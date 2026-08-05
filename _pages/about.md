@@ -14,7 +14,7 @@ hide_lesson_header: true
     <h1>Learn what games are <em>really</em> doing.</h1>
     <p>Memory, assembly, graphics, packets, and reverse engineering—explained in plain English, then explored with small Rust programs.</p>
     <div class="hero-actions">
-      <a class="button button--primary" href="/pages/1/01/">Start lesson one <span aria-hidden="true">→</span></a>
+      <a class="button button--primary" href="{{ site.baseurl }}/pages/1/01/">Start lesson one <span aria-hidden="true">→</span></a>
       <a class="button button--ghost" href="#course-map">See the course map</a>
     </div>
   </div>
@@ -43,16 +43,16 @@ assert_eq!(gold, 50);</code></pre>
 </div>
 
 <div class="course-grid">
-  <a class="course-card" href="/pages/1/01/"><span>01</span><h3>Start Here</h3><p>Computers, games, memory, and a safe lab.</p></a>
-  <a class="course-card" href="/pages/2/01/"><span>02</span><h3>Debug & Reverse</h3><p>Assembly, breakpoints, code caves, and pointers.</p></a>
-  <a class="course-card course-card--rust" href="/pages/3/01/"><span>03</span><h3>Build It in Rust</h3><p>Ownership, Win32 APIs, and careful unsafe code.</p></a>
-  <a class="course-card" href="/pages/4/01/"><span>04</span><h3>Strategy Games</h3><p>Stats, maps, events, and small bots.</p></a>
-  <a class="course-card" href="/pages/5/01/"><span>05</span><h3>3D Games</h3><p>Coordinates, rendering, aiming, and overlays.</p></a>
-  <a class="course-card" href="/pages/6/01/"><span>06</span><h3>Networks</h3><p>Packets, sockets, clients, and local proxies.</p></a>
-  <a class="course-card" href="/pages/7/01/"><span>07</span><h3>Make Tools</h3><p>Scanners, debuggers, and disassemblers.</p></a>
-  <a class="course-card" href="/pages/8/01/"><span>08</span><h3>Files & Mods</h3><p>Saves, textures, resources, and supported mods.</p></a>
-  <a class="course-card" href="/pages/9/01/"><span>09</span><h3>Windows Internals</h3><p>Processes, pages, threads, DLLs, tracing, and defensive checks.</p></a>
-  <a class="course-card" href="/pages/10/01/"><span>10</span><h3>Windows APIs & IPC</h3><p>API layers, exports, shared memory, local pipes, hashes, and signatures.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/1/01/"><span>01</span><h3>Start Here</h3><p>Computers, games, memory, and a safe lab.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/2/01/"><span>02</span><h3>Debug & Reverse</h3><p>Assembly, breakpoints, code caves, and pointers.</p></a>
+  <a class="course-card course-card--rust" href="{{ site.baseurl }}/pages/3/01/"><span>03</span><h3>Build It in Rust</h3><p>Ownership, Win32 APIs, and careful unsafe code.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/4/01/"><span>04</span><h3>Strategy Games</h3><p>Stats, maps, events, and small bots.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/5/01/"><span>05</span><h3>3D Games</h3><p>Coordinates, rendering, aiming, and overlays.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/6/01/"><span>06</span><h3>Networks</h3><p>Packets, sockets, clients, and local proxies.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/7/01/"><span>07</span><h3>Make Tools</h3><p>Scanners, debuggers, and disassemblers.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/8/01/"><span>08</span><h3>Files & Mods</h3><p>Saves, textures, resources, and supported mods.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/9/01/"><span>09</span><h3>Windows Internals</h3><p>Processes, pages, threads, DLLs, tracing, and defensive checks.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/10/01/"><span>10</span><h3>Windows APIs & IPC</h3><p>API layers, exports, shared memory, local pipes, hashes, and signatures.</p></a>
 </div>
 
 <div class="why-rust">
@@ -74,7 +74,7 @@ assert_eq!(gold, 50);</code></pre>
 - A debugger such as x64dbg and a memory scanner such as Cheat Engine
 - Curiosity, patience, and permission to inspect the target
 
-The original PDF is still available as a [legacy snapshot](/assets/GameHackingAcademy.pdf). It predates this Rust rewrite, so the website is the source of truth.
+The original PDF is still available as a [legacy snapshot]({{ site.baseurl }}/assets/GameHackingAcademy.pdf). It predates this Rust rewrite, so the website is the source of truth.
 
 The portable algorithms used throughout the book are collected in the repository’s `rust-labs` crate. Run `cargo test` there to experiment with byte parsing, pattern scanning, angle math, and world-to-screen projection without attaching to any process.
 
