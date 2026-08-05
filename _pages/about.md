@@ -78,6 +78,17 @@ The original PDF is still available as a [legacy snapshot]({{ site.baseurl }}/as
 
 The portable algorithms used throughout the book are collected in the repository’s `rust-labs` crate. Run `cargo test` there to experiment with byte parsing, pattern scanning, angle math, and world-to-screen projection without attaching to any process.
 
+## Interactive learning tools
+
+Ownership lessons include step-by-step memory models inspired by
+[Aquascope](https://github.com/cognitive-engineering-lab/aquascope), which
+presents both Rust's execution behavior and the facts checked by the borrow
+checker. Knowledge checks use a native Jekyll implementation inspired by
+[mdbook-quiz](https://github.com/cognitive-engineering-lab/mdbook-quiz),
+including multiple-choice, short-answer, and compile-tracing questions with
+saved attempts. These components were written for this reader so they work on
+GitHub Pages without an mdBook preprocessor or a separate analysis server.
+
 <div class="community-strip">
   <a href="https://github.com/GameHackingAcademy"><i class="fa fa-github" aria-hidden="true"></i><span><strong>GitHub</strong><small>Projects and source</small></span></a>
   <a href="https://twitter.com/GameHackingAcad"><i class="fa fa-twitter" aria-hidden="true"></i><span><strong>Updates</strong><small>Course news</small></span></a>
