@@ -1,19 +1,86 @@
 <script>
-    function render_mermaid() {
+    async function render_mermaid() {
+        // Mermaid measures text while it lays out nodes. Waiting for the book
+        // fonts prevents a late font swap from making labels wider than boxes.
+        if (document.fonts && document.fonts.ready) {
+            await document.fonts.ready;
+        }
+
         mermaid.initialize({
             startOnLoad: false,
             theme: "default",
+            securityLevel: "strict",
+            flowchart: {
+                // The lessons use <br/> inside labels to keep diagrams compact.
+                // HTML labels let Mermaid measure those intended line breaks.
+                htmlLabels: true,
+                useMaxWidth: true
+            }
         });
-        window.mermaid.init(undefined, document.querySelectorAll('.language-mermaid'));
+        await window.mermaid.run({
+            nodes: document.querySelectorAll('.language-mermaid')
+        });
+
+        // Let Mermaid finish inserting and styling labels before measuring.
+        // This matters for HTML labels because their final font can change the
+        // space a node needs by a few pixels.
+        await new Promise(function (resolve) {
+            requestAnimationFrame(resolve);
+        });
+        await new Promise(function (resolve) {
+            requestAnimationFrame(resolve);
+        });
+
+        // Measure the whole SVG, not a flowchart-only inner group. The whole
+        // SVG includes sequence actors, messages, state labels, and every other
+        // diagram-specific element. Rebuilding the viewBox from those complete
+        // bounds keeps labels and arrowheads inside the visible canvas.
+        document.querySelectorAll('.language-mermaid[data-processed="true"] svg')
+            .forEach(function (svg) {
+                var box;
+                try {
+                    box = svg.getBBox();
+                } catch (error) {
+                    box = svg.viewBox && svg.viewBox.baseVal;
+                }
+                if (!box || box.width <= 0 || box.height <= 0) return;
+                var x = box.x;
+                var y = box.y;
+                var width = box.width;
+                var height = box.height;
+                var paddingX = Math.max(18, width * 0.025);
+                var paddingY = Math.max(14, height * 0.035);
+                svg.setAttribute(
+                    'viewBox',
+                    [
+                        x - paddingX,
+                        y - paddingY,
+                        width + paddingX * 2,
+                        height + paddingY * 2
+                    ].join(' ')
+                );
+                svg.style.setProperty(
+                    '--mermaid-natural-width',
+                    Math.ceil(width + paddingX * 2) + 'px'
+                );
+                svg.setAttribute('width', '100%');
+                svg.removeAttribute('height');
+                svg.style.removeProperty('max-width');
+                svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+            });
+    }
+
+    function safely_render_mermaid() {
+        render_mermaid().catch(function (error) {
+            console.error("Could not render Mermaid diagram", error);
+        });
     }
 
     function initialize_mermaid() {
         if (document.readyState === "loading") {
-            // Loading hasn't finished yet
-            document.addEventListener("DOMContentLoaded", render_mermaid);
+            document.addEventListener("DOMContentLoaded", safely_render_mermaid);
         } else {
-            // `DOMContentLoaded` has already fired
-            render_mermaid();
+            safely_render_mermaid();
         }
     }
 

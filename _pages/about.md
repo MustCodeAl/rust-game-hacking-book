@@ -38,7 +38,7 @@ assert_eq!(gold, 50);</code></pre>
 
 <div class="section-heading" id="course-map">
   <span>Course map</span>
-  <h2>Eight stops, one idea at a time</h2>
+  <h2>Ten stops, one idea at a time</h2>
   <p>You do not need to know Rust yet. The early lessons teach the pieces right before you use them.</p>
 </div>
 
@@ -51,6 +51,8 @@ assert_eq!(gold, 50);</code></pre>
   <a class="course-card" href="/pages/6/01/"><span>06</span><h3>Networks</h3><p>Packets, sockets, clients, and local proxies.</p></a>
   <a class="course-card" href="/pages/7/01/"><span>07</span><h3>Make Tools</h3><p>Scanners, debuggers, and disassemblers.</p></a>
   <a class="course-card" href="/pages/8/01/"><span>08</span><h3>Files & Mods</h3><p>Saves, textures, resources, and supported mods.</p></a>
+  <a class="course-card" href="/pages/9/01/"><span>09</span><h3>Windows Internals</h3><p>Processes, pages, threads, DLLs, tracing, and defensive checks.</p></a>
+  <a class="course-card" href="/pages/10/01/"><span>10</span><h3>Windows APIs & IPC</h3><p>API layers, exports, shared memory, local pipes, hashes, and signatures.</p></a>
 </div>
 
 <div class="why-rust">
