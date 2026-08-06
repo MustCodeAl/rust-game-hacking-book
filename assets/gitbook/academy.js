@@ -324,6 +324,7 @@
   }
 
   function initTableOfContents() {
+    revealCurrentTocItem();
     if (tocEventsReady) return;
     tocEventsReady = true;
     document.addEventListener("click", function (event) {
@@ -337,6 +338,30 @@
       ).forEach(function (lesson) {
         lesson.hidden = !willOpen;
       });
+    });
+  }
+
+  function revealCurrentTocItem() {
+    requestAnimationFrame(function () {
+      var summary = document.querySelector(".book-summary");
+      var active = document.querySelector(".book-summary li.chapter.active > a");
+      if (!summary || !active) return;
+
+      var summaryRect = summary.getBoundingClientRect();
+      var activeRect = active.getBoundingClientRect();
+      var breathingRoom = 28;
+      var isClipped = (
+        activeRect.top < summaryRect.top + breathingRoom
+        || activeRect.bottom > summaryRect.bottom - breathingRoom
+      );
+      if (!isClipped) return;
+
+      summary.scrollTop += (
+        activeRect.top
+        - summaryRect.top
+        - (summary.clientHeight / 2)
+        + (activeRect.height / 2)
+      );
     });
   }
 
