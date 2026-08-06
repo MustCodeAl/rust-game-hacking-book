@@ -264,7 +264,9 @@
     root.dataset.learningReady = "true";
     root.replaceChildren();
 
-    const header = element("header", "ownership-scope__header");
+    const header = element("div", "ownership-scope__header");
+    header.setAttribute("role", "group");
+    header.setAttribute("aria-label", "Ownership visualizer heading");
     const headerCopy = element("div", "ownership-scope__header-copy");
     headerCopy.append(
       element("span", "ownership-scope__eyebrow", example.eyebrow),
@@ -455,7 +457,9 @@
 
       extension = element("section", "academy-quiz__extension");
       extension.hidden = true;
-      const extensionHeader = element("header", "academy-quiz__extension-header");
+      const extensionHeader = element("div", "academy-quiz__extension-header");
+      extensionHeader.setAttribute("role", "group");
+      extensionHeader.setAttribute("aria-label", "Follow-up quiz heading");
       const extensionHeaderCopy = element("div", "academy-quiz__extension-title");
       extensionHeaderCopy.append(
         element("span", "academy-quiz__extension-eyebrow", "Keep going"),
@@ -712,7 +716,9 @@
   }
 
   function makeLabHeader(eyebrow, title, description) {
-    const header = element("header", "concept-lab__header");
+    const header = element("div", "concept-lab__header");
+    header.setAttribute("role", "group");
+    header.setAttribute("aria-label", "Interactive lab heading");
     const copy = element("div", "concept-lab__header-copy");
     copy.append(
       element("span", "concept-lab__eyebrow", eyebrow),
