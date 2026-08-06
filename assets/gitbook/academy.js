@@ -12,6 +12,7 @@
     { id: "light", label: "Light" },
     { id: "dark", label: "Dark" }
   ];
+  var SYNTAX_PALETTES = ["academy", "cyber", "mono"];
   var NATURAL_MODES = {
     paper: "light",
     purple: "dark",
@@ -117,6 +118,54 @@
     }
   }
 
+  function readSavedSyntaxPalette() {
+    try {
+      return localStorage.getItem("gha-syntax-palette");
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function saveSyntaxPalette(id) {
+    try {
+      localStorage.setItem("gha-syntax-palette", id);
+    } catch (error) {
+      /* A blocked storage API should not block reading the book. */
+    }
+  }
+
+  function readSavedSemanticSetting() {
+    try {
+      return localStorage.getItem("gha-semantic-highlighting");
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function saveSemanticSetting(id) {
+    try {
+      localStorage.setItem("gha-semantic-highlighting", id);
+    } catch (error) {
+      /* A blocked storage API should not block reading the book. */
+    }
+  }
+
+  function readSavedLigatureSetting() {
+    try {
+      return localStorage.getItem("gha-code-ligatures");
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function saveLigatureSetting(id) {
+    try {
+      localStorage.setItem("gha-code-ligatures", id);
+    } catch (error) {
+      /* A blocked storage API should not block reading the book. */
+    }
+  }
+
   function updateThemeControls(theme, mode) {
     document.querySelectorAll("[data-theme-label]").forEach(function (label) {
       label.textContent = theme.label;
@@ -173,6 +222,43 @@
     if (persist !== false) saveCodeMode(mode.id);
   }
 
+  function applySyntaxPalette(id, persist) {
+    var palette = SYNTAX_PALETTES.indexOf(id) === -1 ? "academy" : id;
+    document.documentElement.dataset.academySyntax = palette;
+    document.querySelectorAll("[data-syntax-palette-choice]").forEach(function (button) {
+      button.setAttribute(
+        "aria-pressed",
+        button.dataset.syntaxPaletteChoice === palette ? "true" : "false"
+      );
+    });
+    if (persist !== false) saveSyntaxPalette(palette);
+  }
+
+  function applySemanticSetting(id, persist) {
+    var setting = id === "off" ? "off" : "on";
+    document.documentElement.dataset.academySemantic = setting;
+    document.querySelectorAll("[data-semantic-choice]").forEach(function (button) {
+      button.setAttribute(
+        "aria-pressed",
+        button.dataset.semanticChoice === setting ? "true" : "false"
+      );
+    });
+    refreshSemanticHighlighting();
+    if (persist !== false) saveSemanticSetting(setting);
+  }
+
+  function applyLigatureSetting(id, persist) {
+    var setting = id === "on" ? "on" : "off";
+    document.documentElement.dataset.academyLigatures = setting;
+    document.querySelectorAll("[data-ligature-choice]").forEach(function (button) {
+      button.setAttribute(
+        "aria-pressed",
+        button.dataset.ligatureChoice === setting ? "true" : "false"
+      );
+    });
+    if (persist !== false) saveLigatureSetting(setting);
+  }
+
   function applyTheme(id, persist) {
     var mode = document.documentElement.dataset.academyMode || readSavedMode() || "light";
     applyAppearance(id, mode, persist);
@@ -197,6 +283,24 @@
   function cycleCodeMode() {
     var current = findMode(document.documentElement.dataset.academyCodeMode || "dark");
     applyCodeMode(current.id === "dark" ? "light" : "dark");
+  }
+
+  function cycleSyntaxPalette() {
+    var current = document.documentElement.dataset.academySyntax || "academy";
+    var index = SYNTAX_PALETTES.indexOf(current);
+    applySyntaxPalette(SYNTAX_PALETTES[(index + 1) % SYNTAX_PALETTES.length]);
+  }
+
+  function toggleSemanticHighlighting() {
+    applySemanticSetting(
+      document.documentElement.dataset.academySemantic === "off" ? "on" : "off"
+    );
+  }
+
+  function toggleLigatures() {
+    applyLigatureSetting(
+      document.documentElement.dataset.academyLigatures === "on" ? "off" : "on"
+    );
   }
 
   function closeThemeMenu(switcher) {
@@ -224,6 +328,18 @@
     applyAppearance(savedTheme, savedMode, false);
     applyCodeMode(
       document.documentElement.dataset.academyCodeMode || readSavedCodeMode() || "dark",
+      false
+    );
+    applySyntaxPalette(
+      document.documentElement.dataset.academySyntax || readSavedSyntaxPalette() || "academy",
+      false
+    );
+    applySemanticSetting(
+      document.documentElement.dataset.academySemantic || readSavedSemanticSetting() || "on",
+      false
+    );
+    applyLigatureSetting(
+      document.documentElement.dataset.academyLigatures || readSavedLigatureSetting() || "off",
       false
     );
 
@@ -257,6 +373,24 @@
       var codeModeChoice = event.target.closest("[data-code-mode-choice]");
       if (codeModeChoice) {
         applyCodeMode(codeModeChoice.dataset.codeModeChoice);
+        return;
+      }
+
+      var syntaxPaletteChoice = event.target.closest("[data-syntax-palette-choice]");
+      if (syntaxPaletteChoice) {
+        applySyntaxPalette(syntaxPaletteChoice.dataset.syntaxPaletteChoice);
+        return;
+      }
+
+      var semanticChoice = event.target.closest("[data-semantic-choice]");
+      if (semanticChoice) {
+        applySemanticSetting(semanticChoice.dataset.semanticChoice);
+        return;
+      }
+
+      var ligatureChoice = event.target.closest("[data-ligature-choice]");
+      if (ligatureChoice) {
+        applyLigatureSetting(ligatureChoice.dataset.ligatureChoice);
         return;
       }
 
@@ -296,6 +430,18 @@
       if (event.altKey && event.key.toLowerCase() === "c") {
         event.preventDefault();
         cycleCodeMode();
+      }
+      if (event.altKey && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        cycleSyntaxPalette();
+      }
+      if (event.altKey && event.key.toLowerCase() === "h") {
+        event.preventDefault();
+        toggleSemanticHighlighting();
+      }
+      if (event.altKey && event.key.toLowerCase() === "l") {
+        event.preventDefault();
+        toggleLigatures();
       }
     });
   }
@@ -400,8 +546,32 @@
 
       pre.dataset.language = LANGUAGE_LABELS[language] || language;
       pre.dataset.languageId = language;
-      applySemanticHighlighting(code, language, pageEnumVariants);
       pre.dataset.enhanced = "true";
+    });
+
+    refreshSemanticHighlighting(pageEnumVariants);
+  }
+
+  function refreshSemanticHighlighting(declaredEnumVariants) {
+    var codeBlocks = Array.from(document.querySelectorAll(".markdown-section pre code"));
+    var pageEnumVariants = declaredEnumVariants || {};
+
+    if (!declaredEnumVariants) {
+      codeBlocks.forEach(function (code) {
+        if (findCodeLanguage(code) !== "rust") return;
+        Object.assign(pageEnumVariants, findDeclaredEnumVariants(code));
+      });
+    }
+
+    codeBlocks.forEach(function (code) {
+      code.querySelectorAll(".semantic-token").forEach(function (token) {
+        Array.from(token.classList).forEach(function (className) {
+          if (className.indexOf("semantic-token") === 0) token.classList.remove(className);
+        });
+      });
+
+      if (document.documentElement.dataset.academySemantic === "off") return;
+      applySemanticHighlighting(code, findCodeLanguage(code), pageEnumVariants);
     });
   }
 
@@ -467,7 +637,7 @@
     if (!marker) return;
 
     var comment = original.slice(marker[0].length);
-    if (/^(?:🛡️|⚠️|✅|🔍|🛠️|💡|🧠|🧪)/u.test(comment)) return;
+    if (/^(?:🛡️|⚠️|✅|❌|🔍|🛠️|💡|🧠|🧪|📦|🎯|🧹|📏|🔁|🧭|🔒)/u.test(comment)) return;
 
     var emoji = "💡";
     if (/\b(?:warning|caution|danger|never|do not)\b/i.test(comment)) emoji = "⚠️";
