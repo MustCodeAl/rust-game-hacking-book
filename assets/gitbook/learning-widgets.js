@@ -376,10 +376,336 @@
     }
   }
 
+  function makeLabHeader(eyebrow, title, description) {
+    const header = element("header", "concept-lab__header");
+    const copy = element("div", "concept-lab__header-copy");
+    copy.append(
+      element("span", "concept-lab__eyebrow", eyebrow),
+      element("h3", "", title),
+      element("p", "concept-lab__description", description)
+    );
+    header.append(copy, element("span", "concept-lab__live-badge", "Live lab"));
+    return header;
+  }
+
+  function makeTextControl(id, labelText, value) {
+    const label = element("label", "concept-lab__field");
+    label.htmlFor = id;
+    label.append(element("span", "concept-lab__field-label", labelText));
+    const input = element("input", "concept-lab__text-input");
+    input.id = id;
+    input.type = "text";
+    input.value = value;
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    label.append(input);
+    return { label, input };
+  }
+
+  function makeResult(labelText, valueText, noteText) {
+    const card = element("div", "concept-lab__result-card");
+    const value = element("strong", "concept-lab__result-value", valueText);
+    card.append(element("span", "concept-lab__result-label", labelText), value);
+    if (noteText) card.append(element("small", "concept-lab__result-note", noteText));
+    return { card, value };
+  }
+
+  function parseFourBytes(raw) {
+    const cleaned = String(raw || "").trim().replace(/0x/gi, "");
+    let parts = cleaned.split(/[\s,;:-]+/).filter(Boolean);
+    if (parts.length === 1 && /^[0-9a-f]{8}$/i.test(parts[0])) {
+      parts = parts[0].match(/.{2}/g);
+    }
+    if (parts.length !== 4 || parts.some((part) => !/^[0-9a-f]{2}$/i.test(part))) {
+      return null;
+    }
+    return parts.map((part) => Number.parseInt(part, 16));
+  }
+
+  function readableFloat32(value) {
+    if (Number.isNaN(value)) return "NaN";
+    if (value === Infinity) return "+Infinity";
+    if (value === -Infinity) return "-Infinity";
+    if (Object.is(value, -0)) return "-0";
+    if (value === 0) return "0";
+    const magnitude = Math.abs(value);
+    if (magnitude >= 10000000 || magnitude < 0.0001) return value.toExponential(5);
+    return Number(value.toPrecision(7)).toString();
+  }
+
+  function initializeByteLens(root) {
+    const labId = String(root.dataset.conceptId || "byte-lens").replace(/[^a-z0-9_-]/gi, "-");
+    root.replaceChildren();
+    root.append(
+      makeLabHeader(
+        "Byte lens",
+        "Four bytes can tell several stories",
+        "Change the bytes, then compare what happens when the computer reads the exact same bits as different data types."
+      )
+    );
+
+    const body = element("div", "concept-lab__body");
+    const controls = element("div", "concept-lab__control-row");
+    const byteControl = makeTextControl(`${labId}-bytes`, "Four hexadecimal bytes", "64 00 00 00");
+    byteControl.input.setAttribute("aria-describedby", `${labId}-byte-help ${labId}-byte-error`);
+    const examples = element("div", "concept-lab__examples");
+    examples.append(element("span", "concept-lab__example-label", "Try a known value:"));
+    [
+      ["100", "64 00 00 00"],
+      ["−1", "FF FF FF FF"],
+      ["1.0", "00 00 80 3F"],
+    ].forEach(([label, bytes]) => {
+      const button = element("button", "concept-lab__example", label);
+      button.type = "button";
+      button.dataset.bytes = bytes;
+      examples.append(button);
+    });
+    controls.append(byteControl.label, examples);
+
+    const help = element(
+      "p",
+      "concept-lab__help",
+      "Write each byte with two hex digits. The first byte is stored at the lowest address."
+    );
+    help.id = `${labId}-byte-help`;
+    const error = element("p", "concept-lab__error");
+    error.id = `${labId}-byte-error`;
+    error.setAttribute("role", "alert");
+    error.hidden = true;
+
+    const byteStrip = element("div", "concept-lab__byte-strip");
+    byteStrip.setAttribute("aria-label", "Bytes in increasing address order");
+    const results = element("div", "concept-lab__results concept-lab__results--four");
+    const unsigned = makeResult("Unsigned 32-bit", "", "Little-endian u32");
+    const signed = makeResult("Signed 32-bit", "", "Little-endian i32");
+    const floating = makeResult("32-bit decimal", "", "IEEE-754 f32");
+    const bigEndian = makeResult("Unsigned, reversed order", "", "Big-endian u32");
+    results.append(unsigned.card, signed.card, floating.card, bigEndian.card);
+
+    const takeaway = element(
+      "p",
+      "concept-lab__takeaway",
+      "Memory stores bytes, not labels. A type tells the program how to interpret those bytes."
+    );
+    body.append(controls, help, error, byteStrip, results, takeaway);
+    root.append(body);
+
+    function render() {
+      const bytes = parseFourBytes(byteControl.input.value);
+      if (!bytes) {
+        error.textContent = "Enter exactly four bytes, such as 64 00 00 00.";
+        error.hidden = false;
+        results.hidden = true;
+        byteStrip.replaceChildren();
+        return;
+      }
+      error.hidden = true;
+      results.hidden = false;
+      byteStrip.replaceChildren(
+        ...bytes.map((byte, index) => {
+          const cell = element("span", "concept-lab__byte");
+          cell.append(
+            element("small", "", `+${index}`),
+            element("strong", "", byte.toString(16).toUpperCase().padStart(2, "0"))
+          );
+          return cell;
+        })
+      );
+      const array = Uint8Array.from(bytes);
+      const view = new DataView(array.buffer);
+      unsigned.value.textContent = view.getUint32(0, true).toLocaleString("en-US");
+      signed.value.textContent = view.getInt32(0, true).toLocaleString("en-US");
+      floating.value.textContent = readableFloat32(view.getFloat32(0, true));
+      bigEndian.value.textContent = view.getUint32(0, false).toLocaleString("en-US");
+    }
+
+    byteControl.input.addEventListener("input", render);
+    examples.querySelectorAll("[data-bytes]").forEach((button) => {
+      button.addEventListener("click", () => {
+        byteControl.input.value = button.dataset.bytes;
+        render();
+        byteControl.input.focus();
+      });
+    });
+    render();
+  }
+
+  function parseAddressNumber(raw) {
+    const value = String(raw || "").trim().replace(/_/g, "");
+    if (!/^(?:0x[0-9a-f]+|[0-9]+)$/i.test(value)) return null;
+    try {
+      return BigInt(value);
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function formatAddress(value) {
+    return `0x${value.toString(16).toUpperCase()}`;
+  }
+
+  function initializeAddressBuilder(root) {
+    const labId = String(root.dataset.conceptId || "address-builder").replace(/[^a-z0-9_-]/gi, "-");
+    const maxAddress = (1n << 64n) - 1n;
+    root.replaceChildren();
+    root.append(
+      makeLabHeader(
+        "Address math",
+        "Build a live address",
+        "A module can move each time Windows loads it. Add a stable relative offset to today's module base to find the live address."
+      )
+    );
+
+    const body = element("div", "concept-lab__body");
+    const controls = element("div", "concept-lab__control-grid");
+    const base = makeTextControl(`${labId}-base`, "Module base today", "0x7FF600000000");
+    const offset = makeTextControl(`${labId}-offset`, "Relative virtual address (RVA)", "0x1200");
+    controls.append(base.label, offset.label);
+    const error = element("p", "concept-lab__error");
+    error.setAttribute("role", "alert");
+    error.hidden = true;
+
+    const equation = element("div", "concept-lab__address-equation");
+    const baseBlock = makeResult("Base", "", "changes between runs");
+    const plus = element("span", "concept-lab__operator", "+");
+    const offsetBlock = makeResult("RVA", "", "stable inside this build");
+    const equals = element("span", "concept-lab__operator", "=");
+    const liveBlock = makeResult("Live address", "", "use for this run");
+    liveBlock.card.classList.add("concept-lab__result-card--accent");
+    equation.append(baseBlock.card, plus, offsetBlock.card, equals, liveBlock.card);
+    const takeaway = element(
+      "p",
+      "concept-lab__takeaway",
+      "Keep the RVA in your notes. Re-read the module base after every launch, then rebuild the live address."
+    );
+    body.append(controls, error, equation, takeaway);
+    root.append(body);
+
+    function render() {
+      const baseValue = parseAddressNumber(base.input.value);
+      const offsetValue = parseAddressNumber(offset.input.value);
+      if (baseValue === null || offsetValue === null) {
+        error.textContent = "Use a decimal number or a hexadecimal number beginning with 0x.";
+        error.hidden = false;
+        equation.hidden = true;
+        return;
+      }
+      const liveValue = baseValue + offsetValue;
+      if (baseValue > maxAddress || offsetValue > maxAddress || liveValue > maxAddress) {
+        error.textContent = "That result does not fit in a 64-bit Windows address.";
+        error.hidden = false;
+        equation.hidden = true;
+        return;
+      }
+      error.hidden = true;
+      equation.hidden = false;
+      baseBlock.value.textContent = formatAddress(baseValue);
+      offsetBlock.value.textContent = formatAddress(offsetValue);
+      liveBlock.value.textContent = formatAddress(liveValue);
+    }
+
+    base.input.addEventListener("input", render);
+    offset.input.addEventListener("input", render);
+    render();
+  }
+
+  function normalizeAngle(delta) {
+    return ((delta + 540) % 360) - 180;
+  }
+
+  function makeRangeControl(id, labelText, value) {
+    const wrapper = element("label", "concept-lab__range");
+    wrapper.htmlFor = id;
+    const heading = element("span", "concept-lab__range-heading");
+    const output = element("strong", "concept-lab__range-value");
+    heading.append(element("span", "", labelText), output);
+    const input = element("input", "");
+    input.id = id;
+    input.type = "range";
+    input.min = "-180";
+    input.max = "180";
+    input.step = "1";
+    input.value = String(value);
+    wrapper.append(heading, input);
+    return { wrapper, input, output };
+  }
+
+  function initializeAngleLab(root) {
+    const labId = String(root.dataset.conceptId || "angle-lab").replace(/[^a-z0-9_-]/gi, "-");
+    root.replaceChildren();
+    root.append(
+      makeLabHeader(
+        "Angle lab",
+        "Find the shortest turn",
+        "Move both headings. The direct subtraction can suggest a long spin, while normalization finds the same direction with the smallest turn."
+      )
+    );
+
+    const body = element("div", "concept-lab__body concept-lab__angle-layout");
+    const controls = element("div", "concept-lab__range-controls");
+    const current = makeRangeControl(`${labId}-current`, "Current heading", 179);
+    const desired = makeRangeControl(`${labId}-desired`, "Desired heading", -179);
+    controls.append(current.wrapper, desired.wrapper);
+
+    const visual = element("div", "concept-lab__angle-visual");
+    const dial = element("div", "concept-lab__dial");
+    dial.setAttribute("aria-hidden", "true");
+    const north = element("span", "concept-lab__dial-north", "0°");
+    const currentArm = element("span", "concept-lab__dial-arm concept-lab__dial-arm--current");
+    const desiredArm = element("span", "concept-lab__dial-arm concept-lab__dial-arm--desired");
+    const center = element("span", "concept-lab__dial-center");
+    dial.append(north, currentArm, desiredArm, center);
+
+    const results = element("div", "concept-lab__angle-results");
+    const direct = makeResult("Direct subtraction", "", "desired − current");
+    const shortest = makeResult("Shortest turn", "", "normalized to −180°…180°");
+    shortest.card.classList.add("concept-lab__result-card--accent");
+    results.append(direct.card, shortest.card);
+    visual.append(dial, results);
+    const takeaway = element("p", "concept-lab__takeaway concept-lab__angle-takeaway");
+    takeaway.setAttribute("aria-live", "polite");
+    body.append(controls, visual, takeaway);
+    root.append(body);
+
+    function render() {
+      const currentValue = Number(current.input.value);
+      const desiredValue = Number(desired.input.value);
+      const directDelta = desiredValue - currentValue;
+      const shortestDelta = normalizeAngle(directDelta);
+      current.output.textContent = `${currentValue}°`;
+      desired.output.textContent = `${desiredValue}°`;
+      direct.value.textContent = `${directDelta > 0 ? "+" : ""}${directDelta}°`;
+      shortest.value.textContent = `${shortestDelta > 0 ? "+" : ""}${shortestDelta}°`;
+      currentArm.style.transform = `rotate(${currentValue}deg)`;
+      desiredArm.style.transform = `rotate(${desiredValue}deg)`;
+      if (shortestDelta === 0) {
+        takeaway.textContent = "Already aligned: no turn is needed.";
+      } else {
+        const direction = shortestDelta > 0 ? "clockwise" : "counter-clockwise";
+        takeaway.textContent = `Turn ${Math.abs(shortestDelta)}° ${direction}. The sign tells your code which way to rotate.`;
+      }
+    }
+
+    current.input.addEventListener("input", render);
+    desired.input.addEventListener("input", render);
+    render();
+  }
+
+  function initializeConceptLab(root) {
+    if (root.dataset.learningReady === "true") return;
+    const lab = root.dataset.conceptLab;
+    if (!["byte-lens", "address-builder", "angle-lab"].includes(lab)) return;
+    root.dataset.learningReady = "true";
+    if (lab === "byte-lens") initializeByteLens(root);
+    if (lab === "address-builder") initializeAddressBuilder(root);
+    if (lab === "angle-lab") initializeAngleLab(root);
+  }
+
   function initializeLearningWidgets(scope) {
     const root = scope && scope.querySelectorAll ? scope : document;
     root.querySelectorAll("[data-ownership-example]").forEach(initializeOwnershipScope);
     root.querySelectorAll(".academy-quiz").forEach(initializeQuiz);
+    root.querySelectorAll("[data-concept-lab]").forEach(initializeConceptLab);
   }
 
   function start() {

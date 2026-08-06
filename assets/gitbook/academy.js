@@ -3,6 +3,8 @@
 
   var THEMES = [
     { id: "paper", label: "Paper", browser: "#15130f" },
+    { id: "light", label: "Light", browser: "#f7f9fc" },
+    { id: "dark", label: "Dark", browser: "#0f1216" },
     { id: "purple", label: "Purple", browser: "#1e0028" },
     { id: "midnight", label: "Midnight", browser: "#07111d" },
     { id: "forest", label: "Forest", browser: "#102018" },
