@@ -119,70 +119,120 @@
       { prompt: "Why change one thing at a time during an experiment?", options: ["It makes the game run faster", "It connects one cause to one observed effect", "It removes the need for notes", "It makes every address permanent"], answer: 1, explanation: "One controlled change gives you evidence about cause and effect. Several changes at once make the result ambiguous." },
       { prompt: "Who normally owns the official shared state in a multiplayer game?", options: ["The rendering thread", "The keyboard driver", "The authoritative server", "The newest client"], answer: 2, explanation: "A client draws and predicts, but the authoritative server normally decides the shared result." },
       { prompt: "Why can the same four bytes mean different things?", options: ["Bytes contain hidden field names", "A type supplies the interpretation rule", "Windows changes them while reading", "Every byte is a pointer"], answer: 1, explanation: "Memory stores bits. The selected type decides whether those bits represent an integer, float, pointer, flags, or something else." },
-      { prompt: "What is an offset?", options: ["A distance from a starting location", "A second name for a process", "A copied value", "A kind of CPU"], answer: 0, explanation: "An offset is a distance. Add it to a known base to describe another location." }
+      { prompt: "What is an offset?", options: ["A distance from a starting location", "A second name for a process", "A copied value", "A kind of CPU"], answer: 0, explanation: "An offset is a distance. Add it to a known base to describe another location." },
+      { prompt: "Why does each process receive its own virtual address space?", options: ["To isolate its addresses and let Windows map them independently", "To make all pointers permanent", "To remove physical RAM", "To store only executable code"], answer: 0, explanation: "Virtual memory isolates processes and lets the operating system map virtual pages to appropriate backing storage." },
+      { prompt: "What does little-endian describe?", options: ["The lowest-addressed byte holds the least-significant part of a multi-byte value", "All integers are negative", "Addresses grow from right to left", "Bits are stored as text"], answer: 0, explanation: "Endianness is the byte order used for multi-byte values. x86 and x86-64 normally use little-endian order." },
+      { prompt: "What usually distinguishes a stack allocation from a heap allocation?", options: ["Stack storage follows call-scope structure; heap storage has independently managed lifetime", "Heap values have no addresses", "Stack memory is shared by every process", "Only strings use the heap"], answer: 0, explanation: "Stacks naturally track function calls, while heap allocations can outlive the scope that created them and need explicit ownership rules." },
+      { prompt: "Why is a remote memory read called a snapshot?", options: ["The target may change immediately before or after the copied bytes are observed", "Windows always saves it as an image", "The read freezes every thread", "The address becomes read-only"], answer: 0, explanation: "A remote read copies bytes from one moment in a process that usually keeps running." },
+      { prompt: "What does a null pointer normally communicate?", options: ["No valid object address is present", "The object starts at address one", "The value is always zero bytes long", "The pointer is executable"], answer: 0, explanation: "A null pointer is a sentinel meaning there is no referenced object. Dereferencing it is invalid." }
     ],
     2: [
       { prompt: "What does `cmp` mainly change on x86?", options: ["The compared operands", "CPU flags used by later branches", "The stack size", "The executable file"], answer: 1, explanation: "`cmp` performs subtraction-like flag work without storing the result. A later conditional jump reads those flags." },
       { prompt: "Why must a detour cover whole instructions?", options: ["Rust requires five-byte instructions", "Returning into half an instruction changes the decoded byte stream", "Whole instructions use less memory", "Windows ignores partial instructions"], answer: 1, explanation: "x86 instructions have different lengths. A patch must resume at a real instruction boundary." },
       { prompt: "What should a code cave do with displaced original instructions?", options: ["Forget them", "Replay their required behavior before returning", "Turn them into data", "Run them twice"], answer: 1, explanation: "The detour temporarily owns that code boundary, so it must preserve the original behavior the program still needs." },
       { prompt: "What does `call` place on the stack?", options: ["A return address", "The entire executable", "A page permission", "A process handle"], answer: 0, explanation: "The return address tells `ret` where execution should continue after the called function finishes." },
-      { prompt: "What makes a breakpoint observation useful evidence?", options: ["It happened once", "It repeats when the controlled behavior repeats", "The address looks familiar", "The register contains a large number"], answer: 1, explanation: "Repeatable behavior links the paused instruction to the action you are studying." }
+      { prompt: "What makes a breakpoint observation useful evidence?", options: ["It happened once", "It repeats when the controlled behavior repeats", "The address looks familiar", "The register contains a large number"], answer: 1, explanation: "Repeatable behavior links the paused instruction to the action you are studying." },
+      { prompt: "What does the instruction pointer identify?", options: ["The next instruction location for the current thread", "The base of every heap", "The process security level", "The most recent mouse coordinate"], answer: 0, explanation: "RIP on x86-64 identifies the current execution location and advances as instructions are decoded." },
+      { prompt: "Why can a conditional jump be understood only with the earlier flag-setting instruction?", options: ["The jump reads CPU flags rather than the original high-level condition", "Jumps contain source variable names", "Flags store the complete call stack", "Every jump changes page permissions"], answer: 0, explanation: "Instructions such as cmp and test set flags; a later jcc interprets those flags to choose a path." },
+      { prompt: "What does a calling convention define?", options: ["How arguments, return values, registers, and stack cleanup are shared across a call", "How files are compressed", "Where ASLR places modules", "Which debugger theme to use"], answer: 0, explanation: "Both caller and callee need one ABI contract or they will disagree about machine state." },
+      { prompt: "How does a software breakpoint commonly pause x86 code?", options: ["It temporarily replaces one instruction byte with int3", "It deletes the stack", "It sets every debug register", "It encrypts the opcode"], answer: 0, explanation: "The one-byte int3 instruction raises a breakpoint exception that the debugger handles." },
+      { prompt: "Why record a module-relative location instead of one absolute address?", options: ["ASLR may move the module while the internal RVA remains stable for that build", "Relative locations ignore instruction boundaries", "Absolute addresses cannot hold code", "Modules load only once per computer"], answer: 0, explanation: "The live base can change on each run, so base plus build-specific RVA is a reproducible description." }
     ],
     3: [
       { prompt: "What problem does Rust ownership prevent?", options: ["Two owners freeing the same allocation", "A server sending packets", "A debugger setting breakpoints", "A matrix moving a point"], answer: 0, explanation: "Ownership gives one value responsibility for cleanup and prevents accidental double-free behavior." },
       { prompt: "What does a shared borrow allow?", options: ["Reading without taking ownership", "Writing from every thread", "Keeping a reference forever", "Skipping bounds checks"], answer: 0, explanation: "A shared borrow temporarily allows reading while the owner keeps responsibility for the value." },
       { prompt: "Where should unavoidable raw-pointer work live?", options: ["Throughout the program", "Inside a small documented boundary", "Only in comments", "Inside every loop"], answer: 1, explanation: "A narrow `unsafe` boundary makes the assumptions visible and lets the rest of the program use ordinary safe types." },
       { prompt: "Why wrap a Windows handle in a Rust type with `Drop`?", options: ["To make the handle permanent", "To close it on every normal exit path", "To convert it into a pointer", "To disable errors"], answer: 1, explanation: "RAII cleanup runs when the owning wrapper leaves scope, including early returns." },
-      { prompt: "What should happen when expected bytes do not match?", options: ["Patch anyway", "Refuse the operation and explain the mismatch", "Write more bytes", "Restart Windows automatically"], answer: 1, explanation: "A mismatch means your build or location assumption is unproven. Refusal is successful safety behavior." }
+      { prompt: "What should happen when expected bytes do not match?", options: ["Patch anyway", "Refuse the operation and explain the mismatch", "Write more bytes", "Restart Windows automatically"], answer: 1, explanation: "A mismatch means your build or location assumption is unproven. Refusal is successful safety behavior." },
+      { prompt: "What must an FFI boundary specify correctly?", options: ["The ABI, data layout, pointer validity, and ownership expectations", "Only the function name", "The monitor refresh rate", "A permanent module base"], answer: 0, explanation: "Foreign code and Rust must agree on the machine-level contract and on who owns each resource." },
+      { prompt: "Why wrap raw operating-system resources in small high-level types?", options: ["To centralize validation and guarantee one cleanup policy", "To make resource identifiers permanent", "To bypass access checks", "To convert every error into success"], answer: 0, explanation: "A wrapper can enforce ownership, lifetime, and cleanup while exposing a smaller safe interface." },
+      { prompt: "Why is a pointer from another process not a normal reference in your tool?", options: ["It belongs to another address space and may become invalid independently", "Pointers cannot store numbers", "References are always file offsets", "Windows copies the object automatically"], answer: 0, explanation: "The pointer value is only meaningful in the target process and cannot carry Rust's local lifetime guarantees." },
+      { prompt: "What security idea does W^X express?", options: ["Memory should normally be writable or executable, not both at once", "Windows and x86 use the same byte order", "Every page is shared", "Executable files cannot contain data"], answer: 0, explanation: "Separating writable and executable permissions reduces the opportunity to turn modified data directly into code." },
+      { prompt: "Why should a patch plan include cleanup before installation?", options: ["Restoration is part of the feature's correctness, not an optional afterthought", "Cleanup chooses the game version", "It increases instruction size", "It prevents all crashes"], answer: 0, explanation: "A reversible tool defines how it will undo hooks, protections, threads, and resources before it changes the target." }
     ],
     4: [
       { prompt: "What is a remote snapshot?", options: ["A live Rust reference", "A copied observation from one moment", "A permanent game object", "An executable section"], answer: 1, explanation: "The target can change immediately after a read, so a snapshot is a time-stamped copy, not a live view." },
       { prompt: "How do you reach record number `i` in a fixed-size table?", options: ["base + i × record_size", "base ÷ record_size", "i + field_size", "record_size − base"], answer: 0, explanation: "The index chooses the record stride. A field offset is added only after reaching that record." },
       { prompt: "Why bound a player count before looping?", options: ["To change teams", "To prevent bad metadata from causing huge reads", "To remove inactive players", "To increase FPS"], answer: 1, explanation: "A count read from remote memory is untrusted. A reasonable cap protects the loop and its address math." },
       { prompt: "Why model a bot as explicit states?", options: ["States make timing and stop behavior testable", "States remove all game rules", "States make pointers permanent", "States bypass input"], answer: 0, explanation: "Named states and transitions make the action loop predictable, testable, and easier to stop safely." },
-      { prompt: "What sampling rate should an observer use?", options: ["Always the fastest possible", "A rate appropriate for how quickly the value changes", "Exactly once per launch", "The monitor refresh rate"], answer: 1, explanation: "Slow strategy values do not become more truthful when read thousands of times per second." }
+      { prompt: "What sampling rate should an observer use?", options: ["Always the fastest possible", "A rate appropriate for how quickly the value changes", "Exactly once per launch", "The monitor refresh rate"], answer: 1, explanation: "Slow strategy values do not become more truthful when read thousands of times per second." },
+      { prompt: "How is tile `(x, y)` located in a row-major grid of width `w`?", options: ["y × w + x", "x × w + y", "w ÷ x + y", "x + y"], answer: 0, explanation: "Each full row contributes w entries; x selects the column within row y." },
+      { prompt: "What makes a state-machine transition safe to test?", options: ["Its source state, guard, action, and destination are explicit", "It has no stop state", "It runs as fast as possible", "It reads raw memory inside every condition"], answer: 0, explanation: "Explicit transitions make behavior deterministic and allow invalid moves, timeouts, and cancellation to be tested." },
+      { prompt: "Why separate game-state collection from strategy decisions?", options: ["The decision system can consume one validated model instead of scattered changing reads", "It makes coordinates unnecessary", "It disables other threads", "It turns pointers into files"], answer: 0, explanation: "A snapshot boundary makes errors and timing visible while keeping higher-level logic independent of memory APIs." },
+      { prompt: "What does the magnitude of a position-difference vector represent?", options: ["The straight-line distance between the two positions", "A process identifier", "The map width", "The number of CPU threads"], answer: 0, explanation: "Subtracting positions creates a displacement vector; its Euclidean length is the distance." },
+      { prompt: "Why give an automation loop a cancellation path and timeouts?", options: ["It must be able to stop when observations or expected transitions fail", "It makes every action succeed", "It prevents input latency", "It keeps all pointers valid"], answer: 0, explanation: "Stop-safe automation treats stalled or unexpected state as a normal error path rather than looping forever." }
     ],
     5: [
       { prompt: "What does subtracting two positions produce?", options: ["A direction from one to the other", "A process handle", "A color", "A file offset"], answer: 0, explanation: "The difference vector describes how far and in which direction the second point lies." },
       { prompt: "Why use `atan2(y, x)` for an angle?", options: ["It preserves quadrant information", "It allocates a matrix", "It removes all wraparound", "It changes screen resolution"], answer: 0, explanation: "The signs of both inputs tell `atan2` which quadrant contains the direction." },
       { prompt: "What should world-to-screen code do with a non-positive clip-space `w`?", options: ["Draw the point", "Reject the point before dividing", "Replace it with 1", "Use its absolute value"], answer: 1, explanation: "For the course projection convention, a non-positive `w` places the point behind the camera." },
       { prompt: "What is the shortest turn from 179° to −179°?", options: ["−358°", "+2°", "+179°", "−180°"], answer: 1, explanation: "Angles wrap at the boundary, so a two-degree forward turn crosses directly to −179°." },
-      { prompt: "Why restore graphics state after a diagnostic draw?", options: ["OpenGL state persists into later draws", "The GPU forgets every call", "Rust cannot store colors", "Matrices require cleanup handles"], answer: 0, explanation: "Graphics APIs are state machines. Unrestored settings can accidentally affect unrelated objects." }
+      { prompt: "Why restore graphics state after a diagnostic draw?", options: ["OpenGL state persists into later draws", "The GPU forgets every call", "Rust cannot store colors", "Matrices require cleanup handles"], answer: 0, explanation: "Graphics APIs are state machines. Unrestored settings can accidentally affect unrelated objects." },
+      { prompt: "What does a world-to-view transform do?", options: ["Expresses a world position relative to the camera", "Allocates a network packet", "Finds a PE section", "Changes page protection"], answer: 0, explanation: "The view transform moves coordinates into the camera's coordinate system before projection." },
+      { prompt: "Why does perspective projection divide by clip-space w?", options: ["It produces normalized device coordinates with distance-dependent perspective", "It reverses endianness", "It chooses a texture", "It finds the nearest pointer"], answer: 0, explanation: "The perspective divide makes farther geometry appear smaller and places it into normalized device space." },
+      { prompt: "What question does a depth buffer help the renderer answer?", options: ["Which visible fragment is closest at a screen location", "Which DLL exported a function", "Which packet arrived first", "Which thread owns a handle"], answer: 0, explanation: "Depth testing compares fragment depth so nearer surfaces can hide farther surfaces." },
+      { prompt: "Why is one changed render state at a time a strong experiment?", options: ["The visible difference can be attributed to that single controlled variable", "It increases the frame rate automatically", "It reveals source-code names", "It disables clipping"], answer: 0, explanation: "Controlled rendering experiments use the same cause-and-effect method as memory scans and protocol captures." },
+      { prompt: "What does a normalized direction vector preserve?", options: ["Direction while changing its length to one", "The original distance", "A virtual address", "The object's texture"], answer: 0, explanation: "Normalization divides by magnitude, producing a unit direction useful for angles, rays, and movement." }
     ],
     6: [
       { prompt: "What does TCP provide to an application?", options: ["A stream of ordered bytes", "Preserved message boundaries", "One packet per read", "Only encrypted text"], answer: 0, explanation: "TCP does not know your application message boundaries. Framing must define them." },
       { prompt: "What does UDP preserve?", options: ["A continuous byte stream", "Datagram boundaries", "File offsets", "Function call stacks"], answer: 1, explanation: "Each UDP receive corresponds to a datagram, though delivery and order are not guaranteed." },
       { prompt: "Why is byte order part of a protocol?", options: ["Both sides must agree how multi-byte numbers are arranged", "It chooses the IP address", "It makes packets reliable", "It selects a Rust owner"], answer: 0, explanation: "The same bytes produce different numbers when readers disagree about which byte comes first." },
       { prompt: "What should happen before allocating a length-prefixed payload?", options: ["Trust the advertised length", "Compare it with a strict maximum and available bytes", "Reverse every byte", "Open a process handle"], answer: 1, explanation: "Network lengths are untrusted. Bound them before allocation or slicing." },
-      { prompt: "Why test with a captured real fixture?", options: ["An encoder and decoder can share the same mistake", "Fixtures remove all parsing", "TCP requires captures", "It makes the protocol private"], answer: 0, explanation: "A real known frame anchors your implementation to the actual protocol rather than two matching bugs." }
+      { prompt: "Why test with a captured real fixture?", options: ["An encoder and decoder can share the same mistake", "Fixtures remove all parsing", "TCP requires captures", "It makes the protocol private"], answer: 0, explanation: "A real known frame anchors your implementation to the actual protocol rather than two matching bugs." },
+      { prompt: "Why can one TCP receive return half a message or several messages?", options: ["TCP preserves an ordered byte stream, not application message boundaries", "TCP randomly changes payloads", "Every router compresses data", "Sockets cannot buffer bytes"], answer: 0, explanation: "Applications must buffer stream bytes and apply their own framing rules." },
+      { prompt: "What does backpressure mean in a proxy?", options: ["A slow receiver eventually limits how quickly the relay can accept more bytes", "The proxy reverses packets", "The server changes byte order", "The socket becomes read-only"], answer: 0, explanation: "Bounded buffers and awaited writes let downstream capacity control upstream production." },
+      { prompt: "Why cap decompressed message size separately from compressed size?", options: ["A small compressed payload can expand into a very large output", "Compression removes length fields", "Decompression changes TCP into UDP", "Only text can be compressed"], answer: 0, explanation: "Expansion limits defend memory and CPU even when the wire payload looks small." },
+      { prompt: "What makes a parser state machine useful for streaming data?", options: ["It remembers whether it needs a header, payload, or more bytes across partial reads", "It guarantees delivery", "It removes syntax validation", "It assigns permanent addresses"], answer: 0, explanation: "Streaming parsers advance only when enough bytes are buffered for the current state." },
+      { prompt: "Why should protocol errors name the phase that failed?", options: ["Framing, decompression, text decoding, and semantic validation require different fixes", "All errors have the same cause", "It makes packets smaller", "It prevents disconnects"], answer: 0, explanation: "Specific error categories turn malformed input into actionable evidence instead of one vague failure." }
     ],
     7: [
       { prompt: "What should a pattern scanner do with several matches?", options: ["Patch all of them", "Refuse ambiguity and refine the pattern", "Choose the lowest address", "Add more wildcards"], answer: 1, explanation: "Several matches mean the signature is not yet a unique identity." },
       { prompt: "What does a second value scan keep?", options: ["Old candidates that match the new observation", "Every address in the process", "Only executable pages", "Only the first result"], answer: 0, explanation: "Each observation filters the existing candidate set instead of starting over." },
       { prompt: "How do you turn an RVA into a live address?", options: ["module base + RVA", "file offset + pointer size", "RVA − module base", "section count × RVA"], answer: 0, explanation: "An RVA is a distance from the module's live base." },
       { prompt: "What distinguishes PE32 from PE32+ in the optional header?", options: ["The magic value and field layout", "The filename extension", "The section names", "The DOS letters"], answer: 0, explanation: "The optional-header magic selects the 32-bit or 64-bit field layout." },
-      { prompt: "Why rewind `EIP` after an `int3` breakpoint?", options: ["The CPU already advanced past the one-byte breakpoint", "To restart the process", "To skip the original instruction", "To enlarge the stack"], answer: 0, explanation: "Rewinding lets the restored original instruction execute from its real start." }
+      { prompt: "Why rewind `EIP` after an `int3` breakpoint?", options: ["The CPU already advanced past the one-byte breakpoint", "To restart the process", "To skip the original instruction", "To enlarge the stack"], answer: 0, explanation: "Rewinding lets the restored original instruction execute from its real start." },
+      { prompt: "Why use wildcards for relocation-dependent bytes in a pattern?", options: ["Those bytes may change while the surrounding instruction structure remains characteristic", "Wildcards make every match unique", "They decode instructions", "They disable ASLR"], answer: 0, explanation: "A signature should keep stable identity bytes and ignore fields expected to vary across load locations." },
+      { prompt: "What should happen when an instruction decoder reports an invalid or truncated instruction?", options: ["Stop or resynchronize according to an explicit error policy", "Assume it is one byte", "Patch the next five bytes", "Treat the data as UTF-8"], answer: 0, explanation: "Inventing a length corrupts all later boundaries. A disassembler must surface decode failure." },
+      { prompt: "How do the export and import tables differ?", options: ["Exports advertise symbols a module provides; imports name symbols it needs", "Both store thread stacks", "Imports contain textures", "Exports are always live pointers on disk"], answer: 0, explanation: "The loader uses import requests and provider exports to resolve cross-module calls." },
+      { prompt: "Why can two processes load the same DLL at different addresses?", options: ["Each has a separate virtual address space and ASLR placement", "DLLs have no preferred base", "File offsets are random", "Exports change size"], answer: 0, explanation: "Module identity can be shared while live virtual addresses remain process-specific." },
+      { prompt: "Why must instrumentation guard against re-entering its own logger?", options: ["Logging may call code that reaches the hooked path again and recurse", "Hooks cannot call functions", "Registers cannot be saved", "Logs are executable"], answer: 0, explanation: "A thread-local reentrancy guard or carefully isolated sink prevents recursive observation from overwhelming the target." }
     ],
     8: [
       { prompt: "Why copy a file before parsing or modifying it?", options: ["To preserve a known recovery point", "To change its format", "To remove its header", "To make offsets virtual"], answer: 0, explanation: "An untouched source makes experiments reversible and comparisons trustworthy." },
       { prompt: "What should a parser validate before slicing bytes?", options: ["That offset + length stays inside the file", "Only the filename", "The screen resolution", "The process ID"], answer: 0, explanation: "Checked boundary math prevents truncated or malicious data from becoming an out-of-range access." },
       { prompt: "Why preserve unknown fields when rewriting a format?", options: ["They may carry meaning your tool does not understand", "They are always comments", "They make files smaller", "Rust requires them"], answer: 0, explanation: "Unknown does not mean useless. Dropping it can silently damage compatibility." },
       { prompt: "What makes a mod easy to undo?", options: ["Keeping changes in a separate override folder", "Editing every base file", "Deleting the original", "Changing unrelated assets"], answer: 0, explanation: "A separate mod layer can be disabled or removed without reconstructing the installation." },
-      { prompt: "Why parse named fields instead of blind search-and-replace?", options: ["The same text may appear in unrelated contexts", "Search never finds text", "Named fields use no bytes", "It makes every file JSON"], answer: 0, explanation: "Structured parsing changes the intended field and preserves other occurrences." }
+      { prompt: "Why parse named fields instead of blind search-and-replace?", options: ["The same text may appear in unrelated contexts", "Search never finds text", "Named fields use no bytes", "It makes every file JSON"], answer: 0, explanation: "Structured parsing changes the intended field and preserves other occurrences." },
+      { prompt: "What does a controlled diff between two save files reveal?", options: ["Which byte ranges or fields changed with one known game action", "The live call stack", "The GPU projection matrix", "The process DACL"], answer: 0, explanation: "Changing one in-game fact turns a binary or structured diff into evidence about its representation." },
+      { prompt: "Why validate a temporary output before replacing the original file?", options: ["A failed serializer should not destroy the last known-good copy", "Temporary files bypass parsing", "Validation makes writes atomic", "It changes file permissions"], answer: 0, explanation: "The temporary file can be parsed and checked completely before an atomic replacement step." },
+      { prompt: "Why must replacement textures preserve mipmap and compression expectations?", options: ["The engine and GPU loader interpret bytes using that metadata", "Pixels contain process handles", "Mipmaps choose network ports", "Compression fixes coordinates"], answer: 0, explanation: "Asset bytes require the same format contract expected by the renderer." },
+      { prompt: "What does a checksum inside an archive primarily detect?", options: ["Accidental or unexpected changes to the covered bytes", "Who authored the archive", "Whether code is safe", "The live module base"], answer: 0, explanation: "A checksum is an integrity signal, not proof of identity or security." },
+      { prompt: "Why version a mod's data schema?", options: ["Readers can select the correct field rules as the format evolves", "Versions keep pointers stable", "Schemas eliminate backups", "It prevents all invalid values"], answer: 0, explanation: "Explicit versions make compatibility decisions and migrations testable instead of guessed." }
     ],
     9: [
       { prompt: "What does `MEM_COMMIT` tell you?", options: ["Storage is committed for the range", "The page is executable", "The page belongs to a DLL", "The address is permanent"], answer: 0, explanation: "State, type, and protection answer different questions. Committed state alone does not grant every access." },
       { prompt: "Why is writable-and-executable memory worth reviewing?", options: ["It combines permissions commonly separated by W^X", "It is always malware", "It cannot contain code", "It is read-only"], answer: 0, explanation: "W+X is not proof of abuse, but it deserves an explanation because writable code is unusually powerful." },
       { prompt: "What does least privilege mean for a process handle?", options: ["Request only the rights the current operation needs", "Always request full access", "Never close the handle", "Use the largest numeric mask"], answer: 0, explanation: "Smaller rights clarify intent and reduce accidental capability." },
       { prompt: "Why can `ReadProcessMemory` fail after `VirtualQueryEx` said a region was readable?", options: ["The target can change between the check and the read", "Addresses are strings", "Pages have no state", "The query writes memory"], answer: 0, explanation: "This is a time-of-check/time-of-use race in a process that keeps running." },
-      { prompt: "What should a read-only mapper avoid requesting?", options: ["Write and remote-thread rights", "Query rights", "Read rights", "A process ID"], answer: 0, explanation: "A mapper needs query and read access, not mutation capabilities." }
+      { prompt: "What should a read-only mapper avoid requesting?", options: ["Write and remote-thread rights", "Query rights", "Read rights", "A process ID"], answer: 0, explanation: "A mapper needs query and read access, not mutation capabilities." },
+      { prompt: "How does a thread differ from a process?", options: ["A thread is one execution path sharing its process's address space and resources", "A thread has its own executable file", "A process shares one stack among all threads", "Threads have no registers"], answer: 0, explanation: "Threads have individual contexts and stacks but share the process container." },
+      { prompt: "What does an access token describe?", options: ["The security identity and privileges used for access checks", "A module's RVA", "The current instruction bytes", "A texture format"], answer: 0, explanation: "Windows compares token identity and privileges with an object's security rules when granting access." },
+      { prompt: "Why is a small crash dump often preferable to dumping all memory?", options: ["It can capture relevant threads, modules, and contexts with less sensitive or irrelevant data", "It keeps the process running forever", "It contains source code", "It disables ASLR"], answer: 0, explanation: "Selectivity reduces size and data exposure while preserving the evidence needed for a scoped crash." },
+      { prompt: "What is an ETW provider?", options: ["A component that emits structured events into trace sessions", "A kernel patch", "A file compressor", "A pointer scanner"], answer: 0, explanation: "Controllers select providers and sessions record timestamped events for later correlation." },
+      { prompt: "What makes loader lock a deadlock risk?", options: ["DllMain may wait for work that itself needs the loader's locked state", "It makes modules read-only", "It prevents CPU exceptions", "It changes byte order"], answer: 0, explanation: "Circular waiting occurs when code under loader lock invokes or waits on operations that need the same loader progress." }
     ],
     10: [
       { prompt: "What does `ERROR_PIPE_CONNECTED` mean during the named-pipe race?", options: ["A client already connected", "The pipe was deleted", "The message is too large", "The server lost permission"], answer: 0, explanation: "A fast client can connect between pipe creation and the server's connect call." },
       { prompt: "Why prefer a small message enum over a command string?", options: ["It limits input to explicitly supported actions", "It makes every client an administrator", "It runs PowerShell faster", "It shares pointers"], answer: 0, explanation: "Structured messages are data. Arbitrary command strings can accidentally become code execution." },
       { prompt: "What does a shared file mapping share between processes?", options: ["Backing storage, possibly at different virtual addresses", "One Rust reference", "The same thread", "A debugger"], answer: 0, explanation: "Each process maps the same object into its own address space; the virtual addresses may differ." },
       { prompt: "What does a SHA-256 hash help identify?", options: ["The exact bytes of a file", "A process permission", "A window coordinate", "A function argument"], answer: 0, explanation: "A changed byte changes the digest with overwhelming probability, making hashes useful build fingerprints." },
-      { prompt: "Why keep ordinary learning tools in user mode?", options: ["A mistake is less likely to crash or corrupt the whole system", "User mode has no memory", "Kernel mode cannot use Rust", "Drivers cannot read files"], answer: 0, explanation: "Kernel code has system-wide privilege. User mode provides a safer failure boundary for these labs." }
+      { prompt: "Why keep ordinary learning tools in user mode?", options: ["A mistake is less likely to crash or corrupt the whole system", "User mode has no memory", "Kernel mode cannot use Rust", "Drivers cannot read files"], answer: 0, explanation: "Kernel code has system-wide privilege. User mode provides a safer failure boundary for these labs." },
+      { prompt: "What does a system call change?", options: ["The CPU privilege level and execution path enter a validated kernel service", "The executable's hash", "The network byte order", "The process architecture"], answer: 0, explanation: "A system call is a controlled transition, with arguments validated by the kernel before privileged work." },
+      { prompt: "What is a forwarded export?", options: ["An export entry that names another module and symbol instead of containing code", "A copied stack frame", "A shared-memory message", "A signed hash"], answer: 0, explanation: "The loader follows the forwarder string to resolve the actual provider function." },
+      { prompt: "Why can shared memory map at different addresses in two processes?", options: ["Each process chooses a virtual address for the same backing object", "The bytes are different", "Mappings disable virtual memory", "Only one process has pages"], answer: 0, explanation: "The shared object is the identity; each process's view address is local to its own address space." },
+      { prompt: "What does a digital signature add beyond a digest?", options: ["A cryptographic claim tied to a signing key and trust policy", "Proof that software has no bugs", "A permanent file path", "A process handle"], answer: 0, explanation: "A signature associates bytes with a key identity, while validation policy decides whether that identity is trusted." },
+      { prompt: "Why should a named-pipe protocol use explicit message types and sizes?", options: ["The receiver can validate bounded data instead of interpreting arbitrary commands", "Pipes automatically run text", "It removes synchronization", "It makes handles global"], answer: 0, explanation: "A small framed protocol constrains behavior and makes malformed input fail at a clear boundary." }
     ]
   };
 
@@ -341,10 +391,26 @@
 
     const quizId = root.dataset.quizId;
     const quizType = root.dataset.quizType;
+    const seed = String(root.dataset.quizSeed || quizId || "quiz");
     const correctAnswer = normalizeAnswer(root.dataset.answer);
     const acceptedAnswers = [correctAnswer]
       .concat(String(root.dataset.alternatives || "").split("||").map(normalizeAnswer))
       .filter(Boolean);
+    const optionContainer = root.querySelector(".academy-quiz__options");
+    if (quizType === "multiple-choice" && optionContainer) {
+      const originalOptions = Array.from(optionContainer.querySelectorAll("[data-quiz-option]"));
+      const rotation = originalOptions.length
+        ? Array.from(seed).reduce((total, character) => total + character.charCodeAt(0), 0) % originalOptions.length
+        : 0;
+      originalOptions
+        .slice(rotation)
+        .concat(originalOptions.slice(0, rotation))
+        .forEach((button, index) => {
+          const letter = button.querySelector(".academy-quiz__option-letter");
+          if (letter) letter.textContent = String.fromCharCode(65 + index);
+          optionContainer.append(button);
+        });
+    }
     const optionButtons = Array.from(root.querySelectorAll("[data-quiz-option]"));
     const input = root.querySelector("[data-quiz-input]");
     const submit = root.querySelector("[data-quiz-submit]");
@@ -355,7 +421,6 @@
     const storageKey = `${STORAGE_PREFIX}${quizId}`;
     const chapter = Number(root.dataset.quizChapter);
     const reviewBank = REVIEW_BANKS[chapter] || [];
-    const seed = String(root.dataset.quizSeed || quizId || chapter);
     const offset = reviewBank.length
       ? Array.from(seed).reduce((total, character) => total + character.charCodeAt(0), 0) % reviewBank.length
       : 0;
@@ -449,18 +514,28 @@
       extensionCheck.hidden = false;
       extensionNext.hidden = true;
       extensionOptions.replaceChildren();
-      followUpOptionButtons = question.options.map((optionText, index) => {
+      const followUpRotation = question.options.length
+        ? (Array.from(seed).reduce((total, character) => total + character.charCodeAt(0), 0) + followUpIndex)
+          % question.options.length
+        : 0;
+      const orderedOptionIndexes = question.options
+        .map((_optionText, index) => index)
+        .slice(followUpRotation)
+        .concat(question.options.map((_optionText, index) => index).slice(0, followUpRotation));
+      followUpOptionButtons = orderedOptionIndexes.map((originalIndex, visualIndex) => {
+        const optionText = question.options[originalIndex];
         const button = element("button", "academy-quiz__extension-option");
         button.type = "button";
+        button.dataset.optionIndex = String(originalIndex);
         button.setAttribute("aria-pressed", "false");
         button.append(
-          element("span", "academy-quiz__option-letter", String.fromCharCode(65 + index)),
+          element("span", "academy-quiz__option-letter", String.fromCharCode(65 + visualIndex)),
           element("span", "", optionText)
         );
         button.addEventListener("click", () => {
-          followUpSelected = index;
-          followUpOptionButtons.forEach((candidate, candidateIndex) => {
-            const active = candidateIndex === index;
+          followUpSelected = originalIndex;
+          followUpOptionButtons.forEach((candidate) => {
+            const active = Number(candidate.dataset.optionIndex) === originalIndex;
             candidate.classList.toggle("is-selected", active);
             candidate.setAttribute("aria-pressed", String(active));
           });
@@ -486,10 +561,11 @@
       extensionFeedback.className = `academy-quiz__extension-feedback ${wasCorrect ? "is-correct" : "is-incorrect"}`;
       extensionFeedbackTitle.textContent = wasCorrect ? "✅ Correct" : "❌ Not quite";
       extensionFeedbackText.textContent = question.explanation;
-      followUpOptionButtons.forEach((button, index) => {
+      followUpOptionButtons.forEach((button) => {
+        const originalIndex = Number(button.dataset.optionIndex);
         button.disabled = true;
-        button.classList.toggle("is-correct-answer", index === question.answer);
-        button.classList.toggle("is-wrong-answer", index === followUpSelected && !wasCorrect);
+        button.classList.toggle("is-correct-answer", originalIndex === question.answer);
+        button.classList.toggle("is-wrong-answer", originalIndex === followUpSelected && !wasCorrect);
       });
       extensionCheck.hidden = true;
       extensionNext.hidden = false;
