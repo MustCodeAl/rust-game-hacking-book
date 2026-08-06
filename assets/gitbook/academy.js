@@ -244,6 +244,8 @@
     code.querySelectorAll("span").forEach(function (token) {
       if (token.children.length > 0) return;
 
+      decorateCodeComment(token);
+
       var value = token.textContent.trim();
       if (!value) return;
 
@@ -277,6 +279,78 @@
 
       if (!role) return;
       token.classList.add("semantic-token", "semantic-token--" + role);
+    });
+  }
+
+  function decorateCodeComment(token) {
+    var commentClasses = ["c", "ch", "cd", "cm", "cpf", "c1", "cs"];
+    var isComment = commentClasses.some(function (className) {
+      return token.classList.contains(className);
+    });
+    if (!isComment || token.dataset.commentEmoji === "true") return;
+
+    var original = token.textContent;
+    var marker = original.match(/^(\s*(?:(?:\/\/+)|(?:<!--)|(?:--(?!>))|#|;|\/\*+|\*+)\s*)/);
+    if (!marker) return;
+
+    var comment = original.slice(marker[0].length);
+    if (/^(?:🛡️|⚠️|✅|🔍|🛠️|💡|🧠|🧪)/u.test(comment)) return;
+
+    var emoji = "💡";
+    if (/\b(?:warning|caution|danger|never|do not)\b/i.test(comment)) emoji = "⚠️";
+    else if (/\b(?:safety|safe|permission|validate|bounds?|guard)\b/i.test(comment)) emoji = "🛡️";
+    else if (/\b(?:test|assert|verify|expect|check)\b/i.test(comment)) emoji = "✅";
+    else if (/\b(?:read|find|scan|observe|inspect|look|trace)\b/i.test(comment)) emoji = "🔍";
+    else if (/\b(?:todo|build|create|write|implement|replace)\b/i.test(comment)) emoji = "🛠️";
+
+    token.textContent = marker[0] + emoji + (comment ? " " + comment : "");
+    token.dataset.commentEmoji = "true";
+    token.classList.add("semantic-comment");
+  }
+
+  function decorateLessonText() {
+    var rules = [
+      { pattern: /^checkpoint\b/i, emoji: "✅" },
+      { pattern: /^(?:avoid|do not|never|wrong|bad|fragile)\b/i, emoji: "❌" },
+      { pattern: /^(?:a safe|good|correct|preferred|recommended|verified)\b/i, emoji: "✅" },
+      { pattern: /^(?:scope|safety|permission|guard|restore|cleanup|validate)\b/i, emoji: "🛡️" },
+      { pattern: /^(?:test|try|run|lab|experiment|exercise)\b/i, emoji: "🧪" },
+      { pattern: /^(?:build|write|implement|create|make|add|compile|model)\b/i, emoji: "🛠️" },
+      { pattern: /^(?:find|locate|inspect|observe|debug|scan|trace|read|search|verify|diagnose)\b/i, emoji: "🔍" },
+      { pattern: /^(?:memory|bytes?|pointers?|addresses?|stack|heap|cpu|assembly|registers?|process|threads?|network|packets?|sockets?|protocol|rust|windows|pe\b|code cave)\b/i, emoji: "💻" },
+      { pattern: /^(?:coordinates?|angles?|matrix|screen|transform|world|3d)\b/i, emoji: "🧭" },
+      { pattern: /^(?:files?|mods?|maps?|sections?)\b/i, emoji: "🗂️" },
+      { pattern: /^(?:why|how|what|understand|mental model|concept)\b/i, emoji: "🧠" }
+    ];
+
+    document.querySelectorAll(".markdown-section h2, .markdown-section h3").forEach(function (heading) {
+      if (heading.dataset.emojiReady === "true") return;
+      heading.dataset.emojiReady = "true";
+      var text = heading.textContent.trim();
+      var rule = rules.find(function (candidate) { return candidate.pattern.test(text); });
+      if (!rule) return;
+      var icon = document.createElement("span");
+      icon.className = "lesson-heading__emoji";
+      icon.setAttribute("aria-hidden", "true");
+      icon.textContent = rule.emoji;
+      heading.insertBefore(icon, heading.firstChild);
+    });
+
+    document.querySelectorAll(
+      ".markdown-section p, .markdown-section li, .markdown-section th, .markdown-section td"
+    ).forEach(function (block) {
+      if (block.dataset.comparisonCue === "true" || block.closest("pre")) return;
+      block.dataset.comparisonCue = "true";
+      var text = block.textContent.trim();
+      var emoji = null;
+      if (/^(?:do not|don't|never|avoid|bad|wrong|fragile|incorrect)\b/i.test(text)) emoji = "❌";
+      else if (/^(?:good|a good|correct|safer?|recommended|preferred|verified)\b/i.test(text)) emoji = "✅";
+      if (!emoji) return;
+      var cue = document.createElement("span");
+      cue.className = "comparison-cue";
+      cue.setAttribute("aria-hidden", "true");
+      cue.textContent = emoji;
+      block.insertBefore(cue, block.firstChild);
     });
   }
 
@@ -344,6 +418,7 @@
     initThemeSwitcher();
     bindReadingProgress();
     labelCodeBlocks();
+    decorateLessonText();
   }
 
   function bindGitBookLifecycle() {
