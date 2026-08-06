@@ -2,16 +2,26 @@
   "use strict";
 
   var THEMES = [
-    { id: "paper", label: "Paper", browser: "#15130f" },
-    { id: "light", label: "Light", browser: "#f7f9fc" },
-    { id: "dark", label: "Dark", browser: "#0f1216" },
-    { id: "purple", label: "Purple", browser: "#1e0028" },
-    { id: "midnight", label: "Midnight", browser: "#07111d" },
-    { id: "forest", label: "Forest", browser: "#102018" },
-    { id: "contrast", label: "Contrast", browser: "#000000" }
+    { id: "paper", label: "Paper", browser: { light: "#f7f9fc", dark: "#0f1216" } },
+    { id: "purple", label: "Purple", browser: { light: "#f7f1fb", dark: "#0f0917" } },
+    { id: "midnight", label: "Midnight", browser: { light: "#eef6fb", dark: "#07111d" } },
+    { id: "forest", label: "Forest", browser: { light: "#eef3e8", dark: "#0d1710" } },
+    { id: "contrast", label: "Contrast", browser: { light: "#ffffff", dark: "#000000" } }
   ];
+  var MODES = [
+    { id: "light", label: "Light" },
+    { id: "dark", label: "Dark" }
+  ];
+  var NATURAL_MODES = {
+    paper: "light",
+    purple: "dark",
+    midnight: "dark",
+    forest: "light",
+    contrast: "light"
+  };
   var themeEventsReady = false;
   var themeObserverReady = false;
+  var tocEventsReady = false;
   var LANGUAGE_LABELS = {
     diff: "before → after",
     nasm: "x86 assembly",
@@ -55,6 +65,10 @@
     return THEMES.find(function (theme) { return theme.id === id; }) || THEMES[0];
   }
 
+  function findMode(id) {
+    return MODES.find(function (mode) { return mode.id === id; }) || MODES[0];
+  }
+
   function readSavedTheme() {
     try {
       return localStorage.getItem("gha-theme");
@@ -71,9 +85,28 @@
     }
   }
 
-  function updateThemeControls(theme) {
+  function readSavedMode() {
+    try {
+      return localStorage.getItem("gha-mode");
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function saveMode(id) {
+    try {
+      localStorage.setItem("gha-mode", id);
+    } catch (error) {
+      /* A blocked storage API should not block reading the book. */
+    }
+  }
+
+  function updateThemeControls(theme, mode) {
     document.querySelectorAll("[data-theme-label]").forEach(function (label) {
       label.textContent = theme.label;
+    });
+    document.querySelectorAll("[data-mode-label]").forEach(function (label) {
+      label.textContent = mode.label;
     });
     document.querySelectorAll("[data-theme-choice]").forEach(function (button) {
       button.setAttribute(
@@ -81,22 +114,48 @@
         button.dataset.themeChoice === theme.id ? "true" : "false"
       );
     });
+    document.querySelectorAll("[data-mode-choice]").forEach(function (button) {
+      button.setAttribute(
+        "aria-pressed",
+        button.dataset.modeChoice === mode.id ? "true" : "false"
+      );
+    });
+  }
+
+  function applyAppearance(themeId, modeId, persist) {
+    var theme = findTheme(themeId);
+    var mode = findMode(modeId);
+    document.documentElement.dataset.academyTheme = theme.id;
+    document.documentElement.dataset.academyMode = mode.id;
+    updateThemeControls(theme, mode);
+
+    var browserColor = document.querySelector('meta[name="theme-color"]');
+    if (browserColor) browserColor.setAttribute("content", theme.browser[mode.id]);
+    if (persist !== false) {
+      saveTheme(theme.id);
+      saveMode(mode.id);
+    }
   }
 
   function applyTheme(id, persist) {
-    var theme = findTheme(id);
-    document.documentElement.dataset.academyTheme = theme.id;
-    updateThemeControls(theme);
+    var mode = document.documentElement.dataset.academyMode || readSavedMode() || "light";
+    applyAppearance(id, mode, persist);
+  }
 
-    var browserColor = document.querySelector('meta[name="theme-color"]');
-    if (browserColor) browserColor.setAttribute("content", theme.browser);
-    if (persist !== false) saveTheme(theme.id);
+  function applyMode(id, persist) {
+    var theme = document.documentElement.dataset.academyTheme || readSavedTheme() || "paper";
+    applyAppearance(theme, id, persist);
   }
 
   function cycleTheme() {
     var current = findTheme(document.documentElement.dataset.academyTheme);
     var index = THEMES.findIndex(function (theme) { return theme.id === current.id; });
     applyTheme(THEMES[(index + 1) % THEMES.length].id);
+  }
+
+  function cycleMode() {
+    var current = findMode(document.documentElement.dataset.academyMode);
+    applyMode(current.id === "light" ? "dark" : "light");
   }
 
   function closeThemeMenu(switcher) {
@@ -114,8 +173,14 @@
   }
 
   function initThemeSwitcher() {
-    var saved = document.documentElement.dataset.academyTheme || readSavedTheme() || "paper";
-    applyTheme(saved, false);
+    var savedTheme = document.documentElement.dataset.academyTheme || readSavedTheme() || "paper";
+    var savedMode = document.documentElement.dataset.academyMode || readSavedMode();
+    if (savedTheme === "light" || savedTheme === "dark") {
+      savedMode = savedTheme;
+      savedTheme = "paper";
+    }
+    if (!savedMode) savedMode = NATURAL_MODES[findTheme(savedTheme).id] || "light";
+    applyAppearance(savedTheme, savedMode, false);
 
     document.querySelectorAll("[data-theme-switcher]").forEach(function (switcher) {
       var toggle = switcher.querySelector(".theme-switcher__toggle");
@@ -134,13 +199,20 @@
     document.addEventListener("click", function (event) {
       var choice = event.target.closest("[data-theme-choice]");
       if (choice) {
-        var choiceSwitcher = choice.closest("[data-theme-switcher]");
         applyTheme(choice.dataset.themeChoice);
-        if (choiceSwitcher) {
-          closeThemeMenu(choiceSwitcher);
-          var choiceToggle = choiceSwitcher.querySelector(".theme-switcher__toggle");
-          if (choiceToggle) choiceToggle.focus();
-        }
+        return;
+      }
+
+      var modeChoice = event.target.closest("[data-mode-choice]");
+      if (modeChoice) {
+        applyMode(modeChoice.dataset.modeChoice);
+        return;
+      }
+
+      var printButton = event.target.closest("[data-print-book]");
+      if (printButton) {
+        closeThemeMenus();
+        requestAnimationFrame(function () { window.print(); });
         return;
       }
 
@@ -166,6 +238,10 @@
         event.preventDefault();
         cycleTheme();
       }
+      if (event.altKey && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        cycleMode();
+      }
     });
   }
 
@@ -189,6 +265,23 @@
     observer.observe(document.querySelector(".book") || document.body, {
       childList: true,
       subtree: true
+    });
+  }
+
+  function initTableOfContents() {
+    if (tocEventsReady) return;
+    tocEventsReady = true;
+    document.addEventListener("click", function (event) {
+      var toggle = event.target.closest("[data-toc-chapter-toggle]");
+      if (!toggle) return;
+      var chapter = toggle.dataset.tocChapterToggle;
+      var willOpen = toggle.getAttribute("aria-expanded") !== "true";
+      toggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      document.querySelectorAll(
+        '.book-summary li.chapter[data-academy-chapter="' + chapter + '"]'
+      ).forEach(function (lesson) {
+        lesson.hidden = !willOpen;
+      });
     });
   }
 
@@ -313,14 +406,8 @@
       { pattern: /^checkpoint\b/i, emoji: "✅" },
       { pattern: /^(?:avoid|do not|never|wrong|bad|fragile)\b/i, emoji: "❌" },
       { pattern: /^(?:a safe|good|correct|preferred|recommended|verified)\b/i, emoji: "✅" },
-      { pattern: /^(?:scope|safety|permission|guard|restore|cleanup|validate)\b/i, emoji: "🛡️" },
-      { pattern: /^(?:test|try|run|lab|experiment|exercise)\b/i, emoji: "🧪" },
-      { pattern: /^(?:build|write|implement|create|make|add|compile|model)\b/i, emoji: "🛠️" },
-      { pattern: /^(?:find|locate|inspect|observe|debug|scan|trace|read|search|verify|diagnose)\b/i, emoji: "🔍" },
-      { pattern: /^(?:memory|bytes?|pointers?|addresses?|stack|heap|cpu|assembly|registers?|process|threads?|network|packets?|sockets?|protocol|rust|windows|pe\b|code cave)\b/i, emoji: "💻" },
-      { pattern: /^(?:coordinates?|angles?|matrix|screen|transform|world|3d)\b/i, emoji: "🧭" },
-      { pattern: /^(?:files?|mods?|maps?|sections?)\b/i, emoji: "🗂️" },
-      { pattern: /^(?:why|how|what|understand|mental model|concept)\b/i, emoji: "🧠" }
+      { pattern: /^(?:scope|safety|permission)\b/i, emoji: "🛡️" },
+      { pattern: /^(?:test|try|run the (?:lab|tool)|exercise)\b/i, emoji: "🧪" }
     ];
 
     document.querySelectorAll(".markdown-section h2, .markdown-section h3").forEach(function (heading) {
@@ -336,9 +423,7 @@
       heading.insertBefore(icon, heading.firstChild);
     });
 
-    document.querySelectorAll(
-      ".markdown-section p, .markdown-section li, .markdown-section th, .markdown-section td"
-    ).forEach(function (block) {
+    document.querySelectorAll(".markdown-section th, .markdown-section td").forEach(function (block) {
       if (block.dataset.comparisonCue === "true" || block.closest("pre")) return;
       block.dataset.comparisonCue = "true";
       var text = block.textContent.trim();
@@ -416,6 +501,7 @@
 
   function initializePageFeatures() {
     initThemeSwitcher();
+    initTableOfContents();
     bindReadingProgress();
     labelCodeBlocks();
     decorateLessonText();
