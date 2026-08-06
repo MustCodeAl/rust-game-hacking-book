@@ -101,6 +101,22 @@
     }
   }
 
+  function readSavedCodeMode() {
+    try {
+      return localStorage.getItem("gha-code-mode");
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function saveCodeMode(id) {
+    try {
+      localStorage.setItem("gha-code-mode", id);
+    } catch (error) {
+      /* A blocked storage API should not block reading the book. */
+    }
+  }
+
   function updateThemeControls(theme, mode) {
     document.querySelectorAll("[data-theme-label]").forEach(function (label) {
       label.textContent = theme.label;
@@ -137,6 +153,26 @@
     }
   }
 
+  function updateCodeModeControls(mode) {
+    document.querySelectorAll("[data-code-mode-label]").forEach(function (label) {
+      label.textContent = mode.label;
+    });
+    document.querySelectorAll("[data-code-mode-choice]").forEach(function (button) {
+      button.setAttribute(
+        "aria-pressed",
+        button.dataset.codeModeChoice === mode.id ? "true" : "false"
+      );
+    });
+  }
+
+  function applyCodeMode(id, persist) {
+    var requestedMode = MODES.some(function (mode) { return mode.id === id; }) ? id : "dark";
+    var mode = findMode(requestedMode);
+    document.documentElement.dataset.academyCodeMode = mode.id;
+    updateCodeModeControls(mode);
+    if (persist !== false) saveCodeMode(mode.id);
+  }
+
   function applyTheme(id, persist) {
     var mode = document.documentElement.dataset.academyMode || readSavedMode() || "light";
     applyAppearance(id, mode, persist);
@@ -156,6 +192,11 @@
   function cycleMode() {
     var current = findMode(document.documentElement.dataset.academyMode);
     applyMode(current.id === "light" ? "dark" : "light");
+  }
+
+  function cycleCodeMode() {
+    var current = findMode(document.documentElement.dataset.academyCodeMode || "dark");
+    applyCodeMode(current.id === "dark" ? "light" : "dark");
   }
 
   function closeThemeMenu(switcher) {
@@ -181,6 +222,10 @@
     }
     if (!savedMode) savedMode = NATURAL_MODES[findTheme(savedTheme).id] || "light";
     applyAppearance(savedTheme, savedMode, false);
+    applyCodeMode(
+      document.documentElement.dataset.academyCodeMode || readSavedCodeMode() || "dark",
+      false
+    );
 
     document.querySelectorAll("[data-theme-switcher]").forEach(function (switcher) {
       var toggle = switcher.querySelector(".theme-switcher__toggle");
@@ -206,6 +251,12 @@
       var modeChoice = event.target.closest("[data-mode-choice]");
       if (modeChoice) {
         applyMode(modeChoice.dataset.modeChoice);
+        return;
+      }
+
+      var codeModeChoice = event.target.closest("[data-code-mode-choice]");
+      if (codeModeChoice) {
+        applyCodeMode(codeModeChoice.dataset.codeModeChoice);
         return;
       }
 
@@ -241,6 +292,10 @@
       if (event.altKey && event.key.toLowerCase() === "d") {
         event.preventDefault();
         cycleMode();
+      }
+      if (event.altKey && event.key.toLowerCase() === "c") {
+        event.preventDefault();
+        cycleCodeMode();
       }
     });
   }
