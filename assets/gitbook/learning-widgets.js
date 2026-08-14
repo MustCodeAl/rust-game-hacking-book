@@ -1,7 +1,9 @@
 (function () {
   "use strict";
 
-  const STORAGE_PREFIX = "gha-quiz:";
+  // Version the saved answer format so an older quiz layout cannot revive stale UI state.
+  const STORAGE_PREFIX = "gha-quiz:v3:";
+  const FOLLOW_UP_COUNT = 4;
 
   const OWNERSHIP_EXAMPLES = {
     "move-string": {
@@ -136,7 +138,13 @@
       { prompt: "Why can a conditional jump be understood only with the earlier flag-setting instruction?", options: ["The jump reads CPU flags rather than the original high-level condition", "Jumps contain source variable names", "Flags store the complete call stack", "Every jump changes page permissions"], answer: 0, explanation: "Instructions such as cmp and test set flags; a later jcc interprets those flags to choose a path." },
       { prompt: "What does a calling convention define?", options: ["How arguments, return values, registers, and stack cleanup are shared across a call", "How files are compressed", "Where ASLR places modules", "Which debugger theme to use"], answer: 0, explanation: "Both caller and callee need one ABI contract or they will disagree about machine state." },
       { prompt: "How does a software breakpoint commonly pause x86 code?", options: ["It temporarily replaces one instruction byte with int3", "It deletes the stack", "It sets every debug register", "It encrypts the opcode"], answer: 0, explanation: "The one-byte int3 instruction raises a breakpoint exception that the debugger handles." },
-      { prompt: "Why record a module-relative location instead of one absolute address?", options: ["ASLR may move the module while the internal RVA remains stable for that build", "Relative locations ignore instruction boundaries", "Absolute addresses cannot hold code", "Modules load only once per computer"], answer: 0, explanation: "The live base can change on each run, so base plus build-specific RVA is a reproducible description." }
+      { prompt: "Why record a module-relative location instead of one absolute address?", options: ["ASLR may move the module while the internal RVA remains stable for that build", "Relative locations ignore instruction boundaries", "Absolute addresses cannot hold code", "Modules load only once per computer"], answer: 0, explanation: "The live base can change on each run, so base plus build-specific RVA is a reproducible description." },
+      { prompt: "What does the `this` pointer normally identify inside a C++ member function?", options: ["The object instance receiving the method call", "The executable's first instruction", "The current Windows process handle", "The method's return address"], answer: 0, explanation: "A non-static member function needs an object to work on. The hidden `this` argument supplies that object's base address." },
+      { prompt: "What is strong evidence that an object begins with a C++ virtual-function pointer?", options: ["The first field points into a read-only table of executable function addresses", "The first four bytes are zero", "Every field is a floating-point number", "The object lives on the stack"], answer: 0, explanation: "A common C++ layout stores a vptr near the object start. It points to a vtable whose entries lead to executable methods, though this is an implementation pattern rather than a language guarantee." },
+      { prompt: "Why should a recovered structure include unknown padding instead of squeezing known fields together?", options: ["Offsets describe real byte distances, including bytes whose purpose is not known yet", "Padding makes pointers permanent", "The compiler ignores declared fields", "Unknown bytes are always encrypted"], answer: 0, explanation: "The next known field must remain at its observed offset. Unknown or alignment bytes still occupy space even before you understand them." },
+      { prompt: "Why compare several instances of the same suspected class?", options: ["Stable offsets and plausible per-object differences separate fields from coincidences", "Every instance has the same address", "It removes the need for breakpoints", "It reveals the original source file"], answer: 0, explanation: "If health, position, and name behave consistently at the same offsets across several objects, the proposed layout has much stronger evidence." },
+      { prompt: "What does an indirect call through `[vtable + slot]` suggest?", options: ["A virtual method dispatch through a function-table entry", "A direct call to a fixed address", "A string comparison", "A heap allocation size"], answer: 0, explanation: "Virtual dispatch loads a function pointer from the object's table and calls the selected slot. The exact sequence depends on architecture and compiler." },
+      { prompt: "Why read remote fields individually in a Rust observer instead of casting a remote address to `&Player`?", options: ["The address belongs to another process and Rust cannot give it a valid local reference lifetime", "Rust structs cannot contain numbers", "Windows forbids all structured reads", "Individual reads disable ASLR"], answer: 0, explanation: "A numeric address in the target is not local borrowed memory. Typed, bounded copies keep that process boundary explicit and make each layout assumption checkable." }
     ],
     3: [
       { prompt: "What problem does Rust ownership prevent?", options: ["Two owners freeing the same allocation", "A server sending packets", "A debugger setting breakpoints", "A matrix moving a point"], answer: 0, explanation: "Ownership gives one value responsibility for cleanup and prevents accidental double-free behavior." },
@@ -233,6 +241,44 @@
       { prompt: "Why can shared memory map at different addresses in two processes?", options: ["Each process chooses a virtual address for the same backing object", "The bytes are different", "Mappings disable virtual memory", "Only one process has pages"], answer: 0, explanation: "The shared object is the identity; each process's view address is local to its own address space." },
       { prompt: "What does a digital signature add beyond a digest?", options: ["A cryptographic claim tied to a signing key and trust policy", "Proof that software has no bugs", "A permanent file path", "A process handle"], answer: 0, explanation: "A signature associates bytes with a key identity, while validation policy decides whether that identity is trusted." },
       { prompt: "Why should a named-pipe protocol use explicit message types and sizes?", options: ["The receiver can validate bounded data instead of interpreting arbitrary commands", "Pipes automatically run text", "It removes synchronization", "It makes handles global"], answer: 0, explanation: "A small framed protocol constrains behavior and makes malformed input fail at a clear boundary." }
+    ],
+    11: [
+      { prompt: "Why embed Lua in a compiled game or tool?", options: ["Small rules and content can change without rebuilding the whole engine", "Lua removes the operating system", "Every pointer becomes valid", "Scripts run before the CPU starts"], answer: 0, explanation: "The compiled host supplies stable capabilities while text scripts can express changeable policy, configuration, and gameplay rules." },
+      { prompt: "What key does the first element of a conventional Lua sequence use?", options: ["1", "0", "-1", "The sequence has no keys"], answer: 0, explanation: "Lua sequences conventionally begin at one, so a Rust Vec index is shifted forward when converted to a Lua table." },
+      { prompt: "What is a Lua table?", options: ["A mapping from keys to values that can model lists, records, and dictionaries", "Only a fixed-size numeric array", "A Windows handle", "Compiled x86 instructions"], answer: 0, explanation: "Tables are Lua's main compound data structure and can use many value types as keys and values." },
+      { prompt: "What does the colon in `bot:update(snapshot)` provide?", options: ["It passes `bot` as the hidden first `self` argument", "It starts a comment", "It makes the function global", "It copies the entire table"], answer: 0, explanation: "Colon call syntax is shorthand for a dot call with the receiver supplied as the first argument." },
+      { prompt: "Why expose `game.snapshot()` instead of `memory.read(address, size)`?", options: ["The host can validate versioned fields and avoid giving scripts arbitrary pointer capability", "Snapshots make all data permanent", "Lua cannot represent bytes", "Memory reads require a network"], answer: 0, explanation: "A domain snapshot keeps process handles, pointer lifetimes, bounds, and layout profiles inside the Rust boundary." },
+      { prompt: "Why should Lua send a structured action request instead of a command string?", options: ["Rust can match a small allowed enum and validate every field", "Strings cannot contain numbers", "Tables execute faster than machine code", "A request bypasses state checks"], answer: 0, explanation: "Structured data constrains behavior; arbitrary command strings can accidentally become a code-execution interface." },
+      { prompt: "What does an instruction hook budget help stop?", options: ["A Lua loop that fails to return control", "All allocation in Rust callbacks", "Windows process exit", "Incorrect UTF-16"], answer: 0, explanation: "Periodic VM hooks can abort scripts that execute too many Lua instructions, though separate limits are still needed for time, memory, and host callbacks." },
+      { prompt: "Why does the host validate an action again after the script chooses it?", options: ["The game state may have changed since the copied snapshot", "Lua tables cannot be read twice", "Validation disables ownership", "The action becomes a file path"], answer: 0, explanation: "Snapshot and action processing happen at different times, so IDs, state, bounds, and permissions must still be current." },
+      { prompt: "What should happen when a script produces an unknown state-machine state?", options: ["Stop with a clear error instead of guessing a transition", "Repeat the last input forever", "Treat it as success", "Write it into game memory"], answer: 0, explanation: "Unknown state indicates a broken invariant. Failing closed makes the control-flow mistake visible." },
+      { prompt: "Why queue Lua requests until the script returns successfully?", options: ["A later script error cannot leave half-committed host actions", "Queues make pointers local", "Lua has no return values", "It avoids all locking"], answer: 0, explanation: "Collect-then-validate gives script execution transaction-like behavior and prevents partial effects after failure." },
+      { prompt: "What does a Lua closure remember?", options: ["Values from the surrounding lexical environment used by the function", "Every Windows thread", "The executable import table", "Only global variables"], answer: 0, explanation: "A closure keeps access to captured locals even after the outer function has returned." },
+      { prompt: "Why load only needed Lua standard libraries?", options: ["The script receives fewer unnecessary capabilities and a smaller documented API", "It makes dynamic typing static", "It guarantees a script has no bugs", "It turns Lua into Rust"], answer: 0, explanation: "Library selection is one layer of capability control, alongside host validation, resource limits, and cancellation." },
+      { prompt: "What does a lexer produce from source text?", options: ["A sequence of tokens", "A Windows process", "Physical page tables", "A vtable"], answer: 0, explanation: "The lexer groups characters into meaningful tokens before the parser checks their grammatical structure." },
+      { prompt: "Why does a stack VM pop the right operand before the left operand?", options: ["The right operand was pushed last", "Lua reads expressions backward", "Integers have reverse endianness", "The instruction pointer is negative"], answer: 0, explanation: "A stack is last-in, first-out. Operand order matters for subtraction, division, and comparisons." },
+      { prompt: "What makes an interpreter value dynamically typed?", options: ["Its runtime representation carries a type tag that operations inspect", "It has no type at all", "It is always a string", "Rust guesses from the address"], answer: 0, explanation: "Dynamic typing moves many checks to runtime; it does not remove types from values or operations." },
+      { prompt: "Why can two closures need one shared upvalue cell?", options: ["Both closures captured the same mutable local and must observe the same updates", "Closures cannot store integers", "A cell changes byte order", "Each closure is a Windows thread"], answer: 0, explanation: "Copying the captured value separately would break the source-language meaning when either closure modifies it." },
+      { prompt: "What is a garbage collector root?", options: ["A live starting reference such as globals, active frames, or host-held values", "The first source-code token", "A table's longest key", "A native return address"], answer: 0, explanation: "Tracing begins from roots and follows reachable objects; unreachable objects can then be reclaimed." },
+      { prompt: "Why should an embedded host limit callback duration separately from Lua bytecode steps?", options: ["A callback can block inside Rust while no Lua instruction is being counted", "Rust callbacks contain no code", "Bytecode budgets allocate files", "Callbacks cannot return errors"], answer: 0, explanation: "A VM hook controls interpreted instructions, not arbitrary time spent inside a native callback." }
+    ],
+    12: [
+      { prompt: "What should a reverse engineer label before a suspected class name is known?", options: ["Observed offsets and behavior with provisional names", "The first nearby source filename", "Every pointer as Player", "Only values that never change"], answer: 0, explanation: "Neutral labels preserve evidence and let the model change as constructors, destructors, and call sites reveal more." },
+      { prompt: "What is strong evidence for a factory pattern?", options: ["A type choice leads to allocation and one of several constructor paths returning a common kind of pointer", "One function returns an integer", "A string contains factory", "The program uses the heap"], answer: 0, explanation: "The allocation-and-construction behavior is the compiled shape that matters; source names may be gone." },
+      { prompt: "Why inspect destructors while reconstructing an object model?", options: ["They reveal which children, references, containers, and allocations an object releases", "They rename vtables", "They make pointers permanent", "They disable inheritance"], answer: 0, explanation: "Cleanup paths are powerful evidence about ownership and object lifetime." },
+      { prompt: "What invariant supports a vector-like container interpretation?", options: ["begin is at or before end, which is at or before capacity end", "All three pointers are equal forever", "The count is stored as text", "Every element is executable"], answer: 0, explanation: "Ordered pointers, divisibility by element size, readable ranges, and a bounded count support the model." },
+      { prompt: "Why can caching a component pointer be unsafe in a dense component pool?", options: ["Removing another component may swap elements and move the component", "Components have no memory", "Pointers cannot refer to arrays", "Entity IDs are virtual addresses"], answer: 0, explanation: "Stable handles or entity IDs can outlive movement that invalidates an element's old address." },
+      { prompt: "What separates obfuscation from encryption?", options: ["Obfuscation mainly hides an obvious representation; encryption provides a security property under a key and threat model", "Obfuscation is always irreversible", "Encryption has no algorithm", "Only obfuscation changes bytes"], answer: 0, explanation: "A reversible home-made transform can slow casual inspection but is not a substitute for reviewed cryptography." },
+      { prompt: "Why test decode(encode(value, key), key) for many values?", options: ["It checks that the proposed inverse works generally rather than for one coincidence", "It proves the key is secret", "It creates an AEAD tag", "It disables overflow"], answer: 0, explanation: "Property-style round-trip tests validate the relationship over a range of inputs." },
+      { prompt: "What extra property does authenticated encryption provide beyond hiding plaintext?", options: ["It detects changes to ciphertext and authenticated context", "It stores the key automatically", "It guarantees the application has no bugs", "It makes nonces secret"], answer: 0, explanation: "AEAD combines confidentiality with integrity and authenticity under the key." },
+      { prompt: "Why must a nonce follow the algorithm's uniqueness rule?", options: ["Reusing a nonce with one key can break the construction's security", "A nonce is the decryption password", "Nonces make files smaller", "The nonce names the Rust type"], answer: 0, explanation: "Nonce handling is part of the cryptographic contract, even though the nonce itself can be stored openly." },
+      { prompt: "What does CR3 provide to an x86-64 capture translator?", options: ["The physical base of the top page-table structure for an address space", "The game's class name", "The DMA device firmware", "The size of every allocation"], answer: 0, explanation: "CR3 anchors the page-table walk that connects a virtual address to physical memory." },
+      { prompt: "What does an IOMMU protect?", options: ["It constrains which physical memory regions a device may access", "It encrypts all source code", "It replaces process page tables", "It stores Lua bytecode"], answer: 0, explanation: "An IOMMU gives the operating system control over device DMA mappings instead of granting unrestricted RAM access." },
+      { prompt: "Why use an offline synthetic capture before a real authorized image?", options: ["Every expected table entry and data byte is known, so translator bugs are unambiguous", "Synthetic pages bypass Windows security", "It creates live game pointers", "It removes the need for bounds checks"], answer: 0, explanation: "A deterministic fixture isolates page-walk logic from capture timing, missing pages, and unknown target state." },
+      { prompt: "Why translate again when a read crosses 4 KiB?", options: ["The next virtual page may map to a nonadjacent physical frame", "The CPU changes endianness at each page", "Every page has another CR3", "The file becomes executable"], answer: 0, explanation: "Virtual pages can be contiguous while their physical frames are scattered." },
+      { prompt: "What should happen when a page-table present bit is clear?", options: ["Return a level-specific error", "Read address zero", "Guess the next table", "Mask away the error bit"], answer: 0, explanation: "A missing mapping is meaningful evidence. Guessing would turn malformed or wrong-address-space data into misleading output." },
+      { prompt: "Why record a capture hash?", options: ["It lets later analysis verify that the evidence file's bytes have not changed", "It decrypts the capture", "It reveals every virtual address", "It grants hardware access"], answer: 0, explanation: "A digest supports provenance and detects accidental or unauthorized modification of the image." },
+      { prompt: "What is the correct response when Kernel DMA Protection blocks an unapproved path?", options: ["Keep the protection enabled and use an authorized offline or synthetic workflow", "Disable every firmware defense", "Install stealth firmware", "Write to the running process"], answer: 0, explanation: "A blocked unauthorized mapping is successful defense. The learning goals do not require weakening the machine." }
     ]
   };
 
@@ -426,9 +472,13 @@
     const offset = reviewBank.length
       ? Array.from(seed).reduce((total, character) => total + character.charCodeAt(0), 0) % reviewBank.length
       : 0;
-    const followUpQuestions = reviewBank.length >= 2
-      ? [reviewBank[offset], reviewBank[(offset + 1) % reviewBank.length]]
+    const followUpQuestions = reviewBank.length >= FOLLOW_UP_COUNT
+      ? Array.from(
+        { length: FOLLOW_UP_COUNT },
+        (_unused, index) => reviewBank[(offset + index) % reviewBank.length]
+      )
       : [];
+    const totalQuestions = 1 + followUpQuestions.length;
     let selectedAnswer = "";
     let firstQuestionCorrect = false;
     let followUpIndex = 0;
@@ -450,10 +500,24 @@
     let extensionSummary = null;
     let extensionScore = null;
     let extensionScoreMessage = null;
+    let firstNext = null;
 
     if (followUpQuestions.length) {
-      firstProgress = element("span", "academy-quiz__question-progress", "Question 1 of 3");
+      firstProgress = element(
+        "span",
+        "academy-quiz__question-progress",
+        `Question 1 of ${totalQuestions}`
+      );
       root.querySelector(".academy-quiz__header").append(firstProgress);
+
+      firstNext = element(
+        "button",
+        "academy-quiz__check academy-quiz__check--next",
+        "Next question →"
+      );
+      firstNext.type = "button";
+      firstNext.hidden = true;
+      retry.parentNode.append(firstNext);
 
       extension = element("section", "academy-quiz__extension");
       extension.hidden = true;
@@ -463,7 +527,7 @@
       const extensionHeaderCopy = element("div", "academy-quiz__extension-title");
       extensionHeaderCopy.append(
         element("span", "academy-quiz__extension-eyebrow", "Keep going"),
-        element("h4", "", "Two more questions")
+        element("h4", "", `${followUpQuestions.length} more questions`)
       );
       extensionProgress = element("span", "academy-quiz__question-progress");
       extensionHeader.append(extensionHeaderCopy, extensionProgress);
@@ -512,7 +576,7 @@
       extension.hidden = false;
       extensionBody.hidden = false;
       extensionSummary.hidden = true;
-      extensionProgress.textContent = `Question ${followUpIndex + 2} of 3`;
+      extensionProgress.textContent = `Question ${followUpIndex + 2} of ${totalQuestions}`;
       extensionPrompt.textContent = question.prompt;
       extensionFeedback.hidden = true;
       extensionCheck.hidden = false;
@@ -550,6 +614,12 @@
       });
     }
 
+    function beginFollowUps() {
+      if (!extension || !followUpQuestions.length) return;
+      root.classList.add("is-follow-up-active");
+      renderFollowUp();
+    }
+
     function checkFollowUp() {
       if (followUpSelected === null) {
         extensionFeedback.hidden = false;
@@ -583,10 +653,16 @@
       extensionBody.hidden = true;
       extensionSummary.hidden = false;
       extensionProgress.textContent = "Complete";
-      extensionScore.textContent = `${totalCorrect} / 3`;
-      extensionScoreMessage.textContent = totalCorrect === 3
-        ? "Excellent — you understood all three ideas."
+      extensionScore.textContent = `${totalCorrect} / ${totalQuestions}`;
+      extensionScoreMessage.textContent = totalCorrect === totalQuestions
+        ? `Excellent — you understood all ${totalQuestions} ideas.`
         : "Read the explanations, then try again. Understanding matters more than speed.";
+      safeStorageSet(storageKey, JSON.stringify({
+        answer: currentAnswer(),
+        correct: firstQuestionCorrect,
+        completed: true,
+        totalCorrect,
+      }));
     }
 
     function resetFollowUps() {
@@ -602,7 +678,7 @@
       extensionOptions.replaceChildren();
       extensionCheck.hidden = false;
       extensionNext.hidden = true;
-      extensionProgress.textContent = "Question 2 of 3";
+      extensionProgress.textContent = `Question 2 of ${totalQuestions}`;
     }
 
     function selectOption(button) {
@@ -626,6 +702,7 @@
       feedback.hidden = false;
       retry.hidden = false;
       submit.hidden = true;
+      if (firstNext) firstNext.hidden = false;
       result.textContent = wasCorrect ? "Correct — nice work." : "Not quite yet.";
 
       optionButtons.forEach((button) => {
@@ -640,8 +717,11 @@
         safeStorageSet(storageKey, JSON.stringify({ answer, correct: wasCorrect }));
       }
       saved.hidden = false;
-      saved.textContent = wasCorrect ? "Completed" : "Attempt saved";
-      if (followUpQuestions.length) renderFollowUp();
+      saved.textContent = "Question 1 saved";
+      // A freshly answered question keeps its explanation visible until the reader
+      // chooses Next. A restored attempt resumes at question 2 without reviving the
+      // old, disabled question-1 card above it.
+      if (followUpQuestions.length && !shouldSave) beginFollowUps();
     }
 
     function checkAnswer() {
@@ -663,7 +743,9 @@
       submit.hidden = false;
       saved.hidden = true;
       firstQuestionCorrect = false;
-      if (firstProgress) firstProgress.textContent = "Question 1 of 3";
+      root.classList.remove("is-follow-up-active");
+      if (firstProgress) firstProgress.textContent = `Question 1 of ${totalQuestions}`;
+      if (firstNext) firstNext.hidden = true;
       resetFollowUps();
       optionButtons.forEach((button) => {
         button.disabled = false;
@@ -681,6 +763,7 @@
     optionButtons.forEach((button) => button.addEventListener("click", () => selectOption(button)));
     submit.addEventListener("click", checkAnswer);
     retry.addEventListener("click", reset);
+    if (firstNext) firstNext.addEventListener("click", beginFollowUps);
     if (extensionCheck) extensionCheck.addEventListener("click", checkFollowUp);
     if (extensionNext) {
       extensionNext.addEventListener("click", () => {
@@ -709,6 +792,13 @@
         );
         if (selected) selectOption(selected);
         reveal(answer, acceptedAnswers.includes(answer), false);
+        if (attempt.completed && Number.isFinite(Number(attempt.totalCorrect))) {
+          followUpCorrect = Math.max(
+            0,
+            Math.min(followUpQuestions.length, Number(attempt.totalCorrect) - (firstQuestionCorrect ? 1 : 0))
+          );
+          finishFollowUps();
+        }
       } catch (_error) {
         safeStorageRemove(storageKey);
       }

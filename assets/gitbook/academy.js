@@ -397,6 +397,11 @@
       var printButton = event.target.closest("[data-print-book]");
       if (printButton) {
         closeThemeMenus();
+        var entireBookTarget = printButton.getAttribute("data-print-entire-book");
+        if (entireBookTarget) {
+          window.location.assign(entireBookTarget);
+          return;
+        }
         requestAnimationFrame(function () { window.print(); });
         return;
       }
