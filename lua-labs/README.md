@@ -1,6 +1,6 @@
 # Lua automation labs
 
-This crate is the safe, simulated host for Chapter 11. It embeds Lua 5.4 with
+This crate is the safe, simulated host for Chapter 12. It embeds Lua 5.4 with
 `mlua`, exposes copied entity snapshots, accepts only two bounded action types,
 and demonstrates memory and instruction limits.
 

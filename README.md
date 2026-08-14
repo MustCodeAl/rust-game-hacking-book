@@ -23,7 +23,7 @@ cargo test
 ## Windows, Lua, and advanced memory labs
 
 The `windows-labs` crate contains the complete Windows implementations used by
-the memory, debugger, PE, IPC, and authorized game lessons. Chapter 11's
+the memory, debugger, PE, IPC, and authorized game lessons. Chapter 12's
 simulated scripting host is separate so it can run on any development machine:
 
 ```text
@@ -31,7 +31,7 @@ cargo run --manifest-path lua-labs/Cargo.toml -- lua-labs/scripts/observer.lua
 cargo test --manifest-path advanced-memory-labs/Cargo.toml
 ```
 
-The advanced crate supports the related lessons in Chapters 2, 9, and 10 with
+The advanced crate supports the related lessons in Chapters 3, 9, and 11 with
 toy value obfuscation, XChaCha20-Poly1305 authenticated encryption, and
 read-only x86-64 page-table translation over offline capture files. It contains no DMA hardware
 driver, live memory writer, anti-cheat bypass, or stealth firmware.

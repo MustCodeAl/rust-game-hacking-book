@@ -2,9 +2,17 @@
   "use strict";
 
   // Version the saved answer format so an older quiz layout cannot revive stale UI state.
-  const STORAGE_PREFIX = "gha-quiz:v4:";
+  const STORAGE_PREFIX = "gha-quiz:v6:";
   const FOLLOW_UP_COUNT = 4;
   const initializedQuizRoots = new WeakSet();
+  const STUDY_STOP_WORDS = new Set([
+    "about", "after", "again", "against", "also", "another", "answer", "because",
+    "before", "being", "between", "both", "can", "could", "does", "each", "every",
+    "from", "have", "into", "just", "more", "most", "not", "only", "other", "our",
+    "question", "should", "some", "than", "that", "the", "their", "then", "there",
+    "these", "they", "this", "through", "under", "using", "very", "what", "when",
+    "where", "which", "while", "why", "will", "with", "without", "would", "your"
+  ]);
 
   const OWNERSHIP_EXAMPLES = {
     "move-string": {
@@ -235,6 +243,10 @@
       { prompt: "Why version a mod's data schema?", options: ["Readers can select the correct field rules as the format evolves", "Versions keep pointers stable", "Schemas eliminate backups", "It prevents all invalid values"], answer: 0, explanation: "Explicit versions make compatibility decisions and migrations testable instead of guessed." }
     ],
     9: [
+      { prompt: "Why is an effect-based policy stronger than checking a command's name?", options: ["It validates the state change or capability regardless of which label requested it", "It makes every command name secret", "It removes the need for tests", "It permits unknown commands automatically"], answer: 0, explanation: "Names are descriptions, not security boundaries. Validate the requested effect so aliases and new labels follow the same rule." },
+      { prompt: "How does a sink-side check reduce a time-of-check/time-of-use bug?", options: ["It verifies the required identity and state immediately before committing the effect", "It makes time stop after validation", "It stores the check in a filename", "It trusts an earlier result forever"], answer: 0, explanation: "Mutable state can change after an early check. Revalidating at the operation boundary closes that stale-decision gap in the toy lab." },
+      { prompt: "Why should a denied toy-policy decision produce a structured event?", options: ["The reason, requested effect, and relevant state remain available for testing and repair", "Logging turns denial into approval", "Events prevent every race", "The command becomes encrypted"], answer: 0, explanation: "A visible denial trail lets a defender distinguish expected refusal, missing coverage, and an unexplained gap." },
+      { prompt: "What is the purpose of the toy-evasion exercises in this book?", options: ["Break intentionally weak local controls, explain the design mistake, and verify the repaired invariant", "Bypass security products", "Hide a live process", "Disable operating-system defenses"], answer: 0, explanation: "The exercises stay inside purpose-built Rust models so the lesson is defensive design, repeatable testing, and repair." },
       { prompt: "What does `MEM_COMMIT` tell you?", options: ["Storage is committed for the range", "The page is executable", "The page belongs to a DLL", "The address is permanent"], answer: 0, explanation: "State, type, and protection answer different questions. Committed state alone does not grant every access." },
       { prompt: "Why is writable-and-executable memory worth reviewing?", options: ["It combines permissions commonly separated by W^X", "It is always malware", "It cannot contain code", "It is read-only"], answer: 0, explanation: "W+X is not proof of abuse, but it deserves an explanation because writable code is unusually powerful." },
       { prompt: "What does least privilege mean for a process handle?", options: ["Request only the rights the current operation needs", "Always request full access", "Never close the handle", "Use the largest numeric mask"], answer: 0, explanation: "Smaller rights clarify intent and reduce accidental capability." },
@@ -291,6 +303,24 @@
       { prompt: "What is a garbage collector root?", options: ["A live starting reference such as globals, active frames, or host-held values", "The first source-code token", "A table's longest key", "A native return address"], answer: 0, explanation: "Tracing begins from roots and follows reachable objects; unreachable objects can then be reclaimed." },
       { prompt: "Why should an embedded host limit callback duration separately from Lua bytecode steps?", options: ["A callback can block inside Rust while no Lua instruction is being counted", "Rust callbacks contain no code", "Bytecode budgets allocate files", "Callbacks cannot return errors"], answer: 0, explanation: "A VM hook controls interpreted instructions, not arbitrary time spent inside a native callback." }
     ]
+  };
+
+  // The book's lessons were regrouped into twelve balanced chapters. These
+  // source lists keep follow-ups inside the current subject area before the
+  // relevance scorer ranks them for the exact page.
+  const REVIEW_SOURCES_BY_CHAPTER = {
+    1: [1],
+    2: [2],
+    3: [2, 3],
+    4: [4],
+    5: [5],
+    6: [6, 10],
+    7: [7, 9, 10],
+    8: [3, 5, 7, 10],
+    9: [8, 10],
+    10: [9, 10],
+    11: [7, 9, 10],
+    12: [11],
   };
 
   function element(tagName, className, text) {
@@ -444,6 +474,75 @@
     }
   }
 
+  function studyTokens(text) {
+    const matches = String(text || "")
+      .toLowerCase()
+      .replace(/[’']/g, "")
+      .match(/[a-z0-9_+#.-]{3,}/g) || [];
+    const tokens = new Set();
+    matches.forEach((rawToken) => {
+      const token = rawToken.replace(/^[.+-]+|[.+-]+$/g, "");
+      if (!token || STUDY_STOP_WORDS.has(token)) return;
+      tokens.add(token);
+      if (token.length > 5 && token.endsWith("ies")) tokens.add(`${token.slice(0, -3)}y`);
+      if (token.length > 4 && token.endsWith("s") && !token.endsWith("ss")) {
+        tokens.add(token.slice(0, -1));
+      }
+    });
+    return tokens;
+  }
+
+  function addWeightedStudyTerms(target, text, weight) {
+    studyTokens(text).forEach((token) => {
+      target.set(token, Math.min(24, (target.get(token) || 0) + weight));
+    });
+  }
+
+  function stableQuestionHash(text) {
+    return Array.from(String(text || "")).reduce(
+      (total, character) => ((total * 31) + character.charCodeAt(0)) >>> 0,
+      2166136261
+    );
+  }
+
+  function lessonStudyTerms(root) {
+    const terms = new Map();
+    const lesson = root.closest(".markdown-section") || document.body;
+    const lessonHeader = lesson.querySelector(".lesson-header");
+    addWeightedStudyTerms(terms, lessonHeader && lessonHeader.querySelector("h1")?.textContent, 12);
+    addWeightedStudyTerms(terms, lessonHeader && lessonHeader.querySelector("p")?.textContent, 8);
+    addWeightedStudyTerms(terms, root.querySelector("h3")?.textContent, 10);
+    addWeightedStudyTerms(terms, root.querySelector(".academy-quiz__prompt")?.textContent, 10);
+    lesson.querySelectorAll("h2, h3, h4").forEach((heading) => {
+      if (!root.contains(heading)) addWeightedStudyTerms(terms, heading.textContent, 5);
+    });
+    return terms;
+  }
+
+  function questionRelevance(question, terms) {
+    let score = 0;
+    studyTokens(question.prompt).forEach((token) => { score += (terms.get(token) || 0) * 4; });
+    studyTokens(question.explanation).forEach((token) => { score += (terms.get(token) || 0) * 2; });
+    question.options.forEach((option) => {
+      studyTokens(option).forEach((token) => { score += terms.get(token) || 0; });
+    });
+    return score;
+  }
+
+  function selectRelevantFollowUps(root, reviewBank, seed) {
+    if (!reviewBank.length) return [];
+    const terms = lessonStudyTerms(root);
+    return reviewBank
+      .map((question) => ({
+        question,
+        score: questionRelevance(question, terms),
+        tieBreak: stableQuestionHash(`${seed}:${question.prompt}`),
+      }))
+      .sort((left, right) => right.score - left.score || left.tieBreak - right.tieBreak)
+      .slice(0, Math.min(FOLLOW_UP_COUNT, reviewBank.length))
+      .map((ranked) => ranked.question);
+  }
+
   function initializeQuiz(root) {
     // GitBook may restore a cloned, already-mutated quiz after page navigation.
     // A WeakSet recognizes live nodes that still have their listeners, while a
@@ -484,16 +583,9 @@
     const saved = root.querySelector("[data-quiz-saved]");
     const storageKey = `${STORAGE_PREFIX}${quizId}`;
     const chapter = Number(root.dataset.quizChapter);
-    const reviewBank = REVIEW_BANKS[chapter] || [];
-    const offset = reviewBank.length
-      ? Array.from(seed).reduce((total, character) => total + character.charCodeAt(0), 0) % reviewBank.length
-      : 0;
-    const followUpQuestions = reviewBank.length >= FOLLOW_UP_COUNT
-      ? Array.from(
-        { length: FOLLOW_UP_COUNT },
-        (_unused, index) => reviewBank[(offset + index) % reviewBank.length]
-      )
-      : [];
+    const reviewBank = (REVIEW_SOURCES_BY_CHAPTER[chapter] || [])
+      .flatMap((sourceChapter) => REVIEW_BANKS[sourceChapter] || []);
+    const followUpQuestions = selectRelevantFollowUps(root, reviewBank, seed);
     const totalQuestions = 1 + followUpQuestions.length;
     let selectedAnswer = "";
     let firstQuestionCorrect = false;
@@ -505,6 +597,7 @@
     let firstProgress = null;
     let extension = null;
     let extensionProgress = null;
+    let extensionRemaining = null;
     let extensionPrompt = null;
     let extensionOptions = null;
     let extensionFeedback = null;
@@ -561,9 +654,10 @@
       extensionHeader.setAttribute("role", "group");
       extensionHeader.setAttribute("aria-label", "Follow-up quiz heading");
       const extensionHeaderCopy = element("div", "academy-quiz__extension-title");
+      extensionRemaining = element("h4", "");
       extensionHeaderCopy.append(
         element("span", "academy-quiz__extension-eyebrow", "Keep going"),
-        element("h4", "", `${followUpQuestions.length} more questions`)
+        extensionRemaining
       );
       extensionProgress = element("span", "academy-quiz__question-progress");
       extensionHeader.append(extensionHeaderCopy, extensionProgress);
@@ -605,6 +699,15 @@
       root.append(extension);
     }
 
+    function updateRemainingCount(remaining) {
+      if (!extensionRemaining) return;
+      if (remaining <= 0) {
+        extensionRemaining.textContent = "No questions left";
+        return;
+      }
+      extensionRemaining.textContent = `${remaining} question${remaining === 1 ? "" : "s"} left`;
+    }
+
     function renderFollowUp() {
       if (!extension || !followUpQuestions.length) return;
       const question = followUpQuestions[followUpIndex];
@@ -612,6 +715,7 @@
       extension.hidden = false;
       extensionBody.hidden = false;
       extensionSummary.hidden = true;
+      updateRemainingCount(followUpQuestions.length - followUpIndex);
       extensionProgress.textContent = `Question ${followUpIndex + 2} of ${totalQuestions}`;
       extensionPrompt.textContent = question.prompt;
       extensionFeedback.hidden = true;
@@ -679,6 +783,7 @@
       });
       extensionCheck.hidden = true;
       extensionNext.hidden = false;
+      updateRemainingCount(followUpQuestions.length - followUpIndex - 1);
       extensionNext.textContent = followUpIndex === followUpQuestions.length - 1
         ? "See quiz score →"
         : "Next question →";
@@ -690,6 +795,7 @@
       extension.hidden = false;
       extensionBody.hidden = true;
       extensionSummary.hidden = false;
+      updateRemainingCount(0);
       extensionProgress.textContent = "Complete";
       extensionScore.textContent = `${totalCorrect} / ${totalQuestions}`;
       extensionScoreMessage.textContent = totalCorrect === totalQuestions
@@ -716,6 +822,7 @@
       extensionOptions.replaceChildren();
       extensionCheck.hidden = false;
       extensionNext.hidden = true;
+      updateRemainingCount(followUpQuestions.length);
       extensionProgress.textContent = `Question 2 of ${totalQuestions}`;
     }
 

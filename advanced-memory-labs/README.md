@@ -1,6 +1,6 @@
 # Advanced memory labs
 
-These small Rust programs support the advanced lessons placed in Chapters 2, 9, and 10 of the book.
+These small Rust programs support the advanced lessons placed in Chapters 3, 9, and 11 of the book.
 
 - `obfuscation_lab` demonstrates a reversible XOR-and-rotate transform and a toy integrity tag.
 - `crypto_demo` protects a fake save payload with XChaCha20-Poly1305 authenticated encryption.
