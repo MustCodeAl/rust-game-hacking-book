@@ -2,8 +2,9 @@
   "use strict";
 
   // Version the saved answer format so an older quiz layout cannot revive stale UI state.
-  const STORAGE_PREFIX = "gha-quiz:v3:";
+  const STORAGE_PREFIX = "gha-quiz:v4:";
   const FOLLOW_UP_COUNT = 4;
+  const initializedQuizRoots = new WeakSet();
 
   const OWNERSHIP_EXAMPLES = {
     "move-string": {
@@ -117,6 +118,11 @@
 
   const REVIEW_BANKS = {
     1: [
+      { prompt: "What makes a study question source-grounded?", options: ["Its answer can be checked against identified material or a repeatable experiment", "It sounds technical", "It has the longest possible wording", "It can be answered without evidence"], answer: 0, explanation: "A dependable question names the evidence that can verify or correct its answer." },
+      { prompt: "Why hide the source before answering?", options: ["To test whether you can reconstruct the meaning instead of copying it", "To make the answer less accurate", "To avoid ever checking your work", "To turn every fact into an opinion"], answer: 0, explanation: "A short closed-source answer tests recall and understanding; revealing the source afterward supplies correction." },
+      { prompt: "In a game-research note, which statement is an inference?", options: ["This address probably stores gold because it changed with the display in three trials", "The display changed from 100 to 75", "The debugger stopped at 0x401000", "The source file defines a field named gold"], answer: 0, explanation: "The repeated changes are observations. Interpreting the candidate as gold is a supported inference that still deserves further tests." },
+      { prompt: "How does deliberate rewording differ from answering in your own words?", options: ["Rewording practices flexible expression; your own words prioritize a natural, accurate explanation", "Rewording permits changing the fact", "Your own words must copy the source", "There is no useful distinction"], answer: 0, explanation: "Both must preserve meaning. The first emphasizes versatility; the second emphasizes understanding expressed naturally." },
+      { prompt: "What should you do when an AI supplies an offset absent from the provided source?", options: ["Treat it as unverified and check an authoritative source or controlled experiment", "Use it because offsets cannot be invented", "Patch every matching process", "Remove the target version from your notes"], answer: 0, explanation: "AI can organize evidence but cannot create trustworthy target facts without support." },
       { prompt: "What is an address?", options: ["A numbered location in an address space", "The value stored at that location", "A Rust type", "A CPU instruction"], answer: 0, explanation: "An address tells the computer where bytes begin. It is a location, not the value stored there." },
       { prompt: "Why change one thing at a time during an experiment?", options: ["It makes the game run faster", "It connects one cause to one observed effect", "It removes the need for notes", "It makes every address permanent"], answer: 1, explanation: "One controlled change gives you evidence about cause and effect. Several changes at once make the result ambiguous." },
       { prompt: "Who normally owns the official shared state in a multiplayer game?", options: ["The rendering thread", "The keyboard driver", "The authoritative server", "The newest client"], answer: 2, explanation: "A client draws and predicts, but the authoritative server normally decides the shared result." },
@@ -144,7 +150,14 @@
       { prompt: "Why should a recovered structure include unknown padding instead of squeezing known fields together?", options: ["Offsets describe real byte distances, including bytes whose purpose is not known yet", "Padding makes pointers permanent", "The compiler ignores declared fields", "Unknown bytes are always encrypted"], answer: 0, explanation: "The next known field must remain at its observed offset. Unknown or alignment bytes still occupy space even before you understand them." },
       { prompt: "Why compare several instances of the same suspected class?", options: ["Stable offsets and plausible per-object differences separate fields from coincidences", "Every instance has the same address", "It removes the need for breakpoints", "It reveals the original source file"], answer: 0, explanation: "If health, position, and name behave consistently at the same offsets across several objects, the proposed layout has much stronger evidence." },
       { prompt: "What does an indirect call through `[vtable + slot]` suggest?", options: ["A virtual method dispatch through a function-table entry", "A direct call to a fixed address", "A string comparison", "A heap allocation size"], answer: 0, explanation: "Virtual dispatch loads a function pointer from the object's table and calls the selected slot. The exact sequence depends on architecture and compiler." },
-      { prompt: "Why read remote fields individually in a Rust observer instead of casting a remote address to `&Player`?", options: ["The address belongs to another process and Rust cannot give it a valid local reference lifetime", "Rust structs cannot contain numbers", "Windows forbids all structured reads", "Individual reads disable ASLR"], answer: 0, explanation: "A numeric address in the target is not local borrowed memory. Typed, bounded copies keep that process boundary explicit and make each layout assumption checkable." }
+      { prompt: "Why read remote fields individually in a Rust observer instead of casting a remote address to `&Player`?", options: ["The address belongs to another process and Rust cannot give it a valid local reference lifetime", "Rust structs cannot contain numbers", "Windows forbids all structured reads", "Individual reads disable ASLR"], answer: 0, explanation: "A numeric address in the target is not local borrowed memory. Typed, bounded copies keep that process boundary explicit and make each layout assumption checkable." },
+      { prompt: "What should a reverse engineer label before a suspected class name is known?", options: ["Observed offsets and behavior with provisional names", "The first nearby source filename", "Every pointer as Player", "Only values that never change"], answer: 0, explanation: "Neutral labels preserve evidence and let the model change as constructors, destructors, and call sites reveal more." },
+      { prompt: "What is strong evidence for a factory pattern?", options: ["A type choice leads to allocation and one of several constructor paths returning a common kind of pointer", "One function returns an integer", "A string contains factory", "The program uses the heap"], answer: 0, explanation: "The allocation-and-construction behavior is the compiled shape that matters; source names may be gone." },
+      { prompt: "Why inspect destructors while reconstructing an object model?", options: ["They reveal which children, references, containers, and allocations an object releases", "They rename vtables", "They make pointers permanent", "They disable inheritance"], answer: 0, explanation: "Cleanup paths are powerful evidence about ownership and object lifetime." },
+      { prompt: "What invariant supports a vector-like container interpretation?", options: ["begin is at or before end, which is at or before capacity end", "All three pointers are equal forever", "The count is stored as text", "Every element is executable"], answer: 0, explanation: "Ordered pointers, divisibility by element size, readable ranges, and a bounded count support the model." },
+      { prompt: "Why can caching a component pointer be unsafe in a dense component pool?", options: ["Removing another component may swap elements and move the component", "Components have no memory", "Pointers cannot refer to arrays", "Entity IDs are virtual addresses"], answer: 0, explanation: "Stable handles or entity IDs can outlive movement that invalidates an element's old address." },
+      { prompt: "What separates obfuscation from encryption?", options: ["Obfuscation mainly hides an obvious representation; encryption provides a security property under a key and threat model", "Obfuscation is always irreversible", "Encryption has no algorithm", "Only obfuscation changes bytes"], answer: 0, explanation: "A reversible home-made transform can slow casual inspection but is not a substitute for reviewed cryptography." },
+      { prompt: "Why test decode(encode(value, key), key) for many values?", options: ["It checks that the proposed inverse works generally rather than for one coincidence", "It proves the key is secret", "It creates an AEAD tag", "It disables overflow"], answer: 0, explanation: "Property-style round-trip tests validate the relationship over a range of inputs." }
     ],
     3: [
       { prompt: "What problem does Rust ownership prevent?", options: ["Two owners freeing the same allocation", "A server sending packets", "A debugger setting breakpoints", "A matrix moving a point"], answer: 0, explanation: "Ownership gives one value responsibility for cleanup and prevents accidental double-free behavior." },
@@ -180,7 +193,10 @@
       { prompt: "Why does perspective projection divide by clip-space w?", options: ["It produces normalized device coordinates with distance-dependent perspective", "It reverses endianness", "It chooses a texture", "It finds the nearest pointer"], answer: 0, explanation: "The perspective divide makes farther geometry appear smaller and places it into normalized device space." },
       { prompt: "What question does a depth buffer help the renderer answer?", options: ["Which visible fragment is closest at a screen location", "Which DLL exported a function", "Which packet arrived first", "Which thread owns a handle"], answer: 0, explanation: "Depth testing compares fragment depth so nearer surfaces can hide farther surfaces." },
       { prompt: "Why is one changed render state at a time a strong experiment?", options: ["The visible difference can be attributed to that single controlled variable", "It increases the frame rate automatically", "It reveals source-code names", "It disables clipping"], answer: 0, explanation: "Controlled rendering experiments use the same cause-and-effect method as memory scans and protocol captures." },
-      { prompt: "What does a normalized direction vector preserve?", options: ["Direction while changing its length to one", "The original distance", "A virtual address", "The object's texture"], answer: 0, explanation: "Normalization divides by magnitude, producing a unit direction useful for angles, rays, and movement." }
+      { prompt: "What does a normalized direction vector preserve?", options: ["Direction while changing its length to one", "The original distance", "A virtual address", "The object's texture"], answer: 0, explanation: "Normalization divides by magnitude, producing a unit direction useful for angles, rays, and movement." },
+      { prompt: "Why should an immediate-mode menu avoid writing memory during every paint pass?", options: ["Painting repeats frequently, so side effects should happen only after an explicit command", "egui cannot call functions", "Windows blocks all UI threads", "A paint pass has no variables"], answer: 0, explanation: "The interface is described again every frame. Keeping rendering side-effect free prevents accidental repeated writes and stalls." },
+      { prompt: "Why represent overlay choices with one enum instead of several booleans?", options: ["One enum prevents mutually exclusive modes from being active together", "Enums make GPU memory permanent", "Booleans cannot cross threads", "Rust only draws enum values"], answer: 0, explanation: "A single value can hold Off, TeamOnly, or AllActors, but never contradictory combinations." },
+      { prompt: "What should happen to held synthetic input when a tool shuts down?", options: ["Release it before the worker exits", "Leave it down for Windows to guess", "Send more down events", "Convert it to a window message"], answer: 0, explanation: "Reverse-order cleanup includes releasing every key or mouse button the tool pressed." }
     ],
     6: [
       { prompt: "What does TCP provide to an application?", options: ["A stream of ordered bytes", "Preserved message boundaries", "One packet per read", "Only encrypted text"], answer: 0, explanation: "TCP does not know your application message boundaries. Framing must define them." },
@@ -228,7 +244,14 @@
       { prompt: "What does an access token describe?", options: ["The security identity and privileges used for access checks", "A module's RVA", "The current instruction bytes", "A texture format"], answer: 0, explanation: "Windows compares token identity and privileges with an object's security rules when granting access." },
       { prompt: "Why is a small crash dump often preferable to dumping all memory?", options: ["It can capture relevant threads, modules, and contexts with less sensitive or irrelevant data", "It keeps the process running forever", "It contains source code", "It disables ASLR"], answer: 0, explanation: "Selectivity reduces size and data exposure while preserving the evidence needed for a scoped crash." },
       { prompt: "What is an ETW provider?", options: ["A component that emits structured events into trace sessions", "A kernel patch", "A file compressor", "A pointer scanner"], answer: 0, explanation: "Controllers select providers and sessions record timestamped events for later correlation." },
-      { prompt: "What makes loader lock a deadlock risk?", options: ["DllMain may wait for work that itself needs the loader's locked state", "It makes modules read-only", "It prevents CPU exceptions", "It changes byte order"], answer: 0, explanation: "Circular waiting occurs when code under loader lock invokes or waits on operations that need the same loader progress." }
+      { prompt: "What makes loader lock a deadlock risk?", options: ["DllMain may wait for work that itself needs the loader's locked state", "It makes modules read-only", "It prevents CPU exceptions", "It changes byte order"], answer: 0, explanation: "Circular waiting occurs when code under loader lock invokes or waits on operations that need the same loader progress." },
+      { prompt: "What does CR3 provide to an x86-64 capture translator?", options: ["The physical base of the top page-table structure for an address space", "The game's class name", "The DMA device firmware", "The size of every allocation"], answer: 0, explanation: "CR3 anchors the page-table walk that connects a virtual address to physical memory." },
+      { prompt: "What does an IOMMU protect?", options: ["It constrains which physical memory regions a device may access", "It encrypts all source code", "It replaces process page tables", "It stores Lua bytecode"], answer: 0, explanation: "An IOMMU gives the operating system control over device DMA mappings instead of granting unrestricted RAM access." },
+      { prompt: "Why use an offline synthetic capture before a real authorized image?", options: ["Every expected table entry and data byte is known, so translator bugs are unambiguous", "Synthetic pages bypass Windows security", "It creates live game pointers", "It removes the need for bounds checks"], answer: 0, explanation: "A deterministic fixture isolates page-walk logic from capture timing, missing pages, and unknown target state." },
+      { prompt: "Why translate again when a read crosses 4 KiB?", options: ["The next virtual page may map to a nonadjacent physical frame", "The CPU changes endianness at each page", "Every page has another CR3", "The file becomes executable"], answer: 0, explanation: "Virtual pages can be contiguous while their physical frames are scattered." },
+      { prompt: "What should happen when a page-table present bit is clear?", options: ["Return a level-specific error", "Read address zero", "Guess the next table", "Mask away the error bit"], answer: 0, explanation: "A missing mapping is meaningful evidence. Guessing would turn malformed or wrong-address-space data into misleading output." },
+      { prompt: "Why record a capture hash?", options: ["It lets later analysis verify that the evidence file's bytes have not changed", "It decrypts the capture", "It reveals every virtual address", "It grants hardware access"], answer: 0, explanation: "A digest supports provenance and detects accidental or unauthorized modification of the image." },
+      { prompt: "What is the correct response when Kernel DMA Protection blocks an unapproved path?", options: ["Keep the protection enabled and use an authorized offline or synthetic workflow", "Disable every firmware defense", "Install stealth firmware", "Write to the running process"], answer: 0, explanation: "A blocked unauthorized mapping is successful defense. The learning goals do not require weakening the machine." }
     ],
     10: [
       { prompt: "What does `ERROR_PIPE_CONNECTED` mean during the named-pipe race?", options: ["A client already connected", "The pipe was deleted", "The message is too large", "The server lost permission"], answer: 0, explanation: "A fast client can connect between pipe creation and the server's connect call." },
@@ -240,7 +263,13 @@
       { prompt: "What is a forwarded export?", options: ["An export entry that names another module and symbol instead of containing code", "A copied stack frame", "A shared-memory message", "A signed hash"], answer: 0, explanation: "The loader follows the forwarder string to resolve the actual provider function." },
       { prompt: "Why can shared memory map at different addresses in two processes?", options: ["Each process chooses a virtual address for the same backing object", "The bytes are different", "Mappings disable virtual memory", "Only one process has pages"], answer: 0, explanation: "The shared object is the identity; each process's view address is local to its own address space." },
       { prompt: "What does a digital signature add beyond a digest?", options: ["A cryptographic claim tied to a signing key and trust policy", "Proof that software has no bugs", "A permanent file path", "A process handle"], answer: 0, explanation: "A signature associates bytes with a key identity, while validation policy decides whether that identity is trusted." },
-      { prompt: "Why should a named-pipe protocol use explicit message types and sizes?", options: ["The receiver can validate bounded data instead of interpreting arbitrary commands", "Pipes automatically run text", "It removes synchronization", "It makes handles global"], answer: 0, explanation: "A small framed protocol constrains behavior and makes malformed input fail at a clear boundary." }
+      { prompt: "Why should a named-pipe protocol use explicit message types and sizes?", options: ["The receiver can validate bounded data instead of interpreting arbitrary commands", "Pipes automatically run text", "It removes synchronization", "It makes handles global"], answer: 0, explanation: "A small framed protocol constrains behavior and makes malformed input fail at a clear boundary." },
+      { prompt: "What extra property does authenticated encryption provide beyond hiding plaintext?", options: ["It detects changes to ciphertext and authenticated context", "It stores the key automatically", "It guarantees the application has no bugs", "It makes nonces secret"], answer: 0, explanation: "AEAD combines confidentiality with integrity and authenticity under the key." },
+      { prompt: "Why must a nonce follow the algorithm's uniqueness rule?", options: ["Reusing a nonce with one key can break the construction's security", "A nonce is the decryption password", "Nonces make files smaller", "The nonce names the Rust type"], answer: 0, explanation: "Nonce handling is part of the cryptographic contract, even though the nonce itself can be stored openly." },
+      { prompt: "Which GetAsyncKeyState bit reliably reports that a key is down now?", options: ["The most-significant/sign bit", "The least-significant compatibility bit", "Every reserved bit", "The carry flag"], answer: 0, explanation: "A negative i16 means the high bit is set and the key is currently down. The low compatibility bit is not a reliable edge event." },
+      { prompt: "Why can SendMessageW freeze an external tool?", options: ["It waits for the target window procedure to finish", "It allocates physical memory", "It always starts a debugger", "It closes the target handle"], answer: 0, explanation: "SendMessageW is synchronous. A bounded SendMessageTimeoutW call is safer when the receiver may be hung." },
+      { prompt: "Why might a game ignore a posted WM_KEYDOWN message?", options: ["It may read Raw Input or device state instead of treating window messages as gameplay input", "WM_KEYDOWN contains no key number", "Windows messages work only in browsers", "The message changes the executable hash"], answer: 0, explanation: "Window messages and device input are different paths. Sending a message does not update every input API a game might use." },
+      { prompt: "Why is an HWND not closed with CloseHandle?", options: ["Window handles follow the window manager's lifetime contract, not the kernel-handle CloseHandle contract", "HWND is a source pointer", "Windows never destroys windows", "CloseHandle works only on files"], answer: 0, explanation: "Windows uses several opaque handle families. Each must follow the API that created, borrowed, or destroys it." }
     ],
     11: [
       { prompt: "Why embed Lua in a compiled game or tool?", options: ["Small rules and content can change without rebuilding the whole engine", "Lua removes the operating system", "Every pointer becomes valid", "Scripts run before the CPU starts"], answer: 0, explanation: "The compiled host supplies stable capabilities while text scripts can express changeable policy, configuration, and gameplay rules." },
@@ -261,24 +290,6 @@
       { prompt: "Why can two closures need one shared upvalue cell?", options: ["Both closures captured the same mutable local and must observe the same updates", "Closures cannot store integers", "A cell changes byte order", "Each closure is a Windows thread"], answer: 0, explanation: "Copying the captured value separately would break the source-language meaning when either closure modifies it." },
       { prompt: "What is a garbage collector root?", options: ["A live starting reference such as globals, active frames, or host-held values", "The first source-code token", "A table's longest key", "A native return address"], answer: 0, explanation: "Tracing begins from roots and follows reachable objects; unreachable objects can then be reclaimed." },
       { prompt: "Why should an embedded host limit callback duration separately from Lua bytecode steps?", options: ["A callback can block inside Rust while no Lua instruction is being counted", "Rust callbacks contain no code", "Bytecode budgets allocate files", "Callbacks cannot return errors"], answer: 0, explanation: "A VM hook controls interpreted instructions, not arbitrary time spent inside a native callback." }
-    ],
-    12: [
-      { prompt: "What should a reverse engineer label before a suspected class name is known?", options: ["Observed offsets and behavior with provisional names", "The first nearby source filename", "Every pointer as Player", "Only values that never change"], answer: 0, explanation: "Neutral labels preserve evidence and let the model change as constructors, destructors, and call sites reveal more." },
-      { prompt: "What is strong evidence for a factory pattern?", options: ["A type choice leads to allocation and one of several constructor paths returning a common kind of pointer", "One function returns an integer", "A string contains factory", "The program uses the heap"], answer: 0, explanation: "The allocation-and-construction behavior is the compiled shape that matters; source names may be gone." },
-      { prompt: "Why inspect destructors while reconstructing an object model?", options: ["They reveal which children, references, containers, and allocations an object releases", "They rename vtables", "They make pointers permanent", "They disable inheritance"], answer: 0, explanation: "Cleanup paths are powerful evidence about ownership and object lifetime." },
-      { prompt: "What invariant supports a vector-like container interpretation?", options: ["begin is at or before end, which is at or before capacity end", "All three pointers are equal forever", "The count is stored as text", "Every element is executable"], answer: 0, explanation: "Ordered pointers, divisibility by element size, readable ranges, and a bounded count support the model." },
-      { prompt: "Why can caching a component pointer be unsafe in a dense component pool?", options: ["Removing another component may swap elements and move the component", "Components have no memory", "Pointers cannot refer to arrays", "Entity IDs are virtual addresses"], answer: 0, explanation: "Stable handles or entity IDs can outlive movement that invalidates an element's old address." },
-      { prompt: "What separates obfuscation from encryption?", options: ["Obfuscation mainly hides an obvious representation; encryption provides a security property under a key and threat model", "Obfuscation is always irreversible", "Encryption has no algorithm", "Only obfuscation changes bytes"], answer: 0, explanation: "A reversible home-made transform can slow casual inspection but is not a substitute for reviewed cryptography." },
-      { prompt: "Why test decode(encode(value, key), key) for many values?", options: ["It checks that the proposed inverse works generally rather than for one coincidence", "It proves the key is secret", "It creates an AEAD tag", "It disables overflow"], answer: 0, explanation: "Property-style round-trip tests validate the relationship over a range of inputs." },
-      { prompt: "What extra property does authenticated encryption provide beyond hiding plaintext?", options: ["It detects changes to ciphertext and authenticated context", "It stores the key automatically", "It guarantees the application has no bugs", "It makes nonces secret"], answer: 0, explanation: "AEAD combines confidentiality with integrity and authenticity under the key." },
-      { prompt: "Why must a nonce follow the algorithm's uniqueness rule?", options: ["Reusing a nonce with one key can break the construction's security", "A nonce is the decryption password", "Nonces make files smaller", "The nonce names the Rust type"], answer: 0, explanation: "Nonce handling is part of the cryptographic contract, even though the nonce itself can be stored openly." },
-      { prompt: "What does CR3 provide to an x86-64 capture translator?", options: ["The physical base of the top page-table structure for an address space", "The game's class name", "The DMA device firmware", "The size of every allocation"], answer: 0, explanation: "CR3 anchors the page-table walk that connects a virtual address to physical memory." },
-      { prompt: "What does an IOMMU protect?", options: ["It constrains which physical memory regions a device may access", "It encrypts all source code", "It replaces process page tables", "It stores Lua bytecode"], answer: 0, explanation: "An IOMMU gives the operating system control over device DMA mappings instead of granting unrestricted RAM access." },
-      { prompt: "Why use an offline synthetic capture before a real authorized image?", options: ["Every expected table entry and data byte is known, so translator bugs are unambiguous", "Synthetic pages bypass Windows security", "It creates live game pointers", "It removes the need for bounds checks"], answer: 0, explanation: "A deterministic fixture isolates page-walk logic from capture timing, missing pages, and unknown target state." },
-      { prompt: "Why translate again when a read crosses 4 KiB?", options: ["The next virtual page may map to a nonadjacent physical frame", "The CPU changes endianness at each page", "Every page has another CR3", "The file becomes executable"], answer: 0, explanation: "Virtual pages can be contiguous while their physical frames are scattered." },
-      { prompt: "What should happen when a page-table present bit is clear?", options: ["Return a level-specific error", "Read address zero", "Guess the next table", "Mask away the error bit"], answer: 0, explanation: "A missing mapping is meaningful evidence. Guessing would turn malformed or wrong-address-space data into misleading output." },
-      { prompt: "Why record a capture hash?", options: ["It lets later analysis verify that the evidence file's bytes have not changed", "It decrypts the capture", "It reveals every virtual address", "It grants hardware access"], answer: 0, explanation: "A digest supports provenance and detects accidental or unauthorized modification of the image." },
-      { prompt: "What is the correct response when Kernel DMA Protection blocks an unapproved path?", options: ["Keep the protection enabled and use an authorized offline or synthetic workflow", "Disable every firmware defense", "Install stealth firmware", "Write to the running process"], answer: 0, explanation: "A blocked unauthorized mapping is successful defense. The learning goals do not require weakening the machine." }
     ]
   };
 
@@ -434,7 +445,12 @@
   }
 
   function initializeQuiz(root) {
-    if (root.dataset.learningReady === "true") return;
+    // GitBook may restore a cloned, already-mutated quiz after page navigation.
+    // A WeakSet recognizes live nodes that still have their listeners, while a
+    // cloned node is rebuilt even if it copied the data-learning-ready flag.
+    if (initializedQuizRoots.has(root)) return;
+    initializedQuizRoots.add(root);
+    root.querySelectorAll("[data-quiz-runtime]").forEach((node) => node.remove());
     root.dataset.learningReady = "true";
 
     const quizId = root.dataset.quizId;
@@ -502,12 +518,30 @@
     let extensionScoreMessage = null;
     let firstNext = null;
 
+    // Normalize markup restored from GitBook's page cache before applying the
+    // current saved attempt. This prevents disabled answers from a prior visit.
+    root.classList.remove("is-unanswered", "is-correct", "is-incorrect", "is-follow-up-active");
+    feedback.hidden = true;
+    retry.hidden = true;
+    submit.hidden = false;
+    saved.hidden = true;
+    optionButtons.forEach((button) => {
+      button.disabled = false;
+      button.classList.remove("is-selected", "is-correct-answer", "is-wrong-answer");
+      button.setAttribute("aria-pressed", "false");
+    });
+    if (input) {
+      input.disabled = false;
+      input.value = "";
+    }
+
     if (followUpQuestions.length) {
       firstProgress = element(
         "span",
         "academy-quiz__question-progress",
         `Question 1 of ${totalQuestions}`
       );
+      firstProgress.dataset.quizRuntime = "true";
       root.querySelector(".academy-quiz__header").append(firstProgress);
 
       firstNext = element(
@@ -517,10 +551,12 @@
       );
       firstNext.type = "button";
       firstNext.hidden = true;
+      firstNext.dataset.quizRuntime = "true";
       retry.parentNode.append(firstNext);
 
       extension = element("section", "academy-quiz__extension");
       extension.hidden = true;
+      extension.dataset.quizRuntime = "true";
       const extensionHeader = element("div", "academy-quiz__extension-header");
       extensionHeader.setAttribute("role", "group");
       extensionHeader.setAttribute("aria-label", "Follow-up quiz heading");
@@ -650,6 +686,8 @@
 
     function finishFollowUps() {
       const totalCorrect = (firstQuestionCorrect ? 1 : 0) + followUpCorrect;
+      root.classList.add("is-follow-up-active");
+      extension.hidden = false;
       extensionBody.hidden = true;
       extensionSummary.hidden = false;
       extensionProgress.textContent = "Complete";
@@ -718,10 +756,8 @@
       }
       saved.hidden = false;
       saved.textContent = "Question 1 saved";
-      // A freshly answered question keeps its explanation visible until the reader
-      // chooses Next. A restored attempt resumes at question 2 without reviving the
-      // old, disabled question-1 card above it.
-      if (followUpQuestions.length && !shouldSave) beginFollowUps();
+      // Keep the explanation visible after a restored answer too. Automatically
+      // jumping into a cached follow-up made the quiz appear stuck after navigation.
     }
 
     function checkAnswer() {

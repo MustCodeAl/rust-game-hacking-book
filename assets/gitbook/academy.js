@@ -12,7 +12,8 @@
     { id: "light", label: "Light" },
     { id: "dark", label: "Dark" }
   ];
-  var SYNTAX_PALETTES = ["academy", "cyber", "mono"];
+  var SYNTAX_PALETTES = ["academy", "cyber", "aurora", "solar", "ocean", "mono"];
+  var BACKGROUND_TONES = ["theme", "warm", "cool", "rose", "neutral"];
   var NATURAL_MODES = {
     paper: "light",
     purple: "dark",
@@ -46,9 +47,12 @@
     windows: [
       "BOOL", "DWORD", "HANDLE", "HMODULE", "HWND", "LPVOID", "MODULEENTRY32W",
       "PROCESSENTRY32W", "CloseHandle", "CreateRemoteThread", "CreateToolhelp32Snapshot",
-      "GetLastError", "GetModuleHandleW", "GetProcAddress", "Module32FirstW",
+      "ClientToScreen", "EnumWindows", "GetAsyncKeyState", "GetClientRect",
+      "GetForegroundWindow", "GetLastError", "GetModuleHandleW", "GetProcAddress",
+      "GetWindowThreadProcessId", "Module32FirstW",
       "Module32NextW", "OpenProcess", "Process32FirstW", "Process32NextW",
-      "ReadProcessMemory", "VirtualAllocEx", "VirtualFreeEx", "VirtualProtect",
+      "PostMessageW", "ReadProcessMemory", "SendInput", "SendMessageTimeoutW",
+      "SendMessageW", "VirtualAllocEx", "VirtualFreeEx", "VirtualProtect",
       "VirtualProtectEx", "WaitForSingleObject", "WriteProcessMemory"
     ],
     memory: [
@@ -129,6 +133,22 @@
   function saveSyntaxPalette(id) {
     try {
       localStorage.setItem("gha-syntax-palette", id);
+    } catch (error) {
+      /* A blocked storage API should not block reading the book. */
+    }
+  }
+
+  function readSavedBackground() {
+    try {
+      return localStorage.getItem("gha-background-tone");
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function saveBackground(id) {
+    try {
+      localStorage.setItem("gha-background-tone", id);
     } catch (error) {
       /* A blocked storage API should not block reading the book. */
     }
@@ -234,6 +254,18 @@
     if (persist !== false) saveSyntaxPalette(palette);
   }
 
+  function applyBackground(id, persist) {
+    var background = BACKGROUND_TONES.indexOf(id) === -1 ? "theme" : id;
+    document.documentElement.dataset.academyBackground = background;
+    document.querySelectorAll("[data-background-choice]").forEach(function (button) {
+      button.setAttribute(
+        "aria-pressed",
+        button.dataset.backgroundChoice === background ? "true" : "false"
+      );
+    });
+    if (persist !== false) saveBackground(background);
+  }
+
   function applySemanticSetting(id, persist) {
     var setting = id === "off" ? "off" : "on";
     document.documentElement.dataset.academySemantic = setting;
@@ -334,6 +366,10 @@
       document.documentElement.dataset.academySyntax || readSavedSyntaxPalette() || "academy",
       false
     );
+    applyBackground(
+      document.documentElement.dataset.academyBackground || readSavedBackground() || "theme",
+      false
+    );
     applySemanticSetting(
       document.documentElement.dataset.academySemantic || readSavedSemanticSetting() || "on",
       false
@@ -382,6 +418,12 @@
         return;
       }
 
+      var backgroundChoice = event.target.closest("[data-background-choice]");
+      if (backgroundChoice) {
+        applyBackground(backgroundChoice.dataset.backgroundChoice);
+        return;
+      }
+
       var semanticChoice = event.target.closest("[data-semantic-choice]");
       if (semanticChoice) {
         applySemanticSetting(semanticChoice.dataset.semanticChoice);
@@ -391,6 +433,17 @@
       var ligatureChoice = event.target.closest("[data-ligature-choice]");
       if (ligatureChoice) {
         applyLigatureSetting(ligatureChoice.dataset.ligatureChoice);
+        return;
+      }
+
+      var resetAppearance = event.target.closest("[data-theme-reset]");
+      if (resetAppearance) {
+        applyAppearance("paper", "light");
+        applyBackground("theme");
+        applyCodeMode("dark");
+        applySyntaxPalette("academy");
+        applySemanticSetting("on");
+        applyLigatureSetting("off");
         return;
       }
 

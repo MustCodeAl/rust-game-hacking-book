@@ -38,23 +38,22 @@ assert_eq!(gold, 50);</code></pre>
 
 <div class="section-heading" id="course-map">
   <span>Course map</span>
-  <h2>Twelve stops, one idea at a time</h2>
+  <h2>Eleven stops, one idea at a time</h2>
   <p>You do not need to know Rust yet. The early lessons teach the pieces right before you use them.</p>
 </div>
 
 <div class="course-grid">
-  <a class="course-card" href="{{ site.baseurl }}/pages/1/01/"><span>01</span><h3>Start Here</h3><p>Computers, games, memory, and a safe lab.</p></a>
-  <a class="course-card" href="{{ site.baseurl }}/pages/2/01/"><span>02</span><h3>Debug & Reverse</h3><p>Assembly, breakpoints, code caves, and pointers.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/1/01/"><span>01</span><h3>Start Here</h3><p>Source-grounded questions, computers, games, memory, and a safe lab.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/2/01/"><span>02</span><h3>Debug & Reverse</h3><p>Assembly, breakpoints, code caves, C++ objects, and obfuscated values.</p></a>
   <a class="course-card course-card--rust" href="{{ site.baseurl }}/pages/3/01/"><span>03</span><h3>Build It in Rust</h3><p>Ownership, Win32 APIs, and careful unsafe code.</p></a>
   <a class="course-card" href="{{ site.baseurl }}/pages/4/01/"><span>04</span><h3>Strategy Games</h3><p>Stats, maps, events, and small bots.</p></a>
-  <a class="course-card" href="{{ site.baseurl }}/pages/5/01/"><span>05</span><h3>3D Games</h3><p>Coordinates, rendering, aiming, and overlays.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/5/01/"><span>05</span><h3>3D Games</h3><p>Coordinates, rendering, aiming, overlays, and safe Rust menus.</p></a>
   <a class="course-card" href="{{ site.baseurl }}/pages/6/01/"><span>06</span><h3>Networks</h3><p>Packets, sockets, clients, and local proxies.</p></a>
   <a class="course-card" href="{{ site.baseurl }}/pages/7/01/"><span>07</span><h3>Make Tools</h3><p>Scanners, debuggers, and disassemblers.</p></a>
   <a class="course-card" href="{{ site.baseurl }}/pages/8/01/"><span>08</span><h3>Files & Mods</h3><p>Saves, textures, resources, and supported mods.</p></a>
-  <a class="course-card" href="{{ site.baseurl }}/pages/9/01/"><span>09</span><h3>Windows Internals</h3><p>Processes, pages, threads, DLLs, tracing, and defensive checks.</p></a>
-  <a class="course-card" href="{{ site.baseurl }}/pages/10/01/"><span>10</span><h3>Windows APIs & IPC</h3><p>API layers, exports, shared memory, local pipes, hashes, and signatures.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/9/01/"><span>09</span><h3>Windows Internals</h3><p>Processes, pages, threads, DLLs, DMA translation, and toy defensive-evasion labs.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/10/01/"><span>10</span><h3>Windows APIs & IPC</h3><p>API layers, input, window messages, IPC, signatures, and authenticated encryption.</p></a>
   <a class="course-card course-card--rust" href="{{ site.baseurl }}/pages/11/01/"><span>11</span><h3>Lua Automation</h3><p>Tables, host APIs, safe snapshots, state machines, and script limits.</p></a>
-  <a class="course-card" href="{{ site.baseurl }}/pages/12/01/"><span>12</span><h3>Advanced Memory</h3><p>OOP patterns, ownership, obfuscation, encryption, and offline DMA captures.</p></a>
 </div>
 
 <div class="why-rust">
@@ -78,7 +77,7 @@ assert_eq!(gold, 50);</code></pre>
 
 The original PDF is still available as a [legacy snapshot]({{ site.baseurl }}/assets/GameHackingAcademy.pdf). It predates this Rust rewrite, so the website is the source of truth.
 
-The portable algorithms used throughout the book are collected in the repository’s `rust-labs` crate. Run `cargo test` there to experiment with byte parsing, pattern scanning, angle math, and world-to-screen projection without attaching to any process. Chapter 12's `advanced-memory-labs` crate adds toy obfuscation, authenticated encryption, and read-only x86-64 translation for offline capture files.
+The portable algorithms used throughout the book are collected in the repository’s `rust-labs` crate. Run `cargo test` there to experiment with byte parsing, pattern scanning, angle math, and world-to-screen projection without attaching to any process. The advanced lessons in Chapters 2, 9, and 10 use `advanced-memory-labs` for toy obfuscation, authenticated encryption, and read-only x86-64 translation of offline capture files.
 
 ## Interactive learning tools
 
