@@ -747,6 +747,22 @@
     });
   }
 
+  function enhanceLessonTables() {
+    document.querySelectorAll(".markdown-section table").forEach(function (table) {
+      if (table.parentElement && table.parentElement.classList.contains("table-scroll")) {
+        return;
+      }
+
+      var wrapper = document.createElement("div");
+      wrapper.className = "table-scroll";
+      wrapper.setAttribute("role", "region");
+      wrapper.setAttribute("aria-label", "Scrollable lesson table");
+      wrapper.setAttribute("tabindex", "0");
+      table.parentNode.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    });
+  }
+
   function findDeclaredEnumVariants(code) {
     var variants = {};
     var depth = 0;
@@ -813,6 +829,7 @@
     bindReadingProgress();
     labelCodeBlocks();
     decorateLessonText();
+    enhanceLessonTables();
   }
 
   function bindGitBookLifecycle() {
