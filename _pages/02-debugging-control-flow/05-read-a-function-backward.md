@@ -1,0 +1,150 @@
+---
+title: Read a Function Backward
+author: attilathedud
+date: 2026-07-30
+category: Debugging & Control Flow
+layout: post
+permalink: /pages/2/05/
+chapter: "2.5"
+minutes: 23
+summary: Climb from one gold-changing instruction to the menu decision that caused it.
+---
+
+Finding one instruction is useful. Understanding the surrounding feature is better.
+
+## Start from a known anchor
+
+The gold subtraction instruction from the last lesson is an **anchor**. Set a code breakpoint there, recruit one unit, and let the breakpoint fire.
+
+![A breakpoint on the gold subtraction]({{ site.baseurl }}/assets/images/2/5/wesnoth4.png)
+
+The current function probably handles a small part of recruitment. To discover who asked for that work, look at the call stack or run until the function returns.
+
+![Running until the current function returns]({{ site.baseurl }}/assets/images/2/5/wesnoth6.png)
+
+Now you are back in the caller. This technique is sometimes called **bubbling up**: start with a tiny known behavior and climb toward broader decisions.
+
+## Why the caller is visible
+
+When x86 executes `call`, it places a return address on the stack before jumping to the callee. That address points to the instruction the caller expects to run next. A debugger’s call stack combines return addresses with known module ranges and function information to show the nested route that reached the breakpoint.
+
+The stack is evidence, not a perfect story. Optimizations can inline functions, reuse stack space, or omit traditional frame pointers. Confirm an important caller by returning to it or placing a breakpoint at its call site and reproducing the action.
+
+## Recognize dispatcher code
+
+Menus often use a chain of comparisons:
+
+```nasm
+cmp eax, MENU_RECRUIT
+je handle_recruit
+cmp eax, MENU_DESCRIPTION
+je show_description
+cmp eax, MENU_CANCEL
+je close_menu
+```
+
+The constants will not have friendly names in the debugger. You create those names from experiments.
+
+Trigger one menu item at a time and record which branch runs:
+
+```text
+Action: Recruit
+Compared value: 3
+Taken destination: 0x...
+
+Action: Terrain description
+Compared value: 5
+Taken destination: 0x...
+```
+
+Several observations turn anonymous numbers into a useful enum:
+
+```rust
+#[repr(u32)]
+enum MenuAction {
+    Recruit = 3,
+    TerrainDescription = 5,
+}
+```
+
+The enum is your model, not a claim about the original source type.
+
+The comparison value alone is not enough. Record where it came from: a register, a stack argument, or a field inside a menu object. Also record whether another branch changed it before the dispatcher. Those details distinguish “menu command ID” from a temporary loop counter that merely happened to equal `3`.
+
+## Separate “where” from “why”
+
+The gold instruction tells you **where** a change happens. The menu dispatcher tells you **why** execution reached it.
+
+That distinction matters:
+
+- patching the subtraction changes one cost rule;
+- changing a branch may select a different feature;
+- hooking the dispatcher lets you observe every menu action.
+
+Do not make all three changes at once. Test one layer at a time.
+
+This is also a lesson about **abstraction levels**. The subtraction is a low-level side effect. The recruitment function groups validation and side effects into one operation. The dispatcher chooses among operations. Moving upward explains more behavior but also adds more unrelated branches, so stop when the original question is answered.
+
+## Follow dependencies, not just nearby instructions
+
+“Backward” does not simply mean scrolling upward in the disassembly. It means following the facts that had to be true for the anchor instruction to run.
+
+- A **data dependency** asks where an operand came from. If `eax` is the price, find the instruction or argument that produced `eax`.
+- A **control dependency** asks which comparison allowed this block to run. If a branch skipped the subtraction, determine what value controlled that branch.
+- A **call dependency** asks which caller requested this operation and what arguments it supplied.
+
+Compilers can move calculations away from the source statement that inspired them. The instruction immediately above the anchor may be unrelated, while the important value was loaded twenty instructions earlier or passed by the caller. Track one value and one decision at a time.
+
+A practical stopping rule is: stop climbing when you can name the input, the decision, and the observable result in plain English. Going farther may teach the whole menu framework, but it no longer answers the focused gold question.
+
+![Code branching between menu operations]({{ site.baseurl }}/assets/images/2/5/wesnoth9.png)
+
+## Restore before changing direction
+
+Use x64dbg’s restore command after every temporary patch.
+
+![Restoring the original selection]({{ site.baseurl }}/assets/images/2/5/wesnoth11.png)
+
+Then verify:
+
+1. original bytes are back;
+2. the normal menu behavior works;
+3. no stale breakpoint remains;
+4. your notes describe the unmodified baseline.
+
+## A plain-English function sketch
+
+After the experiments, write pseudocode before writing code:
+
+```text
+when the player chooses a menu item:
+    if it is Recruit:
+        check the tile
+        check the price
+        create the unit
+        subtract gold
+    otherwise:
+        run the matching menu action
+```
+
+Pseudocode is not wasted work. It separates the idea from register names and addresses. If you cannot explain the function in plain English, you are not ready to automate it.
+
+Annotate uncertainty instead of inventing names:
+
+```text
+if candidate_action == 3:       # observed as Recruit in three trials
+    check unknown_flag          # branch exists; meaning not proved yet
+    call create_unit_candidate  # creates a unit in the positive trials
+    subtract gold
+```
+
+Good reverse-engineering notes separate observed facts, strong inferences, and unanswered questions. That makes the next experiment obvious.
+
+## Checkpoint
+
+You should now be able to:
+
+- begin at a known instruction;
+- use the call stack or return address to find its caller;
+- collect test cases for a branch;
+- write a small, named model of the behavior.

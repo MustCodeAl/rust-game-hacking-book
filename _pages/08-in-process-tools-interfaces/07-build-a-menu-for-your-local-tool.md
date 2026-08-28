@@ -1,0 +1,284 @@
+---
+title: Build a Menu for Your Local Tool
+author: attilathedud
+date: 2026-08-14
+category: In-Process Tools & Interfaces
+layout: post
+permalink: /pages/8/07/
+chapter: "8.7"
+minutes: 38
+summary: Build a readable egui settings menu, model feature state with enums, send commands to a worker, and clean up safely.
+---
+
+## A menu is a control surface, not the hack itself
+
+A useful game-tool menu answers four questions clearly:
+
+1. What features exist?
+2. What state is each feature in?
+3. Which changes have actually reached the worker?
+4. How does everything return to normal during shutdown?
+
+The menu should **not** own a process handle, execute pointer chains while
+painting a checkbox, or patch memory sixty times per second. Its job is to edit
+ordinary settings and send deliberate commands to a worker. That separation
+makes the interface responsive and the low-level code reviewable. 🎛️
+
+```text
+egui widgets → owned Settings → channel → tool worker
+                                            ↓
+                               handles, reads, writes, cleanup
+```
+
+This tutorial builds a separate desktop window. That is the best first menu:
+it is easy to debug, does not run under loader lock, and can stay open beside
+Wesnoth, AssaultCube, or another local course target. Integrating the same
+widgets into an injected renderer is a later graphics-backend problem.
+
+## Create the project
+
+The buildable course version lives in
+[`menu_lab.rs`]({{ site.baseurl }}/windows-labs/src/bin/menu_lab.rs). It uses
+`eframe` 0.36, whose `egui` UI is well suited to tools that redraw interactive
+controls every frame:
+
+```toml
+[dependencies]
+eframe = { version = "0.36", default-features = false, features = [
+    "default_fonts",
+    "glow",
+] }
+```
+
+From the `windows-labs` directory, run:
+
+```powershell
+cargo run --bin menu_lab
+```
+
+The first build downloads and compiles the windowing and OpenGL support, so it
+will take longer than later runs.
+
+## Put the settings in one type
+
+Avoid one unrelated global boolean per feature. A settings value is easier to
+copy, compare, validate, save, and send:
+
+```rust
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum OverlayMode {
+    #[default]
+    Off,
+    TeamOnly,
+    AllActors,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct Settings {
+    overlay: OverlayMode,
+    show_names: bool,
+    show_distance: bool,
+    field_of_view: f32,
+    observation_only: bool,
+}
+```
+
+The enum is important. Three booleans named `overlay_off`, `team_overlay`, and
+`all_overlay` could all become true at once. One `OverlayMode` value can hold
+exactly one variant. ✅
+
+`observation_only` defaults to true. A safe default is a design feature, not a
+warning paragraph the user has to remember.
+
+## Understand immediate-mode UI
+
+In a retained UI toolkit, you create a checkbox object and the framework keeps
+it. In egui's **immediate mode**, your `ui` function describes the interface
+again each frame:
+
+```rust
+ui.checkbox(&mut self.settings.show_names, "Show names");
+ui.add(
+    egui::Slider::new(&mut self.settings.field_of_view, 30.0..=140.0)
+        .text("Field of view"),
+);
+```
+
+The checkbox borrows `show_names` for this call. It reads the current value,
+draws the correct box, and changes the value if the user clicks. The `MenuApp`
+stores the setting between frames; the widget does not.
+
+This is why low-level work must not happen unconditionally in `ui`:
+
+```diff
+ fn draw_settings(&mut self, ui: &mut egui::Ui) -> anyhow::Result<()> {
+     ui.add(egui::Slider::new(&mut self.settings.field_of_view, 30.0..=140.0));
+-    process.write_f32(FOV_ADDRESS, self.settings.field_of_view)?; // every frame ❌
++    if ui.button("Apply changes").clicked() {
++        self.commands.send(Command::Apply(self.settings.clone()))?; // once ✅
++    }
+     Ok(())
+ }
+```
+
+The first version repeats a side effect merely because the menu repainted. The
+second version names the user action that triggers one update.
+
+## Design the event before drawing the widget
+
+An event-driven tool waits for something meaningful to happen, then runs the
+small handler that owns that event. Describe each interaction before choosing
+colors, icons, or panel layouts:
+
+| User event | UI command | Worker result | Visible feedback |
+|---|---|---|---|
+| clicks **Apply changes** | `Apply(settings)` | accepted or rejected | exact status and reason |
+| clicks **Restore defaults** | `RestoreDefaults` | features disabled and state restored | “Restored” only after acknowledgement |
+| presses **Escape** | close the menu | no game-state change | menu disappears |
+| closes the app | `Shutdown` | keys released, patches restored, handles closed | window exits after worker joins |
+
+This table prevents a common UI logic bug: the button changes its label or
+color, but no one can say whether the worker completed the requested action.
+The worker owns the game-hacking side effect; the menu owns the request and the
+truthful report of its result.
+
+## Give the worker commands, not widget references
+
+The menu and worker may run on different threads. Send owned data through a
+channel:
+
+```rust
+#[derive(Debug)]
+enum Command {
+    Apply(Settings),
+    RestoreDefaults,
+    Shutdown,
+}
+
+let (command_tx, command_rx) = std::sync::mpsc::channel();
+let worker = std::thread::spawn(move || lab_worker(command_rx));
+```
+
+`Apply(Settings)` owns a snapshot. The UI can keep changing its copy without
+racing with the worker. The worker is the only place that should own Windows
+handles and call the verified adapters from earlier lessons.
+
+The course lab intentionally prints settings instead of modifying a game:
+
+```rust
+fn lab_worker(commands: Receiver<Command>) {
+    while let Ok(command) = commands.recv() {
+        match command {
+            Command::Apply(settings) => println!("apply: {settings:?}"),
+            Command::RestoreDefaults => println!("restore defaults"),
+            Command::Shutdown => break,
+        }
+    }
+}
+```
+
+Replace only that adapter with a version-checked game bridge. The UI
+architecture stays the same whether the worker reads a snapshot, controls an
+overlay, or applies the guarded Wesnoth gold change from Chapter 3.
+
+## Do not resend unchanged settings
+
+Keep both the currently edited value and the last value sent:
+
+```rust
+fn apply_if_changed(&mut self) {
+    if self.settings == self.last_applied {
+        self.status = "Nothing changed.".into();
+        return;
+    }
+
+    if self.commands.send(Command::Apply(self.settings.clone())).is_ok() {
+        self.last_applied = self.settings.clone();
+        self.status = "Settings sent to the tool worker.".into();
+    }
+}
+```
+
+This is **state synchronization** in miniature. `settings` is the proposed
+state. `last_applied` is the last state the UI knows it submitted. In a more
+advanced tool, the worker can answer with an acknowledgement so the menu shows
+“applied,” “rejected,” or “target closed” instead of guessing.
+
+## Add a menu hotkey without accidental repeats
+
+Use the rising-edge helper from lesson 10.8 for `VK_INSERT`. Polling
+`GetAsyncKeyState(VK_INSERT)` and toggling on every frame while it is negative
+will make the menu flicker open and closed. Toggle only when the key changes
+from up to down:
+
+```rust
+if insert_edge.pressed_now(VK_INSERT) {
+    menu_open = !menu_open;
+}
+```
+
+When the menu is open, decide who owns input:
+
+- a separate menu window receives input only while the user focuses it;
+- an injected overlay should ask egui whether it wants pointer or keyboard
+  input before forwarding those events to the game;
+- closing the menu must release any synthetic key or mouse button the worker
+  still owns;
+- losing target focus should pause active input features.
+
+Do not “fix” focus by continuously forcing the game window to the foreground.
+Let the user choose which application receives input.
+
+## Make the menu readable
+
+Good menus are boring in the best way:
+
+- use verbs such as **Apply changes** and **Restore defaults**;
+- group observation, overlay, and input features separately;
+- show units on numbers (`degrees`, `pixels`, `milliseconds`);
+- disable controls that cannot currently work and explain why;
+- display the target build and connection state near the top;
+- keep dangerous actions behind an explicit confirmation;
+- never use color as the only sign of success or failure.
+- keep **Stop**, **Restore defaults**, and **Escape** easy to reach;
+- preserve keyboard navigation and readable contrast at every theme setting;
+- remember cosmetic preferences without silently remembering an unsafe active feature.
+
+The full example sets a minimum window size so labels do not collapse into one
+letter per line. The earlier quiz-card bug came from missing width constraints;
+desktop tool menus need the same care.
+
+## Shut down in the reverse order of setup
+
+`MenuApp::on_exit` sends `Command::Shutdown`. The worker should then:
+
+1. stop accepting new feature commands;
+2. release held keys and mouse buttons;
+3. restore bytes or graphics state it changed;
+4. unhook only hooks it installed;
+5. close its owned handles;
+6. report completion and exit.
+
+The main thread joins the worker before returning. A window disappearing is not
+proof that cleanup finished; joining turns cleanup into something the program
+actually waits for.
+
+## From tool window to transparent overlay
+
+Once this separate menu behaves correctly, reuse its `Settings` and `Command`
+types in an overlay. The overlay-specific layer must additionally:
+
+- track the game client rectangle with `GetClientRect` and `ClientToScreen`;
+- respond to DPI and resize changes;
+- switch between click-through mode when closed and interactive mode when open;
+- save and restore the game's graphics state if drawing inside its renderer;
+- keep the target's update thread free of file I/O, sleeping, and channel waits.
+
+Build the control model first. Rendering it in a different place should not
+rewrite the rules for ownership, commands, or cleanup.
+
+## Reference
+
+- [`eframe::run_native`](https://docs.rs/eframe/latest/eframe/fn.run_native.html)
+- [`eframe::App`](https://docs.rs/eframe/latest/eframe/trait.App.html)
+- [`egui::Slider`](https://docs.rs/egui/latest/egui/widgets/struct.Slider.html)

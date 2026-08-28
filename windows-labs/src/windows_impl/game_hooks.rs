@@ -1,4 +1,4 @@
-//! Exact x86 hooks used by the authorized, version-pinned course labs.
+//! Exact x86 hooks used by the version-pinned course targets.
 
 #![cfg(target_arch = "x86")]
 

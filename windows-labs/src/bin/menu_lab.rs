@@ -68,7 +68,7 @@ impl MenuApp {
         match self.commands.send(Command::Apply(self.settings.clone())) {
             Ok(()) => {
                 self.last_applied = self.settings.clone();
-                self.status = "Settings sent to the authorized-lab worker.".into();
+                self.status = "Settings sent to the tool worker.".into();
             }
             Err(_) => self.status = "Worker stopped; no settings were applied.".into(),
         }
@@ -79,7 +79,7 @@ impl eframe::App for MenuApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ui, |ui| {
             ui.heading("Game Hacking Academy — lab menu");
-            ui.label("A separate settings window for an authorized offline target.");
+            ui.label("A separate settings window for the offline target.");
             ui.separator();
 
             egui::ComboBox::from_label("Overlay mode")
@@ -168,7 +168,7 @@ fn main() -> eframe::Result {
     };
 
     let result = eframe::run_native(
-        "GHA authorized lab menu",
+        "GHA tool menu",
         options,
         Box::new(move |_creation| Ok(Box::new(MenuApp::new(command_tx)))),
     );

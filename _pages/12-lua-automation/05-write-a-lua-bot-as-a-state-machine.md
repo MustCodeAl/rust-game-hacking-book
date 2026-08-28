@@ -1,0 +1,170 @@
+---
+title: Write a Lua Bot as a State Machine
+author: attilathedud
+date: 2026-08-14
+category: Lua Automation
+layout: post
+permalink: /pages/12/05/
+chapter: "12.5"
+minutes: 31
+summary: Make scripted automation predictable with named states, guarded transitions, one action at a time, timeouts, and a permanent stop path.
+---
+
+## A loop needs a story
+
+This loop is short and dangerous to reason about:
+
+```lua
+-- ❌ Repeats forever with no state, confirmation, or stop rule.
+while true do
+    game.request({ kind = "select_entity", id = 1 })
+end
+```
+
+A state machine gives each phase a name and defines why the script may move to another phase.
+
+```text
+observe -> choose -> request -> wait -> observe
+                         \-> stop
+```
+
+Formally, one update uses the current state plus one input to produce a next state and, sometimes, an output:
+
+```text
+(current state, validated snapshot or event) -> (next state, optional request)
+```
+
+That model separates **policy** from **mechanism**. The state machine chooses whether a request is appropriate. The host decides how to deliver it, whether the current target still permits it, and how to report success or failure.
+
+Do not put every game fact into the state name. `WAITING_FOR_SELECTION` describes the bot's control phase; the selected entity ID, request sequence, and remaining timeout are data owned by that phase.
+
+## Represent states as strings carefully
+
+```lua
+local State = {
+    OBSERVE = "observe",
+    CHOOSE = "choose",
+    REQUEST = "request",
+    WAIT = "wait",
+    STOP = "stop",
+}
+
+local bot = {
+    state = State.OBSERVE,
+    selected = nil,
+    request_sequence = nil,
+    wait_ticks = 0,
+}
+```
+
+Lua has no built-in enum. A table of constants reduces spelling mistakes and gives one place to see all states.
+
+## One update performs bounded work
+
+```lua
+local function update(bot, snapshot)
+    if bot.state == State.OBSERVE then
+        bot.snapshot = snapshot
+        bot.state = State.CHOOSE
+
+    elseif bot.state == State.CHOOSE then
+        bot.selected = choose_nearest_living(snapshot.entities)
+        bot.state = bot.selected and State.REQUEST or State.STOP
+
+    elseif bot.state == State.REQUEST then
+        game.request({
+            kind = "select_entity",
+            id = bot.selected.id,
+            based_on = snapshot.sequence,
+        })
+        bot.request_sequence = snapshot.sequence
+        bot.wait_ticks = 20
+        bot.state = State.WAIT
+
+    elseif bot.state == State.WAIT then
+        if snapshot.selected_id == bot.selected.id then
+            bot.state = State.OBSERVE -- confirmed ✅
+        elseif bot.wait_ticks == 0 then
+            bot.state = State.STOP -- timed out safely
+        else
+            bot.wait_ticks = bot.wait_ticks - 1
+        end
+
+    elseif bot.state == State.STOP then
+        return false
+    else
+        error("unknown bot state: " .. tostring(bot.state))
+    end
+
+    return true
+end
+```
+
+The host calls `update` at a controlled rate. The script does not own an infinite loop and cannot flood actions between frames.
+
+Bounded work makes scheduling visible. One call performs at most one transition and proposes at most one action. The host can measure it, stop between calls, and prevent a fast script loop from starving rendering or input processing.
+
+## Separate choosing from acting
+
+`choose_nearest_living` should be a pure function:
+
+```lua
+local function choose_nearest_living(entities)
+    local local_player = entities[1]
+    local best = nil
+    local best_distance = math.huge
+
+    for index = 2, #entities do
+        local candidate = entities[index]
+        if candidate.alive then
+            local distance = game.distance(local_player.position, candidate.position)
+            if distance < best_distance then
+                best = candidate
+                best_distance = distance
+            end
+        end
+    end
+    return best
+end
+```
+
+It reads input and returns a choice. It does not log, request, sleep, or mutate the snapshot. That makes it easy to test with fixed tables.
+
+## Give stop the highest priority
+
+Before every update, the host can check:
+
+- user pressed the stop hotkey;
+- game process exited;
+- profile no longer matches;
+- script exceeded an error limit;
+- action request was rejected;
+- snapshot has been invalid for too long.
+
+Any of these moves the host to stopped even if Lua wants to continue. The script is a guest, not the authority over shutdown.
+
+## Test transitions as a table
+
+| Starting state | Input | Expected next state |
+| --- | --- | --- |
+| Observe | valid snapshot | Choose |
+| Choose | living candidate | Request |
+| Choose | no candidate | Stop |
+| Request | accepted request | Wait |
+| Wait | selection confirmed | Observe |
+| Wait | timeout reaches zero | Stop |
+| Any | user cancellation | Stop |
+
+Create a test snapshot for every row. Also pass an unknown state and confirm the error contains its name.
+
+## The lab's small example
+
+Run:
+
+```powershell
+cargo run --manifest-path lua-labs/Cargo.toml -- scripts/state_machine.lua
+```
+
+The included script performs a tiny observe → mark → stop path against simulated data. Extend it one transition at a time, keeping every request bounded and visible in the host's final output.
+
+State machines do not make automation intelligent by themselves. They make its assumptions, wait conditions, and failures readable—which is more important first.

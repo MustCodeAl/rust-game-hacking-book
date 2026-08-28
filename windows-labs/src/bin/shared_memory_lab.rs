@@ -73,7 +73,7 @@ mod app {
                 PAGE_READWRITE,
                 0,
                 MAPPING_BYTES as u32,
-                w!("Local\\GhaAuthorizedSharedMemoryV1"),
+                w!("Local\\GhaSharedMemoryV1"),
             )
         }?;
         let mapping = OwnedHandle::from_raw(mapping)?;
@@ -101,7 +101,7 @@ mod app {
             OpenFileMappingW(
                 FILE_MAP_READ.0,
                 false,
-                w!("Local\\GhaAuthorizedSharedMemoryV1"),
+                w!("Local\\GhaSharedMemoryV1"),
             )
         }
         .context("open the writer first so the named mapping exists")?;

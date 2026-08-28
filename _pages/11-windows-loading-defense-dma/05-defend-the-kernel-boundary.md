@@ -1,0 +1,201 @@
+---
+title: Defend the Kernel Boundary
+author: attilathedud
+date: 2026-07-30
+category: Windows Loading, Defense & DMA
+layout: post
+permalink: /pages/11/05/
+chapter: "11.5"
+minutes: 22
+summary: Understand why game labs stay in user mode, inventory loaded drivers without changing them, and harden Windows against unsafe kernel tooling.
+mermaid: true
+---
+
+## Ring 3 and ring 0 in plain English
+
+The Windows kernel is the part of the operating system trusted to manage memory, devices, processes, and security boundaries. A normal game and the tools in this book run in **user mode**, often called **ring 3**. A kernel driver runs in **kernel mode**, often called **ring 0**.
+
+The important model is **which invariants a component can break**. User-mode code
+runs with page-table and privilege checks that confine ordinary faults to its allowed
+address space and handles. Kernel-mode code participates in enforcing those checks;
+it can change mappings, device state, process state, and security decisions for the
+whole system.
+
+A user-mode crash normally ends one process. A bad kernel pointer can crash the
+entire computer or corrupt data belonging to any process. Moving code into a driver
+therefore enlarges both its authority and the damage caused by a bug. “More
+privilege” is not the same as “better engineering.”
+
+```mermaid
+flowchart TD
+    A["Game and analysis tool<br/>user mode / ring 3"] --> B["Documented Windows API boundary<br/>checks handles, rights, and buffers"]
+    B --> C["Windows kernel<br/>ring 0 and system-wide authority"]
+    C --> D["Device driver<br/>narrow device-specific contract"]
+    D --> E["Hardware"]
+    A -->|"ordinary fault scope"| F["Usually one process"]
+    C -->|"kernel fault scope"| G["Potentially the whole system"]
+```
+
+The boundary is useful because callers do not receive kernel authority merely
+for asking Windows to do something. The kernel checks the request, and a sound
+driver checks it again before touching device or privileged memory.
+
+## Why the course labs stay in user mode
+
+The old open-source games in this book do not need a driver. Their offline processes can be studied with documented Windows APIs, a debugger, a user-mode DLL, and reversible patches.
+
+The course deliberately does not build:
+
+- arbitrary kernel or physical-memory read/write commands;
+- privilege-escalation paths;
+- security-product or anti-cheat bypasses;
+- hidden drivers, callbacks, threads, or processes;
+- loaders for vulnerable or untrusted drivers.
+
+Those capabilities would expand the problem from studying one game process into controlling the operating system and concealing that control.
+
+Microsoft’s own driver security guidance begins with the same design question: confirm that a kernel driver is actually required. If a service or application can do the job, it is the lower-risk boundary.
+
+## The defensive problem: trusted code can still be vulnerable
+
+A signed driver is not automatically a safe driver. If it exposes a badly protected command that can read or write arbitrary privileged memory, another program may abuse that power.
+
+Defenders should treat driver loading as a rare, high-impact event:
+
+```text
+new driver appears
+→ identify publisher and signature
+→ compare its hash and version with the approved baseline
+→ check the vulnerable-driver block policy
+→ investigate the process and installer that introduced it
+```
+
+Do not “test” a suspicious driver by loading it on your daily computer. Use an isolated disposable virtual machine and vendor-provided analysis guidance.
+
+## Build a read-only driver inventory
+
+The inventory calls `EnumDeviceDrivers` and `GetDeviceDriverBaseNameW` through the `windows` crate. It queries visible driver images, prints their base names, and uses no mutation APIs.
+
+<details class="lab-source" markdown="1">
+<summary>Complete defensive lab source: driver_inventory.rs</summary>
+
+```rust
+#[cfg(windows)]
+fn main() -> anyhow::Result<()> {
+    use std::{ffi::c_void, mem::size_of};
+
+    use anyhow::Context;
+    use windows::Win32::System::ProcessStatus::{
+        EnumDeviceDrivers,
+        GetDeviceDriverBaseNameW,
+    };
+
+    fn enumerate() -> anyhow::Result<Vec<*mut c_void>> {
+        let mut drivers = vec![std::ptr::null_mut(); 256];
+        loop {
+            let byte_capacity = u32::try_from(drivers.len() * size_of::<*mut c_void>())
+                .context("driver buffer is too large")?;
+            let mut bytes_needed = 0_u32;
+            // SAFETY: the vector owns byte_capacity writable bytes and the
+            // output count lives until the Windows call returns.
+            unsafe {
+                EnumDeviceDrivers(
+                    drivers.as_mut_ptr(),
+                    byte_capacity,
+                    &mut bytes_needed,
+                )?;
+            }
+            let count = usize::try_from(bytes_needed)?
+                .div_ceil(size_of::<*mut c_void>());
+            if count <= drivers.len() {
+                drivers.truncate(count);
+                return Ok(drivers);
+            }
+            anyhow::ensure!(count <= 16_384, "unreasonable driver count: {count}");
+            drivers.resize(count, std::ptr::null_mut());
+        }
+    }
+
+    let mut names = Vec::new();
+    for image_base in enumerate()? {
+        if image_base.is_null() {
+            continue;
+        }
+        let mut buffer = [0_u16; 260];
+        // SAFETY: the address came from Windows and the UTF-16 buffer is writable.
+        let length = unsafe {
+            GetDeviceDriverBaseNameW(image_base, &mut buffer)
+        } as usize;
+        if length == 0 || length > buffer.len() {
+            continue;
+        }
+        names.push(String::from_utf16_lossy(&buffer[..length]));
+    }
+
+    names.sort_unstable_by_key(|name| name.to_ascii_lowercase());
+    names.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
+    println!("Loaded kernel drivers visible to this account: {}", names.len());
+    for name in names {
+        println!("  {name}");
+    }
+    println!("No privileges were enabled and no driver state was changed.");
+    Ok(())
+}
+```
+
+</details>
+
+Build and run it from a normal terminal:
+
+```powershell
+cargo run --release --target i686-pc-windows-msvc --bin driver_inventory
+```
+
+The program does not enable debug privileges. On a hardened or newer Windows installation, the account may see fewer details. Treat that as the security boundary working; do not weaken the machine to make the list longer.
+
+## Turn an inventory into a baseline
+
+One list is only a snapshot. A useful defensive baseline also records:
+
+- Windows build and capture time;
+- driver file name, version, publisher, and signature result;
+- cryptographic hash;
+- why the driver is installed;
+- the approved update source.
+
+Compare snapshots after installing a game, hardware utility, or anti-cheat component. A new driver is not automatically malicious, but it deserves a reason and a trustworthy origin.
+
+## Windows protections worth keeping on
+
+**Memory integrity**, also called **HVCI**, uses virtualization-based security to enforce kernel code-integrity rules. The Microsoft vulnerable-driver blocklist prevents known risky drivers from loading when the relevant Windows protections or application-control policy enforce it.
+
+For a normal learning machine:
+
+1. keep Windows and driver updates current;
+2. leave Secure Boot and memory integrity enabled when the hardware supports them;
+3. use the Microsoft vulnerable-driver blocklist or an approved application-control policy;
+4. remove abandoned hardware utilities and drivers you no longer need;
+5. download drivers through Windows Update or the hardware vendor;
+6. do not turn off protections merely to run an experiment.
+
+If an old driver conflicts with memory integrity, first look for a supported update or remove the dependent software. Compatibility trouble is not evidence that the protection should stay disabled.
+
+## Detect driver changes
+
+Sysmon’s Driver Load event, Event ID 6, can record a loaded driver’s hash and signature information. On a managed lab machine, alert on:
+
+- an unknown or unexpected publisher;
+- an invalid or missing signature;
+- a hash not present in the approved baseline;
+- a driver introduced outside the normal update process;
+- a driver name associated with a block policy or security advisory.
+
+Detection is not “spot one weird filename and delete it.” Confirm the file, service, signature, source, and owning software before taking action.
+
+## If you genuinely need to develop a driver
+
+Use Microsoft’s Windows Driver Frameworks, a disposable test VM, Driver Verifier, strict device access control, narrow IOCTLs, checked buffer lengths, least privilege, peer review, and the proper test-signing and release-signing workflows. Never expose arbitrary kernel, physical, or device memory to a user-mode caller.
+
+The full read-only inventory is [`driver_inventory.rs`]({{ site.baseurl }}/windows-labs/src/bin/driver_inventory.rs).
+
+References: [Microsoft driver security checklist](https://learn.microsoft.com/en-us/windows-hardware/drivers/driversecurity/driver-security-checklist), [recommended vulnerable-driver block rules](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/design/microsoft-recommended-driver-block-rules), [HVCI compatibility](https://learn.microsoft.com/en-us/windows-hardware/test/hlk/testref/driver-compatibility-with-device-guard), and [Sysmon Driver Load events](https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon).

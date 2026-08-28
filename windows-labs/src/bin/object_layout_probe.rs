@@ -5,7 +5,7 @@ mod windows_app {
     use anyhow::{Context, Result, ensure};
     use gha_windows_labs::Process;
 
-    // This profile is intentionally pinned to the authorized AssaultCube 1.2.0.2 lab build.
+    // This profile is intentionally pinned to the AssaultCube 1.2.0.2 build.
     const PROCESS_NAME: &str = "ac_client.exe";
     const LOCAL_PLAYER_ROOT: usize = 0x0050_9B74;
     const ENTITY_LIST_ROOT: usize = 0x0050_F4F8;

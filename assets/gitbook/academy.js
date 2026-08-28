@@ -528,10 +528,18 @@
   }
 
   function initTableOfContents() {
+    applyTocSectionVisibility();
     revealCurrentTocItem();
     if (tocEventsReady) return;
     tocEventsReady = true;
     document.addEventListener("click", function (event) {
+      var sectionToggle = event.target.closest("[data-toc-section-toggle]");
+      if (sectionToggle) {
+        var showSections = sectionToggle.getAttribute("aria-pressed") !== "true";
+        setTocSectionVisibility(showSections);
+        return;
+      }
+
       var toggle = event.target.closest("[data-toc-chapter-toggle]");
       if (!toggle) return;
       var chapter = toggle.dataset.tocChapterToggle;
@@ -543,6 +551,43 @@
         lesson.hidden = !willOpen;
       });
     });
+  }
+
+  function readTocSectionPreference() {
+    try {
+      return localStorage.getItem("gha-toc-page-headings") === "shown";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function saveTocSectionPreference(showSections) {
+    try {
+      localStorage.setItem(
+        "gha-toc-page-headings",
+        showSections ? "shown" : "hidden"
+      );
+    } catch (error) {
+      /* The control still works for this page when storage is unavailable. */
+    }
+  }
+
+  function setTocSectionVisibility(showSections) {
+    document.querySelectorAll(".book-summary ul.summary").forEach(function (summary) {
+      summary.dataset.tocSections = showSections ? "shown" : "hidden";
+    });
+
+    document.querySelectorAll("[data-toc-section-toggle]").forEach(function (toggle) {
+      toggle.setAttribute("aria-pressed", showSections ? "true" : "false");
+      var state = toggle.querySelector("[data-toc-section-state]");
+      if (state) state.textContent = showSections ? "Hide" : "Show";
+    });
+
+    saveTocSectionPreference(showSections);
+  }
+
+  function applyTocSectionVisibility() {
+    setTocSectionVisibility(readTocSectionPreference());
   }
 
   function revealCurrentTocItem() {

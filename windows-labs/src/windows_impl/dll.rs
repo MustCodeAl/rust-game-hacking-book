@@ -206,7 +206,7 @@ fn run_lab() -> Result<()> {
         "quake3-urt.exe" => run_urban_terror(),
         "flare.exe" => run_flare_farming_bot(&STOP),
         "wyrmsun.exe" => run_wyrmsun_macro(&STOP),
-        _ => anyhow::bail!("{process:?} is not an authorized course target"),
+        _ => anyhow::bail!("{process:?} is not a configured course target"),
     }
 }
 
@@ -230,7 +230,7 @@ pub extern "system" fn gha_start(_argument: *mut c_void) -> u32 {
     }
     STOP.store(false, Ordering::Release);
     let started = thread::Builder::new()
-        .name("gha-authorized-lab".into())
+        .name("gha-tool-worker".into())
         .spawn(|| {
             if let Err(error) = run_lab() {
                 eprintln!("game lab stopped: {error:#}");

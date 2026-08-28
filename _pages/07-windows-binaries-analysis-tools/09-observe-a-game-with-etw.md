@@ -1,0 +1,212 @@
+---
+title: Observe a Game with ETW
+author: attilathedud
+date: 2026-07-30
+category: Windows Binaries & Analysis Tools
+layout: post
+permalink: /pages/7/09/
+chapter: "7.9"
+minutes: 28
+summary: Use Event Tracing for Windows and a small controller to record a short performance trace of a game.
+mermaid: true
+---
+
+## Observation without a breakpoint
+
+A debugger stops or single-steps a thread. That is perfect when you need the exact instruction and registers, but stopping changes timing. A game may stutter, a network timeout may expire, or another thread may continue while the selected thread is paused.
+
+**Event Tracing for Windows**, shortened to **ETW**, records structured events with much less disturbance. Windows and applications can report process, thread, image-load, CPU-sampling, disk, networking, and other activity. The exact events depend on which providers and keywords a trace enables.
+
+ETW is for questions such as:
+
+- Which thread used most of the CPU during a slow frame?
+- Which DLLs loaded while the game started?
+- Did a long pause line up with disk activity?
+- Was work happening on one thread or many?
+
+ETW does not tell you the meaning of an arbitrary `gold` field. Use the tool that matches the question.
+
+ETW is a producer–buffer–consumer system. Providers describe events, a session
+controls which streams are active, and consumers turn the ordered records into
+a model:
+
+```mermaid
+flowchart TD
+    A["Event providers"] --> B["Typed timestamped events"]
+    C["Trace session controller"] --> A
+    B --> D["Kernel buffers"]
+    D --> E["ETL event stream"]
+    E --> F["Trace consumer"]
+    F --> G["Timeline and aggregates"]
+```
+
+Buffers separate fast event production from slower analysis, but they are
+finite. A trace can lose records when production outruns collection, so
+“missing from this capture” does not automatically mean “never happened.”
+
+## Four roles make one trace
+
+The names sound formal, but the jobs are simple:
+
+1. A **provider** creates events. Windows, a driver, or an application can be a provider.
+2. A **session** receives selected events into buffers and possibly an `.etl` file.
+3. A **controller** starts and stops the session and selects providers.
+4. A **consumer** reads the events live or from the saved file.
+
+Windows Performance Recorder, or **WPR**, is a controller. Windows Performance Analyzer, or **WPA**, is a graphical consumer.
+
+```text
+providers → ETW session buffers → gha-game.etl → Windows Performance Analyzer
+```
+
+An event normally includes a timestamp, provider identity, event identity, process/thread context, and provider-defined fields. A keyword is a bitmask used to select groups of related events from a provider.
+
+## Keep the lab short and isolated
+
+A general performance profile can include activity from the whole machine, not just the game. That may reveal filenames, process names, or timing from unrelated applications.
+
+Use a clean disposable Windows VM, close unrelated programs, record only long enough to reproduce the game action, and do not publish the `.etl` file without reviewing it. The course helper refuses to overwrite an existing trace.
+
+## Keep the controller narrow
+
+The helper launches `wpr.exe` directly with `std::process::Command`. It does not build a command string for PowerShell or `cmd.exe`, so the output path is passed as one argument rather than interpreted as shell code.
+
+<details class="lab-source" markdown="1">
+<summary>Complete lab source: etw_capture.rs</summary>
+
+```rust
+#[cfg(windows)]
+fn main() -> anyhow::Result<()> {
+    use std::{io, path::PathBuf, process::Command};
+    use anyhow::{Context, ensure};
+
+    fn run_wpr(arguments: &[&std::ffi::OsStr]) -> anyhow::Result<()> {
+        let status = Command::new("wpr.exe")
+            .args(arguments)
+            .status()
+            .context("could not start wpr.exe")?;
+        ensure!(status.success(), "wpr.exe returned {status}");
+        Ok(())
+    }
+
+    let output = std::env::args_os()
+        .nth(1)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("gha-game.etl"));
+    ensure!(
+        !output.exists(),
+        "refusing to overwrite {}",
+        output.display()
+    );
+
+    run_wpr(&[
+        std::ffi::OsStr::new("-start"),
+        std::ffi::OsStr::new("GeneralProfile"),
+        std::ffi::OsStr::new("-filemode"),
+    ])?;
+
+    println!("ETW recording started.");
+    println!("Exercise the game, then press Enter to stop.");
+    let mut answer = String::new();
+    if let Err(error) = io::stdin().read_line(&mut answer) {
+        let _ = run_wpr(&[std::ffi::OsStr::new("-cancel")]);
+        return Err(error)
+            .context("could not read Enter; the trace was cancelled");
+    }
+
+    let stop_result = run_wpr(&[
+        std::ffi::OsStr::new("-stop"),
+        output.as_os_str(),
+    ]);
+    if stop_result.is_err() {
+        let _ = run_wpr(&[std::ffi::OsStr::new("-cancel")]);
+    }
+    stop_result?;
+    println!("Saved {}", output.display());
+    println!("Open the ETL file in Windows Performance Analyzer.");
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn main() {
+    eprintln!("This ETW capture helper must run on Windows.");
+}
+```
+
+</details>
+
+## Why the cleanup path matters
+
+Starting a trace creates system state that outlives the first `wpr.exe` process. If reading from the terminal fails or stopping the session fails, the helper asks WPR to cancel.
+
+```diff
+ fn record_trace(output: &Path) -> anyhow::Result<()> {
+     run_wpr(&[OsStr::new("-start"), OsStr::new("GeneralProfile")])?;
+     let mut answer = String::new();
+-    io::stdin().read_line(&mut answer)?;
++    if let Err(error) = io::stdin().read_line(&mut answer) {
++        let _ = run_wpr(&[OsStr::new("-cancel")]);
++        return Err(error).context("the trace was cancelled");
++    }
+     run_wpr(&[OsStr::new("-stop"), output.as_os_str()])?;
+     Ok(())
+ }
+```
+
+### Why this version?
+
+An error should not leave a forgotten recorder running. Cleanup is part of correctness, just like restoring a breakpoint byte or closing a process handle.
+
+The ignored result on `-cancel` is deliberate: the original error remains the most useful explanation, and cancellation is a best-effort recovery after something already went wrong.
+
+## Record one repeatable action
+
+Build the helper:
+
+```powershell
+cd windows-labs
+cargo build --release --target i686-pc-windows-msvc --bin etw_capture
+```
+
+In a clean VM, start the capture from an administrator terminal if WPR requests it:
+
+```powershell
+.\target\i686-pc-windows-msvc\release\etw_capture.exe `
+  .\wesnoth-turn.etl
+```
+
+Then:
+
+1. start Wesnoth 1.14.9;
+2. load a small local scenario;
+3. end exactly one turn;
+4. return to the terminal and press Enter;
+5. open `wesnoth-turn.etl` in WPA.
+
+Use the same short procedure for AssaultCube startup or one Urban Terror map load. Repeatability makes two traces comparable.
+
+## Read the result in layers
+
+Start with broad questions before zooming into thousands of events:
+
+- In **Process Lifetimes**, confirm the expected executable and PID.
+- In **CPU Usage (Sampled)**, filter to that process and find busy threads.
+- In **Image Load**, inspect DLLs loaded during startup.
+- In **Disk Usage**, look for long file reads that overlap a pause.
+- In the timeline, select only the few seconds around your action.
+
+A stack may show system DLLs, game functions, or unresolved addresses. Symbols translate addresses into names. Without matching symbols, the timing is still real, but the function label may remain a module plus offset.
+
+## Missing events are data too
+
+ETW writes through buffers. If a provider produces events faster than the session can deliver them, events can be lost. A controller can report buffer and event-loss statistics.
+
+That means “I did not see an event” is weaker than “the event could not have happened.” Check whether the chosen profile included the relevant provider and whether the session lost data.
+
+## Keep tracing separate from evasion
+
+This chapter starts, stops, and consumes an ordinary diagnostic session. It does not disable providers, patch tracing APIs, alter another process's telemetry, or hide module loads. Those actions would defeat the evidence this lab is trying to understand.
+
+The complete helper is [`etw_capture.rs`]({{ site.baseurl }}/windows-labs/src/bin/etw_capture.rs).
+
+References: [Microsoft: About Event Tracing](https://learn.microsoft.com/en-us/windows/win32/etw/about-event-tracing), [Windows Performance Recorder](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/windows-performance-recorder), and [Windows Performance Analyzer](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/windows-performance-analyzer).

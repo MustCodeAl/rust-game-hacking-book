@@ -30,7 +30,7 @@ fn main() -> anyhow::Result<()> {
     ])?;
 
     println!("ETW recording started.");
-    println!("Launch or exercise the owned game now, then press Enter to stop.");
+    println!("Launch or exercise the game now, then press Enter to stop.");
     let mut answer = String::new();
     if let Err(error) = io::stdin().read_line(&mut answer) {
         let _ = run_wpr(&[std::ffi::OsStr::new("-cancel")]);

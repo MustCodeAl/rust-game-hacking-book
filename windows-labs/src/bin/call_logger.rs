@@ -220,7 +220,7 @@ mod app {
             "no direct calls found in executable regions"
         );
 
-        // SAFETY: the PID is the authorized process found by ToolHelp.
+        // SAFETY: the PID is the exact process found by ToolHelp.
         unsafe { DebugActiveProcess(entry.id) }?;
         let mut attach = AttachGuard {
             pid: entry.id,

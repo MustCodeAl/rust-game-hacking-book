@@ -21,4 +21,4 @@ cargo run --manifest-path advanced-memory-labs/Cargo.toml --bin crypto_demo
 cargo run --manifest-path advanced-memory-labs/Cargo.toml --bin dma_capture -- capture.bin 0x1000 0x7FF612341000 64
 ```
 
-The DMA reader never opens a hardware device, loads a kernel driver, writes memory, disables an IOMMU, or bypasses anti-cheat. Use captures from a machine, virtual machine, or synthetic test fixture you own and are authorized to inspect.
+The DMA reader never opens a hardware device, loads a kernel driver, writes memory, disables an IOMMU, or bypasses anti-cheat. Use captures with known provenance or a synthetic test fixture.

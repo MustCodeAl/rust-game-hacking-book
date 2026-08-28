@@ -1,6 +1,6 @@
-# Game Hacking Academy · Rust edition
+# Game Hacking Academy
 
-The book is a beginner-friendly, Rust-first guide to game internals, memory,
+The book is a beginner-friendly guide to game internals, memory,
 debugging, graphics, networking, tooling, and supported modding.
 
 It begins with a source-grounded questioning method: identify the exact target,
@@ -13,7 +13,7 @@ retry missed ideas without guessing.
 bundle exec jekyll serve
 ```
 
-## Portable Rust exercises
+## Portable exercises
 
 ```text
 cd rust-labs
@@ -23,7 +23,7 @@ cargo test
 ## Windows, Lua, and advanced memory labs
 
 The `windows-labs` crate contains the complete Windows implementations used by
-the memory, debugger, PE, IPC, and authorized game lessons. Chapter 12's
+the memory, debugger, PE, IPC, and game-analysis lessons. Chapter 12's
 simulated scripting host is separate so it can run on any development machine:
 
 ```text

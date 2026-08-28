@@ -23,7 +23,7 @@ the lessons and should be used only in offline/local matches you control.
 | `src/bin/module_inspector.rs` | Finds a live course-game module with ToolHelp and translates a checked RVA into its ASLR-adjusted address. |
 | `src/bin/iat_hook_lab.rs` | Redirects this course program's own PE32 `MessageBoxW` IAT slot and restores it through RAII. |
 | `src/bin/driver_inventory.rs` | Lists driver base names visible through PSAPI without enabling privileges or changing kernel state. |
-| `src/bin/access_probe.rs` | Opens an owned game with the smallest useful query right and prints its executable path. |
+| `src/bin/access_probe.rs` | Opens a game process with the smallest useful query right and prints its executable path. |
 | `src/bin/etw_capture.rs` | Starts and stops a short Windows Performance Recorder session without invoking a shell. |
 | `src/bin/integrity_manifest.rs` | Creates or verifies a SHA-256 manifest for exact game and mod files. |
 | `src/bin/self_minidump.rs` | Writes a small dump of the lab process itself for WinDbg practice. |
@@ -92,7 +92,7 @@ the normal call, redirected call, and restored call in that order.
 
 ## Run the Windows-internals labs
 
-Query an owned game without asking for memory-write access, create and verify a
+Query a game process without asking for memory-write access, create and verify a
 file baseline, record a short ETW trace in a disposable VM, and capture the lab
 process itself:
 

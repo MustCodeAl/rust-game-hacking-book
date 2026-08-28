@@ -1,0 +1,187 @@
+---
+title: Make a Data-Driven Unit Mod
+author: attilathedud
+date: 2026-07-30
+category: Files, Mods & Trust
+layout: post
+permalink: /pages/9/04/
+chapter: "9.4"
+minutes: 18
+summary: Clone an existing Flare unit definition, change one field at a time, and validate the result with a tiny linter.
+---
+
+## Supported data beats live patching
+
+Flare defines many items, enemies, powers, and maps in text files. That makes it an excellent modding target.
+
+![A Flare enemy in the original game]({{ site.baseurl }}/assets/images/8/4/flare1.png)
+
+Find the unit definition by searching for a visible name or asset path. Copy the definition into a separate mod folder instead of editing the base game.
+
+In the standard Windows install, start here:
+
+```text
+C:\Program Files (x86)\Flare\mods
+```
+
+`mods.txt` normally lists `fantasycore` followed by `empyrean_campaign`. Lower entries override higher entries.
+
+## Learn the override order
+
+Flare loads mods in order; later entries can override earlier data. Keep your mod small so it is obvious which file wins.
+
+```text
+base game
+→ required libraries
+→ your unit mod
+```
+
+Do not copy an entire base data folder into the mod. You would accidentally freeze and override unrelated files.
+
+## Clone before inventing
+
+Start with a known working unit:
+
+```text
+[enemy]
+id=gha_training_slime
+name=Training Slime
+level=1
+hp=20
+speed=2.0
+```
+
+Change the `id` and one visible field. Load the game and confirm. Then change the next field.
+
+For the real Rotting Zombie, follow the two-layer definition:
+
+```text
+mods\fantasycore\enemies\base\zombie.txt
+mods\empyrean_campaign\enemies\lvl1_zombie_rotting.txt
+```
+
+The base file points to shared animation data. The campaign file supplies the visible name and combat statistics. In a copied mod, override `lvl1_zombie_rotting.txt`, give the enemy a new name, lower its HP, and raise its movement speed. Load the first area containing a Rotting Zombie: it should display the new name, die quickly, and move faster.
+
+The original lesson's exact visible data hack is:
+
+```text
+INCLUDE enemies/base/zombie.txt
+
+name=MOOOOO
+level=1
+categories=zombie,undead,dungeon,grassland
+rarity=common
+xp=2
+
+# combat stats
+stat=hp,1
+speed=20
+turn_delay=1ms
+chance_pursue=10
+
+power=melee,1,1
+
+stat=accuracy,1
+stat=avoidance,10
+stat=poise,20
+
+stat=dmg_melee_min,1
+stat=dmg_melee_max,1
+cooldown=1800ms
+
+# loot
+loot=loot/level_1.txt
+```
+
+Put this at `gha_rotting_zombie\enemies\lvl1_zombie_rotting.txt` and list `gha_rotting_zombie` after `empyrean_campaign` in `mods.txt`. Because later mods override earlier ones at the same relative path, Flare uses this record while still following the `INCLUDE` to the shared zombie behavior and animation.
+
+## Parse and validate the definition
+
+A small linter catches easy mistakes:
+
+```rust
+#[derive(Debug)]
+struct EnemyDefinition {
+    id: String,
+    name: String,
+    level: u32,
+    hp: u32,
+    speed: f32,
+}
+
+impl EnemyDefinition {
+    fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(!self.id.trim().is_empty(), "id cannot be empty");
+        anyhow::ensure!(
+            self.id.chars().all(|c| c.is_ascii_lowercase() || c == '_' || c.is_ascii_digit()),
+            "id must use lowercase ASCII, digits, or underscores"
+        );
+        anyhow::ensure!(!self.name.trim().is_empty(), "name cannot be empty");
+        anyhow::ensure!((1..=100).contains(&self.level), "level is out of range");
+        anyhow::ensure!((1..=1_000_000).contains(&self.hp), "hp is out of range");
+        anyhow::ensure!(self.speed.is_finite() && self.speed > 0.0, "speed must be positive");
+        Ok(())
+    }
+}
+```
+
+The typed struct above teaches validation. For the real repeatable `stat=` lines, preserve the key and parse the first comma-separated item as the stat name and the second as its numeric value. Do not collect them into a map keyed only by `stat`, because that would discard all but one line.
+
+## Follow asset references
+
+A unit definition may point to:
+
+- an animation set;
+- a sprite sheet;
+- sound effects;
+- powers;
+- loot tables;
+- AI behavior.
+
+![Locating a referenced Flare asset]({{ site.baseurl }}/assets/images/8/4/flare4.png)
+
+Copy or create only assets your mod changes. Keep paths relative and verify case sensitivity—Windows may accept a path that Linux rejects.
+
+Follow the animation reference from `zombie.txt` to its animation file, then follow that file to the zombie sprite sheet (`zombie.png`). Make a copy inside your mod with the same relative path and paint a blue background behind every animation frame. Do not resize the sheet or move frames: the animation file selects fixed rectangles from it.
+
+## Add the unit to a test map
+
+Use a disposable map or developer spawn command. Place one unit in an empty area.
+
+![A custom unit placed in a test area]({{ site.baseurl }}/assets/images/8/4/flare8.png)
+
+Test:
+
+- spawn and idle animation;
+- movement and collision;
+- damage and death;
+- save and reload;
+- missing-asset behavior;
+- uninstall by removing the mod.
+
+When the modified Rotting Zombie runs onto the screen with the changed name, statistics, and blue sprite background, you have changed the actual unit’s data and artwork—not a stand-in format.
+
+## Keep a manifest
+
+```toml
+name = "gha-training-slime"
+version = "0.1.0"
+target_game = "Flare 1.12"
+description = "Adds one low-level training enemy."
+```
+
+Document dependencies and load order.
+
+## Finish the course the maintainable way
+
+The course began by changing one number in live memory. It ends with a supported, versioned, removable mod.
+
+Both approaches teach how games represent behavior, but the file-based mod has strong advantages:
+
+- the diff is readable;
+- the game can validate it;
+- users can install and remove it;
+- updates are easier to track;
+- no raw process memory is involved.
+
+When a supported extension point exists, choose it.

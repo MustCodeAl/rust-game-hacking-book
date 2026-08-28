@@ -1,0 +1,261 @@
+---
+title: Manage a Detour
+author: attilathedud
+date: 2026-07-30
+category: In-Process Tools & Interfaces
+layout: post
+permalink: /pages/8/03/
+chapter: "8.3"
+minutes: 24
+summary: Turn the debugger-only code-cave experiment into a verified, reversible patch plan.
+---
+
+## Typed code manages the machine-code boundary
+
+A hook changes running machine code, so the final write is necessarily low-level. Typed code keeps the surrounding lifecycle explicit:
+
+- exact ownership of original bytes;
+- checked address math;
+- supported-version checks;
+- a single apply/restore state;
+- cleanup in `Drop`;
+- clear errors.
+
+![The debugger-only detour from the earlier lab]({{ site.baseurl }}/assets/images/3/4/wesnoth1.png)
+
+## Define the patch's safety model first
+
+In an offline game, the main danger is self-inflicted:
+patching the wrong build, splitting an instruction, losing restoration bytes,
+or unloading while the cave still runs. Write the safety model before writing
+the jump:
+
+| Question | Wesnoth detour answer |
+|---|---|
+| What are we protecting? | the original instructions and a recoverable local match |
+| What change is allowed? | one verified hook span in the exact supported build |
+| What evidence validates it? | executable fingerprint, architecture, decoded whole instructions, and exact current bytes |
+| When must it refuse? | any mismatch, unreachable cave, bad length, or failed protection change |
+| How does it recover? | stop users, restore captured bytes, flush the instruction cache, restore page protection, then unload |
+
+This is a game-hacking safety contract, not an enterprise threat model. Its job
+is to prevent an experiment from turning uncertainty into a write.
+
+The trusted core should stay small: target-profile selection, instruction
+decoding, the patch writer, and the restoration record. A menu theme, log
+formatter, or hotkey label should not be able to bypass byte verification. When
+more code can validate a patch, there are more places where a bug can create a
+wrong write.
+
+## Represent a patch as data
+
+```rust
+#[derive(Debug)]
+struct PatchPlan {
+    hook: usize,
+    expected: Vec<u8>,
+    replacement: Vec<u8>,
+}
+
+impl PatchPlan {
+    fn validate(&self) -> Result<(), &'static str> {
+        if self.expected.is_empty() {
+            return Err("expected bytes cannot be empty");
+        }
+        if self.expected.len() != self.replacement.len() {
+            return Err("replacement must preserve the hook span");
+        }
+        Ok(())
+    }
+}
+```
+
+The planner performs no raw memory access. A disassembler should determine the whole-instruction span; never choose it by counting five arbitrary bytes.
+
+## Verify before writing
+
+```rust
+fn verify_hook(process: &Process, plan: &PatchPlan) -> anyhow::Result<()> {
+    let mut found = vec![0_u8; plan.expected.len()];
+    process.read_exact(plan.hook, &mut found)?;
+
+    anyhow::ensure!(
+        found == plan.expected,
+        "hook bytes do not match this target profile"
+    );
+    Ok(())
+}
+```
+
+Do not turn a mismatch into a force option:
+
+```diff
+ fn run_detour(process: &Process, plan: &PatchPlan) -> anyhow::Result<()> {
+-    process.write_exact(plan.hook, &plan.replacement)?;
++    plan.validate()?;
++    verify_hook(process, plan)?;
++    let mut applied = AppliedPatch::apply(process, plan)?;
++    // Keep `applied` alive for the entire period when the detour is enabled.
+     run_feature_until_stopped()?;
++    applied.restore()?;
+     Ok(())
+ }
+```
+
+> **Why this version?** The expected bytes are a tiny build fingerprint. If they
+> differ, the planned jump may split a different instruction or replay the wrong
+> behavior. Equal lengths keep the resume address stable. Finally, the
+> `AppliedPatch` value represents the fact that the process is currently changed;
+> when that value is restored or dropped, it still has the original bytes needed
+> to undo the patch.
+{: .block-why }
+
+If bytes differ, stop. Do not add a “force” switch to a beginner tool.
+
+## Own the applied state
+
+```rust
+struct AppliedPatch<'a> {
+    process: &'a Process,
+    address: usize,
+    original: Vec<u8>,
+    active: bool,
+}
+
+impl AppliedPatch<'_> {
+    fn restore(&mut self) -> anyhow::Result<()> {
+        if self.active {
+            // 🔁 Restore bytes before clearing the flag. If the write fails,
+            // `active` stays true so Drop can make one final best-effort attempt.
+            self.process.write_exact(self.address, &self.original)?;
+            self.active = false;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for AppliedPatch<'_> {
+    fn drop(&mut self) {
+        // 🧹 `restore` is idempotent: explicit cleanup sets active=false, so this
+        // fallback cannot accidentally write the original bytes twice.
+        if let Err(error) = self.restore() {
+            eprintln!("warning: patch restoration failed: {error:#}");
+        }
+    }
+}
+```
+
+`Drop` is a final safety net, not the only cleanup path. Call `restore` explicitly and report failures while the program can still react.
+
+## Calculate jumps carefully
+
+A 5-byte relative jump stores a signed 32-bit displacement measured from the end of the jump:
+
+```rust
+fn rel32(from: usize, to: usize) -> Option<i32> {
+    // 🧭 The CPU measures a near jump from the address *after* its five bytes.
+    let next_instruction = from.checked_add(5)?;
+    // 📏 Use a wider signed type for subtraction so targets below `from` work
+    // without unsigned wraparound; the final conversion enforces rel32 range.
+    let difference = (to as i128) - (next_instruction as i128);
+    i32::try_from(difference).ok()
+}
+
+fn near_jump(from: usize, to: usize) -> Option<[u8; 5]> {
+    let mut bytes = [0_u8; 5];
+    bytes[0] = 0xE9;
+    bytes[1..].copy_from_slice(&rel32(from, to)?.to_le_bytes());
+    Some(bytes)
+}
+```
+
+If the destination is too far away, `rel32` returns `None`. Do not truncate the number.
+
+## Architecture matters
+
+The target, DLL, pointer size, instruction decoder, and calling convention must agree:
+
+- a 32-bit DLL loads into a 32-bit process;
+- a 64-bit DLL loads into a 64-bit process;
+- saved instructions may use instruction-pointer-relative addressing;
+- registers and stack rules differ by architecture.
+
+This is why copying a detour from a video or another game version is unreliable.
+
+## A safer milestone
+
+Before any live patch, test:
+
+- `rel32` with forward and backward jumps;
+- overflow rejection;
+- byte verification with a fake memory buffer;
+- applying and restoring in a practice process you wrote;
+- repeated enable/disable cycles.
+
+After every restoration test, read the hook span again and compare it with the
+captured original bytes. “The feature looks disabled” is weaker evidence than
+proving the machine code returned to its starting state.
+
+The first end-to-end target should be a tiny program with one known function.
+
+## Apply it to Wesnoth 1.14.9
+
+After the practice target works, reproduce the original Wesnoth terrain-description hook:
+
+```text
+hook site:       0x00CC_AF8A
+resume address:  0x00CC_AF90
+hook span:       6 complete bytes
+trigger:         right-click a tile → Terrain Description
+visible result:  player gold becomes 888 before the text appears
+```
+
+At `0x00CCAF8A`, the supported 1.14.9 profile expects these exact six bytes:
+
+```text
+8B 01 8D 74 26 00
+```
+
+They contain the instructions represented as:
+
+```nasm
+mov eax, dword ptr [ecx]
+lea esi, [esi]
+```
+
+The x86 cave can preserve state, call the gold-changing helper, replay those instructions, and return:
+
+```rust
+#[cfg(target_arch = "x86")]
+extern "C" fn cave_body() {
+    let _ = set_wesnoth_gold(888);
+}
+
+#[cfg(target_arch = "x86")]
+#[unsafe(naked)]
+unsafe extern "C" fn wesnoth_cave() {
+    core::arch::naked_asm!(
+        "pushfd",
+        "pushad",
+        "call {body}",
+        "popad",
+        "popfd",
+        "mov eax, dword ptr [ecx]",
+        "lea esi, [esi]",
+        "jmp {resume}",
+        body = sym cave_body,
+        resume = const 0x00CC_AF90,
+    );
+}
+```
+
+Build the DLL for 32-bit Windows. Create the six-byte replacement as a five-byte `E9 rel32` jump followed by `0x90`, verify the live bytes still equal the recorded original, change the page protection, write the patch, flush the instruction cache, and restore the old protection.
+
+Those actions are fully implemented—rather than delegated to an imaginary
+wrapper—in [`local_patch.rs`]({{ site.baseurl }}/windows-labs/src/windows_impl/local_patch.rs).
+The build-checked Wesnoth cave and installer are in
+[`game_hooks.rs`]({{ site.baseurl }}/windows-labs/src/windows_impl/game_hooks.rs). Lesson 2.6
+prints the complete hook, pointer write, instruction replay, and run command in
+one place.
+
+When you choose **Terrain Description**, gold should become `888`. Disable the feature and restore all six original bytes; choosing the menu item again should leave gold unchanged. That final restoration test is part of the hack, not optional cleanup.

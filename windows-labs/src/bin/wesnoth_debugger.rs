@@ -193,7 +193,7 @@ mod app {
             "expected ADD opcode 0x01 at {INCOME_INSTRUCTION:#010x}, found {original_byte:#04x}"
         );
 
-        // SAFETY: the PID came from ToolHelp and the process is an authorized target.
+        // SAFETY: the PID came from ToolHelp and identifies the exact target.
         unsafe { DebugActiveProcess(entry.id) }?;
         let mut attach = AttachGuard {
             process_id: entry.id,

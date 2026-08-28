@@ -1,0 +1,329 @@
+---
+title: Build a Wesnoth Chat Bot
+author: attilathedud
+date: 2026-07-30
+category: Protocols, Networks & IPC
+layout: post
+permalink: /pages/6/05/
+chapter: "6.5"
+minutes: 24
+summary: Perform Wesnoth 1.14.9’s real local handshake, log in, read gzip-framed WML, and answer a chat command.
+mermaid: true
+---
+
+## What we are building
+
+Run `wesnothd.exe` on your own computer, connect a client named **ChatBot**, and make it answer `\wave` with **Hello!** in the lobby.
+
+This is not a toy protocol. It uses the exact flow we reversed from Wesnoth 1.14.9:
+
+```text
+TCP to 127.0.0.1:15000
+→ four-zero negotiation
+→ gzip-framed [version]
+→ gzip-framed [login]
+→ gzip-framed lobby messages
+```
+
+Keep transport, decoding, session meaning, and behavior as separate layers. One
+incoming message should travel through the pipeline before any reply is built:
+
+```mermaid
+flowchart TD
+    A["TCP byte stream"] --> B["Bounded frame decoder"]
+    B --> C["WML parser"]
+    C --> D["Session-state update"]
+    D --> E["Domain event"]
+    E --> F["Chat command handler"]
+    F --> G["Framed outbound message"]
+```
+
+This separation lets a malformed frame fail before it reaches chat behavior,
+and it lets the command handler work with events instead of raw network bytes.
+
+## Connect with timeouts
+
+```rust
+use std::{
+    io::{self, Read, Write},
+    net::{SocketAddr, TcpStream},
+    time::Duration,
+};
+
+const MAX_FRAME: usize = 1_048_576;
+
+fn connect_local(address: SocketAddr) -> io::Result<TcpStream> {
+    if !address.ip().is_loopback() || address.port() != 15_000 {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "this Wesnoth lab connects only to loopback port 15000",
+        ));
+    }
+
+    let stream = TcpStream::connect_timeout(&address, Duration::from_secs(3))?;
+    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+    Ok(stream)
+}
+```
+
+The timeout prevents a broken server or parser from hanging the bot forever.
+
+## Read and write exact frames
+
+Lesson 6.3’s `encode_wesnoth_frame` performs the gzip compression and adds the four-byte big-endian length. `write_all` matters because one `write` may send only part of a buffer.
+
+```rust
+fn send_wml(stream: &mut TcpStream, wml: &str) -> anyhow::Result<()> {
+    let frame = encode_wesnoth_frame(wml)?;
+    stream.write_all(&frame)?;
+    stream.flush()?;
+    Ok(())
+}
+
+fn read_frame(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+    let mut header = [0_u8; 4];
+    stream.read_exact(&mut header)?;
+    let length = u32::from_be_bytes(header) as usize;
+    if length > MAX_FRAME {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "frame too large"));
+    }
+
+    let mut frame = Vec::with_capacity(4 + length);
+    frame.extend_from_slice(&header);
+    frame.resize(4 + length, 0);
+    stream.read_exact(&mut frame[4..])?;
+    Ok(frame)
+}
+```
+
+`read_exact` handles TCP fragmentation. It does not assume one receive call equals one Wesnoth message.
+
+## Handle early server replies
+
+The opening negotiation is special, so collect its replies until a short quiet period. The historical capture received 41 bytes.
+
+```rust
+fn read_server_batch(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+    stream.set_read_timeout(Some(Duration::from_millis(250)))?;
+    let mut collected = Vec::new();
+    let mut chunk = [0_u8; 512];
+
+    loop {
+        match stream.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(count) => {
+                collected.extend_from_slice(&chunk[..count]);
+                if collected.len() > MAX_FRAME {
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, "reply too large"));
+                }
+            }
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                ) => break,
+            Err(error) => return Err(error),
+        }
+    }
+
+    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+    Ok(collected)
+}
+```
+
+Keep this helper for negotiation only. Once the session is in the lobby, use the frame reader.
+
+## Perform the Wesnoth 1.14.9 login
+
+```rust
+fn log_in(stream: &mut TcpStream, nickname: &str) -> anyhow::Result<()> {
+    let nickname = simple_field(nickname)?;
+
+    // The first message is not compressed or length-prefixed.
+    stream.write_all(&[0, 0, 0, 0])?;
+    let reply = read_server_batch(stream)?;
+    anyhow::ensure!(!reply.is_empty(), "server did not negotiate");
+
+    send_wml(
+        stream,
+        "[version]\nversion=\"1.14.9\"\n[/version]",
+    )?;
+    let _version_reply = read_server_batch(stream)?;
+
+    send_wml(
+        stream,
+        &format!("[login]\nusername=\"{nickname}\"\n[/login]"),
+    )?;
+    let _login_reply = read_server_batch(stream)?;
+    Ok(())
+}
+```
+
+If the server rejects the version, compare the decompressed frame with the one produced by the official 1.14.9 client. Do not randomly change compressed bytes; fix the WML and recompress it.
+
+## Answer `\wave`
+
+```rust
+fn run(address: SocketAddr, nickname: String) -> anyhow::Result<()> {
+    let mut stream = connect_local(address)?;
+    log_in(&mut stream, &nickname)?;
+
+    let nickname = simple_field(&nickname)?;
+    send_wml(
+        &mut stream,
+        &format!(
+            "[message]\nmessage=\"ChatBot connected\"\nroom=\"lobby\"\nsender=\"{nickname}\"\n[/message]"
+        ),
+    )?;
+
+    loop {
+        let frame = read_frame(&mut stream)?;
+        let wml = decode_wesnoth_frame(&frame)?;
+        println!("{wml}");
+
+        if wml.contains("message=\"\\wave\"") {
+            send_wml(
+                &mut stream,
+                &format!(
+                    "[message]\nmessage=\"Hello!\"\nroom=\"lobby\"\nsender=\"{nickname}\"\n[/message]"
+                ),
+            )?;
+        }
+    }
+}
+```
+
+## Prove the bot works
+
+1. Start `wesnothd.exe`.
+2. Run the client with address `127.0.0.1:15000` and nickname `ChatBot`.
+3. Join `localhost:15000` from the normal Wesnoth client.
+4. Type `\wave` in the lobby.
+5. Confirm **Hello!** appears from ChatBot.
+
+That visible lobby response proves the real negotiation, version, login, gzip framing, Simple WML, receive loop, and command logic all work together.
+
+## Keep it well behaved
+
+Limit message length, respond at most once per command frame, add a short send rate limit, and exit cleanly when the local server closes. A parser error should print the frame size and stop; it should not enter an automatic reconnect storm.
+
+## Run the complete bot
+
+After building the workspace, start the course `wesnothd.exe` on port 15000 and run:
+
+```powershell
+.\target\i686-pc-windows-msvc\release\wesnoth_chatbot.exe ChatBot
+```
+
+The full client is [`wesnoth_chatbot.rs`]({{ site.baseurl }}/windows-labs/src/bin/wesnoth_chatbot.rs). The framing/parser it imports is [`wesnoth_protocol.rs`]({{ site.baseurl }}/windows-labs/src/wesnoth_protocol.rs). Together they implement the real loopback connection, timeouts, four-zero negotiation, version frame, login frame, lobby receive loop, `\wave` recognition, and `Hello!` reply.
+
+<details class="lab-source" markdown="1">
+<summary>Complete lab source: wesnoth_chatbot.rs</summary>
+
+```rust
+use std::{
+    io::{self, Read, Write},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream},
+    time::Duration,
+};
+
+use anyhow::{Context, Result};
+use gha_windows_labs::wesnoth_protocol::{
+    MAX_FRAME, decode_frame, read_frame, send_wml, simple_field,
+};
+
+fn read_server_batch(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+    stream.set_read_timeout(Some(Duration::from_millis(250)))?;
+    let mut collected = Vec::new();
+    let mut chunk = [0_u8; 512];
+    loop {
+        match stream.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(count) => {
+                collected.extend_from_slice(&chunk[..count]);
+                if collected.len() > MAX_FRAME {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "reply is too large",
+                    ));
+                }
+            }
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                ) =>
+            {
+                break;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+    Ok(collected)
+}
+
+fn log_in(stream: &mut TcpStream, nickname: &str) -> Result<()> {
+    let nickname = simple_field(nickname)?;
+    stream.write_all(&[0, 0, 0, 0])?;
+    anyhow::ensure!(
+        !read_server_batch(stream)?.is_empty(),
+        "server did not negotiate"
+    );
+
+    send_wml(stream, "[version]\nversion=\"1.14.9\"\n[/version]")?;
+    anyhow::ensure!(
+        !read_server_batch(stream)?.is_empty(),
+        "server did not answer version"
+    );
+
+    send_wml(
+        stream,
+        &format!("[login]\nusername=\"{nickname}\"\n[/login]"),
+    )?;
+    let _login_reply = read_server_batch(stream)?;
+    Ok(())
+}
+
+fn main() -> Result<()> {
+    let nickname = std::env::args().nth(1).unwrap_or_else(|| "ChatBot".into());
+    simple_field(&nickname)?;
+    let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 15_000);
+    let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(3))
+        .context("start local wesnothd.exe on port 15000 first")?;
+    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+    log_in(&mut stream, &nickname)?;
+    send_wml(
+        &mut stream,
+        &format!(
+            "[message]\nmessage=\"ChatBot connected\"\nroom=\"lobby\"\nsender=\"{nickname}\"\n[/message]"
+        ),
+    )?;
+    println!("{nickname} joined the local Wesnoth lobby. Type \\wave from a normal client.");
+
+    loop {
+        let frame = match read_frame(&mut stream) {
+            Ok(frame) => frame,
+            Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => break,
+            Err(error) => return Err(error.into()),
+        };
+        let wml = decode_frame(&frame)?;
+        println!("{wml}");
+        if wml.contains("message=\"\\wave\"") {
+            send_wml(
+                &mut stream,
+                &format!(
+                    "[message]\nmessage=\"Hello!\"\nroom=\"lobby\"\nsender=\"{nickname}\"\n[/message]"
+                ),
+            )?;
+        }
+    }
+    Ok(())
+}
+```
+
+</details>
+
+The reusable gzip/WML framing stays in one tested protocol module; this file owns the session state. That split is intentional: byte framing should not know what `\wave` means, and chat behavior should not reimplement gzip.

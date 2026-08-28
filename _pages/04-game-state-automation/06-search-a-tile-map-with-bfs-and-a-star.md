@@ -1,0 +1,234 @@
+---
+title: Search a Tile Map with BFS and A-Star
+author: attilathedud
+date: 2026-08-14
+category: Game State & Automation
+layout: post
+permalink: /pages/4/06/
+chapter: "4.6"
+minutes: 36
+summary: Turn a recovered grid into a tested route while separating map observation, graph search, and game input.
+mermaid: true
+---
+
+## A map becomes a graph
+
+A strategy game may store terrain as a flat row-major array. Pathfinding becomes easier to understand when you rename the pieces:
+
+- each walkable tile is a **node**;
+- a legal move between neighboring tiles is an **edge**;
+- a route is a sequence of connected nodes;
+- a wall simply means no edge crosses that tile.
+
+For a map with width `w`, tile `(x, y)` is stored at `y * w + x`. Always bounds-check before performing that multiplication.
+
+BFS and A-Star use the same search loop. The important difference is how the
+frontier chooses which tile comes out next:
+
+```mermaid
+flowchart TD
+    A["Validated tile grid"] --> B["Put start in frontier"]
+    B --> C["Choose the next tile"]
+    C --> D{"Goal reached?"}
+    D -- "No" --> E["Add legal unseen neighbors"]
+    E --> C
+    D -- "Yes" --> F["Rebuild route from parents"]
+```
+
+BFS chooses in first-in-first-out order; A-Star chooses the tile with the best
+known cost plus its estimate. Both must reject invalid tiles before searching.
+
+## Breadth-first search first
+
+Breadth-first search (BFS) explores every tile one step away, then two steps away, and so on. On a grid where every move costs the same, the first route it finds is shortest in number of steps.
+
+```rust
+use std::collections::{HashMap, VecDeque};
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct Tile {
+    x: i32,
+    y: i32,
+}
+
+fn neighbors(tile: Tile) -> [Tile; 4] {
+    [
+        Tile { x: tile.x + 1, y: tile.y },
+        Tile { x: tile.x - 1, y: tile.y },
+        Tile { x: tile.x, y: tile.y + 1 },
+        Tile { x: tile.x, y: tile.y - 1 },
+    ]
+}
+
+fn bfs(
+    start: Tile,
+    goal: Tile,
+    walkable: impl Fn(Tile) -> bool,
+) -> Option<Vec<Tile>> {
+    let mut frontier = VecDeque::from([start]);
+    let mut came_from = HashMap::from([(start, None)]);
+
+    while let Some(current) = frontier.pop_front() {
+        if current == goal {
+            break;
+        }
+
+        for next in neighbors(current) {
+            if walkable(next) && !came_from.contains_key(&next) {
+                frontier.push_back(next);
+                came_from.insert(next, Some(current));
+            }
+        }
+    }
+
+    let mut current = goal;
+    let mut route = vec![goal];
+    while current != start {
+        current = came_from.get(&current).copied().flatten()?;
+        route.push(current);
+    }
+    route.reverse();
+    Some(route)
+}
+```
+
+`came_from` does two jobs: it marks visited tiles and remembers how to reconstruct the route. If the goal is absent, `?` returns `None` instead of inventing a path.
+
+## Turn coordinates into an array index safely
+
+A `Vec<T>` stores its elements in one contiguous row of memory. A game can use
+that row to represent a two-dimensional map by placing row 1 after row 0, row 2
+after row 1, and so on. That is why `(x, y)` becomes `y * width + x`.
+
+Do not perform that formula until negative and out-of-range coordinates have
+been rejected. Also use checked arithmetic, because a corrupted width from a
+bad reverse-engineered layout must not wrap into a believable index:
+
+```rust
+#[derive(Clone, Copy, Debug)]
+enum Terrain {
+    Ground,
+    Water,
+    Wall,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TileInfo {
+    terrain: Terrain,
+    visible: bool,
+    movement_cost: u16,
+}
+
+struct Grid {
+    width: usize,
+    height: usize,
+    cells: Vec<TileInfo>,
+}
+
+impl Grid {
+    fn get(&self, tile: Tile) -> Option<&TileInfo> {
+        // 🧭 Conversion fails for negative coordinates.
+        let x = usize::try_from(tile.x).ok()?;
+        let y = usize::try_from(tile.y).ok()?;
+
+        if x >= self.width || y >= self.height {
+            return None;
+        }
+
+        // 🧮 Checked math refuses impossible dimensions instead of wrapping.
+        let index = y.checked_mul(self.width)?.checked_add(x)?;
+        self.cells.get(index)
+    }
+}
+```
+
+`cells.get(index)` performs one final length check. That catches an incomplete
+snapshot whose header claims a `100 × 100` map but whose copied array contains
+fewer than 10,000 tiles.
+
+Keep facts about one tile in one record such as `TileInfo`. Three separate
+vectors named `terrain`, `visible`, and `movement_cost` can drift out of sync so
+index 42 describes three different tiles. One vector of records makes that
+mistake harder to express.
+
+## A-Star adds a useful guess
+
+A-Star uses the known route cost plus a heuristic: an estimate of the remaining distance. On a four-direction grid, Manhattan distance is a safe estimate:
+
+```rust
+fn manhattan(a: Tile, b: Tile) -> u32 {
+    a.x.abs_diff(b.x) + a.y.abs_diff(b.y)
+}
+```
+
+The heuristic must not overestimate if you want the shortest-path guarantee. If terrain has costs, use:
+
+```text
+priority = cost already paid + estimated cost remaining
+```
+
+Do not include hidden enemy positions in the heuristic. A legitimate observer should plan from information the local game state actually reveals.
+
+Keep the search's bookkeeping names precise:
+
+- the **frontier** contains discovered tiles that still deserve exploration;
+- `cost_so_far[tile]` is the cheapest route to that tile found so far;
+- `came_from[tile]` records the parent of that cheapest known route;
+- the heuristic estimates only the cost that remains.
+
+A tile entering the frontier does not mean its best path is final. If a cheaper
+route reaches it later, update its cost and parent. This distinction is why an
+implementation that merely marks every discovered tile “done” can return the
+wrong route on weighted terrain.
+
+Setting the heuristic to zero turns A-Star into Dijkstra's algorithm. That is a
+useful debugging switch: if the zero-heuristic version works but the normal one
+does not, inspect the heuristic and movement-cost assumptions before blaming the
+recovered map.
+
+## Keep three layers separate
+
+```text
+observer snapshot -> validated grid -> search algorithm -> proposed route -> input adapter
+```
+
+The search function should never call `ReadProcessMemory` or press keys. It accepts an ordinary copied grid and returns ordinary coordinates. This makes it testable on any computer.
+
+The input adapter is the only part allowed to translate one confirmed route step into a supported action in your offline lab.
+
+## Tests that catch real mistakes
+
+```rust
+#[test]
+fn bfs_walks_around_a_wall() {
+    let blocked = Tile { x: 1, y: 0 };
+    let route = bfs(
+        Tile { x: 0, y: 0 },
+        Tile { x: 2, y: 0 },
+        |tile| (0..=2).contains(&tile.x)
+            && (0..=1).contains(&tile.y)
+            && tile != blocked,
+    ).expect("a route exists through the second row");
+
+    assert_eq!(route.first(), Some(&Tile { x: 0, y: 0 }));
+    assert_eq!(route.last(), Some(&Tile { x: 2, y: 0 }));
+    assert!(!route.contains(&blocked));
+}
+```
+
+Also test:
+
+- start equals goal;
+- goal is completely enclosed;
+- coordinates lie outside the map;
+- a one-tile corridor;
+- terrain cost changes the preferred route;
+- the observed grid changes after planning.
+
+That final case matters. A route is based on one snapshot. Before performing the next step, confirm that the current tile and the next tile are still valid. If not, stop and plan again. 🔁
+
+## BFS or A-Star?
+
+Use BFS when the grid is small, every step costs the same, or you are still verifying the map. Use A-Star when the map is large and a meaningful heuristic can avoid exploring most irrelevant tiles.
+
+Both algorithms are only as correct as the recovered grid. A brilliant route through a tile you misclassified as walkable is still wrong. Pathfinding does not replace reverse-engineering evidence; it consumes that evidence.

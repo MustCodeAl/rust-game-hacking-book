@@ -1,0 +1,207 @@
+---
+title: Capture a Local Protocol
+author: attilathedud
+date: 2026-07-30
+category: Protocols, Networks & IPC
+layout: post
+permalink: /pages/6/02/
+chapter: "6.2"
+minutes: 17
+summary: Capture your own local client/server session, isolate one action, and turn a noisy stream into labeled observations.
+---
+
+## Separate network layers before capturing
+
+An application message is not the same thing as an IP packet or TCP segment.
+Each layer has a different job:
+
+```text
+game protocol message   login, chat, lobby update
+TCP byte stream         ordered, reliable bytes between two sockets
+IP packet               routed data between host addresses
+link/loopback capture   what the capture interface records
+```
+
+TCP may split one game message across several segments or combine bytes from
+several messages in one segment. Retransmissions can repeat packet data. The
+receiving application sees an ordered stream, so protocol parsing needs its own
+framing rule such as a length prefix or delimiter.
+
+A **socket** is an operating-system object representing one endpoint. A TCP
+connection is identified by source address, source port, destination address,
+and destination port—the four-tuple used below.
+
+## Capture answers “what crossed,” not “why”
+
+A network trace records bytes and timing at one observation point. It does not contain the sender's variable names, the receiver's interpretation, or proof that one UI action caused one packet. Build that connection with controlled contrast:
+
+1. capture a quiet baseline;
+2. perform exactly one distinctive local action;
+3. repeat the action with one changed input;
+4. compare both directions and several repetitions;
+5. confirm the candidate fields in the open-source client or server.
+
+Label facts by layer. “TCP payload bytes changed” is direct capture evidence. “This field is chat text” is an interpretation that needs parsing and behavioral confirmation.
+
+## Build a controlled capture
+
+Use the course’s local Wesnoth server setup or your own toy client and server. Keep both endpoints inside the lab VM.
+
+![A local multiplayer lobby]({{ site.baseurl }}/assets/images/6/2/bot1.png)
+
+Start Wireshark, choose the loopback adapter when client and server share the machine, and begin capture before connecting.
+
+Capturing on the wrong interface produces an empty-looking experiment. Traffic
+to `127.0.0.1` stays on the loopback path rather than crossing the physical Wi-Fi
+or Ethernet adapter.
+
+![The Wireshark interface]({{ site.baseurl }}/assets/images/6/2/bot6.png)
+
+## Reduce noise
+
+Filter by the known local port:
+
+```text
+tcp.port == 15000
+```
+
+For the Wesnoth 1.14.9 lab, keep `15000`: that is `wesnothd`’s default listening port. Launch `wesnothd.exe`, choose **Connect to Server** in the game, and enter `localhost:15000`.
+
+Then label a timeline:
+
+```text
+00:00 connect
+00:02 enter username
+00:05 join lobby
+00:08 send "hello-17"
+00:12 disconnect
+```
+
+A distinctive message such as `hello-17` is easier to find than “hi.”
+
+## Direction matters
+
+Record the four-tuple for one connection:
+
+```text
+client IP : client port → server IP : server port
+server IP : server port → client IP : client port
+```
+
+The client port is often temporary. The server port is the stable listening port.
+
+The server first owns a **listening socket** on port `15000`. Accepting a client
+creates a separate connected socket while the listener remains available for
+other clients. The client normally receives an ephemeral local port selected by
+Windows.
+
+## Follow the stream
+
+Wireshark’s “Follow TCP Stream” view reassembles TCP bytes for easier inspection.
+
+![Following a TCP stream]({{ site.baseurl }}/assets/images/6/2/bot8.png)
+
+Remember: this is still a stream, not necessarily a list of messages. Look for:
+
+- fixed-size headers;
+- length fields;
+- magic bytes;
+- repeated separators;
+- readable text;
+- compressed-looking regions;
+- request/response pairs.
+
+“Follow TCP Stream” performs reassembly for inspection. Your client still
+has to handle partial reads: `read()` may return fewer bytes than requested even
+when more bytes will arrive later. `read_exact` is appropriate only after a
+validated frame length tells you exactly how many bytes belong to the next
+piece.
+
+Reassembly also chooses an order from sequence numbers and removes retransmitted overlap. Preserve the original packet capture alongside any exported stream fixture so later questions about direction, timing, or retransmission can still be answered.
+
+## Export a tiny fixture
+
+Save only the bytes for one clearly labeled action. A small binary fixture is excellent for parser tests.
+
+```rust
+#[test]
+fn parses_recorded_local_chat_frame() {
+    let bytes = include_bytes!("fixtures/local-chat-frame.bin");
+    let message = parse_frame(bytes).expect("fixture should parse");
+    assert!(matches!(message, Message::Chat { .. }));
+}
+```
+
+Do not store secrets, account tokens, or other people’s traffic in fixtures.
+
+## Compare two captures
+
+Repeat the same action with exactly one changed input:
+
+```text
+Capture A: send "red"
+Capture B: send "blue"
+```
+
+Compare lengths and differing byte ranges. If only one region changes, it may contain the text. If the whole payload changes, compression or encryption may be involved.
+
+![A server message identified in the stream]({{ site.baseurl }}/assets/images/6/2/bot14.png)
+
+## Identify the real Wesnoth handshake
+
+Add this display filter so Wireshark shows client/server data rather than every TCP acknowledgement:
+
+```text
+tcp.port == 15000 && tcp.flags.push == 1
+```
+
+The first client payload in a Wesnoth 1.14.9 connection is exactly four zero bytes:
+
+```text
+00 00 00 00
+```
+
+Replay only those four bytes from a tiny TCP client. The local server responds with 41 bytes across the observed replies, proving that the zeros begin protocol negotiation. The next client frame identifies version `1.14.9`; the following frame logs in with the chosen username.
+
+After the four-byte frame length, both of those later frames begin with gzip magic bytes `1F 8B`. For example, a captured version frame begins:
+
+```text
+00 00 00 2F  1F 8B 08 00 ...
+└─ length 47 ┘  └─ gzip data
+```
+
+Do the same controlled capture with usernames `IEUser` and `FFFAAAKKKEEE`. The second name makes repeated-character compression easier to notice. By the end of this experiment, your notebook should say:
+
+```text
+target: Wesnoth 1.14.9 + local wesnothd
+transport: TCP
+server: 127.0.0.1:15000
+negotiation: 00 00 00 00
+normal frame: u32 big-endian compressed length + gzip(Simple WML)
+login order: negotiation → version → username → lobby
+```
+
+## Make a protocol notebook
+
+```text
+Transport: TCP
+Direction: client → local server
+Frame header length:
+Length-field byte order:
+Compression:
+Message kind:
+Test input:
+Observed byte range:
+Confidence:
+```
+
+Use confidence labels such as “confirmed,” “likely,” and “unknown.” A good protocol model preserves uncertainty.
+
+## Checkpoint
+
+You are ready to parse when you can point to:
+
+- the start of one frame;
+- the field that gives its size, or another reliable delimiter;
+- its direction;
+- one input and the bytes that changed because of it.

@@ -76,7 +76,7 @@ mod app {
         // message-mode connection and supplies no custom security pointer.
         let pipe = unsafe {
             CreateNamedPipeW(
-                w!(r"\\.\pipe\gha-authorized-game-lab-v1"),
+                w!(r"\\.\pipe\gha-local-game-ipc-v1"),
                 PIPE_ACCESS_DUPLEX,
                 mode,
                 1,
@@ -111,7 +111,7 @@ mod app {
         // requests read/write data access, and does not inherit the handle.
         let pipe = unsafe {
             CreateFileW(
-                w!(r"\\.\pipe\gha-authorized-game-lab-v1"),
+                w!(r"\\.\pipe\gha-local-game-ipc-v1"),
                 GENERIC_READ.0 | GENERIC_WRITE.0,
                 FILE_SHARE_MODE(0),
                 None,

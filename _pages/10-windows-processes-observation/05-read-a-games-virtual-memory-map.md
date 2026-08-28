@@ -1,0 +1,265 @@
+---
+title: Read a Game's Virtual-Memory Map
+author: attilathedud
+date: 2026-07-30
+category: Windows Processes & Observation
+layout: post
+permalink: /pages/10/05/
+chapter: "10.5"
+minutes: 33
+summary: Understand committed pages, guard pages, memory types, and R/W/X protection by printing one exact game module's map with VirtualQueryEx.
+---
+
+## Memory is managed in pages
+
+A process sees memory as a huge range of numbered virtual addresses. Windows does not manage that range one byte at a time. It groups adjacent addresses into fixed-size **pages**, commonly 4 KiB on x86 and x86-64 systems.
+
+Pages that share the same state and protection are reported together as a **region**. A 200 KiB read-only region is therefore a run of many pages with matching rules, not one enormous hardware page.
+
+This matters to every scanner and patcher in the course. An address can be a perfectly valid integer while the page at that address is absent, guarded, read-only, or non-executable.
+
+🛡️ **Permission check:** a believable address is not enough. Ask Windows whether the page exists and whether your exact operation is allowed before touching it.
+{: .emoji-note }
+
+## A virtual address is part of a process's map
+
+The address printed by a debugger is a **virtual address**. It names a location
+inside one process's address space; it does not directly name a RAM chip cell.
+Windows and the CPU use page tables to translate the virtual page into a
+physical frame when the page is present.
+
+For any page size, an address can be split into two pieces:
+
+```rust
+fn split_address(address: usize, page_size: usize) -> Option<(usize, usize)> {
+    if page_size == 0 {
+        return None;
+    }
+
+    let virtual_page = address / page_size;
+    let offset_inside_page = address % page_size;
+    Some((virtual_page, offset_inside_page))
+}
+```
+
+With a 4 KiB page, address `0x1234_5ABC` has offset `0xABC` inside its page.
+The remaining upper part identifies the virtual page. The translation changes
+the page part; the offset stays the same because it selects one byte inside that
+page.
+
+Two games can both use virtual address `0x0040_0000` while those addresses map
+to different physical memory. One process can also have no mapping there at
+all. `ReadProcessMemory` takes a process handle precisely so Windows knows
+**which process map** should interpret the address.
+
+Committed also does not mean “currently sitting in physical RAM.” Windows may
+bring a committed page back from its backing storage when accessed. That event
+is a page fault handled by the operating system; it is not automatically a bug
+in the game or scanner.
+
+## State, type, and protection answer different questions
+
+Windows describes a region using three groups of facts.
+
+**State** says whether storage is ready:
+
+- `MEM_FREE`: no address range is reserved there;
+- `MEM_RESERVE`: the address range is set aside, but physical/page-file storage is not committed;
+- `MEM_COMMIT`: Windows has committed storage and the process may use it according to its protection.
+
+**Type** says where committed pages came from:
+
+- `MEM_IMAGE`: a mapped PE image such as an EXE or DLL;
+- `MEM_MAPPED`: a mapped file or shared section;
+- `MEM_PRIVATE`: private process memory such as many heap allocations.
+
+**Protection** says which operations are allowed. The course prints the three permissions as `R`, `W`, and `X`:
+
+| Display | Meaning |
+|---|---|
+| `R--` | Data can be read but not written or executed. |
+| `RW-` | Data can be read and written but not executed. |
+| `R-X` | Instructions can be read and executed but not normally edited. |
+| `RWX` | The same page can be read, written, and executed. |
+| `---` | The wrapper considers the region inaccessible. |
+
+`PAGE_GUARD` is an extra flag. The first access raises an exception and clears the guard flag. Windows uses guard pages for mechanisms such as growing thread stacks. A scanner should skip them instead of treating the exception as ordinary data.
+
+## Why writable plus executable deserves attention
+
+Normal compiled code is usually readable and executable. Writable data is usually non-executable. Keeping those roles separate follows the **write xor execute** idea: memory should normally be writable or executable, not both at once.
+
+Some legitimate runtimes generate code dynamically, and old software may use broad permissions. An `RWX` region is therefore a question, not a conviction:
+
+- Which component created it?
+- Is it inside the expected image or private memory?
+- Does it exist in a clean run of the same build?
+- Does its lifetime match a known feature?
+
+This lab reports `RWX` regions but never writes to them or starts a thread there.
+
+## `VirtualQueryEx` returns one matching run
+
+The shared `Process::regions` wrapper begins at an address, calls `VirtualQueryEx`, records the returned `MEMORY_BASIC_INFORMATION`, and advances by `RegionSize`.
+
+```rust
+let returned = unsafe {
+    // 🔍 Ask about the run containing `current`; this describes pages but does
+    // not copy bytes from them or grant permission to read/write them.
+    VirtualQueryEx(
+        process_handle,
+        Some(current as *const c_void),
+        &mut information,
+        size_of::<MEMORY_BASIC_INFORMATION>(),
+    )
+};
+if returned == 0 {
+    // ✅ Zero ends the walk. No stale MEMORY_BASIC_INFORMATION is consumed.
+    break;
+}
+
+// 📏 Move from the returned base—not merely from `current`—to the first address
+// after this entire run of pages with identical attributes.
+let next = (information.BaseAddress as usize)
+    .checked_add(information.RegionSize)
+    .context("memory map overflowed")?;
+anyhow::ensure!(next > current, "memory map did not advance");
+current = next;
+```
+
+The checked addition prevents an invalid region from wrapping to a low address. The progress check prevents an endless loop if the reported range does not move forward.
+
+## Build a read-only module mapper
+
+The complete tool opens the process without write rights, finds one module, clips every returned region to that module, and prints an access summary.
+
+<details class="lab-source" markdown="1">
+<summary>Complete lab source: memory_map.rs</summary>
+
+```rust
+#[cfg(windows)]
+fn main() -> anyhow::Result<()> {
+    use anyhow::Context;
+    use gha_windows_labs::Process;
+
+    let mut arguments = std::env::args().skip(1);
+    let process_name = arguments.next()
+        .unwrap_or_else(|| "wesnoth.exe".to_owned());
+    let module_name = arguments.next()
+        .unwrap_or_else(|| process_name.clone());
+
+    let process = Process::open_by_name(&process_name, false)?;
+    let (module_base, module_size) = process.module(&module_name)?;
+    let module_end = module_base.checked_add(module_size)
+        .context("module range overflowed")?;
+    let regions = process.regions(module_base, module_end)?;
+
+    println!("{} (PID {})", process.name(), process.id());
+    println!("Module: {module_name} {module_base:#010x}..{module_end:#010x}");
+    println!("Range                         Size       Access");
+
+    let mut rwx_count = 0_usize;
+    for region in regions {
+        if region.base >= module_end {
+            break;
+        }
+        let region_end = region.base.checked_add(region.size)
+            .context("memory region overflowed")?
+            .min(module_end);
+        let shown_size = region_end.saturating_sub(region.base);
+        let access = format!(
+            "{}{}{}",
+            if region.readable { 'R' } else { '-' },
+            if region.writable { 'W' } else { '-' },
+            if region.executable { 'X' } else { '-' },
+        );
+        if region.readable && region.writable && region.executable {
+            rwx_count += 1;
+        }
+        println!(
+            "{:#010x}..{:#010x}  {:#010x}  {access}",
+            region.base,
+            region_end,
+            shown_size,
+        );
+    }
+
+    println!("RWX regions in this module: {rwx_count}");
+    println!("The tool queried page metadata and changed nothing.");
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn main() {
+    eprintln!("This virtual-memory map must run on Windows.");
+}
+```
+
+</details>
+
+`false` in `open_by_name(&process_name, false)` is important. It means the wrapper requests query and read rights without `PROCESS_VM_OPERATION` or `PROCESS_VM_WRITE`.
+
+```diff
+ fn inspect_module(process_name: String, module_name: String) -> anyhow::Result<()> {
+-    let process = Process::open_by_name(&process_name, true)?;
++    let process = Process::open_by_name(&process_name, false)?;
+     let (module_base, module_size) = process.module(&module_name)?;
+     let regions = process.regions(module_base, module_base + module_size)?;
+     print_regions(&regions);
+     Ok(())
+ }
+```
+
+### Why this version?
+
+The lab is answering “what permissions exist?” It does not need permission to change them. The handle should match the question.
+
+## Run it against the course games
+
+```powershell
+cd windows-labs
+cargo build --release --target i686-pc-windows-msvc --bin memory_map
+
+.\target\i686-pc-windows-msvc\release\memory_map.exe `
+  wesnoth.exe wesnoth.exe
+.\target\i686-pc-windows-msvc\release\memory_map.exe `
+  ac_client.exe ac_client.exe
+.\target\i686-pc-windows-msvc\release\memory_map.exe `
+  Quake3-UrT.exe Quake3-UrT.exe
+```
+
+Compare the regions with the PE section flags printed by `pe_inspector`. The on-disk section table describes intended mapping characteristics; `VirtualQueryEx` describes the live pages in this run.
+
+Keep these address ideas separate:
+
+| Name | Meaning in this course |
+|---|---|
+| file offset | byte position inside the EXE or DLL file |
+| RVA | position relative to the image base |
+| virtual address | live address inside one process |
+| physical address | hardware-memory location after page translation |
+
+A normal user-mode pattern scanner needs the live virtual address and lets
+Windows perform translation. It should not guess physical addresses. The
+offline DMA chapter introduces page-table translation separately because a raw
+capture file has no running Windows process to translate addresses for it.
+
+## Why a scanner skips some pages
+
+The memory scanner visits only committed, readable, non-guarded regions. That avoids predictable failures and reduces wasted work. A later `ReadProcessMemory` can still fail because the process continues running and page state can change between the query and read.
+
+This is another time-of-check/time-of-use race. A robust scanner treats a failed region read as a normal event, reports useful context, and continues when safe.
+
+The buildable tool is [`memory_map.rs`]({{ site.baseurl }}/windows-labs/src/bin/memory_map.rs), and the shared query implementation is in [`process.rs`]({{ site.baseurl }}/windows-labs/src/windows_impl/process.rs).
+
+References: [`VirtualQueryEx`](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualqueryex) and [memory protection constants](https://learn.microsoft.com/en-us/windows/win32/memory/memory-protection-constants).
+
+{% include quiz.html
+  id="memory-map-least-privilege"
+  type="multiple-choice"
+  title="Choose the smallest handle rights"
+  prompt="A tool only maps regions and reads bytes. Which handle design best follows least privilege?"
+  options="Request every process right in case a later feature needs it||Request query and read rights only||Request write and remote-thread rights but never use them||Open no handle and guess the memory map"
+  answer="1"
+  explanation="Permissions should match the operation the tool performs now. Query-and-read rights are enough for a read-only mapper. Smaller rights reduce accidental capability, make intent clear, and are less likely to fail under ordinary Windows security rules."
+%}

@@ -1,0 +1,158 @@
+---
+title: Game Files Are Often the Best Door
+author: attilathedud
+date: 2026-07-30
+category: Files, Mods & Trust
+layout: post
+permalink: /pages/9/01/
+chapter: "9.1"
+minutes: 11
+summary: Learn how saves, configuration, textures, maps, and archives differ from live process memory.
+---
+
+## Not every change needs a debugger
+
+Games load a large collection of resources:
+
+- settings and configuration;
+- saves and profiles;
+- maps and level scripts;
+- textures, models, and sounds;
+- localization text;
+- unit or item definitions;
+- archives that bundle many files.
+
+If a supported mod file can express your idea, use it. File-based changes are easier to inspect, share, version, and undo than live memory patches.
+
+🗂️ **Parser rule:** copy the original, parse into named fields, validate every boundary, then write a new file. Keep the untouched source as your way back.
+{: .emoji-note }
+
+![A game world built from many resources]({{ site.baseurl }}/assets/images/8/1/urbanterror.jpg)
+
+## A file format is an agreement about bytes
+
+A file is only a numbered sequence of bytes. A **format** explains how to divide and interpret them:
+
+```text
+header → version and counts
+table  → where entries begin
+data   → the actual records or assets
+footer → optional checksum or index
+```
+
+Text formats use character encodings and visible separators. Binary formats use fixed fields, lengths, offsets, and flags. Neither kind is automatically safer or simpler; both need a parser that rejects impossible sizes and missing fields.
+
+Compression and archives are also different ideas. Compression tries to represent data in fewer bytes. An archive gives many named entries one container. ZIP normally does both, but a ZIP entry can also be stored without compression.
+
+A **checksum** is a compact value calculated from other bytes to detect accidental changes. A cryptographic signature additionally uses a key to prove who produced the data. Renaming or recompressing a file does not recreate a valid signature.
+
+## Parse in two stages
+
+First prove the bytes are structurally safe to read. Then decide whether the decoded values make sense for the game.
+
+```text
+byte validation: offsets, lengths, counts, encoding, checksums
+meaning validation: known version, valid IDs, legal ranges, consistent references
+```
+
+A file can pass one stage and fail the other. A well-formed save might refer to an unknown unit type, while a familiar unit name can appear inside a truncated file. Keeping the stages separate produces precise errors and stops friendly-looking text from bypassing boundary checks.
+
+Use a cursor or checked slice ranges rather than repeatedly calculating raw indexes. Every parser step should either consume a proven range or return an error without changing the input file.
+
+## Identify the kind of file
+
+The extension is only a hint. Inspect the first bytes:
+
+```rust
+use std::{fs::File, io::{self, Read}, path::Path};
+
+fn first_bytes(path: &Path, count: usize) -> io::Result<Vec<u8>> {
+    let mut file = File::open(path)?;
+    let mut bytes = vec![0_u8; count];
+    let read = file.read(&mut bytes)?;
+    bytes.truncate(read);
+    Ok(bytes)
+}
+```
+
+Common “magic” bytes include:
+
+```text
+PNG     89 50 4E 47 0D 0A 1A 0A
+ZIP     50 4B 03 04
+gzip    1F 8B
+```
+
+A file with no readable text may be compressed, encrypted, or simply binary.
+
+## Observe file access
+
+Use Process Monitor inside the VM to see which paths the game opens when you:
+
+- start the game;
+- load a save;
+- enter one map;
+- change one setting;
+- close the game.
+
+Filter by the target process and operations such as `CreateFile`, `ReadFile`, and `WriteFile`.
+
+## Copy before parsing
+
+Never experiment on the only copy:
+
+```rust
+use std::{fs, path::Path};
+
+fn make_backup(path: &Path) -> anyhow::Result<()> {
+    let extension = path.extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("file");
+    let backup = path.with_extension(format!("{extension}.gha-backup"));
+    anyhow::ensure!(!backup.exists(), "backup already exists: {}", backup.display());
+    fs::copy(path, &backup)?;
+    Ok(())
+}
+```
+
+Keep the original bytes and record a hash.
+
+## Parse, do not search-and-replace blindly
+
+For text formats, prefer a real parser:
+
+- `serde_json` for JSON;
+- `toml` for TOML;
+- `quick-xml` for XML;
+- a format-specific library when available.
+
+Blind replacement can alter comments, unrelated fields, encodings, checksums, or lengths.
+
+Parsing creates a **data model** that is intentionally smaller and clearer than the file representation. Preserve fields you do not understand when the format allows round trips, and distinguish “missing,” “present with a default value,” and “present with an unknown value.” Those cases may serialize differently even when the game currently displays the same result.
+
+## Treat files as untrusted input
+
+Even a local save can be malformed. A parser should enforce:
+
+- file-size limits;
+- collection-count limits;
+- string-length limits;
+- checked offsets and sizes;
+- valid encoding;
+- no path traversal when extracting archives.
+
+Never join an archive entry such as `../../important.txt` directly to an output folder.
+
+## A reversible file workflow
+
+```text
+identify the exact file
+→ copy and hash the original
+→ parse into typed data
+→ change one field
+→ serialize to a new file
+→ compare the diff
+→ test in a disposable profile
+```
+
+File work rewards the same discipline as memory work: one hypothesis, one change, one observation.

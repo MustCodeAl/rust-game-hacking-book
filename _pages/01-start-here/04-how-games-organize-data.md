@@ -1,0 +1,191 @@
+---
+title: How Games Organize Data
+author: attilathedud
+date: 2026-07-30
+category: Start Here
+layout: post
+permalink: /pages/1/04/
+chapter: "1.4"
+minutes: 18
+summary: Turn players, maps, rules, and screens into simple data models, then choose operations that fit their shape.
+mermaid: true
+---
+
+## A game is a loop
+
+Most games repeat the same basic loop:
+
+```mermaid
+flowchart LR
+    A["Read input"] --> B["Update the world"]
+    B --> C["Draw a frame"]
+    C --> A
+```
+
+“Update the world” includes many smaller jobs: move players, check collisions, update timers, run enemy logic, and decide whether the match has ended.
+
+## Data describes the world
+
+Imagine a tiny strategy game. A unit needs a name, health, position, and team. A `struct` groups those related values:
+
+```rust
+#[derive(Debug)]
+struct Position {
+    x: f32,
+    y: f32,
+}
+
+#[derive(Debug)]
+struct Unit {
+    name: String,
+    health: u32,
+    position: Position,
+    team: Team,
+}
+
+#[derive(Debug)]
+enum Team {
+    Blue,
+    Red,
+}
+```
+
+This is more than neat organization. It tells the compiler exactly what a valid unit looks like. `Team` can only be `Blue` or `Red`; there is no mystery value `7` to remember.
+
+We can now make a unit:
+
+```rust
+let scout = Unit {
+    name: String::from("Scout"),
+    health: 80,
+    position: Position { x: 12.5, y: 7.0 },
+    team: Team::Blue, // 🧠 An enum variant prevents mystery team numbers.
+};
+```
+
+In memory, those fields become bytes. A debugger does not know the friendly names `health` or `position`; it shows addresses, bytes, and instructions. Reversing is the work of rebuilding those names and relationships.
+
+## Separate representation, rules, and views
+
+A useful game-state model has three layers:
+
+1. **Representation** answers, “Which bytes store the state?” A position might be two `f32` values, while a team might be a small integer.
+2. **Rules** answer, “Which states are allowed?” Health may never exceed maximum health, and an entity ID may need to be unique.
+3. **Views** answer, “How is the state shown?” A health bar, scoreboard, and save file can all present the same underlying health differently.
+
+This separation prevents a common reversing mistake. Finding the number `80` beside a health bar does not prove you found the gameplay field. It could be formatted text, a percentage, a copied render snapshot, or the authoritative value. Change normal gameplay first, then compare which copies move together and which code consumes each one.
+
+An **invariant** is a rule that should remain true while the program runs. If you think a record is a unit, check several invariants: its coordinates stay finite, its team stays inside the known set, and its health changes in sensible steps. One matching field is a clue; several independent invariants make the interpretation much stronger.
+
+## Code changes the data
+
+A game function might damage a unit:
+
+```rust
+fn apply_damage(unit: &mut Unit, amount: u32) {
+    // 🛡️ Saturating subtraction stops at zero instead of wrapping around.
+    unit.health = unit.health.saturating_sub(amount);
+}
+```
+
+The `&mut` means “borrow this unit and allow changes.” `saturating_sub` stops at zero instead of wrapping around to a huge number.
+
+That tiny function teaches an important split:
+
+- **Data** is the unit’s current health.
+- **Code** is the rule that changes health.
+
+A memory scanner helps us find data. A debugger helps us find the code that reads or changes it.
+
+## Ask five questions before processing data
+
+Before choosing a data structure or algorithm, describe the information you
+actually have:
+
+| Question | Game-hacking example | Why it matters |
+|---|---|---|
+| Is the order meaningful or sorted? | Captured events have timestamps. | Sorting can make time ranges fast to search. |
+| Does each item have a label or key? | A save file names fields such as `gold`. | A map or parser can find a field by name. |
+| Are items treated alike? | Every entity snapshot has an ID and position. | A vector can process records with one loop. |
+| Is there a hierarchy? | A scene owns nodes, and nodes own children. | A tree preserves parent-child relationships. |
+| Does one item depend on another? | A pointer chain reaches a player through two objects. | The order of reads becomes part of the algorithm. |
+
+These are not the only questions, but they stop you from picking a structure
+because its name sounds advanced. The shape of the data should guide the tool.
+
+## Most data work uses a few basic operations
+
+Programs repeatedly **search**, **access**, **insert**, **update**, and
+**remove** information. No one structure makes all five operations equally
+cheap. A vector is excellent for walking every entity in order. A map is
+better when you repeatedly look up an entity by ID. A tree is useful when
+parents and children matter.
+
+The logic that performs those operations is an **algorithm**. Control flow
+usually combines three simple shapes:
+
+- **sequence:** copy a region, parse it, then search it;
+- **decision:** reject the region if it is not readable;
+- **repetition:** compare the pattern at each candidate offset.
+
+The rules may come from mathematics, a game mechanic, a file format, or the
+contract of another program. Even a complicated scanner is still built from
+data, decisions, sequences, and repetition.
+
+## Ownership in one picture
+
+The ownership rule says every value has one owner, and the value is cleaned up when that owner leaves scope. Other code can temporarily borrow the value.
+
+```rust
+fn display_name(unit: &Unit) {
+    println!("{}", unit.name);
+}
+
+let unit = Unit { /* fields omitted */ };
+display_name(&unit); // borrow it
+// ✅ `unit` is still ours here; the temporary borrow has ended.
+```
+
+In everyday code, ownership prevents many memory bugs. During reverse engineering, Windows APIs may give us a raw address that the compiler cannot prove is valid. We keep that uncertainty inside a very small `unsafe` block and expose a safer function to the rest of the program.
+
+> `unsafe` does not mean “anything goes.” It means “the compiler cannot verify these few operations, so the programmer must verify them.”
+{: .block-warning }
+
+## Single-player and multiplayer
+
+In a single-player game, your computer usually owns the world state. In a multiplayer game, a server often owns the official state:
+
+```mermaid
+sequenceDiagram
+    participant P as Player
+    participant C as Local client
+    participant S as Game server
+    P->>C: Press move
+    C->>S: Request movement
+    S->>S: Check the rules
+    S-->>C: Approved position
+    C-->>P: Draw the result
+```
+
+Changing a local number may change what you see without changing the server’s truth. Offline and local targets keep the relevant state under one reproducible authority. In a client-server game, the server validates shared state and may overwrite a client-only change during the next update.
+
+## What you are looking for
+
+When you inspect a game, ask:
+
+1. What piece of data represents this thing?
+2. Which code reads it?
+3. Which code changes it?
+4. Who owns the real value: this process or a server?
+
+Those four questions will guide almost every later lesson.
+
+{% include quiz.html
+  id="world-state-owner"
+  type="multiple-choice"
+  title="Find the source of truth"
+  prompt="In an ordinary multiplayer game, which machine usually owns the official shared world state?"
+  options="Each player's rendering thread||The authoritative game server||Whichever player pressed a key last||The last packet visible in a capture"
+  answer="1"
+  explanation="Your client predicts and draws a local view, but the authoritative server normally decides the shared result. That is why changing a local copy may change the picture on one screen without changing the official game state."
+%}
