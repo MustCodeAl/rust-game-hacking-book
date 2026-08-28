@@ -1,5 +1,7 @@
 #![doc = "Portable, safe Rust exercises used by Game Hacking Academy."]
 
+use std::{error::Error, fmt};
+
 /// One position in a byte pattern.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PatternByte {
@@ -42,6 +44,21 @@ pub enum ParseError {
     /// A byte sequence was not UTF-8.
     InvalidUtf8,
 }
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Truncated => formatter.write_str("the input ended before the requested value"),
+            Self::TooLarge(length) => write!(
+                formatter,
+                "the declared payload length ({length} bytes) exceeds the configured limit"
+            ),
+            Self::InvalidUtf8 => formatter.write_str("the payload is not valid UTF-8"),
+        }
+    }
+}
+
+impl Error for ParseError {}
 
 /// A bounds-checked reader over a borrowed byte slice.
 #[derive(Debug)]
@@ -218,8 +235,8 @@ pub fn world_to_screen(point: Vec3, matrix: Mat4, width: f32, height: f32) -> Op
     }
 
     Some(ScreenPoint {
-        x: (ndc_x + 1.0) * 0.5 * width,
-        y: (1.0 - ndc_y) * 0.5 * height,
+        x: ndc_x.midpoint(1.0) * width,
+        y: (-ndc_y).midpoint(1.0) * height,
         depth: ndc_z,
     })
 }
@@ -255,6 +272,15 @@ mod tests {
         let bytes = [0, 0, 4, 0];
         let mut cursor = Cursor::new(&bytes);
         assert_eq!(cursor.string(32), Err(ParseError::TooLarge(1_024)));
+    }
+
+    #[test]
+    fn cursor_error_explains_the_failed_boundary() {
+        let error = ParseError::TooLarge(1_024);
+        assert_eq!(
+            error.to_string(),
+            "the declared payload length (1024 bytes) exceeds the configured limit"
+        );
     }
 
     #[test]

@@ -1,5 +1,7 @@
 #[cfg(windows)]
 mod windows_app {
+    use std::num::NonZeroUsize;
+
     use anyhow::{Context, Result, ensure};
     use gha_windows_labs::Process;
 
@@ -11,14 +13,24 @@ mod windows_app {
     const MAX_PLAYERS: usize = 32;
 
     #[derive(Clone, Copy, Debug)]
-    struct ObjectAddress(usize);
+    struct ObjectAddress(NonZeroUsize);
 
     #[derive(Clone, Copy, Debug)]
     struct FieldOffset(usize);
 
     impl ObjectAddress {
+        fn new(value: usize, label: &str) -> Result<Self> {
+            let value = NonZeroUsize::new(value)
+                .with_context(|| format!("{label} is null; start a local bot match first"))?;
+            Ok(Self(value))
+        }
+
+        fn get(self) -> usize {
+            self.0.get()
+        }
+
         fn field(self, offset: FieldOffset) -> Result<usize> {
-            self.0
+            self.get()
                 .checked_add(offset.0)
                 .context("object base + field offset overflowed")
         }
@@ -76,7 +88,7 @@ mod windows_app {
                 .iter()
                 .all(|value| value.is_finite() && value.abs() < 100_000.0),
             "implausible coordinates at {:#010x}",
-            player.0
+            player.get()
         );
         ensure!(
             yaw.is_finite() && pitch.is_finite(),
@@ -96,14 +108,13 @@ mod windows_app {
 
     fn pointer_at(process: &Process, address: usize, label: &str) -> Result<ObjectAddress> {
         let value = process.read_u32(address)? as usize;
-        ensure!(value != 0, "{label} is null; start a local bot match first");
-        Ok(ObjectAddress(value))
+        ObjectAddress::new(value, label)
     }
 
     fn print_player(label: &str, player: &PlayerSnapshot) {
         println!(
             "{label:<10} {:#010x} name={:?} pos=({:.2}, {:.2}, {:.2}) yaw={:.2} pitch={:.2} dead={}",
-            player.address.0,
+            player.address.get(),
             player.name,
             player.position[0],
             player.position[1],
@@ -135,15 +146,16 @@ mod windows_app {
 
         for index in 0..count {
             let slot = entity_list
-                .0
+                .get()
                 .checked_add(index.checked_mul(4).context("entity slot overflowed")?)
                 .context("entity list address overflowed")?;
             let address = process.read_u32(slot)? as usize;
-            if address == 0 || address == local.0 {
+            if address == 0 || address == local.get() {
                 continue;
             }
 
-            match read_player(&process, ObjectAddress(address)) {
+            let entity = ObjectAddress::new(address, "entity pointer")?;
+            match read_player(&process, entity) {
                 Ok(player) => print_player(&format!("entity[{index}]"), &player),
                 Err(error) => eprintln!("entity[{index}] {address:#010x}: {error:#}"),
             }

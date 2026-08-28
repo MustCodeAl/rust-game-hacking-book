@@ -11,6 +11,7 @@ use windows::Win32::System::{
 ///
 /// The original bytes are owned by this value. Calling `restore`, or simply
 /// dropping the value, puts those bytes back.
+#[derive(Debug)]
 pub struct LocalPatch {
     address: usize,
     original: Vec<u8>,
@@ -119,6 +120,7 @@ impl LocalPatch {
         })
     }
 
+    /// Restores the captured bytes. Calling this more than once is harmless.
     pub fn restore(&mut self) -> Result<()> {
         if self.active {
             write_local_code(self.address, &self.original)
@@ -157,6 +159,8 @@ fn relative_instruction(opcode: u8, from: usize, to: usize) -> Result<[u8; 5]> {
     Ok(instruction)
 }
 
+/// Returns the size Windows expects when an [`INPUT`](windows::Win32::UI::Input::KeyboardAndMouse::INPUT) value is sent.
+#[must_use]
 pub fn input_structure_size() -> i32 {
     i32::try_from(size_of::<windows::Win32::UI::Input::KeyboardAndMouse::INPUT>())
         .expect("INPUT fits in an i32 on Windows")
