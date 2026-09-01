@@ -1,5 +1,5 @@
 ---
-title: Debugging Without the Mystery
+title: Debug a Running Game Step by Step
 author: attilathedud
 date: 2026-07-30
 category: Debugging & Control Flow

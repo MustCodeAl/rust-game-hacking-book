@@ -44,7 +44,7 @@ Each file has one main reason to change. A new game build mostly changes
 `target.rs`. A redesigned menu mostly changes `ui.rs`. A safer restoration rule
 belongs in `apply.rs`, not in every checkbox handler.
 
-The main path should read like the tool's story:
+The main path should show the tool's control flow clearly:
 
 ```text
 verify the exact target build
@@ -235,7 +235,7 @@ The complete dispatcher and lifecycles are in [`dll.rs`]({{ site.baseurl }}/wind
 
 Reusing proven work is normal engineering. Rebuilding everything wastes time;
 adding a dependency for every five-line problem creates a different kind of
-fragility. Use this decision ladder:
+fragility. Make the decision in this order:
 
 1. Can the standard library or an existing project abstraction do it clearly?
 2. Is there a maintained crate whose API, license, and safety model fit?

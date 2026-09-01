@@ -7,7 +7,7 @@ layout: post
 permalink: /pages/2/05/
 chapter: "2.5"
 minutes: 23
-summary: Climb from one gold-changing instruction to the menu decision that caused it.
+summary: Follow callers and dependencies from one gold-changing instruction to the menu decision that caused it.
 ---
 
 Finding one instruction is useful. Understanding the surrounding feature is better.
@@ -22,13 +22,13 @@ The current function probably handles a small part of recruitment. To discover w
 
 ![Running until the current function returns]({{ site.baseurl }}/assets/images/2/5/wesnoth6.png)
 
-Now you are back in the caller. This technique is sometimes called **bubbling up**: start with a tiny known behavior and climb toward broader decisions.
+Now you are back in the caller. Repeat this carefully to move from the low-level write toward the broader decision that requested it.
 
 ## Why the caller is visible
 
 When x86 executes `call`, it places a return address on the stack before jumping to the callee. That address points to the instruction the caller expects to run next. A debugger’s call stack combines return addresses with known module ranges and function information to show the nested route that reached the breakpoint.
 
-The stack is evidence, not a perfect story. Optimizations can inline functions, reuse stack space, or omit traditional frame pointers. Confirm an important caller by returning to it or placing a breakpoint at its call site and reproducing the action.
+The stack is useful evidence, but it may be incomplete. Optimizations can inline functions, reuse stack space, or omit traditional frame pointers. Confirm an important caller by returning to it or placing a breakpoint at its call site and reproducing the action.
 
 ## Recognize dispatcher code
 
@@ -95,7 +95,7 @@ This is also a lesson about **abstraction levels**. The subtraction is a low-lev
 
 Compilers can move calculations away from the source statement that inspired them. The instruction immediately above the anchor may be unrelated, while the important value was loaded twenty instructions earlier or passed by the caller. Track one value and one decision at a time.
 
-A practical stopping rule is: stop climbing when you can name the input, the decision, and the observable result in plain English. Going farther may teach the whole menu framework, but it no longer answers the focused gold question.
+A practical stopping rule is: stop tracing callers when you can name the input, the decision, and the observable result in plain English. Going farther may reveal the whole menu framework, but it no longer answers the focused gold question.
 
 ![Code branching between menu operations]({{ site.baseurl }}/assets/images/2/5/wesnoth9.png)
 

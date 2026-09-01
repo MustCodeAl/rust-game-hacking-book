@@ -28,15 +28,13 @@ public:
 
 The compiler does **not** normally copy that neat declaration into the finished `.exe`. Names such as `Player`, `position`, and `update` may disappear. The running program still needs a repeatable arrangement of bytes, though. It must know where each player's position begins, where the name lives, and which function to call.
 
-Reversing a class means rebuilding a useful description of that arrangement from evidence. You are not magically restoring the original source. You are producing a tested model that explains what the machine does. 🧠
+Reversing a class means rebuilding a useful description of that arrangement from evidence. This does not restore the original source. It produces a tested model that explains what the machine does. 🧠
 
 This lesson uses **AssaultCube 1.2.0.2 32-bit Windows** in a local bot match. Offsets are version-specific. A different build may have a different layout.
 
 ## Build confidence from several kinds of evidence
 
-Reverse engineering moves from facts the machine exposes to ideas humans use.
-The higher you climb, the more useful the description becomes—and the more
-carefully you must test it.
+Reverse engineering begins with facts the machine exposes and combines them into useful descriptions. A broader description explains more behavior, but it also needs more independent tests.
 
 | Level | Example claim | Confidence source |
 | --- | --- | --- |

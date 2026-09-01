@@ -86,7 +86,7 @@ When a software breakpoint installed by this debugger fires:
 
 The next single-step exception lets the debugger reinsert `0xCC` and clear the trap flag.
 
-This dance is why a breakpoint is state, not just one byte.
+This two-step cycle is why a breakpoint has state; it is not just one changed byte.
 
 ```rust
 enum BreakpointPhase {
@@ -214,7 +214,7 @@ Then add one breakpoint at a known function in the course target.
 
 ## Attach it to Wesnoth
 
-Once the breakpoint dance works in the tiny target, point the debugger at the 32-bit `wesnoth.exe` 1.14.9 process. Add one software breakpoint at the income instruction from lesson 2.9:
+Once the breakpoint cycle works in the tiny target, point the debugger at the 32-bit `wesnoth.exe` 1.14.9 process. Add one software breakpoint at the income instruction from lesson 2.9:
 
 ```text
 0x009B4D00  add dword ptr [eax+4], edx

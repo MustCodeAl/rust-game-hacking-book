@@ -109,7 +109,7 @@ Start with one entry breakpoint while learning the state machine. The completed 
 
 A software breakpoint changes the first byte of an instruction to `0xCC`, the one-byte `int3` instruction. When the CPU executes it, Windows pauses the thread and reports `EXCEPTION_BREAKPOINT` to the debugger. The original `E8` must be remembered so the real call can still execute and can later be restored.
 
-## The two-event breakpoint dance
+## The two-event breakpoint cycle
 
 One breakpoint hit is not enough. If the debugger immediately writes `0xCC` back at the same address and continues, the thread hits it forever. The logger temporarily restores the call and single-steps exactly one instruction:
 

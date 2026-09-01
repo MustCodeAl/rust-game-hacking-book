@@ -141,7 +141,7 @@ Then design observations that separate the two explanations. Watching the
 value, the transition, and the next UI refresh is stronger than staring at one
 disassembly window.
 
-## Use an evidence ladder
+## Combine several kinds of evidence
 
 | Strength | Evidence | What it supports |
 |---:|---|---|
@@ -152,7 +152,7 @@ disassembly window.
 | 5 | Clean restarts and multiple builds | Stability and version limits |
 | 6 | Automated regression fixture | A claim that can be rechecked |
 
-Higher rungs do not make a conclusion eternal. They make its evidence and
+More evidence does not make a conclusion permanent. It makes the claim and
 limits clearer.
 
 ## Report the result so it can be retested
