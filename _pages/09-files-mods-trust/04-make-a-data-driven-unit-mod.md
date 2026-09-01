@@ -172,7 +172,7 @@ description = "Adds one low-level training enemy."
 
 Document dependencies and load order.
 
-## Finish the course the maintainable way
+## Prefer supported data files when they meet the goal
 
 The course began by changing one number in live memory. It ends with a supported, versioned, removable mod.
 

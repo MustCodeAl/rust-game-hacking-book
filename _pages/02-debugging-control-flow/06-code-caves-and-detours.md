@@ -26,7 +26,7 @@ flowchart TD
     E --> F["Continue original code"]
 ```
 
-## The five pieces
+## A detour needs five parts
 
 A responsible detour has:
 

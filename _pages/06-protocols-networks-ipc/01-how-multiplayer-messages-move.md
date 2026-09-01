@@ -6,8 +6,8 @@ category: Protocols, Networks & IPC
 layout: post
 permalink: /pages/6/01/
 chapter: "6.1"
-minutes: 13
-summary: Understand clients, servers, packets, TCP streams, and why one read is not the same as one message.
+minutes: 24
+summary: Understand clients, servers, framing, streams, ticks, snapshots, deltas, prediction, reconciliation, and message ordering.
 mermaid: true
 ---
 
@@ -59,7 +59,7 @@ enum Message {
 
 The bytes are untrusted until parsing succeeds.
 
-## A protocol is a stack of agreements
+## A protocol defines several layers of rules
 
 Several layers cooperate when the bot sends one chat message:
 
@@ -132,6 +132,73 @@ A later position update can make an older one useless, so freshness may matter m
 
 Do not assume a game uses only one protocol. It might use TCP for login/chat and UDP for movement.
 
+## Real-time games replicate a simulation, not just variables
+
+Most action games advance the world in discrete **ticks**. If a server runs at
+60 ticks per second, one simulation step is approximately:
+
+```text
+tick duration = 1 second / 60 = 16.67 milliseconds
+```
+
+The client samples input, labels it, and sends a command. The server processes
+commands during its own ticks and periodically sends a snapshot or delta. The
+client then draws frames between confirmed server states:
+
+```mermaid
+sequenceDiagram
+    participant I as Input sampler
+    participant C as Client simulation
+    participant S as Server simulation
+    participant R as Renderer
+    I->>C: command 418: move right
+    C->>C: predict command 418
+    C->>S: command 418
+    S->>S: validate and simulate tick 9021
+    S-->>C: tick 9021, ack 418, state delta
+    C->>C: reconcile prediction
+    C->>R: interpolate a display state
+```
+
+Several similar-looking states can therefore coexist:
+
+| State | Purpose | Important label |
+|---|---|---|
+| Last confirmed state | What the server has accepted | Server tick or snapshot ID |
+| Predicted state | Immediate response to local input | Last locally simulated command |
+| Interpolated state | Smooth display of remote objects | Render timestamp between snapshots |
+| Historical state | Rewind or lag-compensation query | Past server tick or time |
+
+This explains why a coordinate found in memory can be correct yet appear to
+“snap back.” You may have observed the predicted or rendered copy while a later
+server snapshot replaced it. Before assigning meaning to a field, record which
+thread writes it, whether its update follows input or packets, and which tick or
+sequence number travels beside it.
+
+## Ordering needs explicit evidence
+
+Packet arrival order is not automatically simulation order. UDP packets can
+arrive late or twice; even over TCP, one stream can contain application events
+whose own timestamps refer to different moments. Protocols commonly carry:
+
+- a monotonically increasing sequence number;
+- a server tick or timestamp;
+- an acknowledgment of the newest processed command;
+- a bit mask acknowledging several earlier packets;
+- a baseline ID telling which snapshot a delta modifies.
+
+Sequence numbers often wrap. For an unsigned `N`-bit counter, comparisons must
+use modular arithmetic and accept only a bounded forward window. A simple
+numeric `incoming > current` test fails when `65535` wraps to `0`. The exact
+window is part of the protocol contract and should be proved with boundary
+tests.
+
+A **snapshot** contains enough state to stand alone. A **delta** contains changes
+relative to a named baseline. Applying a delta to the wrong baseline may parse
+perfectly and still create nonsense. Robust tooling keeps the baseline ID with
+the bytes, refuses missing dependencies, and bounds how long incomplete state
+may wait.
+
 ## Ports and sockets
 
 A socket connects an address and port to a network endpoint:
@@ -159,7 +226,7 @@ For learning, use:
 - captured bytes provided by a challenge;
 - application logs you control.
 
-## The network rule
+## Use captures to test protocol claims
 
 The capture, replay, and proxy examples use loopback or a local test server. That keeps timing, state changes, and failures observable while you learn what each protocol layer contributes.
 

@@ -32,7 +32,7 @@ Reversing a class means rebuilding a useful description of that arrangement from
 
 This lesson uses **AssaultCube 1.2.0.2 32-bit Windows** in a local bot match. Offsets are version-specific. A different build may have a different layout.
 
-## Climb an evidence ladder
+## Build confidence from several kinds of evidence
 
 Reverse engineering moves from facts the machine exposes to ideas humans use.
 The higher you climb, the more useful the description becomes—and the more
@@ -52,7 +52,7 @@ Do not skip from “bytes changed” straight to “this is definitely a `Player
 class.” Keep each intermediate claim visible. If a later test fails, you can
 step down one level and see exactly which inference broke.
 
-## Five words that sound similar
+## Separate five object-layout terms
 
 | Word | Plain-English meaning |
 | --- | --- |
@@ -398,4 +398,7 @@ Before moving on, explain these ideas without debugger vocabulary:
 - a recovered class is a versioned hypothesis supported by repeated experiments;
 - a remote address is not a valid local reference.
 
-That mental model scales beyond games. Debuggers, crash analyzers, compatibility tools, profilers, and digital-forensics programs all recover structure from raw memory using the same evidence-first process.
+This evidence-based method also appears in debuggers, crash analyzers,
+compatibility tools, profilers, and digital-forensics programs. Each tool
+recovers structure from raw memory without pretending that the original source
+code is still present.

@@ -54,7 +54,7 @@ game instruction. Most instructions execute natively. Hardware privilege, addres
 translation, interrupts, and controlled entries provide the limits that let the OS
 remain in control.
 
-## Win32 is the supported front door
+## Win32 is the documented application interface
 
 The documented Win32 API is the part application developers are normally expected to call. Examples from this course include:
 

@@ -7,155 +7,171 @@ layout: post
 permalink: /pages/1/08/
 chapter: "1.8"
 minutes: 18
-summary: Find and change one gold value in an offline, open-source game while keeping careful notes.
+summary: Find, test, and change one gold value in Wesnoth while recording what each scan proves.
 ---
 
-## Target and goal
+This experiment connects the first seven lessons. You will observe a gold value,
+search the Wesnoth process for matching bytes, make a controlled in-game change,
+and filter the results.
 
-Use **The Battle for Wesnoth 1.14.9** in an offline local match. This old, open-source version is the course’s controlled practice target.
+The goal is not merely to reach a final address. The goal is to understand why
+each scan removes some candidates and why one test still does not prove that a
+candidate is the main game-play value.
 
-Goal: find the player’s current gold in memory and temporarily change it.
+## Prepare the target and notes
 
-If the words address, byte, pointer, page, stack, or heap are still unclear,
-read [How Memory Actually Works]({{ site.baseurl }}/pages/1/03/) first. This experiment assumes
-you understand that a scanner searches byte representations inside one
-process’s virtual address space.
+Use the course build of Wesnoth 1.14.9 in the Windows VM. Start a local match and
+pause before recruiting a unit.
+
+Record:
+
+```text
+Game build: Wesnoth 1.14.9, 32-bit
+Starting gold:
+Planned action:
+Expected gold after the action:
+VM snapshot:
+```
 
 ![A Wesnoth match showing the gold value]({{ site.baseurl }}/assets/images/1/5/wesnoth1.png)
 
-## Make a prediction
+Suppose the screen shows 100 gold and the unit you plan to recruit costs 15.
+Your prediction is that the visible value will become 85.
 
-Gold is displayed as a non-negative whole number. A good first guess is a 4-byte integer.
+## Attach Cheat Engine to the game process
 
-Suppose the game shows `100` gold. That number will appear in memory many times, so the first scan will produce many candidates. We narrow the list by changing gold in the game and scanning again.
-
-## Why one number has many matches
-
-The number `100` is common. It might appear as health, a percentage, an array
-size, a timer, a menu width, an old copy of gold, or four bytes that merely look
-like `100` when interpreted as an integer.
-
-A first scan asks only:
-
-> Which readable four-byte windows equal `100` at this moment?
-
-It does **not** ask which match is gold. Later scans add behavior to the
-question. If gold changes from `100` to `83`, candidates that remain `100` are
-discarded. Repeating the process is set intersection: each observation removes
-locations that no longer fit the history.
-
-The selected value type controls interpretation. A four-byte integer `100` is
-stored as `64 00 00 00` on this little-endian target. A 32-bit floating-point
-`100.0` uses different bytes. Choosing the wrong type can hide the real value
-even though the screen shows the same digits.
-
-## A scan is repeated filtering, not guessing
-
-Think of the first scan as creating a set of hypotheses: every matching address is a possible explanation for the displayed value. Each controlled game action adds a new condition and removes candidates that contradict it.
-
-The quality of the action matters more than the number of scans. If gold changes by a known unit price while nearby health and timers stay steady, the new observation carries more information than waiting for several unrelated values to drift. Record the before value, the action, the expected after value, and the actual after value.
-
-Scans taken at different moments are not one atomic snapshot of the process. Threads continue running while regions are copied. A candidate may change during the scan, so repeat surprising results and confirm the final address with a debugger or controlled write.
-
-## Find candidates
-
-1. Start the offline match and note the exact gold value.
-2. Open Cheat Engine and attach it to the Wesnoth process.
-3. Choose a 4-byte exact-value scan.
-4. Enter the current gold and run the first scan.
+Open Cheat Engine, choose the process button, and select the running Wesnoth
+process.
 
 ![Choosing the Wesnoth process]({{ site.baseurl }}/assets/images/1/5/wesnoth2.png)
 
+Attaching tells Cheat Engine which process address space to read. It does not
+yet tell the scanner where gold is or how it is stored.
+
+## Perform the first value scan
+
+Enter the visible gold amount. Use:
+
+- **Value Type:** 4 Bytes;
+- **Scan Type:** Exact Value;
+- **Value:** the current gold amount.
+
+Start the first scan.
+
 ![The first scan for gold]({{ site.baseurl }}/assets/images/1/5/wesnoth3.png)
 
-Now return to the game and recruit a unit so the gold changes. Enter the new value and choose **Next Scan**.
+The scan will probably find many addresses. That is expected. The number 100 can
+appear in timers, object fields, capacities, interface data, and unrelated
+allocations.
+
+At this point, each result proves only this:
+
+> These four bytes were readable as the integer 100 when the scanner checked
+> them.
+
+It does not prove that the address controls gold.
+
+## Change the game once
+
+Return to Wesnoth and perform the planned action. Recruit the unit and record the
+new gold value.
 
 ![Gold after recruiting a unit]({{ site.baseurl }}/assets/images/1/5/wesnoth4.png)
 
-Repeat the cycle:
+If the value changed from 100 to 85, return to Cheat Engine, enter 85, and choose
+**Next Scan**.
+
+The scanner does not search the whole process from the beginning. It checks the
+previous candidate addresses and keeps only those that now contain 85. In set
+notation:
 
 ```text
-observe the displayed value
-→ perform one action
-→ scan for the new value
-→ repeat
+new_candidates = old_candidates ∩ addresses_currently_equal_to_85
 ```
 
-The candidate list should shrink.
+You do not need the symbol memorized. It means “keep items that are in both
+groups.”
 
-Cheat Engine reads many committed, readable regions and searches copied bytes.
-It skips inaccessible ranges. Between scans, the game continues running, so a
-candidate can disappear because the game changed or released that memory. That
-is normal evidence, not automatically a scanner failure.
+## Repeat with a different change
 
-## Test one candidate
-
-When only a few addresses remain, add a candidate to the address list and change it to a small, obvious value such as `123`.
+Make another controlled change with a different result. For example, recruit a
+unit with another cost or end a turn if the scenario changes gold in a known
+way. Record the expected and actual value, then perform another **Next Scan**.
 
 ![A narrowed list of candidate addresses]({{ site.baseurl }}/assets/images/1/5/wesnoth6.png)
 
-Return to the game and trigger a normal refresh—recruiting or ending a turn can do this. If the display changes and you can spend the new amount, your candidate probably represents the real value.
+Using different values is important. If you repeat only 100 → 85 → 100, an
+unrelated value that happens to follow the same pattern can remain in the list.
+
+Continue until you have a small number of candidates. Do not assume the first
+remaining address is correct.
+
+## Test one candidate reversibly
+
+Add one candidate to the address list. Before changing it:
+
+1. record its address and current value;
+2. confirm the game still shows the expected gold;
+3. choose a small replacement value;
+4. write the replacement once;
+5. observe the screen and one real purchase;
+6. restore the original value.
 
 ![The edited gold value in Wesnoth]({{ site.baseurl }}/assets/images/1/5/wesnoth9.png)
 
-If nothing happens, restore the original value and test the next candidate. If only the text changes but the game rules do not, you probably found a display copy rather than the authoritative value.
+Different results support different explanations:
 
-## Copies can have different jobs
+| Observation | Likely meaning |
+|---|---|
+| the number and purchase rules change | strong candidate for game-play state |
+| only the text changes | likely a display copy |
+| the value changes back on the next update | another system recomputes or owns it |
+| nothing visible changes | unrelated value or a copy used elsewhere |
+| nearby behavior breaks | wrong address, type, or field width may have been changed |
 
-A game may copy one idea into several representations:
+These are hypotheses, not automatic proofs. Repeat from a known starting state.
+
+## Why several copies may all be related
+
+The game can legitimately keep more than one gold-related value:
+
+- the current simulation value;
+- a previous value used by an animation;
+- text prepared for the interface;
+- a value in a replay, event, or network message;
+- a temporary calculation.
+
+That is why value scanning is usually the start of reverse engineering. A write
+breakpoint later shows which instruction changes the strongest candidate. The
+surrounding instructions can reveal the object base and other fields.
+
+## Record what the experiment supports
+
+Finish the note:
 
 ```text
-authoritative gold field
-→ temporary arithmetic value
-→ formatted text such as "Gold: 100"
-→ pixels drawn on screen
+Candidate address:
+Original value:
+Replacement value:
+Immediate visual result:
+Purchase or rule result:
+Result after the next update:
+Restore result:
+What this supports:
+What remains uncertain:
+Next test after restarting:
 ```
 
-Changing the formatted text does not change the rules. Changing a temporary
-register or stack copy may last for one frame. The strongest candidate changes
-through normal gameplay, controls what can be spent, and is read again when the
-interface refreshes.
+An address can move after restart because the process layout and heap can change.
+The next chapters show how to move from one temporary address to the instruction
+and object path that explain it.
 
-“Authoritative” here means the local source of truth for this offline game
-state. In a networked game, a server may own the real value and replace local
-changes with its next update.
+## Checkpoint
 
-## What happened?
+You should now understand that:
 
-Cheat Engine asked Windows to read the game process’s memory. Your scans filtered the results:
-
-```text
-all readable memory
-∩ values equal to the first amount
-∩ values equal to the second amount
-∩ values equal to the third amount
-= likely gold locations
-```
-
-Later, our scanner will perform the same kind of filtering. The friendly interface will be replaced by:
-
-- a process handle;
-- a list of readable memory regions;
-- byte-to-number conversion;
-- a set of candidate addresses.
-
-An address from this run is a clue, not a permanent identifier. ASLR can move
-modules, heap allocations can move, and a new match can construct a new player
-object. The later debugger and pointer lessons teach how code, module-relative
-locations, and object relationships survive changes better than one absolute
-number.
-
-## Record the result
-
-Write down:
-
-- the exact Wesnoth version;
-- the value type you used;
-- each observed gold amount;
-- the final address;
-- whether the address changes after restarting the game.
-
-It probably **will** change. Modern operating systems move process memory around, and games allocate some data dynamically. The next section teaches how a debugger helps us find stable code and pointer paths instead of trusting one temporary address.
-
-> The goal was not “get lots of gold.” The goal was to prove that a visible game value has a memory representation you can locate with repeatable observations.
-{: .block-tip }
+- a first scan finds every matching value it can read, not “the gold address”;
+- each controlled game change filters the previous candidate set;
+- changing one candidate is a test of a hypothesis;
+- display copies and simulation values can behave differently;
+- recording and restoring the original value makes the test repeatable.

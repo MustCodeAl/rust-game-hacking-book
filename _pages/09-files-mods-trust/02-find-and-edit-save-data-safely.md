@@ -146,9 +146,9 @@ The important change is that the original path is not used as scratch space:
 
 On Windows, replacing an existing file may require a platform-specific replace operation. Keep the backup until the game successfully loads the new save.
 
-## Treat the edit as a tiny transaction
+## Prepare, validate, commit, and recover
 
-The mental model is **prepare, validate, commit, recover**:
+Use four explicit stages: **prepare, validate, commit, recover**:
 
 1. **Prepare:** read the original and build new bytes somewhere else.
 2. **Validate:** confirm the target field, format, ranges, and complete output.

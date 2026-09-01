@@ -6,8 +6,8 @@ category: 3D Games & Rendering
 layout: post
 permalink: /pages/5/04/
 chapter: "5.4"
-minutes: 12
-summary: Use a temporary OpenGL state change to verify which draw samples belong to a model category.
+minutes: 20
+summary: Treat temporary color as a controlled classification experiment while accounting for materials, lighting, blending, and color space.
 ---
 
 ## Color is a debugging label
@@ -19,6 +19,29 @@ A solid temporary color can answer a classification question:
 This technique is often called **chams**. In this course it is a visual debugger for an offline target.
 
 ![An original player texture]({{ site.baseurl }}/assets/images/5/4/urbanterror1.png)
+
+## A pixel's color has several contributors
+
+“Set the color to red” sounds simple, but the final framebuffer value may combine:
+
+```text
+vertex color
+× sampled texture
+× material/light result
+→ fragment output
+→ blending with the existing framebuffer
+→ display conversion
+```
+
+Multiplication is only one common model; a shader can compute anything. In the
+fixed-function path used here, disabling selected arrays and textures reduces the
+number of active contributors so the diagnostic color is easier to interpret.
+
+Alpha does not automatically mean transparency. Blending must be enabled with a
+specific source/destination rule, and draw order still matters. Likewise, RGB
+values may be interpreted as linear light or sRGB-encoded display values. A debug
+color only needs to be distinctive, but exact color comparison requires knowing
+the framebuffer's color-space conversion.
 
 ## Separate classification from styling
 
@@ -52,6 +75,17 @@ For this exact Urban Terror build, `count > 500` is the original course filter. 
 
 Keep the classifier pure. It should not call OpenGL or change memory, which makes it easy to test with recorded samples.
 
+Purity also makes uncertainty visible. Return `Unknown` when the observations do
+not support a category. A confident-looking wrong label is harder to diagnose than
+an explicit unknown.
+
+```text
+recorded draw state ──► pure classifier ──► category
+                                           │
+                                           ▼
+                                temporary debug style
+```
+
 ## Measure classification errors
 
 A colored result gives immediate feedback, but “some players turned red” is not enough. Count four outcomes across a small labeled capture:
@@ -64,6 +98,17 @@ A colored result gives immediate feedback, but “some players turned red” is 
 | non-player left unchanged | true negative |
 
 Changing a threshold usually trades false positives against false negatives. Add independent features only when experiments show they help: call site, texture, model transform, or another stable render property. Avoid piling on conditions that merely memorize one map and graphics setting.
+
+For a labeled set, calculate:
+
+```text
+precision = true_positive / (true_positive + false_positive)
+recall    = true_positive / (true_positive + false_negative)
+```
+
+Precision asks “when the classifier says player, how often is it right?” Recall
+asks “of all player draws, how many did it find?” If a denominator is zero, report
+the metric as undefined instead of inventing a perfect score.
 
 Keep the recorded samples separate from the classifier implementation. Then a new rule can be evaluated against the same evidence instead of judged from memory.
 
@@ -100,11 +145,21 @@ At the hook boundary:
 3. forward exactly one draw;
 4. restore every captured value.
 
+The state must cover both server-side values such as enable flags and client array
+state such as color or texture-coordinate arrays. Capturing only the visible color
+is insufficient if the original draw obtains its color from a bound array.
+
 ![A color-coded model in the offline lab]({{ site.baseurl }}/assets/images/5/4/urbanterror2.png)
 
-## Add the real chams state to the Urban Terror hook
+## Understand the build-specific Urban Terror fallback
 
-Extend the working OpenGL wallhack with the functions and constants used by Urban Terror 4.3.4:
+The clean design above wraps one whole draw: capture, change, draw, restore. The
+course's Urban Terror 4.3.4 cave is different. It runs in the middle of
+`glDrawElements`, so it cannot surround the call and restore a snapshot after
+that same draw. Instead, it applies a debug state to player-sized draws and
+puts assumed engine defaults back on the next ordinary draw.
+
+The fallback uses these functions and constants:
 
 ```rust
 type GlToggle = unsafe extern "system" fn(capability: u32);
@@ -115,7 +170,7 @@ const GL_COLOR_ARRAY: u32 = 0x8076;
 const GL_TEXTURE_COORD_ARRAY: u32 = 0x8078;
 ```
 
-Inside the `count > 500` branch, immediately before forwarding the draw:
+Conceptually, its state transition is:
 
 ```rust
 // SAFETY: every pointer was resolved from the current opengl32.dll and this
@@ -135,11 +190,26 @@ unsafe {
 }
 ```
 
-Keep the depth-state calls from the previous lesson around this block. When injected into a local Urban Terror match, player-sized models should appear through walls in bright red. If the HUD, world, or later effects stay tinted, one of the OpenGL states was not restored.
+Keep the depth-state calls from the previous lesson around this block. In the
+pinned Urban Terror build, player-sized models should appear through walls in
+bright red. If the HUD, world, or later effects stay tinted, the assumed
+defaults did not match the state owned by that render pass.
+
+This is an exact-build, best-effort fallback—not general OpenGL state
+restoration. It assumes texture and color arrays are normally enabled,
+`GL_COLOR_MATERIAL` is normally disabled, the current color is white, the depth
+range is `0..1`, and the depth function is `GL_LEQUAL`. A renderer may legally
+use different values. For a reusable tool, hook at a boundary that encloses one
+whole draw and query or track the exact prior state in a typed guard before
+changing anything.
+{: .block-warning }
 
 Try `count <= 500`, `count > 500`, and no filter while logging samples. The visual differences let you prove which calls your classifier actually catches instead of treating the threshold as magic.
 
-The compiled DLL uses the naked cave from the previous lesson. It resolves all seven required OpenGL exports, switches to `OPENGL_CHAMS`, and applies exactly this state from the render thread. Inject it and press **F3** to toggle chams; press **End** to restore normal rendering and the original instruction:
+The compiled DLL uses the naked cave from the previous lesson. It resolves all
+seven required OpenGL exports, switches to `OPENGL_CHAMS`, and applies this
+documented fallback from the render thread. Inject it and press **F3** to toggle
+chams; press **End** to restore normal rendering and the original instruction:
 
 ```powershell
 .\target\i686-pc-windows-msvc\release\injector.exe `
@@ -160,6 +230,21 @@ Keep state changes in the narrowest possible scope and test:
 - normal models after it;
 - menus and text;
 - level reloads.
+
+Also test early returns and errors. Scope guards help with CPU state, but graphics
+APIs may require restoration on the render thread while the correct context is
+current. A guard dropped on another thread is not equivalent cleanup.
+
+## Distinguish a category from a render pass
+
+The same player may appear in several passes: shadow, depth prepass, main color,
+outline, reflection, or HUD portrait. A filter that recognizes one of those draws
+does not automatically recognize the object everywhere. Conversely, a call site
+may draw many categories through a shared material pass.
+
+When color appears twice, through a mirror, or only in a shadow, add the current
+framebuffer, shader/program, and pass position to the observation before changing
+the category rule.
 
 ## Use better evidence than one number
 

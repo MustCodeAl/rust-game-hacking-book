@@ -1,5 +1,5 @@
 ---
-title: Game Files Are Often the Best Door
+title: Start with Game Files When They Contain the Needed State
 author: attilathedud
 date: 2026-07-30
 category: Files, Mods & Trust
@@ -10,7 +10,7 @@ minutes: 11
 summary: Learn how saves, configuration, textures, maps, and archives differ from live process memory.
 ---
 
-## Not every change needs a debugger
+## Check supported files before inspecting live memory
 
 Games load a large collection of resources:
 

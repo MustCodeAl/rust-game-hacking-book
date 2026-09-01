@@ -6,8 +6,9 @@ category: 3D Games & Rendering
 layout: post
 permalink: /pages/5/06/
 chapter: "5.6"
-minutes: 23
-summary: Find player positions, calculate yaw and pitch, rank targets, and test the math without automating live input.
+minutes: 35
+summary: Derive yaw and pitch from vectors, measure true angular error, rank valid targets, and reason about target points, timing, and projectile motion.
+mermaid: true
 ---
 
 ## Break the problem into layers
@@ -23,6 +24,19 @@ Keep these layers separate. Most of the interesting work belongs in safe, testab
 ![A 3D target and camera relationship]({{ site.baseurl }}/assets/images/5/6/cube2.png)
 {: .diagram-on-dark }
 
+```mermaid
+flowchart LR
+    S["Coherent world snapshot"] --> V["Validate candidates"]
+    V --> A["Compute desired direction / angles"]
+    A --> O["Reject outside FOV or occluded"]
+    O --> R["Rank with an explicit score"]
+    R --> P["Publish chosen ID + aim point"]
+```
+
+Every arrow has a contract. If the snapshot mixes two frames, perfect trigonometry
+still points at an old position. If validation confuses an entity slot with a live
+identity, ranking can choose a reused object. Math cannot repair bad observations.
+
 ## Confirm the view angles
 
 Use AssaultCube’s local debug commands and memory scanning to find yaw and pitch. Rotate only horizontally while searching for yaw, then only vertically for pitch.
@@ -36,6 +50,19 @@ Validate:
 - standing still keeps both stable;
 - values are finite;
 - the sign and zero direction match your formulas.
+
+Write the convention beside the values, for example:
+
+```text
+yaw_degrees: increases clockwise when viewed from above
+pitch_degrees: positive means looking down
+forward_at_zero: +Y
+up_axis: +Z
+```
+
+This prevents “fixes” such as unexplained `+90` or sign changes from leaking into
+generic math. Convert from the engine convention at one boundary, perform the
+calculation in one documented convention, then convert back.
 
 ## Read player snapshots
 
@@ -150,6 +177,49 @@ The math helpers avoid two tempting shortcuts:
 
 Your target may need a yaw offset, inverted pitch, or different axes. Derive those adjustments from known directions.
 
+### Why the formulas have this shape
+
+Project `delta` onto the horizontal plane first:
+
+```text
+horizontal = √(delta_x² + delta_y²)
+yaw        = atan2(delta_y, delta_x)
+pitch      = atan2(delta_z, horizontal)
+```
+
+Yaw asks for the direction of the horizontal projection. Pitch asks how far the
+full vector rises above that projection. Using total 3D distance as the second
+pitch argument would measure a different angle.
+
+When `horizontal = 0`, the target is directly above or below. Pitch remains
+defined, but yaw is mathematically unconstrained because every horizontal heading
+points to the same vertical line. Preserve the current yaw in that case rather
+than letting an arbitrary `atan2(0, 0)` result cause a snap.
+
+### Angle error can be measured without Euler angles
+
+For normalized current forward vector `f` and target direction `d`:
+
+```text
+angular_error = acos(clamp(dot(f, d), -1, 1))
+```
+
+This gives the true angle between two directions and avoids yaw wraparound. It is
+often the cleanest field-of-view test:
+
+```rust
+fn inside_cone(forward: Vec3, toward: Vec3, half_angle_degrees: f32) -> bool {
+    let Some(forward) = normalized(forward) else { return false };
+    let Some(toward) = normalized(toward) else { return false };
+    let threshold = half_angle_degrees.to_radians().cos();
+    let dot = forward.x * toward.x + forward.y * toward.y + forward.z * toward.z;
+    dot >= threshold
+}
+```
+
+Cosine decreases from `1` to `-1` over `0..π`, so a smaller cone has a larger
+threshold. Comparing dots avoids calling `acos` for every candidate.
+
 ## Measure angular difference
 
 Angles wrap around. The distance between `179°` and `-179°` is `2°`, not `358°`.
@@ -196,6 +266,56 @@ fn best_target<'a>(
 
 This is an iterator pipeline: filter invalid players, calculate candidates, enforce a field-of-view limit, then select the smallest error.
 
+Be precise about the score. Nearest world distance, smallest angular error, and
+smallest screen-pixel distance answer different questions:
+
+| Score | Favors | Important limitation |
+|---|---|---|
+| world distance | physically nearest target | may be far from crosshair |
+| angular error | smallest camera rotation | ignores viewport aspect/FOV shape |
+| pixel distance | nearest rendered marker | depends on current projection and resolution |
+| weighted score | chosen trade-off | weights need units and testing |
+
+Do not compare mixed units directly. If a score is
+`angle_degrees + distance_metres`, its weights silently claim that one degree is
+worth one metre. Normalize each term or state the conversion intentionally.
+
+Tie-breaking must also be stable. If two scores differ only by floating-point
+noise, prefer the current target or a stable entity ID. Otherwise the choice can
+oscillate every frame.
+
+## Choose an aim point, not merely an entity origin
+
+An entity's position often refers to its feet, collision-cylinder center, or model
+pivot. A head position may come from a bone transform, tagged attachment point, or
+fixed offset. Animation changes bone positions each frame.
+
+```text
+bone_world = entity_world × skeleton_pose × bone_bind_inverse × local_point
+```
+
+The exact matrix order depends on convention. The important distinction is that a
+bone's local coordinates are not world coordinates until the hierarchy has been
+accumulated. A constant z offset may work for one stance and fail while crouching,
+jumping, or using a different model.
+
+## Account for time only when the model requires it
+
+For an instantaneous hitscan query, aim at the current coherent target point. For
+a projectile with constant speed `s`, target position `p`, target velocity `v`, and
+shooter position `o`, solve for a positive time `t`:
+
+```text
+|p + vt - o| = s t
+
+(v·v - s²)t² + 2((p-o)·v)t + (p-o)·(p-o) = 0
+```
+
+Choose the smallest positive finite root, then aim at `p + vt`. If there is no
+positive root, the constant-velocity target is not interceptable at that projectile
+speed. Gravity, drag, network interpolation, and launch delay require a richer
+model; do not hide them inside a guessed multiplier.
+
 ## Test with synthetic data
 
 You can prove the math without writing to a game:
@@ -209,6 +329,10 @@ fn wraparound_uses_shortest_turn() {
 ```
 
 Add tests for targets above, below, behind, at the same position, and outside the allowed error.
+
+Add convention tests with known basis directions. If the engine says forward is
+`+Y` at `90°`, encode that as a test. Also check `NaN`, infinity, a vertical target,
+wrap boundaries on both sides, and deterministic tie-breaking.
 
 ## Visualization before action
 
@@ -282,6 +406,23 @@ unsafe fn update_aimbot() -> anyhow::Result<()> {
 ```
 
 Run it every few milliseconds in the injected worker. In a local match with idle bots, the view should lock to the nearest live player and switch after that bot dies. The `+90°` correction is target-specific and comes from AssaultCube starting forward at 90 degrees.
+
+Notice that this exact implementation ranks horizontal world distance, while
+`best_target` above ranks angular error. That is an intentional contrast, not two
+names for the same rule. Replace the score only after deciding which behavior the
+tool should implement.
+
+## Diagnose aim errors geometrically
+
+| Symptom | Likely assumption |
+|---|---|
+| constant 90° horizontal error | zero-forward convention |
+| correct yaw, inverted pitch | pitch sign or screen/axis orientation |
+| accurate nearby, trails moving targets | stale snapshots or missing motion model |
+| selects targets behind camera | unwrapped angle or missing dot/FOV test |
+| snaps when target is straight above | undefined yaw at zero horizontal distance |
+| switches rapidly between two targets | unstable tie-breaking or noisy positions |
+| points at feet while model animates | entity origin used instead of aim point/bone |
 
 This is the complete path for the exact build: static globals → reversed player struct → target math → live yaw/pitch write.
 

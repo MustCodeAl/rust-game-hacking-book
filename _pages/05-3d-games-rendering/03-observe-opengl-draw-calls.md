@@ -6,11 +6,11 @@ category: 3D Games & Rendering
 layout: post
 permalink: /pages/5/03/
 chapter: "5.3"
-minutes: 22
-summary: Wrap one OpenGL call, record its parameters, preserve state, and forward to the real function.
+minutes: 30
+summary: Understand indexed drawing, observe OpenGL calls without stalling the render thread, and connect parameters to geometry and state.
 ---
 
-## A wrapper is a traffic observer
+## A wrapper records and forwards draw calls
 
 OpenGL applications call functions such as `glDrawElements`. A wrapper sits between the caller and the real function:
 
@@ -22,6 +22,52 @@ game calls glDrawElements
 ```
 
 The wrapper must preserve the exact ABI and forward every normal call.
+
+## What an indexed draw actually requests
+
+`glDrawElements(mode, count, element_type, indices)` asks OpenGL to consume an
+ordered sequence of vertex indices:
+
+| Argument | Meaning |
+|---|---|
+| `mode` | how index results form primitives, such as triangles or lines |
+| `count` | number of indices to read |
+| `element_type` | width/format of each index, such as 16- or 32-bit unsigned |
+| `indices` | byte offset into a bound index buffer, or an address in old client-memory mode |
+
+The call does not directly identify a model. OpenGL combines those indices with
+the currently bound vertex attributes, textures, transforms, and other state. One
+character may require several draws—body, head, weapon, shadow—and one draw may
+contain many instances or a batch of unrelated objects.
+
+With `GL_TRIANGLES`, every complete group of three indices describes one submitted
+triangle. The indices may repeat vertices, and some triangles may be degenerate,
+clipped, back-face culled, or hidden by depth. Therefore:
+
+```text
+count / 3 = maximum submitted triangle groups
+count / 3 ≠ visible triangle count
+count     ≠ unique vertex count
+```
+
+The `indices` parameter is especially easy to misread. If an element-array buffer
+is bound, a small value such as `0x120` is an offset into GPU-managed buffer state,
+not a process pointer that should be dereferenced.
+
+## CPU submission and GPU execution overlap
+
+The CPU usually records commands faster than the GPU completes them. A draw call
+returning does not mean its pixels are finished. Reads that force the GPU to catch
+up can stall both processors. Treat the hook as observation of *submitted work*,
+not a timestamp for completed pixels.
+
+```text
+CPU frame N+1: build and submit commands ──────────────►
+GPU frame N:       execute vertices → rasterize → shade ─────────►
+```
+
+This overlap explains why a debugger pause or synchronous query can create a much
+larger performance change than its own instruction count suggests.
 
 ## A hook sits on the program's critical path
 
@@ -52,6 +98,11 @@ type GlDrawElements = unsafe extern "system" fn(
 ```
 
 The exact signature comes from the OpenGL API, not from guessing registers.
+
+In an older fixed-function renderer, transforms and arrays may be ordinary OpenGL
+state. In a modern renderer, shader programs and buffer objects carry the same
+roles. The observation method is still valid, but the state needed to explain a
+draw changes with the API version and engine.
 
 ## Keep the original function
 
@@ -124,6 +175,42 @@ Collect features such as:
 - call site.
 
 Then change one visible object and compare the samples.
+
+Capture the smallest feature vector that can answer the current question:
+
+```rust
+#[derive(Clone, Copy, Debug)]
+struct DrawFingerprint {
+    call_site: usize,
+    mode: u32,
+    index_count: i32,
+    index_type: u32,
+    texture: u32,
+    frame_number: u64,
+}
+```
+
+`call_site` distinguishes engine submission paths, but compiler inlining and
+updates can change it. `texture` can identify a material in one scene, but skins,
+quality settings, and atlases can change it. Features become evidence only after
+controlled comparisons.
+
+## Shaders turn vertex records into pixels
+
+A **shader** is a small GPU program invoked many times in parallel. Two stages are
+central here:
+
+- a vertex shader reads one vertex (and often matrices) and produces clip-space
+  position plus values to interpolate;
+- a fragment shader runs for candidate covered samples and produces a color,
+  depth, or another render-target output.
+
+Values such as texture coordinates and normals are interpolated across a triangle.
+The fragment shader usually does not receive the original vertex value. This is why
+a draw's texture, program, uniforms, and vertex layout are part of its identity.
+
+Older fixed-function OpenGL calls hide these programs behind predefined state, but
+the pipeline still performs equivalent transformations and color calculations.
 
 This is a classification problem. A threshold such as `count > 500` separates the examples you observed, not necessarily the concept “player.” Test it against weapons, detailed scenery, menus, different models, and different graphics settings. Report false positives and false negatives instead of quietly turning a correlation into a definition.
 
@@ -224,6 +311,13 @@ The threshold is a confirmed property of this lesson build, not a universal play
 ## Restore graphics state
 
 OpenGL is a state machine: a call changes settings that remain active until another call changes them. This middle-of-function cave cannot surround one typed `glDrawElements` call, so it restores the normal state when the next non-highlighted draw arrives and when the feature is disabled. Pressing **End** also disables the mode before removing the code patch. That ordering prevents the game from being left with `GL_ALWAYS` active.
+
+State restoration must match what was changed. A robust typed wrapper queries or
+tracks the previous depth function, depth range, enabled client arrays, color, and
+bindings. Restoring guessed “defaults” works only until another legitimate render
+pass enters with different state. A middle-of-function cave has fewer safe options,
+which is a real limitation of that interception point rather than an implementation
+detail to ignore.
 
 ## Diagnose common failures
 

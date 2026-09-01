@@ -309,7 +309,7 @@ which patch was enabled and whether its original bytes were restored. Keep them
 separate from the visible menu so closing or redesigning the UI does not erase
 the evidence needed to debug a failed cleanup.
 
-## The finish line
+## How the final architecture fits together
 
 A multifeature tool is ready when:
 

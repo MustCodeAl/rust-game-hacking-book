@@ -38,7 +38,7 @@ state the control's promise
 → add a regression test
 ```
 
-## Recipe 1: walk around a name-based rule
+## Recipe 1: test a name-based rule with an equivalent command
 
 The toy has three commands:
 
@@ -103,7 +103,7 @@ fn effect_based_policy(command: LabCommand, writes_allowed: bool) -> bool {
 The regression test iterates over every state-changing enum variant. Adding a
 new variant then forces the programmer to classify it.
 
-## Recipe 2: change state between check and use
+## Recipe 2: test a change between validation and use
 
 The weak function checks a target build, calls a lab-only hook that simulates a
 change, and then writes:
@@ -143,7 +143,7 @@ two calls. You cannot make another process freeze by wishing. Keep the interval
 small, compare expected bytes, report mismatch as a normal refusal, and make
 the operation reversible.
 
-## Recipe 3: disappear through an unlogged branch
+## Recipe 3: test a state-changing branch the logger misses
 
 The third toy control logs allowed work but returns early for denied work:
 

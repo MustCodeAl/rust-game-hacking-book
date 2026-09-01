@@ -11,7 +11,7 @@ summary: Turn live Wesnoth reads into a stable typed snapshot, keep observation 
 mermaid: true
 ---
 
-## Advanced means predictable 🧠
+## Reliability starts with explicit rules
 
 A beginner tool often grows as one long function:
 
@@ -34,7 +34,7 @@ flowchart LR
 
 The important idea is not extra code. It is that **data crosses a gate before it gains authority**. A raw address is only an observation. A validated `Snapshot` is evidence. A write is allowed only after fresh evidence still matches.
 
-## Give one moment a type
+## Store one snapshot in one typed value
 
 This lesson records the entire Wesnoth pointer path, not only the final gold number:
 
@@ -101,7 +101,7 @@ let process = Process::open_by_name("wesnoth.exe", replacement.is_some())?;
 
 This is capability-oriented design in plain English: if the user asked only to look, the handle should be unable to write.
 
-## Treat a write like a tiny transaction
+## Validate, write, verify, and recover
 
 The write path has three gates:
 

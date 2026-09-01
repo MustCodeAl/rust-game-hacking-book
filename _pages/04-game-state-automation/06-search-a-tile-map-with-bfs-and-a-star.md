@@ -11,7 +11,7 @@ summary: Turn a recovered grid into a tested route while separating map observat
 mermaid: true
 ---
 
-## A map becomes a graph
+## Represent walkable tiles as a graph
 
 A strategy game may store terrain as a flat row-major array. Pathfinding becomes easier to understand when you rename the pieces:
 

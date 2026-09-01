@@ -211,7 +211,7 @@ fn decodes_simple_64_bit_function() {
 
 Add tests for truncated instructions, invalid bitness, a relative branch, 32-bit bytes, and a start address near overflow.
 
-## The lesson
+## What a disassembler can and cannot prove
 
 Use a mature decoder for instruction truth. Spend your effort on the tool around it: safe process reads, section selection, navigation, symbols, and clear error messages.
 

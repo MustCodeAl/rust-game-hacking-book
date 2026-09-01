@@ -27,7 +27,7 @@ Big-endian means the most significant byte comes first. A length of 78 is hexade
 
 ## Keep five layers separate
 
-A useful protocol mental model is a stack of agreements:
+A protocol message has several nested layers, and each layer has its own rule:
 
 ```text
 TCP byte stream

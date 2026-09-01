@@ -105,7 +105,7 @@ At a simplified level, one thread repeatedly:
 
 `eip` is the **instruction pointer**. It is not a normal game variable. It tells the CPU where this thread is executing. A jump, call, return, exception, or debugger action can change it.
 
-## Registers are the CPU’s workbench
+## Registers hold the CPU's current working values
 
 Registers are tiny, very fast storage locations built into the CPU. On 32-bit x86, each general-purpose register below holds 32 bits:
 
@@ -366,7 +366,7 @@ For each instruction, ask:
 
 Answer those five questions one instruction at a time. A long function becomes a trail of small facts.
 
-## Rebuild two maps: data flow and control flow
+## Trace both data flow and control flow
 
 Reading only downward through the listing works for a tiny straight-line function.
 Larger functions need two connected maps.

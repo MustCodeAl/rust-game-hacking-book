@@ -181,7 +181,7 @@ normal frame: u32 big-endian compressed length + gzip(Simple WML)
 login order: negotiation → version → username → lobby
 ```
 
-## Make a protocol notebook
+## Record each protocol field and observation
 
 ```text
 Transport: TCP

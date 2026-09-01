@@ -11,7 +11,7 @@ summary: Read Lua's one-based sequences, record-style tables, closures, colon me
 mermaid: true
 ---
 
-## One container, several jobs
+## Lua tables represent arrays, records, and maps
 
 A Lua table maps keys to values. These are all tables:
 

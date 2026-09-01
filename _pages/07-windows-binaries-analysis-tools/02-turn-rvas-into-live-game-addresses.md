@@ -6,8 +6,8 @@ category: Windows Binaries & Analysis Tools
 layout: post
 permalink: /pages/7/02/
 chapter: "7.2"
-minutes: 18
-summary: Connect preferred addresses, RVAs, ToolHelp module bases, and ASLR with one checked address calculation.
+minutes: 28
+summary: Translate among PE file offsets, RVAs, preferred addresses, and live addresses with checked section and ASLR calculations.
 mermaid: true
 ---
 
@@ -25,6 +25,56 @@ sections such as code or data.
 Do not confuse an RVA with a **file offset**. A file offset counts bytes in the
 EXE on disk. An RVA counts from the mapped image base after Windows has arranged
 sections according to virtual addresses and alignment. They can differ.
+
+The complete vocabulary is worth making explicit:
+
+| Name | Coordinate system | Typical formula |
+|---|---|---|
+| File offset | Bytes from the start of the file on disk | `section.raw_ptr + offset_in_section` |
+| RVA | Bytes from the start of the mapped image | `section.virtual_address + offset_in_section` |
+| Preferred VA | Address requested by the PE headers | `preferred_image_base + RVA` |
+| Live VA | Address in this process now | `live_module_base + RVA` |
+
+These are coordinates in different spaces. Adding a live module base to a file
+offset is the binary-analysis version of adding meters to seconds: the numbers
+fit in an integer, but the operation has no useful meaning.
+
+## Map an RVA back to bytes on disk
+
+To translate an RVA to a file offset, first find the PE section whose virtual
+range contains it. For a section with virtual start `V`, raw file start `R`,
+virtual size `VS`, and raw size `RS`:
+
+```text
+offset_in_section = RVA - V
+file_offset       = R + offset_in_section
+```
+
+The mapping is valid only when the RVA lies in the section's mapped range and
+`offset_in_section < RS`. A section can have more virtual bytes than raw bytes;
+the loader fills that tail with zeros, so no corresponding file byte exists.
+Conversely, alignment padding on disk is not necessarily meaningful mapped
+memory. Header RVAs below `SizeOfHeaders` are a special case that commonly map
+directly to the same file offset.
+
+Example section:
+
+```text
+VirtualAddress   = 0x2000
+VirtualSize      = 0x0900
+PointerToRawData = 0x0600
+SizeOfRawData    = 0x0800
+```
+
+RVA `0x2340` is `0x340` bytes into the section, so its file offset is
+`0x0600 + 0x0340 = 0x0940`. RVA `0x2880` is mapped inside the virtual tail but
+is beyond the `0x800` raw bytes; it represents zero-filled memory rather than a
+byte stored in the file.
+
+A rigorous parser checks every subtraction and addition, validates section
+ranges against the actual file length, and rejects overlapping or impossible
+metadata. PE headers describe a file; they do not deserve blind trust merely
+because Windows-shaped field names were decoded.
 
 Resolving an RVA is useful only when the build identity and the live module
 range are part of the calculation:
@@ -70,6 +120,28 @@ run B: base B + same RVA = address B
 The RVA is stable only relative to that image layout. Recompiling or updating the
 game can move the instruction inside the module, so the build identity must travel
 with the RVA.
+
+Small wrapper types can stop coordinate-space mistakes before runtime:
+
+```rust
+#[derive(Clone, Copy, Debug)]
+struct Rva(u32);
+
+#[derive(Clone, Copy, Debug)]
+struct LiveAddress(usize);
+
+fn resolve_rva(base: LiveAddress, image_size: usize, rva: Rva) -> Option<LiveAddress> {
+    let offset = rva.0 as usize;
+    if offset >= image_size {
+        return None;
+    }
+    base.0.checked_add(offset).map(LiveAddress)
+}
+```
+
+Both values are integers internally, but the type names preserve their units.
+The function also states two proof obligations: the RVA belongs to this image,
+and addition cannot overflow the address type.
 
 ## Derive the Wesnoth example
 

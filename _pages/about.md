@@ -16,6 +16,7 @@ hide_lesson_header: true
     <div class="hero-actions">
       <a class="button button--primary" href="{{ site.baseurl }}/pages/1/01/">Start lesson one <span aria-hidden="true">→</span></a>
       <a class="button button--ghost" href="#course-map">See the course map</a>
+      <a class="button button--ghost" href="{{ site.baseurl }}/glossary/">Browse the glossary</a>
     </div>
   </div>
   <div class="academy-hero__terminal" aria-label="A tiny typed-code example">
@@ -38,7 +39,7 @@ The examples use version-pinned open-source games, local matches, and determinis
 
 <div class="section-heading" id="course-map">
   <span>Course map</span>
-  <h2>Twelve balanced chapters, one idea at a time</h2>
+  <h2>Thirteen balanced chapters, one idea at a time</h2>
   <p>You do not need to know the language yet. The early lessons teach each piece right before you use it.</p>
 </div>
 
@@ -55,6 +56,7 @@ The examples use version-pinned open-source games, local matches, and determinis
   <a class="course-card" href="{{ site.baseurl }}/pages/10/01/"><span>10</span><h3>Windows Processes & Observation</h3><p>Build identity, least-privilege handles, memory maps, threads, API layers, and crash dumps.</p></a>
   <a class="course-card" href="{{ site.baseurl }}/pages/11/01/"><span>11</span><h3>Windows Loading, Defense & DMA</h3><p>DLL loading, optional APIs, harmless toy defenses, the kernel boundary, and offline DMA evidence.</p></a>
   <a class="course-card course-card--rust" href="{{ site.baseurl }}/pages/12/01/"><span>12</span><h3>Lua Automation</h3><p>Tables, host APIs, snapshots, state machines, limits, and virtual-machine internals.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/13/01/"><span>13</span><h3>Advanced Game Hacking</h3><p>Game-state invariants, integrity gaps, anti-debug behavior, value transforms, robust hooks, update-resistant layouts, and bypass analysis.</p></a>
 </div>
 
 <div class="why-rust">

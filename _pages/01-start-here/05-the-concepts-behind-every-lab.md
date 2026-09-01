@@ -6,279 +6,227 @@ category: Start Here
 layout: post
 permalink: /pages/1/05/
 chapter: "1.5"
-minutes: 30
-summary: Connect algorithms, state, data structures, APIs, parsing, concurrency, and abstraction before the book starts combining them.
+minutes: 20
+summary: Learn the core computer-science words used throughout the book and how they connect in real tools.
 ---
 
-## Computer science is mostly organized problem solving
+Technical words are useful when they name a precise idea. They are not useful
+when they only make a simple idea sound harder. This lesson defines the words
+that later chapters use often.
 
-The vocabulary can make computers sound more mysterious than they are. Most programs repeatedly do four things:
+You do not need to memorize the page. Return to it when a term appears in code.
 
-```text
-receive some data
-→ decide what it means
-→ change or create state
-→ produce an observable result
-```
+## Data, values, and types
 
-A memory scanner receives copied bytes, interprets groups of four as numbers, keeps matching addresses, and prints candidates. A game receives input, updates player state, and draws a frame. The details differ; the shape is similar.
-
-## Data is representation; meaning comes from interpretation
-
-**Data** is information represented in a form a program can store: bits, numbers, text, images, structs, and collections.
-
-The same four bytes can represent an integer, floating-point number, color, pointer, or part of an instruction. A representation is only useful when both sides agree on its meaning.
-
-That agreement might come from:
-
-- a source-code type;
-- a file-format specification;
-- a network protocol;
-- a CPU instruction;
-- a reverse-engineered observation supported by repeated behavior.
-
-## State is what can be different later
-
-**State** is the information a system remembers between moments. Player health, the current map, a socket connection, and whether a patch is enabled are all state.
+**Data** is stored information. A **value** is one piece of data interpreted in
+a particular way. A **type** states what kind of value code expects and which
+operations make sense for it.
 
 ```rust
-enum PatchState {
-    Disabled,
-    Enabled { original_bytes: Vec<u8> },
-}
+let health: u32 = 80;
+let player_name: &str = "Ada";
+let is_alive: bool = true;
 ```
 
-The enum makes the valid states visible. When enabled, restoration bytes must exist. There is no “enabled but somehow forgot the original bytes” variant.
+Here, `80`, `"Ada"`, and `true` are values. Their types are `u32`, `&str`, and
+`bool`.
 
-A **state transition** is a valid move from one state to another:
+Types catch mistakes before the program runs. They also document meaning. A
+`PlayerId(u32)` and a `Health(u32)` can use the same bits while representing
+different jobs.
+
+## State is information that can change
+
+The **state** of a program is the information that describes it at one moment.
+If health changes from 80 to 55, the program moved from one state to another.
+
+Some values are inputs, some are temporary calculations, and some become stored
+state. Naming that difference helps you trace cause and effect:
 
 ```text
-Disabled → verify bytes → Enabled
-Enabled  → restore bytes → Disabled
+damage event → calculate new health → store health → update health bar
 ```
 
-A **state machine** is simply a list of allowed states and transitions. It is useful for bots, debuggers, network handshakes, and patch lifecycles because it stops impossible sequences from being treated as normal.
+The stored simulation health and the displayed health-bar width are related,
+but they are not necessarily the same value.
 
-## An algorithm is a repeatable method
+## An algorithm is a repeatable procedure
 
-An **algorithm** is a finite set of steps for solving a kind of problem. It is not necessarily advanced math.
+An **algorithm** is a clear sequence of steps for solving a kind of problem.
+For example, a basic value scanner:
 
-The first memory scan uses this algorithm:
+1. visits readable memory regions;
+2. reads a bounded chunk;
+3. compares each possible value with the search value;
+4. records matching addresses;
+5. repeats later using only the previous candidates.
 
-1. enumerate readable regions;
-2. copy one bounded chunk;
-3. compare every four-byte window with the wanted value;
-4. record matching addresses;
-5. stop if limits are exceeded.
+An algorithm is not tied to one programming language. Code is one exact way to
+express it.
 
-The code is one implementation of that method. You should be able to explain the algorithm before worrying about syntax.
+Most program logic combines three control-flow forms:
 
-## Plan input, processing, and output before syntax
-
-Before opening a debugger or writing code, describe the job in three columns:
-
-| Part | Memory-scanner example | Question to answer |
-|---|---|---|
-| **Input** | copied bytes from readable regions and the wanted `u32` | What facts enter the tool? |
-| **Processing** | decode four-byte windows and compare them | What rules transform those facts? |
-| **Output** | zero, one, or several candidate addresses | What observable result should leave? |
-
-This small plan catches fuzzy ideas early. “Scan the game” is not yet a useful
-algorithm. “Copy each readable region, compare each four-byte window with
-`100`, and report every matching address” gives you operations you can test.
-
-Also write the refusal result. If the target closes halfway through a scan, the
-output should be an error describing an incomplete scan—not a confident list
-made from half of memory. 🛑
-
-## Most tool logic uses three shapes
-
-Complicated tools are built by combining three ordinary control-flow shapes:
-
-- **sequence**: do steps in a deliberate order;
-- **selection**: choose a path when a condition is true or false;
-- **repetition**: repeat a step while there is more work.
-
-Here is their shape inside a memory scan:
+- **sequence** — do steps in order;
+- **selection** — choose a branch with `if` or `match`;
+- **repetition** — repeat with a loop or iterator.
 
 ```rust
-for region in &regions {
-    // 🔁 Repetition: inspect each region once.
-    if !region.readable {
-        // 🔀 Selection: an unreadable region takes the skip path.
-        continue;
-    }
-
-    // ➡️ Sequence: copy first, search second, record third.
-    let bytes = process.read_bytes(region.base, region.size)?;
-    for offset in find_all_u32(&bytes, wanted) {
-        matches.push(region.base + offset);
+for player in players {
+    if player.health > 0 {
+        println!("{} is alive", player.name);
     }
 }
 ```
 
-Read that code like instructions: “For every region, skip it if it cannot be
-read; otherwise copy its bytes, find the wanted value, and save each address.”
-If you cannot explain a block that way, give its pieces clearer names or split
-it into smaller functions.
-
-A **syntax error** means the source does not follow the language's grammar; the compiler
-usually points at it. A **logic error** means valid code performs the wrong
-steps—for example, scanning every region except the last one. Logic errors need
-tests, traces, and carefully chosen game states because the compiler cannot
-know what result you intended.
+This code repeats over players and selects only living ones.
 
 ## A data structure organizes values
 
-A **data structure** chooses how related values are stored and accessed.
+A **data structure** is a chosen arrangement of data. The arrangement affects
+which operations are easy or expensive.
 
-| Structure | Useful mental picture | Course example |
-|---|---|---|
-| array | fixed row of same-sized boxes | four matrix rows |
-| vector | row that can grow | scan candidates |
-| string | encoded text with a length | process or player name |
-| struct | labeled fields forming one record | position with `x`, `y`, `z` |
-| enum | exactly one choice from known variants | debugger phase |
-| map | keys connected to values | parsed save fields |
-| queue | first item in is first item out | messages for a worker |
-| stack | last item in is first item out | function calls and local values |
+| Structure | Good fit |
+|---|---|
+| `Vec<T>` | ordered items scanned by index |
+| `HashMap<K, V>` | values looked up by a key |
+| queue | work handled in arrival order |
+| grid | tiles addressed by row and column |
+| graph | waypoints or objects connected by edges |
 
-Choosing a structure is choosing which operations should be simple and which invalid states should be hard to create.
+Ask what the program does most often: search, access, insert, remove, or walk
+relationships. Choose a structure that supports those operations clearly.
 
-## An abstraction hides machinery behind a useful promise
+## A function gives a name to a behavior
 
-An **abstraction** gives a complicated action a smaller interface.
-
-```rust
-let gold = process.read_u32(gold_address)?;
-```
-
-That method hides handle ownership, a Windows API call, a raw output buffer, byte counts, and error conversion. Its promise is smaller: “read exactly one `u32` from this process or return an error.”
-
-A good abstraction does not hide important uncertainty. `read_u32` still returns `Result` because another process’s memory can become unreadable.
-
-## APIs are public promises; ABIs are machine promises
-
-An **API**, or application programming interface, describes how source code asks another component to do something. The `windows` crate exposes typed bindings for Windows functions.
-
-An API does not have to live on the internet. All of these are APIs:
-
-- a method in a crate;
-- a local Windows operating-system function;
-- a game's public scripting interface;
-- a web service that accepts a request on another computer.
-
-A web API sends data to a server and receives a response. `ReadProcessMemory`
-runs locally through Windows. Both provide named operations, but their
-transport, latency, permissions, and failure modes are different.
-
-Code is grouped at several levels. A **module** organizes names inside code.
-A **crate** is one compilation unit. A **package** is the Cargo project
-described by `Cargo.toml` and may contain one or more crates. People often use
-**library** as a general word for reusable code. The [Rust Book's packages and
-crates chapter](https://doc.rust-lang.org/stable/book/ch07-01-packages-and-crates.html)
-shows the exact Rust definitions.
-
-When you meet an unfamiliar operation, do not rely on its name alone. Read:
-
-1. its input and output types;
-2. what success and failure mean;
-3. who owns returned data or handles;
-4. whether it changes state or depends on a thread;
-5. which version the documentation describes;
-6. one smallest example.
-
-Use editor “go to definition,” official documentation, source code, and a tiny
-experiment to move from a guess to evidence. If a wrapper uses operations you
-already understand, reading underneath it can clarify the contract. If a
-library hides the facts you need or does not fit the problem, compare another
-library instead of forcing it.
-
-An **ABI**, or application binary interface, describes the machine-level agreement:
-
-- argument sizes and locations;
-- calling convention;
-- return-value location;
-- struct layout and alignment;
-- symbol names and linking rules.
-
-Two functions can look conceptually similar but be ABI-incompatible. Hooks care about the ABI because the CPU does not see source-level types or helpful compiler errors at runtime.
-
-## Encoding, serialization, and compression solve different problems
-
-These words are often mixed together:
-
-- **encoding** maps information to symbols or bytes, such as UTF-8 text;
-- **serialization** turns structured values into a storable or sendable format;
-- **compression** represents the same information using fewer bytes;
-- **encryption** makes information unreadable without a key;
-- **hashing** produces a fixed-size fingerprint and is not reversible.
-
-A Wesnoth message can contain WML text encoded as UTF-8, serialized into a framed message, then compressed with gzip. Each layer has a different job and a different failure mode.
-
-## A parser crosses from bytes into meaning
-
-A **parser** reads an untrusted representation and either produces a valid structured value or a clear error.
+A **function** accepts inputs, performs work, and may return an output.
 
 ```rust
-fn parse_length(bytes: [u8; 4], maximum: usize) -> anyhow::Result<usize> {
-    let length = u32::from_be_bytes(bytes) as usize;
-    anyhow::ensure!(length <= maximum, "frame is too large");
-    Ok(length)
+fn is_valid_health(health: u32, max_health: u32) -> bool {
+    health <= max_health
 }
 ```
 
-“Parse, don’t guess” means checking sizes, ranges, encodings, terminators, and required fields before later code relies on them.
+The name describes the question. The parameters describe the required inputs.
+The return type describes the answer.
 
-## A pointer is a location, not the value at that location
+Small functions make a tool easier to test. A parser, for example, can be
+tested with saved bytes without launching a game.
 
-A **pointer** stores an address. Dereferencing follows that address to read or write memory.
+## An abstraction hides details behind a smaller interface
 
-```text
-player pointer = 0x12340000
-memory at 0x12340000 = player record
-memory at 0x12340030 = health field
+An **abstraction** lets one part of a program use a service without knowing all
+of its internal steps.
+
+```rust
+trait MemoryReader {
+    fn read_u32(&self, address: usize) -> anyhow::Result<u32>;
+}
 ```
 
-Pointers can be null, stale, misaligned, outside the expected region, or aimed at the wrong type. Raw-pointer dereferencing is therefore `unsafe`, and course code verifies the process, version, range, and current bytes.
+Code that searches for health can call `read_u32`. It does not need to repeat
+the Windows handle, buffer, and error logic for every read.
 
-## Concurrency means more than one timeline
+The abstraction does not make bad addresses safe by magic. It gives validation
+and error handling one clear place to live.
 
-**Concurrency** means multiple tasks can make progress during overlapping time. A game’s render thread, input thread, audio thread, and network thread share process memory but execute independently.
+## APIs and ABIs describe boundaries
 
-A **race condition** happens when the result depends on timing that the program did not control. For example:
+An **API** describes how code asks another component to do something: function
+names, parameters, results, and behavior.
 
-```text
-thread A checks that a patch is disabled
-thread B enables it
-thread A also enables it using stale information
+An **ABI** describes lower-level binary rules such as how arguments use
+registers or the stack, how values are returned, and who preserves which
+registers.
+
+You usually meet the API first:
+
+```rust
+let value = reader.read_u32(address)?;
 ```
 
-Ownership, channels, mutexes, atomics, and single-writer designs make shared state predictable by defining who may read or change it and when.
+You meet the ABI when calling Windows functions, reconstructing compiled
+functions, or writing hooks. Chapter 2 explains calling conventions with
+assembly examples.
 
-## Invariants are facts that must stay true
+## Encodings and parsers turn bytes into meaning
 
-An **invariant** is a condition the program relies on throughout an operation.
+An **encoding** assigns meaning to byte patterns. UTF-8 is a text encoding.
+Little endian is a byte-order rule for multi-byte numbers.
 
-Examples from this book:
+**Serialization** arranges values into bytes for a file or message. A **parser**
+checks those bytes and constructs typed values.
 
-- a detour replaces whole instructions;
-- the return address is the first untouched byte;
-- only one thread owns a TCP writer;
-- a save editor finds exactly one target field;
-- a patch restores the bytes it captured;
-- a pointer calculation stays inside the supported module.
+```text
+raw bytes → validate length and tags → typed message → program logic
+```
 
-Every `unsafe` block should name the invariant that makes the raw operation valid.
+Never let an untrusted length decide an allocation or index without a limit.
+Parsing is the boundary where uncertain bytes become trusted program state, so
+errors and bounds are part of the design.
 
-## Use this reading pattern
+Compression is different from encoding or encryption. Compression tries to use
+fewer bytes. Encryption tries to hide content from someone without a key.
 
-When a later chapter introduces a term, ask:
+## Concurrency means state can change between steps
 
-1. What real problem does this concept solve?
-2. What information does it hold or transform?
-3. What promise does it make?
-4. What can go wrong?
-5. How does the code enforce the promise?
+**Concurrency** means more than one task can make progress during the same span
+of time. Two threads may share memory, or a game may update while an external
+tool reads it.
 
-If a paragraph only tells you *what to type*, pause and answer those five questions before continuing. The goal is not to memorize one game address. It is to learn a method you can explain and rebuild.
+This creates questions that single-step code does not answer:
+
+- Can another thread change the value between our check and our use?
+- Does one thread free an object while another still has its address?
+- What happens when a queue fills faster than it can be drained?
+
+Later lessons use snapshots, locks, atomics, bounded channels, and explicit
+lifecycles to answer those questions.
+
+## An invariant is a rule valid state must keep true
+
+An **invariant** is a condition that must remain true whenever the system is in
+a valid state.
+
+```rust
+fn valid_player(health: u32, max_health: u32) -> bool {
+    health <= max_health
+}
+```
+
+Examples include:
+
+- `health <= max_health`;
+- a message length fits inside the received frame;
+- an installed patch still matches the expected game build;
+- a handle is closed exactly once;
+- a collection length does not exceed its capacity.
+
+Invariants help reverse engineering because they connect fields and behavior.
+One matching number is weak evidence; several relationships that stay true
+across controlled changes are much stronger.
+
+## Read unfamiliar code in a fixed order
+
+When a code block feels dense, do not stare at the whole block. Ask:
+
+1. What enters this function?
+2. What type does each important value have?
+3. Which checks can stop the work?
+4. Which state is read or changed?
+5. What is returned, logged, or displayed?
+
+If one line still cannot be explained in ordinary words, split it into smaller
+expressions or read the called function. Difficulty may mean the code is doing
+too much at once—not that you are supposed to guess.
+
+## Checkpoint
+
+You should now be able to distinguish:
+
+- data, values, types, and state;
+- algorithms and data structures;
+- functions and abstractions;
+- APIs and ABIs;
+- encoding, serialization, parsing, compression, and encryption;
+- sequential behavior and concurrent behavior;
+- an ordinary condition and an invariant.

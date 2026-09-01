@@ -1026,8 +1026,8 @@
     root.replaceChildren();
     root.append(
       makeLabHeader(
-        "Byte lens",
-        "Four bytes can tell several stories",
+        "Byte interpreter",
+        "The same four bytes can represent different values",
         "Change the bytes, then compare what happens when the computer reads the exact same bits as different data types."
       )
     );

@@ -6,8 +6,9 @@ category: 3D Games & Rendering
 layout: post
 permalink: /pages/5/05/
 chapter: "5.5"
-minutes: 15
-summary: Trace the game’s own target-under-crosshair result and turn it into a checked decision, not a blind firing loop.
+minutes: 26
+summary: Understand camera rays, collision queries, occlusion, and semantic target results before tracing the game’s crosshair-selection path.
+mermaid: true
 ---
 
 ## Use an existing UI clue
@@ -19,6 +20,93 @@ Use **AssaultCube 1.2.0.2**. Enable nametags, start a single-player deathmatch w
 Searching for the visible name and breaking on reads can lead from text back to the target-selection logic.
 
 ![Searching for a player name]({{ site.baseurl }}/assets/images/5/5/cube3.png)
+
+## A crosshair is a ray through the camera
+
+For a centered crosshair with no weapon offset, the geometric query begins at the
+camera position and travels along the camera's forward direction. A **ray** is:
+
+```text
+point(t) = origin + t × direction, where t ≥ 0
+```
+
+If `direction` has length one, `t` is distance in world units. If it is not
+normalized, `t` is merely a scale parameter. Keep that contract consistent when
+comparing hit distances.
+
+```rust
+#[derive(Clone, Copy, Debug)]
+struct Ray {
+    origin: Vec3,
+    direction: Vec3, // invariant: finite and normalized
+}
+
+impl Ray {
+    fn point_at(self, distance: f32) -> Vec3 {
+        Vec3 {
+            x: self.origin.x + self.direction.x * distance,
+            y: self.origin.y + self.direction.y * distance,
+            z: self.origin.z + self.direction.z * distance,
+        }
+    }
+}
+```
+
+Crosshairs away from screen center require **unprojection**: transform a near and
+far screen point back through the inverse view-projection matrix, divide each by
+its homogeneous `w`, then normalize the direction between them. A rendered weapon
+muzzle may not be the ray origin; many games aim from the camera but spawn a
+projectile from the weapon, then reconcile the two paths.
+
+## Ray casting is a nearest-valid-hit problem
+
+A collision system rarely tests every triangle directly. It commonly uses:
+
+```mermaid
+flowchart LR
+    R["Camera ray"] --> B["Broad phase: spatial tree / bounding volumes"]
+    B --> C["Small candidate set"]
+    C --> N["Narrow phase: shapes / triangles"]
+    N --> H["Nearest accepted hit"]
+    H --> S["Semantic filters: team, alive, material"]
+```
+
+The broad phase quickly rejects distant regions. The narrow phase computes more
+exact intersections. The query then chooses the smallest nonnegative hit parameter
+and applies rules such as collision masks and ignored entities.
+
+A sphere intersection illustrates the math. For sphere center `c`, radius `r`,
+ray origin `o`, and normalized direction `d`, substitute `o + td` into the sphere
+equation:
+
+```text
+m = o - c
+b = dot(m, d)
+c_term = dot(m, m) - r²
+discriminant = b² - c_term
+```
+
+A negative discriminant means no line intersection. Otherwise the nearer ray hit
+is `t = -b - sqrt(discriminant)`, provided `t ≥ 0`. If the origin is inside the
+sphere, the nearer root may be negative and the farther root must be considered.
+Production engines use several shape types and acceleration structures, but this
+same “generate candidates, reject invalid roots, choose nearest” reasoning applies.
+
+## Rendering visibility and collision visibility differ
+
+The renderer may omit a distant object, draw a transparent surface, or use a
+different level-of-detail mesh. A gameplay ray can still collide with its collision
+shape. The reverse can also occur: foliage may be visible but configured not to
+block shots.
+
+| Question | Likely data source |
+|---|---|
+| what pixel is visible? | depth/render buffers |
+| what geometry blocks a shot? | physics/collision query |
+| which entity gets a nametag? | UI selection result |
+| which entity receives damage? | weapon/gameplay logic |
+
+These results may agree most of the time without being the same variable.
 
 ## Collect positive and negative cases
 
@@ -32,6 +120,10 @@ Record what the target result looks like when aiming at:
 - a dead player.
 
 One non-zero value does not automatically mean “valid opponent.”
+
+Also vary distance, partial cover, transparent surfaces, camera mode, and weapon.
+The purpose is to learn the query's contract: maximum range, ignored object types,
+collision mask, and whether it returns the nearest hit or the first accepted entity.
 
 ## Model the observation
 
@@ -81,6 +173,11 @@ fn decide_trigger(observation: &CrosshairObservation) -> TriggerIntent {
 ```
 
 This function does not press a button. It turns an observation into a testable intent. Keeping action separate makes accidental behavior less likely.
+
+The `visible` field needs an exact definition. It might mean “the game's existing
+crosshair query selected this entity,” “a collision ray reached its hitbox,” or
+“its projected point is inside the viewport.” Name the predicate after the real
+evidence; those definitions are not interchangeable.
 
 ## Reproduce the actual AssaultCube hook
 
@@ -228,6 +325,27 @@ The name-rendering path may use a cached or display-only target. Confirm it upda
 ![Code associated with the name display]({{ site.baseurl }}/assets/images/5/5/cube6.png)
 
 Trace the value’s producer, not only its final display. Reusing an internal result is more reliable than recreating a ray test from incomplete data.
+
+When tracing the producer, identify:
+
+- where the ray origin and direction come from;
+- the maximum query distance;
+- collision layers or masks;
+- ignored entities, especially the local player;
+- whether the result is a pointer, index, handle, or cached UI record;
+- when during the frame the result becomes valid;
+- whether a later gameplay check can reject the UI selection.
+
+## Failure patterns reveal the wrong assumption
+
+| Symptom | Check first |
+|---|---|
+| target appears selected through thin walls | collision mask or stale cached result |
+| selection is offset while moving | camera snapshot timing |
+| center works but edge crosshair does not | missing screen unprojection |
+| nearest target is skipped | ignored layers, dead state, or hitbox mismatch |
+| result points to a reused entity | handle generation/lifetime |
+| flicker at silhouette edges | ray precision, animation, or frame-to-frame pose changes |
 
 ## Scope
 

@@ -71,7 +71,7 @@ The capture layer understands physical ranges and page tables. The layout layer 
 
 This separation keeps an object-layout mistake from corrupting translation code and makes each layer independently testable.
 
-## Hardware defenses are part of the lesson
+## Account for IOMMU and platform protections
 
 Modern systems use an IOMMU and operating-system policy to restrict DMA-capable devices. On supported Windows systems, Kernel DMA Protection can isolate peripherals and block unsafe access, especially around externally accessible buses.
 

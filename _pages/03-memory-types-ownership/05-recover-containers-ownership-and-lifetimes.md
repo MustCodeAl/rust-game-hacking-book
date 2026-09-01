@@ -141,7 +141,7 @@ Constructors show default values and vptr writes. Destructors show ownership:
 
 Set a breakpoint on an owned toy object’s destructor and delete it through the normal game action. Record the call chain and field accesses. Repeat the experiment; one run may include unrelated cleanup.
 
-## Component pools change the picture
+## Component pools store fields in separate collections
 
 In an entity-component system, an entity handle may resolve into several pools:
 

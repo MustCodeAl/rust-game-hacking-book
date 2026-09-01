@@ -6,8 +6,8 @@ category: Lua Automation
 layout: post
 permalink: /pages/12/01/
 chapter: "12.1"
-minutes: 24
-summary: Learn what a scripting language is, why games embed Lua, and where a script sits between a game engine and a mod.
+minutes: 32
+summary: Follow Lua from source text through bytecode and the VM, then reason about values, garbage collection, host calls, and capability boundaries.
 mermaid: true
 ---
 
@@ -30,6 +30,40 @@ flowchart TD
 The engine owns the runtime and decides which values and functions cross the API
 boundary. A script cannot automatically do everything the engine can do; it sees
 only the capabilities that the host deliberately exposes.
+
+## What “run this script” actually means
+
+Lua source is not executed as English-like text one line at a time. A typical
+Lua 5.4 runtime performs a small pipeline:
+
+```mermaid
+flowchart LR
+    S["Source text"] --> L["Lexer: characters to tokens"]
+    L --> P["Parser: tokens to syntax"]
+    P --> B["Compiler: syntax to bytecode"]
+    B --> V["Virtual machine executes instructions"]
+    V --> H["Host functions and game state"]
+```
+
+The **lexer** recognizes tokens such as names, numbers, `function`, and `end`.
+The **parser** checks how those tokens form expressions and statements. The
+compiler produces instructions for Lua's virtual machine, and the VM updates a
+Lua stack, tables, call frames, and program counter. Some hosts cache bytecode;
+others compile source each time it loads. LuaJIT may additionally translate hot
+paths into native machine code, so identify the actual runtime before assuming
+its internals.
+
+This layered model gives a useful debugging order:
+
+1. a syntax error means parsing never produced a runnable function;
+2. a runtime type error means execution reached an operation with unsuitable
+   values;
+3. a host-API error means the script crossed the engine boundary but violated
+   that function's contract;
+4. a gameplay error can occur even when all three earlier layers succeeded.
+
+“The script failed” is therefore only a starting observation. Record the layer,
+instruction or source location, values, and host call involved.
 
 ## Lua is dynamically typed
 
@@ -63,6 +97,47 @@ local decide = function() end   -- function
 ```
 
 Lua also has threads/coroutines and userdata supplied by a host. A table is the main container: it can behave like a list, dictionary, record, namespace, or object.
+
+Every Lua value carries a runtime type tag. A table variable normally refers to
+a garbage-collected object rather than containing the complete table inline.
+Assignments copy the reference, so two names can point to the same table:
+
+```lua
+local first = { health = 100 }
+local second = first
+second.health = 75
+assert(first.health == 75) -- both names reach the same table
+```
+
+That is aliasing. It is convenient, but it means ownership is a host-and-runtime
+policy rather than a simple “one variable owns one table” rule. The garbage
+collector reclaims an object only after it can no longer be reached from Lua
+roots such as globals, active call frames, registry entries, or host-held
+references.
+
+**Userdata** is the bridge to native objects. Full userdata is memory managed by
+Lua with a host-defined metatable; light userdata is essentially an unowned raw
+pointer value. A sound API avoids exposing a pointer whose native object may die
+while Lua still holds it. Stable handles with generation checks, copied
+snapshots, or host-managed reference objects make the lifetime rule explicit.
+
+## Calls cross a real stack boundary
+
+The Lua C API uses an indexed value stack. A native function reads arguments
+from stack slots, validates them, pushes return values, and reports how many it
+returned. Libraries such as `mlua` wrap much of that protocol, but the contract
+still exists underneath:
+
+```text
+before call: [function][argument 1][argument 2]
+native code: validate arguments, perform bounded work
+after call:  [return value 1]
+```
+
+Stack balance, conversion errors, panics/exceptions, and re-entrant calls all
+matter at this boundary. Treat each host function like a small parser: specify
+accepted types and ranges, reject invalid inputs without partial side effects,
+and return errors in the form the runtime expects.
 
 ## Local versus global names
 

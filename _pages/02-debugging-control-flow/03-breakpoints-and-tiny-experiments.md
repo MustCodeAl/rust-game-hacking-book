@@ -52,7 +52,7 @@ When the CPU executes `int3`, Windows reports a breakpoint exception. The debugg
 
 That bookkeeping is why you should remove breakpoints through the debugger instead of editing the byte by hand.
 
-## The software-breakpoint dance
+## How a software breakpoint pauses and resumes
 
 The original instruction still has to execute. A debugger normally handles the
 `0xCC` pause in two events:

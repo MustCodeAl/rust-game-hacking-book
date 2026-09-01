@@ -6,11 +6,12 @@ category: 3D Games & Rendering
 layout: post
 permalink: /pages/5/09/
 chapter: "5.9"
-minutes: 31
-summary: Build and test a world-to-screen pipeline, then draw names or markers in a separate offline observer.
+minutes: 44
+summary: Derive and test the complete world-view-clip-NDC-viewport pipeline, including projection conventions, clipping, depth, and stable overlay placement.
+mermaid: true
 ---
 
-## The one essential transform
+## World-to-screen uses the view-projection transform
 
 An ESP-style observer needs to answer:
 
@@ -19,6 +20,11 @@ An ESP-style observer needs to answer:
 The reliable answer uses the game’s view-projection matrix. Hand-tuned angle formulas can teach geometry, but a matrix handles camera rotation, field of view, aspect ratio, and perspective together.
 
 ![A simple viewport diagram]({{ site.baseurl }}/assets/images/5/9/diagram1.png)
+
+The matrix is not magic screen-coordinate data. It is a compact composition of
+specific coordinate changes. If its convention, snapshot time, or viewport does
+not match the rendered frame, the resulting pixels can be precise arithmetic and
+still describe the wrong image.
 
 ## Name every coordinate space
 
@@ -42,6 +48,15 @@ screen pixels
   where the overlay may draw
 ```
 
+```mermaid
+flowchart LR
+    L["Local vertex<br/>(x,y,z,1)"] -->|model| W["World"]
+    W -->|view| V["Camera"]
+    V -->|projection| C["Clip<br/>(x,y,z,w)"]
+    C -->|clip, then divide by w| N["NDC"]
+    N -->|viewport| P["Pixels"]
+```
+
 Naming the stages makes bugs easier to locate. A marker that rotates the wrong
 way usually points to the view transform. A marker that stretches after a
 resolution change points to the viewport or aspect ratio. A point behind the
@@ -53,6 +68,82 @@ Reject unusable `w` values before dividing, then reject points outside the
 target API's depth interval. OpenGL commonly uses `-1..=1` after projection;
 Direct3D commonly uses `0..=1`. The matrix and convention must come from the
 same game pipeline.
+
+## The view matrix is the inverse camera pose
+
+A camera pose says where the camera exists in world space. Rendering needs the
+opposite question: where does the world appear relative to the camera? Therefore
+the view matrix is the inverse of the camera's world transform.
+
+For an orthonormal camera basis, inverse rotation is its transpose. The translation
+is not simply `-camera_position`; it is the negative position expressed along the
+camera basis. In dot-product form:
+
+```text
+d = world_point - camera_position
+view_x = dot(d, camera_right)
+view_y = dot(d, camera_up)
+view_z = dot(d, camera_forward_or_back)
+```
+
+If positions track correctly until the camera rotates, the translation may be
+right while the basis order, handedness, or inverse operation is wrong.
+
+## One concrete perspective matrix
+
+Conventions must be attached to formulas. Under these assumptions:
+
+- column vectors;
+- right-handed camera space looking down `-Z`;
+- vertical field of view `fov_y`;
+- aspect ratio `width / height`;
+- OpenGL NDC depth `-1..1`;
+- positive near and far distances with `0 < near < far`;
+
+define `f = 1 / tan(fov_y / 2)`. One projection matrix is:
+
+```text
+[ f/aspect   0             0                    0          ]
+[    0       f             0                    0          ]
+[    0       0     (far+near)/(near-far)  2far·near/(near-far) ]
+[    0       0            -1                    0          ]
+```
+
+Multiplying a view-space point gives `clip_w = -view_z`, so points in front have
+positive `w`. This exact matrix is not portable to a left-handed or Direct3D depth
+convention. Its purpose is to show where assumptions live.
+
+`fov_y` must be in radians for ordinary trigonometric functions. The half-angle
+appears because the camera center splits the vertical frustum symmetrically.
+
+## Clipping happens before perspective division
+
+In homogeneous clip space, the standard OpenGL visible volume satisfies:
+
+```text
+-w ≤ x ≤ w
+-w ≤ y ≤ w
+-w ≤ z ≤ w
+```
+
+For a Direct3D-style depth range, z is commonly constrained by `0 ≤ z ≤ w` while x
+and y use the same bounds. A triangle crossing a plane is clipped into a smaller
+polygon; it is not discarded merely because one vertex is outside.
+
+Point labels are simpler: if their single anchor lies outside, reject or clamp the
+label according to the UI rule. Do not use a point-label rejection rule to reason
+about whether an entire triangle should render.
+
+The playground below uses one declared convention so every sign and axis has a
+meaning. It deliberately treats forward as positive `+Z`, unlike the `-Z`
+projection example above; this makes the depth control read naturally and shows
+why formulas cannot be separated from their coordinate convention. Move the
+point sideways, vertically, and through depth; then change
+the vertical field of view. Watch how camera-space coordinates become NDC and
+finally pixels. Moving a point farther away reduces its NDC displacement because
+the perspective divide divides by a value proportional to depth.
+
+{% include perspective-playground.html %}
 
 ## Represent the matrix
 
@@ -86,6 +177,17 @@ impl DepthConvention {
 ```
 
 First determine whether the target stores matrices row-major or column-major. Test with a known point while the camera is stationary.
+
+There are three independent questions:
+
+1. are consecutive values a row or a column (**storage layout**)?
+2. does the math use row or column vectors (**multiplication convention**)?
+3. is the candidate already `view × projection`, `projection × view`, or one
+   component only (**composition**)?
+
+Transposing can compensate for one mismatch and conceal another. Validate identity,
+translation, and a known 90-degree rotation rather than repeatedly transposing until
+one screenshot looks plausible.
 
 ## Transform a point
 
@@ -139,6 +241,34 @@ fn world_to_screen(
 }
 ```
 
+The positive-`w` rule belongs to the projection convention described above. Some
+pipelines use a different sign. Determine the front-facing half-space with a point
+known to be directly ahead. The small epsilon avoids enormous coordinates near the
+camera plane, but it is a policy threshold in clip-space units, not a universal
+constant.
+
+The midpoint calls implement:
+
+```text
+screen_x = viewport_x + (ndc_x + 1) × viewport_width / 2
+screen_y = viewport_y + (1 - ndc_y) × viewport_height / 2
+```
+
+The y flip assumes an upper-left pixel origin. OpenGL's traditional viewport origin
+is lower-left, and UI/window systems commonly use upper-left. Confirm which layer
+the overlay draws into.
+
+## Depth after projection is not world distance
+
+`ndc_z` is produced by the projection and perspective divide. For a perspective
+camera it is nonlinear with view-space distance. Two points separated by one metre
+near the camera can have a much larger depth-buffer difference than two points one
+metre apart near the far plane.
+
+Use Euclidean or view-space distance for range labels. Use projected depth to test
+the clip range or compare against a compatible depth buffer. Do not display
+`ndc_z` as metres.
+
 If all markers move incorrectly, the likely problem is matrix layout or coordinate conventions—not a random “scale constant.”
 
 ## Find the matrix by behavior
@@ -152,6 +282,15 @@ Search for a group of 16 floats and compare:
 - one known world point projected through a candidate.
 
 A pattern scanner may later locate the code or global pointer that produces the matrix.
+
+Candidate-matrix invariants help reject false positives:
+
+- all 16 values are finite;
+- the camera-dependent portion changes smoothly with camera movement;
+- the projection scale changes predictably with field of view/aspect ratio;
+- a point directly ahead projects near the center;
+- farther points with the same direction approach the same screen coordinate;
+- multiplying by an identity test matrix leaves a test point unchanged.
 
 ## Read a coherent snapshot
 
@@ -169,6 +308,11 @@ struct FrameSnapshot {
 ```
 
 Validate every float and cap player count.
+
+“Roughly the same frame” is measurable. Attach a sequence number before and after
+the read when the target exposes one, and retry if it changed. Without a sequence,
+read the matrix twice around the entity batch and reject the sample if it changed
+materially. This does not create atomicity, but it detects many torn snapshots.
 
 ## Draw only visible, valid points
 
@@ -217,6 +361,11 @@ observer reads owned snapshots
 ```
 
 The overlay should ignore mouse input, match the target’s client area, and stop when the target closes.
+
+Match the **client area**, not the outer window rectangle. Borders and title bars
+shift the origin. DPI scaling can make logical UI units differ from physical pixels,
+and borderless/fullscreen modes may change which coordinate system the compositor
+uses. Recalculate when the window moves, resizes, changes monitor, or changes DPI.
 
 ![A basic offline overlay experiment]({{ site.baseurl }}/assets/images/5/9/cube16.png)
 
@@ -313,6 +462,33 @@ Test in this order:
 7. add several entities.
 
 If a point behind the camera appears mirrored, the `w` rejection is missing or wrong.
+
+## Projecting a 3D box is not just two points
+
+To draw a 2D rectangle around a 3D bounds, transform all eight corners of an
+axis-aligned box and take the min/max of the surviving screen coordinates. Two
+opposite corners are insufficient after rotation. If the box crosses the near
+plane, some corners have unusable `w`; a rigorous result clips its edges against
+the near plane before taking bounds. Simply dropping those corners can make the box
+collapse or jump.
+
+An oriented bounding box requires its local corners to pass through the object's
+world transform first. A skeletal model may need pose-derived bounds because its
+rest-pose box no longer tightly encloses the animation.
+
+## Diagnose world-to-screen failures
+
+| Symptom | First check |
+|---|---|
+| every point mirrored horizontally | x basis/handedness |
+| markers rotate opposite the camera | view transform/inverse |
+| correct in center, wrong near edges | projection FOV or aspect ratio |
+| correct at one resolution only | viewport dimensions or stale aspect ratio |
+| fixed offset from every object | client-area origin/DPI/window border |
+| jitter while camera or entities move | incoherent snapshots |
+| behind-camera labels flip onto screen | `w` sign/rejection |
+| labels vanish too early in depth | wrong OpenGL/Direct3D depth convention |
+| box jumps near the camera | no near-plane edge clipping |
 
 ## Scope
 

@@ -13,7 +13,9 @@ mermaid: true
 
 ## A program file is not a running process
 
-`wesnoth.exe` on disk is a **program file**. When Windows starts it, Windows creates a **process**: a protected container with an address space, handles, threads, security information, and loaded modules.
+`wesnoth.exe` on disk is a **program file**. When Windows starts it, Windows
+creates a **process**: an isolated running instance with its own address space,
+handles, threads, security information, and loaded modules.
 
 That distinction matters. The PE chapter reads the file on disk. A debugger or memory tool studies the running process after Windows has mapped that file and its DLLs into virtual memory.
 
@@ -50,7 +52,7 @@ can initialize security state, global constructors, thread-local storage, and li
 support before it calls the developer's main function. Reverse the startup chain as
 a sequence of responsibilities rather than labeling the first code address “main.”
 
-## The pieces Windows builds
+## What Windows creates for a running process
 
 A normal game process contains several kinds of state:
 
@@ -66,7 +68,7 @@ The operating system owns the rules. The process can read much of its own user-m
 
 ## A process is machine state plus managed resources
 
-The useful mental model is an inventory of everything required to stop this running
+The useful description is an inventory of everything required to stop this running
 program and later continue it:
 
 ```text

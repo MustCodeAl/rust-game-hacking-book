@@ -6,12 +6,12 @@ category: 3D Games & Rendering
 layout: post
 permalink: /pages/5/01/
 chapter: "5.1"
-minutes: 17
-summary: Learn positions, directions, angles, cameras, and projection with small named types instead of a wall of formulas.
+minutes: 27
+summary: Build a precise explanation of 3D coordinates, vectors, bases, transformations, cameras, and perspective before using renderer-specific details.
 mermaid: true
 ---
 
-## Add one more direction
+## Extend 2D coordinates to three dimensions
 
 A 2D game often describes a position with `x` and `y`.
 
@@ -56,6 +56,18 @@ A practical frame description answers four questions:
 These are not cosmetic choices. If an overlay reads an engine that uses `z` as up
 but performs math as though `y` were up, the result may look almost correct near
 the origin and drift badly elsewhere.
+
+### Handedness tells you which way positive rotation goes
+
+Point your right thumb along the positive axis. In a **right-handed** coordinate
+system, the curl of your fingers shows positive rotation around that axis. A
+left-handed system reverses that convention. Handedness also fixes the direction
+of a cross product: in a right-handed frame, `right × up = forward` for one common
+choice of basis directions.
+
+Do not infer handedness from axis labels alone. An engine may call an axis
+`forward` while using a different sign than a math library. Confirm it with three
+known movements or by reading the matrix construction code.
 
 ## Position versus direction
 
@@ -122,6 +134,62 @@ A field-of-view test can compare the camera's forward direction with the directi
 to a target. This avoids turning both vectors into angles merely to ask whether they
 point roughly the same way.
 
+For vectors `a = (aₓ, aᵧ, a_z)` and `b = (bₓ, bᵧ, b_z)`:
+
+```text
+a · b = aₓbₓ + aᵧbᵧ + a_zb_z
+
+if a and b have length 1:
+a · b = cos(θ)
+```
+
+That second line is why a dot product can become an angle with
+`acos(clamp(dot, -1, 1))`. Clamp first because floating-point rounding can produce
+`1.0000001`, which is outside the mathematical input range of `acos`.
+
+The **cross product** produces a direction perpendicular to two input directions:
+
+```text
+a × b = (
+    aᵧb_z - a_zbᵧ,
+    a_zbₓ - aₓb_z,
+    aₓbᵧ - aᵧbₓ
+)
+```
+
+Its length is the area of the parallelogram between the vectors. Camera code uses
+it to construct perpendicular `right`, `up`, and `forward` directions. The order
+matters: `a × b = -(b × a)`.
+
+## A basis defines the local axes
+
+A **basis** is a set of independent directions used to measure coordinates. A
+camera basis usually contains `right`, `up`, and `forward`. If those directions
+all have length one and are mutually perpendicular, the basis is
+**orthonormal**.
+
+```mermaid
+flowchart LR
+    P["World-space point"] --> D["Subtract camera position"]
+    D --> R["Dot with camera right → view x"]
+    D --> U["Dot with camera up → view y"]
+    D --> F["Dot with camera forward → view depth"]
+```
+
+This is the view transform in plain English. First express the point relative to
+the camera, then ask how much of that displacement lies along each camera ruler:
+
+```text
+d = world_point - camera_position
+view_x = dot(d, camera_right)
+view_y = dot(d, camera_up)
+view_z = dot(d, camera_forward)
+```
+
+The sign of `view_z` depends on the convention. OpenGL camera space traditionally
+looks down negative z; many other descriptions use positive forward. A correct
+formula with the wrong convention is still a wrong result.
+
 ## Yaw and pitch
 
 Many first-person games describe view direction with:
@@ -172,6 +240,20 @@ A **coordinate space** is a reference frame—an agreement about where the origi
 
 The point is not physically moving through five worlds. We keep expressing the same point relative to a different reference frame.
 
+The spaces can be summarized as contracts:
+
+| Space | Origin | Axes/basis | Typical units |
+|---|---|---|---|
+| Model/local | model pivot | model's own orientation | model units |
+| World | level origin | level axes | world units |
+| View/camera | camera position | camera right/up/forward | world units |
+| Clip | projection-defined | not yet divided by `w` | homogeneous |
+| NDC | center of visible volume | API convention | usually `-1..1` |
+| Screen | viewport top-left or bottom-left | pixel axes | pixels |
+
+Never add values from different spaces. `world_position + model_offset` is valid
+only after the model offset has been rotated/scaled into world space.
+
 ## What a matrix actually does
 
 A **matrix** is a rectangular table of numbers used as a transformation rule. A 4×4 matrix has four rows and four columns:
@@ -201,6 +283,37 @@ origin, then place it in the world” is not the same operation as “place it, 
 the whole world-space position around the origin.” Matrix multiplication records
 that order, so swapping two matrices is not a harmless style change.
 
+For one common column-vector convention, the complete transform is written:
+
+```text
+clip = projection × view × model × local_point
+```
+
+The rightmost operation happens first. A row-vector engine may write the reverse
+order. “Row-major versus column-major” describes storage, while “row vectors versus
+column vectors” describes the multiplication convention; people often mix up
+these two separate choices.
+
+## Why 3D graphics uses four numbers for a 3D point
+
+A 3D translation cannot be represented by an ordinary 3×3 linear matrix because
+linear transforms must keep the origin fixed. **Homogeneous coordinates** add a
+fourth component so translation fits into the same matrix pipeline as rotation and
+scale:
+
+```text
+position  (x, y, z) becomes (x, y, z, 1)
+direction (x, y, z) becomes (x, y, z, 0)
+```
+
+A translation matrix affects the position because its `w` is `1`, but it does not
+move a direction because its `w` is `0`. This distinction is mathematical, not
+just extra padding.
+
+After projection, `(x, y, z, w)` also represents the same Euclidean point as
+`(kx, ky, kz, kw)` for any nonzero `k`. Dividing by `w` chooses the familiar form
+where the last component is one.
+
 A 4×4 view-projection matrix commonly combines the camera and projection steps. The transformed `w` value helps determine whether a point is in front of the camera.
 
 ## Why perspective uses `w`
@@ -213,6 +326,32 @@ ndc_y = clip_y / clip_w
 ```
 
 If `w` is zero or behind the camera’s accepted direction, the division is invalid or the point should not be drawn. That is why world-to-screen code checks `w` before producing pixels.
+
+For a symmetric perspective camera, the projected scale is proportional to
+`1 / depth`. Ignoring signs and API details, the central idea is:
+
+```text
+screen_x ∝ view_x / view_depth
+screen_y ∝ view_y / view_depth
+```
+
+Double the depth while keeping the sideways offset unchanged and the point moves
+half as far from the screen center. A perspective matrix stores this division in
+`w` so the GPU can delay it until after clipping.
+
+## What field of view and aspect ratio change
+
+The vertical field of view `fov_y` determines how much of the world fits from top
+to bottom. The aspect ratio is `width / height`. A common perspective scale is:
+
+```text
+y_scale = 1 / tan(fov_y / 2)
+x_scale = y_scale / aspect
+```
+
+A smaller field of view makes `tan(fov_y / 2)` smaller, so the scale grows and the
+scene looks zoomed in. Using degrees where a function expects radians can make the
+matrix appear completely broken; convert units at the boundary and name them.
 
 ## Screen coordinates
 
@@ -248,7 +387,18 @@ Also verify:
 - yaw wraps where expected;
 - points behind the camera are rejected.
 
-## The useful mental model
+When a transform fails, identify the earliest wrong space:
+
+| Symptom | First assumption to check |
+|---|---|
+| every point follows camera translation backward | view translation/sign |
+| left and right are mirrored | handedness or x sign |
+| correct at center, increasingly wrong near edges | field of view/aspect ratio |
+| correct until camera rotates | basis or matrix order |
+| behind-camera points appear mirrored | `w` test |
+| correct shape but wrong location | viewport origin or window/client-area offset |
+
+## How the coordinate spaces connect
 
 Do not memorize every engine’s coordinate system. Remember the pipeline:
 

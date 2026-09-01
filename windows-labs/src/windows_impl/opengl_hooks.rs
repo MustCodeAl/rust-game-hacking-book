@@ -42,6 +42,11 @@ fn address(slot: &AtomicUsize) -> Option<usize> {
     (value != 0).then_some(value)
 }
 
+// This mid-glDrawElements cave cannot wrap one whole draw, so the non-highlight
+// branch restores the defaults observed in the pinned Urban Terror 4.3.4 build.
+// It is deliberately not advertised as a general OpenGL state snapshot. A
+// reusable hook should capture/query the exact previous state at a boundary
+// where it can restore that state immediately after forwarding one draw.
 extern "C" fn apply_urban_terror_gl_state(count: u32) {
     let mode = OPENGL_MODE.load(Ordering::Acquire);
     let (Some(depth_func), Some(depth_range)) = (address(&DEPTH_FUNC), address(&DEPTH_RANGE))

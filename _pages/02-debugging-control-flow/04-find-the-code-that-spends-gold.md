@@ -10,7 +10,7 @@ minutes: 20
 summary: Follow a known gold address backward to the exact instruction that changes it.
 ---
 
-## The question
+## Find the instruction that changes gold
 
 In the previous memory lab, we found the current gold. Now we want to know:
 

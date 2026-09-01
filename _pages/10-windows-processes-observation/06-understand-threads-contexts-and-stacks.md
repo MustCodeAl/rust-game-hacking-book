@@ -113,7 +113,7 @@ of its life waiting and still be perfectly healthy. A CPU profiler mainly sample
 running work; wait analysis explains why a thread is not running. Use the tool that
 matches the question.
 
-## A context is the CPU's paused notebook
+## A thread context stores paused register values
 
 A **thread context** is a structure containing register state for a particular architecture. On 32-bit x86, useful fields include:
 

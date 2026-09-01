@@ -250,7 +250,7 @@ struct CapturedWorker {
 
 Build the DLL for the game’s 32-bit architecture, inject it into your offline match, recruit one worker normally to fill the buffer, then gather more than 3000 gold. Workers should begin recruiting automatically from the selected structure. If they do not, log the calculated module addresses and verify each original byte before allowing the hooks to install.
 
-## The two caves are fully implemented
+## How the two Wyrmsun caves complete the action
 
 The complete implementation is in
 [`strategy_hooks.rs`]({{ site.baseurl }}/windows-labs/src/windows_impl/strategy_hooks.rs). It
@@ -281,7 +281,7 @@ Inject `gha_windows_labs.dll` into `wyrmsun.exe`, recruit one worker normally,
 select a structure, and collect more than 3000 gold. Press **End** to stop and
 restore both hooks.
 
-## The real lesson
+## What the state-machine design prevents
 
 The reusable skill is turning that working game hack into:
 

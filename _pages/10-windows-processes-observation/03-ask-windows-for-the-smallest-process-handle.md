@@ -10,7 +10,7 @@ minutes: 26
 summary: Learn access tokens, integrity levels, process DACLs, access masks, and least privilege through a buildable query tool.
 ---
 
-## A PID is a name, not a permission slip
+## A PID identifies a process but grants no access
 
 A process ID identifies a running process. It does not grant access to that process. To ask Windows for a usable process **handle**, a program calls `OpenProcess` with an **access mask**: a group of bits describing the operations it wants.
 

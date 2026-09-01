@@ -6,8 +6,9 @@ category: 3D Games & Rendering
 layout: post
 permalink: /pages/5/08/
 chapter: "5.8"
-minutes: 13
-summary: Trace why one entity appears on a radar while another is filtered out, then express the rule as a tested predicate.
+minutes: 23
+summary: Reconstruct radar enumeration, filtering, translation, rotation, scale, clipping, and marker semantics as separate testable stages.
+mermaid: true
 ---
 
 ## A radar is a small rendering pipeline
@@ -26,6 +27,16 @@ projection   where should each marker appear?
 drawing      which icon, color, and size should be used?
 ```
 
+```mermaid
+flowchart LR
+    E["Enumerate"] --> V["Validate"]
+    V --> F["Filter by radar rules"]
+    F --> T["World → local-relative"]
+    T --> R["Rotate into radar basis"]
+    R --> S["Scale + clip"]
+    S --> D["Draw marker"]
+```
+
 If an opponent is absent, do not immediately assume its position is missing.
 The radar loop may read the opponent correctly and skip it at the filtering
 step. A breakpoint on the team field helps locate that decision.
@@ -41,6 +52,16 @@ step. A breakpoint on the team field helps locate that decision.
 5. **clipped space:** clamp or reject markers outside the radar shape.
 
 Attach units and spaces to your notes: `world_metres`, `relative_xy`, or `radar_pixels`. A sign error can look like a wrong pointer, and a degrees-versus-radians error can look like corrupt data. Test known directions first: directly north, east, south, and west of the local player.
+
+There are two common display conventions:
+
+- **north-up:** world north remains at the top; the local-player arrow rotates;
+- **heading-up:** the local player's forward direction remains at the top; the
+  world and other markers rotate by the negative heading.
+
+The code later in this lesson implements heading-up. Applying `-yaw` is an inverse
+rotation: it undoes the local orientation so coordinates are expressed in the
+player's basis.
 
 ## Start with two contrasting entities
 
@@ -101,6 +122,11 @@ fn should_show_teammate(entity: &RadarEntity, local_id: EntityId, local_team: u3
 
 This plain function helps verify your reconstructed rule against several recorded entities.
 
+Keep “allowed to appear” separate from “has a drawable marker.” An entity can pass
+team and alive filters but still fail coordinate validation, be outside range, or
+have no icon. One boolean that merges all stages is difficult to reverse because a
+missing marker no longer tells you which rule rejected it.
+
 ## Convert world position to radar position
 
 A radar usually translates the entity relative to the local player, rotates by the camera yaw, scales, then clamps to the radar bounds.
@@ -123,6 +149,56 @@ fn radar_offset(local: Vec3, entity: Vec3, yaw: f32, scale: f32) -> (f32, f32) {
 Axis order and yaw sign must be confirmed for the target.
 
 The subtraction must happen before rotation because the radar is centered on the local player. Rotation and uniform scaling can be exchanged mathematically, but clipping usually happens after both because it is defined in radar coordinates. Writing the stages separately makes those assumptions visible.
+
+The 2D rotation is the matrix:
+
+```text
+[x']   [ cos θ  -sin θ ] [x]
+[y'] = [ sin θ   cos θ ] [y]
+```
+
+Its columns are the rotated basis directions. Rotation preserves length because
+the basis remains orthonormal: `x'² + y'² = x² + y²` apart from floating-point
+rounding. If marker distance changes while only yaw changes, the transform or units
+are wrong.
+
+## Map scale and range are one contract
+
+If `pixels_per_world_unit = s`, then a relative displacement `(x, y)` becomes
+`(sx, sy)`. A radar with radius `R` pixels displays an unclamped world radius of
+`R / s`. Doubling `s` zooms in and halves the visible world range.
+
+Choose one out-of-range policy:
+
+1. reject the marker;
+2. clamp it to the edge and mark it as out-of-range;
+3. switch to a directional arrow.
+
+For a circular radar, clamp a pixel offset `p` to radius `R`:
+
+```rust
+fn clamp_to_circle(x: f32, y: f32, radius: f32) -> (f32, f32, bool) {
+    let length = x.hypot(y);
+    if !length.is_finite() || radius < 0.0 {
+        return (0.0, 0.0, true);
+    }
+    if length <= radius || length <= f32::EPSILON {
+        return (x, y, false);
+    }
+    let scale = radius / length;
+    (x * scale, y * scale, true)
+}
+```
+
+Clamping x and y independently would clamp to a square, distort direction near
+corners, and make diagonal markers appear farther from the center.
+
+## Height needs an explicit visual rule
+
+A top-down radar discards one world axis. That is a projection, not proof that
+height is irrelevant. Floors above and below may share the same 2D position.
+Common encodings use an up/down arrow, brightness, marker shape, or a height limit.
+Record the chosen height policy separately from the team/visibility filter.
 
 ## Prefer a separate lab display
 
@@ -166,6 +242,26 @@ Join a local team game with bots. Before the patch, the radar shows teammates. A
 - markers remain bounded;
 - invalid coordinates stop the update;
 - team changes update the classification.
+
+Also verify invariants that expose coordinate errors:
+
+- rotating in place preserves every marker's radial distance;
+- translating the local player and entity equally leaves the relative marker fixed;
+- doubling world distance doubles unclamped pixel distance;
+- directly forward maps to the documented radar-up direction;
+- a marker crossing the edge follows one consistent reject/clamp policy;
+- entities on different floors use the documented height cue.
+
+## Diagnose radar failures
+
+| Symptom | Check first |
+|---|---|
+| all markers orbit the wrong way | yaw sign/inverse rotation |
+| marker distance changes when turning | rotation formula or degree/radian mix |
+| diagonal markers stick to corners | square clamp used for circular radar |
+| marker drifts as both players move together | subtraction order or mixed snapshots |
+| upstairs and downstairs overlap | missing height policy |
+| marker flickers at maximum range | noisy distance and no hysteresis |
 
 As with fog of war, the concrete patch is tied to AssaultCube's offline local state. A server-owned visibility model would require a different explanation of where the authoritative state lives.
 

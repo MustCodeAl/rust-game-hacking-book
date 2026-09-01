@@ -6,8 +6,9 @@ category: 3D Games & Rendering
 layout: post
 permalink: /pages/5/07/
 chapter: "5.7"
-minutes: 14
-summary: Follow a shot’s camera movement to the function that adds recoil, then model the effect as data.
+minutes: 23
+summary: Decompose recoil into input, weapon kick, spread, camera shake, and recovery; then identify each contribution with time-series evidence.
+mermaid: true
 ---
 
 ## What recoil is inside a program
@@ -27,6 +28,23 @@ The game may keep separate values for:
 Those systems can produce similar movement while controlling different things.
 Removing a camera kick should not be assumed to remove projectile spread, and
 changing the weapon animation should not be assumed to change aim.
+
+```mermaid
+flowchart TD
+    I["Player input"] --> A["Base aim orientation"]
+    W["Weapon recoil impulse"] --> K["Kick state"]
+    K --> C["Camera orientation"]
+    A --> C
+    S["Camera shake"] --> C
+    A --> F["Shot direction"]
+    P["Projectile spread"] --> F
+    C --> R["Rendered view"]
+    M["Weapon-model animation"] --> R
+```
+
+This diagram deliberately gives rendered view and shot direction separate paths.
+If two systems read the same base aim but add different offsets, changing one will
+not necessarily change the other.
 
 An **angle** describes rotation. Yaw usually turns left and right around a
 vertical axis. Pitch looks up and down. Games may store degrees, radians, fixed
@@ -48,6 +66,11 @@ Recoil may change the same yaw and pitch values as the mouse, or it may update s
 Record time as well as values. A single before-and-after pair shows total
 movement; a short time series shows whether the kick happens instantly and how
 recovery behaves across later frames.
+
+Use a monotonic timestamp and record the frame or simulation tick when available.
+Wall-clock timestamps can jump; a monotonic clock measures elapsed duration. Also
+record the weapon, fire mode, and whether the shot was accepted. Otherwise a reload
+or dry-fire sample can be mistaken for zero recoil.
 
 ## Break on the angle write
 
@@ -93,6 +116,42 @@ Do not assume the units are degrees. Compare known view changes and weapon diffe
 spread through later math and make comparisons or drawing unreliable. The
 `90.0` limits are a lab sanity check, not proof of the game’s real unit system.
 
+Name samples with units:
+
+```rust
+#[derive(Clone, Copy, Debug)]
+struct TimedKick {
+    seconds_after_shot: f32,
+    yaw_degrees: f32,
+    pitch_degrees: f32,
+}
+```
+
+Degrees per frame and degrees per second are different quantities. A per-frame
+recovery constant produces different behavior when frame rate changes unless the
+engine runs that update on a fixed simulation tick.
+
+## Recoil is often an impulse plus recovery
+
+A simple model keeps a kick displacement `x` and velocity `v`. Firing adds an
+impulse; each update pulls the displacement toward zero and damps velocity:
+
+```text
+on shot:  v ← v + impulse
+update:   acceleration = -stiffness × x - damping × v
+          v ← v + acceleration × dt
+          x ← x + v × dt
+```
+
+This damped-spring model explains overshoot and smooth return. Other games use a
+fixed curve, exponential decay, a table of weapon-specific offsets, or direct
+angle changes. Fit the simplest model supported by measured samples rather than
+assuming every recovery is a spring.
+
+For exponential recovery, `x(t) = x₀e^(-kt)`. Equal fractions disappear in equal
+time intervals. For linear recovery, equal absolute amounts disappear. Plotting a
+few samples makes the difference visible.
+
 ## Prefer measurement over removal
 
 First build an observer that logs a short sequence:
@@ -122,6 +181,18 @@ This can reveal:
 - weapon-specific values;
 - accumulation and recovery over time.
 
+Repeat the same shot many times. Compute mean kick to expose a fixed pattern and
+the spread around that mean to expose randomness. If shot number inside a burst
+matters, group by shot index instead of averaging the whole magazine together.
+
+```text
+mean = sum(samples) / count
+variance = sum((sample - mean)²) / (count - 1)   when count > 1
+```
+
+Variance describes observed variation; it does not prove which random-number
+source or probability distribution produced it.
+
 ## Test a code hypothesis carefully
 
 A temporary debugger patch can show whether one instruction contributes to recoil. Record and restore the original bytes, change one instruction, and compare the same controlled shot.
@@ -129,6 +200,16 @@ A temporary debugger patch can show whether one instruction contributes to recoi
 ![A candidate recoil instruction]({{ site.baseurl }}/assets/images/5/7/cube6.png)
 
 If weapon animation still moves but the camera does not, you may have isolated view kick. If accuracy changes too, the instruction controls more than presentation.
+
+Compare at least these observables separately:
+
+| Observable | What it can tell you |
+|---|---|
+| stored base yaw/pitch | player-input orientation |
+| final camera matrix | presentation actually rendered |
+| shot direction or impact | gameplay trajectory |
+| weapon-model transform | view-model animation |
+| kick accumulator over time | recovery state |
 
 ## Apply the AssaultCube 1.2.0.2 no-recoil patch
 
@@ -162,7 +243,7 @@ let mut no_recoil = plan.apply(&process)?;
 
 Fire a single shot before and after enabling it. Ammo and firing animation should still work, but the camera should no longer kick upward. Restore the original three bytes and confirm recoil returns.
 
-## The broader lesson
+## What the recoil experiment proves
 
 Many effects are layers:
 
@@ -175,6 +256,22 @@ input angle
 ```
 
 Do not label the first changing float “recoil.” Trace when it is produced and where it is combined.
+
+Composition order matters for 3D rotations. Adding small yaw/pitch offsets is a
+common approximation, but full orientations may be matrices or quaternions. Large
+rotations do not generally commute: applying yaw then pitch can differ from pitch
+then yaw. Identify where the engine converts or combines its representation before
+assigning meaning to one component.
+
+## Common false conclusions
+
+| Observation | What it does **not** prove |
+|---|---|
+| camera no longer rises | projectile spread is gone |
+| weapon model stops moving | aim direction is unchanged |
+| pitch write disappears | no later camera transform adds kick |
+| repeated shots look similar | recoil is fully deterministic |
+| one weapon uses an offset table | every weapon uses that table |
 
 Keep this experiment offline. Its value is learning to separate a visible effect into measurable contributions.
 

@@ -11,7 +11,7 @@ summary: Learn what a debugger actually does and why pausing one instruction can
 mermaid: true
 ---
 
-## A debugger is a pause-and-look tool
+## A debugger can pause and inspect a running program
 
 A memory scanner answers, “Where might this value live?” A debugger answers, “Which instruction just touched it?”
 
@@ -120,7 +120,7 @@ Treat pseudocode as an editable notebook:
 This prevents a common failure chain: one guessed pointer becomes a guessed
 structure, which gives every field a confident-looking but incorrect name. 🔎
 
-## Build knowledge with a hypothesis-and-evidence loop
+## Test explanations against recorded evidence
 
 Reverse engineering is an inference problem. You cannot see the missing source
 directly, so you build a model that predicts what the compiled program should
@@ -146,7 +146,7 @@ Different practice targets may use 32-bit or 64-bit code, different calling
 conventions, and different build settings. Transfer the investigation process,
 not literal addresses or register choices from a worked example.
 
-## The question-first habit
+## Write the debugging question before using the tools
 
 Do not scroll through thousands of instructions hoping one looks important. Begin with a question:
 
@@ -161,7 +161,7 @@ Then:
 
 You used a visible value as a trail back to the code.
 
-## Registers are the CPU’s scratch space
+## Registers hold values the CPU is using now
 
 Assembly uses names such as `rax`, `rbx`, `rcx`, and `rdx`. These are registers. On a 64-bit x86 CPU, `rax` is 64 bits wide. `eax` refers to its lower 32 bits, `ax` to the lower 16, and `al` to the lowest 8.
 

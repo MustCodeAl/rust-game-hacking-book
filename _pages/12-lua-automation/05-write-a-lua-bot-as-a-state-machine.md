@@ -10,7 +10,7 @@ minutes: 31
 summary: Make scripted automation predictable with named states, guarded transitions, one action at a time, timeouts, and a permanent stop path.
 ---
 
-## A loop needs a story
+## Define the bot's states and transitions first
 
 This loop is short and dangerous to reason about:
 

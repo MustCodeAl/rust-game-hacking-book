@@ -868,6 +868,102 @@
     return variants;
   }
 
+  function initProjectionPlaygrounds() {
+    document.querySelectorAll("[data-projection-lab]").forEach(function (lab) {
+      if (lab.dataset.projectionReady === "true") return;
+
+      var inputs = {};
+      var outputs = {};
+      lab.querySelectorAll("[data-projection-input]").forEach(function (input) {
+        inputs[input.dataset.projectionInput] = input;
+      });
+      lab.querySelectorAll("[data-projection-output]").forEach(function (output) {
+        outputs[output.dataset.projectionOutput] = output;
+      });
+
+      var requiredInputs = ["x", "y", "z", "fov"];
+      if (!requiredInputs.every(function (name) { return inputs[name] && outputs[name]; })) {
+        return;
+      }
+
+      var frustumTop = lab.querySelector('[data-frustum-edge="top"]');
+      var frustumBottom = lab.querySelector('[data-frustum-edge="bottom"]');
+      var frustumPoint = lab.querySelector("[data-frustum-point]");
+      var frustumLabel = lab.querySelector("[data-frustum-point-label]");
+      var screenPoint = lab.querySelector("[data-screen-point]");
+      var screenLabel = lab.querySelector("[data-screen-point-label]");
+      var status = lab.querySelector("[data-projection-status]");
+      var math = lab.querySelector("[data-projection-math]");
+
+      if (!frustumTop || !frustumBottom || !frustumPoint || !frustumLabel
+          || !screenPoint || !screenLabel || !status || !math) {
+        return;
+      }
+
+      function clamp(value, minimum, maximum) {
+        return Math.min(maximum, Math.max(minimum, value));
+      }
+
+      function updateProjection() {
+        var x = Number(inputs.x.value);
+        var y = Number(inputs.y.value);
+        var z = Number(inputs.z.value);
+        var fovDegrees = Number(inputs.fov.value);
+        var aspect = 1280 / 720;
+        var tangent = Math.tan((fovDegrees * Math.PI / 180) / 2);
+        var halfWidth = z * tangent * aspect;
+        var halfHeight = z * tangent;
+        var ndcX = x / halfWidth;
+        var ndcY = y / halfHeight;
+        var inside = z > 0.1 && Math.abs(ndcX) <= 1 && Math.abs(ndcY) <= 1;
+        var screenX = (ndcX + 1) * 640;
+        var screenY = (1 - ndcY) * 360;
+
+        outputs.x.textContent = x.toFixed(1);
+        outputs.y.textContent = y.toFixed(1);
+        outputs.z.textContent = z.toFixed(1);
+        outputs.fov.textContent = fovDegrees.toFixed(0) + "°";
+
+        var farHalfWidth = 20 * tangent * aspect;
+        var worldScale = 85 / Math.max(farHalfWidth, 10);
+        frustumTop.setAttribute("y2", String(115 - farHalfWidth * worldScale));
+        frustumBottom.setAttribute("y2", String(115 + farHalfWidth * worldScale));
+
+        var frustumX = 44 + clamp(z / 20, 0, 1) * 368;
+        var frustumY = clamp(115 - x * worldScale, 16, 214);
+        frustumPoint.setAttribute("cx", frustumX.toFixed(1));
+        frustumPoint.setAttribute("cy", frustumY.toFixed(1));
+        frustumPoint.classList.toggle("is-outside", !inside);
+        frustumLabel.setAttribute("x", (frustumX > 350 ? frustumX - 11 : frustumX + 11).toFixed(1));
+        frustumLabel.setAttribute("y", clamp(frustumY - 10, 18, 214).toFixed(1));
+        frustumLabel.setAttribute("text-anchor", frustumX > 350 ? "end" : "start");
+
+        var viewportX = clamp(26 + ((ndcX + 1) / 2) * 348, 26, 374);
+        var viewportY = clamp(12 + ((1 - ndcY) / 2) * 196, 12, 208);
+        screenPoint.setAttribute("cx", viewportX.toFixed(1));
+        screenPoint.setAttribute("cy", viewportY.toFixed(1));
+        screenPoint.classList.toggle("is-outside", !inside);
+        screenLabel.setAttribute("x", (viewportX > 300 ? viewportX - 12 : viewportX + 12).toFixed(1));
+        screenLabel.setAttribute("y", clamp(viewportY - 10, 26, 204).toFixed(1));
+        screenLabel.setAttribute("text-anchor", viewportX > 300 ? "end" : "start");
+        screenLabel.textContent = inside
+          ? "(" + Math.round(screenX) + ", " + Math.round(screenY) + ")"
+          : "outside viewport";
+
+        status.textContent = inside ? "Inside the view" : "Outside the view";
+        math.textContent = "w = " + z.toFixed(1)
+          + " · NDC (" + ndcX.toFixed(2) + ", " + ndcY.toFixed(2) + ")"
+          + (inside ? " · screen (" + Math.round(screenX) + ", " + Math.round(screenY) + ")" : "");
+      }
+
+      requiredInputs.forEach(function (name) {
+        inputs[name].addEventListener("input", updateProjection);
+      });
+      lab.dataset.projectionReady = "true";
+      updateProjection();
+    });
+  }
+
   function initializePageFeatures() {
     initThemeSwitcher();
     initTableOfContents();
@@ -875,6 +971,7 @@
     labelCodeBlocks();
     decorateLessonText();
     enhanceLessonTables();
+    initProjectionPlaygrounds();
   }
 
   function bindGitBookLifecycle() {

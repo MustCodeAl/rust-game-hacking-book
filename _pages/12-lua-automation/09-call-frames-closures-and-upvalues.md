@@ -99,7 +99,7 @@ When `mlua` registers `game.log`, it builds a callable Lua value backed by a hos
 
 The callback should be short and bounded. A Lua instruction budget cannot interrupt arbitrary blocking work performed inside native host code.
 
-## Re-entrancy changes the stack picture
+## Re-entrancy adds nested host and VM call frames
 
 A host callback may call Lua again, which may call another host function. This is **re-entrancy**. The host needs a clear policy for locks and mutable game state.
 

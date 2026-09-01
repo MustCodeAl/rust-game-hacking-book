@@ -6,281 +6,183 @@ category: Start Here
 layout: post
 permalink: /pages/1/06/
 chapter: "1.6"
-minutes: 20
-summary: Use one repeatable method instead of guessing your way through a reverse-engineering problem.
+minutes: 16
+summary: Use Identify, Understand, Locate, and Change to turn a game observation into a controlled, repeatable experiment.
 ---
 
-Reverse engineering begins with incomplete information. You can see outputs, pause instructions, and copy bytes, but the original variable names and design notes are usually gone. The reliable way forward is to ask one narrow question, predict what evidence would answer it, and run a reversible experiment.
+Reverse engineering becomes confusing when you search and change things before
+deciding what question you are trying to answer. This book uses four steps to
+keep the work in order:
 
-## Four words that keep experiments honest
+1. **Identify** the exact behavior.
+2. **Understand** how that behavior should work.
+3. **Locate** the data and code involved.
+4. **Change** one thing and measure the result.
 
-Before the steps, separate these ideas:
+The steps can repeat. A failed change often sends you back to improve what you
+understand or locate a different copy.
 
-- a **hypothesis** is an explanation you think may be true;
-- a **prediction** is what you expect to observe if it is true;
-- an **observation** is what actually happened;
-- **evidence** is an observation that makes one explanation more or less likely.
+## 1. Identify the behavior
 
-“This address is gold” is a hypothesis. “Changing it to `500` will change both
-the display and what I can spend” is a prediction. The result is an
-observation. Repeating the test after the value changes gives stronger
-evidence.
+Choose something you can observe and reproduce.
 
-One successful change does not prove every detail. You might have found a
-display copy, a temporary calculation, or a value shared by several systems.
-The method below deliberately asks follow-up questions.
+❌ “Find player stuff.”
 
-## Treat the work as model correction
+✅ “Find the value that decreases by exactly 25 when the local player takes one
+known hit.”
 
-Your notes contain a **model**: a compact explanation that predicts what the game will do. The live game is the thing that can prove the model wrong.
+Record the starting conditions:
 
-```text
-model -> prediction -> controlled action -> observation -> revised model
-```
+- exact game build;
+- map, save, or level;
+- starting value;
+- action you will perform;
+- result you expect to observe.
 
-Suppose the model says, “this four-byte field is spendable gold.” Recruiting a unit should reduce it by the unit price, changing it should affect what can be purchased, and a fresh match should create a new instance of the same kind of field. If only the HUD changes, revise the model to “display copy” instead of forcing the evidence to fit the first guess.
+Good starting behaviors include spending gold, taking damage, moving along one
+axis, or toggling one graphics setting. Avoid changing several things at once.
 
-Prefer experiments that separate competing explanations. Watching a value change from `100` to `90` supports many stories. Watching it change only when player one recruits, but not when player two recruits or when the HUD redraws, removes several of those stories at once. A good next step is the one that reduces uncertainty, not the one that produces the most dramatic patch.
+## 2. Understand the expected rules
 
-## 1. Identify
+Before searching memory, write what the game appears to do.
 
-Write one exact, visible goal.
-
-Good: “In my offline Wesnoth match, set the displayed gold from 100 to 500.”
-
-Too broad: “Hack the whole game.”
-
-An exact goal gives you a test. If the display changes to 500 and you can spend the gold, you learned something real.
-
-Include the target version and situation in the goal. “Wesnoth 1.14.9, local
-match, player one” is more useful than “Wesnoth.” Addresses, instruction bytes,
-and layouts can change between builds.
-
-## 2. Understand
-
-Predict what kind of data or code could control the behavior.
-
-For gold, useful questions include:
-
-- Is it a whole number or a decimal?
-- Can it be negative?
-- Does the server own it, or does this local process own it?
-- Does the displayed value update immediately?
-- What actions increase or decrease it?
-
-You do not need the correct answer yet. You need a reasonable theory you can test.
-
-Understanding means building the smallest model that predicts behavior. For
-gold, a first model might be:
+For health:
 
 ```text
-one side object owns one 32-bit gold field
-recruiting subtracts a whole-number price
-the interface reads the same field when it redraws
+new_health = max(0, old_health - damage)
 ```
 
-Every line can be tested. If only the display changes, the last line may be
-wrong. If the address belongs to a temporary stack value, the first line may be
-wrong.
-
-## Write the tool's contract before touching memory
-
-A **contract** is a plain-English promise about what a tool accepts, what it
-does, what it returns, and when it must stop. For a first value scan:
+Also write relationships you expect:
 
 ```text
-Input:      copied readable regions and one wanted 32-bit value
-Processing: decode each four-byte window and compare it with the wanted value
-Output:     every matching address, or an explicit “no matches” result
-Stop:       target closes, a required read fails, or the candidate limit is hit
+0 <= health <= max_health
+dead becomes true when health reaches 0
+the health bar follows health after an update
 ```
 
-The stop line matters as much as the happy path. Without it, a tool can silently
-present partial evidence as a complete answer.
+These rules help distinguish the simulation value from text, animation state,
+or a cached display value.
 
-Write the logic in simple pseudocode before translating it to code:
+At this stage, the rules are hypotheses. The game may use armor, difficulty
+scaling, delayed damage, or a server-owned result. Write down uncertainty rather
+than silently treating a guess as fact.
+
+## Define what your tool is allowed to do
+
+Before code touches another process, write a small contract:
 
 ```text
-open the exact supported build for reading
-verify its executable and supported build
-
-for each readable memory region
-    copy one bounded chunk
-    compare each complete four-byte window
-    remember matching addresses
-    stop if the candidate limit is reached
-
-if there is exactly one candidate
-    report it as a candidate that still needs verification
-otherwise
-    report zero or many candidates honestly
+Target: Wesnoth 1.14.9, 32-bit Windows build
+Input: process name and expected build fingerprint
+Read: one known module-relative pointer path
+Change: one u32 field after confirming its current value
+Stop: cancel key, version mismatch, invalid pointer, or failed read
+Restore: write the recorded original value when the experiment ends
 ```
 
-Pseudocode is not a language the computer runs. It is a cheap place to notice a
-missing step before Windows handles, pointer arithmetic, and error types make
-the idea harder to see.
+This contract prevents a small experiment from quietly turning into an
+unbounded tool.
 
-## 3. Locate
+## 3. Locate the data and code
 
-Use the smallest tool that can test the theory:
+Use the least complicated observation that can answer the question:
 
-- a memory scanner to find changing values;
-- a debugger to pause on an instruction;
-- a packet viewer to observe local test traffic;
-- a file monitor to find a save or texture;
-- a small program that makes the observation repeatable.
+1. scan for the visible value;
+2. make one controlled game change;
+3. filter the candidate addresses;
+4. repeat until the list is small;
+5. set a breakpoint on the strongest candidate;
+6. observe which instruction reads or writes it;
+7. follow the object pointer and surrounding fields.
 
-Change one thing in the game, then observe one thing in the tool. Smaller experiments are easier to understand.
+An address found once is evidence for that run. Restart the game before calling
+it stable. If the absolute address moves but a module-relative path remains
+valid, record the path and the exact build it belongs to.
 
-Finding an address is not the same as identifying its meaning. **Location**
-answers where the bytes are in one run. **Identity** answers what they
-represent and how the program reaches them. Use multiple states and restarts to
-separate the two.
+Keep a table while you work:
 
-## 4. Change
+| Observation | Evidence | Confidence | Next test |
+|---|---|---:|---|
+| candidate changes with visible gold | two scans | medium | spend a different amount |
+| instruction writes candidate after purchase | write breakpoint | high | inspect the object base |
+| path survives restart | three launches | higher | test another save |
 
-Make the smallest reversible change that proves the idea. Write down:
+Confidence is not proof. It tells you how much independent evidence supports the
+current explanation.
 
-- the original bytes or value;
-- the new bytes or value;
-- the game version;
-- the steps needed to reproduce the result;
-- what happened and what did **not** happen.
+## 4. Change one thing and measure the result
 
-If the game crashes, that is still information. Restore the original value, shrink the change, and try again.
+Make a prediction before the change:
 
-A good change is also a **causal test**. If you remove one complete subtraction
-instruction and only gold spending stops, that supports a direct relationship.
-If several unrelated systems break, the instruction has a wider job than your
-first label suggested.
+```text
+If this is the game-play gold field, changing 75 to 100 should allow a purchase
+that costs more than 75, and the value should remain consistent after the next
+game update.
+```
 
-## Encode the experiment state
+Then:
 
-The same process fits a small program:
+1. record the original bytes or value;
+2. confirm the value still matches what you expect;
+3. apply one bounded change;
+4. observe the immediate and next-update results;
+5. restore the original state;
+6. repeat from a known starting condition.
+
+If only the text changes, you probably found a display copy. If the value snaps
+back, another system owns or recomputes it. If unrelated fields break, your type,
+width, or address may be wrong. These failures improve the model when you record
+them.
+
+## Use tests and types for quick feedback
+
+Separate code that decides *what should happen* from code that performs a
+Windows API call. Pure logic can be tested without launching the game:
 
 ```rust
-#[derive(Debug)]
-struct Experiment {
-    goal: &'static str,
-    prediction: &'static str,
-    observed: Option<u32>,
-}
-
-fn main() {
-    let mut lab = Experiment {
-        goal: "Find the offline gold value",
-        prediction: "It is stored as a 32-bit integer",
-        observed: None,
-    };
-
-    // A tool or safe wrapper would provide the observation.
-    lab.observed = Some(100);
-    println!("{lab:#?}");
-}
-```
-
-The important part is not this struct. It is the habit of separating your **goal**, **prediction**, and **observation**.
-
-## Build a dense feedback loop
-
-For deterministic logic—parsers, address arithmetic, pattern matching, and
-byte conversion—write the test before or beside the implementation. The test
-turns “I think this works” into an immediate, repeatable check.
-
-```rust
-fn matches_pattern(bytes: &[u8], pattern: &[Option<u8>]) -> bool {
-    bytes.len() == pattern.len()
-        && bytes
-            .iter()
-            .zip(pattern)
-            .all(|(byte, expected)| expected.is_none_or(|value| *byte == value))
+fn should_write(current: u32, expected: u32, replacement: u32) -> bool {
+    current == expected && replacement <= 10_000
 }
 
 #[test]
-fn wildcard_accepts_one_changed_byte() {
-    // 🧪 `None` means “this position may contain any byte.”
-    let pattern = [Some(0x48), Some(0x8B), None, Some(0x24)];
-
-    assert!(matches_pattern(&[0x48, 0x8B, 0x99, 0x24], &pattern));
-    assert!(!matches_pattern(&[0x90, 0x8B, 0x99, 0x24], &pattern));
+fn rejects_an_unexpected_current_value() {
+    assert!(!should_write(74, 75, 100));
 }
 ```
 
-A useful loop is:
+The compiler checks types. Tests check examples. Debugger observations check the
+running game. Use all three feedback sources rather than depending on memory.
 
-1. write one behavior as a test;
-2. run it and see the expected failure;
-3. make the smallest implementation pass;
-4. refactor while the test protects the behavior;
-5. run formatting, compiler checks, tests, and Clippy.
+## Record enough to repeat the experiment
 
-Test-first work is a tool, not a religion. Discovering an unknown structure in
-a live process is exploratory: you cannot write every answer in advance.
-Capture the smallest reproducible input—such as a copied byte buffer—then move
-the known behavior into an offline test as soon as possible. Use the debugger
-for runtime state and the type system for invalid states the compiler can
-reject. The [Rust Book's testing chapter](https://doc.rust-lang.org/stable/book/ch11-00-testing.html)
-explains how tests can stay close to the code they verify.
-
-## Desk-check the paths a test might miss
-
-A **desk check** means pretending to be the computer and tracing one step at a
-time. Do it with more than the easy case:
-
-| Trial | Observed candidates | Extra event | Expected result |
-|---|---:|---|---|
-| A | 1 | none | return one candidate, still labeled unverified |
-| B | 0 | none | return “no matches,” not address zero |
-| C | 37 | limit is 32 | stop and report that the result was capped |
-| D | 4 | target closes | discard the incomplete scan and return an error |
-
-For each row, follow the pseudocode and write down how the candidate list and
-stop condition change. One successful scan proves only that one path worked.
-Boundary cases reveal wrong comparisons, misplaced updates, and cleanup paths
-that normal gameplay may not reach. 🧪
-
-If you copy an example, check its license and version first. Copying the test
-or expected output before the implementation can be helpful because it tells
-you what “working” means. Then add the implementation in small pieces and
-explain every AI completion or borrowed line you keep.
-
-## Define the experiment boundary
-
-Before changing state, record the executable version or hash, architecture,
-starting save or map, and which component owns the source of truth. A useful
-experiment can restart from the same input and has an explicit stop or restore
-path.
-
-Use a copied byte fixture or deterministic practice program when live timing is
-not part of the question. When behavior depends on the running game, use the
-exact local build and starting state named by the lesson. In client-server
-software, distinguish client presentation and prediction from
-server-authoritative state: a local write may affect only the current view and
-may be replaced by the next replicated update.
-
-## Your experiment note template
+Use a note like this:
 
 ```text
-Goal:
-Target version/hash:
-Architecture and starting state:
-State authority:
+Question:
+Target build and fingerprint:
+Starting state:
 Prediction:
-Tool:
-Original value/bytes:
-Test change:
-Result:
-Next question:
+Address or path:
+Original bytes/value:
+Single change:
+Immediate result:
+Result after next update:
+Restore result:
+What the evidence supports:
+What remains uncertain:
+Next test:
 ```
 
-Save a note for every experiment. Good notes turn a lucky discovery into knowledge you can reproduce.
+Good notes turn a lucky result into a procedure another person—or you next
+week—can repeat.
 
-{% include quiz.html
-  id="controlled-experiment"
-  type="multiple-choice"
-  title="Design a useful experiment"
-  prompt="Which plan gives the clearest evidence about what caused a change?"
-  options="Change several values at once and keep the most exciting result||Keep only the final address and discard the original value||Predict, change one thing, record the original and result, then repeat||Skip the prediction so the result cannot surprise you"
-  answer="2"
-  explanation="Changing one thing at a time lets you connect cause and effect. Recording the prediction, original state, and result also gives you a safe restoration value and enough evidence to repeat the test after a restart."
-%}
+## Checkpoint
+
+You should now be able to plan an experiment that:
+
+- names one observable behavior;
+- records expected rules and uncertainty;
+- locates data through repeated evidence;
+- makes one reversible change;
+- uses tests, types, and observations for feedback;
+- records enough information to reproduce the result.

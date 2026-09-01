@@ -11,7 +11,7 @@ summary: Copy game code once, divide immutable local snapshots across workers, c
 mermaid: true
 ---
 
-## Parallel code needs a boundary 🔀
+## Divide the scan into independent ranges
 
 The simple pattern scanner is intentionally single-threaded. Its next advanced step is not “put every Windows call on a thread.” The safe boundary is:
 

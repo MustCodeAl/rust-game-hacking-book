@@ -73,7 +73,7 @@ self.instruction_pointer += 1; // 🧭 Default to the next bytecode.
 
 A jump replaces that default next location. Bounds checks prevent corrupt bytecode from jumping outside the program.
 
-## Picture the VM as state plus one transition
+## Model the VM as state plus one transition function
 
 At any instant, this tiny machine is completely described by a small state:
 

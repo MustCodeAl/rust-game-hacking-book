@@ -6,8 +6,9 @@ category: 3D Games & Rendering
 layout: post
 permalink: /pages/5/02/
 chapter: "5.2"
-minutes: 16
-summary: Follow a visible graphics setting from a console command to the branch and data that control drawing.
+minutes: 25
+summary: Follow visible graphics state from game objects through meshes, shaders, rasterization, depth testing, and the final framebuffer.
+mermaid: true
 ---
 
 ## Use a setting as an anchor
@@ -29,6 +30,68 @@ game objects -> visible draw list -> vertices and materials -> GPU commands -> f
 A CPU-side flag can stop an entity before a draw call exists. Graphics state can change how an existing draw is tested. A shader can change the final color. Similar screenshots can therefore come from very different layers.
 
 Locate the earliest layer that explains the observation. If no call is submitted, inspect culling or entity selection. If the call exists but pixels disappear, inspect transforms, clipping, depth, and blending. Keeping those stages separate prevents the vague conclusion that “rendering is broken.”
+
+```mermaid
+flowchart LR
+    A["Game objects"] --> B["Visible set"]
+    B --> C["Draw submissions"]
+    C --> D["Vertex shader"]
+    D --> E["Primitive assembly + clipping"]
+    E --> F["Rasterization"]
+    F --> G["Fragment shader"]
+    G --> H["Depth / stencil / blend tests"]
+    H --> I["Framebuffer"]
+```
+
+The names differ between graphics APIs, but the responsibilities remain useful:
+
+- the game decides which objects exist and which may be visible;
+- a draw submission selects geometry, shader programs, textures, and state;
+- a vertex shader transforms each submitted vertex and may calculate values for
+  later stages;
+- primitive assembly groups vertices into triangles, lines, or points;
+- clipping trims or rejects primitives outside the camera's clip volume;
+- rasterization finds the pixel-sized **fragments** covered by each primitive;
+- a fragment shader computes candidate colors and other outputs;
+- depth, stencil, and blending rules decide how candidates affect stored pixels.
+
+A fragment is not yet a final pixel. Several triangles may produce fragments for
+the same pixel, and tests may reject most of them.
+
+## Geometry is vertices plus an interpretation
+
+A **mesh** is usually a collection of vertices plus enough information to connect
+them into primitives. A vertex is a record, not merely a position:
+
+| Attribute | What it commonly represents |
+|---|---|
+| position | model-space location |
+| normal | local surface direction used for lighting |
+| texture coordinate | location in a 2D image |
+| color | per-vertex tint or data |
+| bone indices/weights | how an animation skeleton moves the vertex |
+
+An **index buffer** stores integer vertex references. For example, two triangles
+forming a square can share four vertices instead of duplicating six. In an indexed
+draw, `count` usually says how many indices to consume—not how many unique vertices,
+triangles, or objects exist. With triangle topology and no primitive restart,
+`count / 3` is the submitted triangle count, but clipping and degenerate triangles
+mean it is still not the number of visible triangles.
+
+## Render state is context for interpreting a draw
+
+A draw call does not contain every fact needed to explain its pixels. Its meaning
+depends on state already bound to the graphics context:
+
+```text
+geometry + topology + transforms + shaders + textures + render state = draw meaning
+```
+
+Important state includes face culling, depth comparison, depth writes, stencil
+operations, blending, scissor rectangles, color masks, and the current framebuffer.
+Changing `depth_test_enabled` is different from changing the depth comparison from
+`LESS` to `ALWAYS`, and both are different from leaving the test on while disabling
+depth writes.
 
 ![Entities no longer being drawn]({{ site.baseurl }}/assets/images/5/2/urbanterror2.png)
 
@@ -100,6 +163,27 @@ After geometry is transformed and clipped, it produces candidate screen fragment
 
 Depth is therefore not a distance flag stored on one entity. It is a per-fragment comparison performed after projection. If depth testing is disabled or changed to always pass, later fragments can appear on top even when their geometry is behind a wall.
 
+There are two related operations:
+
+1. **depth test:** compare the candidate fragment's stored depth with the current
+   depth-buffer value;
+2. **depth write:** if the fragment survives, optionally replace the stored value.
+
+Transparent objects often keep the depth test but disable depth writes and render
+back-to-front. Turning off the test entirely is not equivalent.
+
+Perspective depth is normally **nonlinear**. More of the depth buffer's numeric
+precision is concentrated near the camera. With the traditional mapping, making
+the near plane extremely small compared with the far plane wastes precision and
+can cause two nearby surfaces to alternate visibility, called *z-fighting*.
+Modern engines may use a floating-point reversed-z buffer, where farther values and
+the comparison direction are reversed to improve precision. Never hard-code “small
+depth means near” until the projection and comparison convention are confirmed.
+
+The depth buffer answers “which submitted fragment wins at this sample?” It does
+not answer whether an object is logically visible to gameplay. Collision queries,
+portals, fog-of-war systems, and server state may use entirely different data.
+
 ![A depth-test experiment in an offline target]({{ site.baseurl }}/assets/images/5/2/urbanterror13.png)
 
 That visual result proves a rendering rule changed; it does **not** prove which objects a call represents. You still need classification tests.
@@ -132,6 +216,26 @@ impl<F: FnOnce()> Drop for RestoreOnDrop<F> {
 The actual graphics calls may need FFI, but the “restore no matter how this scope exits” pattern stays in ordinary safe code.
 
 Older OpenGL behaves like a state machine: many calls change context state that later draw calls inherit. Treat each temporary change as a scoped transaction. Capture the exact old value, apply the experiment, perform the intended draw, and restore even on early return. “Set it back to the usual default” is weaker than restoring the value that was actually present.
+
+Also restore state on the same thread and context where it was captured. OpenGL
+context state belongs to a current context; a worker thread cannot safely repair
+render-thread state merely because it has the same function pointers.
+
+## Separate visibility failures by stage
+
+Use the earliest observable difference to narrow the cause:
+
+| Observation | Likely stage |
+|---|---|
+| object absent from visible list | game filtering or CPU culling |
+| draw call absent | submission/batching path |
+| vertices leave clip volume | transform, camera, or clipping |
+| fragments exist but fail depth | depth state or existing occluder |
+| fragments pass but write no color | color mask, shader discard, stencil |
+| color appears but looks wrong | shader inputs, texture, lighting, blend, color space |
+
+This table is a diagnostic order, not proof. Some engines merge or reorder stages,
+and GPU-driven pipelines can construct visible lists on the GPU.
 
 ## Build the Urban Terror 4.3.4 memory wallhack
 

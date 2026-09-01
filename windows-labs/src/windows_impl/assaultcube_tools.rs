@@ -116,19 +116,14 @@ fn is_alive(entity: usize) -> bool {
 }
 
 fn aim_from_to(from: Vec3, to: Vec3) -> (f32, Angles) {
-    let mut dx = to.x - from.x;
-    let mut dy = to.y - from.y;
+    let dx = to.x - from.x;
+    let dy = to.y - from.y;
     let dz = to.z - from.z;
-    let distance = dx.hypot(dy);
+    let horizontal = dx.hypot(dy);
 
     let yaw = dy.atan2(dx).to_degrees() + 90.0;
-    dy = dy.abs();
-    if dy < 5.0 {
-        dx = dx.abs();
-        dy = dx;
-    }
-    let pitch = dz.atan2(dy).to_degrees();
-    (distance, Angles { yaw, pitch })
+    let pitch = dz.atan2(horizontal).to_degrees();
+    (horizontal, Angles { yaw, pitch })
 }
 
 pub fn assaultcube_aim_once() -> Result<()> {

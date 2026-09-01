@@ -29,7 +29,7 @@ enum Value {
 
 The IDs here are handles into VM-owned storage. That keeps interpreter objects under one memory manager instead of handing scripts raw native pointers.
 
-## A table has two useful personalities
+## A Lua table combines array-like and map-like storage
 
 Lua uses tables for sequences, records, dictionaries, objects, and module namespaces. An implementation can optimize common integer keys with an array part while keeping other keys in a hash-map part:
 

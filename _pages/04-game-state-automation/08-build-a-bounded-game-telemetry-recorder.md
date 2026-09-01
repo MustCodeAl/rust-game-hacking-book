@@ -11,7 +11,7 @@ summary: Sample live game state without write rights, move file I/O off the obse
 mermaid: true
 ---
 
-## Observation should not become the slowdown 📈
+## The recorder must not stall the game
 
 A call logger, frame observer, or value recorder has two jobs with different timing needs:
 
@@ -32,7 +32,7 @@ flowchart LR
 
 The producer never waits for disk. The consumer owns the file.
 
-## Reliable means honest when one part goes wrong
+## Record overload and failure instead of hiding them
 
 A **fault** is one thing going wrong: the disk pauses, a queue fills, the target
 closes, or the writer thread exits. A **failure** is the recorder breaking its
@@ -165,7 +165,7 @@ record:
 
 Do not silently reinterpret old columns after a format change. Create `v2`.
 
-## Give a run a beginning, details, and an ending
+## Write explicit start, event, and end records
 
 Treat one telemetry file as a complete record rather than a pile of unrelated
 lines:

@@ -197,6 +197,27 @@ pub struct Mat4 {
     pub values: [[f32; 4]; 4],
 }
 
+/// Normalized depth interval used by the target graphics API.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DepthConvention {
+    /// OpenGL-style normalized depth from -1 through 1.
+    OpenGl,
+    /// Direct3D-style normalized depth from 0 through 1.
+    Direct3D,
+}
+
+impl DepthConvention {
+    /// Returns whether a finite normalized depth lies inside the clip volume.
+    #[must_use]
+    pub fn contains(self, depth: f32) -> bool {
+        depth.is_finite()
+            && match self {
+                Self::OpenGl => (-1.0..=1.0).contains(&depth),
+                Self::Direct3D => (0.0..=1.0).contains(&depth),
+            }
+    }
+}
+
 /// A projected screen position.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScreenPoint {
@@ -206,8 +227,17 @@ pub struct ScreenPoint {
 }
 
 /// Projects a 3D point with a row-major view-projection matrix.
+///
+/// The matrix contract assumes visible points produce positive clip `w`.
+/// Callers must supply the normalized depth interval used by the target API.
 #[must_use]
-pub fn world_to_screen(point: Vec3, matrix: Mat4, width: f32, height: f32) -> Option<ScreenPoint> {
+pub fn world_to_screen(
+    point: Vec3,
+    matrix: Mat4,
+    width: f32,
+    height: f32,
+    depth_convention: DepthConvention,
+) -> Option<ScreenPoint> {
     if !point.is_reasonable()
         || !width.is_finite()
         || !height.is_finite()
@@ -230,7 +260,7 @@ pub fn world_to_screen(point: Vec3, matrix: Mat4, width: f32, height: f32) -> Op
     let ndc_x = clip_x / clip_w;
     let ndc_y = clip_y / clip_w;
     let ndc_z = clip_z / clip_w;
-    if !ndc_x.is_finite() || !ndc_y.is_finite() || !ndc_z.is_finite() {
+    if !ndc_x.is_finite() || !ndc_y.is_finite() || !depth_convention.contains(ndc_z) {
         return None;
     }
 
@@ -324,9 +354,18 @@ mod tests {
             identity,
             1920.0,
             1080.0,
+            DepthConvention::OpenGl,
         )
         .expect("origin projects");
         assert!((point.x - 960.0).abs() < f32::EPSILON);
         assert!((point.y - 540.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn depth_conventions_reject_different_clip_ranges() {
+        assert!(DepthConvention::OpenGl.contains(-0.5));
+        assert!(!DepthConvention::Direct3D.contains(-0.5));
+        assert!(DepthConvention::Direct3D.contains(0.5));
+        assert!(!DepthConvention::OpenGl.contains(f32::NAN));
     }
 }
