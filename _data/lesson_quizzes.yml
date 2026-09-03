@@ -877,3 +877,19 @@
   options: "Unity's Boehm collector does not move objects, so an address stays valid for the object's lifetime, while CoreCLR's compacting collector can relocate a surviving object||Both collectors relocate objects, so no address is ever durable||Neither collector relocates objects, so addresses behave exactly as in a native game||Only 32-bit runtimes relocate objects"
   answer: "0"
   explanation: "'Managed' does not decide whether an address is durable; the specific collector does. Unity's Mono uses the non-moving Boehm collector, which is why fixed addresses and pointer chains behave much as they do in native games. CoreCLR uses a generational compacting collector that relocates survivors, so there you need a stable reference such as a handle or a re-lookup rather than a remembered address."
+
+"5.10":
+  id: "dxgi-present-vtable-index"
+  title: "Derive the slot"
+  prompt: "`IDXGISwapChain` inherits IUnknown (3 methods), then IDXGIObject (4 methods), then IDXGIDeviceSubObject (1 method), and declares `Present` first. Which vtable index is `Present`, and why does that reasoning matter?"
+  options: "Index 8, because a vtable lists inherited methods first in inheritance order, so the derivation can be repeated for any method instead of trusting a copied number||Index 0, because Present is the interface's own first method||Index 3, because IUnknown occupies the first three slots and everything else follows immediately||Index 8, but only in 32-bit processes"
+  answer: "0"
+  explanation: "3 + 4 + 1 = 8. The value matters less than the method: counting inherited interfaces in order lets you derive ResizeBuffers, DrawIndexed, or any other slot yourself, and tells you at once when a list found online is describing a different interface. Slot width does change with pointer size, but the index does not."
+
+"5.11":
+  id: "d3d-draw-count-units"
+  title: "Count the right thing"
+  prompt: "A filter written for Direct3D 11 keys on `index_count == 900`. Ported to Direct3D 9's `DrawIndexedPrimitive`, it matches nothing. What is the most likely cause?"
+  options: "Direct3D 9 passes `primitive_count`, which counts primitives rather than indices, so a 900-index triangle list arrives as 300||Direct3D 9 does not support indexed drawing||The index buffer is bound differently, so counts are always zero||Direct3D 9 reports counts only after the frame is presented"
+  answer: "0"
+  explanation: "For a triangle list the two differ by a factor of three. Direct3D 11's `DrawIndexed` takes an index count; Direct3D 9's `DrawIndexedPrimitive` takes a primitive count. Confirm which unit an argument carries before porting a threshold, and note that `base_vertex_location` is signed in Direct3D 11 for the same care-with-units reason."
