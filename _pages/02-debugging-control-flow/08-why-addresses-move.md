@@ -35,7 +35,12 @@ treating yesterday's address as permanent identity.
 
 ## Relative locations
 
-Although a module base can move, the distance from the base to a specific item is often stable for one exact build:
+ASLR moves a module, but it moves the whole module as a single piece. Windows
+maps the entire image — code, constants, global variables — as one block and
+chooses a new starting address for that block on each run. Nothing inside the
+block shifts relative to anything else inside it. So while the base address is
+unpredictable, the distance from the base to a specific global is decided by
+the compiler and stays identical on every run of that exact build:
 
 ```text
 module base + relative offset = current address
@@ -85,6 +90,32 @@ At every link, distinguish three different numbers:
 - the field offset added to that pointer value.
 
 Writing the chain as numbered equations makes accidental double-dereferences visible.
+
+Walked with real numbers, the chain in the diagram above looks like this:
+
+```text
+module base                    0x1400_0000
++ root offset 0x01A2_B3C0  ->  0x15A2_B3C0    an address holding a pointer
+read the pointer there     ->  0x0453_1180    the player manager
+
+0x0453_1180 + 0x18         ->  0x0453_1198    an address holding a pointer
+read the pointer there     ->  0x0691_A200    the current player
+
+0x0691_A200 + 0x30         ->  0x0691_A230    the address of the gold field
+read four bytes there      ->  250            the value you wanted
+```
+
+Notice the rhythm: add, read, add, read — and then at the last step, add and
+stop. That final `+ 0x30` produces the address *of* gold, not a pointer to
+somewhere else. Reading a pointer there instead would take the number 250,
+treat it as an address, and try to read memory at `0x0000_00FA`.
+
+That is the “one dereference too many” mistake, and it has a recognizable
+signature: the error names a very small address. Ordinary game values —
+health, gold, ammunition — are small numbers, so when one is mistakenly used
+as an address it points at the very bottom of the address space, where nothing
+is mapped. An error mentioning an address below a few thousand almost always
+means you dereferenced a value instead of a pointer.
 
 ## Pointer scans are hypotheses
 

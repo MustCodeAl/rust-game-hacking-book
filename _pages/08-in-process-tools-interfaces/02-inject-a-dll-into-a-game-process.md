@@ -134,6 +134,26 @@ let module_handle = wait_for_thread(&thread, "the LoadLibraryW thread")?;
 anyhow::ensure!(module_handle != 0, "LoadLibraryW returned null");
 ```
 
+Two things about that sequence deserve an explanation, because both look wrong
+the first time you read them.
+
+**Why is our own `LoadLibraryW` address valid in the game?** `GetProcAddress`
+runs in the injector and returns an address in the injector's address space —
+which, from the previous chapter, should mean nothing in another process.
+It works here because Windows randomizes the base of a system DLL like
+`kernel32.dll` once per boot, not once per process. Every process in the
+session maps it at the same address, so the number is genuinely the same on
+both sides. This is a property of system DLLs specifically. It is not true of
+the game's own modules, and it is not a rule to generalize.
+
+**Why can `LoadLibraryW` be used as a thread start routine?** Because the two
+signatures happen to line up. A thread entry point receives one pointer-sized
+argument and returns a pointer-sized value; `LoadLibraryW` takes one pointer (a
+wide string) and returns one (the module handle). So `CreateRemoteThread` can
+call it directly, the remote memory holding the path becomes its argument, and
+the thread's exit code is the returned module handle — which is exactly what
+the `module_handle != 0` check above reads.
+
 The wrapper methods are small `unsafe` boundaries over:
 
 - `OpenProcess`;

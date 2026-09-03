@@ -33,6 +33,24 @@ Many APIs return a new handle that the caller owns. When the program is finished
 
 Closing the same handle twice is also wrong. Windows may have already reused that number for a different object, turning a cleanup mistake into a difficult intermittent bug.
 
+That sequence is worth spelling out, because it explains why this class of bug
+surfaces so far away from its cause:
+
+```text
+1. you open a process and receive handle 0x12C
+2. you close 0x12C                          -> correct
+3. elsewhere, the program opens a log file
+   Windows reuses the free slot and returns 0x12C again
+4. your cleanup code closes 0x12C a second time
+5. the log file is now closed, and nothing says why
+```
+
+Step 4 does not report an error. It closes something perfectly real — just not
+the object you meant. The failure appears later, in unrelated code, at a moment
+that depends on the exact order in which the program happened to allocate
+handles. That timing dependence is precisely why double-close bugs are so hard
+to reproduce and so easy to blame on the wrong component.
+
 The ownership rule should be simple:
 
 > One owner closes one owned handle exactly once. Borrowers may use it temporarily but never close it.

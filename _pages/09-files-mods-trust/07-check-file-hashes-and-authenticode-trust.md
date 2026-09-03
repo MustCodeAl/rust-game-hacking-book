@@ -16,7 +16,23 @@ A SHA-256 hash is a fingerprint of exact bytes. Change one byte and the fingerpr
 
 > “Are these bytes identical to the bytes I recorded earlier?”
 
-It cannot answer who created the original file. An attacker can replace both a file and an unprotected text file containing its hash.
+It cannot answer who created the original file. A hash does not create trust; it
+only *moves* trust from wherever you obtained the hash onto the bytes now on
+your disk.
+
+That distinction has practical teeth. If you download `mod.zip` and
+`mod.zip.sha256` from the same page, and someone is able to change that page,
+they can change both — and the two will agree perfectly:
+
+```text
+downloaded mod.zip          -> hashes to 9f2c...     match
+downloaded mod.zip.sha256   -> claims    9f2c...     both lines written by the attacker
+```
+
+Verification reports success and has proven nothing. A hash is only worth
+checking when it reached you by a route the attacker does not control: a signed
+release, a genuinely separate channel, or a value you recorded yourself from a
+copy you already had reason to trust.
 
 An **Authenticode signature** connects the file's digest to a signing certificate and asks Windows to apply a trust policy. It can help answer:
 

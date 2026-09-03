@@ -87,6 +87,15 @@ teams:     [t0  t1  t2 ]
 An entity-component system may store position, health, and rendering components
 in separate pools connected by an entity ID.
 
+Engines choose between these for a practical reason. The first layout keeps one
+player's fields side by side, which suits code that handles one player at a
+time. The second keeps each field's values side by side, which suits code that
+sweeps across every player touching only one field: a physics step that reads
+positions and ignores everything else moves far less unrelated data through the
+CPU's cache. You cannot tell which choice an engine made by staring at a single
+value. You can tell by looking at what sits immediately around it and by
+watching which addresses one instruction visits as a loop repeats.
+
 These layouts describe the same ideas differently. Do not force the first
 layout onto evidence that shows the second. Follow the instructions that read
 the values.
@@ -103,8 +112,21 @@ Games often reuse memory. After one enemy disappears, a new enemy may later use
 address `0x5000`. The address stayed the same while the identity changed.
 
 Many engines solve this with a **handle** made from an index plus a generation
-number. The index chooses a slot; the generation changes when the slot is
-reused. Code rejects an old handle whose generation no longer matches.
+number. The index chooses a slot, and the generation is a counter that goes up
+every time that slot is reused. Code compares the generation carried by the
+handle against the generation currently sitting in the slot:
+
+```text
+handle {slot: 12, generation: 3}    slot 12 holds generation 3    -> accepted
+    ... that enemy dies, and slot 12 is reused for a new enemy ...
+handle {slot: 12, generation: 3}    slot 12 holds generation 4    -> rejected
+```
+
+Notice what the stale handle points at: a real, living object at a valid
+address. Nothing about the memory looks broken. The generation mismatch is the
+only thing that reveals this is not the object the holder meant. That idea is
+worth copying into your own tools — when you record an object, record something
+that proves which object it is, not only where it was.
 
 ## Rules are relationships that must remain true
 
@@ -119,7 +141,14 @@ position coordinates are finite numbers
 ```
 
 Such a rule is called an **invariant** when valid game state must keep it true.
-Checking relationships is stronger than checking one field alone.
+
+Checking a relationship is stronger than checking one field, because a single
+field can rarely look wrong on its own. A health of 80 is entirely plausible —
+until you read `max_health` from the same object and find 60. Each number is
+believable by itself; together they prove the pair did not come from one valid
+object. In practice that is how you discover that an offset is wrong, that a
+structure shifted in a newer game build, or that you accidentally read two
+fields from two different objects.
 
 ## A displayed value may be a copy
 

@@ -118,6 +118,26 @@ When a new build moves fields:
 7. create a new layout record and keep the old record immutable;
 8. run captured-snapshot regression tests for both builds.
 
+Step 3 deserves emphasis, because the tempting shortcut is to diff two known
+offsets and add that difference to all the others. Layouts do not move like
+that. A field inserted in the middle shifts everything after it and nothing
+before it, and alignment can absorb part of the shift:
+
+```text
+field         build 41    build 42    moved by
+position      0x30        0x30        0
+yaw           0x48        0x48        0
+team          --          0x50        (newly added)
+health        0x138       0x140       +8
+max_health    0x13C       0x144       +8
+entity_id     0x150       0x158       +8
+```
+
+Nothing here moved by one constant. Three fields did not move at all, one
+appeared, and the rest shifted by the size of the insertion. A tool that added
+`+8` everywhere would read `position` eight bytes into the wrong place and
+report numbers that still look like perfectly plausible coordinates.
+
 Compiler optimization can split, inline, reorder, or eliminate accesses. A
 missing old pattern does not prove the underlying concept disappeared.
 

@@ -85,7 +85,23 @@ For the course build of AssaultCube, our recovered player model contains these u
 
 Notice the gaps. We have not claimed that every byte between `0x0C` and `0x40` is useless. Those bytes may contain velocity, dimensions, pointers, flags, or padding. **Unknown means unproven**, not empty.
 
-Padding is especially easy to miss. CPUs and compilers often place a field at an aligned address, leaving unused bytes between fields. If you squeeze the known fields together in your guessed structure, every later offset becomes wrong. ❌
+Padding is especially easy to miss. CPUs and compilers often place a field at an
+aligned address — usually a multiple of that field's own size — leaving unused
+bytes in between. Three fields declared in this order produce a layout with a
+hole in it:
+
+```text
+offset  size  field
++0x00   1     dead flag  (u8)
++0x04   4     health     (u32)    <- not +0x01
++0x08   4     yaw        (f32)
+```
+
+The three bytes at `+0x01`, `+0x02`, and `+0x03` hold nothing meaningful. They
+exist only so that `health` begins at a multiple of four. If you assume fields
+sit back to back and put `health` at `+0x01`, then every offset after it is
+wrong by three bytes, and each read returns a value stitched together from
+pieces of two neighboring fields. ❌
 
 ## Find the object base from one known field
 
@@ -143,12 +159,34 @@ A class can declare a method as `virtual`, allowing different object types to ch
 - a **vtable**: a table containing function addresses;
 - a **vptr**: a hidden pointer in each object that points to its vtable.
 
+The purpose is to let a single call site reach different code depending on what
+the object actually is. The compiler cannot know at build time whether a given
+entity will be a human player or a bot, so rather than writing a fixed
+destination it writes “call whatever address is in slot 3 of this object's
+table.” Each class gets its own table, and every object carries a pointer to
+the right one.
+
 A 32-bit virtual call often has this general shape:
 
 ```nasm
-mov eax, [ecx]      ; read the object's possible vptr
+mov eax, [ecx]           ; read the object's possible vptr
 call dword ptr [eax+0Ch] ; call virtual slot 3
 ```
+
+That is two lookups before any game code runs. Followed with real numbers:
+
+```text
+ecx                  =  0x1234_0000    the object
+read [ecx]           -> 0x00A1_B200    the vtable this object uses
+0x00A1_B200 + 0x0C   =  0x00A1_B20C    the slot being called
+read [0x00A1_B20C]   -> 0x004C_7710    the function that finally runs
+```
+
+The offset `0x0C` is 12, and a pointer in a 32-bit process is four bytes, so
+`12 / 4 = 3`: this is the fourth entry counting from zero, which is why it is
+called slot 3. Two objects of different classes executing this identical
+instruction end up in different functions, because the second step read a
+different table.
 
 Do not label every first pointer a vptr. Test it:
 

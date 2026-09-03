@@ -99,7 +99,21 @@ end
 local ready_once = make_cooldown(3)
 ```
 
-The returned function keeps access to `remaining` after `make_cooldown` has returned. That remembered environment is a closure.
+The returned function keeps access to `remaining` after `make_cooldown` has
+returned. That remembered environment is a closure.
+
+The practical payoff is that each call to `make_cooldown` produces its own
+private `remaining`. Two cooldowns created this way count down independently,
+with no shared global and no counter passed around by hand:
+
+```lua
+local attack_ready = make_cooldown(3)
+local heal_ready = make_cooldown(10)   -- separate remaining, separate countdown
+```
+
+That is why closures suit bot code so well: each piece of timed behavior can
+own its own state without the rest of the script being able to reach in and
+disturb it.
 
 ## The colon supplies `self`
 
@@ -135,6 +149,22 @@ end
 local scout = Bot:new("scout")
 scout:set_state("plan")
 ```
+
+The line that confuses nearly everyone is `Bot.__index = Bot`. Two separate
+things are happening there, and it helps to state them apart.
+
+A **metatable** is simply a table attached to another table. Attaching one by
+itself changes nothing about how keys are looked up. What does the work is the
+`__index` key *inside* that metatable: when a lookup on the original table
+fails, Lua checks the metatable for `__index`, and if it finds a table there,
+repeats the lookup in that table.
+
+So `setmetatable(instance, Bot)` says “if a key is missing from this instance,
+ask `Bot` what to do,” and `Bot.__index = Bot` says “what to do is: look inside
+`Bot` itself.” Compressed into one line it reads as circular; separated into
+two steps it is ordinary. Forgetting to set `__index` is the classic beginner
+mistake — the metatable is attached, every method lookup still returns `nil`,
+and nothing in the error explains why.
 
 When `scout` has no `set_state` key, its metatable's `__index` points to `Bot`, so Lua looks there. This resembles method lookup, but it is not a compiled C++ vtable. It is a runtime table rule that scripts can inspect and change.
 

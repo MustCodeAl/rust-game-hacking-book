@@ -95,6 +95,30 @@ For a loaded PE32 image:
 7. walk its lookup names and IAT slots together;
 8. find `MessageBoxW` by name.
 
+Step 7 is the one that surprises people: each imported DLL has **two** parallel
+arrays, not one. The compiler writes them as identical lists of equal length,
+and the loader overwrites only one of them.
+
+```text
+index   lookup table (names)      address table (IAT)
+  0     "MessageBoxW"             0x7FF8_1234_5000    <- written by the loader
+  1     "MessageBoxA"             0x7FF8_1234_5100
+  2     ordinal 0x201             0x7FF8_1234_5200
+  3     0  (terminator)           0
+```
+
+Before the module is loaded, both arrays hold the same name references. During
+loading, Windows resolves each name and writes the resulting live address into
+the matching IAT slot, leaving the lookup table alone. That is exactly why you
+walk the two together: the lookup table still records *which function this
+entry is*, while the IAT records *where that function currently lives*.
+Searching the IAT by itself gives you addresses with no names attached;
+searching the lookup table by itself gives you names with nothing to patch.
+
+(Some binaries ship with the lookup table absent, in which case the loader has
+only the IAT to work from. The parser should handle that case rather than
+assuming both arrays are always present.)
+
 The important matching loop is:
 
 ```rust

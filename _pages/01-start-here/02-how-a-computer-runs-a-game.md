@@ -111,10 +111,12 @@ A location in memory has an **address**. The address answers “where?” The by
 stored there answer “what pattern is present?” The code that reads those bytes
 decides what that pattern means.
 
-For example, the bytes `64 00 00 00` can represent the integer 100 when read as
-a little-endian 32-bit number. The same bytes could be part of something else
-if the program reads them using another type. Bytes do not contain labels such
-as “health” or “gold.” Meaning comes from the code and surrounding data.
+For example, the bytes `64 00 00 00` represent the integer 100 when read as a
+32-bit number on an x86 machine, which stores the smallest-valued byte first.
+The next lesson works through that ordering. The same four bytes could be part
+of something entirely different if the program reads them using another type.
+Bytes do not contain labels such as “health” or “gold.” Meaning comes from the
+code that reads them and from the data around them.
 
 ## A process contains one or more threads
 
@@ -122,9 +124,15 @@ A **process** owns an address space and resources such as handles and loaded
 modules. A **thread** is an execution path inside that process.
 
 A game may use different threads for rendering, audio, file loading, or network
-work. Threads in the same process can share memory. This matters when debugging:
-a paused thread is only one execution path at one moment, while another thread
-may still change shared data.
+work. Threads in the same process share the same memory, which is what makes
+them useful and also what makes them awkward to observe.
+
+This matters the first time you pause a game. When a Windows debugger breaks,
+it normally suspends every thread in that process, so the game really does hold
+still. But “still” has limits. The pause ends the instant you continue, and
+anything outside that process — a game server sending an update, another
+program, a device — was never suspended at all. A value you read while paused
+is a fact about one moment, not a fact that stays true.
 
 You only need this distinction for now:
 
@@ -146,6 +154,21 @@ decimal 16 = hexadecimal 10
 decimal 255 = hexadecimal FF
 ```
 
+Hexadecimal is not chosen for elegance. It is chosen because sixteen is two
+multiplied by itself four times, so one hex digit stands for exactly four bits
+and two hex digits stand for exactly one byte:
+
+```text
+bits   1111 1111
+hex       F    F     ->  0xFF, one byte
+```
+
+That fixed relationship is what makes hex readable in a debugger. Written as
+`0xFF` you can see one whole byte at a glance. Written as decimal 255 the byte
+boundary is invisible, and a number like decimal 4096 gives no hint that it is
+a round figure in memory terms, while the same value written `0x1000` obviously
+is.
+
 The prefix `0x` tells you a number is written in hex, so `0xFF` means decimal
 255. Hex does not create a different value; it is another way to write the same
 number.
@@ -156,8 +179,23 @@ calculator while the notation becomes familiar.
 ## Software is built in layers
 
 Your code can call a library. The library can call a Windows API. Windows can
-ask a driver to communicate with hardware. Each layer gives the layer above it
-a smaller set of operations to use.
+ask a driver to communicate with hardware. Each layer offers the layer above it
+a simpler set of operations and hides the details of the layer below it.
+
+A single key press passes through several named layers before your code sees an
+answer:
+
+```text
+your code               "is the F1 key currently down?"
+  -> user32.dll         GetAsyncKeyState
+    -> Windows kernel   input handling
+      -> keyboard driver
+        -> the physical keyboard
+```
+
+Every arrow in that list is a place where the answer can be produced, delayed,
+filtered, or supplied by something other than a real key press. Knowing the
+layers is what lets you say *which* arrow your observation actually came from.
 
 That structure matters because a bug or observation belongs to a particular
 layer. If a window message arrives but the game ignores it, the input reached

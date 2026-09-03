@@ -237,6 +237,19 @@ je player_is_dead
 
 Signed and unsigned matter because the same bits can be read in different ways. `0xFFFF_FFFF` is `4,294,967,295` as a `u32`, but `-1` as an `i32`.
 
+That choice decides which branch actually runs. Imagine a price of
+`0xFFFFFFFF` arriving at a gold check while the player holds 100 gold:
+
+```text
+jb  (unsigned): is 100 below 4,294,967,295?   yes -> refuse the purchase
+jl  (signed):   is 100 less than -1?          no  -> allow it, then subtract
+                                                     -1, which adds a gold
+```
+
+Identical bits, identical `cmp`, opposite outcomes. When you are reading a
+check that guards something valuable, the signedness of the jump is not a
+footnote — it is very often the entire bug.
+
 The type makes that choice visible:
 
 ```rust
@@ -346,13 +359,24 @@ struct PlayerSnapshot {
 
 ## `lea` does math, not a read
 
-`lea rax, [rcx+rdx*4]` calculates an address-like number and stores it in `rax`. Despite the brackets, it does not read the pointed-to memory.
+`lea` stands for “load effective address.” It works out the address the brackets
+describe and stores that number, instead of reading whatever lives there. It is
+the one common instruction where brackets do not mean a memory access:
 
 ```nasm
-lea rax, [rcx+rdx*4]  ; rax = rcx + rdx*4
+mov rax, [rcx+rdx*4]  ; rax = the value stored at rcx + rdx*4
+lea rax, [rcx+rdx*4]  ; rax = rcx + rdx*4 itself, nothing is read
 ```
 
-Compilers also use `lea` for ordinary arithmetic, so do not assume every result is a pointer.
+The `*4` is a strong hint that this is array indexing: `rcx` holds the start of
+an array, `rdx` holds an index, and each step of the index moves four bytes
+because each element is four bytes wide. So this `lea` computes “the address of
+element number `rdx`,” which is exactly what code does just before handing one
+element to another function.
+
+Compilers also use `lea` as a quick way to do plain arithmetic, since it can
+multiply and add in one instruction without disturbing the flags. Do not assume
+every `lea` result is a pointer.
 
 ## A five-question reading method
 
@@ -413,6 +437,26 @@ cannot_afford:
 xor eax, eax             ; eax = 0, meaning false
 ret 4
 ```
+
+Three details in that listing puzzle almost everyone the first time.
+
+**Why `[esp+4]` and not `[esp]`?** The `call` that reached this function pushed
+a return address onto the stack, so that address is now sitting at `[esp]`. The
+argument the caller pushed just before the call is one slot further in, at
+`[esp+4]`. Whenever you see a function collecting its arguments from `+4`, `+8`,
+`+12`, the saved return address is what those offsets are stepping over.
+
+**Why `xor eax, eax` instead of `mov eax, 0`?** Both leave zero in `eax`. Any
+value exclusive-ORed with itself is zero, and the `xor` form assembles to fewer
+bytes, so compilers emit it constantly. Read `xor register, register` as “set
+this register to zero” and keep going.
+
+**Why does `ret` have a number after it?** `ret 4` returns *and* discards four
+bytes of arguments from the stack, so the function cleans up after itself. A
+plain `ret` leaves that job to the caller. Which form a function uses is fixed
+by its calling convention, and getting it wrong corrupts `esp`: execution
+returns to the correct place, and from that point on the caller's stack is off
+by four bytes.
 
 Trace it with `gold = 100` and `price = 30`:
 

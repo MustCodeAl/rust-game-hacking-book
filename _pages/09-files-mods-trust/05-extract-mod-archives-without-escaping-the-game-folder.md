@@ -26,7 +26,26 @@ It can also claim:
 C:\Users\Player\startup.bat
 ```
 
-If an installer joins those names directly onto the chosen mod directory, `..` or an absolute path can escape the folder. The safe rule is simple: **every extracted file must remain beneath one destination root after validation**.
+If an installer joins those names directly onto the chosen mod directory, `..`
+or an absolute path can escape the folder. Joining is not a containment
+operation — it is string concatenation with a separator, and it will happily
+build a path that leads somewhere else entirely:
+
+```text
+destination:   C:\Games\Wesnoth\mods
+entry name:    ..\..\..\Windows\System32\example.dll
+joined:        C:\Games\Wesnoth\mods\..\..\..\Windows\System32\example.dll
+resolves to:   C:\Windows\System32\example.dll
+```
+
+Look closely at what makes this dangerous. The joined path *does* begin with
+the mod folder, so a check like "does this start with my destination?" passes.
+The escape happens later, when the operating system resolves each `..` while
+opening the file. Absolute entry names are worse still: joining an absolute
+path onto a base discards the base completely, so the result is simply whatever
+path the archive asked for.
+
+The safe rule is therefore simple: **every extracted file must remain beneath one destination root after validation**.
 
 Containment is stronger than removing suspicious text. Paths can use repeated separators, mixed slash styles, drive prefixes, device names, case differences, links, or components that normalize away. Parse the path into components and accept only an explicitly safe relative form.
 

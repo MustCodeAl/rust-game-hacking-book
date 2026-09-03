@@ -67,6 +67,24 @@ thread B: owns loader_lock in DllMain → waits for game_lock
 
 Neither thread can continue. The dangerous second lock may be hidden inside a function that loads a DLL, initializes COM, sends a blocking cross-thread message, starts complex runtime work, or waits for another thread.
 
+The version that catches most game tools is subtler, because you never write
+the second lock yourself:
+
+```text
+DllMain  (holding the loader lock)
+  -> CreateThread                    succeeds; the thread now exists
+  -> WaitForSingleObject(thread)     wait for it to get going
+         the new thread must first run DLL_THREAD_ATTACH notifications
+         those need the loader lock
+         which DllMain is still holding
+```
+
+`CreateThread` returns success, so nothing appears to have gone wrong. The new
+thread then blocks before executing a single line of your code, and the wait
+never finishes. This is precisely why the shutdown sequence above joins worker
+threads *outside* the loader lock, and why starting real work belongs in an
+explicit `start()` that the host calls once loading has completed.
+
 That is why `DllMain` should not:
 
 - load another DLL;

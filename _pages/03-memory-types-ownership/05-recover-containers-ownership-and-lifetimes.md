@@ -42,6 +42,31 @@ the addresses belong to readable memory
 the resulting count fits a sensible limit
 ```
 
+Worked through with real numbers, a vector of 32-byte entities might look like
+this:
+
+```text
+begin        = 0x0453_1000
+end          = 0x0453_1140
+capacity_end = 0x0453_1400
+
+(0x140) / 32 = 10 live elements
+(0x400) / 32 = 32 elements of allocated room
+```
+
+The gap between `end` and `capacity_end` is the container's spare room. That is
+exactly why the count has to come from `end` rather than from the size of the
+allocation — using the allocation would report 32 entities, 22 of which were
+never constructed.
+
+Notice how much rests on `element_size` being correct. Guess 16 bytes instead
+of 32 and the same three pointers report 20 elements, half of them the second
+halves of real entities. Every address is readable and the count looks
+entirely reasonable. The divisibility check rejects many wrong guesses, but not
+one that happens to divide evenly like this, so the element size needs its own
+evidence: the stride the code actually uses when it walks from one element to
+the next.
+
 Those checks describe meaning. They remain useful even if a compiler changes field order.
 
 ## Fixed offsets and scaled offsets answer different questions

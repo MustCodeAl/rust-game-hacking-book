@@ -59,7 +59,22 @@ a.friend = b
 b.friend = a
 ```
 
-If each table strongly owns the other, both counts stay above zero even after the script drops `a` and `b`. A tracing garbage collector can start from roots—globals, active stacks, and live closures—mark reachable objects, then reclaim unmarked cycles.
+If each table strongly owns the other, both counts stay above zero even after the script drops `a` and `b`. Follow the arithmetic:
+
+```text
+after a = {} and b = {}      table A: 1 (a)             table B: 1 (b)
+after a.friend = b           table A: 1                 table B: 2 (b, A.friend)
+after b.friend = a           table A: 2 (a, B.friend)   table B: 2
+a and b leave scope          table A: 1 (B.friend)      table B: 1 (A.friend)
+```
+
+Both counts settle at one, each held up solely by the other. Nothing in the
+running program can reach either table any more, yet neither will ever be
+freed. That is the shape of every reference-counting leak: the objects have
+become unreachable without becoming unreferenced, and counting alone cannot
+tell those two conditions apart.
+
+A tracing garbage collector can start from roots—globals, active stacks, and live closures—mark reachable objects, then reclaim unmarked cycles.
 
 Do not assume `Rc` by itself is a complete Lua garbage collector. A small non-cyclic interpreter can use it while learning, but a general implementation needs a cycle strategy.
 

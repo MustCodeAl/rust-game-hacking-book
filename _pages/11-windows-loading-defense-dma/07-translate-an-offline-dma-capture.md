@@ -75,6 +75,39 @@ The error includes the failed level and physical entry address. That context is 
 
 ## Walk all four levels
 
+Before reading the code, it pays to see where its constants come from, because
+none of them are arbitrary. A 64-bit virtual address is cut into six fields:
+
+```text
+ 63     48 47    39 38    30 29    21 20    12 11         0
++---------+--------+--------+--------+--------+------------+
+|  sign   |  PML4  |  PDPT  |   PD   |   PT   |   offset   |
+| extend  | 9 bits | 9 bits | 9 bits | 9 bits |  12 bits   |
++---------+--------+--------+--------+--------+------------+
+```
+
+That single diagram accounts for every mask in the walk below:
+
+- **The shifts of 39, 30, 21, and 12** slide each index field down to bit zero
+  so it can be used as a table index.
+- **`& 0x1FF`** keeps nine bits, because `0x1FF` is 511 and each table holds
+  512 entries. Nine bits is not a coincidence: 512 entries of eight bytes each
+  comes to exactly 4,096 bytes, so every page table is itself exactly one page.
+- **`& 0xFFF`** keeps twelve bits — the offset within a 4 KiB page, since
+  `0xFFF` is 4,095.
+- **`& 0x000F_FFFF_FFFF_F000`** keeps bits 12 through 51 of an entry. The low
+  twelve bits are cleared because an entry stores flags there (present,
+  writable, user-accessible, large-page), and the high bits are cleared because
+  they hold further flags rather than address. What remains is the physical
+  address of the next table — which is page-aligned, and therefore always had
+  twelve spare zero bits for those flags to live in.
+
+So each level spends nine bits of the virtual address choosing one entry out of
+512, and the last twelve bits choose a byte inside the resulting page. Four
+levels of nine bits, plus twelve, is 48 — exactly how much of a 64-bit address
+this scheme actually uses, and the reason the top sixteen bits must be a sign
+extension for an address to count as canonical.
+
 The complete implementation masks flag bits from each next-table address:
 
 ```rust
@@ -102,7 +135,24 @@ The real file also checks the large-page bit at the PDPT and page-directory leve
 
 ## A read can cross a page boundary
 
-Translating only the starting address is a subtle bug. Suppose a 32-byte read begins 8 bytes before the end of a page. The first 8 bytes use one physical mapping; the remaining 24 bytes may live anywhere.
+Translating only the starting address is a subtle bug. Virtual memory looks
+contiguous; the physical memory behind it is not. Two virtual pages sitting
+side by side can be backed by physical pages nowhere near each other.
+
+Suppose a 32-byte read begins 8 bytes before the end of a page:
+
+```text
+requested: 32 bytes at virtual 0x0000_7FF6_1234_0FF8
+
+bytes  1..8    live in the page at virtual ...0000  ->  physical 0x0512_3000
+bytes  9..32   live in the page at virtual ...1000  ->  physical 0x0091_A000
+```
+
+Nothing warns you when this happens. Translating once and then reading 32
+consecutive physical bytes quietly returns 24 bytes belonging to whatever
+follows the first page in physical memory — a completely unrelated allocation,
+another process's data, or nothing mapped at all. The bytes come back looking
+perfectly ordinary.
 
 `read_virtual` therefore loops:
 

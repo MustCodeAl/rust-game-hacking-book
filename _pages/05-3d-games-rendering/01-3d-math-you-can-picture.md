@@ -147,6 +147,24 @@ That second line is why a dot product can become an angle with
 `acos(clamp(dot, -1, 1))`. Clamp first because floating-point rounding can produce
 `1.0000001`, which is outside the mathematical input range of `acos`.
 
+Worked through, a field-of-view test is three multiplications and two
+additions. Suppose the camera faces straight along positive x, and a target
+sits ahead and a little to the side:
+
+```text
+camera_forward      = (1.0, 0.0, 0.0)     already length 1
+direction_to_target = (0.8, 0.6, 0.0)     already length 1
+
+dot = (1.0 x 0.8) + (0.0 x 0.6) + (0.0 x 0.0) = 0.8
+```
+
+`0.8` is the cosine of roughly 37 degrees, so the target sits about 37 degrees
+off the centre of view. If the rule is “visible within a 45-degree cone,” you
+never need `acos` at all: compare the dot product against `cos(45°)`, which is
+about `0.707`, and anything above that threshold is inside the cone. Comparing
+cosines is cheaper than converting to angles, and it sidesteps the rounding
+trap described above.
+
 The **cross product** produces a direction perpendicular to two input directions:
 
 ```text
@@ -297,7 +315,12 @@ these two separate choices.
 ## Why 3D graphics uses four numbers for a 3D point
 
 A 3D translation cannot be represented by an ordinary 3×3 linear matrix because
-linear transforms must keep the origin fixed. **Homogeneous coordinates** add a
+linear transforms must keep the origin fixed. That restriction is easy to
+confirm for yourself: multiplying any 3×3 matrix by the point `(0, 0, 0)`
+multiplies every entry in the matrix by zero, so the answer is always
+`(0, 0, 0)` again. No arrangement of nine numbers can shift the origin
+somewhere else — and shifting everything by a fixed amount is precisely what
+translation means. **Homogeneous coordinates** add a
 fourth component so translation fits into the same matrix pipeline as rotation and
 scale:
 
@@ -325,7 +348,27 @@ ndc_x = clip_x / clip_w
 ndc_y = clip_y / clip_w
 ```
 
-If `w` is zero or behind the camera’s accepted direction, the division is invalid or the point should not be drawn. That is why world-to-screen code checks `w` before producing pixels.
+The reason this creates perspective at all is that the projection matrix is
+built so that the resulting `w` carries the point's distance from the camera.
+Dividing by `w` is therefore dividing by depth, and dividing by depth is
+precisely what makes distant things small: double the distance and the object
+covers half as much screen.
+
+If `w` is zero, the division is undefined. If `w` is negative, the point is
+behind the camera — and the division still yields a perfectly ordinary-looking
+coordinate, with both signs flipped. This is the classic overlay bug: an enemy
+standing directly behind the player gets drawn on screen in front, mirrored to
+the opposite side, with the box sliding the wrong way as they move. Nothing
+crashes and no number looks obviously wrong, which is why the check has to be
+written out explicitly:
+
+```text
+if clip_w <= small_positive_threshold {
+    the point is not visible; skip it
+}
+```
+
+That is why world-to-screen code checks `w` before producing pixels.
 
 For a symmetric perspective camera, the projected scale is proportional to
 `1 / depth`. Ignoring signs and API details, the central idea is:

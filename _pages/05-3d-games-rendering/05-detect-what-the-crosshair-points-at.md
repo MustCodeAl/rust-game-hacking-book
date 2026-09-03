@@ -86,7 +86,23 @@ c_term = dot(m, m) - r²
 discriminant = b² - c_term
 ```
 
-A negative discriminant means no line intersection. Otherwise the nearer ray hit
+Each symbol has a plain-English meaning worth holding on to. `m` is the vector
+from the sphere's centre to the ray's origin. `b` says how far along the ray the
+centre projects — in effect, where the ray comes closest to the centre.
+`c_term` compares the origin's distance from the centre against the radius, so
+it is negative exactly when the ray starts inside the sphere.
+
+The discriminant then answers one geometric question: how close does the ray
+pass to the centre, compared with the radius?
+
+```text
+discriminant < 0    the ray passes wide of the sphere   -> no hit
+discriminant = 0    the ray grazes the surface          -> one touch point
+discriminant > 0    the ray passes through it           -> enters and exits
+```
+
+That is why two roots appear when it is positive — one where the ray enters and
+one where it leaves. The nearer ray hit
 is `t = -b - sqrt(discriminant)`, provided `t ≥ 0`. If the origin is inside the
 sphere, the nearer root may be negative and the farther root must be considered.
 Production engines use several shape types and acceleration structures, but this

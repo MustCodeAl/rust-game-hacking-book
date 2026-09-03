@@ -85,6 +85,24 @@ The four-byte length makes embedded zero bytes unambiguous and lets the reader r
  }
 ```
 
+One hazard is worth naming here, even though this one-shot lab sidesteps it by
+writing only once. Shared memory gives two processes access to the same bytes.
+It gives them no agreement about *when*. Nothing prevents a reader from
+arriving in the middle of a write:
+
+```text
+writer: store length = 11
+        <- the reader runs here: length says 11, payload is still the old text
+writer: copy "hello world" into the payload
+```
+
+The reader's length check passes, the UTF-8 decode very likely succeeds, and
+the text returned is simply wrong — or is half of the previous message. Writing
+the payload before the length narrows that window without closing it, since the
+CPU and the compiler may reorder the two stores anyway. Closing it takes a
+sequence number the reader checks before and after copying, or a real
+synchronization object.
+
 This is the beginning of **serialization**: turning structured information into an agreed byte representation.
 
 ## Build the writer and reader

@@ -81,6 +81,26 @@ Suppose code measures how long a tiny operation takes. A large gap might come
 from a breakpoint, but also from preemption, power management, virtualization,
 page faults, logging, or a busy machine.
 
+Numbers make the difficulty concrete. Time the same trivial operation ten
+thousand times on an idle machine and you might record:
+
+```text
+median             1.2 us
+99th percentile    8.0 us
+maximum          412.0 us     <- one scheduler preemption, nothing unusual
+```
+
+Now try to pick a threshold. Set it at 10 microseconds and ordinary background
+activity trips it several times a minute. Set it above 412 and you have written
+a rule that almost nothing will ever trigger, including the condition you meant
+to catch. The distribution of “ordinary but unlucky” overlaps the distribution
+of “actually paused,” so no single number separates them cleanly.
+
+What does separate them is repetition. One sample above the 99th percentile is
+ordinary luck; twenty in a row from the same code path is a changed
+environment. That is exactly why the state machine above asks for another
+sample rather than deciding on the first one.
+
 Use distributions rather than one magic threshold:
 
 | Measurement | Useful interpretation |

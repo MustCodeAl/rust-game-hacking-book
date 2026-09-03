@@ -33,7 +33,35 @@ The CPU sees one continuous byte stream. The disassembler groups that stream int
 
 Suppose two supported builds both subtract a value and then load a nearby field. The instruction *shape* may stay recognizable while the relative call target between those instructions moves. A useful signature keeps the stable shape and places wildcards over the changing target bytes.
 
-Wildcards are not “bytes we forgot.” Each wildcard should have a written reason. Too few wildcards make the signature fragile. Too many make it common and ambiguous.
+Written out, that comparison looks like this. The same two instructions, taken
+from two builds of one game:
+
+```text
+build A:   29 47 04  E8 3C 91 FF FF
+build B:   29 47 04  E8 A8 2D FE FF
+           ~~~~~~~~  ~~ ~~~~~~~~~~~
+           identical |  these four differ
+                     |
+                     still the same call opcode
+```
+
+The first three bytes are `sub dword ptr [edi+4], eax`: the operation, the
+registers, and the field offset, none of which the compiler had any reason to
+change. `E8` is a call, and the four bytes after it hold a *relative distance*
+to the target, measured from the end of the call instruction. That distance
+shifts whenever either the calling code or the called function moves, even by a
+single byte, even though it still calls exactly the same function.
+
+So the signature keeps the first four bytes and wildcards the last four:
+
+```text
+29 47 04 E8 ?? ?? ?? ??
+```
+
+Wildcards are not “bytes we forgot.” Each one here has a stated reason —
+“relative call displacement, changes whenever code moves” — and that written
+reason is the difference between a wildcard and a shrug. Too few wildcards make
+the signature fragile. Too many make it common and ambiguous.
 
 ## A signature can overfit one recording
 

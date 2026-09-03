@@ -32,8 +32,23 @@ Here, `80`, `"Ada"`, and `true` are values. Their types are `u32`, `&str`, and
 `bool`.
 
 Types catch mistakes before the program runs. They also document meaning. A
-`PlayerId(u32)` and a `Health(u32)` can use the same bits while representing
-different jobs.
+`PlayerId(u32)` and a `Health(u32)` store identical bits, but giving them
+separate types means the compiler refuses to let you pass one where the other
+belongs:
+
+```rust
+struct PlayerId(u32);
+struct Health(u32);
+
+fn damage(target: PlayerId, amount: Health) { /* ... */ }
+
+// damage(Health(50), PlayerId(3));   // rejected: the arguments are swapped
+```
+
+Written as two plain `u32` parameters, that swap compiles happily and misbehaves
+at runtime instead. This is the cheapest bug prevention available, and later
+chapters lean on it constantly to keep addresses, offsets, and game values from
+being mistaken for one another.
 
 ## State is information that can change
 
@@ -161,8 +176,23 @@ raw bytes → validate length and tags → typed message → program logic
 ```
 
 Never let an untrusted length decide an allocation or index without a limit.
+Picture a message that starts with a four-byte length followed by that many
+bytes of text:
+
+```text
+00 00 00 04  a b c d      length 4, and four bytes really follow
+FF FF FF FF  a b c d      length 4,294,967,295, and four bytes follow
+```
+
+Nothing about the second line is malformed at the byte level. It is a
+well-formed message whose length field simply lies. Code that believes it will
+try to reserve four gigabytes for a twelve-byte message, or will index far past
+the end of what was actually received. The fix is not to detect the lie; it is
+to refuse to act on any length before checking it against both a configured
+maximum and the number of bytes genuinely present.
+
 Parsing is the boundary where uncertain bytes become trusted program state, so
-errors and bounds are part of the design.
+errors and bounds belong in the design rather than being bolted on afterward.
 
 Compression is different from encoding or encryption. Compression tries to use
 fewer bytes. Encryption tries to hide content from someone without a key.

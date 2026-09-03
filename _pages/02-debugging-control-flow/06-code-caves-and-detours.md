@@ -42,12 +42,35 @@ If any one is wrong, the game may crash or behave strangely.
 
 On x86, one instruction may be 1 byte and another may be 7 bytes. A typical near jump needs 5 bytes. You must replace **whole instructions** until you have enough room.
 
+The reason is that the CPU keeps no map of where instructions begin. It starts
+decoding at whatever address it is handed and reads forward, letting each
+opcode announce how many bytes it consumes. Start it one byte late and every
+instruction from that point on is decoded from the wrong position.
+
+Take the six-byte span this lesson hooks:
+
+```text
+address   bytes         instruction
+0x1000    8B 01         mov eax, [ecx]
+0x1002    8D 74 26 00   lea esi, [esi]
+```
+
+A five-byte jump written over it covers `8B 01 8D 74 26` and strands the final
+`00`. When the cave later returns to `0x1005`, the CPU does not see “the
+leftover tail of a `lea`.” It sees a fresh byte stream beginning with `00`,
+which starts a completely different instruction that swallows whatever follows
+as its operands. Execution continues confidently into nonsense, and the crash
+usually surfaces somewhere unrelated a few instructions later — which is what
+makes this mistake so hard to diagnose after the fact.
+
 ```text
 bad:  copy exactly 5 bytes, cutting an instruction in half
 good: copy whole instructions whose combined size is at least 5 bytes
 ```
 
-The return address is the hook address plus the total number of whole bytes replaced.
+So you round up to the next instruction boundary: cover all six bytes and fill
+the spare sixth byte with a `nop`. The return address is the hook address plus
+the total number of whole bytes replaced.
 
 ## Implement the verified Wesnoth detour
 
@@ -221,6 +244,20 @@ E9 ?? ?? ?? ?? 90
                └─ one-byte padding because the original span was six bytes
 ```
 
+Those four `??` bytes hold a *distance*, not a destination. `E9` takes a signed
+32-bit displacement measured from the address of the instruction that follows
+the jump — the hook address plus five. The number to write is therefore:
+
+```text
+displacement = cave_address - (hook_address + 5)
+```
+
+Two things follow from that. Because the value is relative, the same five bytes
+mean different destinations at different addresses, so a working jump cannot be
+copied to another location and still land anywhere sensible. And because the
+value is signed, jumping backward is perfectly ordinary: a cave at a lower
+address simply produces a negative displacement.
+
 The CPU therefore goes to our DLL instead. Our cave borrows control, preserves
 the interrupted computation, changes gold, performs the behavior we removed,
 and gives control back at `0x00CCAF90`. The original function never returns to
@@ -229,6 +266,15 @@ the hook address, so there is no loop.
 This is a tiny example of **control-flow redirection**, a computer-science idea
 used by debuggers, profilers, hot-patching systems, instrumentation tools, and
 game hooks.
+
+The cave interrupts a function in the middle of its work. That function had
+values sitting in registers and a comparison result sitting in the flags, and
+it expects to find all of them untouched when execution resumes. Everything the
+cave does — including the ordinary Rust inside `cave_body` — is free to
+overwrite them. `pushad` copies all eight general-purpose registers onto the
+stack and `pushfd` copies the flags; `popfd` and `popad` restore them in the
+opposite order, so the interrupted function never notices that anything
+happened.
 
 There is no universal “save every register” rule. `pushfd`/`pushad` is easy to
 understand for this small 32-bit teaching cave. In a performance-sensitive

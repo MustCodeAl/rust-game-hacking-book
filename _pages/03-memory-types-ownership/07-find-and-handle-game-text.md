@@ -28,7 +28,25 @@ Keep four layers separate:
 3. a **code unit** is one storage unit used by an encoding, such as `u8` for UTF-8 or `u16` for UTF-16;
 4. the **bytes** are the actual memory representation, with byte order relevant for multi-byte code units.
 
-One visible character can use several code units. That is why byte count, UTF-16 unit count, Unicode scalar count, and what a reader sees on screen are not interchangeable lengths.
+One visible character can use several code units. That is why byte count,
+UTF-16 unit count, Unicode scalar count, and what a reader sees on screen are
+not interchangeable lengths. Four short examples show every column coming
+apart:
+
+```text
+text                UTF-8 bytes   UTF-16 units   scalars   visible
+"A"                       1             1           1         1
+"é"  (U+00E9)             2             1           1         1
+"🎮" (U+1F3AE)            4             2           1         1
+"e" + U+0301              3             2           2         1
+```
+
+The last row is `e` followed by a combining acute accent, which displays as a
+single `é` but is two separate scalars. The practical consequence: a buffer
+sized from "the name is at most 16 characters" can be far too small, and code
+that truncates a string at a fixed byte count can cut a character in half and
+produce bytes that no longer decode. Always say which of these four lengths a
+number refers to.
 
 ![A terrain description containing searchable text]({{ site.baseurl }}/assets/images/3/5/wesnoth2.png)
 

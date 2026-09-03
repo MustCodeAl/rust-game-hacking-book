@@ -42,6 +42,17 @@ known cost plus its estimate. Both must reject invalid tiles before searching.
 
 Breadth-first search (BFS) explores every tile one step away, then two steps away, and so on. On a grid where every move costs the same, the first route it finds is shortest in number of steps.
 
+The queue is what makes that guarantee work. Because tiles leave the queue in
+the order they entered it, every tile one step from the start is examined
+before any tile two steps away, and so on outward. So the first time BFS
+reaches a tile, it must have arrived by the fewest possible steps: a shorter
+route would have come out of the queue earlier and got there first.
+
+Notice what that guarantee rests on — every move costing the same. As soon as
+some tiles cost more to enter, such as deep water, rough ground, or a slope,
+“fewest steps” and “cheapest route” stop being the same question, and BFS
+confidently answers the wrong one. Closing that gap is what A-Star is for.
+
 ```rust
 use std::collections::{HashMap, VecDeque};
 

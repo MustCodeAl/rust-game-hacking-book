@@ -97,6 +97,22 @@ One call to `read` may return:
 - one message plus part of the next;
 - several messages.
 
+Concretely: if the sender writes two length-prefixed messages back to back, the
+receiver has no say in how they turn up.
+
+```text
+sent:       [00 00 00 02][41 42]  [00 00 00 03][43 44 45]
+
+read #1 ->  00 00 00 02 41 42 00 00      one message, plus half a header
+read #2 ->  00 03 43 44 45               the remainder
+```
+
+Neither read lands on a message boundary. The receiver has to hold what it has
+in a buffer, remove complete messages when enough bytes have arrived, and keep
+the leftover for next time. A parser that assumes one `read` equals one message
+works flawlessly over a fast loopback connection while you are testing, then
+breaks the moment timing changes.
+
 This is why a protocol needs framing.
 
 ```rust
