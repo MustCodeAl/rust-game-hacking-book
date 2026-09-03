@@ -11,6 +11,7 @@ cargo test
 
 The crate covers:
 
+- eleven bypass patterns reproduced against weak toy controls and repaired;
 - exact and wildcard byte-pattern matching;
 - bounds-checked binary parsing;
 - angle wrapping and target-facing math;

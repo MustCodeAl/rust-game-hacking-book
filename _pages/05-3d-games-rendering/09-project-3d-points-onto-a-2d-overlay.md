@@ -185,9 +185,27 @@ There are three independent questions:
 3. is the candidate already `view × projection`, `projection × view`, or one
    component only (**composition**)?
 
-Transposing can compensate for one mismatch and conceal another. Validate identity,
-translation, and a known 90-degree rotation rather than repeatedly transposing until
-one screenshot looks plausible.
+Those three interact in a way that actively hides mistakes. Transposing a
+matrix swaps its rows and columns, and switching between row-vector and
+column-vector multiplication has precisely the same effect on the arithmetic.
+Two wrong answers therefore cancel, and the transform appears to work — for
+the wrong reasons:
+
+```text
+storage layout read wrong        -> effectively transposes the matrix
+multiplication convention wrong  -> transposes it straight back
+on screen                        -> correct, and still wrong
+```
+
+What makes this hard to catch is that the easiest test cannot detect it. The
+identity matrix is symmetric, so transposing it changes nothing and it passes
+under every combination of the three choices. A camera sitting still is nearly
+as forgiving. A translation matrix and a 90-degree rotation matrix are not
+symmetric, so under a cancelled pair of mistakes they are the first things to
+break.
+
+Validate identity, translation, and a known 90-degree rotation together rather
+than repeatedly transposing until one screenshot looks plausible.
 
 ## Transform a point
 

@@ -110,6 +110,26 @@ Why use an enum? Each variant defines exactly which data belongs to that event. 
 
 Some values flicker while a game changes scenes. Debouncing waits for the same candidate value to appear several times before accepting it.
 
+It helps to know *why* a value flickers, because that tells you how long to
+wait. During a scene change the game is often rebuilding the very object you
+are reading. The pointer is briefly null, or it points at a freshly allocated
+record whose fields have not been filled in yet. Your read succeeds and hands
+back a real number that was never a real game state:
+
+```text
+poll 1   health 100            the old scene
+poll 2   health 0              object freed, memory not yet reused
+poll 3   health 0
+poll 4   health 3452816845     new allocation, uninitialized bytes (0xCDCDCDCD)
+poll 5   health 100            the new scene, fully constructed
+```
+
+Debouncing buys correctness with latency, and that trade is exactly why the
+sample count deserves thought. Requiring three consistent samples at twenty
+polls per second delays every genuine change by roughly 150 milliseconds. That
+is cheap for "the match ended" and far too slow for "an enemy appeared." Choose
+the requirement per value rather than once for the whole bot.
+
 ```rust
 #[derive(Debug)]
 struct Debouncer<T> {
