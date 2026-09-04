@@ -2,7 +2,7 @@
 title: Identify the Engine and Runtime First
 author: attilathedud
 date: 2026-09-03
-category: Windows Processes & Observation
+category: Processes, Handles & Threads
 layout: post
 permalink: /pages/10/09/
 chapter: "10.9"

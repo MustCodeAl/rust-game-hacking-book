@@ -1,8 +1,8 @@
 ---
-title: Use Windows Input and Window Messages Deliberately
+title: Choose the Right Windows Input Path
 author: attilathedud
 date: 2026-08-14
-category: In-Process Tools & Interfaces
+category: DLLs, Hooks & In-Process Tools
 layout: post
 permalink: /pages/8/06/
 chapter: "8.6"

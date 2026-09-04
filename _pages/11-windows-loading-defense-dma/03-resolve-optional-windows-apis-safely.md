@@ -2,7 +2,7 @@
 title: Resolve Optional Windows APIs Safely
 author: attilathedud
 date: 2026-08-14
-category: Windows Loading, Defense & DMA
+category: DLL Loading, Defenses & DMA
 layout: post
 permalink: /pages/11/03/
 chapter: "11.3"

@@ -51,10 +51,10 @@ The examples use version-pinned open-source games, local matches, and determinis
   <a class="course-card" href="{{ site.baseurl }}/pages/5/01/"><span>05</span><h3>3D Games & Rendering</h3><p>Coordinates, OpenGL state, aiming, recoil, radar, and overlays.</p></a>
   <a class="course-card" href="{{ site.baseurl }}/pages/6/01/"><span>06</span><h3>Protocols, Networks & IPC</h3><p>Packets, framing, local proxies, shared memory, and named pipes.</p></a>
   <a class="course-card" href="{{ site.baseurl }}/pages/7/01/"><span>07</span><h3>Windows Binaries & Analysis</h3><p>PE files, exports, scanners, disassemblers, debuggers, call logs, and ETW.</p></a>
-  <a class="course-card course-card--rust" href="{{ site.baseurl }}/pages/8/01/"><span>08</span><h3>In-Process Tools & Interfaces</h3><p>DLLs, injection, detours, imports, input, menus, and reliable tool design.</p></a>
-  <a class="course-card" href="{{ site.baseurl }}/pages/9/01/"><span>09</span><h3>Files, Mods & Trust</h3><p>Saves, textures, unit data, safe archives, reversible manifests, signatures, and encryption.</p></a>
-  <a class="course-card" href="{{ site.baseurl }}/pages/10/01/"><span>10</span><h3>Windows Processes & Observation</h3><p>Build identity, least-privilege handles, memory maps, threads, API layers, and crash dumps.</p></a>
-  <a class="course-card" href="{{ site.baseurl }}/pages/11/01/"><span>11</span><h3>Windows Loading, Defense & DMA</h3><p>DLL loading, optional APIs, harmless toy defenses, the kernel boundary, and offline DMA evidence.</p></a>
+  <a class="course-card course-card--rust" href="{{ site.baseurl }}/pages/8/01/"><span>08</span><h3>DLLs, Hooks & In-Process Tools</h3><p>DLLs, injection, detours, imports, input, menus, and reliable tool design.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/9/01/"><span>09</span><h3>Game Files, Mods & Integrity</h3><p>Saves, textures, unit data, safe archives, reversible manifests, signatures, and encryption.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/10/01/"><span>10</span><h3>Processes, Handles & Threads</h3><p>Build identity, least-privilege handles, memory maps, threads, API layers, and crash dumps.</p></a>
+  <a class="course-card" href="{{ site.baseurl }}/pages/11/01/"><span>11</span><h3>DLL Loading, Defenses & DMA</h3><p>DLL loading, optional APIs, harmless toy defenses, the kernel boundary, and offline DMA evidence.</p></a>
   <a class="course-card course-card--rust" href="{{ site.baseurl }}/pages/12/01/"><span>12</span><h3>Lua Automation</h3><p>Tables, host APIs, snapshots, state machines, limits, and virtual-machine internals.</p></a>
   <a class="course-card" href="{{ site.baseurl }}/pages/13/01/"><span>13</span><h3>Advanced Game Hacking</h3><p>Game-state invariants, integrity gaps, anti-debug behavior, value transforms, robust hooks, update-resistant layouts, and bypass analysis.</p></a>
 </div>

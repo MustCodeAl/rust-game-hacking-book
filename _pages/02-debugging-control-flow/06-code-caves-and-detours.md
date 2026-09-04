@@ -17,6 +17,15 @@ Replacing an instruction with `nop` is useful for one quick test, but it can onl
 
 A **code cave** is a spare executable area used for extra code. A **detour** redirects execution there and then returns.
 
+The road-diversion image behind the name is worth taking literally, because
+every part of it maps onto something you have to get right. You put a sign at
+one junction sending traffic down a side road that rejoins the main road
+further along. You have not demolished the main road, so traffic can be
+restored by removing the sign. The side road must rejoin — a diversion that
+just stops leaves everyone stranded, which is what a detour with no return jump
+does. And the sign has to replace a whole junction, not half of one, which is
+the instruction-boundary problem below.
+
 ```mermaid
 flowchart TD
     A["Original code"] --> B["Jump to cave"]

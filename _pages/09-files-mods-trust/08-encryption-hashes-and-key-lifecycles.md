@@ -2,7 +2,7 @@
 title: Encryption, Hashes, and Key Lifecycles
 author: attilathedud
 date: 2026-08-14
-category: Files, Mods & Trust
+category: Game Files, Mods & Integrity
 layout: post
 permalink: /pages/9/08/
 chapter: "9.8"

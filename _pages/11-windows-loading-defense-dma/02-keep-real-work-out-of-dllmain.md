@@ -2,7 +2,7 @@
 title: Keep Real Work Out of DllMain
 author: attilathedud
 date: 2026-07-30
-category: Windows Loading, Defense & DMA
+category: DLL Loading, Defenses & DMA
 layout: post
 permalink: /pages/11/02/
 chapter: "11.2"

@@ -2,7 +2,7 @@
 title: Translate an Offline DMA Capture
 author: attilathedud
 date: 2026-08-14
-category: Windows Loading, Defense & DMA
+category: DLL Loading, Defenses & DMA
 layout: post
 permalink: /pages/11/07/
 chapter: "11.7"

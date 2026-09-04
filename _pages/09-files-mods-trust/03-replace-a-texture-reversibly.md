@@ -2,7 +2,7 @@
 title: Replace a Texture Reversibly
 author: attilathedud
 date: 2026-07-30
-category: Files, Mods & Trust
+category: Game Files, Mods & Integrity
 layout: post
 permalink: /pages/9/03/
 chapter: "9.3"

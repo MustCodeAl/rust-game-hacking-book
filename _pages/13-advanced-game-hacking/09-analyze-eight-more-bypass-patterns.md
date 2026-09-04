@@ -1,5 +1,5 @@
 ---
-title: Analyze Eight More Bypass Patterns
+title: Eight More Bypass Patterns and Their Repairs
 author: attilathedud
 date: 2026-09-03
 category: Advanced Game Hacking

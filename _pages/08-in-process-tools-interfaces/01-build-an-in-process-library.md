@@ -2,7 +2,7 @@
 title: Build an In-Process Library
 author: attilathedud
 date: 2026-07-30
-category: In-Process Tools & Interfaces
+category: DLLs, Hooks & In-Process Tools
 layout: post
 permalink: /pages/8/01/
 chapter: "8.1"

@@ -2,7 +2,7 @@
 title: Build a Reversible Mod Manifest
 author: attilathedud
 date: 2026-08-14
-category: Files, Mods & Trust
+category: Game Files, Mods & Integrity
 layout: post
 permalink: /pages/9/06/
 chapter: "9.6"

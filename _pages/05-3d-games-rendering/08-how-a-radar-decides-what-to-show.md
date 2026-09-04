@@ -1,5 +1,5 @@
 ---
-title: Understand Radar Filtering
+title: How a Radar Decides What to Show
 author: attilathedud
 date: 2026-07-30
 category: 3D Games & Rendering

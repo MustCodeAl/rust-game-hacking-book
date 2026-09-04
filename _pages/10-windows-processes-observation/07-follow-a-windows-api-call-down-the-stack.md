@@ -2,7 +2,7 @@
 title: Follow a Windows API Call Down the Stack
 author: attilathedud
 date: 2026-08-04
-category: Windows Processes & Observation
+category: Processes, Handles & Threads
 layout: post
 permalink: /pages/10/07/
 chapter: "10.7"

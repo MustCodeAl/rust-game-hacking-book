@@ -2,7 +2,7 @@
 title: Ask Windows for the Smallest Process Handle
 author: attilathedud
 date: 2026-07-30
-category: Windows Processes & Observation
+category: Processes, Handles & Threads
 layout: post
 permalink: /pages/10/03/
 chapter: "10.3"

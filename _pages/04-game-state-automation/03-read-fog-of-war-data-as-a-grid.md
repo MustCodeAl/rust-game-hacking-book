@@ -1,5 +1,5 @@
 ---
-title: Understand Fog-of-War Data
+title: Read Fog-of-War Data as a Grid
 author: attilathedud
 date: 2026-07-30
 category: Game State & Automation

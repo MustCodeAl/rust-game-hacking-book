@@ -2,7 +2,7 @@
 title: Inventory Every DLL Loaded by the Game
 author: attilathedud
 date: 2026-07-30
-category: Windows Loading, Defense & DMA
+category: DLL Loading, Defenses & DMA
 layout: post
 permalink: /pages/11/01/
 chapter: "11.1"

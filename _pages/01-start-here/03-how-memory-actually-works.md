@@ -216,13 +216,23 @@ common early mistake by a wide margin:
 | the pointer's own value | also an address | `0x5000` |
 | what it points at | the actual data | the player object |
 
-Read address `0x2000` and you get `0x5000`. That is not the player. It is a note
-telling you where the player is. To reach the player you read a second time,
-now from `0x5000`. That second read is called **dereferencing** the pointer.
+Read address `0x2000` and you get `0x5000`. That is not the player. To reach the
+player you read a second time, now from `0x5000`. That second read is called
+**dereferencing** the pointer.
 
-Said as two steps it stops being slippery: *read the note, then go where the
-note says.* Every extra link in a pointer chain is just that pair of steps
-again, which is exactly what Lesson 2.8 walks through with real numbers.
+Think of a library catalogue card. The card is not the book. It sits in a
+drawer at its own location, and all it carries is a shelf number. Finding the
+book is two separate steps: read the card, then walk to the shelf.
+
+That comparison is worth keeping because it survives being pushed on. The
+drawer slot is `0x2000`. The shelf number written on the card is `0x5000`. The
+book is the player object. And here is the part that matters most: if a
+librarian removes that book and shelves a different one in the gap, your card
+still reads `0x5000` and still sends you confidently to a real shelf holding a
+real book — the wrong one. Nothing about the card looks damaged.
+
+That is not a flaw in the comparison. It is precisely what goes wrong with
+pointers, and you will watch it happen at the end of this lesson.
 
 ### Why bother with the extra hop?
 
@@ -275,10 +285,15 @@ that register to make room for the return address and the call's local values.
 Returning adds it straight back. The block belonging to one call is its **stack
 frame**.
 
-Two useful properties fall directly out of that mechanism. Allocation costs
-almost nothing, because it is one subtraction. And cleanup is automatic and
-strictly reverse-order: there is a single pointer, and it retraces its steps,
-so the most recent frame is always the first to go.
+Picture a single bookmark sliding down a page as calls go deeper, and sliding
+back up as they return. Everything past the bookmark is scratch space that the
+next call will write over.
+
+That one image predicts all of the stack's behaviour. Allocation is cheap
+because it is just moving the bookmark. Cleanup is automatic because returning
+moves it back whether or not anyone remembered to tidy up. And frames are
+released in reverse order because there is only one bookmark and it retraces
+its own steps.
 
 The price of that simplicity is that a stack value cannot outlive its function.
 Once the pointer moves back, those bytes belong to whatever gets called next.
@@ -293,6 +308,13 @@ Game entities, text, and growable lists live here, because their lifetimes are
 set by game events — an enemy spawning, a match ending — not by a function
 returning. That flexibility costs real work per allocation, and nothing is
 automatic: some code has to decide when the object dies.
+
+Renting a locker is the closer comparison here, and it earns its place by
+getting the failures right too. You ask for one and it is yours for as long as
+you want, rather than until you leave the room. You have to hand the key back,
+and if you forget, the locker stays reserved for nobody — which is what a memory
+leak is. And once you do return it, the very next person can be given that exact
+locker, which is the address-reuse problem in the next section.
 
 ### An object keeps its address, but an address does not keep its object
 
@@ -329,11 +351,25 @@ per-process map from those numbers to actual physical memory.
 So `0x5000` in the game and `0x5000` in your own tool are two unrelated
 locations that happen to share a number. They are not the same box.
 
+Room numbers work the same way. Every building has a Room 101, so “Room 101”
+identifies nothing until you also say which building. Push that further and it
+keeps holding: you cannot walk into another building's Room 101 just by knowing
+the number — you need to be let through their front door first.
+
 That has a hard practical consequence. Your tool cannot reach the game's health
 value by reading `0x5000` itself — it would just read its own memory. It has to
 ask Windows to read that address *inside that particular process*. A **process
-handle** is how you say which process you mean, and it is why every external
+handle** is how you name which process you mean, and it is why every external
 memory tool in this book starts by opening one.
+
+A handle behaves like a cloakroom ticket, and the comparison holds up under
+pressure. The ticket is not the coat, and studying the number tells you nothing
+about the coat. It only works at the desk that issued it, which is why a handle
+number means nothing in another process. The desk decides what you may do with
+it — collect the coat, or only ask whether it is still there — which is the
+access rights you request when opening one. And if you never hand the ticket
+back, the desk keeps the hook reserved forever, which is exactly what leaking a
+handle does to Windows.
 
 Windows hands out virtual memory in blocks called **pages**, and groups
 neighbouring pages with matching properties into regions. A region can be

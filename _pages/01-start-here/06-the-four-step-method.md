@@ -1,5 +1,5 @@
 ---
-title: The Four-Step Method
+title: A Four-Step Method for Every Experiment
 author: attilathedud
 date: 2026-07-30
 category: Start Here

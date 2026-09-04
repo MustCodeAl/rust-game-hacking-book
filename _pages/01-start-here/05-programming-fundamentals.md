@@ -1,5 +1,5 @@
 ---
-title: The Concepts Behind Every Lab
+title: Programming Fundamentals
 author: attilathedud
 date: 2026-07-30
 category: Start Here
@@ -7,7 +7,7 @@ layout: post
 permalink: /pages/1/05/
 chapter: "1.5"
 minutes: 20
-summary: Learn the core computer-science words used throughout the book and how they connect in real tools.
+summary: "Learn the programming vocabulary the rest of the book assumes — data, types, state, algorithms, data structures, functions, abstractions, APIs, ABIs, parsing, concurrency, and invariants."
 ---
 
 Technical words are useful when they name a precise idea. They are not useful

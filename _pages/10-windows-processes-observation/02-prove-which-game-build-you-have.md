@@ -2,7 +2,7 @@
 title: Prove Which Game Build You Have
 author: attilathedud
 date: 2026-07-30
-category: Windows Processes & Observation
+category: Processes, Handles & Threads
 layout: post
 permalink: /pages/10/02/
 chapter: "10.2"

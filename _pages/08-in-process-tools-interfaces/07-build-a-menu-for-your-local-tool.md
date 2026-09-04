@@ -2,7 +2,7 @@
 title: Build a Menu for Your Local Tool
 author: attilathedud
 date: 2026-08-14
-category: In-Process Tools & Interfaces
+category: DLLs, Hooks & In-Process Tools
 layout: post
 permalink: /pages/8/07/
 chapter: "8.7"

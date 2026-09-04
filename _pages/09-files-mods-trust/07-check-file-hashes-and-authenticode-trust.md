@@ -2,7 +2,7 @@
 title: Check File Hashes and Authenticode Trust
 author: attilathedud
 date: 2026-08-04
-category: Files, Mods & Trust
+category: Game Files, Mods & Integrity
 layout: post
 permalink: /pages/9/07/
 chapter: "9.7"

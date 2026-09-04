@@ -2,7 +2,7 @@
 title: Find and Edit Save Data Safely
 author: attilathedud
 date: 2026-07-30
-category: Files, Mods & Trust
+category: Game Files, Mods & Integrity
 layout: post
 permalink: /pages/9/02/
 chapter: "9.2"

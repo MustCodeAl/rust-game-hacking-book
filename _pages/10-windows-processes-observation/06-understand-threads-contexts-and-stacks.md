@@ -2,7 +2,7 @@
 title: Understand Threads, Contexts, and Stacks
 author: attilathedud
 date: 2026-07-30
-category: Windows Processes & Observation
+category: Processes, Handles & Threads
 layout: post
 permalink: /pages/10/06/
 chapter: "10.6"

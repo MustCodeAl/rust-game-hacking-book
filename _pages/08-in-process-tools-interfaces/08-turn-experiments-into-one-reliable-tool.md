@@ -2,7 +2,7 @@
 title: Turn Experiments into One Reliable Tool
 author: attilathedud
 date: 2026-07-30
-category: In-Process Tools & Interfaces
+category: DLLs, Hooks & In-Process Tools
 layout: post
 permalink: /pages/8/08/
 chapter: "8.8"
