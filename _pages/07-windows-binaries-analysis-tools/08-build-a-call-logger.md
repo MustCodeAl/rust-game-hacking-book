@@ -246,7 +246,7 @@ This tool combines the whole section:
 - iced-x86 identifies calls;
 - the debugger owns breakpoint state;
 - the logger moves observations off the hot path;
-- RAII restores bytes and closes handles.
+- RAII — resource acquisition is initialization, the habit of tying cleanup to a value's lifetime — restores bytes and closes handles.
 
 First prove the logger against a small test target whose source is available. Then run the real capstone against one narrow course target:
 

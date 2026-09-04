@@ -45,7 +45,7 @@ Record the starting conditions:
 Good starting behaviors include spending gold, taking damage, moving along one
 axis, or toggling one graphics setting. Avoid changing several things at once.
 
-## 2. Understand the expected rules
+## 2. Understand how the behavior should work
 
 Before searching memory, write what the game appears to do.
 

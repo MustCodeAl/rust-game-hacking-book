@@ -22,8 +22,8 @@ state.
 |---|---|
 | storage drive | keeps the game files when the game is not running |
 | RAM | holds code and data the running game needs soon |
-| CPU | executes instructions that update the game |
-| GPU | turns drawing commands into pixels on the screen |
+| CPU (central processing unit) | executes instructions that update the game |
+| GPU (graphics processing unit) | turns drawing commands into pixels on the screen |
 | input devices | send keyboard, mouse, or controller events |
 
 The operating system coordinates these parts. On this course that operating
@@ -178,7 +178,7 @@ calculator while the notation becomes familiar.
 
 ## Software is built in layers
 
-Your code can call a library. The library can call a Windows API. Windows can
+Your code can call a library. The library can call a Windows **API** — an application programming interface, meaning the set of functions Windows offers and the rules for calling them. Windows can
 ask a driver to communicate with hardware. Each layer offers the layer above it
 a simpler set of operations and hides the details of the layer below it.
 

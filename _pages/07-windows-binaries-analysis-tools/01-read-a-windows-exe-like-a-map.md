@@ -15,7 +15,7 @@ mermaid: true
 
 A Windows `.exe` is not one solid blob of CPU instructions. It is a **Portable Executable**, usually shortened to **PE**. Its headers tell Windows where the code, read-only data, writable data, imports, resources, and relocation information live.
 
-Use two layouts connected by the section table:
+The same section occupies a place in the file and a place in memory, and those two places are numbered differently. A position in the file is a **file offset**. A position in the loaded image is an **RVA**, a relative virtual address, meaning a distance from wherever Windows put the module. Use two layouts connected by the section table:
 
 ```text
 file layout on disk                         image layout in a process

@@ -32,7 +32,7 @@ stateDiagram-v2
 
 Every arrow has a reason. That is much easier to debug than nested `if` statements and sleeps.
 
-## Find the action, then find its rules
+## Find the action, then find what it requires
 
 The original lesson traced a unit-creation path:
 

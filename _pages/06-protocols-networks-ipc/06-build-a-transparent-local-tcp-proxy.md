@@ -101,7 +101,7 @@ When a transparent proxy fails, compare direct and proxied captures:
 - Did both directions start?
 - Were bytes changed or dropped?
 - Did the client send the server’s port or address inside the protocol?
-- Is there TLS or a certificate bound to a hostname?
+- Is there TLS (Transport Layer Security, the encryption behind HTTPS) or a certificate bound to a hostname?
 - Did a relay block because it waited for EOF?
 - Did one side expect a UDP companion channel?
 

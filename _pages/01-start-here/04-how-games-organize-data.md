@@ -128,10 +128,15 @@ only thing that reveals this is not the object the holder meant. That idea is
 worth copying into your own tools — when you record an object, record something
 that proves which object it is, not only where it was.
 
-## Rules are relationships that must remain true
+## An invariant is a rule the game can never legally break
 
-A single value can look reasonable while the whole object is impossible. Useful
-relationships include:
+A single value can look completely reasonable while the object it belongs to is
+impossible. Health of 80 is fine. Health of 80 in an object whose maximum is 60
+is not — no legal sequence of game events could have produced that pair.
+
+A statement that valid game state must always satisfy is called an
+**invariant**. The word means what it sounds like: whatever else changes while
+you play, this does not vary.
 
 ```text
 0 <= health <= max_health
@@ -140,7 +145,11 @@ entity_generation matches slot_generation
 position coordinates are finite numbers
 ```
 
-Such a rule is called an **invariant** when valid game state must keep it true.
+Note what these have in common. Every one relates two or more pieces of state
+to each other, rather than saying a single number is “sensible.” That is the
+whole source of their power, and it is why invariants come up in every later
+chapter of this book — as the thing you use to confirm a field is real, and, in
+Chapter 13, as the thing a game control is supposed to protect.
 
 Checking a relationship is stronger than checking one field, because a single
 field can rarely look wrong on its own. A health of 80 is entirely plausible —

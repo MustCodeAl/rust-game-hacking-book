@@ -82,7 +82,7 @@ enum Message {
 
 The bytes are untrusted until parsing succeeds.
 
-## A protocol defines several layers of rules
+## One message is wrapped in several layers
 
 Several layers cooperate when the bot sends one chat message:
 

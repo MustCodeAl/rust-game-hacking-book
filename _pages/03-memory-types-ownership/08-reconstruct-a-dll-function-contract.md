@@ -163,7 +163,7 @@ Use the DLL from `windows-labs` and record results instead of calling an unknown
 
 Then compare your inferred contract with `windows-labs/src/windows_impl/dll.rs`. Differences are useful: they show exactly which part of the machine evidence you misunderstood.
 
-## Rules for unknown DLLs
+## Working practices for an undocumented DLL
 
 - Never guess a function pointer type and “try it” in an important process.
 - Use the disposable course fixture and record its exact build identity.

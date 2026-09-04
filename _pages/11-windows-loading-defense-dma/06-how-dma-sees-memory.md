@@ -74,6 +74,8 @@ Rejecting impossible input gives a clearer error than following nonsense offsets
 
 ## An IOMMU gives devices their own map
 
+An **IOMMU** is an input/output memory management unit. It does for devices what the page tables above do for processes: it sits between a device and physical memory and translates the addresses the device asks for.
+
 An IOMMU performs for devices a job similar to what the MMU performs for processes. The operating system can limit a device to approved physical regions instead of letting it reach all RAM.
 
 Windows exposes protections including **Kernel DMA Protection** on supported hardware. Microsoft explains that it uses the IOMMU to isolate capable peripherals and protect against malicious DMA devices. Read the current [Microsoft overview](https://learn.microsoft.com/en-us/windows/security/hardware-security/kernel-dma-protection-for-thunderbolt) for requirements and behavior.

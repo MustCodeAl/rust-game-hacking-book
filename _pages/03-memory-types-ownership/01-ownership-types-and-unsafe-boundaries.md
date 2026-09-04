@@ -324,7 +324,7 @@ and bounds; use checked address arithmetic for remote memory.
 
 Notice that Rust 2024 still requires an inner `unsafe` block inside an `unsafe fn`. The dangerous operation remains easy to find in review.
 
-> Never use `unsafe` to “make the borrow checker stop complaining.” First understand the ownership problem. In this course, `unsafe` is reserved for operating-system, graphics, FFI, and verified raw-memory boundaries.
+> Never use `unsafe` to “make the borrow checker stop complaining.” First understand the ownership problem. In this course, `unsafe` is reserved for operating-system, graphics, foreign-function-interface (FFI) — that is, calls into code compiled from another language — and verified raw-memory boundaries.
 {: .block-warning }
 
 ## Set up a Windows project

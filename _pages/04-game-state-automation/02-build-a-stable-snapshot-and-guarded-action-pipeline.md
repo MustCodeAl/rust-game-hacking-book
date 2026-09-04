@@ -11,7 +11,7 @@ summary: Turn live Wesnoth reads into a stable typed snapshot, keep observation 
 mermaid: true
 ---
 
-## Reliability starts with explicit rules
+## One long function hides where it can fail
 
 A beginner tool often grows as one long function:
 

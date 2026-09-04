@@ -123,6 +123,6 @@ The demo prints a transformed value, decodes it, flips one bit, and shows the in
 - ❌ “One successful decode proves the formula.”
 - ✅ Test several values, sessions, and objects.
 - ❌ “An integrity field is impossible to reproduce.”
-- ✅ First determine whether it is a checksum, keyed MAC, or authenticated-encryption tag.
+- ✅ First determine whether it is a checksum, a keyed MAC (message authentication code, which needs a secret key), or an authenticated-encryption tag.
 
 The next lesson explains those real security terms and shows why authenticated encryption is different from a home-made transform.

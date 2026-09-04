@@ -152,11 +152,11 @@ and error handling one clear place to live.
 
 ## APIs and ABIs describe boundaries
 
-An **API** is the agreement as written in source code: what the function is
+An **API** — application programming interface — is the agreement as written in source code: what the function is
 called, what you hand it, what it hands back, and what it promises to do. It is
 the level you are working at when you write `reader.read_u32(address)`.
 
-An **ABI** is that same agreement expressed in machine terms, after the compiler
+An **ABI** — application *binary* interface — is that same agreement expressed in machine terms, after the compiler
 has finished: which register or stack slot each argument actually occupies,
 where the return value comes back, and which registers the called function has
 to leave untouched.
