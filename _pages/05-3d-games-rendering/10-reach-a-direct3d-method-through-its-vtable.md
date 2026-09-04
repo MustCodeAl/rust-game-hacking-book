@@ -23,7 +23,9 @@ method you might want to watch. The exports are a short list — mostly
 `D3D11CreateDevice` and friends — and none of them is the function that runs
 once per frame.
 
-This is not obfuscation. Direct3D is a **COM** API, and COM does not expose
+This is not obfuscation. Direct3D is built on **COM**, the Component Object
+Model — Microsoft's convention for handing out objects whose methods are reached
+through a table of function pointers rather than by name. COM does not expose
 methods as exports. It exposes objects.
 
 ## A COM interface is a vtable, which you have already met
@@ -197,8 +199,9 @@ hooked the same slot later, writing your saved pointer back removes their
 replacement *and* leaves them forwarding to a function no longer in the table.
 Restore only when the slot still holds your own function.
 
-**Holding a lock across the forwarded call deadlocks.** The original is free to
-re-enter the hooked path. Copy the original pointer out, release the lock, then
+**Holding a lock across the forwarded call deadlocks** — that is, two paths end
+up each waiting for something the other holds, and neither ever continues. The
+original is free to re-enter the hooked path. Copy the original pointer out, release the lock, then
 call — the lab does exactly this and says why in a comment.
 
 **The device can be recreated underneath you.** A resolution change or an

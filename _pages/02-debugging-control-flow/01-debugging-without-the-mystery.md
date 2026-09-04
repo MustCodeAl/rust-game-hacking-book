@@ -113,7 +113,8 @@ Treat pseudocode as an editable notebook:
 - rename a value only after you can explain the evidence;
 - change a type when instruction width, signedness, API contracts, and live
   values agree;
-- check the control-flow graph when an `if` or loop looks strange;
+- check the control-flow graph — the map of which instruction can run after
+  which, built by following every jump — when an `if` or loop looks strange;
 - return to assembly when one incorrect type makes later expressions look
   impossible.
 

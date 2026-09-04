@@ -218,7 +218,8 @@ When inspecting object-oriented code, separate three questions:
    choose at this moment?
 
 These answers can differ. A pointer passed to a base-class method may point a
-few bytes into the complete allocation. A compiler-generated thunk may adjust
+few bytes into the complete allocation. A **thunk** — a tiny compiler-generated
+stub that fixes something up and then jumps to the real function — may adjust
 `this` before jumping to the real method. Subtracting every observed field from
 that adjusted pointer can produce negative offsets and a broken layout even
 though the pointer is valid for its particular base view.

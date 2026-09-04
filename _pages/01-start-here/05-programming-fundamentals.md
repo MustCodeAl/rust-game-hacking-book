@@ -236,8 +236,9 @@ This creates questions that single-step code does not answer:
 - Does one thread free an object while another still has its address?
 - What happens when a queue fills faster than it can be drained?
 
-Later lessons use snapshots, locks, atomics, bounded channels, and explicit
-lifecycles to answer those questions.
+Later lessons answer those questions with snapshots, locks, atomics (single
+operations the hardware guarantees cannot be seen half-finished), bounded
+channels, and explicit lifecycles.
 
 ## An invariant is a rule valid state must keep true
 

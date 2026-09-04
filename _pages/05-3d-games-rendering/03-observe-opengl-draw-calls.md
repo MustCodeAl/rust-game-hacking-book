@@ -212,7 +212,7 @@ a draw's texture, program, uniforms, and vertex layout are part of its identity.
 Older fixed-function OpenGL calls hide these programs behind predefined state, but
 the pipeline still performs equivalent transformations and color calculations.
 
-This is a classification problem. A threshold such as `count > 500` separates the examples you observed, not necessarily the concept “player.” Test it against weapons, detailed scenery, menus, different models, and different graphics settings. Report false positives and false negatives instead of quietly turning a correlation into a definition.
+This is a classification problem. A threshold such as `count > 500` separates the examples you observed, not necessarily the concept “player.” Test it against weapons, detailed scenery, menus, different models, and different graphics settings. Report false positives (something your rule caught that is not a player) and false negatives (a player your rule missed) instead of quietly turning a correlation into a definition.
 
 ## Turn the wrapper into the actual Urban Terror wallhack
 
