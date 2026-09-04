@@ -196,7 +196,7 @@ toc_hidden: true
       <dt id="term-detector"><dfn>Detector</dfn></dt>
       <dd>Logic that reports evidence that a condition or invariant failure may be present. A detector can be noisy, incomplete, or independent from the control that prevents the failure.</dd>
       <dt id="term-detour"><dfn>Detour</dfn></dt>
-      <dd>A control-flow redirection that replaces instructions at a function entry or other site with a jump to another routine. A correct detour preserves whole instruction boundaries and, when needed, provides a trampoline back.</dd>
+      <dd>A redirection that sends execution into your own code and then back. You overwrite instructions at a chosen point with a jump; a correct detour only ever replaces whole instructions, keeps a copy of the originals, and provides a way back so the interrupted function finishes normally.</dd>
       <dt id="term-differential-observation"><dfn>Differential observation</dfn></dt>
       <dd>A comparison between runs that differ in one controlled input. The first meaningful output difference can reveal which transform, branch, or state transition depends on that input.</dd>
       <dt id="term-digital-signature"><dfn>Digital signature</dfn></dt>
@@ -308,11 +308,11 @@ toc_hidden: true
     <div class="glossary-group__letter"><h2 id="glossary-h">H</h2><a href="#glossary-top">Top</a></div>
     <dl class="glossary-list">
       <dt id="term-handle"><dfn>Handle</dfn></dt>
-      <dd>A process-local token that refers to a Windows-managed object together with granted access. It is not a raw pointer to the kernel object, and the owner must close it.</dd>
+      <dd>A numbered ticket standing for something Windows is managing on your behalf — an open process, file, or thread — together with what you are permitted to do with it. It is meaningful only inside the process that obtained it, it is not a pointer to the underlying object, and whoever opens it must close it.</dd>
       <dt id="term-hash"><dfn>Hash</dfn></dt>
       <dd>A fixed-size digest computed from arbitrary input. A cryptographic hash is useful for change detection, but an unkeyed hash does not prove who created the input and cannot recover the original bytes.</dd>
       <dt id="term-heap"><dfn>Heap</dfn></dt>
-      <dd>A process memory area used for dynamically sized allocations whose lifetimes are not tied directly to one function call. “Heap” describes allocation behavior, not one guaranteed contiguous region.</dd>
+      <dd>Memory handed out on request for things that must outlive the function that created them, such as game entities and growable lists. An allocator decides when each block is freed, so nothing is automatic. “Heap” names that allocation behaviour, not one guaranteed contiguous region.</dd>
       <dt id="term-hexadecimal"><dfn>Hexadecimal</dfn></dt>
       <dd>Base-sixteen notation using digits <code>0–9</code> and <code>A–F</code>. One hex digit represents four bits, so hex is a compact way to display bytes and addresses.</dd>
       <dt id="term-hook"><dfn>Hook</dfn></dt>
@@ -422,7 +422,7 @@ toc_hidden: true
       <dt id="term-metatable"><dfn>Metatable</dfn></dt>
       <dd>A Lua table that defines how another value responds to operations such as indexing, arithmetic, or calls. It changes behavior through named metamethods; it is not inheritance by itself.</dd>
       <dt id="term-module"><dfn>Module</dfn></dt>
-      <dd>A loaded executable image, commonly an EXE or DLL, with a base address, mapped sections, imports, exports, and code. The word can also mean a source-code unit; context separates them.</dd>
+      <dd>One loaded EXE or DLL, as it exists in memory: the address Windows placed it at, its sections, and the functions it imports and exports. Beware that the same word also means a source-code unit in most languages; context separates the two.</dd>
       <dt id="term-mutex"><dfn>Mutex</dfn></dt>
       <dd>A synchronization object that allows one holder at a time into a critical section. It protects a shared invariant; it does not automatically make every operation on the object thread-safe.</dd>
     </dl>
@@ -500,7 +500,7 @@ toc_hidden: true
       <dt id="term-physical-address"><dfn>Physical address</dfn></dt>
       <dd>A location in the machine’s physical memory address space. Ordinary process pointers are virtual addresses and require page-table translation before they can be related to a physical capture.</dd>
       <dt id="term-pointer"><dfn>Pointer</dfn></dt>
-      <dd>A value interpreted as an address. Valid use also requires the right process, mapping, protection, type, alignment, and lifetime.</dd>
+      <dd>A value whose meaning is the address of something else. Reading the pointer gives you an address; reading again at that address gives you the data. Nothing in the bytes marks a value as a pointer — the code that uses it decides. Valid use also requires the right process, mapping, protection, type, alignment, and lifetime.</dd>
       <dt id="term-pointer-chain"><dfn>Pointer chain</dfn></dt>
       <dd>A sequence of “add an offset, read the pointer stored there” steps leading from a repeatable base to a dynamic object. Every dereference is a new validity check.</dd>
       <dt id="term-plain-value"><dfn>Plain value</dfn></dt>
@@ -514,7 +514,7 @@ toc_hidden: true
       <dt id="term-privilege-escalation"><dfn>Privilege escalation</dfn></dt>
       <dd>A transition from a lower-authority security context to a higher-authority one outside the intended policy. Defensive analysis asks which trust boundary was crossed and which validation, isolation, or patch would prevent the transition.</dd>
       <dt id="term-process"><dfn>Process</dfn></dt>
-      <dd>A protected execution container with an address space, handles, security token, loaded modules, and one or more threads.</dd>
+      <dd>One running program. Windows gives it private memory that other programs cannot reach directly, plus the resources it has opened. Formally: a protected execution container with an address space, handles, security token, loaded modules, and one or more threads.</dd>
       <dt id="term-projection"><dfn>Projection</dfn></dt>
       <dd>The transformation that maps view-space geometry toward clip space. Perspective projection makes apparent size depend on depth; orthographic projection does not.</dd>
       <dt id="term-protocol"><dfn>Protocol</dfn></dt>
@@ -592,9 +592,9 @@ toc_hidden: true
       <dt id="term-signal"><dfn>Signal</dfn></dt>
       <dd>One observable measurement used as evidence, such as a timing outlier, flag, exception, or value change. A signal is not the same as the conclusion drawn from it.</dd>
       <dt id="term-snapshot"><dfn>Snapshot</dfn></dt>
-      <dd>A copy of selected state associated with one observation time and build. It makes later reasoning repeatable, but fields read at different moments can still form an inconsistent snapshot unless captured carefully.</dd>
+      <dd>A copy of chosen values, taken at a known moment from a known build, so later reasoning works from fixed data instead of a moving target. Reading the fields takes time, though, so values gathered at slightly different moments can describe a state that never actually existed unless the capture is done carefully.</dd>
       <dt id="term-stack"><dfn>Stack</dfn></dt>
-      <dd>A per-thread memory region used for active calls, local storage, saved registers, and return control information. It grows and shrinks with call activity; it is not the same as the abstract LIFO data structure, though it behaves similarly.</dd>
+      <dd>The memory a thread uses for function calls. Calling a function claims a block for its local values and return address; returning releases it again, so the space is reused constantly. Each thread has its own. It behaves like the last-in-first-out data structure of the same name, but it is a concrete memory region, not that abstract structure.</dd>
       <dt id="term-state"><dfn>State</dfn></dt>
       <dd>Information that can make future behavior differ. A game’s state includes world values, current mode, timers, and pending events—not just visible variables.</dd>
       <dt id="term-state-machine"><dfn>State machine</dfn></dt>
@@ -624,7 +624,7 @@ toc_hidden: true
       <dt id="term-texture"><dfn>Texture</dfn></dt>
       <dd>An indexed image or general data resource sampled by GPU programs. A texture’s bytes need a format, dimensions, channel order, and sampling rules to have meaning.</dd>
       <dt id="term-thread"><dfn>Thread</dfn></dt>
-      <dd>One independently scheduled path of execution inside a process, with its own registers, instruction pointer, and stack while sharing process resources.</dd>
+      <dd>One line of execution running inside a process. A process can have several, all sharing the same memory but each keeping its own place in the code. Formally: an independently scheduled path of execution with its own registers, instruction pointer, and stack, sharing the rest of the process's resources.</dd>
       <dt id="term-thread-context"><dfn>Thread context</dfn></dt>
       <dd>The register state needed to describe or resume a thread at a moment. Capturing or changing it safely normally requires controlled thread state.</dd>
       <dt id="term-timing-check"><dfn>Timing check</dfn></dt>

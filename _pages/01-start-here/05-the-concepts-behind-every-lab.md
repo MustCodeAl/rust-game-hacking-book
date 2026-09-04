@@ -18,9 +18,15 @@ You do not need to memorize the page. Return to it when a term appears in code.
 
 ## Data, values, and types
 
-**Data** is stored information. A **value** is one piece of data interpreted in
-a particular way. A **type** states what kind of value code expects and which
-operations make sense for it.
+Start with three words that get used interchangeably and really should not be.
+
+**Data** is stored information — bytes sitting somewhere. A **value** is one
+piece of that data, interpreted a particular way. A **type** is the thing that
+says which interpretation to use, and therefore which operations make sense.
+
+The bytes `50 00 00 00` are data. Read as a `u32`, the value is 80. Doubling it
+is a sensible thing to do; adding the text `"Ada"` to it is not, and the type is
+how the compiler knows the difference before you ever run the program.
 
 ```rust
 let health: u32 = 80;
@@ -146,12 +152,21 @@ and error handling one clear place to live.
 
 ## APIs and ABIs describe boundaries
 
-An **API** describes how code asks another component to do something: function
-names, parameters, results, and behavior.
+An **API** is the agreement as written in source code: what the function is
+called, what you hand it, what it hands back, and what it promises to do. It is
+the level you are working at when you write `reader.read_u32(address)`.
 
-An **ABI** describes lower-level binary rules such as how arguments use
-registers or the stack, how values are returned, and who preserves which
-registers.
+An **ABI** is that same agreement expressed in machine terms, after the compiler
+has finished: which register or stack slot each argument actually occupies,
+where the return value comes back, and which registers the called function has
+to leave untouched.
+
+The distinction becomes real when the two disagree. Two functions can have
+identical APIs — same name, same parameters, same return type — and still be
+completely incompatible, because one expects its argument in the `ecx` register
+and the other expects it on the stack. Nothing in the source code shows that
+mismatch. The program just reads the wrong place and carries on as if nothing
+happened.
 
 You usually meet the API first:
 
@@ -199,9 +214,21 @@ fewer bytes. Encryption tries to hide content from someone without a key.
 
 ## Concurrency means state can change between steps
 
-**Concurrency** means more than one task can make progress during the same span
-of time. Two threads may share memory, or a game may update while an external
-tool reads it.
+**Concurrency** means more than one task can make progress during the same
+stretch of time. Two threads may share memory, or a game may keep updating while
+your external tool reads it.
+
+The awkward part is that code you wrote as a list of steps stops behaving like
+one. This looks obviously correct:
+
+```text
+1. check that the enemy pointer is not null
+2. read the enemy's health through that pointer
+```
+
+Between step 1 and step 2, the game is free to delete that enemy. Your check was
+true when you made it and false by the time you used it, and no individual line
+of your code is wrong. The bug lives in the gap between two lines.
 
 This creates questions that single-step code does not answer:
 

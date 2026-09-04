@@ -19,15 +19,34 @@ instructions.
 
 ## Start from behavior, not from a guessed formula
 
-An encoded field often looks random in a memory viewer because its stored bits
-are not the number displayed by the game. That alone does not tell you whether
-the field is compressed, serialized, obfuscated, authenticated, or encrypted.
+An encoded field often looks like noise in a memory viewer, because the bits
+being stored are not the number the game displays. That on its own tells you
+almost nothing about what is being done to it.
 
-The target invariant is:
+Five words get used as though they were interchangeable here, and they are not:
 
-> For every accepted value and key, decoding the encoded form recovers the
-> original value, and any accompanying integrity relation is checked before
-> the decoded value is trusted.
+| Word | What it is actually for | Needs a secret? |
+|---|---|---|
+| compression | making the bytes smaller | no |
+| serialization | arranging values for storage or sending | no |
+| obfuscation | making the bytes awkward to read | no |
+| authentication | proving nobody altered the bytes | yes |
+| encryption | hiding the bytes from anyone without the key | yes |
+
+Only the last two involve a secret. Mistaking obfuscation for encryption sends
+you hunting for a key that was never there; mistaking encryption for
+obfuscation wastes days trying to spot a pattern in output designed to have
+none.
+
+The rule your decoder has to satisfy:
+
+> Decoding an encoded value returns exactly the original value, and any
+> integrity check travelling with it is verified *before* the decoded value is
+> used for anything.
+
+The second half is the part people skip. A value that decodes cleanly is not
+the same as a value nobody tampered with — decoding will happily produce a
+plausible-looking number from bytes somebody edited.
 
 Trace both directions:
 

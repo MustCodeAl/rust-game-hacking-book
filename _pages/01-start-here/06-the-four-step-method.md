@@ -10,9 +10,12 @@ minutes: 16
 summary: Use Identify, Understand, Locate, and Change to turn a game observation into a controlled, repeatable experiment.
 ---
 
-Reverse engineering becomes confusing when you search and change things before
-deciding what question you are trying to answer. This book uses four steps to
-keep the work in order:
+The fastest way to get completely lost is to open a memory scanner and start
+searching before deciding what you are actually asking. You end up with four
+hundred addresses, no way to tell which one matters, and no record of what you
+already ruled out.
+
+Four steps keep the work in order:
 
 1. **Identify** the exact behavior.
 2. **Understand** how that behavior should work.

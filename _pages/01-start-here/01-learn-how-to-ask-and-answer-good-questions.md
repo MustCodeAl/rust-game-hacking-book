@@ -101,8 +101,8 @@ copying the sentence.
 example, order, or comparison. For instance:
 
 - accurate answer: “An offset is a distance from a starting address.”
-- different explanation: “If an object begins at mailbox 100 and health is in
-  mailbox 112, the field offset is 12.”
+- different explanation: “If a player object starts at address `0x5000` and its
+  health sits at `0x5030`, the field offset is `0x30` — 48 bytes.”
 
 The first checks precision. The second checks whether you can use the idea.
 

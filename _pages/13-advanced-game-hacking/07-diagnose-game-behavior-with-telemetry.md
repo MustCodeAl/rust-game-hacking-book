@@ -18,14 +18,32 @@ machines, bounded queues, and the difference between correlation and causation.
 
 ## Telemetry should explain a decision path
 
-A giant log is not automatically useful. Effective telemetry lets you follow
-one game action from observed input through validation to its effect.
+Most logs turn out to be useless at exactly the moment you need them. They
+record that something happened without recording why it was allowed or refused,
+so you end up staring at a line that says `write failed` and guessing.
 
-The target invariant is:
+Useful telemetry lets you follow one game action the whole way through: what
+came in, what the code decided, why it decided that, and what actually changed
+as a result.
 
-> Every guarded operation produces enough bounded evidence to reconstruct its
-> identity, decision, reason, and outcome without recording sensitive or
-> unbounded payloads.
+The rule to design against:
+
+> Every guarded operation leaves behind enough evidence to reconstruct four
+> things — which target it touched, what it decided, why, and what happened —
+> without dumping secrets or unbounded blobs into the log.
+
+Those four are worth naming separately, because a log missing any one of them
+cannot answer the question you will eventually put to it:
+
+| What it records | The question it answers later |
+|---|---|
+| identity | which process, build, and object was this? |
+| decision | was it allowed or denied? |
+| reason | which specific check produced that answer? |
+| outcome | did the effect actually happen? |
+
+Drop the reason and you can see that something was refused but never why. Drop
+the outcome and you cannot tell an allowed operation from a completed one.
 
 Design events around the decision pipeline:
 

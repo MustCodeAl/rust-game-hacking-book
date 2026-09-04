@@ -33,9 +33,16 @@ flowchart LR
     R --> P["Publish chosen ID + aim point"]
 ```
 
-Every arrow has a contract. If the snapshot mixes two frames, perfect trigonometry
-still points at an old position. If validation confuses an entity slot with a live
-identity, ranking can choose a reused object. Math cannot repair bad observations.
+Each arrow has to hold up its end of the deal, and the arrows before the maths
+are the ones that quietly break.
+
+If the snapshot mixed two frames together, flawless trigonometry will aim
+confidently at where something used to be. If validation mistook a reused entity
+slot for a live one, the ranking step will happily pick a target that no longer
+exists. Neither failure looks like a maths error — the numbers are all
+beautifully computed — which is what makes them hard to find.
+
+Maths cannot repair bad observations. It can only give them more decimal places.
 
 ## Confirm the view angles
 

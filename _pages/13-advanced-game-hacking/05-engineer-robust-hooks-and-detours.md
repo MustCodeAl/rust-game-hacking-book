@@ -19,14 +19,27 @@ ownership.
 
 ## A hook changes a live control-flow graph
 
-A detour replaces an edge in the game’s control-flow graph. The difficult part
-is not emitting a jump; it is preserving every contract around that edge while
-other threads may execute it.
+Writing the jump is the easy part. You did that in Lesson 2.6 and it worked.
 
-The target invariant is:
+The hard part is that you are editing a program while it runs. Another thread
+may be executing the very bytes you are half-way through rewriting. A call may
+already be inside your replacement at the moment you decide to remove it. The
+game may throw away the object you hooked and build a fresh one.
 
-> The hook is either fully absent or fully usable; every call observes a valid
-> instruction stream, ABI state, lifetime, and return path.
+In the vocabulary of Chapter 2, a detour replaces one edge in the game's
+control-flow graph — it changes where a single instruction leads. Every
+difficulty in this lesson comes from doing that to a graph other threads are
+walking at the same time.
+
+So the rule to hold on to is:
+
+> The hook is either completely absent or completely working. There is never a
+> moment when a call can find half of it.
+
+“Completely working” means four things are true at once, for every call: the
+instructions it lands on are whole, the registers and stack are as the caller
+expects, everything the hook touches is still alive, and there is a correct way
+back.
 
 Model installation and removal explicitly:
 

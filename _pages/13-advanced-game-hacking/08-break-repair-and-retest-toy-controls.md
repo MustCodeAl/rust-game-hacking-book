@@ -17,6 +17,22 @@ You should understand invariants, canonical state, checksums, decision
 telemetry, environment signals, and regression tests. Each example is a small
 state model that keeps the important relationship visible in one screenful.
 
+## What all three examples have in common
+
+Every control in this lesson makes a promise, and all three break it the same
+way: each one checks something *near* the thing it cares about instead of the
+thing itself.
+
+A greyed-out button stands in for “this player is allowed to do that.” A
+checksum over one field stands in for “this record is intact.” A debugger flag
+stands in for “this request is honest.” Every stand-in is easier to check than
+the real property, which is precisely why someone reached for it — and every one
+of them can be true while the real property is false.
+
+Once you see that shape, the repair stops being a guess. It is never “add more
+stand-ins.” It is to move the check to the place where the effect actually
+happens, and demote the stand-in to a clue that helps explain what went wrong.
+
 ## Use one rigorous analysis recipe every time
 
 Each experiment follows the same sequence:

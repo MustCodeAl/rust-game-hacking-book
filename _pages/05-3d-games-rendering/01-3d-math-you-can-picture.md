@@ -181,10 +181,20 @@ matters: `a × b = -(b × a)`.
 
 ## A basis defines the local axes
 
-A **basis** is a set of independent directions used to measure coordinates. A
-camera basis usually contains `right`, `up`, and `forward`. If those directions
-all have length one and are mutually perpendicular, the basis is
-**orthonormal**.
+A **basis** is the set of directions you measure coordinates against — the
+rulers you are holding up. A camera basis usually holds `right`, `up`, and
+`forward`.
+
+They have to be *independent*, meaning no one of them can be built by combining
+the others. If `up` were just `forward` tilted slightly, the two would partly
+measure the same thing and some positions would have no unique description at
+all.
+
+When those directions are additionally all exactly length one and all at right
+angles to each other, the basis is called **orthonormal**. That is worth
+insisting on, because it makes measuring cheap: to find how far along a
+direction a point lies, you take a dot product and stop. No division, no
+correction for skew.
 
 ```mermaid
 flowchart LR
@@ -248,7 +258,7 @@ flowchart TD
     E --> F["Screen pixels"]
 ```
 
-A **coordinate space** is a reference frame—an agreement about where the origin is and what the axes mean.
+A **coordinate space** is one specific choice of where the origin sits and which way each axis points. The same physical spot in the level gets different numbers in each space, so a coordinate is meaningless until you say which space it belongs to.
 
 - Model space describes a vertex relative to its own model. A character’s hand can be “half a meter from the character’s center.”
 - World space describes everything relative to the level’s origin.
@@ -274,7 +284,9 @@ only after the model offset has been rotated/scaled into world space.
 
 ## What a matrix actually does
 
-A **matrix** is a rectangular table of numbers used as a transformation rule. A 4×4 matrix has four rows and four columns:
+A **matrix** is a rectangular table of numbers. By itself that is just storage.
+What makes it useful is one fixed rule for combining it with a point, and the
+rule is smaller than it looks.
 
 ```rust
 #[derive(Clone, Copy, Debug)]
@@ -283,7 +295,29 @@ struct Mat4 {
 }
 ```
 
-When a renderer multiplies a point by a matrix, each output component becomes a weighted combination of the input components. The weights can encode rotation, scale, translation, camera orientation, and perspective.
+To produce one number of the output, walk one row of the matrix alongside the
+point, multiply each pair, and add the results:
+
+```text
+point  = (x, y, z, 1)
+row 0  = (a, b, c, d)
+
+output x = a*x + b*y + c*z + d*1
+```
+
+Do that once per row and you have the whole output point. For a 4×4 matrix that
+is four multiply-and-add passes. Nothing more mysterious is happening.
+
+Every transform a renderer uses is just a choice of numbers in those rows. Ones
+down the diagonal and zeros elsewhere copy the point unchanged. Twos down the
+diagonal double every coordinate, which scales the model. The `d` entry is added
+no matter what the input was, which is exactly what moving something requires —
+and it is why a 3D point is carried as four numbers rather than three. That
+trailing `1` exists to give `d` something to multiply.
+
+So a matrix is a compact way of writing “here is how to work out the new
+coordinates from the old ones.” Multiplying two matrices together produces a
+single matrix that performs both operations, one after the other.
 
 You do not need to memorize sixteen formulas to use one carefully. Start with the promise:
 

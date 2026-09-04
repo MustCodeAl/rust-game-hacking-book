@@ -36,9 +36,32 @@ When reversing a local open-source protocol, record whether a field is an **inte
 
 ## Packets and protocols
 
-A packet is a chunk of bytes sent through a network. A protocol is the agreement that gives those bytes meaning.
+A **packet** is a chunk of bytes sent across a network. That part is
+straightforward.
 
-📦 **Packet idea:** the bytes are the package; the protocol is the packing list that explains where every item belongs.
+“Protocol” is usually defined with words like *rules* or *agreement*, which
+sound reasonable and tell you nothing. Be concrete instead. A **protocol** is
+the set of specific questions both programs must already know the answers to
+before a single byte means anything. There are four:
+
+1. **Where does one message end and the next begin?** A TCP connection is one
+   long stream of bytes with no natural gaps, so something has to mark the
+   boundaries.
+2. **What is each part of a message?** Which bytes are the length, which are the
+   message type, which are the payload, and how each of those is encoded.
+3. **Which messages are allowed right now?** A login reply makes no sense before
+   a login request. People routinely forget this is part of the protocol at all.
+4. **What happens when something is wrong?** An unknown message type, a length
+   that does not fit, a message arriving out of turn.
+
+None of that can be worked out by staring at the bytes, because none of it is
+written in them. Both programs have to know it in advance. That is precisely why
+reverse engineering a protocol means recovering those four answers — and why a
+byte layout on its own only ever answers the second one.
+
+📦 **Watch for:** the same bytes can be perfectly valid at one point in a
+conversation and meaningless at another. Record *when* a message is legal, not
+only what it contains.
 {: .emoji-note }
 
 A simple framed message might contain:

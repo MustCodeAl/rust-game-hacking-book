@@ -30,6 +30,12 @@ The target invariant is:
 > A layout is accepted only for the build and object identity supported by its
 > evidence, and every field read is bounded and semantically validated.
 
+Unpacked, that is four separate demands. Use an offset only on the exact build
+you proved it on. Use it only on an object you have confirmed is the one you
+meant. Never read past the end of that object. And check that the value coming
+back makes sense before believing it — a four-byte read that succeeds is not
+the same thing as a four-byte read that returned health.
+
 ## Recover a layout from independent evidence
 
 ```mermaid
