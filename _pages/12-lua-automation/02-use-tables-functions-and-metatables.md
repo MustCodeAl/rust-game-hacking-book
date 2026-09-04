@@ -153,8 +153,12 @@ scout:set_state("plan")
 The line that confuses nearly everyone is `Bot.__index = Bot`. Two separate
 things are happening there, and it helps to state them apart.
 
-A **metatable** is simply a table attached to another table. Attaching one by
-itself changes nothing about how keys are looked up. What does the work is the
+A **metatable** is a table you attach to another table to say what should
+happen when an ordinary operation on it does not work out — a key that is
+missing, an addition, a comparison. Lua looks inside it for specially named
+keys such as `__index` or `__add`, and uses whatever it finds there.
+
+Attaching one by itself changes nothing about how keys are looked up. What does the work is the
 `__index` key *inside* that metatable: when a lookup on the original table
 fails, Lua checks the metatable for `__index`, and if it finds a table there,
 repeats the lookup in that table.
