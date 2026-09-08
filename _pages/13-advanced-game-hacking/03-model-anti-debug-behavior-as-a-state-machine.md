@@ -75,6 +75,59 @@ A **response** is an action such as recording a diagnostic event or refusing a
 specific invalid command. Combining all three into one hidden boolean makes it
 hard to discover false positives and impossible to explain the decision.
 
+## What a Windows program can actually measure
+
+The state machine above is deliberately abstract, which risks leaving the
+impression that an "observer signal" is one vague thing. It is not. A Windows
+program has several genuinely different sources of evidence, and they differ in
+what they prove — which is the whole reason the lesson insists on separating
+signal from assessment.
+
+**Things the loader wrote down.** When Windows starts a process for a debugger,
+it records that fact inside the process itself. The Process Environment Block
+carries a `BeingDebugged` byte at offset `0x02`, and `IsDebuggerPresent` is
+little more than a read of it. The same structure's `NtGlobalFlag` field gains
+heap-checking bits, and the process heap ends up with different `Flags` and
+`ForceFlags` values than it otherwise would. Nothing here measured anything.
+The loader simply noted what it was asked to do, and the program is reading the
+note.
+
+**Bookkeeping the kernel keeps.** A debugged process has a debug object
+associated with it, and `NtQueryInformationProcess` will report on that
+association when asked for `ProcessDebugPort` or `ProcessDebugObjectHandle`.
+Again a record, held somewhere else.
+
+**Its own code.** Lesson 2.3 showed that a software breakpoint replaces a byte
+with `0xCC`. A checksum over its own instructions notices that change.
+
+**Its own thread state.** A hardware breakpoint changes no bytes, so a checksum
+misses it entirely. It lives in the CPU's debug registers — `DR0` through `DR3`
+holding addresses, `DR7` holding the enable and condition bits — and those
+registers are part of a thread's saved context. A thread can therefore call
+`GetThreadContext` on itself and read them.
+
+That pair is worth sitting with. Neither kind of breakpoint is invisible, and
+neither is universally visible; they leave traces in *different places*. A
+program checking only its bytes never sees a hardware breakpoint, and one
+checking only its debug registers never sees a software breakpoint.
+
+**Who handles an exception first.** A program can raise an exception on purpose
+and see whether its own handler runs. If something else took it, something else
+is attached.
+
+**The surrounding machine.** Parent process, window titles, the module list.
+
+Sort these by what they would establish and the picture changes. The first two
+are records the operating system keeps, and a determined observer can change
+what those records say. The middle two are the program noticing traces of your
+tools inside its own address space and thread state. The last one is about the
+machine, not about this process, and can be true with nothing attached at all.
+
+None of them establishes that a game rule was broken. That is exactly why this
+lesson keeps environment observation separate from validating game state, and
+why the invariant at the top belongs at the effect boundary rather than
+anywhere in this list.
+
 ## Timing detects pauses, not intent
 
 Suppose code measures how long a tiny operation takes. A large gap might come

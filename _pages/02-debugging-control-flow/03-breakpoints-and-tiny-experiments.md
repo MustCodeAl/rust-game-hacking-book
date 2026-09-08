@@ -52,6 +52,18 @@ When the CPU executes `int3`, Windows reports a breakpoint exception. The debugg
 
 That bookkeeping is why you should remove breakpoints through the debugger instead of editing the byte by hand.
 
+It also means a software breakpoint is not invisible. While it is set, the
+program's own code genuinely contains `0xCC` where the original byte used to
+be, and nothing prevents the program from reading its own bytes and noticing.
+A routine that adds up the bytes of a function and compares the total against
+a figure recorded when the game was built will disagree the moment you place a
+breakpoint inside that function.
+
+Notice what such a routine has actually established: that its code changed. It
+has not detected a debugger, and it cannot tell your breakpoint apart from any
+other modification to those bytes. Chapter 13 returns to this, because it is
+the same self-checking idea used to notice a patch.
+
 ## How a software breakpoint pauses and resumes
 
 The original instruction still has to execute. A debugger normally handles the
