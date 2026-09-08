@@ -31,6 +31,29 @@ fn allowed_target(name: &str) -> bool {
 
 This chapter covers the classic Windows loader sequence. Protected-process work and anti-cheat bypasses are separate subjects and are outside this tool's contract.
 
+It is worth knowing that this is one route among several, so you do not mistake
+it for the only one. The approaches differ along three axes: who allocates the
+memory in the target, what causes the target to start executing it, and —
+the important one — whether the Windows loader is involved at all.
+
+This route uses the loader. You hand the target a path and ask it to run
+`LoadLibraryW`, and the loader then maps the sections, applies relocations,
+resolves imports, prepares thread-local storage, runs `DllMain`, and adds the
+module to the process's module list.
+
+That last step is easy to overlook and is precisely why this book takes this
+route. Because the loader registers the module, your DLL appears in the
+inventory that Lesson 11.1 builds, `GetModuleHandle` can find it, and unloading
+runs through the same bookkeeping in reverse. Every step is observable and
+reversible.
+
+Routes that avoid the loader have to do the loader's job themselves — walking
+the relocation table, resolving each import by hand, and handling TLS — which
+is where the PE structure from Lesson 7.1 stops being background reading. They
+exist mainly so that a module does not appear in that list, which is a goal
+about avoiding detection rather than about understanding the program, and it is
+not what this book is for.
+
 ## The classic loader sequence
 
 ```mermaid
