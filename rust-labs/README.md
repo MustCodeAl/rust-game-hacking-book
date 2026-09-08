@@ -12,6 +12,7 @@ cargo test
 The crate covers:
 
 - eleven bypass patterns reproduced against weak toy controls and repaired;
+- the cursor, key-edge, and buffer rules behind an in-game text menu;
 - the install/forward/restore lifecycle of a function-pointer-table hook;
 - exact and wildcard byte-pattern matching;
 - bounds-checked binary parsing;
