@@ -4,6 +4,9 @@
   // Version the saved answer format so an older quiz layout cannot revive stale UI state.
   const STORAGE_PREFIX = "gha-quiz:v6:";
   const FOLLOW_UP_COUNT = 4;
+  // Draw the four follow-ups from a slightly larger relevant shortlist so
+  // repeat visits vary without reaching for off-topic questions.
+  const FOLLOW_UP_POOL_SIZE = 10;
   const initializedQuizRoots = new WeakSet();
   const STUDY_STOP_WORDS = new Set([
     "about", "after", "again", "against", "also", "another", "answer", "because",
@@ -147,7 +150,7 @@
       { prompt: "What turns a failed integration into useful evidence?", options: ["Recording the exact action, expected result, actual result, and next testable hypothesis", "Deleting the error", "Changing several libraries at once", "Starting a different project"], answer: 0, explanation: "A specific record narrows the problem and makes the next experiment reproducible." },
       { prompt: "Which knowledge is a good candidate for spaced review?", options: ["A calling-convention rule you repeatedly forget", "Every paragraph in the book", "A function you can already rebuild easily", "An unverified address"], answer: 0, explanation: "Spaced retrieval is most useful for durable facts and distinctions that remain weak. Code-shaped knowledge may be better reviewed by rebuilding and testing it." },
       { prompt: "What should guide the choice between a vector, map, and tree?", options: ["The shape of the data and the operations the tool performs repeatedly", "Which name sounds most advanced", "The current editor theme", "The largest possible allocation"], answer: 0, explanation: "Order, labels, hierarchy, relationships, and repeated operations reveal which representation fits the problem." },
-      { prompt: "When is test-first work especially useful in these labs?", options: ["For deterministic logic such as parsing, pattern matching, and address arithmetic", "For guessing an unknown live structure before evidence exists", "For bypassing target permissions", "Only after all code is finished"], answer: 0, explanation: "Known input-output behavior can be captured in repeatable tests. Live discovery remains exploratory until observations can be moved into an offline fixture." }
+      { prompt: "When is test-first work especially useful in these labs?", options: ["For deterministic logic such as parsing, pattern matching, and address arithmetic", "For guessing an unknown live structure before evidence exists", "For bypassing target permissions", "Only after all code is finished"], answer: 0, explanation: "Known input-output behavior can be captured in repeatable tests. Live discovery remains exploratory until observations can be moved into an offline fixture." },
     ],
     2: [
       { prompt: "What does `cmp` mainly change on x86?", options: ["The compared operands", "CPU flags used by later branches", "The stack size", "The executable file"], answer: 1, explanation: "`cmp` performs subtraction-like flag work without storing the result. A later conditional jump reads those flags." },
@@ -172,7 +175,7 @@
       { prompt: "What invariant supports a vector-like container interpretation?", options: ["begin is at or before end, which is at or before capacity end", "All three pointers are equal forever", "The count is stored as text", "Every element is executable"], answer: 0, explanation: "Ordered pointers, divisibility by element size, readable ranges, and a bounded count support the model." },
       { prompt: "Why can caching a component pointer be unsafe in a dense component pool?", options: ["Removing another component may swap elements and move the component", "Components have no memory", "Pointers cannot refer to arrays", "Entity IDs are virtual addresses"], answer: 0, explanation: "Stable handles or entity IDs can outlive movement that invalidates an element's old address." },
       { prompt: "What separates obfuscation from encryption?", options: ["Obfuscation mainly hides an obvious representation; encryption provides a security property under a key and threat model", "Obfuscation is always irreversible", "Encryption has no algorithm", "Only obfuscation changes bytes"], answer: 0, explanation: "A reversible home-made transform can slow casual inspection but is not a substitute for reviewed cryptography." },
-      { prompt: "Why test decode(encode(value, key), key) for many values?", options: ["It checks that the proposed inverse works generally rather than for one coincidence", "It proves the key is secret", "It creates an AEAD tag", "It disables overflow"], answer: 0, explanation: "Property-style round-trip tests validate the relationship over a range of inputs." }
+      { prompt: "Why test decode(encode(value, key), key) for many values?", options: ["It checks that the proposed inverse works generally rather than for one coincidence", "It proves the key is secret", "It creates an AEAD tag", "It disables overflow"], answer: 0, explanation: "Property-style round-trip tests validate the relationship over a range of inputs." },
     ],
     3: [
       { prompt: "What problem does Rust ownership prevent?", options: ["Two owners freeing the same allocation", "A server sending packets", "A debugger setting breakpoints", "A matrix moving a point"], answer: 0, explanation: "Ownership gives one value responsibility for cleanup and prevents accidental double-free behavior." },
@@ -188,7 +191,7 @@
       { prompt: "What is Clippy's role in a Rust game tool?", options: ["It reports likely mistakes and clearer idioms that you still evaluate", "It proves every address is correct", "It replaces runtime testing", "It grants process permissions"], answer: 0, explanation: "Clippy provides lint guidance. You must still understand each suggestion, especially at FFI and unsafe boundaries." },
       { prompt: "What should you check before adding a crate?", options: ["API fit, supported versions, license, maintenance, safety boundaries, and a test for your use", "Only its download count", "Whether its name is short", "Whether it avoids Result"], answer: 0, explanation: "A dependency becomes part of the tool's correctness, maintenance, licensing, and safety story." },
       { prompt: "What must you explain before accepting a non-trivial AI completion?", options: ["Its types, ownership, side effects, failure path, and test", "Only its indentation", "Only whether it compiles", "Its token count"], answer: 0, explanation: "Compilation checks syntax and types, not target identity, byte invariants, cleanup, or intended behavior." },
-      { prompt: "When is a design-pattern name useful during reversing?", options: ["As a hypothesis that summarizes observed intent and behavior", "As proof of the original source class name", "Whenever one pointer appears", "Only when a string contains the pattern name"], answer: 0, explanation: "Compiled shapes can suggest State, Strategy, Observer, or Factory, but behavior and repeated evidence must support the label." }
+      { prompt: "When is a design-pattern name useful during reversing?", options: ["As a hypothesis that summarizes observed intent and behavior", "As proof of the original source class name", "Whenever one pointer appears", "Only when a string contains the pattern name"], answer: 0, explanation: "Compiled shapes can suggest State, Strategy, Observer, or Factory, but behavior and repeated evidence must support the label." },
     ],
     4: [
       { prompt: "What is a remote snapshot?", options: ["A live Rust reference", "A copied observation from one moment", "A permanent game object", "An executable section"], answer: 1, explanation: "The target can change immediately after a read, so a snapshot is a time-stamped copy, not a live view." },
@@ -200,7 +203,7 @@
       { prompt: "What makes a state-machine transition safe to test?", options: ["Its source state, guard, action, and destination are explicit", "It has no stop state", "It runs as fast as possible", "It reads raw memory inside every condition"], answer: 0, explanation: "Explicit transitions make behavior deterministic and allow invalid moves, timeouts, and cancellation to be tested." },
       { prompt: "Why separate game-state collection from strategy decisions?", options: ["The decision system can consume one validated model instead of scattered changing reads", "It makes coordinates unnecessary", "It disables other threads", "It turns pointers into files"], answer: 0, explanation: "A snapshot boundary makes errors and timing visible while keeping higher-level logic independent of memory APIs." },
       { prompt: "What does the magnitude of a position-difference vector represent?", options: ["The straight-line distance between the two positions", "A process identifier", "The map width", "The number of CPU threads"], answer: 0, explanation: "Subtracting positions creates a displacement vector; its Euclidean length is the distance." },
-      { prompt: "Why give an automation loop a cancellation path and timeouts?", options: ["It must be able to stop when observations or expected transitions fail", "It makes every action succeed", "It prevents input latency", "It keeps all pointers valid"], answer: 0, explanation: "Stop-safe automation treats stalled or unexpected state as a normal error path rather than looping forever." }
+      { prompt: "Why give an automation loop a cancellation path and timeouts?", options: ["It must be able to stop when observations or expected transitions fail", "It makes every action succeed", "It prevents input latency", "It keeps all pointers valid"], answer: 0, explanation: "Stop-safe automation treats stalled or unexpected state as a normal error path rather than looping forever." },
     ],
     5: [
       { prompt: "What does subtracting two positions produce?", options: ["A direction from one to the other", "A process handle", "A color", "A file offset"], answer: 0, explanation: "The difference vector describes how far and in which direction the second point lies." },
@@ -215,7 +218,12 @@
       { prompt: "What does a normalized direction vector preserve?", options: ["Direction while changing its length to one", "The original distance", "A virtual address", "The object's texture"], answer: 0, explanation: "Normalization divides by magnitude, producing a unit direction useful for angles, rays, and movement." },
       { prompt: "Why should an immediate-mode menu avoid writing memory during every paint pass?", options: ["Painting repeats frequently, so side effects should happen only after an explicit command", "egui cannot call functions", "Windows blocks all UI threads", "A paint pass has no variables"], answer: 0, explanation: "The interface is described again every frame. Keeping rendering side-effect free prevents accidental repeated writes and stalls." },
       { prompt: "Why represent overlay choices with one enum instead of several booleans?", options: ["One enum prevents mutually exclusive modes from being active together", "Enums make GPU memory permanent", "Booleans cannot cross threads", "Rust only draws enum values"], answer: 0, explanation: "A single value can hold Off, TeamOnly, or AllActors, but never contradictory combinations." },
-      { prompt: "What should happen to held synthetic input when a tool shuts down?", options: ["Release it before the worker exits", "Leave it down for Windows to guess", "Send more down events", "Convert it to a window message"], answer: 0, explanation: "Reverse-order cleanup includes releasing every key or mouse button the tool pressed." }
+      { prompt: "What should happen to held synthetic input when a tool shuts down?", options: ["Release it before the worker exits", "Leave it down for Windows to guess", "Send more down events", "Convert it to a window message"], answer: 0, explanation: "Reverse-order cleanup includes releasing every key or mouse button the tool pressed." },
+      { prompt: "Why can GetProcAddress not find IDXGISwapChain::Present inside d3d11.dll?", options: ["Direct3D is built on COM, which exposes objects whose methods live in a vtable rather than named exports", "The export is present but hidden by anti-cheat", "Present is implemented in the GPU driver only", "Exports are stripped from every Microsoft DLL"], answer: 0, explanation: "OpenGL exports glDrawElements by name, so Lesson 8.4's import-table technique works. A COM method is reached through the object's function-pointer table instead." },
+      { prompt: "IDXGISwapChain inherits IUnknown (3 methods), IDXGIObject (4), and IDXGIDeviceSubObject (1), then declares Present first. Which vtable index is Present?", options: ["8", "0", "3", "12"], answer: 0, explanation: "3 + 4 + 1 = 8. Counting the inherited interfaces in order lets you derive any slot yourself instead of trusting a number copied from a forum." },
+      { prompt: "Why can a tool read the runtime's Present address from a swap chain it created itself?", options: ["Every object of one interface implementation shares the same vtable, so the addresses are identical", "Windows copies the game's vtable into each process", "Present is at a fixed address on all machines", "The swap chain caches the game's function pointers"], answer: 0, explanation: "Creating a throwaway device asks the runtime for the answer, which needs no byte signature and survives driver updates." },
+      { prompt: "Direct3D 11's DrawIndexed takes base_vertex_location as a signed value. What happens if a logger records it as u32?", options: ["An ordinary negative offset appears as a number near four billion, so a normal draw looks corrupt", "The draw call fails", "The index buffer is read backwards", "Nothing; the value is never negative"], answer: 0, explanation: "Negative base vertex offsets are normal when several meshes share one vertex buffer." },
+      { prompt: "Why does installing the same vtable hook twice overflow the stack on the next frame?", options: ["The second install saves the replacement as the original, so the hook forwards to itself", "Two hooks double the frame rate", "The vtable page becomes read-only", "COM refuses a second AddRef"], answer: 0, explanation: "Refuse the second install by checking whether the slot already holds your function. The crash otherwise appears far from its cause." },
     ],
     6: [
       { prompt: "What does TCP provide to an application?", options: ["A stream of ordered bytes", "Preserved message boundaries", "One packet per read", "Only encrypted text"], answer: 0, explanation: "TCP does not know your application message boundaries. Framing must define them." },
@@ -227,7 +235,7 @@
       { prompt: "What does backpressure mean in a proxy?", options: ["A slow receiver eventually limits how quickly the relay can accept more bytes", "The proxy reverses packets", "The server changes byte order", "The socket becomes read-only"], answer: 0, explanation: "Bounded buffers and awaited writes let downstream capacity control upstream production." },
       { prompt: "Why cap decompressed message size separately from compressed size?", options: ["A small compressed payload can expand into a very large output", "Compression removes length fields", "Decompression changes TCP into UDP", "Only text can be compressed"], answer: 0, explanation: "Expansion limits defend memory and CPU even when the wire payload looks small." },
       { prompt: "What makes a parser state machine useful for streaming data?", options: ["It remembers whether it needs a header, payload, or more bytes across partial reads", "It guarantees delivery", "It removes syntax validation", "It assigns permanent addresses"], answer: 0, explanation: "Streaming parsers advance only when enough bytes are buffered for the current state." },
-      { prompt: "Why should protocol errors name the phase that failed?", options: ["Framing, decompression, text decoding, and semantic validation require different fixes", "All errors have the same cause", "It makes packets smaller", "It prevents disconnects"], answer: 0, explanation: "Specific error categories turn malformed input into actionable evidence instead of one vague failure." }
+      { prompt: "Why should protocol errors name the phase that failed?", options: ["Framing, decompression, text decoding, and semantic validation require different fixes", "All errors have the same cause", "It makes packets smaller", "It prevents disconnects"], answer: 0, explanation: "Specific error categories turn malformed input into actionable evidence instead of one vague failure." },
     ],
     7: [
       { prompt: "What should a pattern scanner do with several matches?", options: ["Patch all of them", "Refuse ambiguity and refine the pattern", "Choose the lowest address", "Add more wildcards"], answer: 1, explanation: "Several matches mean the signature is not yet a unique identity." },
@@ -242,7 +250,7 @@
       { prompt: "Why must instrumentation guard against re-entering its own logger?", options: ["Logging may call code that reaches the hooked path again and recurse", "Hooks cannot call functions", "Registers cannot be saved", "Logs are executable"], answer: 0, explanation: "A thread-local reentrancy guard or carefully isolated sink prevents recursive observation from overwhelming the target." },
       { prompt: "What is a sensible reuse decision order for a tool feature?", options: ["Existing abstraction, vetted crate, licensed example, then the smallest owned implementation", "Rewrite every dependency first", "Copy the largest project available", "Add a scripting engine for every function"], answer: 0, explanation: "Reuse saves effort when it fits, while a small owned implementation remains appropriate when existing choices add more complexity than value." },
       { prompt: "What does an open-source license change about copied code?", options: ["It grants stated permissions while its notice and attribution requirements still apply", "It removes authorship", "It guarantees compatibility with every project", "It makes testing unnecessary"], answer: 0, explanation: "Open source is permission under conditions, not a claim that the code has no author or obligations." },
-      { prompt: "Why isolate a large dependency behind a small interface?", options: ["The rest of the tool depends on a narrow promise that is easier to test or replace", "It makes the dependency invisible to Cargo", "It disables its unsafe code", "It prevents version changes"], answer: 0, explanation: "A narrow boundary limits coupling and makes assumptions, tests, and future replacement clearer." }
+      { prompt: "Why isolate a large dependency behind a small interface?", options: ["The rest of the tool depends on a narrow promise that is easier to test or replace", "It makes the dependency invisible to Cargo", "It disables its unsafe code", "It prevents version changes"], answer: 0, explanation: "A narrow boundary limits coupling and makes assumptions, tests, and future replacement clearer." },
     ],
     8: [
       { prompt: "Why copy a file before parsing or modifying it?", options: ["To preserve a known recovery point", "To change its format", "To remove its header", "To make offsets virtual"], answer: 0, explanation: "An untouched source makes experiments reversible and comparisons trustworthy." },
@@ -254,7 +262,13 @@
       { prompt: "Why validate a temporary output before replacing the original file?", options: ["A failed serializer should not destroy the last known-good copy", "Temporary files bypass parsing", "Validation makes writes atomic", "It changes file permissions"], answer: 0, explanation: "The temporary file can be parsed and checked completely before an atomic replacement step." },
       { prompt: "Why must replacement textures preserve mipmap and compression expectations?", options: ["The engine and GPU loader interpret bytes using that metadata", "Pixels contain process handles", "Mipmaps choose network ports", "Compression fixes coordinates"], answer: 0, explanation: "Asset bytes require the same format contract expected by the renderer." },
       { prompt: "What does a checksum inside an archive primarily detect?", options: ["Accidental or unexpected changes to the covered bytes", "Who authored the archive", "Whether code is safe", "The live module base"], answer: 0, explanation: "A checksum is an integrity signal, not proof of identity or security." },
-      { prompt: "Why version a mod's data schema?", options: ["Readers can select the correct field rules as the format evolves", "Versions keep pointers stable", "Schemas eliminate backups", "It prevents all invalid values"], answer: 0, explanation: "Explicit versions make compatibility decisions and migrations testable instead of guessed." }
+      { prompt: "Why version a mod's data schema?", options: ["Readers can select the correct field rules as the format evolves", "Versions keep pointers stable", "Schemas eliminate backups", "It prevents all invalid values"], answer: 0, explanation: "Explicit versions make compatibility decisions and migrations testable instead of guessed." },
+      { prompt: "An archive entry declares the name ../../Windows/System32/driver.dll. What must a safe extractor do?", options: ["Resolve each entry path and refuse any entry that lands outside the destination folder", "Trust the archive because it was downloaded over HTTPS", "Strip only the leading slash", "Extract it and delete it afterwards"], answer: 0, explanation: "An archive contains names, not trusted paths. Resolve first, then compare the result against the destination root." },
+      { prompt: "What can a saved SHA-256 baseline answer, and what can it never answer?", options: ["It answers whether the bytes match ones recorded earlier; it cannot say who produced them", "It answers both origin and integrity", "It proves the file is free of malware", "It proves the publisher signed the file"], answer: 0, explanation: "A hash is a fingerprint of exact bytes. Establishing authorship needs a key, which is what a signature adds." },
+      { prompt: "Why is downloading mod.zip and mod.zip.sha256 from the same page a weak integrity check?", options: ["Anyone able to change the page can change both, so the comparison succeeds and proves nothing", "SHA-256 is too slow for large archives", "Hash files are always corrupted in transit", "The archive must be signed before it can be hashed"], answer: 0, explanation: "A hash moves trust from wherever you got the hash onto the bytes. It only helps when it arrives by a route the attacker does not control." },
+      { prompt: "A legitimate open-source game build reports no embedded Authenticode signature. What follows?", options: ["Nothing suspicious by itself, since many builds are unsigned; look for published hashes or reproducible artifacts instead", "The file has definitely been tampered with", "Windows will refuse to run it", "The signature was stripped by an attacker"], answer: 0, explanation: "Unsigned is a fact to investigate, not a verdict. Treat the result as one signal and ask what the project actually publishes." },
+      { prompt: "Why prefer authenticated encryption over encryption alone for a save file?", options: ["Confidentiality without tamper detection is incomplete, and AEAD also authenticates the ciphertext and its context", "It produces smaller files", "It removes the need for a key", "It makes the nonce secret"], answer: 0, explanation: "AEAD detects modification instead of silently decrypting altered bytes into plausible-looking state." },
+      { prompt: "Does the nonce in an encrypted envelope need to be kept secret?", options: ["No, but it must be unique for every message protected by the same key, and it is stored with the ciphertext", "Yes, it is a second password", "Yes, or the ciphertext can be decrypted", "No, and it may safely repeat"], answer: 0, explanation: "A nonce is a uniqueness requirement, not a secret. Reuse under one key is what breaks the guarantee." },
     ],
     9: [
       { prompt: "Why is an effect-based policy stronger than checking a command's name?", options: ["It validates the state change or capability regardless of which label requested it", "It makes every command name secret", "It removes the need for tests", "It permits unknown commands automatically"], answer: 0, explanation: "Names are descriptions, not security boundaries. Validate the requested effect so aliases and new labels follow the same rule." },
@@ -277,7 +291,7 @@
       { prompt: "Why translate again when a read crosses 4 KiB?", options: ["The next virtual page may map to a nonadjacent physical frame", "The CPU changes endianness at each page", "Every page has another CR3", "The file becomes executable"], answer: 0, explanation: "Virtual pages can be contiguous while their physical frames are scattered." },
       { prompt: "What should happen when a page-table present bit is clear?", options: ["Return a level-specific error", "Read address zero", "Guess the next table", "Mask away the error bit"], answer: 0, explanation: "A missing mapping is meaningful evidence. Guessing would turn malformed or wrong-address-space data into misleading output." },
       { prompt: "Why record a capture hash?", options: ["It lets later analysis verify that the evidence file's bytes have not changed", "It decrypts the capture", "It reveals every virtual address", "It grants hardware access"], answer: 0, explanation: "A digest supports provenance and detects accidental or unexplained modification of the image." },
-      { prompt: "What is the correct response when Kernel DMA Protection blocks a mapping path?", options: ["Keep the protection enabled and use an offline or synthetic workflow", "Disable every firmware defense", "Install stealth firmware", "Write to the running process"], answer: 0, explanation: "A blocked mapping is successful defense. The learning goals do not require weakening the machine." }
+      { prompt: "What is the correct response when Kernel DMA Protection blocks a mapping path?", options: ["Keep the protection enabled and use an offline or synthetic workflow", "Disable every firmware defense", "Install stealth firmware", "Write to the running process"], answer: 0, explanation: "A blocked mapping is successful defense. The learning goals do not require weakening the machine." },
     ],
     10: [
       { prompt: "What does `ERROR_PIPE_CONNECTED` mean during the named-pipe race?", options: ["A client already connected", "The pipe was deleted", "The message is too large", "The server lost permission"], answer: 0, explanation: "A fast client can connect between pipe creation and the server's connect call." },
@@ -295,7 +309,12 @@
       { prompt: "Which GetAsyncKeyState bit reliably reports that a key is down now?", options: ["The most-significant/sign bit", "The least-significant compatibility bit", "Every reserved bit", "The carry flag"], answer: 0, explanation: "A negative i16 means the high bit is set and the key is currently down. The low compatibility bit is not a reliable edge event." },
       { prompt: "Why can SendMessageW freeze an external tool?", options: ["It waits for the target window procedure to finish", "It allocates physical memory", "It always starts a debugger", "It closes the target handle"], answer: 0, explanation: "SendMessageW is synchronous. A bounded SendMessageTimeoutW call is safer when the receiver may be hung." },
       { prompt: "Why might a game ignore a posted WM_KEYDOWN message?", options: ["It may read Raw Input or device state instead of treating window messages as gameplay input", "WM_KEYDOWN contains no key number", "Windows messages work only in browsers", "The message changes the executable hash"], answer: 0, explanation: "Window messages and device input are different paths. Sending a message does not update every input API a game might use." },
-      { prompt: "Why is an HWND not closed with CloseHandle?", options: ["Window handles follow the window manager's lifetime contract, not the kernel-handle CloseHandle contract", "HWND is a source pointer", "Windows never destroys windows", "CloseHandle works only on files"], answer: 0, explanation: "Windows uses several opaque handle families. Each must follow the API that created, borrowed, or destroys it." }
+      { prompt: "Why is an HWND not closed with CloseHandle?", options: ["Window handles follow the window manager's lifetime contract, not the kernel-handle CloseHandle contract", "HWND is a source pointer", "Windows never destroys windows", "CloseHandle works only on files"], answer: 0, explanation: "Windows uses several opaque handle families. Each must follow the API that created, borrowed, or destroys it." },
+      { prompt: "Why does the book identify a game's engine and runtime before applying the four-step method?", options: ["The runtime decides whether \"a field at a fixed offset from an object base\" is even a durable fact", "Newer engines are always harder to study", "It is only needed for multiplayer games", "The method requires the engine's source code"], answer: 0, explanation: "For native C++ builds the assumption holds. For managed or JIT runtimes the number you want may never have been stored the way the method assumes." },
+      { prompt: "You find Assembly-CSharp.dll under <Game>_Data/Managed/. How does that change the work?", options: ["It holds .NET intermediate language with class, method, and field names, so you can decompile and read the field instead of inferring an offset", "It proves the game is native C++", "It means the game cannot be studied", "It is an ordinary DLL with stripped exports"], answer: 0, explanation: "Unity's Mono backend keeps metadata names, which replaces offset inference with reading something close to the original C#." },
+      { prompt: "GameAssembly.dll sitting beside il2cpp_data/Metadata/global-metadata.dat indicates which build?", options: ["Unity with the IL2CPP backend", "Unreal Engine", "Godot", "A plain native C++ game"], answer: 0, explanation: "IL2CPP converts the managed code ahead of time, so names live in the metadata file rather than in readable IL." },
+      { prompt: "Why confirm folder evidence against the list of modules the process actually loaded?", options: ["A folder can be stale and a launcher can start something other than the executable you inspected, so two independent signals are required", "Module lists are faster to read", "Folders never contain useful evidence", "Loaded modules reveal the source code"], answer: 0, explanation: "Agreement between two independent signals is the evidence standard the book has used since Chapter 1." },
+      { prompt: "Why can an object's address be unreliable under a managed runtime even when nothing looks wrong?", options: ["A garbage collector is entitled to relocate objects, so an address that was correct can stop referring to that object", "Managed runtimes forbid reading memory", "Addresses are encrypted by the runtime", "Every managed object lives on the stack"], answer: 0, explanation: "A moving collector breaks the assumption that a live object stays put, which native builds let you rely on." },
     ],
     11: [
       { prompt: "Why embed Lua in a compiled game or tool?", options: ["Small rules and content can change without rebuilding the whole engine", "Lua removes the operating system", "Every pointer becomes valid", "Scripts run before the CPU starts"], answer: 0, explanation: "The compiled host supplies stable capabilities while text scripts can express changeable policy, configuration, and gameplay rules." },
@@ -315,27 +334,57 @@
       { prompt: "What makes an interpreter value dynamically typed?", options: ["Its runtime representation carries a type tag that operations inspect", "It has no type at all", "It is always a string", "Rust guesses from the address"], answer: 0, explanation: "Dynamic typing moves many checks to runtime; it does not remove types from values or operations." },
       { prompt: "Why can two closures need one shared upvalue cell?", options: ["Both closures captured the same mutable local and must observe the same updates", "Closures cannot store integers", "A cell changes byte order", "Each closure is a Windows thread"], answer: 0, explanation: "Copying the captured value separately would break the source-language meaning when either closure modifies it." },
       { prompt: "What is a garbage collector root?", options: ["A live starting reference such as globals, active frames, or host-held values", "The first source-code token", "A table's longest key", "A native return address"], answer: 0, explanation: "Tracing begins from roots and follows reachable objects; unreachable objects can then be reclaimed." },
-      { prompt: "Why should an embedded host limit callback duration separately from Lua bytecode steps?", options: ["A callback can block inside Rust while no Lua instruction is being counted", "Rust callbacks contain no code", "Bytecode budgets allocate files", "Callbacks cannot return errors"], answer: 0, explanation: "A VM hook controls interpreted instructions, not arbitrary time spent inside a native callback." }
-    ]
+      { prompt: "Why should an embedded host limit callback duration separately from Lua bytecode steps?", options: ["A callback can block inside Rust while no Lua instruction is being counted", "Rust callbacks contain no code", "Bytecode budgets allocate files", "Callbacks cannot return errors"], answer: 0, explanation: "A VM hook controls interpreted instructions, not arbitrary time spent inside a native callback." },
+    ],
+    12: [
+      { prompt: "A captured command carries a correct integrity tag and a bounded amount. Why can accepting it still be wrong?", options: ["The tag proves the bytes were not edited, not that the command is new, so the same message can pay out repeatedly", "A correct tag guarantees the command is safe", "Bounded amounts cannot be replayed", "Integrity tags expire automatically"], answer: 0, explanation: "Bind each command to a position in a sequence and refuse any generation at or behind the last one applied." },
+      { prompt: "A tool reads its writes-allowed setting once at startup and caches the decision. Why is that unsafe even with no second thread involved?", options: ["The cached answer outlives the input it was computed from, so turning writes off no longer stops a write", "Caching is always a data race", "The setting cannot be read twice", "Startup values are never correct"], answer: 0, explanation: "Nothing raced; the decision simply outlived its input. Re-read the setting where the effect happens." },
+      { prompt: "A verifier returns Result<bool, VerifyError> and the caller writes unwrap_or(true). What has that created?", options: ["Deleting the manifest is now easier than forging it, because a verification outage grants permission", "A performance improvement", "A stricter check", "Nothing, since errors are rare"], answer: 0, explanation: "Fail closed, and keep 'the bytes changed' and 'verification was unavailable' as distinct, separately reported outcomes." },
+      { prompt: "Why does request.starts_with(\"assets/\") fail to keep a mod inside the assets folder?", options: ["It compares the text before .. is resolved, so assets/../saves/profile.dat passes the check", "String comparison is too slow", "Windows paths use backslashes only", "The prefix should be assets\\"], answer: 0, explanation: "Resolve the path first, then compare the resolved location against the root." },
+      { prompt: "A bound check writes offset + length <= region_size and accepts a 16-byte read at usize::MAX - 3. Why?", options: ["The sum wraps past zero and lands back inside the allowed range", "The comparison operator is inverted", "usize is too small for the address", "The region size is unsigned"], answer: 0, explanation: "A sum that cannot be represented is not small; it is unanswerable. checked_add returns None and the read is refused." },
+      { prompt: "A batch helper reaches the byte writer without calling the guarded entry point. What is the repair?", options: ["Route every caller through the one guarded function so the check cannot be forgotten", "Add the same check to the batch helper as well", "Remove the batch helper from the public API", "Log the batch writes and allow them"], answer: 0, explanation: "Duplicating the check leaves the next helper free to forget it. One choke point is what makes the guard hard to bypass." },
+      { prompt: "A validate-then-apply loop refuses item two after already applying item one. Which promise did it break?", options: ["That a rejected request changes nothing, since the refusal left earlier items live", "That every item is validated", "That the loop terminates", "That errors are reported"], answer: 0, explanation: "Validate every item first, then apply them. A denial must leave the state untouched." },
+      { prompt: "A movement rule allows the maximum step plus five centimetres of jitter each tick. What goes wrong over a match?", options: ["A steady lean in one direction accumulates the tolerance into a large total distance", "The rule rejects normal movement", "Jitter cancels out automatically", "Floating point makes it exact"], answer: 0, explanation: "Keep the per-tick tolerance but spend it from a budget over a window, so noise costs nothing and a steady lean runs out." },
+      { prompt: "A record's checksum covers health but not maximum_health. Which change does it miss?", options: ["One that falls outside the measured bytes yet makes the record impossible, such as lowering the maximum below the current health", "Any change to health", "A change to the checksum itself", "Changes made while the game is paused"], answer: 0, explanation: "This is a coverage bypass. The relation must cover every field it depends on, and the range check is separate from the checksum." },
+      { prompt: "Why is a greyed-out button flag poor authority for awarding a bonus?", options: ["It describes presentation, while several inputs and scripts can reach the same engine effect", "Flags are always attacker-controlled", "Buttons cannot be trusted on any platform", "The flag is stored as a byte"], answer: 0, explanation: "Presentation state answers 'should this look available?', not 'may the simulation perform this effect?'" },
+      { prompt: "A single timing sample exceeds the recorded 99th percentile. What should a well-built detector do?", options: ["Take another sample, because one outlier is ordinary scheduling noise", "Immediately report a debugger", "Raise the threshold permanently", "Stop the simulation"], answer: 0, explanation: "Ordinary and paused distributions overlap, so repetition rather than magnitude is what distinguishes them." },
+      { prompt: "Two known offsets moved by eight bytes in a new build. Why not add eight to every other offset?", options: ["An inserted field shifts only what follows it, so unmoved fields would then be read from the wrong place", "Offsets always move together", "Eight bytes is never the real shift", "Alignment forbids adding a constant"], answer: 0, explanation: "Collect the member accesses again. Fields before the insertion do not move at all, and the wrong numbers still look plausible." },
+    ],
   };
 
-  // The book's lessons were regrouped into twelve balanced chapters. These
-  // source lists keep follow-ups inside the current subject area before the
-  // relevance scorer ranks them for the exact page.
+  // Which banks each of the book's thirteen chapters may draw follow-ups from.
+  // The banks predate the current chapter numbering, so these lists map bank
+  // subject matter onto today's chapters; the relevance scorer then ranks
+  // within the pool for the exact page. Chapter 13 previously had no entry at
+  // all, which silently left every advanced lesson with a single question.
   const REVIEW_SOURCES_BY_CHAPTER = {
     1: [1],
     2: [2],
-    3: [2, 3],
+    3: [3, 2],
     4: [4],
     5: [5],
     6: [6, 10],
-    7: [7, 9, 10],
-    8: [3, 5, 7, 10],
-    9: [8, 10],
-    10: [9, 10],
-    11: [7, 9, 10],
+    7: [7],
+    8: [2, 10, 7],
+    9: [8],
+    10: [10, 7],
+    11: [9, 10],
     12: [11],
+    13: [12, 9, 2],
   };
+
+  // Fisher-Yates. Quiz order is deliberately random rather than seeded: a
+  // learner who returns to a page, or retakes the quiz, should meet the same
+  // ideas in a different arrangement instead of memorizing "the answer is C".
+  function shuffleInPlace(items) {
+    for (let index = items.length - 1; index > 0; index -= 1) {
+      const swap = Math.floor(Math.random() * (index + 1));
+      const held = items[index];
+      items[index] = items[swap];
+      items[swap] = held;
+    }
+    return items;
+  }
 
   function element(tagName, className, text) {
     const node = document.createElement(tagName);
@@ -543,7 +592,10 @@
     return score;
   }
 
-  function selectRelevantFollowUps(root, reviewBank, seed) {
+  // Rank the whole bank against this page, then keep a shortlist of the most
+  // relevant questions. The shortlist is deterministic so a page never drifts
+  // onto unrelated material; the sample drawn from it is what varies.
+  function relevantFollowUpPool(root, reviewBank, seed) {
     if (!reviewBank.length) return [];
     const terms = lessonStudyTerms(root);
     return reviewBank
@@ -553,8 +605,12 @@
         tieBreak: stableQuestionHash(`${seed}:${question.prompt}`),
       }))
       .sort((left, right) => right.score - left.score || left.tieBreak - right.tieBreak)
-      .slice(0, Math.min(FOLLOW_UP_COUNT, reviewBank.length))
+      .slice(0, Math.min(FOLLOW_UP_POOL_SIZE, reviewBank.length))
       .map((ranked) => ranked.question);
+  }
+
+  function drawFollowUps(pool) {
+    return shuffleInPlace(pool.slice()).slice(0, Math.min(FOLLOW_UP_COUNT, pool.length));
   }
 
   function initializeQuiz(root) {
@@ -574,20 +630,18 @@
       .concat(String(root.dataset.alternatives || "").split("||").map(normalizeAnswer))
       .filter(Boolean);
     const optionContainer = root.querySelector(".academy-quiz__options");
-    if (quizType === "multiple-choice" && optionContainer) {
-      const originalOptions = Array.from(optionContainer.querySelectorAll("[data-quiz-option]"));
-      const rotation = originalOptions.length
-        ? Array.from(seed).reduce((total, character) => total + character.charCodeAt(0), 0) % originalOptions.length
-        : 0;
-      originalOptions
-        .slice(rotation)
-        .concat(originalOptions.slice(0, rotation))
-        .forEach((button, index) => {
-          const letter = button.querySelector(".academy-quiz__option-letter");
-          if (letter) letter.textContent = String.fromCharCode(65 + index);
-          optionContainer.append(button);
-        });
+    // Each button keeps its original index in data-quiz-option, so grading is
+    // unaffected by the order the reader sees.
+    function shuffleMainOptions() {
+      if (quizType !== "multiple-choice" || !optionContainer) return;
+      const buttons = Array.from(optionContainer.querySelectorAll("[data-quiz-option]"));
+      shuffleInPlace(buttons).forEach((button, index) => {
+        const letter = button.querySelector(".academy-quiz__option-letter");
+        if (letter) letter.textContent = String.fromCharCode(65 + index);
+        optionContainer.append(button);
+      });
     }
+    shuffleMainOptions();
     const optionButtons = Array.from(root.querySelectorAll("[data-quiz-option]"));
     const input = root.querySelector("[data-quiz-input]");
     const submit = root.querySelector("[data-quiz-submit]");
@@ -599,7 +653,8 @@
     const chapter = Number(root.dataset.quizChapter);
     const reviewBank = (REVIEW_SOURCES_BY_CHAPTER[chapter] || [])
       .flatMap((sourceChapter) => REVIEW_BANKS[sourceChapter] || []);
-    const followUpQuestions = selectRelevantFollowUps(root, reviewBank, seed);
+    const followUpPool = relevantFollowUpPool(root, reviewBank, seed);
+    let followUpQuestions = drawFollowUps(followUpPool);
     const totalQuestions = 1 + followUpQuestions.length;
     let selectedAnswer = "";
     let firstQuestionCorrect = false;
@@ -736,14 +791,9 @@
       extensionCheck.hidden = false;
       extensionNext.hidden = true;
       extensionOptions.replaceChildren();
-      const followUpRotation = question.options.length
-        ? (Array.from(seed).reduce((total, character) => total + character.charCodeAt(0), 0) + followUpIndex)
-          % question.options.length
-        : 0;
-      const orderedOptionIndexes = question.options
-        .map((_optionText, index) => index)
-        .slice(followUpRotation)
-        .concat(question.options.map((_optionText, index) => index).slice(0, followUpRotation));
+      const orderedOptionIndexes = shuffleInPlace(
+        question.options.map((_optionText, index) => index)
+      );
       followUpOptionButtons = orderedOptionIndexes.map((originalIndex, visualIndex) => {
         const optionText = question.options[originalIndex];
         const button = element("button", "academy-quiz__extension-option");
@@ -893,6 +943,10 @@
     }
 
     function reset() {
+      // A retake is a fresh attempt: new follow-ups from the relevant
+      // shortlist, and a new order for every set of answers.
+      followUpQuestions = drawFollowUps(followUpPool);
+      shuffleMainOptions();
       selectedAnswer = "";
       root.classList.remove("is-unanswered", "is-correct", "is-incorrect");
       feedback.hidden = true;
