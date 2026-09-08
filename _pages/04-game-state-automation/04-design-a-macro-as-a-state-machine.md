@@ -207,6 +207,8 @@ Before unloading an in-process library, set the stop flag, wait for the worker t
 
 ## Wire it to Wyrmsun 5.0.1
 
+This is the original course's **macro bot**, rebuilt as an explicit state machine.
+
 The original lab found these module-relative facts:
 
 | Purpose | `wyrmsun.exe` offset |

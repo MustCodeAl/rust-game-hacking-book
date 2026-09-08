@@ -311,6 +311,8 @@ the evidence needed to debug a failed cleanup.
 
 ## How the final architecture fits together
 
+Combining every separate feature into one DLL is what the original course called the **multihack**.
+
 A multifeature tool is ready when:
 
 - starting it twice does not double-hook;

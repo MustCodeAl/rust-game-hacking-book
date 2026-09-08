@@ -208,6 +208,8 @@ Instead of patching the game’s team condition, use your copied snapshots to pr
 
 ## Patch the actual AssaultCube radar branch
 
+This is the exercise the original course called the **radar hack**.
+
 In AssaultCube 1.2.0.2, breaking on the team field while the radar draws leads through `0x00415322` and eventually to the six-byte team comparison at **`0x00409FB3`**. NOPing that comparison lets the existing radar draw path handle every player:
 
 ```rust

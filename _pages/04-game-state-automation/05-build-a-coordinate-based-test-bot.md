@@ -158,6 +158,8 @@ The most valuable bot code—geometry, state, timing, and failure handling—doe
 
 ## Wire it to Flare 1.12
 
+This is the original course's **farming bot**: it walks toward a nearby enemy and attacks while a key is held.
+
 The original 32-bit lab identified three calls. Their absolute addresses came from a run where `flare.exe` loaded at `0x00830000`; use module-relative offsets in the injected DLL because the base can move.
 
 | Capture | Observed call | Hook offset | Original target offset |

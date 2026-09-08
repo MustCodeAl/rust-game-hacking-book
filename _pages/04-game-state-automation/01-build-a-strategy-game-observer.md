@@ -185,6 +185,8 @@ Refresh slowly—once or twice per second is enough for a learning tool. Constan
 
 ## Exact Wesnoth 1.14.9 stat path
 
+This is the exercise the original course called the **stathack**.
+
 The income breakpoint at `0x009B4CE3` reveals that Wesnoth advances through player records in steps of `0x270` bytes. The paths for the first two players are:
 
 ```text

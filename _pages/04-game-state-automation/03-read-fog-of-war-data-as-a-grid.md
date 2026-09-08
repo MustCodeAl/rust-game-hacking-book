@@ -141,6 +141,8 @@ That keeps the experiment observable and easy to shut down.
 
 ## Reproduce the original Wesnoth map patch
 
+The original course called this exercise the **map hack**.
+
 For **Wesnoth 1.14.9**, the write-breakpoint trail leads to `0x006CD519`. The original eight-byte sequence updates a visibility column. Replacing that full span with the following bytes forces the column bits to `1` using `or [esi], 0xFF`:
 
 ```rust
