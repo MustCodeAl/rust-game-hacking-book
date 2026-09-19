@@ -84,6 +84,18 @@ fn effect_based_policy(command: LabCommand, writes_allowed: bool) -> bool {
 }
 ```
 
+Look at what changed about the question being asked. The weak version asked
+"which command is this?", which has as many answers as there are names. The
+enum asks "what does this command do to state?", and that has exactly two
+answers. A question with a fixed number of answers can be answered completely;
+a question about names cannot.
+
+`effect_of` is now the single place that judgement lives. Adding a command to
+the lab means classifying it there, and the `match` makes that unavoidable —
+leave the new variant out and the code does not compile. The denylist that
+would have needed extending forever has become a decision the compiler insists
+you make once.
+
 ```diff
 - fn policy(command: LabCommand, writes_allowed: bool) -> bool {
 -     command != LabCommand::WriteMemory

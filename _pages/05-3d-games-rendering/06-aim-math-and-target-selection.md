@@ -243,6 +243,34 @@ fn angular_error(current: Angles, desired: Angles) -> f32 {
 }
 ```
 
+That one-line body looks like a trick until you read it as three separate
+moves. The goal is to take a raw difference, which can land anywhere in
+−360 to +360, and fold it into −180 to +180.
+
+```text
+desired - current      the raw difference, somewhere in -360..+360
++ 180.0                shift it so the range you want becomes 0..360
+.rem_euclid(360.0)     wrap it into 0..360
+- 180.0                shift back, giving -180..+180
+```
+
+Run the earlier example through it. Turning from `179°` to `-179°`:
+
+```text
+-179 - 179   = -358
+-358 + 180   = -178
+(-178).rem_euclid(360) = 182
+182 - 180    = 2
+```
+
+Two degrees, and the sign says which way to turn.
+
+`rem_euclid` rather than `%` is the part worth remembering. Rust's `%` takes
+its sign from the left operand, so `-178 % 360` is `-178`, and the formula
+would hand back `-358` — the long way round, which is the exact bug the
+function exists to prevent. `rem_euclid` always returns a non-negative
+remainder, which is what makes the wrap correct for negative inputs.
+
 {% include concept-lab.html
   id="aim-angle-lab"
   lab="angle-lab"

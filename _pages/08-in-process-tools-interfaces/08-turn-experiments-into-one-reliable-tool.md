@@ -86,6 +86,24 @@ struct FrameSnapshot {
 }
 ```
 
+Every field in there was read at the same moment, and that is the whole reason
+the type exists. If the radar reads the player list while the overlay reads the
+camera matrix a few milliseconds later, the two features are describing
+different instants, and markers land where enemies used to be. Bundling them
+means the features cannot disagree with each other, because there is only one
+set of facts to disagree about.
+
+The camera matrix and viewport travel with the players for that exact reason.
+Projecting this frame's positions through last frame's camera is wrong in a way
+that looks almost right — everything is drawn slightly behind where it belongs,
+worst when you turn quickly, which makes it easy to blame the projection maths
+instead of the timing.
+
+`Vec<PlayerSnapshot>` is owned rather than borrowed, so nothing here points back
+into the game. A feature holding a reference into an entity the game then frees
+is the stale-pointer failure from Lesson 1.3, arriving through the back door.
+Copy once, then let every feature read from the copy.
+
 ## Give every feature a lifecycle
 
 ```rust

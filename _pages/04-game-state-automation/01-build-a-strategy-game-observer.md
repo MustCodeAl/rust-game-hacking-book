@@ -62,6 +62,17 @@ imul rax, rdx, record_size
 add rax, player_table
 ```
 
+That pair is the array-indexing formula from Lesson 1.4, written out in two
+instructions. The three-operand `imul` multiplies the index in `rdx` by a
+constant and puts the result in `rax`; the `add` then moves that distance from
+the start of the table.
+
+The constant is the useful part. You do not have to infer the record size by
+finding two players and subtracting their addresses — the instruction states
+it, because the compiler had to know the stride to generate this code at all.
+Read it off, then confirm it against two real players rather than trusting a
+single instruction.
+
 ![An indexed address calculation]({{ site.baseurl }}/assets/images/4/1/wesnoth2.png)
 
 This suggests:
