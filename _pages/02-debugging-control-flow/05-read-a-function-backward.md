@@ -50,12 +50,18 @@ Trigger one menu item at a time and record which branch runs:
 ```text
 Action: Recruit
 Compared value: 3
-Taken destination: 0x...
+Taken destination: 0x00CC_A140
 
 Action: Terrain description
 Compared value: 5
-Taken destination: 0x...
+Taken destination: 0x00CC_AF20
 ```
+
+Those destinations are from one run of one build, and yours will not match.
+Record your own, the way Lesson 2.4 asked you to read your own instruction
+rather than copy the one on the page. What transfers is the shape: two actions,
+two constants, two different branch targets, all from the same comparison
+chain.
 
 Several observations turn anonymous numbers into a useful enum:
 
@@ -96,6 +102,35 @@ This is also a lesson about **abstraction levels**. The subtraction is a low-lev
 Compilers can move calculations away from the source statement that inspired them. The instruction immediately above the anchor may be unrelated, while the important value was loaded twenty instructions earlier or passed by the caller. Track one value and one decision at a time.
 
 A practical stopping rule is: stop tracing callers when you can name the input, the decision, and the observable result in plain English. Going farther may reveal the whole menu framework, but it no longer answers the focused gold question.
+
+### The three questions, asked once
+
+Put the anchor from Lesson 2.4 back on screen and ask all three of them about
+it. Writing `sub dword ptr [esi+0x30], eax` in the middle, each question pulls
+in a different direction:
+
+```text
+        call dependency          who asked for this work?
+                 |               (the caller, and what it passed)
+                 v
+   data  -->  sub [esi+0x30], eax  <--  control
+  where did                             which comparison let
+  esi and eax                           this line run at all?
+  come from?
+```
+
+They are genuinely different searches, and the answers usually live in
+different places. `eax` may have been loaded two instructions above, or handed
+in by the caller and untouched since. `esi` is the one that matters most here:
+find where it was set and you have the object the field belongs to, which is
+the whole of Lesson 2.9. The comparison that guarded the block may sit
+immediately above, or in the caller, having already decided this purchase was
+affordable before the call was made.
+
+Answer one at a time and write the answer down before starting the next. The
+common way to get lost is to chase `eax` upward, notice an interesting branch
+on the way, follow that instead, and end up unable to say which question you
+were answering.
 
 ![Code branching between menu operations]({{ site.baseurl }}/assets/images/2/5/wesnoth9.png)
 
