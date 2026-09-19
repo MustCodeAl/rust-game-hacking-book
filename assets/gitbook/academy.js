@@ -24,13 +24,20 @@
   var themeEventsReady = false;
   var themeObserverReady = false;
   var tocEventsReady = false;
+  // A badge names the language a block is written in. An empty label means the
+  // block gets no badge at all, which is the honest answer for a plain `text`
+  // fence: those hold memory layouts, derivations, and byte diagrams rather
+  // than any language, and labelling them "output" claimed something false of
+  // every one of them.
   var LANGUAGE_LABELS = {
+    asm: "x86 assembly",
+    cpp: "C++",
     diff: "before → after",
     nasm: "x86 assembly",
-    plaintext: "text",
+    plaintext: "",
     powershell: "PowerShell",
     rust: "Rust",
-    text: "output",
+    text: "",
     toml: "TOML"
   };
   var SEMANTIC_TOKENS = {
@@ -646,8 +653,13 @@
       if (!pre || pre.dataset.enhanced === "true") return;
 
       var language = findCodeLanguage(code);
+      var label = LANGUAGE_LABELS[language];
+      if (label === undefined) label = language;
 
-      pre.dataset.language = LANGUAGE_LABELS[language] || language;
+      // An empty label leaves data-language unset, and the CSS badge rule only
+      // matches pre[data-language], so the block renders without one.
+      if (label) pre.dataset.language = label;
+      else delete pre.dataset.language;
       pre.dataset.languageId = language;
       pre.dataset.enhanced = "true";
     });
