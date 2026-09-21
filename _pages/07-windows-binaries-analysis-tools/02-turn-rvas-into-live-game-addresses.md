@@ -89,14 +89,13 @@ flowchart TD
     E -- "No" --> G["Stop with an error"]
 ```
 
-ASLR changes the live base, while a game update can change the RVA. Checking
-both facts keeps an old note from turning into a believable but wrong address.
+**ASLR**, Address Space Layout Randomization, changes the live base, while a game update can change the RVA. Checking both facts keeps an old note from turning into a believable but wrong address.
 
 ## Why an address moves
 
 Old notes often show an address such as `0x007CCD91`. That may be the address from one run, not a permanent location.
 
-Windows can load an executable at a different base address. This is **Address Space Layout Randomization**, or **ASLR**. The useful part that usually stays the same for an exact build is the distance from the module’s beginning: the **Relative Virtual Address**.
+Windows can load an executable at a different base address each run; that is what ASLR randomizes. The useful part that usually stays the same for an exact build is the distance from the module’s beginning: the **Relative Virtual Address**.
 
 ASLR makes fixed absolute addresses less predictable. Windows can relocate an
 image when its PE metadata supports relocation. The module’s internal layout

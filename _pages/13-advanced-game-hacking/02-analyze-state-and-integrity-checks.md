@@ -97,6 +97,36 @@ A check covers `health` but ignores `max_health` or `player_id`. The bytes can
 be internally consistent while describing the wrong entity or an impossible
 range.
 
+Watch it happen to the record above. Start from a perfectly ordinary player:
+
+```text
+player_id  7
+health     80
+max_health 100
+generation 3
+checksum   matches
+```
+
+Now suppose `covered_checksum` had been written without the `max_health` term —
+an easy omission, since the field is rarely the one being updated. Change
+`max_health` from 100 to 60 and recompute nothing:
+
+```text
+max_health 100 -> 60
+checksum   unchanged, and still matches
+health     80, which is now above the maximum
+```
+
+The checksum is doing its job correctly. It is reporting that every byte it
+covers is unchanged, and that is true. The record is still impossible, because
+the damage was done to a field the check never looked at.
+
+This is why `verify` has two clauses rather than one. The checksum answers "did
+the covered bytes change?" and the range test answers "is this record
+possible?", and neither question implies the other. A record can pass one and
+fail the other in both directions, so a check that asks only the first will
+accept states the game's own rules forbid.
+
 ### Wrong source of truth
 
 The code verifies a display cache, then applies an operation to the canonical

@@ -95,6 +95,8 @@ transport:         ordered TCP byte stream
 network:           loopback IP packets
 ```
 
+**WML**, Wesnoth Markup Language, is Wesnoth’s own tagged text format for structured data — chat messages, maps, units, and more all get written as bracketed tags such as `[message]` and `[/message]` wrapping quoted `key="value"` fields. It is the serialization format this chapter keeps reversing.
+
 When something fails, ask which layer broke. A correct TCP connection does not prove the WML is valid. A valid gzip stream does not prove the length prefix used the right byte order.
 
 **Serialization** turns structured values into bytes. **Framing** tells the receiver where one serialized message ends. **Transport** moves bytes between endpoints. Keeping those jobs separate makes both the explanation and the code easier to test.
@@ -227,10 +229,31 @@ whose own timestamps refer to different moments. Protocols commonly carry:
 - a baseline ID telling which snapshot a delta modifies.
 
 Sequence numbers often wrap. For an unsigned `N`-bit counter, comparisons must
-use modular arithmetic and accept only a bounded forward window. A simple
-numeric `incoming > current` test fails when `65535` wraps to `0`. The exact
-window is part of the protocol contract and should be proved with boundary
-tests.
+use modular arithmetic and accept only a bounded forward window, not a plain
+`incoming > current` test.
+
+Work through one 16-bit wraparound. The last accepted sequence number is
+`65534`, and the next two packets carry `65535` and then `0`:
+
+```text
+current  incoming   naive: incoming > current    (incoming - current) mod 65536
+65534    65535      65535 > 65534  -> accept     1   -> accept
+65535    0          0 > 65535      -> reject     1   -> accept
+```
+
+The naive test gets the first packet right and the second one wrong. `0` really
+is one step newer than `65535`, but as a plain integer it is smaller, so the
+packet is thrown away. It gets worse from there: `current` never advances past
+`65535`, so every sequence number after the wrap looks old in the same way, and
+the connection appears to stop receiving updates entirely.
+
+The modular test asks a different question — how far forward is `incoming` from
+`current`, counting the wrap? `(0 - 65535) mod 65536` is `1`, a single step
+ahead, so the packet is accepted and `current` moves on. Accept only while that
+distance stays inside an agreed window such as `1..=32768`. A genuinely old
+packet computes a distance near 65536, which falls outside the window and is
+still refused. The exact window is part of the protocol contract and deserves
+boundary tests.
 
 A **snapshot** contains enough state to stand alone. A **delta** contains changes
 relative to a named baseline. Applying a delta to the wrong baseline may parse

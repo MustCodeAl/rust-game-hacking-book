@@ -206,7 +206,7 @@ advanced tool, the worker can answer with an acknowledgement so the menu shows
 
 ## Add a menu hotkey without accidental repeats
 
-Use the rising-edge helper from lesson 10.8 for `VK_INSERT`. Polling
+Use the rising-edge helper from Lesson 8.6 for `VK_INSERT`. Polling
 `GetAsyncKeyState(VK_INSERT)` and toggling on every frame while it is negative
 will make the menu flicker open and closed. Toggle only when the key changes
 from up to down:

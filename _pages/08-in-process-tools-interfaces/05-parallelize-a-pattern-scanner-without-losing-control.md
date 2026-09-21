@@ -341,7 +341,7 @@ Parallel scanning has fixed costs:
 - merging and sorting remain;
 - small modules may fit in cache and finish faster on one thread.
 
-Measure the capture and scan phases separately with `Instant`. If capture dominates, adding workers cannot solve that bottleneck. This is Amdahl’s law in plain English: the part that stays serial limits the total speedup.
+Measure the capture and scan phases separately with `Instant`. If capture dominates, adding workers cannot solve that bottleneck. This is **Amdahl's law**: total speedup is capped by the fraction of the work that stays serial, no matter how many workers you add to the rest. Concretely, if capture takes 80% of the run and scanning the other 20%, parallelizing the scan perfectly still only shrinks that 20%. Ten workers cannot beat roughly a 1.25x overall speedup, because the 80% you didn't parallelize is still there.
 
 For course-sized modules, the architecture lesson is more important than the benchmark number.
 

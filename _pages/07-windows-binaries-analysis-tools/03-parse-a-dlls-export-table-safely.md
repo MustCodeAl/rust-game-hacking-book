@@ -26,6 +26,8 @@ An export table connects three parallel ideas:
 
 Not every export needs a name. A DLL can export by ordinal only. This beginner tool lists named exports and reports the total number of address entries so the difference stays visible.
 
+An ordinal is not simply a row's position in the address table. The export directory also stores an **ordinal base**, commonly `1`, and an export's real public ordinal is `ordinal_base + its index in the address table`. A caller asking for “ordinal 5” with a base of `1` wants `functions[5 - 1]`, not `functions[5]`. The parser below reads that base once and adds it back in for every named export so the printed ordinals match what the DLL actually publishes.
+
 ## RVA is not a file offset
 
 An **RVA**, or relative virtual address, measures from the image's preferred base after Windows maps it. A **file offset** measures from byte zero in the file on disk.

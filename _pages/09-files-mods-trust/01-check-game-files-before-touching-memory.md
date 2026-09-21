@@ -29,9 +29,9 @@ If a supported mod file can express your idea, use it. File-based changes are ea
 
 ![A game world built from many resources]({{ site.baseurl }}/assets/images/8/1/urbanterror.jpg)
 
-## A file format is an agreement about bytes
+## A file format is a rule for slicing bytes
 
-A file is only a numbered sequence of bytes. A **format** explains how to divide and interpret them:
+A file is only a numbered sequence of bytes. A **format** is the fixed rule that says where one field ends and the next begins, and how to read the bytes in between — as text, as a count, as an offset into the same file, and so on. Two parsers that apply the same rule to the same bytes must agree on every field, or one of them has the format wrong.
 
 ```text
 header → version and counts

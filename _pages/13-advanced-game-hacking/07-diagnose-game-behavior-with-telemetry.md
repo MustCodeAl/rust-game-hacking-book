@@ -67,6 +67,33 @@ sequenceDiagram
 The same correlation ID connects the stages without pretending they happened
 on one thread.
 
+That field earns its place the moment two actions overlap, which on a render
+thread is most of the time. Here are four events from one run, in the order
+they reached the log:
+
+```text
+seq  corr  event
+ 41    7   Decision        allowed=false  reason=ValueOutOfRange
+ 42    8   Decision        allowed=true   reason=Allowed
+ 43    7   EffectFinished  changed=true   generation=13
+ 44    8   EffectFinished  changed=true   generation=14
+```
+
+Read that stream the obvious way — pair each effect with the decision just
+before it — and everything looks correct. The effect at sequence 43 sits right
+after an allowed decision, so nothing stands out, and the log appears to show
+two successful operations.
+
+Now pair by correlation ID instead. The effect at 43 belongs to action 7, and
+action 7 was **denied**. Something changed state after a refusal, which is the
+exact contradiction this lesson exists to catch, and the naive reading walked
+straight past it.
+
+Nothing was missing from the log. The evidence was complete, and ordering alone
+was still enough to reach the wrong conclusion, because two actions interleaved
+and the reader assumed they had not. This is why the join in a detection rule
+is written on the correlation ID rather than on adjacency.
+
 ## Give each event a stable schema
 
 ```rust

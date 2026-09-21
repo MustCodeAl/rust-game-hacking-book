@@ -87,6 +87,8 @@ That is what “safe parsing” means: malformed input becomes an error instead 
 
 ## Find the PE and COFF headers
 
+The **COFF header**, named for the older Common Object File Format it comes from, is the small fixed block right after the four-byte `PE\0\0` signature. It gives the basics a parser needs before anything else: which CPU the machine code targets, how many section rows follow, and how large the next header is.
+
 ```rust
 anyhow::ensure!(bytes_at(&bytes, 0, 2)? == b"MZ", "missing DOS MZ signature");
 // 🧭 DOS field 0x3c contains a file offset, not an RVA or live address.

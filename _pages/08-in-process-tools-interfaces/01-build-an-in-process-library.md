@@ -93,7 +93,7 @@ pub extern "system" fn DllMain(
 }
 ```
 
-Rust 2024 uses `#[unsafe(no_mangle)]` because exporting an unmangled global symbol can affect program-wide linking.
+Normally the compiler mangles a function's name so it can tell apart two functions with the same short name in different modules. `#[no_mangle]` turns that off and exports the bare name `DllMain` instead. If another object linked into the same DLL also exports a symbol named `DllMain`, or if some other code calls this export assuming a different signature, the linker or loader cannot catch the mismatch the way Rust's type checker normally would. Rust 2024 marks `#[unsafe(no_mangle)]` to make that unchecked, program-wide promise visible at the call site instead of leaving it implicit.
 
 ## Export an explicit start function
 

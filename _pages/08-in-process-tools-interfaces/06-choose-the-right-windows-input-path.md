@@ -143,9 +143,15 @@ fn tap_key(key: VIRTUAL_KEY) -> anyhow::Result<()> {
 ```
 
 Always release a key or mouse button during shutdown, even if a feature fails.
-`SendInput` is subject to User Interface Privilege Isolation (UIPI), and some
-games intentionally use Raw Input or device APIs that do not behave like a
-normal text box. Do not respond by repeatedly flooding input.
+`SendInput` is subject to **User Interface Privilege Isolation (UIPI)**: Windows
+blocks input from a lower-integrity process into a window owned by a
+higher-integrity one, such as a game running as administrator while your tool
+does not. The visible symptom is not an error — `SendInput` reports success,
+but the target window never reacts, which looks identical to a wrong virtual-key
+code or an unfocused window. If synthetic input silently does nothing, check
+whether the target is elevated before suspecting your own code. Some games also
+intentionally use Raw Input or device APIs that do not behave like a normal text
+box. Do not respond by repeatedly flooding input.
 
 ## `SendMessageW` is not simulated keyboard input
 
