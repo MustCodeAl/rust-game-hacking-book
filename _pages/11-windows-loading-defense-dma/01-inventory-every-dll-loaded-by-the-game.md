@@ -49,7 +49,7 @@ own the mappings and must not treat a snapshot entry as permission to unload one
 
 ## Search order is a compatibility and security boundary
 
-When code supplies only a DLL name instead of a full path, Windows follows documented resolution rules. Those rules depend on factors such as packaged-app identity, API sets, side-by-side manifests, already loaded modules, known DLLs, safe DLL search mode, the executable directory, system directories, and configured search paths.
+When code supplies only a DLL name instead of a full path, Windows follows documented resolution rules. Those rules depend on factors such as packaged-app identity, **API sets** (virtual DLL names that Windows redirects to whichever real DLL implements them on that build), side-by-side manifests, already loaded modules, the **KnownDLLs** list (a fixed set of core system DLLs, recorded in the registry, that Windows always loads from the trusted system directory instead of searching for them), **safe DLL search mode** (a per-process setting that moves the current working directory later in the search order, so a file planted there is less likely to be picked over the real system DLL), the executable directory, system directories, and configured search paths.
 
 Do not reduce that to “Windows always checks this one folder first.” The precise order depends on how the load was requested and the Windows environment.
 

@@ -200,6 +200,8 @@ if allow_write {
 
 That boolean is a visible decision at the call site. A scanner can open read-only; a verified patcher must deliberately opt into writing.
 
+The "group of bits" from the top of this lesson is not a metaphor. Microsoft documents `PROCESS_QUERY_INFORMATION` as `0x0400` and `PROCESS_VM_READ` as `0x0010`. ORing them sets bit 10 and bit 4 of one 32-bit value and leaves every other bit 0, producing `0x0410`. Allowing writes ORs in `PROCESS_VM_OPERATION` (`0x0008`) and `PROCESS_VM_WRITE` (`0x0020`), setting two more bits for a final mask of `0x0438`. `OpenProcess` compares that exact bit pattern against what the target's DACL permits; there is no separate "and also let me read memory" step hiding behind the named constant.
+
 The complete buildable tool is [`access_probe.rs`]({{ site.baseurl }}/windows-labs/src/bin/access_probe.rs).
 
 References: [Microsoft process security and access rights](https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights), [`OpenProcess`](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess), and [`QueryFullProcessImageNameW`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-queryfullprocessimagenamew).

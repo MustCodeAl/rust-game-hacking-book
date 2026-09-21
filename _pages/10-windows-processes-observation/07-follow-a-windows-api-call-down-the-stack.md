@@ -65,6 +65,8 @@ The documented Win32 API is the part application developers are normally expecte
 
 Microsoft can change how a supported function is implemented while keeping its documented behavior. On modern Windows, an export in `kernel32.dll` may forward to another DLL such as `KernelBase.dll`. Your source code still calls the stable Win32 name.
 
+A **forwarded export** is not a jump instruction the loader inserts. The export table entry itself can hold a string such as `KERNELBASE.CreateFileW` in place of a code address. When `GetProcAddress` resolves that entry, it reads the string, locates the named DLL, and looks up the function there instead — following another forward if that entry also happens to be one. Whoever asked for `kernel32!CreateFileW` never sees this redirection; they get back a usable address in `KernelBase.dll` either way, which is exactly why Microsoft can move an implementation between DLLs across Windows versions without breaking the caller's import.
+
 ## Native APIs sit closer to the system call
 
 `ntdll.dll` exposes many functions whose names begin with `Nt`, such as `NtQueryVirtualMemory`. Some native functions are documented for limited uses and many are not stable application contracts.

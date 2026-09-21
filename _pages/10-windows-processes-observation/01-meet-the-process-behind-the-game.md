@@ -119,7 +119,7 @@ mov eax, dword ptr fs:[0x30]
 mov rax, qword ptr gs:[0x60]
 ```
 
-This is not ordinary game data. `fs:` and `gs:` tell the CPU to use a segment-relative address associated with the current thread. The constants differ because the 32-bit and 64-bit structures differ.
+This is not ordinary game data. `fs:` and `gs:` tell the CPU to use a segment-relative address associated with the current thread. The offset is not simply relabeled between the two builds: most of the TEB fields that come before the PEB pointer are themselves pointers, and a 64-bit pointer takes 8 bytes instead of 4. Doubling the width of nearly every earlier field pushes the PEB pointer roughly twice as far into the structure, which is why `0x30` on x86 becomes `0x60` on x86-64 rather than some unrelated number.
 
 ## Why the course tool uses ToolHelp
 
