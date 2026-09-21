@@ -60,6 +60,35 @@ An enum makes this teaching VM easy to inspect. A full game-scripting
 interpreter may encode opcodes and operands more densely after profiling shows
 that bytecode size or dispatch speed matters.
 
+That `9` is not decoration. Jump operands are positions in the bytecode vector,
+so they only mean anything once you can see the whole program. Here is the
+lab's example, `if (5 + 2) > 6 then print(1) else print(0)`, after compilation.
+The constants are collected into a pool, and the instructions refer to them by
+index:
+
+```text
+constant pool:  0:5   1:2   2:6   3:1   4:0
+
+  0  Constant(0)        push 5
+  1  Constant(1)        push 2
+  2  Add                pop two, push 7
+  3  Constant(2)        push 6
+  4  GreaterThan        pop two, push true
+  5  JumpIfFalse(9)     condition false -> continue at 9
+  6  Constant(3)        push 1          <- then branch
+  7  Print
+  8  Jump(11)           skip the else branch
+  9  Constant(4)        push 0          <- else branch
+ 10  Print
+ 11  Halt
+```
+
+Now the operands read as addresses within this listing. `JumpIfFalse(9)` sends
+a false condition to index 9, which is exactly where the else branch begins.
+`Jump(11)` carries the then branch past the else branch to the `Halt`. The
+`if`/`else` structure you wrote in Lua has become two jumps and a layout — the
+compiler kept the meaning and threw away the shape.
+
 ## The VM has its own instruction pointer
 
 The CPU has an instruction pointer such as `RIP`. The VM also needs one, but it points into the bytecode vector:
@@ -98,7 +127,8 @@ change.
 
 ## The value stack carries temporary results
 
-To compute `(5 + 2) > 6`, the program does this:
+Indices 0 to 4 of that listing compute `(5 + 2) > 6`. Watching the stack
+through those five steps shows where the intermediate values live:
 
 | Step | Bytecode | Stack after step |
 |---:|---|---|

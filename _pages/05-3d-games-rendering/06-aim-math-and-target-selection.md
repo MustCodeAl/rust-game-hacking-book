@@ -329,6 +329,16 @@ fixed offset. Animation changes bone positions each frame.
 bone_world = entity_world × skeleton_pose × bone_bind_inverse × local_point
 ```
 
+A model is rigged once in a resting posture called the **bind pose** — arms
+down, standing straight — and every vertex is authored relative to its bone as
+that bone sits in that one fixed posture. `bone_bind_inverse` undoes the
+bone's original resting transform, leaving the vertex expressed purely
+relative to the bone, with the authoring pose divided back out. `skeleton_pose`
+then reapplies the bone's current, animated transform, and `entity_world`
+places the whole rig in the level. Skip the bind-inverse step and every point
+stays glued to the character's resting pose no matter how the animation
+actually moves.
+
 The exact matrix order depends on convention. The important distinction is that a
 bone's local coordinates are not world coordinates until the hierarchy has been
 accumulated. A constant z offset may work for one stance and fail while crouching,
@@ -346,7 +356,29 @@ shooter position `o`, solve for a positive time `t`:
 (v·v - s²)t² + 2((p-o)·v)t + (p-o)·(p-o) = 0
 ```
 
-Choose the smallest positive finite root, then aim at `p + vt`. If there is no
+Get from one line to the other by squaring both sides — legal here because
+both sides are distances, so neither can be negative. Write `q = p - o` for
+the target's position relative to the shooter, so the constraint reads
+`|q + vt| = st`. Squaring a vector's length turns it into a dot product with
+itself (`|x|² = x·x`), which expands like ordinary multiplication:
+
+```text
+(q + vt)·(q + vt) = (st)²
+q·q + 2t(q·v) + t²(v·v) = s²t²
+```
+
+Move everything to one side and group by power of `t` and you have a standard
+quadratic `at² + bt + c = 0`:
+
+```text
+a = v·v - s²
+b = 2(q·v)
+c = q·q
+```
+
+which is exactly the formula above with `q` written back out as `p - o`. The
+quadratic formula then gives up to two candidate times. Choose the smallest
+positive finite root, then aim at `p + vt`. If there is no
 positive root, the constant-velocity target is not interceptable at that projectile
 speed. Gravity, drag, network interpolation, and launch delay require a richer
 model; do not hide them inside a guessed multiplier.

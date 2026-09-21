@@ -204,7 +204,15 @@ With single inheritance, the base-class part is often placed at the beginning of
 
 Multiple inheritance can add more than one base subobject and more than one vptr. A method may even adjust `this` before using it. If two methods appear to use bases a fixed distance apart, do not immediately declare one of them wrong. You may be looking at two views of the same larger object.
 
-RTTI, when present, can expose type-descriptor clues near virtual tables. Treat names found there as supporting evidence. Release builds can remove RTTI, and a readable name alone does not prove the full field layout.
+**RTTI** stands for run-time type information: extra data the compiler emits so
+that code can ask what class an object really is while the program is running.
+It is what makes `dynamic_cast` possible.
+
+When it is present it can expose type-descriptor clues near virtual tables,
+sometimes including a readable class name. Treat such a name as supporting
+evidence and nothing more. Release builds can strip RTTI entirely, and a name
+tells you what the class was called without telling you where any of its fields
+sit.
 
 ## One object can have several useful identities
 

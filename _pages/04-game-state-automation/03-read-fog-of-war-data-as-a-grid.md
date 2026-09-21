@@ -143,7 +143,18 @@ That keeps the experiment observable and easy to shut down.
 
 The original course called this exercise the **map hack**.
 
-For **Wesnoth 1.14.9**, the write-breakpoint trail leads to `0x006CD519`. The original eight-byte sequence updates a visibility column. Replacing that full span with the following bytes forces the column bits to `1` using `or [esi], 0xFF`:
+For **Wesnoth 1.14.9**, the write-breakpoint trail leads to `0x006CD519`. The original eight-byte sequence updates a visibility column.
+
+This build does not store one `u32` per tile the way the model earlier in this
+lesson does. It packs 32 tiles into a single 32-bit **column**, one bit per
+tile, so the instructions below are bit-level field assignment rather than the
+`y * width + x` array indexing shown above. `mov eax, ebp` then `shl eax, cl`
+builds a single set bit, shifted into the position `cl` names — the bit that
+belongs to one specific tile in that column. `not eax` flips every bit, which
+turns that into a mask that is `0` at the tile's position and `1` everywhere
+else. `and dword ptr [esi], eax` applies the mask to the stored column,
+clearing only that one tile's visibility bit while leaving the other 31 alone.
+Replacing that full span with the following bytes forces the column bits to `1` using `or [esi], 0xFF`:
 
 ```rust
 const MAP_VISIBILITY_HOOK: usize = 0x006C_D519;

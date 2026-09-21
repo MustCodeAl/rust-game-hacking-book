@@ -159,7 +159,8 @@ fn add_offset(address: usize, offset: usize) -> Result<usize, ReadError> {
 
 For a one-purpose tool such as `memory_scanner.exe`, the `anyhow` crate is useful
 because each failed Windows call can say which process, address, or operation
-failed. Code reused by several lessons—such as a packet, PE, or byte-pattern
+failed. Code reused by several lessons—such as a packet, PE (Portable Executable, the
+header-and-sections layout Windows uses for `.exe` and `.dll` files), or byte-pattern
 parser—benefits from a typed error enum. The caller can then handle truncated
 bytes differently from an unsupported size or invalid text. Those errors should
 also explain themselves when printed:

@@ -228,6 +228,21 @@ const GL_LEQUAL: u32 = 0x0203;
 const GL_ALWAYS: u32 = 0x0207;
 ```
 
+`glDepthRange(near, far)` controls where a fragment's depth lands in the
+depth buffer after projection, by remapping the normalized `-1..1` range onto
+whatever window-space interval you pass in. The default call is
+`glDepthRange(0.0, 1.0)`: keep every fragment's real depth. Calling
+`glDepthRange(0.0, 0.0)` instead collapses that mapping to a single point —
+every fragment's stored depth becomes `0.0`, the value reserved for the
+nearest possible surface, no matter how far away the vertex actually was. On
+its own that would not help, because the depth *test* would still reject a
+highlighted fragment sitting behind whatever was already drawn there.
+Switching `glDepthFunc` from `GL_LEQUAL` to `GL_ALWAYS` removes that
+objection: the test now passes unconditionally, so the fragment collapsed to
+depth zero is drawn regardless of what is already in the buffer. It is the
+combination — flatten the depth, then stop testing it — that pushes
+highlighted geometry through walls; neither call does it alone.
+
 The six bytes we replace are one whole x86 instruction:
 
 ```text

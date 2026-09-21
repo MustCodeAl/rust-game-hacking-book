@@ -130,7 +130,7 @@ mov dword ptr [rcx+8], 64h ; likely integer default 100
 mov qword ptr [rcx+10h], 0 ; likely pointer or 64-bit field
 ```
 
-This gives a minimum object size of at least `0x18` bytes, but alignment may make the allocation larger. Compare the allocator’s requested size, constructor stores, destructor reads, and ordinary methods. No single function tells the whole story.
+The last store starts at `+0x10` and writes a `qword`—eight bytes—so the constructor touches bytes through `+0x18` (`0x10 + 8 = 0x18`). That gives a minimum object size of at least `0x18` bytes, but alignment may make the allocation larger. Compare the allocator’s requested size, constructor stores, destructor reads, and ordinary methods. No single function tells the whole story.
 
 ## A repeatable reconstruction method
 

@@ -245,6 +245,16 @@ fn aim_angles(delta: Vec3) -> (f32, f32) {
 
 `atan2` handles all four directions around a circle. Ordinary `atan(y / x)` loses information and breaks when `x` is zero.
 
+Run real numbers through it. Put the camera at the origin and a target at
+`(3.0, 4.0, 0.0)` — three units along `x`, four along `y`, no height
+difference. `delta.y.atan2(delta.x)` is `atan2(4, 3) ≈ 53.13°`, so the target
+sits about 53 degrees around from the positive `x` axis. `flat_distance` is
+`hypot(3, 4) = 5`: the straight-line distance across the ground, ignoring
+height entirely. With `delta.z = 0`, pitch is `atan2(0, 5) = 0°` — level, as
+expected. Raise the target to `(3.0, 4.0, 5.0)` instead and pitch becomes
+`atan2(5, 5) = 45°`: the target is now as far up as it is away, a 45-degree
+climb.
+
 ## World space to screen space
 
 A 3D point cannot be drawn directly on a 2D monitor. The renderer transforms it through several spaces:
@@ -426,9 +436,35 @@ y_scale = 1 / tan(fov_y / 2)
 x_scale = y_scale / aspect
 ```
 
-A smaller field of view makes `tan(fov_y / 2)` smaller, so the scale grows and the
-scene looks zoomed in. Using degrees where a function expects radians can make the
-matrix appear completely broken; convert units at the boundary and name them.
+Here is where that comes from. Picture the frustum at some depth `d` straight
+ahead of the camera. Half the vertical field of view is the angle from the
+center line up to the top edge of what the camera sees, so — for a right
+triangle with that angle and an adjacent side of length `d` — the frustum's
+half-height at that depth is `d × tan(fov_y / 2)`. A point sitting exactly on
+that top edge has `view_y = d × tan(fov_y / 2)`, and it needs to land at the
+very top of the screen, NDC `y = 1`. Since `screen_y` is proportional to
+`view_y / view_depth`, the scale factor that sends `tan(fov_y / 2)` to `1` is
+its reciprocal: `y_scale = 1 / tan(fov_y / 2)`.
+
+Concrete numbers make the zoom effect visible. At `fov_y = 90°`, half the angle
+is `45°` and `tan(45°) = 1`, so `y_scale = 1`. Narrow the field of view to
+`60°`: half the angle is `30°`, `tan(30°) ≈ 0.577`, and `y_scale ≈ 1.732` — a
+bigger multiplier, so the same `view_y / view_depth` now produces a larger NDC
+value and the scene looks zoomed in. A smaller field of view makes
+`tan(fov_y / 2)` smaller, so the scale grows and the view zooms in.
+
+One practical trap sits in that formula. Trigonometric functions take radians,
+not degrees. Passing `90.0` where `1.5708` was expected produces a scale that
+is wrong by a wide margin, and the symptom is a scene that looks nothing like a
+camera view rather than an obviously wrong number. Convert at the boundary and
+put the unit in the variable name.
+
+`x_scale` reuses that number instead of deriving a separate one. At the same
+depth `d`, the frustum's half-width must be `aspect` times its half-height,
+because `aspect` is defined as `width / height`. Dividing `y_scale` by `aspect`
+shrinks the horizontal scale by exactly that factor, so the wider half-width
+still maps to NDC `x = 1`. Skip that division and a widescreen monitor
+squashes the image horizontally instead of showing more of the scene.
 
 ## Screen coordinates
 

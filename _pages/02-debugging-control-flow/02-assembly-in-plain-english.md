@@ -312,7 +312,7 @@ A **calling convention** answers questions such as:
 - Who removes stack arguments?
 - Where is the return value placed?
 
-The course’s 32-bit games commonly expose `cdecl`, `stdcall`, and `thiscall` boundaries. In a typical 32-bit `thiscall`, `ecx` carries the object pointer—the value an object method treats as `self` or `this`—while other arguments use the stack.
+The course’s 32-bit games commonly expose `cdecl`, `stdcall`, and `thiscall` boundaries. The three differ mainly in who removes the arguments from the stack after the call. `cdecl` leaves that job to the caller, which is also what lets a `cdecl` function such as `printf` accept a varying number of arguments—only the caller knows how many it pushed. `stdcall` makes the callee remove its own arguments before returning. In a typical 32-bit `thiscall`, `ecx` carries the object pointer—the value an object method treats as `self` or `this`—while other arguments use the stack, and the callee cleans up like `stdcall`.
 
 Do not identify a calling convention from one register alone. Inspect how the caller prepares arguments and how the callee returns. A wrong convention can leave `esp` incorrect even when the function address is right.
 

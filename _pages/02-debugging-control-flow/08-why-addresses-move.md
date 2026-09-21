@@ -18,7 +18,7 @@ You find gold at `0x1234_5678`, restart the game, and the address is different. 
 Two common reasons are:
 
 - **dynamic allocation** — the game asks for memory while it runs;
-- **ASLR** — Windows loads modules at different base addresses between runs.
+- **ASLR**, short for Address Space Layout Randomization — Windows loads modules at different base addresses between runs.
 
 Virtual addresses belong to one process. The same numeric address in two different processes can name completely different physical memory, and a freed address can later be reused for another allocation in the same process.
 

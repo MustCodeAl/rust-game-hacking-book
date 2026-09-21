@@ -70,6 +70,36 @@ enum UpvalueLocation {
 
 Several closures may capture the same local, so they must share one upvalue cell. If each closure copies the number independently, updates will disagree and the Lua behavior will be wrong.
 
+Follow `make_counter` through with slot numbers and it stops being abstract.
+Say its frame gets `base = 3`, so its single local `count` lives in stack slot
+3:
+
+```text
+call make_counter()
+  stack slot 3 = 0            <- count, inside the live frame
+  inner function created
+  upvalue = Open { stack_index: 3 }
+
+make_counter returns
+  slot 3 is about to belong to whatever runs next,
+  so the interpreter closes the upvalue first:
+  upvalue = Closed(0)         <- the 0 now lives in a cell the closure owns
+
+counter()   reads the cell -> 0, writes 1, returns 1
+counter()   reads the cell -> 1, writes 2, returns 2
+```
+
+“Open” and “closed” are just those two rows: while the frame lives the upvalue
+is a slot number, and afterwards it is a value in a cell. The identity never
+changes — it is the same `count` throughout — only where it is stored.
+
+That distinction predicts a specific bug. Hand the same `count` to two
+closures, then close it by copying the value into each one rather than sharing
+one cell. Call the first closure twice and the second once, and you get 1, 2,
+and then 1 again, because the second closure incremented its own private copy.
+Sharing the cell is what makes the third call return 3, which is the behaviour
+Lua actually promises.
+
 The captured value changes location without changing its identity:
 
 ```mermaid

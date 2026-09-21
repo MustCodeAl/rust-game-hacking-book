@@ -62,7 +62,7 @@ That supports a tentative contract:
 type GhaStart = unsafe extern "system" fn(argument: *mut core::ffi::c_void) -> u32;
 ```
 
-`extern "system"` selects the platform's Windows ABI. `unsafe` is honest: the compiler cannot prove that a raw address really points to a function with this exact contract.
+`extern "system"` selects the platform's Windows **ABI**—application binary interface, the complete machine-level agreement between compiled pieces: which registers or stack slots carry arguments, who cleans up the stack, and where the return value lands. It is the compiled counterpart to a source-level API. `unsafe` is honest: the compiler cannot prove that a raw address really points to a function with this exact contract.
 
 ## Build an evidence table
 
@@ -139,7 +139,7 @@ Keep `Unknown`. A future DLL can add a status without making your wrapper silent
 
 ## Prove the calling convention
 
-A wrong ABI can appear to work in one small test and still corrupt registers or the stack. Check:
+A wrong ABI can appear to work in one small test and still corrupt registers or the stack. The call itself may return without crashing; the damage shows up later, when an unrelated function reads garbage from a register it expected the callee to preserve, or when a mismatched stack-cleanup convention leaves `esp` off by a few bytes and a later `ret` lands somewhere nonsensical. Check:
 
 1. Which architecture is the caller and DLL?
 2. Who removes stack arguments on 32-bit builds?
