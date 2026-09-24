@@ -8,6 +8,7 @@ permalink: /pages/2/02/
 chapter: "2.2"
 minutes: 30
 summary: Understand what assembly is, how the CPU executes it, and how registers, memory, flags, stacks, and calls fit together.
+mermaid: true
 ---
 
 ## What assembly actually is
@@ -16,9 +17,11 @@ A CPU does not run source code or even the words `mov` and `sub`. It runs **mach
 
 Assembly language is a human-readable spelling of those operations. For 32-bit x86, these five bytes:
 
-```text
-B8 19 00 00 00
-```
+{% include memory-strip.html
+  cells="=B8|=19|=00|=00|=00"
+  groups="0-0:opcode|1-4:the number 25, little endian"
+  caption="`B8` means “put the 32-bit number that follows into `eax`.” The four bytes after it are that number."
+%}
 
 can be shown as:
 
@@ -31,16 +34,12 @@ The byte `B8` selects one form of `mov`. The next four bytes hold `25` as a litt
 🔍 **Reading tip:** follow one instruction at a time and write down what changed. Assembly becomes ordinary bookkeeping when you stop trying to understand the whole function at once.
 {: .emoji-note }
 
-```text
-Source code
-→ compiler
-→ machine-code bytes in the EXE
-→ Windows maps those bytes into memory
-→ CPU executes them
-
-machine-code bytes
-→ disassembler
-→ assembly text for a human to read
+```mermaid
+flowchart LR
+    S["source code"] -->|"compiler"| B["machine-code bytes<br/>in the EXE"]
+    B -->|"Windows maps them<br/>into memory"| C["the CPU executes them"]
+    B -->|"disassembler"| A["assembly text<br/>for a human"]
+    A -->|"assembler"| B
 ```
 
 An **assembler** travels from assembly text to machine code. A **disassembler** travels from machine code to assembly text. A debugger includes a disassembler and also shows the live register and memory values while the instructions execute.
@@ -77,6 +76,10 @@ A debugger may show:
 007CCD91  29 42 04  sub dword ptr [edx+4], eax
 ```
 
+{% include memory-strip.html
+  cells="address=007CCD91|bytes=29 42 04|mnemonic=sub|destination=dword ptr [edx+4]|source=eax"
+%}
+
 Read it from left to right:
 
 | Part | Meaning |
@@ -102,6 +105,16 @@ At a simplified level, one thread repeatedly:
 5. performs the operation;
 6. writes the result;
 7. advances `eip` or jumps somewhere else.
+
+```mermaid
+flowchart LR
+    F["fetch the bytes<br/>at eip"] --> D["decode them"]
+    D --> R["read registers<br/>or memory"]
+    R --> X["do the operation"]
+    X --> W["write the result"]
+    W --> N["advance eip,<br/>or jump"]
+    N --> F
+```
 
 `eip` is the **instruction pointer**. It is not a normal game variable. It tells the CPU where this thread is executing. A jump, call, return, exception, or debugger action can change it.
 
@@ -131,6 +144,13 @@ The register value `0xFFFF_FFFF` is only 32 one-bits. An instruction may interpr
 - four bytes;
 - part of a pointer;
 - a bit mask where every switch is on.
+
+{% include memory-strip.html
+  cells="=FF|=FF|=FF|=FF"
+  groups="0-3:as a `u32`: 4,294,967,295"
+  groups2="0-3:as an `i32`: −1"
+  caption="The bits are identical. Only the instruction that uses them chooses the reading."
+%}
 
 Source-level types give those bits a declared meaning. In disassembly, the instruction and surrounding behavior provide the evidence for that meaning.
 
@@ -182,16 +202,22 @@ mov eax, [ecx]     ; read four bytes from memory
 mov [ecx], eax     ; write four bytes to memory
 ```
 
+{% include memory-strip.html
+  cells="0x5000=64|0x5001=00|0x5002=00|0x5003=00"
+  groups="0-3:`mov eax, [ecx]` copies these four bytes: `eax` = 100"
+  caption="Suppose `ecx` holds `0x5000`. `mov eax, ecx` copies the number `0x5000` itself. The brackets in `mov eax, [ecx]` go to that address and copy what is stored there."
+%}
+
 The instruction decides the size. `byte ptr` means one byte, `word ptr` means two, `dword ptr` means four, and `qword ptr` means eight.
 
 ## Little endian explains “backward” bytes
 
 x86 stores a multi-byte integer with its least-significant byte first. The value `0x12345678` appears in memory as:
 
-```text
-address +0  +1  +2  +3
-byte     78  56  34  12
-```
+{% include memory-strip.html
+  cells="+0=78|+1=56|+2=34|+3=12"
+  groups="0-3:the value `0x12345678`"
+%}
 
 The number is not reversed when the CPU uses it. This is only the byte order in memory. The conversion helpers `u32::from_le_bytes` and `to_le_bytes` make the chosen byte order explicit.
 
@@ -274,6 +300,20 @@ assert_eq!(signed.to_ne_bytes(), unsigned.to_ne_bytes());
 
 This is why signed and unsigned jumps differ even though the register bits are identical.
 
+Here are the flags after the two comparisons in the gold check at the end of
+this lesson:
+
+{% include memory-strip.html
+  cells="ZF=0|CF=0|SF=0|OF=0"
+  caption="Gold 100 compared with price 30: 100 − 30 = 70. The result is not zero and nothing was borrowed, so `je` and `jb` both fall through."
+%}
+
+{% include memory-strip.html
+  cells="ZF=0|CF=1|SF=1|OF=0"
+  marks="1-2"
+  caption="Gold 20 compared with price 30: 20 − 30 needs a borrow. CF = 1 makes `jb` jump. SF differs from OF, which makes `jl` jump as well."
+%}
+
 ## Calls, returns, and the stack
 
 `call` jumps into a function and remembers where to return. `ret` goes back.
@@ -293,6 +333,14 @@ ret
 ```
 
 On 32-bit x86, the stack grows toward lower addresses. `push eax` subtracts four from `esp` and stores `eax` there. `pop eax` loads four bytes and adds four back to `esp`.
+
+{% include memory-strip.html
+  column=true
+  cells="0x0019FF30=older data, where esp pointed before|0x0019FF2C=25, the value in eax"
+  marks="1"
+  groups="1-1:`esp` after `push eax`"
+  caption="`push eax` with `eax` = 25. The stack pointer moves down four bytes and the value lands there. `pop eax` reads it back and moves `esp` up again."
+%}
 
 `call target` is roughly:
 
@@ -364,15 +412,25 @@ describe and stores that number, instead of reading whatever lives there. It is
 the one common instruction where brackets do not mean a memory access:
 
 ```nasm
-mov rax, [rcx+rdx*4]  ; rax = the value stored at rcx + rdx*4
-lea rax, [rcx+rdx*4]  ; rax = rcx + rdx*4 itself, nothing is read
+mov eax, [rcx+rdx*4]  ; eax = the four-byte value stored at rcx + rdx*4
+lea rax, [rcx+rdx*4]  ; rax = the address rcx + rdx*4 itself; nothing is read
 ```
+
+The `mov` reads into `eax` because the elements are four bytes wide. Reading
+into the eight-byte `rax` would take the next element along with it.
 
 The `*4` is a strong hint that this is array indexing: `rcx` holds the start of
 an array, `rdx` holds an index, and each step of the index moves four bytes
 because each element is four bytes wide. So this `lea` computes “the address of
 element number `rdx`,” which is exactly what code does just before handing one
 element to another function.
+
+{% include memory-strip.html
+  cells="rcx+0=10|rcx+4=20|rcx+8=30|rcx+12=40"
+  marks="2"
+  groups="2-2:element 2"
+  caption="An array of four-byte numbers, with `rdx` = 2. `lea rax, [rcx+rdx*4]` puts the address `rcx+8` in `rax`. `mov eax, [rcx+rdx*4]` reads the number stored there, 30."
+%}
 
 Compilers also use `lea` as a quick way to do plain arithmetic, since it can
 multiply and add in one instruction without disturbing the flags. Do not assume
@@ -404,12 +462,13 @@ reads that field.
 entry and one exit is often called a **basic block**. Conditional jumps connect
 blocks into a graph:
 
-```text
-read gold -> compare with price -> enough? --yes--> subtract -> success
-                                      |
-                                      no
-                                      v
-                                    failure
+```mermaid
+flowchart LR
+    A["read gold"] --> B["compare with price"]
+    B --> C{"enough?"}
+    C -->|"yes"| D["subtract"]
+    D --> E["success"]
+    C -->|"no"| F["failure"]
 ```
 
 The graph explains the decision even when the compiler has rearranged the blocks.
@@ -438,6 +497,15 @@ xor eax, eax             ; eax = 0, meaning false
 ret 4
 ```
 
+The same listing as a control-flow graph. Each box is a basic block, and the
+only decision is the `jb`:
+
+```mermaid
+flowchart TD
+    A["mov eax, [esp+4]<br/>cmp dword ptr [ecx+4], eax<br/>jb cannot_afford"] -->|"gold is not below the price"| B["sub dword ptr [ecx+4], eax<br/>mov eax, 1<br/>ret 4"]
+    A -->|"gold is below the price, unsigned"| C["cannot_afford:<br/>xor eax, eax<br/>ret 4"]
+```
+
 Three details in that listing puzzle almost everyone the first time.
 
 **Why `[esp+4]` and not `[esp]`?** The `call` that reached this function pushed
@@ -445,6 +513,14 @@ a return address onto the stack, so that address is now sitting at `[esp]`. The
 argument the caller pushed just before the call is one slot further in, at
 `[esp+4]`. Whenever you see a function collecting its arguments from `+4`, `+8`,
 `+12`, the saved return address is what those offsets are stepping over.
+
+{% include memory-strip.html
+  column=true
+  cells="0x0019FF34=the caller's own data|0x0019FF30=the price argument, 30|0x0019FF2C=the return address, pushed by call"
+  marks="2"
+  groups="1-1:`[esp+4]`|2-2:`[esp]`"
+  caption="The stack as the function begins. `esp` points at the return address, so the argument the caller pushed just before the call is one slot further in."
+%}
 
 **Why `xor eax, eax` instead of `mov eax, 0`?** Both leave zero in `eax`. Any
 value exclusive-ORed with itself is zero, and the `xor` form assembles to fewer

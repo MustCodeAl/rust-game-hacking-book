@@ -46,13 +46,19 @@ forms.
 The target and debugger do not merge into one program. Windows remains the
 gatekeeper between them:
 
-```text
-target reaches breakpoint
-→ Windows pauses and reports an event
-→ debugger reads thread context and memory
-→ you choose how to continue
-→ debugger replies to Windows
-→ target resumes
+```mermaid
+sequenceDiagram
+    participant Game as Target game
+    participant Win as Windows
+    participant Dbg as Debugger
+    Game->>Win: a thread reaches a breakpoint
+    Note over Game: paused
+    Win->>Dbg: debug event: which thread, what happened
+    Dbg->>Win: read that thread's context and some memory
+    Win-->>Dbg: registers and copied bytes
+    Note over Dbg: you inspect and decide
+    Dbg->>Win: continue
+    Win->>Game: resume
 ```
 
 Many debuggers pause the rest of the process while you inspect one event. That
@@ -91,16 +97,12 @@ turn a branch into arithmetic.
 
 A decompiler therefore works upward through several reconstructions:
 
-```text
-instruction bytes
-    ↓ decode
-assembly instructions
-    ↓ connect jumps
-basic blocks and a control-flow graph
-    ↓ trace values
-expressions, arguments, and possible types
-    ↓ choose readable syntax
-pseudocode
+```mermaid
+flowchart TD
+    A["instruction bytes"] -->|"decode"| B["assembly instructions"]
+    B -->|"connect the jumps"| C["basic blocks and<br/>a control-flow graph"]
+    C -->|"trace values"| D["expressions, arguments,<br/>and possible types"]
+    D -->|"choose readable syntax"| E["pseudocode"]
 ```
 
 Every upward step is useful, but it adds interpretation. Two different source
@@ -166,12 +168,14 @@ You used a visible value as a trail back to the code.
 
 Assembly uses names such as `rax`, `rbx`, `rcx`, and `rdx`. These are registers. On a 64-bit x86 CPU, `rax` is 64 bits wide. `eax` refers to its lower 32 bits, `ax` to the lower 16, and `al` to the lowest 8.
 
-```text
-rax  [63 ........................................ 0]
-eax                                  [31 ........ 0]
- ax                                         [15 . 0]
- al                                             [7:0]
-```
+{% include memory-strip.html
+  cells="=11|=22|=33|=44|=55|=66|=77|=88"
+  groups="0-7:`rax`: all 64 bits, 0x1122334455667788"
+  groups2="4-7:`eax`: the low 32 bits, 0x55667788"
+  groups3="6-7:`ax`: the low 16, 0x7788"
+  groups4="7-7:`al`: 0x88"
+  caption="One register, written most significant byte first, the way a debugger shows it. The shorter names are views of its low end, not separate registers. Writing `eax` also clears the upper half of `rax`; writing `ax` or `al` leaves the rest alone."
+%}
 
 The names look odd because they are old, not because the idea is complicated.
 
@@ -192,6 +196,13 @@ sub dword ptr [ebx+30h], eax
 - `30h` is an offset, a distance from that base;
 - `[ebx+30h]` means “access memory at the calculated address”;
 - `dword ptr` says the memory operation is four bytes wide.
+
+{% include memory-strip.html
+  cells="ebx →=side object starts|=· · ·|+30h=gold"
+  marks="2"
+  groups="0-1:offset `30h`: 48 bytes along"
+  caption="`[ebx+30h]` names the four bytes 48 bytes past the address in `ebx`. The instruction subtracts `eax` from them and writes the result back."
+%}
 
 The register names alone do not prove those meanings. Compare the calculated
 address with the gold address, compare `eax` with the known unit price, and

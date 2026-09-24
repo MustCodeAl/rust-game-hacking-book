@@ -8,6 +8,7 @@ permalink: /pages/2/03/
 chapter: "2.3"
 minutes: 12
 summary: Pause on an instruction or memory access, inspect the evidence, and continue without losing the thread.
+mermaid: true
 ---
 
 ## What a breakpoint does
@@ -43,6 +44,19 @@ This is the difference between a **trace** and an **explanation**. A trace recor
 
 On x86, a debugger often implements a software breakpoint by temporarily replacing the first byte of an instruction with `0xCC`, the `int3` instruction.
 
+{% include memory-strip.html
+  cells="0x007CCD91=29|=42|=04"
+  groups="0-2:`sub dword ptr [edx+4], eax`"
+  caption="The instruction from Lesson 2.2, as the game shipped it."
+%}
+
+{% include memory-strip.html
+  cells="0x007CCD91=CC|=42|=04"
+  marks="0"
+  groups="0-0:`int3`"
+  caption="The same bytes with a breakpoint set. The CPU now executes `int3` and stops; the debugger keeps the original `29` to put back."
+%}
+
 When the CPU executes `int3`, Windows reports a breakpoint exception. The debugger:
 
 1. pauses the process;
@@ -69,17 +83,16 @@ the same self-checking idea used to notice a patch.
 The original instruction still has to execute. A debugger normally handles the
 `0xCC` pause in two events:
 
-```text
-breakpoint event
-→ restore original byte
-→ move instruction pointer back to the restored instruction
-→ enable one-instruction stepping
-→ continue
-
-single-step event
-→ put 0xCC back
-→ disable one-instruction stepping
-→ continue or pause for the user
+```mermaid
+flowchart TD
+    A["the CPU executes int3"] --> B["breakpoint event"]
+    B --> C["restore the original byte"]
+    C --> D["move the instruction pointer back<br/>to the restored instruction"]
+    D --> E["turn on one-instruction stepping"]
+    E --> F["the real instruction runs"]
+    F --> G["single-step event"]
+    G --> H["write 0xCC back"]
+    H --> I["turn stepping off, then<br/>continue or pause for the user"]
 ```
 
 The instruction pointer needs rewinding because the CPU has already consumed
@@ -94,6 +107,17 @@ belongs to one thread, which is why debugger state records thread IDs.
 ## Memory breakpoints
 
 A hardware breakpoint uses CPU debug registers to watch a small address range. It is ideal when you know the gold address but not the instruction that changes it.
+
+{% include memory-strip.html
+  column=true
+  cells="DR0=0x0550A034|DR1=unused|DR2=unused|DR3=unused|DR7=which of DR0 to DR3 are on, what each watches, and how many bytes"
+  marks="0"
+  caption="One thread's debug registers with a write watchpoint on four bytes of gold. Four address slots are all there are."
+%}
+
+The debug registers can watch for a write, for a read *or* write, or for an
+execute — x86 has no read-only setting. A debugger that offers a pure read
+breakpoint implements it another way, usually with page protection.
 
 Choose the narrowest event that answers your question:
 
@@ -130,6 +154,13 @@ When paused at a `call`, you have choices:
 | Run to return | Continue until the current function returns |
 | Resume | Continue until another event pauses the process |
 
+```mermaid
+flowchart LR
+    P["paused at<br/>call calculate_damage"] -->|"step into"| I["first instruction<br/>inside calculate_damage"]
+    P -->|"step over"| O["the instruction<br/>after the call"]
+    I -->|"run to return"| O
+```
+
 Step into code you need to understand. Step over code that is not part of your question.
 
 “Step over” is not one special CPU instruction. At a `call`, the debugger can
@@ -156,6 +187,26 @@ easy to overlook. Arithmetic instructions often update flags used by the next
 conditional branch. A floating-point store may also pop a value from an x87
 stack. A test that appears visually correct can still damage later control flow
 or machine state.
+
+{% include memory-strip.html
+  cells="=29|=41|=30"
+  groups="0-2:`sub [rcx+30], eax`: three bytes"
+  caption="The original instruction."
+%}
+
+{% include memory-strip.html
+  cells="=90|=90|=90"
+  marks="0-2"
+  groups="0-0:`nop`|1-1:`nop`|2-2:`nop`"
+  caption="All three bytes replaced. The subtraction is gone, and so are the flags it would have set."
+%}
+
+{% include memory-strip.html
+  cells="=90|=90|=30"
+  marks="2"
+  groups="0-1:two `nop`s|2-2:leftover"
+  caption="Only two bytes replaced. The CPU decodes the leftover `30` as the start of an `xor` instruction that swallows the bytes after it."
+%}
 
 Before patching, ask:
 

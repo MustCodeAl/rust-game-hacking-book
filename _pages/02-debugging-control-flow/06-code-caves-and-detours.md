@@ -28,11 +28,13 @@ the instruction-boundary problem below.
 
 ```mermaid
 flowchart TD
-    A["Original code"] --> B["Jump to cave"]
-    B --> C["Run saved instructions"]
-    C --> D["Run extra logic"]
-    D --> E["Jump back"]
-    E --> F["Continue original code"]
+    A["original code runs<br/>up to the hook site"] --> B["hook site: a jump now sits<br/>where whole instructions were"]
+    B --> C["cave: save registers and flags"]
+    C --> D["cave: run the extra logic"]
+    D --> E["cave: restore registers and flags"]
+    E --> F["cave: replay the replaced instructions"]
+    F --> G["jump back to the return address"]
+    G --> H["original code continues"]
 ```
 
 ## A detour needs five parts
@@ -58,11 +60,11 @@ instruction from that point on is decoded from the wrong position.
 
 Take the six-byte span this lesson hooks:
 
-```text
-address   bytes         instruction
-0x1000    8B 01         mov eax, [ecx]
-0x1002    8D 74 26 00   lea esi, [esi]
-```
+{% include memory-strip.html
+  cells="0x1000=8B|=01|0x1002=8D|=74|=26|=00"
+  groups="0-1:`mov eax, [ecx]`|2-5:`lea esi, [esi]`"
+  caption="Two whole instructions, six bytes."
+%}
 
 A five-byte jump written over it covers `8B 01 8D 74 26` and strands the final
 `00`. When the cave later returns to `0x1005`, the CPU does not see “the
@@ -72,10 +74,18 @@ as its operands. Execution continues confidently into nonsense, and the crash
 usually surfaces somewhere unrelated a few instructions later — which is what
 makes this mistake so hard to diagnose after the fact.
 
-```text
-bad:  copy exactly 5 bytes, cutting an instruction in half
-good: copy whole instructions whose combined size is at least 5 bytes
-```
+{% include memory-strip.html
+  cells="0x1000=E9|=??|=??|=??|=??|0x1005=00"
+  marks="5"
+  groups="0-4:`jmp` to the cave|5-5:stranded"
+  caption="Bad: exactly five bytes copied. The cave returns to `0x1005`, and the CPU starts a new instruction at the orphaned `00`."
+%}
+
+{% include memory-strip.html
+  cells="0x1000=E9|=??|=??|=??|=??|=90"
+  groups="0-4:`jmp` to the cave|5-5:`nop`"
+  caption="Good: both whole instructions covered, the spare byte filled with `nop`. The cave returns to `0x1006`, the first untouched byte."
+%}
 
 So you round up to the next instruction boundary: cover all six bytes and fill
 the spare sixth byte with a `nop`. The return address is the hook address plus
@@ -97,6 +107,27 @@ visible change:  set the current side's gold to 888
 The first two original bytes mean `mov eax,[ecx]`. The remaining four form a
 do-nothing `lea` used for alignment. Together they occupy six bytes—enough for
 our five-byte near jump and one `nop`.
+
+Before reading the code, here is its shape. At run time, control passes through
+four pieces and comes back:
+
+```mermaid
+flowchart TD
+    H["Wesnoth reaches 0x00CCAF8A"] -->|"jmp"| C["terrain_cave<br/>naked assembly: saves and restores the CPU state"]
+    C -->|"call"| B["cave_body<br/>ordinary Rust"]
+    B -->|"calls"| S["set_gold(888)<br/>follows the pointer path"]
+    S -->|"returns"| C
+    C -->|"jmp 0x00CCAF90"| R["Wesnoth continues"]
+```
+
+And the pointer path `set_gold` follows, one checked read at a time:
+
+```mermaid
+flowchart LR
+    R["0x017EED18<br/>PLAYER_ROOT"] -->|"read: player record"| P["player + 0xA90"]
+    P -->|"read: current side"| S["side + 0x4"]
+    S -->|"write 888"| G["that side's gold"]
+```
 
 This is the actual cave from the build-checked Windows project:
 
@@ -246,12 +277,11 @@ patch.
 The CPU was about to fetch the byte `0x8B` at `0x00CCAF8A`. We replace that
 six-byte region with:
 
-```text
-E9 ?? ?? ?? ?? 90
-│  └─ signed distance from the end of this jump to terrain_cave
-└──── x86 near-jump opcode
-               └─ one-byte padding because the original span was six bytes
-```
+{% include memory-strip.html
+  cells="0x00CCAF8A=E9|=??|=??|=??|=??|=90"
+  groups="0-0:near `jmp`|1-4:signed distance to `terrain_cave`|5-5:padding"
+  caption="The six bytes written over the hook site."
+%}
 
 Those four `??` bytes hold a *distance*, not a destination. `E9` takes a signed
 32-bit displacement measured from the address of the instruction that follows
@@ -260,6 +290,19 @@ the jump — the hook address plus five. The number to write is therefore:
 ```text
 displacement = cave_address - (hook_address + 5)
 ```
+
+Suppose the DLL placed `terrain_cave` at `0x6F201000`. Then:
+
+```text
+displacement = 0x6F201000 - (0x00CCAF8A + 5)
+             = 0x6F201000 - 0x00CCAF8F
+             = 0x6E536071
+```
+
+{% include memory-strip.html
+  cells="0x00CCAF8A=E9|=71|=60|=53|=6E|=90"
+  groups="0-0:`jmp`|1-4:`0x6E536071`, little endian|5-5:`nop`"
+%}
 
 Two things follow from that. Because the value is relative, the same five bytes
 mean different destinations at different addresses, so a working jump cannot be
@@ -284,6 +327,14 @@ overwrite them. `pushad` copies all eight general-purpose registers onto the
 stack and `pushfd` copies the flags; `popfd` and `popad` restore them in the
 opposite order, so the interrupted function never notices that anything
 happened.
+
+{% include memory-strip.html
+  column=true
+  cells="esp+32=flags, from pushfd|esp+28=eax|esp+24=ecx|esp+20=edx|esp+16=ebx|esp+12=esp as it was before pushad|esp+8=ebp|esp+4=esi|esp →=edi"
+  marks="8"
+  groups="0-0:`pushfd`|1-8:`pushad`, in the order it pushes them"
+  caption="The cave's stack after `pushfd` and `pushad`, with `esp` at the bottom. `popad` then `popfd` take everything back in the opposite order."
+%}
 
 There is no universal “save every register” rule. `pushfd`/`pushad` is easy to
 understand for this small 32-bit teaching cave. In a performance-sensitive
