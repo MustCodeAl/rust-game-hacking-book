@@ -134,6 +134,25 @@ anything outside that process — a game server sending an update, another
 program, a device — was never suspended at all. A value you read while paused
 is a fact about one moment, not a fact that stays true.
 
+```mermaid
+flowchart TB
+    subgraph P["one game process"]
+        direction TB
+        T1["main thread:<br/>runs the game loop"]
+        T2["render thread:<br/>submits drawing"]
+        T3["audio thread:<br/>mixes sound"]
+        M["one shared virtual address space:<br/>code, loaded DLLs, game state"]
+        H["handles: files, windows, events"]
+        T1 --> M
+        T2 --> M
+        T3 --> M
+    end
+```
+
+Every thread reads and writes the same memory. That shared space is what a
+memory tool looks into, and it is also why a value can change between two reads
+even when no single thread looks busy.
+
 You only need this distinction for now:
 
 - process = the running game's resources and memory;
@@ -163,6 +182,16 @@ bits   1111 1111
 hex       F    F     ->  0xFF, one byte
 ```
 
+The split works for any byte. Here is the byte that stores 100, which Lesson
+1.3 keeps coming back to:
+
+{% include memory-strip.html
+  cells="high four bits=0110|low four bits=0100"
+  groups="0-0:6|1-1:4"
+  groups2="0-1:0x64, which is 6 × 16 + 4 = 100"
+  caption="Each group of four bits becomes exactly one hex digit, so a byte is always two digits and the byte boundaries stay visible."
+%}
+
 That fixed relationship is what makes hex readable in a debugger. Written as
 `0xFF` you can see one whole byte at a glance. Written as decimal 255 the byte
 boundary is invisible, and a number like decimal 4096 gives no hint that it is
@@ -185,16 +214,16 @@ a simpler set of operations and hides the details of the layer below it.
 A single key press passes through several named layers before your code sees an
 answer:
 
-```text
-your code               "is the F1 key currently down?"
-  -> user32.dll         GetAsyncKeyState
-    -> Windows kernel   input handling
-      -> keyboard driver
-        -> the physical keyboard
+```mermaid
+flowchart TD
+    A["your code asks:<br/>is the F1 key down right now?"] --> B["user32.dll<br/>GetAsyncKeyState"]
+    B --> C["Windows kernel<br/>input handling"]
+    C --> D["keyboard driver"]
+    D --> E["the physical keyboard"]
 ```
 
-Every arrow in that list is a place where the answer can be produced, delayed,
-filtered, or supplied by something other than a real key press. Knowing the
+Every arrow in that diagram is a place where the answer can be produced,
+delayed, filtered, or supplied by something other than a real key press. Knowing the
 layers is what lets you say *which* arrow your observation actually came from.
 
 That structure matters because a bug or observation belongs to a particular

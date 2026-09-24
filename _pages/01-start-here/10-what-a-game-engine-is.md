@@ -106,6 +106,15 @@ Wesnoth shows two of them side by side:
   is built from the definition on disk. Change the file instead, and every unit
   of that type created afterwards has the new value.
 
+```mermaid
+flowchart LR
+    W["your file edit"] -.->|"changes every unit<br/>created afterwards"| D
+    D["unit type in a WML file:<br/>defines its hit points"] -->|"each recruit is<br/>built from it"| U1["unit in memory"]
+    D --> U2["unit in memory"]
+    D --> U3["the next recruit"]
+    M["your memory edit"] -.->|"changes only this unit"| U1
+```
+
 Neither change is wrong. They answer different questions, and knowing which one
 you are making saves an afternoon of wondering why a change "didn't stick."
 

@@ -21,13 +21,13 @@ predict which facts about a game will survive an update and which will not.
 ## Four stages, each deciding something different
 
 ```mermaid
-flowchart LR
-    A["Source files"] --> B["Compiler"]
-    B --> C["Object files"]
+flowchart TD
+    A["Source files<br/>names, types, comments"] --> B["Compiler"]
+    B -->|"fixes every structure's layout,<br/>then drops field and local names"| C["Object files"]
     C --> D["Linker"]
-    D --> E["EXE or DLL on disk"]
+    D -->|"resolves function names, lays out the image,<br/>records a preferred base and the imports it needs"| E["EXE or DLL on disk"]
     E --> F["Windows loader"]
-    F --> G["Running process"]
+    F -->|"picks the base, applies relocations,<br/>writes real addresses into the import slots"| G["Running process"]
 ```
 
 The important thing is that each stage throws away information the next one
@@ -82,10 +82,19 @@ moves: the image is laid out as one block, and the loader relocates the block.
 
 **Where the DLL functions will be.** The linker knows the game calls
 `MessageBoxW` in `user32.dll`, but not the address, which will not exist until
-the DLL is mapped. So it writes down the requirement and leaves a table of
-empty slots for the loader to fill. That table is the Import Address Table, and
-Lesson 8.4 hooks a program's own copy of it — a technique that works precisely
-because the linker left the answer blank on purpose.
+the DLL is mapped. So it writes down the requirement — which DLL, which
+function — and leaves a table of slots for the loader to fill with real
+addresses. That table is the Import Address Table:
+
+{% include memory-strip.html
+  column=true
+  cells="on disk=a reference to the name MessageBoxW in user32.dll|in memory=the address of MessageBoxW, written by the loader"
+  marks="1"
+  caption="One Import Address Table slot. The game's code calls through the slot, so the call works only once the loader has written the real address there."
+%}
+
+Lesson 8.4 hooks a program's own copy of this table — a technique that works
+precisely because the linker left the address for someone else to fill in.
 
 ## The loader turns a file into a process
 
@@ -115,7 +124,19 @@ new game version.
 That last row is the one Lesson 13.6 turns into a migration procedure. A field
 inserted in the middle of a structure moves everything after it and nothing
 before it, because the compiler recalculated the layout — not because anything
-was deliberately moved to inconvenience you.
+was deliberately moved to inconvenience you:
+
+{% include memory-strip.html
+  cells="+0x00=id|+0x04=health|+0x08=max_health|+0x0C=gold"
+  caption="The player structure in one build."
+%}
+
+{% include memory-strip.html
+  cells="+0x00=id|+0x04=armor|+0x08=health|+0x0C=max_health|+0x10=gold"
+  marks="1"
+  groups="2-4:each moved 4 bytes later"
+  caption="The next build adds `armor`. `id` keeps its offset; every field after the new one moves."
+%}
 
 ## Optimization is why the code does not match the source
 

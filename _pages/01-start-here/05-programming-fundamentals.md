@@ -8,6 +8,7 @@ permalink: /pages/1/05/
 chapter: "1.5"
 minutes: 26
 summary: "Learn the programming vocabulary the rest of the book assumes — data, types, state, algorithms, data structures, functions, event-driven programs, abstractions, APIs, ABIs, parsing, concurrency, and invariants."
+mermaid: true
 ---
 
 Technical words are useful when they name a precise idea. They are not useful
@@ -24,8 +25,15 @@ Start with three words that get used interchangeably and really should not be.
 piece of that data, interpreted a particular way. A **type** is the thing that
 says which interpretation to use, and therefore which operations make sense.
 
-The bytes `50 00 00 00` are data. Read as a `u32`, the value is 80. Doubling it
-is a sensible thing to do; adding the text `"Ada"` to it is not, and the type is
+The bytes `50 00 00 00` are data. Read as a `u32`, the value is 80:
+
+{% include memory-strip.html
+  cells="=50|=00|=00|=00"
+  groups="0-3:data: four stored bytes"
+  groups2="0-3:value: 80, once the type `u32` says how to read them"
+%}
+
+Doubling that value is a sensible thing to do; adding the text `"Ada"` to it is not, and the type is
 how the compiler knows the difference before you ever run the program.
 
 ```rust
@@ -64,8 +72,11 @@ If health changes from 80 to 55, the program moved from one state to another.
 Some values are inputs, some are temporary calculations, and some become stored
 state. Naming that difference helps you trace cause and effect:
 
-```text
-damage event → calculate new health → store health → update health bar
+```mermaid
+flowchart LR
+    E["damage event<br/>an input"] --> C["calculate 80 − 25<br/>a temporary value"]
+    C --> S["store health = 55<br/>state"]
+    S --> B["resize the health bar<br/>derived from state"]
 ```
 
 The stored simulation health and the displayed health-bar width are related,
@@ -81,6 +92,18 @@ For example, a basic value scanner:
 3. compares each possible value with the search value;
 4. records matching addresses;
 5. repeats later using only the previous candidates.
+
+The same steps, drawn as a loop:
+
+```mermaid
+flowchart TD
+    R["visit the next readable region"] --> C["read a bounded chunk"]
+    C --> M["compare each position<br/>with the search value"]
+    M --> K["record the matching addresses"]
+    K --> N{"more regions?"}
+    N -->|"yes"| R
+    N -->|"no"| L["later: re-read only the<br/>recorded candidates and keep<br/>the ones that still match"]
+```
 
 An algorithm is not tied to one programming language. Code is one exact way to
 express it.
@@ -192,6 +215,23 @@ every frame:
     draw the frame
 ```
 
+Compare the two loops. A text editor, using `GetMessage`:
+
+```mermaid
+flowchart LR
+    W["wait for a message<br/>the thread sleeps"] --> H["handle it"]
+    H --> W
+```
+
+A game, using `PeekMessage`:
+
+```mermaid
+flowchart LR
+    P["handle every waiting message<br/>returns at once if there are none"] --> U["update the world"]
+    U --> D["draw the frame"]
+    D --> P
+```
+
 A game is therefore both at once: a loop that runs every frame regardless, and
 an event handler that clears out whatever arrived since the last frame.
 
@@ -199,7 +239,14 @@ an event handler that clears out whatever arrived since the last frame.
 
 A handler must finish quickly, because while it runs, no other event is
 handled. If one handler reads a large file or waits for a lock, every event
-queued behind it waits too.
+queued behind it waits too:
+
+{% include memory-strip.html
+  cells="being handled=WM_KEYDOWN, reading a big file|waiting=WM_MOUSEMOVE|waiting=WM_PAINT|waiting=WM_CLOSE"
+  marks="0"
+  groups="1-3:none of these runs until the first one returns"
+  caption="One thread's message queue. The window cannot even repaint while the first handler is busy."
+%}
 
 You have probably seen the result. Windows adds "(Not Responding)" to a
 window's title when the thread that owns it has not taken a message from its
@@ -251,6 +298,13 @@ has finished: which register or stack slot each argument actually occupies,
 where the return value comes back, and which registers the called function has
 to leave untouched.
 
+```mermaid
+flowchart TD
+    A["one API: read_u32(address)"] --> B["ABI 1: address arrives<br/>in the ecx register"]
+    A --> C["ABI 2: address arrives<br/>on the stack at esp+4"]
+    C -.->|"caller follows ABI 2,<br/>callee expects ABI 1"| X["callee reads ecx and gets<br/>whatever happened to be there"]
+```
+
 The distinction becomes real when the two disagree. Two functions can have
 identical APIs — same name, same parameters, same return type — and still be
 completely incompatible, because one expects its argument in the `ecx` register
@@ -284,12 +338,20 @@ Never let an untrusted length decide an allocation or index without a limit.
 Picture a message that starts with a four-byte length followed by that many
 bytes of text:
 
-```text
-00 00 00 04  a b c d      length 4, and four bytes really follow
-FF FF FF FF  a b c d      length 4,294,967,295, and four bytes follow
-```
+{% include memory-strip.html
+  cells="=00|=00|=00|=04|=a|=b|=c|=d"
+  groups="0-3:length: 4|4-7:four bytes of text"
+  caption="An honest message: the length matches what follows."
+%}
 
-Nothing about the second line is malformed at the byte level. It is a
+{% include memory-strip.html
+  cells="=FF|=FF|=FF|=FF|=a|=b|=c|=d"
+  marks="0-3"
+  groups="0-3:length: 4,294,967,295|4-7:only four bytes arrived"
+  caption="The same shape with a length that lies."
+%}
+
+Nothing about the second message is malformed at the byte level. It is a
 well-formed message whose length field simply lies. Code that believes it will
 try to reserve four gigabytes for a twelve-byte message, or will index far past
 the end of what was actually received. The fix is not to detect the lie; it is
@@ -318,7 +380,18 @@ one. This looks obviously correct:
 
 Between step 1 and step 2, the game is free to delete that enemy. Your check was
 true when you made it and false by the time you used it, and no individual line
-of your code is wrong. The bug lives in the gap between two lines.
+of your code is wrong. The bug lives in the gap between two lines:
+
+```mermaid
+sequenceDiagram
+    participant Tool as Your tool
+    participant Game as The game
+    Tool->>Game: 1. is the enemy pointer non-null?
+    Game-->>Tool: yes
+    Note over Game: the enemy dies and<br/>its memory is freed
+    Tool->>Game: 2. read the enemy's health through the pointer
+    Game-->>Tool: whatever now occupies those bytes
+```
 
 This creates questions that single-step code does not answer:
 

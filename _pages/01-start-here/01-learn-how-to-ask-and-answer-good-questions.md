@@ -8,6 +8,7 @@ permalink: /pages/1/01/
 chapter: "1.1"
 minutes: 14
 summary: Learn a simple way to look up an unfamiliar idea, explain it accurately, correct mistakes, and remember it later.
+mermaid: true
 ---
 
 You do not need to prove that you already know something before you study it.
@@ -20,6 +21,15 @@ This book uses one study loop again and again:
 2. **Close or hide** the answer.
 3. **Explain** the idea in your own words.
 4. **Check and correct** what you said.
+
+```mermaid
+flowchart LR
+    L["1. Look up<br/>the exact part you need"] --> H["2. Hide<br/>the source"]
+    H --> E["3. Explain<br/>in your own words"]
+    E --> C{"4. Check against<br/>the source"}
+    C -->|"missing, incorrect,<br/>or unclear"| L
+    C -->|"correct"| N["next question"]
+```
 
 That loop gives you fast feedback. It also prevents a common mistake: reading
 the same paragraph several times and confusing recognition with understanding.
@@ -47,6 +57,14 @@ For example:
 > When the visible gold count changes from 100 to 75, which memory locations
 > change in the same way, and which repeated test would show that one location
 > is the game-play value rather than a display copy?
+
+Take that question apart and all three pieces are there:
+
+{% include memory-strip.html
+  column=true
+  cells="object=the visible gold count|relationship=which memory locations change the same way when it goes from 100 to 75|evidence=a repeated test that separates the game-play value from a display copy"
+  caption="A question you can answer names what you are studying, what you want to know about it, and how you would check."
+%}
 
 This question is useful because you can perform the change, record the result,
 and repeat it.

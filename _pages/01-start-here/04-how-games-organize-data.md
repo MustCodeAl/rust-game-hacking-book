@@ -67,22 +67,25 @@ offsets, access patterns, and behavior.
 
 ## The same game state can use different memory layouts
 
-One engine may keep every player's fields together:
+One engine may keep every player's fields together. Player 1's fields are
+highlighted:
 
-```text
-[player 0: id health position team]
-[player 1: id health position team]
-[player 2: id health position team]
-```
+{% include memory-strip.html
+  cells="=id 0|=hp 0|=pos 0|=team 0|=id 1|=hp 1|=pos 1|=team 1"
+  marks="4-7"
+  groups="0-3:player 0|4-7:player 1"
+  caption="Array of structures: one player's fields sit side by side."
+%}
 
-Another may keep each kind of field in its own array:
+Another may keep each kind of field in its own array. The same player's fields
+are now spread out:
 
-```text
-ids:       [id0 id1 id2]
-health:    [h0  h1  h2 ]
-positions: [p0  p1  p2 ]
-teams:     [t0  t1  t2 ]
-```
+{% include memory-strip.html
+  cells="=id 0|=id 1|=hp 0|=hp 1|=pos 0|=pos 1|=team 0|=team 1"
+  marks="1|3|5|7"
+  groups="0-1:ids|2-3:health|4-5:positions|6-7:teams"
+  caption="Structure of arrays: each kind of field sits side by side, and one player is spread across four arrays."
+%}
 
 An entity-component system may store position, health, and rendering components
 in separate pools connected by an entity ID.
@@ -120,6 +123,13 @@ handle against the generation currently sitting in the slot:
 handle {slot: 12, generation: 3}    slot 12 holds generation 3    -> accepted
     ... that enemy dies, and slot 12 is reused for a new enemy ...
 handle {slot: 12, generation: 3}    slot 12 holds generation 4    -> rejected
+```
+
+```mermaid
+flowchart LR
+    H["your tool's handle<br/>slot 12, generation 3"] --> S["slot 12 in the game's table<br/>now holds generation 4"]
+    S --> Q{"do the generations match?"}
+    Q -->|"no: 3 is not 4"| R["reject: a different enemy<br/>now lives in this slot"]
 ```
 
 Notice what the stale handle points at: a real, living object at a valid
@@ -169,8 +179,16 @@ One idea can exist in several places:
 - a previous value used for animation;
 - a network prediction waiting for confirmation.
 
-If you change a display copy, the number on screen may change while damage rules
-still use the simulation value. If you change a previous-frame copy, the change
+```mermaid
+flowchart LR
+    S["simulation health: 80<br/>read by the damage rules"] --> C["render cache: 80"]
+    C --> T["on-screen text 'Health: 80'"]
+    S --> A["last frame's value: 85<br/>used to animate the bar"]
+    N["in multiplayer:<br/>the server's value"] -.->|"confirms or corrects"| S
+```
+
+Only the first box decides anything. If you change a display copy, the number
+on screen may change while damage rules still use the simulation value. If you change a previous-frame copy, the change
 may vanish immediately.
 
 To identify a field, observe both reads and writes:

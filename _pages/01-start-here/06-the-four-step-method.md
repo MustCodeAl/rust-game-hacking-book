@@ -8,6 +8,7 @@ permalink: /pages/1/06/
 chapter: "1.6"
 minutes: 16
 summary: Use Identify, Understand, Locate, and Change to turn a game observation into a controlled, repeatable experiment.
+mermaid: true
 ---
 
 The fastest way to get completely lost is to open a memory scanner and start
@@ -23,7 +24,17 @@ Four steps keep the work in order:
 4. **Change** one thing and measure the result.
 
 The steps can repeat. A failed change often sends you back to improve what you
-understand or locate a different copy.
+understand or locate a different copy:
+
+```mermaid
+flowchart LR
+    I["1. Identify<br/>one behavior you can repeat"] --> U["2. Understand<br/>the rules it should follow"]
+    U --> L["3. Locate<br/>the data and the code"]
+    L --> C["4. Change<br/>one thing, then measure"]
+    C -->|"only the text changed:<br/>you found a display copy"| L
+    C -->|"the value snapped back:<br/>another system owns it"| U
+    C -->|"the prediction held"| R["record it, restore,<br/>and repeat from scratch"]
+```
 
 ## 1. Identify the behavior
 
@@ -97,6 +108,15 @@ Use the least complicated observation that can answer the question:
 5. set a breakpoint on the strongest candidate;
 6. observe which instruction reads or writes it;
 7. follow the object pointer and surrounding fields.
+
+Each controlled change throws away the candidates that did not change the same
+way. The numbers below are only an example, but the shape is typical:
+
+{% include memory-strip.html
+  cells="first scan for 100=4,012|after spending 25 gold=37|after a second purchase=3|write breakpoint=1 instruction"
+  marks="3"
+  caption="Scanning narrows the addresses; the breakpoint then names the code that writes the survivor, which is stronger evidence than any number of matching scans."
+%}
 
 An address found once is evidence for that run. Restart the game before calling
 it stable. If the absolute address moves but a module-relative path remains
