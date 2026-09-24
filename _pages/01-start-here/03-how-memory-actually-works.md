@@ -8,6 +8,7 @@ permalink: /pages/1/03/
 chapter: "1.3"
 minutes: 24
 summary: Learn how bytes, addresses, values, types, pointers, offsets, stacks, heaps, and snapshots fit together in a running game.
+mermaid: true
 ---
 
 Your health bar says 100. You take a hit and it says 75. Somewhere inside the
@@ -46,16 +47,15 @@ its **address**.
 That really is most of the idea. Memory is boxes, one byte each, each with an
 address. Here are four of them:
 
-```text
-address       stored byte
-0x1000        0x64
-0x1001        0x00
-0x1002        0x00
-0x1003        0x00
-```
+{% include memory-strip.html
+  cells="0x1000=64|0x1001=00|0x1002=00|0x1003=00"
+  caption="Four boxes of RAM. The small label is each box's address; the number inside is the byte stored there."
+%}
 
-Both columns are written in **hexadecimal** — base 16 — which is what the `0x`
-prefix announces.
+Both the addresses and the bytes are written in **hexadecimal** — base 16. The
+`0x` prefix on an address announces it. Inside the boxes, each byte is shown as
+two hex digits with the prefix left off, which is also how debuggers and hex
+dumps display bytes.
 
 ### Why everything is in hex
 
@@ -79,6 +79,14 @@ Look again at those four boxes. There are three separate things going on:
 - `0x1000` is a **location** — which box;
 - `64 00 00 00` is a **pattern of bytes** starting in that box;
 - `100` is one **interpretation** of that pattern.
+
+{% include memory-strip.html
+  cells="0x1000=64|0x1001=00|0x1002=00|0x1003=00"
+  marks="0"
+  groups="0-3:the byte pattern `64 00 00 00`"
+  groups2="0-3:one interpretation: the `u32` value 100"
+  caption="The address names one box. The pattern spans four. The number 100 appears only when something reads those four boxes as a `u32`."
+%}
 
 The third one does not follow automatically from the first two, and this is the
 single most important idea in the lesson. Those bytes only become the number 100
@@ -113,13 +121,29 @@ power of ten, and some digits.
 That means one four-byte pattern holds two totally different numbers, depending
 on which type you ask for:
 
-```text
-bytes:        00 00 20 41
-read as u32:  1092616192
-read as f32:  10.0
-```
+{% include memory-strip.html
+  cells="=00|=00|=20|=41"
+  groups="0-3:read as `u32`: 1,092,616,192"
+  groups2="0-3:read as `f32`: 10.0"
+  caption="One four-byte pattern, read two ways."
+%}
 
 Both readings are correct. They answer different questions.
+
+Here is how the `f32` reading gets 10.0 out of those same bits. Written the way
+you would write a number, most significant first, the four bytes are
+`0x41200000`. Cut those 32 bits where `f32` cuts them:
+
+{% include memory-strip.html
+  cells="sign=0|exponent, 8 bits=1000 0010|fraction, 23 bits=010 0000 0000 0000 0000 0000"
+  groups="0-0:+|1-1:2³, since 130 − 127 = 3|2-2:1.25, which is 1 + ¼"
+  caption="1.25 × 2³ = 10.0. The `u32` reading ignores these boundaries and treats all 32 bits as one whole number."
+%}
+
+Two details make the arithmetic work. The exponent is stored with 127 added, so
+it never needs a minus sign; subtract 127 to get the real power of two. And the
+fraction's bits are worth ½, ¼, ⅛, and so on, added to a leading 1 that is
+always there and therefore never stored. Here only the ¼ bit is set.
 
 This is also why a memory scanner asks what kind of value you are hunting
 before it searches. Searching for the integer 10 will never find a position
@@ -145,11 +169,11 @@ One box holds one byte, so anything bigger has to spill into the boxes next
 door. A `u32` uses four in a row. An array puts equal-sized items back to back.
 A 3D position is often three `f32` values side by side:
 
-```text
-base + 0x00   x position
-base + 0x04   y position
-base + 0x08   z position
-```
+{% include memory-strip.html
+  cells="+0x00=00|=00|=80|=3F|+0x04=00|=00|=00|=40|+0x08=00|=00|=60|=C0"
+  groups="0-3:x = 1.0|4-7:y = 2.0|8-11:z = −3.5"
+  caption="A position stored as three `f32` values. The labels are offsets from the start of the position."
+%}
 
 Each one is four bytes, which is why the addresses go up by 4 and not by 1.
 
@@ -164,19 +188,19 @@ work the same way, and the byte contributing the smallest amount is called the
 **least-significant** byte.
 
 Windows games on x86 and x86-64 put the least-significant byte in the
-lowest-numbered box. That arrangement is called **little endian**. Written out
-for the value 100:
+lowest-numbered box. That arrangement is called **little endian**. Here is the
+value 1,000, which is `0x3E8` in hex, stored as a four-byte number:
 
-```text
-0x1000  0x64   <- least significant: worth 0x64 x 1
-0x1001  0x00   <- worth 0x00 x 256
-0x1002  0x00   <- worth 0x00 x 65,536
-0x1003  0x00   <- most significant: worth 0x00 x 16,777,216
-```
+{% include memory-strip.html
+  cells="0x1000=E8|0x1001=03|0x1002=00|0x1003=00"
+  groups="0-0:× 1|1-1:× 256|2-2:× 65,536|3-3:× 16,777,216"
+  groups2="0-3:0xE8 is 232, and 232 × 1 + 3 × 256 = 1,000"
+  caption="Little endian: the byte worth the least sits in the lowest-numbered box."
+%}
 
 The practical effect is that reading a hex dump left to right shows the bytes in
-the opposite order from how you would write the number. A four-byte 1,000
-(`0x3E8`) shows up as `E8 03 00 00`, not `00 00 03 E8`.
+the opposite order from how you would write the number: `E8 03 00 00`, not
+`00 00 03 E8`.
 
 This trips up nearly everyone at least once. Expect the reversal every time you
 compare a number you worked out against bytes you actually saw.
@@ -197,14 +221,16 @@ Nothing in the bytes marks them as a pointer. `00 50 00 00` could be the number
 20,480, or it could be a pointer to address `0x5000`. As always, the code that
 reads them decides which.
 
-Here is the whole idea:
+Here is the whole idea. Four ordinary bytes at `0x2000`:
 
-```text
-0x2000 contains 0x5000
-                │
-                └── the address of a player object
+{% include memory-strip.html
+  cells="0x2000=00|0x2001=50|0x2002=00|0x2003=00"
+  groups="0-3:read together as a `u32`: the number `0x5000`, where the player object starts"
+%}
 
-0x5000 contains the player's first field
+```mermaid
+flowchart LR
+    P["box 0x2000<br/>holds the number 0x5000"] -->|"read it, then go to that address"| O["box 0x5000<br/>the player object starts here"]
 ```
 
 Three different numbers are involved, and running them together is the most
@@ -260,6 +286,13 @@ field offset   = 0x30       (48 in decimal)
 health address = 0x5000 + 0x30 = 0x5030
 ```
 
+{% include memory-strip.html
+  cells="0x5000=object starts|=· · ·|0x5030=health"
+  marks="2"
+  groups="0-1:the offset: 0x30, or 48 bytes along"
+  caption="The base says where the object starts. The offset is the distance to the field. Their sum, `0x5030`, is where health is read."
+%}
+
 Three different numbers, doing three different jobs. The base says where the
 object starts. The **offset** says how far in the field is. The sum says where
 to read.
@@ -288,6 +321,14 @@ frame**.
 Picture a single bookmark sliding down a page as calls go deeper, and sliding
 back up as they return. Everything past the bookmark is scratch space that the
 next call will write over.
+
+{% include memory-strip.html
+  column=true
+  cells="0x0019FF80=main: return address and locals|0x0019FF50=update_world: return address and locals|0x0019FF30=apply_damage: return address and locals|esp →=scratch: the next call writes here"
+  marks="2"
+  groups="0-2:in use, released newest first|3-3:free"
+  caption="One thread's stack on 32-bit x86. Each call claims a frame just below the previous one, and `esp` is the bookmark. When `apply_damage` returns, `esp` moves back up and the next call reuses those same bytes."
+%}
 
 That one image predicts all of the stack's behaviour. Allocation is cheap
 because it is just moving the bookmark. Cleanup is automatic because returning
@@ -329,6 +370,17 @@ The moment the object is freed, its address returns to the pool and can be
 handed to the very next thing that asks. Your recorded address is still
 perfectly readable. It now refers to something else entirely.
 
+{% include memory-strip.html
+  cells="0x5000=enemy A · health 100|0x5080=free|0x5100=chat text"
+  caption="Before: enemy A lives at `0x5000`."
+%}
+
+{% include memory-strip.html
+  cells="0x5000=enemy B · health 87|0x5080=free|0x5100=chat text"
+  marks="0"
+  caption="After enemy A is freed, the allocator hands the same address to enemy B. A note saying “enemy A is at `0x5000`” still reads without error, and is now wrong."
+%}
+
 So a heap address is stable in a way a stack address never is — but stable means
 "stable while that object lives," not "permanently means that object." Watch
 this exact failure happen at the end of the lesson, where `0x5000` quietly stops
@@ -350,6 +402,18 @@ per-process map from those numbers to actual physical memory.
 
 So `0x5000` in the game and `0x5000` in your own tool are two unrelated
 locations that happen to share a number. They are not the same box.
+
+```mermaid
+flowchart LR
+    subgraph game["Game process"]
+        G["address 0x5000"]
+    end
+    subgraph tool["Your tool"]
+        T["address 0x5000"]
+    end
+    G -->|"the game's map"| A["physical RAM:<br/>the game's player object"]
+    T -->|"your tool's map"| B["physical RAM:<br/>your tool's own data"]
+```
 
 Room numbers work the same way. Every building has a Room 101, so “Room 101”
 identifies nothing until you also say which building. Push that further and it
@@ -413,10 +477,16 @@ to describe the same moment, read them together, or read them twice and compare.
 Otherwise a multi-step read can stitch together facts that were never true at
 once:
 
-```text
-step 1: read the pointer at 0x2000       -> 0x5000   (enemy A)
-        ... the game removes enemy A and reuses 0x5000 for enemy B ...
-step 2: read health at 0x5000 + 0x30     -> 87       (enemy B's health)
+```mermaid
+sequenceDiagram
+    participant Tool as Your tool
+    participant Game as The game
+    Tool->>Game: read the pointer at 0x2000
+    Game-->>Tool: 0x5000, which is enemy A
+    Note over Game: removes enemy A and<br/>reuses 0x5000 for enemy B
+    Tool->>Game: read health at 0x5000 + 0x30
+    Game-->>Tool: 87, which is enemy B's health
+    Note over Tool: reports enemy A<br/>with enemy B's health
 ```
 
 Every read succeeded. Nothing returned an error. The answer is still wrong: your

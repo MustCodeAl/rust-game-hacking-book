@@ -1,0 +1,59 @@
+{%- comment -%}
+Draws a row of labelled boxes: bytes at addresses, fields in an object,
+cells on a Turing machine tape. With column=true the boxes run top to bottom
+instead, which suits stacks and address-space maps.
+
+  cells    required  "label=value|label=value|..." The label sits above the box
+                     (beside it in a column) and is usually an address or an
+                     offset. Either half may be empty: "=64" or "0x1000=".
+  marks    optional  "2" or "0-3|6": zero-based boxes to highlight.
+  groups   optional  "0-3:read as u32 gives 100|4-7:..." braces spanning boxes.
+  groups2  optional  a second row of braces, for a competing reading of the
+                     same boxes.
+  caption  optional  Markdown allowed.
+  label    optional  accessible name for the figure when the caption alone
+                     does not describe it. The boxes themselves stay readable
+                     text, so a screen reader still reaches every value.
+
+The output is written with no indentation and no blank lines, because
+kramdown would otherwise treat indented HTML as a code block and a blank line
+as the end of the HTML.
+{%- endcomment -%}
+{%- assign mem_cells = include.cells | split: "|" -%}
+{%- assign mem_marks = include.marks | default: "" | append: "" | split: "|" -%}
+{%- assign mem_rows = "" | split: "," -%}
+{%- if include.groups -%}{%- assign mem_rows = mem_rows | push: include.groups -%}{%- endif -%}
+{%- if include.groups2 -%}{%- assign mem_rows = mem_rows | push: include.groups2 -%}{%- endif -%}
+<figure class="mem-figure{% if include.column %} mem-figure--column{% endif %}"{% if include.label %} aria-label="{{ include.label | strip_html | escape }}"{% endif %}>
+<div class="mem-strip" style="--mem-cells: {{ mem_cells.size }}; --mem-rows: {{ mem_rows.size }}">
+{%- for mem_cell in mem_cells -%}
+{%- assign mem_index = forloop.index0 -%}
+{%- assign mem_line = forloop.index -%}
+{%- assign mem_cell_label = mem_cell | split: "=" | first | strip -%}
+{%- assign mem_cell_value = mem_cell | remove_first: mem_cell_label | remove_first: "=" | strip -%}
+{%- assign mem_marked = false -%}
+{%- for mem_mark in mem_marks -%}
+{%- assign mem_mark_start = mem_mark | split: "-" | first | plus: 0 -%}
+{%- assign mem_mark_end = mem_mark | split: "-" | last | plus: 0 -%}
+{%- if mem_index >= mem_mark_start and mem_index <= mem_mark_end -%}{%- assign mem_marked = true -%}{%- endif -%}
+{%- endfor -%}
+<div class="mem-cell{% if mem_marked %} is-marked{% endif %}" style="{% if include.column %}grid-row: {{ mem_line }}{% else %}grid-column: {{ mem_line }}{% endif %}"><span class="mem-cell__label">{{ mem_cell_label }}</span><span class="mem-cell__value">{{ mem_cell_value }}</span></div>
+{%- endfor -%}
+{%- for mem_row in mem_rows -%}
+{%- assign mem_track = forloop.index | plus: 1 -%}
+{%- assign mem_row_number = forloop.index -%}
+{%- assign mem_groups = mem_row | split: "|" -%}
+{%- for mem_group in mem_groups -%}
+{%- assign mem_range = mem_group | split: ":" | first | strip -%}
+{%- assign mem_group_text = mem_group | remove_first: mem_range | remove_first: ":" | strip | markdownify | remove: "<p>" | remove: "</p>" | strip -%}
+{%- assign mem_start = mem_range | split: "-" | first | plus: 1 -%}
+{%- assign mem_end = mem_range | split: "-" | last | plus: 2 -%}
+{%- assign mem_span = mem_end | minus: mem_start -%}
+<div class="mem-group mem-group--{{ mem_row_number }}{% if mem_span > 1 %} mem-group--span{% endif %}" style="{% if include.column %}grid-row: {{ mem_start }} / {{ mem_end }}; grid-column: {{ mem_track }}{% else %}grid-column: {{ mem_start }} / {{ mem_end }}; grid-row: {{ mem_track }}{% endif %}"><span>{{ mem_group_text }}</span></div>
+{%- endfor -%}
+{%- endfor -%}
+</div>
+{%- if include.caption -%}
+<figcaption>{{ include.caption | markdownify | remove: "<p>" | remove: "</p>" | strip }}</figcaption>
+{%- endif -%}
+</figure>

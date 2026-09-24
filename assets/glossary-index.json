@@ -9,7 +9,11 @@ turns the first bolded occurrence of a known term in a lesson into a link to
 its definition.
 
 The glossary authors every entry as:  <dt id="term-x"><dfn>Name</dfn></dt>
-so splitting on those two markers is enough to recover both halves.
+so splitting on those two markers is enough to recover both halves. An entry
+may also carry <span class="glossary-alias">other name / another</span>; each
+alias is emitted as its own row pointing at the same anchor, so a lesson that
+bolds "device driver" or "cvar" still links. The linker allows one link per
+anchor, so a page that bolds two names for one entry gets a single link.
 {%- endcomment -%}
 {%- assign glossary = site.pages | where: "permalink", "/glossary/" | first -%}
 {%- assign chunks = glossary.content | split: '<dt id="' -%}
@@ -24,6 +28,14 @@ so splitting on those two markers is enough to recover both halves.
       {%- unless first %},{% endunless -%}
       {%- assign first = false -%}
 {"t":{{ name | jsonify }},"a":{{ anchor | jsonify }}}
+      {%- assign alias_halves = chunk | split: 'class="glossary-alias">' -%}
+      {%- if alias_halves.size > 1 -%}
+        {%- assign alias_list = alias_halves[1] | split: '</span>' | first | strip_html | split: '/' -%}
+        {%- for alias in alias_list -%}
+          {%- assign alias_name = alias | strip -%}
+          {%- if alias_name != "" -%},{"t":{{ alias_name | jsonify }},"a":{{ anchor | jsonify }}}{%- endif -%}
+        {%- endfor -%}
+      {%- endif -%}
     {%- endif -%}
   {%- endif -%}
 {%- endfor -%}
