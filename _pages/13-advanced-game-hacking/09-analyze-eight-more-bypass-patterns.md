@@ -69,6 +69,13 @@ Nothing overflowed *visibly*. In a release build there is no panic, no warning,
 and the comparison is perfectly true. The read then starts at an address near
 the top of the address space.
 
+```mermaid
+flowchart LR
+    A["offset = usize::MAX - 3"] --> B["offset + length<br/>wraps to 12"]
+    B --> C{"12 <= region_size?"}
+    C -->|"yes"| D["read allowed — starting near<br/>the top of the address space"]
+```
+
 **The repair** is not a bigger integer. It is refusing to answer a question that
 has no answer:
 
@@ -156,12 +163,26 @@ The guard was never removed or weakened. It was simply routed around. Worse,
 the batch path records no decisions at all, so the audit log shows nothing
 happened while the bytes changed.
 
+```mermaid
+flowchart LR
+    A["apply_patch(...)"] --> G{"policy check"}
+    G --> W["self.write(...)"]
+    B["weak_apply_batch(...)"] -.->|"skips the guard"| W
+```
+
 **The repair** is structural rather than additional. Do not add a second copy of
 the check to the batch helper; make the batch helper call the guarded entry
 point. One way in means one place to be correct:
 
 ```rust
 patches.iter().map(|&(a, v)| self.apply_patch(a, v)).collect()
+```
+
+```mermaid
+flowchart LR
+    A2["apply_patch(...)"] --> G2{"policy check"}
+    G2 --> W2["self.write(...)"]
+    B2["apply_batch(...)"] --> A2
 ```
 
 When you review a control, count the routes to the effect before reading the

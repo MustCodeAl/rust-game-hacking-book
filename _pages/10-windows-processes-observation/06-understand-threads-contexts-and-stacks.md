@@ -51,10 +51,15 @@ possibilities.
 Suppose the update thread changes a player record in two steps while an overlay
 thread reads between them:
 
-```text
-update: write x position
-overlay: read x, y, and health
-update: write y position
+```mermaid
+sequenceDiagram
+    participant Update as update thread
+    participant State as player record
+    participant Overlay as overlay thread
+    Update->>State: write x position
+    Overlay->>State: read x, y, and health
+    Note over Overlay: sees the new x with the old<br/>y and health — a state that<br/>never existed
+    Update->>State: write y position
 ```
 
 The overlay may observe a combination that was never a complete game state. This
@@ -133,12 +138,12 @@ This course's debugger uses the debugger event model. It does not randomly freez
 
 When function A calls function B, the program must remember where B should return. Arguments, saved registers, local variables, and return information may be stored in a **stack frame**.
 
-```text
-newest frame       spend_gold()
-                   end_turn()
-                   process_player_action()
-oldest shown       game_loop()
-```
+{% include memory-strip.html
+  column=true
+  cells="newest frame=spend_gold()|=end_turn()|=process_player_action()|oldest shown=game_loop()"
+  marks="0"
+  caption="A stack trace lists frames newest first: `spend_gold` was called from inside `end_turn`, called from inside `process_player_action`, called from `game_loop`."
+%}
 
 A stack trace walks from the current frame toward older callers. Optimized code can inline functions, omit frame pointers, move values into registers, or reuse stack slots, so the neat classroom picture is a guide rather than a promise.
 
@@ -146,7 +151,20 @@ That complexity is why Microsoft recommends `StackWalk64` instead of inventing a
 
 ## Start with a read-only thread inventory
 
-Before opening a thread or asking for its context, identify which threads belong to the target process. `TH32CS_SNAPTHREAD` creates a system-wide snapshot, even when a PID is supplied. The program must filter `th32OwnerProcessID` itself.
+Before opening a thread or asking for its context, identify which threads belong to the target process. `TH32CS_SNAPTHREAD` creates a system-wide snapshot, even when a PID is supplied. The program must filter `th32OwnerProcessID` itself:
+
+```mermaid
+flowchart TD
+    A["CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD)"] --> B["OwnedHandle::from_raw"]
+    B --> C["Thread32First"]
+    C --> D{"th32OwnerProcessID<br/>== process.id?"}
+    D -->|"yes"| E["record TID, base priority"]
+    D -->|"no"| G2["skip"]
+    E --> G["Thread32Next"]
+    G2 --> G
+    G -->|"Ok(())"| D
+    G -->|"no more files"| H["sort and print threads"]
+```
 
 <details class="lab-source" markdown="1">
 <summary>Complete lab source: thread_inventory.rs</summary>

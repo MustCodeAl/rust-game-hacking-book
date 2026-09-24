@@ -8,6 +8,7 @@ permalink: /pages/3/06/
 chapter: "3.6"
 minutes: 38
 summary: Learn the difference between representation and security, trace small encode/decode paths, and implement a reversible value plus integrity check.
+mermaid: true
 ---
 
 ## Obfuscation changes the representation
@@ -38,9 +39,12 @@ Follow `edx` too. A transform without its key is only half the formula.
 
 The lab uses:
 
-```text
-encoded = rotate_left(value XOR key, 7)
-value   = rotate_right(encoded, 7) XOR key
+```mermaid
+flowchart LR
+    V["value"] -->|"XOR key"| X["value XOR key"]
+    X -->|"rotate_left(7)"| E["encoded"]
+    E -->|"rotate_right(7)"| X2["value XOR key"]
+    X2 -->|"XOR key"| V2["value"]
 ```
 
 The inverse relationship is easy to test:
@@ -66,6 +70,14 @@ That last property is the important one: decoding the encoded value must recover
 ## An integrity value is another clue
 
 The lab also stores a toy tag calculated from the encoded value and key. When one bit changes, the tag no longer agrees:
+
+```mermaid
+flowchart LR
+    A["encoded value + key"] --> B["make_tag(encoded, key)"]
+    B --> C{"equals the<br/>stored tag?"}
+    C -->|"no"| D["Err(IntegrityError)"]
+    C -->|"yes"| E["decode(encoded, key)"]
+```
 
 ```rust
 pub fn read(self, key: u32) -> Result<u32, IntegrityError> {

@@ -8,6 +8,7 @@ permalink: /pages/12/06/
 chapter: "12.6"
 minutes: 30
 summary: Put memory and instruction budgets around scripts, preserve useful tracebacks, test bad inputs, and disable failing automation cleanly.
+mermaid: true
 ---
 
 ## A script can fail without being malicious
@@ -94,6 +95,18 @@ lua.set_hook(
 )?;
 ```
 
+```mermaid
+flowchart TD
+    A["VM executes 1,000 instructions"] --> B["host hook fires"]
+    B --> C["calls += 1"]
+    C --> D{"calls > 100?"}
+    D -->|"no"| E["VmState::Continue"]
+    E --> A
+    D -->|"yes"| F["RuntimeError:<br/>instruction budget exceeded"]
+```
+
+Since the hook fires every 1,000 instructions and allows at most 100 calls, a script gets roughly 100,000 VM instructions per update before this particular budget stops it.
+
 The hook is not a stopwatch. Different instructions cost different amounts of real time, and host callbacks can do work between hooks. It is one defense against runaway Lua bytecode.
 
 Reset the instruction allowance at a controlled host boundary, not from inside the script. If the hook counter is shared across updates, document that as a session budget; if each update gets a fresh allowance, also cap how often updates can be requested.
@@ -145,11 +158,12 @@ Do not dump process memory, account tokens, full private chat logs, or arbitrary
 
 One practical policy is:
 
-```text
-first error   -> stop this update and report it
-second error  -> reset script state and retry only on user request
-repeated error -> disable the script for the session
-host invariant failure -> stop all scripted actions immediately
+```mermaid
+flowchart TD
+    A["first error"] --> B["stop this update,<br/>report it"]
+    B -->|"second error"| C["reset script state;<br/>retry only on user request"]
+    C -->|"repeated error"| D["disable the script<br/>for the session"]
+    E["host invariant failure"] --> F["stop all scripted<br/>actions immediately"]
 ```
 
 Do not catch an error and continue from half-mutated host state. Lua requests should be queued and committed only after the script returns successfully.

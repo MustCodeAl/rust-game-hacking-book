@@ -45,6 +45,22 @@ surfaces so far away from its cause:
 5. the log file is now closed, and nothing says why
 ```
 
+As a timeline of calls between your code and Windows, the same five steps look like this:
+
+```mermaid
+sequenceDiagram
+    participant Code as Your code
+    participant Windows
+    Code->>Windows: OpenProcess(...)
+    Windows-->>Code: handle 0x12C (the process)
+    Code->>Windows: CloseHandle(0x12C)
+    Note over Windows: correct — slot 0x12C is now free
+    Code->>Windows: CreateFile(log file)
+    Windows-->>Code: handle 0x12C (the log file)
+    Code->>Windows: CloseHandle(0x12C) again
+    Note over Windows: the log file closes instead,<br/>and nothing reports an error
+```
+
 Step 4 does not report an error. It closes something perfectly real — just not
 the object you meant. The failure appears later, in unrelated code, at a moment
 that depends on the exact order in which the program happened to allocate
@@ -115,7 +131,15 @@ A close failure is normally evidence that the ownership invariant was already br
 
 ## Prove cleanup with a count
 
-The lab records the current process's handle count, creates 128 unnamed event objects, wraps every returned handle, then drops the vector.
+The lab records the current process's handle count, creates 128 unnamed event objects, wraps every returned handle, then drops the vector:
+
+```mermaid
+flowchart LR
+    A["handle_count(): before"] --> B["create 128 events,<br/>each wrapped in OwnedHandle"]
+    B --> C["handle_count(): while_owned"]
+    C --> D["drop(events)"]
+    D --> E["handle_count(): after_drop"]
+```
 
 <details class="lab-source" markdown="1">
 <summary>Complete lab source: handle_raii.rs</summary>
@@ -215,6 +239,13 @@ The middle count should rise by at least 128. The final count should fall again.
 Some APIs return a **pseudo-handle**, such as `GetCurrentProcess`. It is a special constant interpreted as the current process and should not be wrapped as a newly owned handle.
 
 Other APIs return borrowed handles whose documentation says another component owns them. Ownership comes from the API contract, not from the fact that a program can store the number.
+
+```mermaid
+flowchart TD
+    H["a HANDLE value"] --> Q{"does the API's contract say<br/>you now own a new handle?"}
+    Q -->|"yes, e.g. OpenProcess,<br/>CreateEventW"| O["wrap as OwnedHandle:<br/>Drop calls CloseHandle"]
+    Q -->|"no — pseudo-handle<br/>or borrowed handle"| B["never pass it to CloseHandle"]
+```
 
 Before wrapping a handle, answer:
 

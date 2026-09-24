@@ -91,6 +91,14 @@ let (sender, receiver) = mpsc::sync_channel::<GoldEvent>(128);
 
 A normal blocking `send` would wait when all 128 slots are occupied. The producer uses `try_send` instead:
 
+```mermaid
+flowchart TD
+    A["sender.try_send(event)"] --> B{"result?"}
+    B -->|"Ok(())"| C["continue sampling"]
+    B -->|"Full"| D["dropped += 1"]
+    B -->|"Disconnected"| E["bail: writer stopped early"]
+```
+
 ```rust
 match sender.try_send(event) {
     Ok(()) => Ok(()),
@@ -120,6 +128,17 @@ Backpressure is not one library call. It is the decision a system makes when pro
 ## Let channel closure be the stop message
 
 The sink owns an optional sender and writer thread. Finishing removes the final sender:
+
+{% include memory-strip.html
+  cells="sender=Some(SyncSender)|writer=Some(JoinHandle)"
+  caption="Before `finish`: the sink still owns both handles."
+%}
+
+{% include memory-strip.html
+  cells="sender=None|writer=None"
+  marks="0"
+  caption="After `finish`: taking the sender disconnects the channel, so the writer's `recv()` loop ends on its own; then the writer handle is joined."
+%}
 
 ```rust
 self.sender.take();
@@ -175,6 +194,12 @@ lines:
 3. the **trailer** says how the run ended.
 
 For example:
+
+{% include memory-strip.html
+  column=true
+  cells="header=two comment lines: format version, then target and build info|detail rows=elapsed_ms,gold, then one row per sample|trailer=one comment line: written, dropped, and clean_shutdown"
+  caption="Three parts, one file. The trailer's `written` count should agree with the number of detail rows above it."
+%}
 
 ```text
 # gha-gold-telemetry v1

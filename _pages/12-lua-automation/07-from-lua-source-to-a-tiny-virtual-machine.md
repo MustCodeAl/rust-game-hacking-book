@@ -8,6 +8,7 @@ permalink: /pages/12/07/
 chapter: "12.7"
 minutes: 42
 summary: Follow source text through tokens, syntax, bytecode, a value stack, and a bounded interpreter loop.
+mermaid: true
 ---
 
 ## An interpreter is a pipeline
@@ -18,6 +19,14 @@ When Lua reads `total = 5 + 2`, it does not ask the CPU to execute the character
 2. a **parser** checks that the token order follows the language grammar;
 3. a compiler turns the meaning into compact bytecode instructions;
 4. a virtual machine executes those bytecodes using values, a stack, and an instruction pointer.
+
+```mermaid
+flowchart LR
+    A["source text<br/>total = 5 + 2"] -->|"lexer"| B["tokens:<br/>name, equals, integer,<br/>plus, integer"]
+    B -->|"parser"| C["checks grammar"]
+    C -->|"compiler"| D["bytecode instructions"]
+    D -->|"virtual machine"| E["executes using values,<br/>a stack, and an instruction pointer"]
+```
 
 Real Lua is carefully optimized. Our tiny VM is intentionally smaller so every moving part fits on one page.
 
@@ -65,6 +74,11 @@ so they only mean anything once you can see the whole program. Here is the
 lab's example, `if (5 + 2) > 6 then print(1) else print(0)`, after compilation.
 The constants are collected into a pool, and the instructions refer to them by
 index:
+
+{% include memory-strip.html
+  cells="0=5|1=2|2=6|3=1|4=0"
+  caption="The constant pool for `if (5 + 2) > 6 then print(1) else print(0)`. Instructions refer to these by index, never by value directly."
+%}
 
 ```text
 constant pool:  0:5   1:2   2:6   3:1   4:0
@@ -137,6 +151,12 @@ through those five steps shows where the intermediate values live:
 | 3 | add | `7` |
 | 4 | constant 6 | `7, 6` |
 | 5 | greater-than | `true` |
+
+{% include memory-strip.html
+  column=true
+  cells="top →=2|=5"
+  caption="The value stack right after step 2 (`Constant(1)` pushed `2` on top of the `5` pushed in step 1)."
+%}
 
 `Add` pops the right side first because it was pushed last. This last-in, first-out order is the same basic idea as a call stack, although a real VM may use separate regions or registers for different jobs.
 

@@ -8,6 +8,7 @@ permalink: /pages/10/02/
 chapter: "10.2"
 minutes: 30
 summary: Create and verify a SHA-256 manifest so reverse-engineering notes, RVAs, patterns, mods, and patches stay tied to exact files.
+mermaid: true
 ---
 
 ## A version label is not enough
@@ -62,6 +63,17 @@ defined format such as JSON, CBOR, or a signed catalog. The lab stays text-only
 so you can see every parsing rule.
 
 ## Hash in chunks, not one giant allocation
+
+The loop reads a fixed-size buffer at a time instead of the whole file, and only the bytes actually filled go into the hash:
+
+```mermaid
+flowchart LR
+    A["File::open(path)"] --> B["file.read(&mut buffer)"]
+    B --> C{"count == 0?"}
+    C -->|"yes: end of file"| D["hasher.finalize()"]
+    C -->|"no"| E["hasher.update(&buffer[..count])<br/>total += count"]
+    E --> B
+```
 
 ```rust
 fn sha256(path: &Path) -> anyhow::Result<(u64, String)> {
@@ -131,6 +143,17 @@ For each non-comment line, the verifier:
 6. reports `OK` or `CHANGED`;
 7. returns a failing exit status if anything changed.
 
+As a flow, one manifest line becomes one pass/fail decision:
+
+```mermaid
+flowchart LR
+    L["manifest line:<br/>digest, byte-count, path"] --> O["open the recorded path"]
+    O --> S["stream its bytes<br/>through SHA-256"]
+    S --> CMP{"size and digest<br/>both match?"}
+    CMP -->|"yes"| OK["print OK"]
+    CMP -->|"no"| CH["print CHANGED,<br/>exit status 1"]
+```
+
 That final failure is useful in scripts. A colored message is for a person; a non-zero exit status is for another program.
 
 ## Run the complete tool
@@ -179,6 +202,18 @@ For the Urban Terror PK3 lab, record the original archive hash, use the existing
 ## Watch for time-of-check/time-of-use
 
 The program hashes a file and later another tool may open it. The file could change between those actions. This is called a **time-of-check/time-of-use** race.
+
+```mermaid
+sequenceDiagram
+    participant Verifier
+    participant File as the game file
+    participant Other as another tool
+    Verifier->>File: read bytes, compute SHA-256 (the check)
+    File-->>Verifier: digest matches the manifest
+    Note over File: file changes here
+    Other->>File: open and use the file (the use)
+    Note over Verifier,Other: the file that was used is not<br/>the file that was checked
+```
 
 For this lab, close the game and mod tools while verifying. A launcher that must
 verify a versioned mod immediately before starting the game needs a stronger

@@ -109,6 +109,17 @@ The **loader lists** connected to the PEB describe modules known to the Windows 
 
 Each thread has its own **TEB**. It contains thread-specific user-mode state, including a route to the PEB, stack boundaries, thread-local storage information, and error-related fields.
 
+Each thread's TEB points to the one PEB shared by the whole process, which in turn fans out into the structures described above:
+
+```mermaid
+flowchart LR
+    TEB["TEB<br/>(one per thread)"] -->|"route to"| PEB["PEB<br/>(one per process)"]
+    PEB --> LDR["loader lists<br/>(loaded modules)"]
+    PEB --> PARAMS["process parameters<br/>(command line, environment)"]
+    PEB --> HEAP["heap-related state"]
+    PEB --> FLAGS["loader / Windows flags"]
+```
+
 On 32-bit x86 Windows code, the `fs` segment register helps locate thread state. On x86-64 Windows code, `gs` fills that role. That is why you may see instructions such as these in low-level Windows disassembly:
 
 ```nasm
@@ -121,13 +132,37 @@ mov rax, qword ptr gs:[0x60]
 
 This is not ordinary game data. `fs:` and `gs:` tell the CPU to use a segment-relative address associated with the current thread. The offset is not simply relabeled between the two builds: most of the TEB fields that come before the PEB pointer are themselves pointers, and a 64-bit pointer takes 8 bytes instead of 4. Doubling the width of nearly every earlier field pushes the PEB pointer roughly twice as far into the structure, which is why `0x30` on x86 becomes `0x60` on x86-64 rather than some unrelated number.
 
+{% include memory-strip.html
+  cells="+0x00=TEB start|=· · ·|+0x30=PEB pointer"
+  marks="2"
+  caption="32-bit x86: the PEB pointer sits `0x30` bytes into the TEB."
+%}
+
+{% include memory-strip.html
+  cells="+0x00=TEB start|=· · ·|+0x60=PEB pointer"
+  marks="2"
+  caption="x86-64: the same fields are wider — 8 bytes instead of 4 — so the PEB pointer lands at `0x60` instead, roughly twice as far in."
+%}
+
 ## Why the course tool uses ToolHelp
 
 Walking internal loader pointers is useful when you are learning in a debugger. For a beginner-facing tool, Windows already provides a documented, read-only alternative: a **ToolHelp snapshot**.
 
 `CreateToolhelp32Snapshot` asks Windows for a moment-in-time copy of a process, thread, or module list. `Module32FirstW` fills the first `MODULEENTRY32W`, and `Module32NextW` advances through the copy.
 
-The shared wrapper keeps that unsafe boundary in one reviewed function:
+The shared wrapper keeps that unsafe boundary in one reviewed function. Here is the order of Windows calls it makes before it ever returns a module base and size:
+
+```mermaid
+flowchart TD
+    A["CreateToolhelp32Snapshot"] --> B["OwnedHandle::from_raw<br/>(closes itself when dropped)"]
+    B --> C["Module32FirstW<br/>fills the first MODULEENTRY32W"]
+    C --> D{"szModule matches<br/>wanted_name?"}
+    D -->|"yes"| E["return modBaseAddr, modBaseSize"]
+    D -->|"no"| F["Module32NextW"]
+    F -->|"Ok(())"| D
+    F -->|"no more files"| G["anyhow::bail!<br/>module not found"]
+    F -->|"other error"| H["return Err"]
+```
 
 ```rust
 pub fn module(&self, wanted_name: &str) -> anyhow::Result<(usize, usize)> {

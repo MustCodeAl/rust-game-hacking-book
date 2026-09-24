@@ -33,12 +33,12 @@ force.
 The obvious idea is to hook the text function itself. That is the one thing
 that cannot work:
 
-```text
-your hook runs
-  -> you want to draw a menu line
-    -> you call the text function
-      -> which is hooked
-        -> your hook runs
+```mermaid
+flowchart TD
+    A["your hook runs"] --> B["you want to draw a menu line"]
+    B --> C["you call the text function"]
+    C --> D["...which is hooked"]
+    D --> A
 ```
 
 Nothing stops the recursion, and the stack overflows in a frame or two.
@@ -103,13 +103,11 @@ always the same: a marker byte the renderer watches for, followed by an index
 that selects a palette entry. AssaultCube uses the form feed character,
 `0x0C`, followed by a digit.
 
-```text
-bytes:    0C 33 52 61 64 61 72
-          ^^ ^^ ------------
-          |  |  the visible text, "Radar"
-          |  palette index '3'
-          marker
-```
+{% include memory-strip.html
+  cells="=0C|=33|=52|=61|=64|=61|=72"
+  groups="0-0:marker (form feed)|1-1:palette index '3'|2-6:visible text: `Radar`"
+  caption="AssaultCube's colour marker in front of the string `Radar`. The marker and index are consumed by the renderer, not drawn, so these 7 bytes show only 5 visible characters."
+%}
 
 Two consequences follow, and both matter.
 
@@ -151,6 +149,18 @@ the list. Handle the boundary explicitly and the intent is visible:
 ```rust
 self.cursor = if self.cursor == 0 { last } else { self.cursor - 1 };
 ```
+
+{% include memory-strip.html
+  cells="0=item 0|1=item 1|2=item 2|3=item 3"
+  marks="0"
+  caption="For example, four menu rows with the cursor on the first. Pressing up should wrap to the last row, not compute `0 - 1` on an unsigned index."
+%}
+
+{% include memory-strip.html
+  cells="0=item 0|1=item 1|2=item 2|3=item 3"
+  marks="3"
+  caption="After the explicit boundary check, the cursor wraps to the last row instead of underflowing."
+%}
 
 ### `GetAsyncKeyState` reports a level, not a press
 

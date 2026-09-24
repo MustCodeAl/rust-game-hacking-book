@@ -8,6 +8,7 @@ permalink: /pages/11/06/
 chapter: "11.6"
 minutes: 40
 summary: Understand physical RAM, virtual addresses, page tables, CR3, IOMMUs, and why this book studies DMA through owned offline captures.
+mermaid: true
 ---
 
 ## DMA is a way devices move data
@@ -36,6 +37,18 @@ evidence; the address space and access rules are part of its meaning.
 
 An offline physical capture contains bytes arranged by physical address. A debugger’s pointer such as `0x00007FF6_12341000` is virtual. To connect them, the reader needs the correct page-table root for that address space.
 
+```mermaid
+flowchart LR
+    subgraph P1["Process A, CR3 = root A"]
+        VA1["virtual 0x1000"]
+    end
+    subgraph P2["Process B, CR3 = root B"]
+        VA2["virtual 0x1000"]
+    end
+    VA1 -->|"root A's page tables"| PA["physical address A"]
+    VA2 -->|"root B's page tables"| PB["physical address B"]
+```
+
 ## CR3 points to the first translation table
 
 On ordinary x86-64 systems using four-level paging, the CPU’s `CR3` register identifies the physical base of the top table. The virtual address supplies four nine-bit indices and a twelve-bit offset:
@@ -47,6 +60,11 @@ On ordinary x86-64 systems using four-level paging, the CPU’s `CR3` register i
 | 29–21 | page-directory index |
 | 20–12 | page-table index |
 | 11–0 | byte offset inside a 4 KiB page |
+
+{% include memory-strip.html
+  cells="sign ext.=bits 63–48|PML4=bits 47–39|PDPT=bits 38–30|PD=bits 29–21|PT=bits 20–12|offset=bits 11–0"
+  caption="A 64-bit virtual address on x86-64 four-level paging. Only 48 bits are ever used: four 9-bit table indices and a 12-bit page offset. The top 16 bits must copy bit 47, which is what makes an address canonical."
+%}
 
 Each table has 512 eight-byte entries. A normal translation reads one entry at each level, checks its present bit, takes the next table’s physical address, and finally adds the page offset.
 
@@ -75,6 +93,13 @@ Rejecting impossible input gives a clearer error than following nonsense offsets
 ## An IOMMU gives devices their own map
 
 An **IOMMU** is an input/output memory management unit. It does for devices what the page tables above do for processes: it sits between a device and physical memory and translates the addresses the device asks for, so the operating system can limit a device to approved physical regions instead of letting it reach all RAM.
+
+```mermaid
+flowchart LR
+    D["DMA-capable device"] -->|"requests an address"| I["IOMMU"]
+    I -->|"approved region"| M["physical RAM"]
+    I -.->|"outside approved region"| X["blocked"]
+```
 
 Windows exposes protections including **Kernel DMA Protection** on supported hardware. Microsoft explains that it uses the IOMMU to isolate capable peripherals and protect against malicious DMA devices. Read the current [Microsoft overview](https://learn.microsoft.com/en-us/windows/security/hardware-security/kernel-dma-protection-for-thunderbolt) for requirements and behavior.
 

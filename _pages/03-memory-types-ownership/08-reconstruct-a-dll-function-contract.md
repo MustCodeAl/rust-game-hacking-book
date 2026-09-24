@@ -8,6 +8,7 @@ permalink: /pages/3/08/
 chapter: "3.8"
 minutes: 28
 summary: Infer an exported function's parameters, calling convention, result, and ownership rules before wrapping it in a small typed API.
+mermaid: true
 ---
 
 ## A function name is not a contract
@@ -41,6 +42,14 @@ Write each conclusion with its evidence. “The callee reads four bytes and neve
 On 64-bit Windows, the first four integer or pointer arguments normally arrive in `rcx`, `rdx`, `r8`, and `r9`. A return value normally leaves in `rax`. On 32-bit Windows, several calling conventions exist, so also inspect stack cleanup and decorated export names.
 
 Suppose a call site looks like this:
+
+```mermaid
+flowchart LR
+    A["ecx = 0"] --> B["call gha_start"]
+    B --> C{"eax == 0?"}
+    C -->|"yes"| D["success path"]
+    C -->|"no"| E["start_failed"]
+```
 
 ```nasm
 xor ecx, ecx
@@ -82,6 +91,14 @@ One call with a null argument does not prove the argument must always be null. F
 ## Separate lookup from calling
 
 `GetProcAddress` returns an untyped address. Keep the dangerous conversion in one function:
+
+```mermaid
+flowchart LR
+    A["GetProcAddress"] --> B["untyped address"]
+    B --> C["resolve_gha_start,<br/>the only transmute"]
+    C --> D["typed GhaStart<br/>function pointer"]
+    D --> E["the rest of the program<br/>calls it safely"]
+```
 
 ```rust
 use core::ffi::c_void;

@@ -17,12 +17,20 @@ Run `wesnothd.exe` on your own computer, connect a client named **ChatBot**, and
 
 This is not a toy protocol. It uses the exact flow we reversed from Wesnoth 1.14.9:
 
-```text
-TCP to 127.0.0.1:15000
-→ four-zero negotiation
-→ gzip-framed [version]
-→ gzip-framed [login]
-→ gzip-framed lobby messages
+```mermaid
+sequenceDiagram
+    participant Bot as ChatBot
+    participant Server as wesnothd
+    Bot->>Server: connect 127.0.0.1:15000
+    Bot->>Server: four zero bytes
+    Server-->>Bot: negotiation reply
+    Bot->>Server: gzip-framed [version]
+    Server-->>Bot: version reply
+    Bot->>Server: gzip-framed [login]
+    Server-->>Bot: login reply
+    loop lobby
+        Server-->>Bot: gzip-framed WML
+    end
 ```
 
 Keep transport, decoding, session meaning, and behavior as separate layers. One
@@ -73,6 +81,11 @@ The timeout prevents a broken server or parser from hanging the bot forever.
 
 Lesson 6.3’s `encode_wesnoth_frame` performs the gzip compression and adds the four-byte big-endian length. `write_all` matters because one `write` may send only part of a buffer.
 
+{% include memory-strip.html
+  cells="byte 0-3=`u32` length, big-endian|byte 4..=gzip-compressed WML, that many bytes"
+  caption="The frame `read_frame` parses below. It trusts only the four-byte header at first, then reads exactly `length` more bytes before decompressing."
+%}
+
 ```rust
 fn send_wml(stream: &mut TcpStream, wml: &str) -> anyhow::Result<()> {
     let frame = encode_wesnoth_frame(wml)?;
@@ -102,6 +115,16 @@ fn read_frame(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
 ## Handle early server replies
 
 The opening negotiation is special, so collect its replies until a short quiet period. The historical capture received 41 bytes.
+
+```mermaid
+flowchart TD
+    A["stream.read(&mut chunk)"] --> B{"result?"}
+    B -->|"Ok(0)"| C["connection closed: stop"]
+    B -->|"Ok(count) > 0"| D["append to collected"]
+    D --> A
+    B -->|"WouldBlock or TimedOut"| E["quiet period: stop"]
+    B -->|"other error"| F["return the error"]
+```
 
 ```rust
 fn read_server_batch(stream: &mut TcpStream) -> io::Result<Vec<u8>> {

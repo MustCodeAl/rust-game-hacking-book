@@ -8,6 +8,7 @@ permalink: /pages/8/03/
 chapter: "8.3"
 minutes: 24
 summary: Turn the debugger-only code-cave experiment into a verified, reversible patch plan.
+mermaid: true
 ---
 
 ## Typed code manages the machine-code boundary
@@ -151,6 +152,12 @@ impl Drop for AppliedPatch<'_> {
 
 A 5-byte relative jump stores a signed 32-bit displacement measured from the end of the jump:
 
+```mermaid
+flowchart LR
+    F["from<br/>(the jump's own address)"] -->|"+ 5<br/>(the jump's own length)"| N["next_instruction<br/>(first byte after the jump)"]
+    N -->|"rel32 = to − next_instruction"| T["to<br/>(the cave's address)"]
+```
+
 ```rust
 fn rel32(from: usize, to: usize) -> Option<i32> {
     // 🧭 The CPU measures a near jump from the address *after* its five bytes.
@@ -223,7 +230,30 @@ mov eax, dword ptr [ecx]
 lea esi, [esi]
 ```
 
-The x86 cave can preserve state, call the gold-changing helper, replay those instructions, and return:
+{% include memory-strip.html
+  cells="0x00CCAF8A=8B|0x00CCAF8B=01|0x00CCAF8C=8D|0x00CCAF8D=74|0x00CCAF8E=26|0x00CCAF8F=00"
+  groups="0-1:`mov eax, dword ptr [ecx]`|2-5:`lea esi, [esi]`"
+  caption="The six original bytes at the hook site. `0x00CCAF8A` plus this 6-byte span lands exactly on the resume address, `0x00CCAF90`."
+%}
+
+The replacement has to fit in that same six-byte span:
+
+{% include memory-strip.html
+  cells="0x00CCAF8A=E9|=rel32 to the cave, 4 bytes|0x00CCAF8F=90"
+  groups="0-0:opcode|1-1:computed at install time|2-2:filler"
+  caption="The patched bytes, still six bytes long. `rel32` is not written here because it depends on where the DLL happens to load; `near_jump` computes it once the cave's real address is known."
+%}
+
+The x86 cave can preserve state, call the gold-changing helper, replay those instructions, and return. The two functions below share one cave: the first does the actual gold write, and the second is the jump target that wraps it and gets back to `0x00CCAF90`:
+
+```mermaid
+flowchart TD
+    A["execution reaches 0x00CCAF8A,<br/>now the jump into the cave"] --> B["pushfd, pushad<br/>(save flags and all registers)"]
+    B --> C["call cave_body<br/>sets Wesnoth gold to 888"]
+    C --> D["popad, popfd<br/>(restore registers and flags)"]
+    D --> E["replay the displaced bytes:<br/>mov eax, dword ptr [ecx]<br/>lea esi, [esi]"]
+    E --> F["jmp 0x00CCAF90<br/>(resume address)"]
+```
 
 ```rust
 #[cfg(target_arch = "x86")]

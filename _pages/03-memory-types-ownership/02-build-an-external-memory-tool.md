@@ -41,12 +41,10 @@ separate, stronger capability and needs its own expected-value check.
 
 For the exact 32-bit Windows build used by this book, the verified gold path is:
 
-```text
-read u32 at 0x017E_ED18
-→ add 0xA90
-→ read u32 at that address
-→ add 0x4
-→ player one's gold
+```mermaid
+flowchart LR
+    A["read u32 at 0x017E_ED18"] -->|"+ 0xA90"| B["read u32 at that address"]
+    B -->|"+ 0x4"| C["player one's gold"]
 ```
 
 This is the practical result from lesson 2.9. Confirm it in Cheat Engine before running the tool: add a pointer manually, use `0x017EED18` as the base, then add offsets `0xA90` and `0x4`. Start three fresh local matches and verify that it resolves to the gold shown in the game each time.
@@ -219,6 +217,16 @@ Run the tool from an ordinary terminal in the VM. If Windows denies access, repo
 
 Writing should be opt-in and should verify the expected old value first:
 
+```mermaid
+flowchart TD
+    A["read the current value"] --> B{"equals expected?"}
+    B -->|"no"| C["return false;<br/>write nothing"]
+    B -->|"yes"| D["WriteProcessMemory<br/>the new bytes"]
+    D --> E{"bytes written ==<br/>bytes.len()?"}
+    E -->|"no"| F["return false"]
+    E -->|"yes"| G["return true"]
+```
+
 ```rust
 use windows::Win32::System::Diagnostics::Debug::WriteProcessMemory;
 
@@ -265,6 +273,13 @@ this chain is exactly four bytes even if someone later builds the external tool
 as 64-bit. The complete resolver makes that choice visible:
 
 Wesnoth 1.14.9 is a 32-bit target, so a 64-bit tool must read its pointers as **four-byte `u32` values**, not as the tool's native `usize`:
+
+{% include memory-strip.html
+  cells="=b0|=b1|=b2|=b3|=b4|=b5|=b6|=b7"
+  marks="0-3"
+  groups="0-3:the actual 32-bit pointer: `read_u32` takes exactly these 4 bytes|0-7:a native 64-bit `usize` read would consume all 8 bytes here"
+  caption="For example: reading a native `usize` on a 64-bit tool silently absorbs the next field's 4 bytes into the pointer value."
+%}
 
 ```rust
 const WESNOTH_PLAYER_ROOT: usize = 0x017E_ED18;

@@ -8,6 +8,7 @@ permalink: /pages/9/08/
 chapter: "9.8"
 minutes: 42
 summary: Separate encoding, hashing, MACs, encryption, and authenticated encryption, then protect a toy save payload with current RustCrypto APIs.
+mermaid: true
 ---
 
 ## Five tools with different jobs
@@ -51,9 +52,11 @@ mechanism actually enforces it.
 
 The lab uses XChaCha20-Poly1305 from the RustCrypto `chacha20poly1305` crate. One envelope contains:
 
-```text
-24-byte nonce | ciphertext | 16-byte authentication tag
-```
+{% include memory-strip.html
+  column=true
+  cells="+0x00=nonce, 24 bytes|+0x18=ciphertext, same length as the plaintext|end − 0x10=16-byte Poly1305 tag"
+  caption="One sealed envelope, in the order `seal` writes it. `split_at_checked(24)` in the decryption code is what separates the nonce from everything after it."
+%}
 
 The nonce is not a password and does not need to be hidden. It must be unique for messages protected by the same key. XChaCha20’s larger nonce makes random generation practical, but the program still stores it with the ciphertext so decryption can use the same value.
 
@@ -65,7 +68,16 @@ Some information should remain readable but must not be silently swapped. The la
 save-slot:3|format:1
 ```
 
-If someone moves the ciphertext to slot four or claims it uses another format, opening it fails. The associated data is not encrypted; it is included in the authentication calculation.
+If someone moves the ciphertext to slot four or claims it uses another format, opening it fails.
+
+```mermaid
+flowchart LR
+    A["seal with context<br/>save-slot:3, format:1"] --> E["envelope stored on disk"]
+    E --> B["open with context<br/>save-slot:4"]
+    B -->|"context does not match<br/>what was authenticated"| F["decryption fails"]
+```
+
+The associated data is not encrypted; it is included in the authentication calculation.
 
 ## Complete sealing code
 
@@ -140,8 +152,18 @@ of compiling the key into the executable.
 
 Think of a key as having a lifecycle rather than merely a location:
 
-```text
-generate -> store -> load for one operation -> rotate -> retire -> recover
+```mermaid
+stateDiagram-v2
+    [*] --> Generated: cryptographically secure RNG
+    Generated --> Stored: access-controlled storage
+    Stored --> Loaded: load for one operation
+    Loaded --> Stored: erase from memory<br/>when the operation ends
+    Stored --> Rotated: rotation policy
+    Rotated --> Stored: old envelopes still<br/>readable or migrated
+    Stored --> Retired: retirement policy
+    Retired --> [*]: old backups handled
+    Stored --> Recovered: key lost
+    Recovered --> Stored: recovery path
 ```
 
 Generation needs a cryptographically secure random source. Storage needs an access

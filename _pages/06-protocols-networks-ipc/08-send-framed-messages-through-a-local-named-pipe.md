@@ -55,6 +55,11 @@ The lab selects `PIPE_TYPE_MESSAGE` when creating the server and `PIPE_READMODE_
 
 It still adds a four-byte length header. Why use both? Message mode keeps transport boundaries, while the length header validates the application protocol. The receiver can reject a damaged or unexpected frame instead of trusting every byte Windows delivered.
 
+{% include memory-strip.html
+  cells="byte 0-3=`u32` length, little-endian|byte 4..=UTF-8 text, up to 1024 bytes"
+  caption="The pipe frame `read_frame` validates below. `FRAME_BYTES` (1028) reserves room for the header plus the maximum payload."
+%}
+
 ## Treat IPC data like untrusted input
 
 “Local” does not mean “automatically trustworthy.” Another program in the same account or session might know or guess the pipe name.
@@ -65,6 +70,18 @@ The receiver checks all of these facts before making a `String`:
 2. The declared text length is no more than 1024 bytes.
 3. The received frame size equals `4 + declared length`.
 4. The text bytes are valid UTF-8.
+
+```mermaid
+flowchart TD
+    A["bytes_read >= 4?"] -->|"no"| X1["reject: no header"]
+    A -->|"yes"| B["declared <= MAX_TEXT_BYTES?"]
+    B -->|"no"| X2["reject: header too large"]
+    B -->|"yes"| C["bytes_read == declared + 4?"]
+    C -->|"no"| X3["reject: length mismatch"]
+    C -->|"yes"| D["valid UTF-8?"]
+    D -->|"no"| X4["reject: bad UTF-8"]
+    D -->|"yes"| E["return the text"]
+```
 
 The server accepts one client, handles one request, sends one fixed reply, and exits. Small limits make the behavior easy to reason about.
 
@@ -273,6 +290,17 @@ fn main() {
 A client can open the pipe after `CreateNamedPipeW` creates it but just before the server calls `ConnectNamedPipe`. Windows then returns `ERROR_PIPE_CONNECTED`. That does not mean the connection failed—it means the client already won the race.
 
 The match arm accepts only that documented condition and returns every other error:
+
+```mermaid
+sequenceDiagram
+    participant Server
+    participant Client
+    Server->>Server: CreateNamedPipeW
+    Client->>Server: CreateFileW opens the pipe
+    Note over Client,Server: the client connects here,<br/>before ConnectNamedPipe runs
+    Server->>Server: ConnectNamedPipe
+    Server-->>Server: returns ERROR_PIPE_CONNECTED
+```
 
 ```rust
 match unsafe { ConnectNamedPipe(pipe.raw(), None) } {

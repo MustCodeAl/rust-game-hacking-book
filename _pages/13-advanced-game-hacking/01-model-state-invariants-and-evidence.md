@@ -73,6 +73,14 @@ A **control** attempts to preserve an invariant. A **detector** reports evidence
 that the invariant may have failed. A detector can be noisy while the control
 still works, or quiet while the control is incomplete.
 
+```mermaid
+flowchart LR
+    INV["Invariant"] --> CTRL["Control:<br/>tries to preserve it"]
+    INV --> DET["Detector:<br/>reports possible failure"]
+    DET -->|"noisy"| OK["the control can<br/>still be working"]
+    DET -->|"quiet"| BAD["the control can<br/>still be incomplete"]
+```
+
 ## Draw the state before inspecting implementation details
 
 Suppose an entity can be alive, downed, or removed. Write that model before
@@ -96,6 +104,18 @@ that. A timestamped trace can.
 ## Record evidence as structured data
 
 Free-form notes are easy to misread. Use a small schema:
+
+```mermaid
+flowchart LR
+    O["Observation"] --> SEQ["sequence: log order"]
+    O --> TICK["tick: game clock"]
+    O --> SRC["source: which observer"]
+    O --> EID["entity_id"]
+    O --> EV["event: Event"]
+    EV --> HR["HealthRead { value }"]
+    EV --> HW["HealthWrite { before, after }"]
+    EV --> MC["ModeChanged { before, after }"]
+```
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq)]

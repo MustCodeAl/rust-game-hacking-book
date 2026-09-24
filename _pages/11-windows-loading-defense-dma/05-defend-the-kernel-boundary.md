@@ -62,12 +62,12 @@ A signed driver is not automatically a safe driver. If it exposes a badly protec
 
 Defenders should treat driver loading as a rare, high-impact event:
 
-```text
-new driver appears
-→ identify publisher and signature
-→ compare its hash and version with the approved baseline
-→ check the vulnerable-driver block policy
-→ investigate the process and installer that introduced it
+```mermaid
+flowchart TD
+    A["new driver appears"] --> B["identify publisher and signature"]
+    B --> C["compare hash and version<br/>with the approved baseline"]
+    C --> D["check the vulnerable-driver<br/>block policy"]
+    D --> E["investigate the process<br/>and installer that introduced it"]
 ```
 
 Do not “test” a suspicious driver by loading it on your daily computer. Use an isolated disposable virtual machine and vendor-provided analysis guidance.
@@ -75,6 +75,17 @@ Do not “test” a suspicious driver by loading it on your daily computer. Use 
 ## Build a read-only driver inventory
 
 The inventory calls `EnumDeviceDrivers` and `GetDeviceDriverBaseNameW` through the `windows` crate. It queries visible driver images, prints their base names, and uses no mutation APIs.
+
+`enumerate` does not know the driver count in advance, so it grows its buffer and asks again until Windows reports the whole list fit:
+
+```mermaid
+flowchart TD
+    A["drivers: Vec of 256 null pointers"] --> B["EnumDeviceDrivers(drivers,<br/>byte_capacity, out param bytes_needed)"]
+    B --> C{"did count already fit<br/>in drivers.len()?"}
+    C -->|"yes"| D["truncate to count, return"]
+    C -->|"no"| E["resize drivers to count,<br/>call EnumDeviceDrivers again"]
+    E --> B
+```
 
 <details class="lab-source" markdown="1">
 <summary>Complete defensive lab source: driver_inventory.rs</summary>

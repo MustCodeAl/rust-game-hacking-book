@@ -35,6 +35,14 @@ enum ResultCount {
 }
 ```
 
+{% include memory-strip.html
+  column=true
+  cells="index 0=caller's local 0|index 1=caller's local 1|base 2 →=callee's local 0|index 3=callee's local 1 (top)"
+  marks="2-3"
+  groups="0-1:caller's frame, base = 0|2-3:callee's frame, base = 2"
+  caption="For example, one shared value stack holding two frames. `base` marks where each frame's locals start, so a bytecode operand like local slot 1 means `base + 1` in this one vector, never a raw index into another frame."
+%}
+
 `base` says where this function’s local area begins. Bytecode operands can refer to `base + local_index` rather than carrying raw pointers into the vector.
 
 Lua allows multiple return values, so a caller may request an exact number or accept all produced results. Missing results become `nil`; unwanted extras can be discarded.
@@ -104,12 +112,12 @@ The captured value changes location without changing its identity:
 
 ```mermaid
 flowchart TD
-    A["Outer call frame"] --> B["Local stack slot"]
-    B --> C["Open upvalue"]
-    C --> D["Outer function returns"]
-    D --> E["Closed shared cell"]
-    E --> F["Closure A"]
-    E --> G["Closure B"]
+    A["make_counter() frame, base = 3"] --> B["stack slot 3 = 0 (count)"]
+    B --> C["upvalue = Open { stack_index: 3 }"]
+    C --> D["make_counter() returns"]
+    D --> E["upvalue = Closed(0)<br/>(count now lives in its own cell)"]
+    E --> F["Closure A reads/writes the cell"]
+    E --> G["Closure B reads/writes the same cell"]
 ```
 
 Both closures keep referring to one shared cell after the original stack frame is gone.
@@ -132,6 +140,20 @@ The callback should be short and bounded. A Lua instruction budget cannot interr
 ## Re-entrancy adds nested host and VM call frames
 
 A host callback may call Lua again, which may call another host function. This is **re-entrancy**. The host needs a clear policy for locks and mutable game state.
+
+```mermaid
+sequenceDiagram
+    participant L1 as Lua (frame 1)
+    participant H1 as Host callback A
+    participant L2 as Lua (frame 2)
+    participant H2 as Host callback B
+    L1->>H1: calls a host function
+    H1->>L2: calls back into Lua
+    L2->>H2: calls another host function
+    H2-->>L2: returns
+    L2-->>H1: returns
+    H1-->>L1: returns
+```
 
 Avoid holding a mutable engine lock while executing unknown script code. Give Lua a copied snapshot, collect typed requests, return to the host, and then validate and apply them. That architecture from earlier lessons also prevents complicated nested borrows.
 

@@ -8,6 +8,7 @@ permalink: /pages/7/03/
 chapter: "7.3"
 minutes: 42
 summary: Learn PE32 and PE32+ data directories, RVAs, section mappings, export names, ordinals, address entries, and forwarded exports with a bounded parser.
+mermaid: true
 ---
 
 ## An export table is a DLL's public index
@@ -27,6 +28,12 @@ An export table connects three parallel ideas:
 Not every export needs a name. A DLL can export by ordinal only. This beginner tool lists named exports and reports the total number of address entries so the difference stays visible.
 
 An ordinal is not simply a row's position in the address table. The export directory also stores an **ordinal base**, commonly `1`, and an export's real public ordinal is `ordinal_base + its index in the address table`. A caller asking for “ordinal 5” with a base of `1` wants `functions[5 - 1]`, not `functions[5]`. The parser below reads that base once and adds it back in for every named export so the printed ordinals match what the DLL actually publishes.
+
+{% include memory-strip.html
+  cells="functions[0]=ordinal 1|functions[1]=ordinal 2|functions[2]=ordinal 3|functions[3]=ordinal 4|functions[4]=ordinal 5"
+  marks="4"
+  caption="With `ordinal_base = 1`, the export published as “ordinal 5” sits at index 4: `functions[5 - 1]`, not `functions[5]`."
+%}
 
 ## RVA is not a file offset
 
@@ -88,6 +95,13 @@ An export-address entry usually holds an RVA for code or data. If the RVA points
 
 The loader follows that string to another DLL export. This is how Windows can keep a familiar public name while moving the implementation behind it.
 
+```mermaid
+flowchart LR
+    A["AddressOfFunctions[i]<br/>a function RVA"] --> B{"inside export_rva..export_end?"}
+    B -->|"no"| C["RVA of real code or data"]
+    B -->|"yes"| D["forwarder string, e.g.<br/>KERNELBASE.VirtualQueryEx"]
+```
+
 ## Every byte from a file is untrusted input
 
 Even a game DLL you intended to inspect might be truncated, damaged, from the wrong build, or simply not a PE file. A parser should fail with a useful message instead of panicking or allocating several gigabytes because a count field contained nonsense.
@@ -103,6 +117,28 @@ This implementation uses five guardrails:
 Validate from the outside inward. Prove the DOS header range before reading its PE offset, prove the PE and optional-header ranges before reading directories, then prove section and export ranges. A later valid-looking signature cannot make an earlier out-of-bounds read safe.
 
 ## Build the complete parser
+
+Before the listing, here is the exact 40-byte structure `parse_export_table` reads once it has a validated pointer to it, and the order in which it validates its way there.
+
+{% include memory-strip.html
+  cells="+0x00=(unused)|+0x04=(unused)|+0x08=(unused)|+0x0C=Name (RVA)|+0x10=Base (ordinal base)|+0x14=NumberOfFunctions|+0x18=NumberOfNames|+0x1C=AddressOfFunctions|+0x20=AddressOfNames|+0x24=AddressOfNameOrdinals"
+  marks="3-9"
+  caption="The `IMAGE_EXPORT_DIRECTORY`, all 40 bytes (`EXPORT_DIRECTORY_SIZE`). `parse_export_table` skips the first three fields and reads the seven highlighted ones directly by offset."
+%}
+
+```mermaid
+flowchart TD
+    A["Check MZ and PE signatures"] --> B["Read the optional-header magic"]
+    B --> C{"0x10b or 0x20b?"}
+    C -->|"PE32"| D["directory_offset = 96"]
+    C -->|"PE32+"| E["directory_offset = 112"]
+    D --> F["Read export_rva, export_size"]
+    E --> F
+    F --> G["Parse the section table<br/>into a Vec of Section"]
+    G --> H["file_offset(export_rva)<br/>via rva_to_offset"]
+    H --> I["Read image_name, ordinal_base,<br/>function_count, name_count"]
+    I --> J["For each name: look up ordinals[i],<br/>functions[ordinal], check for a forwarder"]
+```
 
 <details class="lab-source" markdown="1">
 <summary>Complete lab source: export_inspector.rs</summary>

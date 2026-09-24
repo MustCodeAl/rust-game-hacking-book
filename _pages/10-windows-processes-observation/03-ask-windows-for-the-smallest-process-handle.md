@@ -8,20 +8,22 @@ permalink: /pages/10/03/
 chapter: "10.3"
 minutes: 26
 summary: Learn access tokens, integrity levels, process DACLs, access masks, and least privilege through a buildable query tool.
+mermaid: true
 ---
 
 ## A PID identifies a process but grants no access
 
 A process ID identifies a running process. It does not grant access to that process. To ask Windows for a usable process **handle**, a program calls `OpenProcess` with an **access mask**: a group of bits describing the operations it wants.
 
-Windows compares that request with the process security rules. The call either returns a handle carrying the granted rights or fails with an error.
+Windows compares that request with the process security rules. The call either returns a handle carrying the granted rights or fails with an error:
 
-```text
-PID + requested rights + caller's security context
-                         ↓
-                Windows access check
-                         ↓
-             handle with rights  OR  error
+```mermaid
+flowchart TD
+    A["PID"] --> D["OpenProcess access check"]
+    B["requested access mask"] --> D
+    C["caller's access token<br/>and integrity level"] --> D
+    D -->|"target's DACL allows it"| E["handle carrying<br/>the granted rights"]
+    D -->|"target's DACL denies it"| F["error"]
 ```
 
 The handle is not the process itself. It is a Windows-managed reference plus a specific set of permissions.
@@ -79,7 +81,15 @@ The small request documents the tool's purpose. If Windows grants it, you know t
 
 ## Build a limited query tool
 
-This program finds a named process through the shared ToolHelp code, opens it with only `PROCESS_QUERY_LIMITED_INFORMATION`, and asks Windows for the image path.
+This program finds a named process through the shared ToolHelp code, opens it with only `PROCESS_QUERY_LIMITED_INFORMATION`, and asks Windows for the image path:
+
+```mermaid
+flowchart LR
+    A["Process::find(process_name)"] --> B["Process::open_with_access<br/>PROCESS_QUERY_LIMITED_INFORMATION"]
+    B --> C["QueryFullProcessImageNameW<br/>(unsafe)"]
+    C --> D["path.truncate(length)"]
+    D --> E["print name, PID, image path"]
+```
 
 <details class="lab-source" markdown="1">
 <summary>Complete lab source: access_probe.rs</summary>
@@ -201,6 +211,17 @@ if allow_write {
 That boolean is a visible decision at the call site. A scanner can open read-only; a verified patcher must deliberately opt into writing.
 
 The "group of bits" from the top of this lesson is not a metaphor. Microsoft documents `PROCESS_QUERY_INFORMATION` as `0x0400` and `PROCESS_VM_READ` as `0x0010`. ORing them sets bit 10 and bit 4 of one 32-bit value and leaves every other bit 0, producing `0x0410`. Allowing writes ORs in `PROCESS_VM_OPERATION` (`0x0008`) and `PROCESS_VM_WRITE` (`0x0020`), setting two more bits for a final mask of `0x0438`. `OpenProcess` compares that exact bit pattern against what the target's DACL permits; there is no separate "and also let me read memory" step hiding behind the named constant.
+
+{% include memory-strip.html
+  cells="QUERY_INFO=1|VM_OPERATION=0|VM_READ=1|VM_WRITE=0"
+  caption="Read-only tools OR together `PROCESS_QUERY_INFORMATION` (`0x0400`, bit 10) and `PROCESS_VM_READ` (`0x0010`, bit 4) for mask `0x0410`. `PROCESS_VM_OPERATION` (bit 3) and `PROCESS_VM_WRITE` (bit 5) stay 0."
+%}
+
+{% include memory-strip.html
+  cells="QUERY_INFO=1|VM_OPERATION=1|VM_READ=1|VM_WRITE=1"
+  marks="1|3"
+  caption="Opting into writes also sets `PROCESS_VM_OPERATION` and `PROCESS_VM_WRITE`, producing mask `0x0438` — exactly the bits the wrapper's `if allow_write` branch adds."
+%}
 
 The complete buildable tool is [`access_probe.rs`]({{ site.baseurl }}/windows-labs/src/bin/access_probe.rs).
 

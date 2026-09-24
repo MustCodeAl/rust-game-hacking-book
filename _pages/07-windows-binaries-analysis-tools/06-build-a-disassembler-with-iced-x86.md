@@ -8,6 +8,7 @@ permalink: /pages/7/06/
 chapter: "7.6"
 minutes: 22
 summary: Decode real variable-length x86 instructions with a tested decoder library instead of reinventing the instruction tables.
+mermaid: true
 ---
 
 ## What a disassembler is for
@@ -37,6 +38,13 @@ registers, immediate values, memory addressing, and flow control. A
 should use decoded fields for logic rather than parsing the displayed string
 back into facts.
 
+```mermaid
+flowchart LR
+    B["raw bytes<br/>48 89 D8"] --> D["Decoder::decode_out<br/>makes an Instruction"]
+    D --> F["NasmFormatter::format<br/>makes the text mov rax, rbx"]
+    D --> L["instruction.flow_control(), instruction.ip()<br/>use these for logic, not the formatted text"]
+```
+
 ## Decoding is harder than formatting
 
 A disassembler does two jobs:
@@ -57,6 +65,12 @@ Very roughly:
 
 Not every instruction contains every piece. Their variable length is why a
 detour must decode whole instructions before deciding how many bytes to replace.
+
+{% include memory-strip.html
+  cells="=48|=89|=D8|=C3"
+  groups="0-2:`mov rax, rbx` — REX prefix + opcode + ModR/M|3-3:`ret` — opcode only"
+  caption="The test bytes from `decodes_simple_64_bit_function` later in this lesson. Same idea as `B8 19 00 00 00` in lesson 2.2: the opcode selects the operation, and pieces like a prefix or ModR/M byte appear only when that instruction needs them."
+%}
 
 For our tool, use `iced-x86`.
 
@@ -176,6 +190,11 @@ This is more reliable than searching formatted strings for `jmp`.
 
 The loop above is a **linear sweep**: decode one instruction after another. It may decode data embedded in a code section as nonsense instructions.
 
+```mermaid
+flowchart LR
+    A["decode at ip"] --> B["decode at ip + len"] --> C["decode at ip + len + len"] --> D["... continue byte after byte"]
+```
+
 A control-flow disassembler begins at a known entry point and follows reachable branches and calls. That needs:
 
 - a work queue of addresses;
@@ -187,6 +206,16 @@ A control-flow disassembler begins at a known entry point and follows reachable 
 Start linear. Add control flow only after the basic decoder and bounds are solid.
 
 A **basic block** is a straight-line run of instructions with one entry and a control transfer at the end. Connecting blocks by possible jumps creates a control-flow graph. Loops appear as edges that return to an earlier block; `if` statements often appear as a branch whose paths later meet.
+
+```mermaid
+flowchart TD
+    Entry["entry point"] --> BB1["basic block 1"]
+    BB1 --> BB2{"conditional branch"}
+    BB2 -->|"taken"| BB3["basic block 3"]
+    BB2 -->|"not taken"| BB4["basic block 4"]
+    BB3 --> BB1
+    BB4 --> Exit["return"]
+```
 
 The graph still contains uncertainty. An indirect jump may obtain its destination from a table or register, exception handling can create non-obvious edges, and code may be reached only through callbacks. Mark unknown successors instead of pretending the graph is complete.
 

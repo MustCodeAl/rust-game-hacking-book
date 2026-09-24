@@ -30,11 +30,11 @@ this?"
 
 ```mermaid
 flowchart TD
-    A[Unfamiliar game] --> B{What runs the logic?}
-    B -->|Native code| C[Offsets from a C++ layout]
-    B -->|Mono / IL2CPP| D[Class metadata, managed heap]
-    B -->|.NET CoreCLR| E[Managed heap that compacts]
-    B -->|JVM| F[Bytecode and JVM objects]
+    A["Unfamiliar game"] --> B{"What runs the logic?"}
+    B -->|"native code"| C["fixed offsets from a<br/>C++ object layout"]
+    B -->|"Unity, Mono backend"| D["decompile Assembly-CSharp.dll;<br/>Boehm GC does not move objects"]
+    B -->|"Unity, IL2CPP backend"| E["native code + global-metadata.dat;<br/>addresses stable"]
+    B -->|".NET CoreCLR or JVM"| F["compacting GC moves objects;<br/>an address is not an identity"]
 ```
 
 The branches are not different difficulty levels. They are different questions.
@@ -108,6 +108,17 @@ A .NET game running on CoreCLR is the case where the earlier assumption really
 does break. CoreCLR's garbage collector is generational and **compacting**: it
 relocates surviving objects to remove gaps. An object's address is therefore
 valid only until the next collection that moves it.
+
+{% include memory-strip.html
+  cells="t0=object at 0x5000|t1, after GC=object at 0x5000"
+  caption="Non-moving collectors — Mono's Boehm GC, and native code generally: for example, an object stays at the same address across a collection."
+%}
+
+{% include memory-strip.html
+  cells="t0=object at 0x5000|t1, after GC=object moved to 0x5A00"
+  marks="1"
+  caption="Compacting collectors — CoreCLR and the JVM: for example, a collection can relocate a surviving object, so the old address is no longer valid."
+%}
 
 Note how precisely that differs from the Unity Mono case above. Both are
 "managed" and "garbage collected," and only one of them moves objects. The word

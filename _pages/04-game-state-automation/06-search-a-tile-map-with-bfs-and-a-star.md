@@ -115,6 +115,12 @@ Do not perform that formula until negative and out-of-range coordinates have
 been rejected. Also use checked arithmetic, because a corrupted width from a
 bad reverse-engineered layout must not wrap into a believable index:
 
+{% include memory-strip.html
+  cells="(0,0)=0|(1,0)=1|(2,0)=2|(0,1)=3|(1,1)=4|(2,1)=5"
+  groups="0-2:row y=0|3-5:row y=1"
+  caption="For example, a 3-wide grid: `(x, y)` maps to index `y * width + x`. Row 1 starts right where row 0 ends, at index `width`."
+%}
+
 ```rust
 #[derive(Clone, Copy, Debug)]
 enum Terrain {
@@ -199,8 +205,12 @@ recovered map.
 
 ## Keep three layers separate
 
-```text
-observer snapshot -> validated grid -> search algorithm -> proposed route -> input adapter
+```mermaid
+flowchart LR
+    A["observer snapshot"] --> B["validated grid"]
+    B --> C["search algorithm"]
+    C --> D["proposed route"]
+    D --> E["input adapter"]
 ```
 
 The search function should never call `ReadProcessMemory` or press keys. It accepts an ordinary copied grid and returns ordinary coordinates. This makes it testable on any computer.
@@ -208,6 +218,27 @@ The search function should never call `ReadProcessMemory` or press keys. It acce
 The input adapter is the only part allowed to translate one confirmed route step into a supported action in your offline lab.
 
 ## Tests that catch real mistakes
+
+For example, here is the exact 3×2 grid this test builds, with the wall
+forcing a detour through row 1:
+
+```mermaid
+flowchart LR
+    subgraph row_0["row y=0"]
+        A0["(0,0) start"]
+        A1["(1,0) wall"]
+        A2["(2,0) goal"]
+    end
+    subgraph row_1["row y=1"]
+        B0["(0,1)"]
+        B1["(1,1)"]
+        B2["(2,1)"]
+    end
+    A0 -->|"1"| B0
+    B0 -->|"2"| B1
+    B1 -->|"3"| B2
+    B2 -->|"4"| A2
+```
 
 ```rust
 #[test]

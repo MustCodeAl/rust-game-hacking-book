@@ -40,14 +40,14 @@ the same thing as a four-byte read that returned health.
 
 ```mermaid
 flowchart TD
-    A[Identify exact build] --> B[Find candidate object roots]
-    B --> C[Collect member access instructions]
-    C --> D[Cluster offsets by function and width]
-    D --> E[Apply value and relationship invariants]
-    E --> F[Compare controlled state changes]
-    F --> G[Score competing layouts]
-    G --> H[Generate versioned reader]
-    H --> I[Replay regression captures]
+    A["Identify exact build"] --> B["Find candidate object roots"]
+    B --> C["Collect member access instructions"]
+    C --> D["Cluster offsets by function and width"]
+    D --> E["Apply value and relationship invariants"]
+    E --> F["Compare controlled state changes"]
+    F --> G["Score competing layouts"]
+    G --> H["Generate versioned reader"]
+    H --> I["Replay regression captures"]
 ```
 
 Do not let one memory scan decide the structure. Combine static access
@@ -124,20 +124,36 @@ When a new build moves fields:
 7. create a new layout record and keep the old record immutable;
 8. run captured-snapshot regression tests for both builds.
 
+As a flow:
+
+```mermaid
+flowchart TD
+    A["fingerprint the new build"] --> B["find the same behavioral<br/>function again"]
+    B --> C["collect member accesses again<br/>(not: add a constant offset)"]
+    C --> D["replay the same controlled<br/>game transitions"]
+    D --> E["rebuild the evidence table"]
+    E --> F["compare field relationships"]
+    F --> G["new immutable layout record"]
+    G --> H["regression test both builds"]
+```
+
 Step 3 deserves emphasis, because the tempting shortcut is to diff two known
 offsets and add that difference to all the others. Layouts do not move like
 that. A field inserted in the middle shifts everything after it and nothing
 before it, and alignment can absorb part of the shift:
 
-```text
-field         build 41    build 42    moved by
-position      0x30        0x30        0
-yaw           0x48        0x48        0
-team          --          0x50        (newly added)
-health        0x138       0x140       +8
-max_health    0x13C       0x144       +8
-entity_id     0x150       0x158       +8
-```
+{% include memory-strip.html
+  column=true
+  cells="0x30=position|0x48=yaw|0x138=health|0x13C=max_health|0x150=entity_id"
+  caption="Build 41: five fields at their original offsets."
+%}
+
+{% include memory-strip.html
+  column=true
+  cells="0x30=position|0x48=yaw|0x50=team (new)|0x140=health|0x144=max_health|0x158=entity_id"
+  marks="2|3|4|5"
+  caption="Build 42: inserting `team` at `0x50` pushes every later field down by 8 bytes. `position` and `yaw`, both before the insertion, do not move at all."
+%}
 
 Nothing here moved by one constant. Three fields did not move at all, one
 appeared, and the rest shifted by the size of the insertion. A tool that added

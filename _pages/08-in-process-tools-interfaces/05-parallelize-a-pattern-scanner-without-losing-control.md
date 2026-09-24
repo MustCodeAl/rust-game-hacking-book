@@ -91,6 +91,20 @@ let Some(region) = snapshots.get(index) else {
 
 No region is handed out twice. When the index passes the slice, the worker finishes.
 
+```mermaid
+sequenceDiagram
+    participant W1 as Worker 1
+    participant W2 as Worker 2
+    participant Idx as next_region (AtomicUsize)
+    W1->>Idx: fetch_add(1)
+    Idx-->>W1: 0
+    W2->>Idx: fetch_add(1)
+    Idx-->>W2: 1
+    W1->>Idx: fetch_add(1)
+    Idx-->>W1: 2
+    Note over W1,W2: Each index is handed out exactly once,<br/>to whichever worker asks first.
+```
+
 Fetching the next index when a worker becomes free is **dynamic scheduling**.
 It is better than permanently giving worker 1 the first quarter of regions and
 worker 2 the second quarter: a worker that receives several tiny regions can
@@ -121,6 +135,14 @@ fn reserve_match(counter: &AtomicUsize) -> bool {
 ```
 
 `fetch_update` performs “check below cap and increment” as one atomic operation. When the cap is full, the worker sets a shared cancellation flag. Other workers notice and stop.
+
+```mermaid
+flowchart LR
+    A["worker finds a match"] --> B{"reserve_match:<br/>counter < MAX_MATCHES?"}
+    B -->|"yes, fetch_update succeeds"| C["record the address"]
+    B -->|"no, cap already reached"| D["cancelled.store(true, Release)"]
+    D --> E["every worker checks<br/>cancelled.load(Acquire)<br/>and stops"]
+```
 
 The memory ordering communicates two small state transitions:
 

@@ -91,6 +91,15 @@ A relative path depends on the target’s working directory and is easy to misre
 
 Model the allocation so cleanup is not optional:
 
+```mermaid
+flowchart TD
+    A["VirtualAllocEx succeeds"] --> B["RemoteAllocation owns process + address"]
+    B --> C["write_exact writes the wide path"]
+    C -->|"an early ? returns"| D["RemoteAllocation is dropped"]
+    C -->|"normal continuation"| D
+    D --> E["Drop::drop calls VirtualFreeEx"]
+```
+
 ```rust
 struct RemoteAllocation<'a> {
     process: &'a Process,
@@ -202,6 +211,18 @@ Pass the absolute DLL produced under `target\i686-pc-windows-msvc\release\`. A 6
 ## Loader-lock reminder
 
 When the DLL loads, Windows calls its `DllMain` under the loader lock. The course DLL does only one small thing there: `DisableThreadLibraryCalls`. The injector then finds the exported `gha_start` address by its DLL-relative offset and starts a **second** remote thread after `LoadLibraryW` has returned. That guarantees the real worker and hook installation happen outside `DllMain` and outside the loader lock.
+
+```mermaid
+sequenceDiagram
+    participant Tool as Injector
+    participant Game as Game process
+    Tool->>Game: CreateRemoteThread(LoadLibraryW, dll path)
+    Note over Game: loader lock held:<br/>maps sections, resolves imports,<br/>runs DllMain
+    Game-->>Tool: thread exit code = DLL base
+    Tool->>Tool: compute gha_start's RVA<br/>from a local, unloaded copy
+    Tool->>Game: CreateRemoteThread(DLL base + RVA)
+    Note over Game: outside the loader lock:<br/>gha_start spawns the worker
+```
 
 ## Cleanup order
 

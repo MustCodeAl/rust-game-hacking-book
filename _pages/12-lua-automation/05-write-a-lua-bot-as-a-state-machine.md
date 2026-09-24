@@ -8,6 +8,7 @@ permalink: /pages/12/05/
 chapter: "12.5"
 minutes: 31
 summary: Make scripted automation predictable with named states, guarded transitions, one action at a time, timeouts, and a permanent stop path.
+mermaid: true
 ---
 
 ## Define the bot's states and transitions first
@@ -23,9 +24,17 @@ end
 
 A state machine gives each phase a name and defines why the script may move to another phase.
 
-```text
-observe -> choose -> request -> wait -> observe
-                         \-> stop
+```mermaid
+stateDiagram-v2
+    [*] --> Observe
+    Observe --> Choose: snapshot stored
+    Choose --> Request: living candidate found
+    Choose --> Stop: no candidate
+    Request --> Wait: request sent,<br/>wait_ticks = 20
+    Wait --> Wait: not yet confirmed,<br/>wait_ticks -= 1
+    Wait --> Observe: selection confirmed
+    Wait --> Stop: wait_ticks reaches 0
+    Stop --> [*]
 ```
 
 Formally, one update uses the current state plus one input to produce a next state and, sometimes, an output:
@@ -103,6 +112,23 @@ end
 The host calls `update` at a controlled rate. The script does not own an infinite loop and cannot flood actions between frames.
 
 Bounded work makes scheduling visible. One call performs at most one transition and proposes at most one action. The host can measure it, stop between calls, and prevent a fast script loop from starving rendering or input processing.
+
+```mermaid
+sequenceDiagram
+    participant Host
+    participant Bot as update(bot, snapshot)
+    participant Game
+    Host->>Bot: call 1 (state = Observe)
+    Bot->>Bot: store snapshot, state = Choose
+    Host->>Bot: call 2 (state = Choose)
+    Bot->>Bot: choose_nearest_living()
+    Bot->>Game: game.request(select_entity)
+    Bot->>Bot: wait_ticks = 20, state = Wait
+    Host->>Bot: call 3.. (state = Wait)
+    Bot->>Bot: not confirmed yet, wait_ticks -= 1
+    Host->>Bot: call N (state = Wait)
+    Bot->>Bot: snapshot.selected_id matches,<br/>state = Observe
+```
 
 ## Separate choosing from acting
 

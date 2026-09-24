@@ -87,19 +87,19 @@ You can watch it happen with a RIP-relative load. At the original site, the
 instruction means “read the global sitting `0x2F1A` bytes past the end of this
 instruction”:
 
-```text
-at 0x1_4000_1000:   48 8B 05 1A 2F 00 00    mov rax, [rip + 0x2F1A]
-                                            reads 0x1_4000_1007 + 0x2F1A
-                                                = 0x1_4000_3F21   <- the global
+```mermaid
+flowchart LR
+    A["bytes at 0x1_4000_1000:<br/>48 8B 05 1A 2F 00 00"] --> B["rip after instruction<br/>= 0x1_4000_1007"]
+    B --> C["+ 0x2F1A = 0x1_4000_3F21<br/>(the global)"]
 ```
 
 Copy those seven bytes into a trampoline at a different address. The
 displacement is unchanged, but the address it is measured from is not:
 
-```text
-at 0x7FF9_00A0_000:  48 8B 05 1A 2F 00 00   mov rax, [rip + 0x2F1A]
-                                            reads 0x7FF9_00A0_007 + 0x2F1A
-                                                = 0x7FF9_00A2_F21 <- unrelated
+```mermaid
+flowchart LR
+    A2["same bytes at 0x7FF9_00A0_000:<br/>48 8B 05 1A 2F 00 00"] --> B2["rip after instruction<br/>= 0x7FF9_00A0_007"]
+    B2 --> C2["+ 0x2F1A = 0x7FF9_00A2_F21<br/>(unrelated!)"]
 ```
 
 The bytes are byte-for-byte identical and the instruction is entirely valid. It
@@ -142,7 +142,14 @@ The preparation stage can verify:
 7. a dry-run decode of the final patch succeeds.
 
 Only then should one owner publish the change. If a later step fails, restore
-the saved bytes and report which postcondition failed.
+the saved bytes and report which postcondition failed. As a flow:
+
+```mermaid
+flowchart TD
+    P["PreparedHook { target, expected,<br/>original, patch, trampoline }"] --> V["verify all 7 preconditions"]
+    V -->|"all pass"| PUB["one owner publishes;<br/>HookPhase::Installed"]
+    V -->|"any fails"| ROLL["restore saved bytes,<br/>report which postcondition failed"]
+```
 
 ### Publication must have a real thread-safety mechanism
 

@@ -89,12 +89,33 @@ action 7 was **denied**. Something changed state after a refusal, which is the
 exact contradiction this lesson exists to catch, and the naive reading walked
 straight past it.
 
+```mermaid
+flowchart LR
+    D7["Decision seq 41, corr 7:<br/>denied, ValueOutOfRange"] -.->|"same corr_id"| E43["EffectFinished seq 43, corr 7:<br/>changed = true"]
+    D8["Decision seq 42, corr 8:<br/>allowed"] -.->|"same corr_id"| E44["EffectFinished seq 44, corr 8:<br/>changed = true"]
+```
+
 Nothing was missing from the log. The evidence was complete, and ordering alone
 was still enough to reach the wrong conclusion, because two actions interleaved
 and the reader assumed they had not. This is why the join in a detection rule
 is written on the correlation ID rather than on adjacency.
 
 ## Give each event a stable schema
+
+```mermaid
+flowchart LR
+    G["GameEvent"] --> SV["schema_version"]
+    G --> SEQ["sequence"]
+    G --> MM["monotonic_micros"]
+    G --> CID["correlation_id"]
+    G --> BID["build_id"]
+    G --> EID["entity_id (optional u32)"]
+    G --> K["kind: EventKind"]
+    K --> K1["SnapshotBuilt { generation }"]
+    K --> K2["Decision { allowed, reason }"]
+    K --> K3["EffectFinished { changed, generation }"]
+    K --> K4["EventsDropped { count }"]
+```
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq)]

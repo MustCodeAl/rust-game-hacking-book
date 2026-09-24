@@ -34,9 +34,9 @@ During the lab, the call still begins at the same instruction; only the pointer 
 
 ```mermaid
 flowchart TD
-    A["Normal call site"] --> B["MessageBoxW IAT slot"]
-    B --> C["Replacement function"]
-    C --> D["Saved original MessageBoxW"]
+    A["call site: MessageBoxW(...)"] --> B["IAT slot for MessageBoxW"]
+    B --> C["hooked_message_box"]
+    C --> D["ORIGINAL_MESSAGE_BOX<br/>(saved pointer to the real MessageBoxW)"]
 ```
 
 When the patch owner is dropped, it puts the saved original pointer back into that same IAT slot.
@@ -165,6 +165,12 @@ The limits stop a malformed table from becoming an endless walk through memory.
 ## Change one pointer, then restore it
 
 `VirtualProtect` temporarily makes the four-byte slot writable. The code immediately restores the old page protection:
+
+```mermaid
+flowchart LR
+    A["VirtualProtect(slot, 4, PAGE_READWRITE)<br/>save old protection"] --> B["slot.write_volatile(value)"]
+    B --> C["VirtualProtect(slot, 4, old)<br/>restore original protection"]
+```
 
 ```rust
 unsafe fn write_slot(slot: *mut u32, value: u32) -> anyhow::Result<()> {

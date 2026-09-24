@@ -71,6 +71,18 @@ RVA `0x2340` is `0x340` bytes into the section, so its file offset is
 is beyond the `0x800` raw bytes; it represents zero-filled memory rather than a
 byte stored in the file.
 
+```mermaid
+flowchart LR
+    subgraph virt["Virtual range: 0x2000 to 0x2900 (VirtualSize 0x900)"]
+        V1["0x2000<br/>section start"] --> V2["0x2340<br/>+0x340"] --> V3["0x2880<br/>+0x880"] --> V4["0x2900<br/>end"]
+    end
+    subgraph raw["Raw range on disk: 0x0600 to 0x0E00 (SizeOfRawData 0x800)"]
+        R1["0x0600<br/>section start"] --> R2["0x0940<br/>+0x340"] --> R3["0x0E00<br/>end"]
+    end
+    V2 -->|"file_offset = 0x0600 + 0x340"| R2
+    V3 -.->|"0x880 is past 0x800:<br/>zero-filled, no file byte"| R3
+```
+
 A rigorous parser checks every subtraction and addition, validates section
 ranges against the actual file length, and rejects overlapping or impossible
 metadata. PE headers describe a file; they do not deserve blind trust merely
@@ -144,16 +156,12 @@ and addition cannot overflow the address type.
 
 ## Derive the Wesnoth example
 
-For the 32-bit Wesnoth 1.14.9 course build, the original disassembly records the instruction at `0x007CCD91`. If the module was loaded at `0x00400000` during that capture:
+For the 32-bit Wesnoth 1.14.9 course build, the original disassembly records the instruction at `0x007CCD91`. If the module was loaded at `0x00400000` during that capture, subtracting the base gives the RVA; adding a different run's base back to that same RVA gives that run's own live address:
 
-```text
-0x007CCD91 - 0x00400000 = 0x003CCD91
-```
-
-So `0x003CCD91` is the RVA. On another run, a live base of `0x00600000` would produce:
-
-```text
-0x00600000 + 0x003CCD91 = 0x009CCD91
+```mermaid
+flowchart LR
+    A["capture run<br/>observed VA 0x007CCD91<br/>base 0x00400000"] -->|"− base"| B["RVA<br/>0x003CCD91"]
+    B -->|"+ base 0x00600000<br/>(a later run)"| C["later run<br/>live VA 0x009CCD91"]
 ```
 
 Never assume the example base. Measure the module in the run you are actually debugging.

@@ -19,10 +19,11 @@ That separation is a safety feature. A map helper should not need to patch a gam
 
 Named shared memory is one IPC option:
 
-```text
-writer's virtual address ─┐
-                          ├─ same mapping object ─ shared bytes
-reader's virtual address ─┘
+```mermaid
+flowchart LR
+    W["writer's view<br/>(its own address)"] --> M["one file-mapping object"]
+    R["reader's view<br/>(its own address)"] --> M
+    M --> B["the same shared bytes"]
 ```
 
 The two views do not need the same virtual address. Windows connects both views to the same file-mapping object.
@@ -64,11 +65,10 @@ The name starts with `Local\`, so it lives in the current logon session's local 
 
 Memory has no built-in `String` type. Both programs must agree on a layout:
 
-```text
-byte 0..4       little-endian u32 text length
-byte 4..4+len   UTF-8 text
-remaining bytes zeroed
-```
+{% include memory-strip.html
+  cells="0..4=little-endian `u32` text length|4..4+len=UTF-8 text|4+len..=zeroed"
+  caption="The shared-memory wire format. `HEADER_BYTES` is 4; everything from `4 + len` onward is left as zero padding."
+%}
 
 The four-byte length makes embedded zero bytes unambiguous and lets the reader reject impossible sizes before creating a string slice.
 
@@ -90,10 +90,15 @@ writing only once. Shared memory gives two processes access to the same bytes.
 It gives them no agreement about *when*. Nothing prevents a reader from
 arriving in the middle of a write:
 
-```text
-writer: store length = 11
-        <- the reader runs here: length says 11, payload is still the old text
-writer: copy "hello world" into the payload
+```mermaid
+sequenceDiagram
+    participant Writer
+    participant Memory as Shared bytes
+    participant Reader
+    Writer->>Memory: store length = 11
+    Reader->>Memory: read length (11) and the payload
+    Note over Reader: payload bytes are still<br/>the previous message
+    Writer->>Memory: copy the new text into the payload
 ```
 
 The reader's length check passes, the UTF-8 decode very likely succeeds, and

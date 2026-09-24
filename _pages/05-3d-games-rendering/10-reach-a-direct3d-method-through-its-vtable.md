@@ -60,13 +60,12 @@ The rule is that a vtable begins with the methods of the interfaces it
 inherits, in inheritance order, each in declaration order. `IDXGISwapChain`
 inherits like this:
 
-```text
-IUnknown                3 methods   QueryInterface, AddRef, Release      -> 0,1,2
-IDXGIObject             4 methods   SetPrivateData, SetPrivateDataInterface,
-                                    GetPrivateData, GetParent            -> 3,4,5,6
-IDXGIDeviceSubObject    1 method    GetDevice                            -> 7
-IDXGISwapChain          Present is declared first                        -> 8
-```
+{% include memory-strip.html
+  cells="0=QueryInterface|1=AddRef|2=Release|3=SetPrivateData|4=SetPrivateDataInterface|5=GetPrivateData|6=GetParent|7=GetDevice|8=Present"
+  marks="8"
+  groups="0-2:IUnknown|3-6:IDXGIObject|7-7:IDXGIDeviceSubObject|8-8:IDXGISwapChain"
+  caption="`IDXGISwapChain`'s vtable. Each inherited interface contributes its methods in declaration order before `Present` gets its own slot."
+%}
 
 3 + 4 + 1 = 8. `Present` is index 8, and now you know *why*, which means you
 can work out `ResizeBuffers` the same way instead of searching for it.
@@ -75,6 +74,14 @@ The same count applied to `ID3D11DeviceContext` gives `IUnknown` (3) plus
 `ID3D11DeviceChild` (4) = 7, then the context's own methods in declaration
 order: `VSSetConstantBuffers`, `PSSetShaderResources`, `PSSetShader`,
 `PSSetSamplers`, `VSSetShader`, and then `DrawIndexed` at index 12.
+
+Written out as slots:
+
+{% include memory-strip.html
+  cells="7=VSSetConstantBuffers|8=PSSetShaderResources|9=PSSetShader|10=PSSetSamplers|11=VSSetShader|12=DrawIndexed"
+  marks="5"
+  caption="`ID3D11DeviceContext`'s own methods start at slot 7, right after `IUnknown` (3 slots) and `ID3D11DeviceChild` (4 slots)."
+%}
 
 For the older API, `IDirect3DDevice9` inherits only `IUnknown`, so its own
 methods begin at index 3 and are simply counted down the header:
@@ -177,6 +184,14 @@ Return the `HRESULT` you received from the original. Callers check it, and
 expecting to handle.
 
 ## The lifecycle is where hooks actually break
+
+```mermaid
+stateDiagram-v2
+    [*] --> Original: slot holds the runtime's function
+    Original --> Hooked: install (refuse if the slot<br/>already holds your function)
+    Hooked --> Original: restore (only if the slot<br/>still holds your function)
+    Hooked --> Hooked: a second install is refused
+```
 
 Install, forward, restore. Each step has a failure that a single successful
 test run will not reveal, so

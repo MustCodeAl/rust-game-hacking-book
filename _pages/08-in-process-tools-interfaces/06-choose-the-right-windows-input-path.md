@@ -8,6 +8,7 @@ permalink: /pages/8/06/
 chapter: "8.6"
 minutes: 34
 summary: Poll a hotkey, send balanced input, compare window messages, and choose the smallest Windows API for a local game tool.
+mermaid: true
 ---
 
 ## “Send a key” can mean three different things
@@ -20,6 +21,24 @@ different ways:
 | `GetAsyncKeyState` | Samples the current physical key state | Toggle a local tool menu | It does not wait for an event |
 | `SendInput` | Inserts keyboard or mouse events into the system input stream | Drive an offline game while its window is active | It does not target one `HWND` |
 | `SendMessageW` / `PostMessageW` | Calls or queues a message for a window procedure | Control a window you created or a documented local test window | Many games read Raw Input or device state instead |
+
+Each path lands on a different destination, which is the real reason to pick carefully:
+
+```mermaid
+flowchart LR
+    subgraph Poll["GetAsyncKeyState"]
+        A1["your code asks: is this<br/>key down right now?"]
+    end
+    subgraph Inject["SendInput"]
+        A2["your code inserts an event<br/>into the system input stream"]
+    end
+    subgraph Message["SendMessageW / PostMessageW"]
+        A3["your code calls or queues a<br/>message for a window procedure"]
+    end
+    A1 --> B1["desktop-wide physical key state"]
+    A2 --> B2["whichever window currently<br/>has keyboard focus"]
+    A3 --> B3["one specific HWND's<br/>window procedure"]
+```
 
 There is no general Win32 function named `SendKey`. .NET's `SendKeys` is a
 separate convenience layer, while the old `keybd_event` function has been
@@ -41,6 +60,12 @@ The current `windows` crate exposes
 as an unsafe function taking a virtual-key number and returning an `i16`.
 Windows puts “down right now” in the most significant bit. Because that is the
 sign bit of an `i16`, a negative result means down:
+
+{% include memory-strip.html
+  cells="bit 15 (sign)=1 if down now|bits 14-1=unused here|bit 0=stale “pressed since last call” flag"
+  marks="0"
+  caption="`GetAsyncKeyState` returns an `i16`. A negative result (bit 15 set) means the key is down right now. Bit 0 is kept for old compatibility, but another process's call can consume it first, which is why the edge detector below is built from bit 15 instead."
+%}
 
 ```rust
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -74,6 +99,15 @@ impl KeyEdge {
         rising_edge
     }
 }
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> Up
+    Up --> Down: key goes down, pressed_now returns true
+    Down --> Down: key stays down, pressed_now returns false
+    Down --> Up: key goes up
+    Up --> Up: key stays up
 ```
 
 Poll at a modest rate such as every 8–16 milliseconds. A tight loop wastes a
@@ -146,9 +180,20 @@ Always release a key or mouse button during shutdown, even if a feature fails.
 `SendInput` is subject to **User Interface Privilege Isolation (UIPI)**: Windows
 blocks input from a lower-integrity process into a window owned by a
 higher-integrity one, such as a game running as administrator while your tool
-does not. The visible symptom is not an error — `SendInput` reports success,
-but the target window never reacts, which looks identical to a wrong virtual-key
-code or an unfocused window. If synthetic input silently does nothing, check
+does not. Windows does not tell you why: neither `SendInput`'s return value
+nor `GetLastError` identifies UIPI as the cause, and the target window simply
+never reacts, which looks identical to a wrong virtual-key code or an unfocused
+window.
+
+```mermaid
+flowchart TD
+    A["SendInput(events)"] --> B{"target window's integrity level<br/>vs. your process's integrity level"}
+    B -->|"equal or lower"| C["event reaches the window normally"]
+    B -->|"higher, e.g. game runs as admin"| D["UIPI blocks the event"]
+    D --> E["nothing says UIPI was the cause:<br/>the window simply never reacts"]
+```
+
+If synthetic input silently does nothing, check
 whether the target is elevated before suspecting your own code. Some games also
 intentionally use Raw Input or device APIs that do not behave like a normal text
 box. Do not respond by repeatedly flooding input.

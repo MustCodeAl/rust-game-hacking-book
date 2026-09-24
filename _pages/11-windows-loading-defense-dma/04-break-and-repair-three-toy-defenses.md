@@ -8,6 +8,7 @@ permalink: /pages/11/04/
 chapter: "11.4"
 minutes: 32
 summary: Reproduce three harmless evasion patterns against deliberately weak controls, observe the gap, and repair the invariant.
+mermaid: true
 ---
 
 ## Research the failure without targeting a real defense
@@ -30,12 +31,12 @@ cargo test --bin toy_evasion_lab
 
 Each exercise follows the same research loop:
 
-```text
-state the control's promise
-→ find the unchecked assumption
-→ reproduce the gap in the toy
-→ move the check to the real effect
-→ add a regression test
+```mermaid
+flowchart LR
+    A["state the control's promise"] --> B["find the unchecked assumption"]
+    B --> C["reproduce the gap in the toy"]
+    C --> D["move the check to<br/>the real effect"]
+    D --> E["add a regression test"]
 ```
 
 ## Recipe 1: test a name-based rule with an equivalent command
@@ -66,6 +67,12 @@ fn weak_name_based_policy(command: LabCommand) -> bool {
 3. Ask about `ApplyPatch`; it says yes.
 4. Observe that the second spelling reaches the same kind of state-changing
    effect the policy claimed to prevent.
+
+```mermaid
+flowchart LR
+    A["WriteMemory"] -->|"name matches the denylist"| B["blocked"]
+    C["ApplyPatch"] -->|"name is not on the denylist"| D["allowed —<br/>but changes state too"]
+```
 
 The weakness is **coverage by spelling**. Adding more forbidden names would
 become an endless denylist. Classify the effect instead:
@@ -137,6 +144,16 @@ target.byte = replacement;
 4. Observe that the weak function still writes `0xCC` because it uses an old
    decision.
 
+```mermaid
+sequenceDiagram
+    participant P as weak_toctou_patch
+    participant T as target
+    P->>T: read build_id (7 == expected_build)
+    Note over T: between_check_and_use(target)<br/>changes build_id to 8
+    P->>T: target.byte = 0xCC
+    Note over P: still writes 0xCC,<br/>using the now-stale build check
+```
+
 This is a **time-of-check/time-of-use** gap. The repair validates the build and
 expected old byte immediately beside the side effect:
 
@@ -173,6 +190,14 @@ events.push(format!("allowed {command:?}"));
 3. Inspect the event list; it is empty.
 4. A reviewer looking only at the log cannot distinguish “nothing happened”
    from “a prohibited request was blocked.”
+
+```mermaid
+flowchart TD
+    A["command arrives"] --> B{"effect_based_policy?"}
+    B -->|"allowed"| C["events.push(allowed)"]
+    B -->|"denied — old code"| D["return Denied,<br/>no event recorded"]
+    B -->|"denied — fixed code"| E["events.push(Denied)"]
+```
 
 This is a **telemetry gap**, not a control bypass. It still matters because
 missing evidence hides repeated mistakes and makes a control difficult to

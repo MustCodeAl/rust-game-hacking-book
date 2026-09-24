@@ -46,13 +46,14 @@ A number such as `100` is also not self-identifying. The bytes `64 00 00 00` rep
 
 Imagine the first scan finds 40,000 addresses containing `100`. You spend 15 gold and scan for `85`. Most unrelated addresses do not make that exact transition, so perhaps 18 survive. Earn 7 gold and scan for `92`; perhaps one remains.
 
-```text
-all readable addresses
-∩ value was 100
-∩ value became 85
-∩ value became 92
-= candidates consistent with every observation
+```mermaid
+flowchart LR
+    A["all readable addresses"] -->|"scan: value == 100"| B["40,000 candidates"]
+    B -->|"value became 85"| C["about 18 candidates"]
+    C -->|"value became 92"| D["1 candidate"]
 ```
+
+Each scan keeps only the addresses that already survived every earlier one — the candidate set only shrinks.
 
 The scanner never rescans the whole process after the first pass. It re-reads only the surviving addresses. This makes later passes faster and preserves the history needed for filters such as increased, decreased, changed, and unchanged.
 
@@ -109,6 +110,13 @@ For an aligned-only scan, step by four. For a general scan, `windows(4)` checks 
 `wanted.to_le_bytes()` creates the exact four-byte representation used by the 32-bit Windows course games. `.windows(4)` yields overlapping four-byte slices, so a value may start at any byte. When a match appears, `base + offset` translates the local slice position back into the target’s virtual address.
 
 The complete program reads 1 MiB chunks. Adjacent chunks overlap by three bytes because a four-byte value can begin in the final three positions of the earlier chunk. Without that overlap, a value split across the boundary would never exist in either local buffer as a complete four-byte window.
+
+{% include memory-strip.html
+  cells="A[end−3]=E8|A[end−2]=03|A[end−1]=00|B[0]=00"
+  marks="0-3"
+  groups="0-3:the `u32` value 1,000 (bytes `E8 03 00 00`), split across the boundary"
+  caption="For example: if the value 1,000 begins three bytes before the end of chunk A, three of its bytes are the last bytes read into chunk A's buffer and the fourth is the first byte of chunk B's buffer. The 3-byte overlap gives the scanner one buffer where a complete `u32` window still exists."
+%}
 
 ## Keep candidate values
 
@@ -246,6 +254,13 @@ fn write_candidate(
 }
 ```
 
+```mermaid
+flowchart LR
+    A["read current value<br/>at candidate.address"] --> B{"current == candidate.previous?"}
+    B -->|"yes"| C["write replacement"]
+    B -->|"no"| D["refuse:<br/>value changed since the last scan"]
+```
+
 The UI should show the old and new value and require an explicit action.
 
 The second read closes a **time-of-check/time-of-use** gap. The candidate matched during the last filter, but the game kept running afterward. If the current value no longer equals `candidate.previous`, the address may be stale or the rule may have changed; the write must stop rather than overwrite newer state.
@@ -271,6 +286,21 @@ Start one supported course game with a value you can change visibly—for exampl
 Change the value in the game, press Enter, and type the new value. The scanner re-reads only surviving addresses. If one remains, it offers one guarded replacement and first confirms the value has not changed again.
 
 The full program is [`memory_scanner.rs`]({{ site.baseurl }}/windows-labs/src/bin/memory_scanner.rs). It uses `VirtualQueryEx`, skips unreadable or oversized regions, reads at most 1 MiB per chunk, adds a three-byte overlap so a `u32` cannot hide across a chunk boundary, caps candidates at 250,000, handles disappearing regions, and prints at most 25 results.
+
+```mermaid
+flowchart TD
+    A["for region in process.regions(...)"] --> B{"region.readable and<br/>region.size within MAX_REGION_SIZE?"}
+    B -->|"no"| A
+    B -->|"yes"| C["read_bytes in CHUNK_SIZE windows,<br/>+3 byte overlap"]
+    C --> D{"bytes.windows(4)<br/>== initial.to_le_bytes()?"}
+    D -->|"match"| E["candidates.push(address)"]
+    D -->|"no match"| C
+    E --> F["print candidates.len()<br/>after the first scan"]
+    F --> G["wait for the new value,<br/>then candidates.retain(...)"]
+    G --> H{"candidates.len() == 1?"}
+    H -->|"yes"| I["guarded write:<br/>re-check, then write_u32"]
+    H -->|"no"| J["ask to narrow further"]
+```
 
 <details class="lab-source" markdown="1">
 <summary>Complete lab source: memory_scanner.rs</summary>

@@ -60,9 +60,10 @@ These are loader notifications, not general application events. The code is runn
 
 Imagine two locks:
 
-```text
-thread A: owns game_lock → calls an API that needs loader_lock
-thread B: owns loader_lock in DllMain → waits for game_lock
+```mermaid
+flowchart LR
+    A["Thread A<br/>holds game_lock"] -->|"wants loader_lock"| B["Thread B<br/>holds loader_lock in DllMain"]
+    B -->|"wants game_lock"| A
 ```
 
 Neither thread can continue. The dangerous second lock may be hidden inside a function that loads a DLL, initializes COM, sends a blocking cross-thread message, starts complex runtime work, or waits for another thread.
@@ -70,13 +71,15 @@ Neither thread can continue. The dangerous second lock may be hidden inside a fu
 The version that catches most game tools is subtler, because you never write
 the second lock yourself:
 
-```text
-DllMain  (holding the loader lock)
-  -> CreateThread                    succeeds; the thread now exists
-  -> WaitForSingleObject(thread)     wait for it to get going
-         the new thread must first run DLL_THREAD_ATTACH notifications
-         those need the loader lock
-         which DllMain is still holding
+```mermaid
+sequenceDiagram
+    participant D as DllMain (holds loader lock)
+    participant T as New thread
+    D->>T: CreateThread
+    Note over T: thread exists,<br/>but must run DLL_THREAD_ATTACH first
+    D->>T: WaitForSingleObject(thread)
+    T->>D: needs the loader lock to run<br/>DLL_THREAD_ATTACH
+    Note over D,T: D holds the loader lock and waits for T.<br/>T needs the loader lock D holds. Deadlock.
 ```
 
 `CreateThread` returns success, so nothing appears to have gone wrong. The new
@@ -128,16 +131,18 @@ It does not start the game lab, read memory, scan modules, or wait.
 
 The DLL exports a separate function named `gha_start`. The injector waits for its `LoadLibraryW` thread to finish first. Only then does it call `gha_start`, after the initial loader work has returned.
 
-```text
-injector calls LoadLibraryW
-        ↓
-Windows maps DLL and calls tiny DllMain under loader lock
-        ↓
-LoadLibraryW returns; injector joins that completed call
-        ↓
-injector calls exported gha_start
-        ↓
-gha_start creates the worker and returns
+```mermaid
+sequenceDiagram
+    participant I as Injector
+    participant W as Windows loader
+    participant Dll as DllMain
+    participant G as gha_start
+    I->>W: LoadLibraryW
+    W->>Dll: map DLL, call DllMain<br/>(loader lock held)
+    Dll-->>W: return (loader-safe work only)
+    W-->>I: LoadLibraryW returns
+    I->>G: call exported gha_start
+    G->>G: spawn worker thread, return
 ```
 
 The exported function uses the Windows thread-procedure ABI because the course injector calls it as a separate thread entry:

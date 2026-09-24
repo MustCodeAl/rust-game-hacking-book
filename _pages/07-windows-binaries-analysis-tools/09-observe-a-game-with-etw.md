@@ -71,6 +71,17 @@ Use a clean disposable Windows VM, close unrelated programs, record only long en
 
 The helper launches `wpr.exe` directly with `std::process::Command`. It does not build a command string for PowerShell or `cmd.exe`, so the output path is passed as one argument rather than interpreted as shell code.
 
+```mermaid
+flowchart TD
+    A["run_wpr(-start, GeneralProfile, -filemode)"] --> B["print prompt,<br/>read_line waits for Enter"]
+    B --> C{"read_line failed?"}
+    C -->|"yes"| D["run_wpr(-cancel)<br/>return Err"]
+    C -->|"no"| E["run_wpr(-stop, output)"]
+    E --> F{"stop failed?"}
+    F -->|"yes"| G["run_wpr(-cancel)<br/>return the stop error"]
+    F -->|"no"| H["print Saved output"]
+```
+
 <details class="lab-source" markdown="1">
 <summary>Complete lab source: etw_capture.rs</summary>
 
@@ -195,11 +206,26 @@ Start with broad questions before zooming into thousands of events:
 - In **Disk Usage**, look for long file reads that overlap a pause.
 - In the timeline, select only the few seconds around your action.
 
+```mermaid
+flowchart TD
+    A["Process Lifetimes:<br/>confirm the executable and PID"] --> B["CPU Usage (Sampled):<br/>find busy threads"]
+    B --> C["Image Load:<br/>inspect DLLs at startup"]
+    C --> D["Disk Usage:<br/>long reads overlapping a pause"]
+    D --> E["Timeline:<br/>zoom to the few seconds<br/>around your action"]
+```
+
 A stack may show system DLLs, game functions, or unresolved addresses. Symbols translate addresses into names. Without matching symbols, the timing is still real, but the function label may remain a module plus offset.
 
 ## Missing events are data too
 
 ETW writes through buffers. If a provider produces events faster than the session can deliver them, events can be lost. A controller can report buffer and event-loss statistics.
+
+```mermaid
+flowchart LR
+    Prov["providers producing events"] --> Buf["kernel buffers<br/>(finite capacity)"]
+    Buf --> Cons["trace consumer"]
+    Buf -.->|"buffer full:<br/>events lost, not recorded"| Lost["gap in the capture"]
+```
 
 That means “I did not see an event” is weaker than “the event could not have happened.” Check whether the chosen profile included the relevant provider and whether the session lost data.
 

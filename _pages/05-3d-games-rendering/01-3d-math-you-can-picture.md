@@ -315,6 +315,14 @@ row 0  = (a, b, c, d)
 output x = a*x + b*y + c*z + d*1
 ```
 
+As boxes, one row multiplied term by term against the point and added:
+
+{% include memory-strip.html
+  cells="=a|=b|=c|=d"
+  groups="0-0:× x|1-1:× y|2-2:× z|3-3:× 1"
+  caption="`a·x + b·y + c·z + d·1`. Four rows like this one produce the whole output point."
+%}
+
 Do that once per row and you have the whole output point. For a 4×4 matrix that
 is four multiply-and-add passes. Nothing more mysterious is happening.
 
@@ -372,6 +380,18 @@ scale:
 position  (x, y, z) becomes (x, y, z, 1)
 direction (x, y, z) becomes (x, y, z, 0)
 ```
+
+{% include memory-strip.html
+  cells="=x|=y|=z|=1"
+  marks="3"
+  caption="A position: `(x, y, z, 1)`. The translation matrix's shift term multiplies this `1`, so it reaches the point."
+%}
+
+{% include memory-strip.html
+  cells="=x|=y|=z|=0"
+  marks="3"
+  caption="A direction: `(x, y, z, 0)`. The same shift term multiplies this `0` and vanishes, so translation cannot move a direction."
+%}
 
 A translation matrix affects the position because its `w` is `1`, but it does not
 move a direction because its `w` is `0`. This distinction is mathematical, not
@@ -515,12 +535,12 @@ When a transform fails, identify the earliest wrong space:
 
 Do not memorize every engine’s coordinate system. Remember the pipeline:
 
-```text
-find positions
-→ subtract to get a direction
-→ use atan2 for angles
-→ transform through the camera
-→ convert normalized coordinates to pixels
+```mermaid
+flowchart LR
+    A["find positions"] --> B["subtract to get<br/>a direction"]
+    B --> C["use atan2<br/>for angles"]
+    C --> D["transform through<br/>the camera"]
+    D --> E["convert normalized<br/>coordinates to pixels"]
 ```
 
 Later lessons reuse this math in offline observer tools.

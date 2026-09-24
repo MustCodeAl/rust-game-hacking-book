@@ -83,6 +83,16 @@ program has several genuinely different sources of evidence, and they differ in
 what they prove — which is the whole reason the lesson insists on separating
 signal from assessment.
 
+```mermaid
+flowchart TD
+    S["Sources of an anti-debug signal"] --> A["the loader wrote it down:<br/>PEB.BeingDebugged @ +0x02,<br/>NtGlobalFlag, heap Flags/ForceFlags"]
+    S --> B["kernel bookkeeping:<br/>NtQueryInformationProcess —<br/>ProcessDebugPort / ProcessDebugObjectHandle"]
+    S --> C["its own code:<br/>a checksum notices a 0xCC byte"]
+    S --> D["its own thread state:<br/>DR0-DR3, DR7 via GetThreadContext"]
+    S --> E["who handles an exception first"]
+    S --> F["the surrounding machine:<br/>parent process, window titles, module list"]
+```
+
 **Things the loader wrote down.** When Windows starts a process for a debugger,
 it records that fact inside the process itself. The Process Environment Block
 carries a `BeingDebugged` byte at offset `0x02`, and `IsDebuggerPresent` is
@@ -110,6 +120,14 @@ That pair is worth sitting with. Neither kind of breakpoint is invisible, and
 neither is universally visible; they leave traces in *different places*. A
 program checking only its bytes never sees a hardware breakpoint, and one
 checking only its debug registers never sees a software breakpoint.
+
+```mermaid
+flowchart LR
+    SW["software breakpoint:<br/>0xCC byte patch"] -->|"visible to"| BC["a byte / checksum check"]
+    HW["hardware breakpoint:<br/>DR0-DR3 + DR7"] -->|"visible to"| DC["a debug-register check"]
+    SW -.->|"invisible to"| DC
+    HW -.->|"invisible to"| BC
+```
 
 **Who handles an exception first.** A program can raise an exception on purpose
 and see whether its own handler runs. If something else took it, something else

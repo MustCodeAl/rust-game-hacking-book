@@ -15,6 +15,20 @@ mermaid: true
 
 An external tool uses Windows to cross a process boundary. An in-process library is loaded into the target and shares its virtual address space.
 
+The two routes reach the same bytes through different doors:
+
+```mermaid
+flowchart LR
+    subgraph external["External tool (separate process)"]
+        E["ReadProcessMemory /<br/>WriteProcessMemory"]
+    end
+    subgraph inprocess["In-process library (this lesson)"]
+        D["DLL code, loaded into the target"]
+    end
+    E -->|"crosses a process boundary,<br/>one call at a time"| M["the game's memory"]
+    D -->|"ordinary pointer read/write,<br/>same address space"| M
+```
+
 That makes pointer access direct, but not automatically safe. An address discovered in a debugger can still be null, stale, misaligned, or wrong for this game version.
 
 Sharing an address space removes one copying boundary; it does not create shared ownership. The game still owns its objects, decides when they move or disappear, and may update them from other threads. Your DLL is a guest that can observe an address only while the assumptions that justified it remain true.
@@ -151,7 +165,15 @@ An even better design resolves the object each time from a module-relative path 
 
 ## Make the Wesnoth gold DLL actually change gold
 
-For **Wesnoth 1.14.9, 32-bit Windows**, use the same chain as the external tool:
+For **Wesnoth 1.14.9, 32-bit Windows**, use the same chain as the external tool. Only the two offsets and the root address are fixed; the two pointer values in between are whatever Wesnoth allocated this run:
+
+```mermaid
+flowchart LR
+    R["PLAYER_ROOT<br/>0x017E_ED18 (fixed)"] -->|"read u32"| P["player object"]
+    P -->|"+ GAME_OFFSET (0x0A90)"| G0["game-pointer field"]
+    G0 -->|"read u32"| G["game object"]
+    G -->|"+ GOLD_OFFSET (0x0004)"| GOLD["gold field (u32, writable)"]
+```
 
 ```rust
 const PLAYER_ROOT: *const u32 = 0x017E_ED18 as *const u32;
@@ -251,6 +273,15 @@ enum LabState {
     Stopping,
     Stopped,
 }
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> Loaded
+    Loaded --> Running: gha_start spawns the worker
+    Running --> Stopping: stop requested
+    Stopping --> Stopped: workers joined, patches restored
+    Stopped --> [*]
 ```
 
 The type system cannot make an unknown game address safe, but it can make the rest of the lifecycle much harder to mix up.

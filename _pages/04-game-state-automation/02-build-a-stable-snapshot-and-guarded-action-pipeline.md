@@ -21,15 +21,15 @@ find process → read pointer → calculate address → write value → print su
 
 That can work once, but every step depends on facts collected earlier. The game may restart, change maps, end a turn, replace an object, or update the value while the tool is still running.
 
-A more reliable tool separates five phases:
+A more reliable tool separates six phases:
 
 ```mermaid
 flowchart LR
-    A["Capture bytes"] --> B["Build typed snapshot"]
-    B --> C["Validate invariants"]
-    C --> D["Choose an action"]
-    D --> E["Re-capture and commit"]
-    E --> F["Read back postcondition"]
+    A["capture() twice:<br/>read the pointer chain"] --> B["Snapshot { player, side,<br/>gold_address, gold }"]
+    B --> C["require the two captures<br/>to be equal"]
+    C --> D["None: observe only<br/>Some(v): propose a write"]
+    D --> E["stable_snapshot() again,<br/>then write_u32"]
+    E --> F["read_u32 back and compare<br/>to the requested value"]
 ```
 
 The important idea is not extra code. It is that **data crosses a gate before it gains authority**. A raw address is only an observation. A validated `Snapshot` is evidence. A write is allowed only after fresh evidence still matches.
@@ -37,6 +37,11 @@ The important idea is not extra code. It is that **data crosses a gate before it
 ## Store one snapshot in one typed value
 
 This lesson records the entire Wesnoth pointer path, not only the final gold number:
+
+{% include memory-strip.html
+  cells="=player: usize|=side: usize|=gold_address: usize|=gold: u32"
+  caption="The whole `Snapshot`. Comparing all four fields catches a changed pointer link, not only a changed gold number."
+%}
 
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -108,6 +113,17 @@ The write path has three gates:
 1. re-capture and require the same snapshot;
 2. write exactly four little-endian bytes to the verified gold field;
 3. read the field back and require the requested result.
+
+```mermaid
+flowchart TD
+    A["stable_snapshot() again"] --> B{"== observed<br/>snapshot?"}
+    B -->|"no"| C["stop: nothing written"]
+    B -->|"yes"| D["write_u32(gold_address,<br/>replacement)"]
+    D --> E["read_u32(gold_address)"]
+    E --> F{"== replacement?"}
+    F -->|"no"| G["report failure"]
+    F -->|"yes"| H["success"]
+```
 
 ```diff
  fn replace_gold(

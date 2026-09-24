@@ -8,6 +8,7 @@ permalink: /pages/3/01/
 chapter: "3.1"
 minutes: 28
 summary: Learn the ownership, address, byte-buffer, error, and operating-system boundaries used by every memory tool.
+mermaid: true
 ---
 
 ## Start with one boundary rule
@@ -34,11 +35,11 @@ reference such as `&Player` from a remote address.
 
 Instead, use a clear boundary:
 
-```text
-remote address + requested size
-→ checked Windows read
-→ owned Vec<u8> in our process
-→ safe parsing and searching
+```mermaid
+flowchart LR
+    A["remote address<br/>+ requested size"] --> B["checked Windows read"]
+    B --> C["owned byte buffer<br/>in our process"]
+    C --> D["safe parsing<br/>and searching"]
 ```
 
 After the copy succeeds, ordinary ownership rules protect the local buffer. Before
@@ -204,12 +205,11 @@ An error value should report what failed; the outermost tool should decide what
 to do about it. A memory reader should not silently retry forever, and a parser
 should not terminate the whole application.
 
-```text
-low-level cause       ReadProcessMemory returned access denied
-operation context     while reading the local-player pointer
-target context        pid 4242, build a3f1c9e2, address 0x017E_ED18
-outer policy          retry once, skip this snapshot, or stop safely
-```
+{% include memory-strip.html
+  column=true
+  cells="low-level cause=ReadProcessMemory returned access denied|operation context=while reading the local-player pointer|target context=pid 4242, build a3f1c9e2, address 0x017E_ED18|outer policy=retry once, skip this snapshot, or stop safely"
+  caption="Each layer adds context without erasing the one below it. The outermost layer, `outer policy`, is the only one that decides what the tool actually does."
+%}
 
 Add context at each boundary without erasing the original Windows or parsing
 error. Then classify the final decision:
@@ -271,6 +271,13 @@ unsafe fn read_raw_u32(pointer: *const u32) -> u32 {
 Raw pointers have an [`offset`](https://doc.rust-lang.org/core/primitive.pointer.html#method.offset)
 method, but its number is **an element count, not a byte count**. If `pointer`
 has type `*const u32`, one element is four bytes:
+
+{% include memory-strip.html
+  cells="+0x00=10|+0x04=20|+0x08=30|+0x0C=40"
+  marks="2"
+  groups="0-0:`first`, at offset 0|2-2:`first.offset(2)`: two elements along, 8 bytes → 30"
+  caption="Each box is one `u32`, 4 bytes. `.offset()` counts in elements of the pointer's type, so `offset(2)` moves two boxes, not two bytes, landing on 30."
+%}
 
 ```rust
 let values = [10_u32, 20, 30, 40];

@@ -83,6 +83,13 @@ answer “may the simulation perform this effect?” Multiple inputs, scripts, a
 restored UI state can reach the same engine operation. The weak control places
 authority in a copy used for presentation.
 
+```mermaid
+flowchart LR
+    UI["ui_button_unlocked<br/>(presentation state)"] --> D{"weak_award checks<br/>only this flag"}
+    POLICY["engine policy<br/>(the real permission)"] -.->|"never read by<br/>weak_award"| D
+    D --> EFFECT["bonus changes"]
+```
+
 ### Minimal reproduction
 
 The example changes only the presentation flag before calling the weak path:
@@ -130,6 +137,12 @@ the health range is valid, and every field used by that relation is covered.
 The checksum answers only, “Did the health field change?” Changing
 `maximum_health` can make the relation impossible while the stored weak
 checksum still matches.
+
+{% include memory-strip.html
+  cells="player_id=7|health=80|max_health=100|generation=3|checksum=weak_checksum(80)"
+  marks="1"
+  caption="The weak checksum reads only `health`. Changing `max_health` from 100 to 60 breaks `health <= max_health`, but the stored checksum still matches — it never looked at `max_health`."
+%}
 
 ### Minimal reproduction
 

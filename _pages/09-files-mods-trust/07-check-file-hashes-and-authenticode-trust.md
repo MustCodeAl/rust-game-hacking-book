@@ -8,6 +8,7 @@ permalink: /pages/9/07/
 chapter: "9.7"
 minutes: 34
 summary: Understand hashes, publisher signatures, certificate trust, WinVerifyTrust state, exact return checks, offline revocation limits, and unsigned open-source builds.
+mermaid: true
 ---
 
 ## A hash and a signature answer different questions
@@ -24,9 +25,13 @@ That distinction has practical teeth. If you download `mod.zip` and
 `mod.zip.sha256` from the same page, and someone is able to change that page,
 they can change both — and the two will agree perfectly:
 
-```text
-downloaded mod.zip          -> hashes to 9f2c...     match
-downloaded mod.zip.sha256   -> claims    9f2c...     both lines written by the attacker
+```mermaid
+flowchart TD
+    P["compromised download page"] --> Z["mod.zip<br/>(attacker's bytes)"]
+    P --> H["mod.zip.sha256<br/>(attacker's hash of those bytes)"]
+    Z --> V{"you hash mod.zip<br/>and compare"}
+    H --> V
+    V -->|"matches"| M["verification succeeds —<br/>but proves nothing:<br/>the attacker wrote both files"]
 ```
 
 Verification reports success and has proven nothing. A hash is only worth
@@ -82,6 +87,17 @@ Known nonzero values help us print plain-English explanations. Unknown statuses 
 Those last two choices have a tradeoff: the result does not include a fresh revocation check. A release pipeline with network access should define and test a stricter revocation policy instead of treating this offline classroom result as the final word.
 
 ## Build the combined inspector
+
+`run` calls these in order; `WinVerifyTrust` itself is called twice, once to verify and once to release the state the first call created:
+
+```mermaid
+flowchart TD
+    A["sha256(path)<br/>stream the file, hash it"] --> B["verify_authenticode(path)"]
+    B --> C["WinVerifyTrust<br/>dwStateAction = VERIFY"]
+    C --> D["status: 0 means trusted"]
+    D --> E["WinVerifyTrust again<br/>dwStateAction = CLOSE"]
+    E --> F["meaning(status) explains<br/>the VERIFY call's result"]
+```
 
 <details class="lab-source" markdown="1">
 <summary>Complete lab source: signature_check.rs</summary>

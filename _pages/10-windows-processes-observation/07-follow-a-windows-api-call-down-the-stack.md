@@ -65,7 +65,14 @@ The documented Win32 API is the part application developers are normally expecte
 
 Microsoft can change how a supported function is implemented while keeping its documented behavior. On modern Windows, an export in `kernel32.dll` may forward to another DLL such as `KernelBase.dll`. Your source code still calls the stable Win32 name.
 
-A **forwarded export** is not a jump instruction the loader inserts. The export table entry itself can hold a string such as `KERNELBASE.CreateFileW` in place of a code address. When `GetProcAddress` resolves that entry, it reads the string, locates the named DLL, and looks up the function there instead — following another forward if that entry also happens to be one. Whoever asked for `kernel32!CreateFileW` never sees this redirection; they get back a usable address in `KernelBase.dll` either way, which is exactly why Microsoft can move an implementation between DLLs across Windows versions without breaking the caller's import.
+A **forwarded export** is not a jump instruction the loader inserts. The export table entry itself can hold a string such as `KERNELBASE.CreateFileW` in place of a code address. When `GetProcAddress` resolves that entry, it reads the string, locates the named DLL, and looks up the function there instead — following another forward if that entry also happens to be one. Whoever asked for `kernel32!CreateFileW` never sees this redirection; they get back a usable address in `KernelBase.dll` either way, which is exactly why Microsoft can move an implementation between DLLs across Windows versions without breaking the caller's import:
+
+```mermaid
+flowchart LR
+    A["GetProcAddress(kernel32,<br/>'CreateFileW')"] --> B["kernel32's export table entry:<br/>the string 'KERNELBASE.CreateFileW',<br/>not a code address"]
+    B --> C["loader locates KernelBase.dll<br/>and looks up CreateFileW there"]
+    C --> D["returns a usable address<br/>in KernelBase.dll"]
+```
 
 ## Native APIs sit closer to the system call
 
@@ -85,7 +92,15 @@ The returned address is a virtual address in the current process. Address Space 
 
 ## Build the address inspector
 
-The lab gets handles to DLLs already loaded in its own process, resolves three names, and prints their process-local addresses. It never opens a game process and never calls the native function.
+The lab gets handles to DLLs already loaded in its own process, resolves three names, and prints their process-local addresses. It never opens a game process and never calls the native function:
+
+```mermaid
+flowchart TD
+    A["GetModuleHandleW('kernel32.dll')"] --> C["exported_address:<br/>VirtualQueryEx, ReadFile"]
+    B["GetModuleHandleW('ntdll.dll')"] --> D["exported_address:<br/>NtQueryVirtualMemory"]
+    C --> E["print layer, name,<br/>address in this run"]
+    D --> E
+```
 
 <details class="lab-source" markdown="1">
 <summary>Complete lab source: api_layers.rs</summary>

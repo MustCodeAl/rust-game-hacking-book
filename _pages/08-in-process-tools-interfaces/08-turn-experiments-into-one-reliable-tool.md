@@ -46,16 +46,14 @@ belongs in `apply.rs`, not in every checkbox handler.
 
 The main path should show the tool's control flow clearly:
 
-```text
-verify the exact target build
-start the observer and command sources
-
-while the target and tool are running
-    create one validated snapshot
-    decide what each enabled feature proposes
-    apply only proposals allowed by the verified profile
-
-stop input, join workers, restore changes, close handles
+```mermaid
+flowchart TD
+    A["verify the exact target build<br/>(target.rs)"] --> B["start the observer and<br/>command sources"]
+    B --> C["create one validated<br/>snapshot (observe.rs)"]
+    C --> D["decide what each enabled<br/>feature proposes (decide.rs)"]
+    D --> E["apply only proposals allowed<br/>by the verified profile (apply.rs)"]
+    E -->|"loop while running"| C
+    E -->|"target or tool stops"| F["stop input, join workers,<br/>restore changes, close handles"]
 ```
 
 That outline is intentionally free of addresses and Windows calls. Those facts
@@ -184,14 +182,14 @@ Decide whether a failure is local to one feature or invalidates the whole snapsh
 
 ## Shut down in reverse order
 
-```text
-stop accepting input
-→ signal update workers
-→ wait for workers to finish
-→ disable features
-→ restore patches and graphics hooks
-→ close handles
-→ exit or unload
+```mermaid
+flowchart TD
+    A["stop accepting input"] --> B["signal update workers"]
+    B --> C["wait for workers to finish"]
+    C --> D["disable features"]
+    D --> E["restore patches and<br/>graphics hooks"]
+    E --> F["close handles"]
+    F --> G["exit or unload"]
 ```
 
 Do not unload code while another thread may still execute it.

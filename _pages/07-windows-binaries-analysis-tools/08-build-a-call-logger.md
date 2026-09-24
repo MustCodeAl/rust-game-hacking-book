@@ -34,6 +34,13 @@ A function call has two jobs:
 
 On 32-bit x86, a common direct call begins with opcode `E8` followed by a signed 32-bit relative displacement. The CPU adds that displacement to the address immediately after the call. A disassembler performs this calculation and exposes the final target.
 
+{% include memory-strip.html
+  cells="0x00401000=E8|0x00401001=4B|0x00401002=00|0x00401003=00|0x00401004=00"
+  marks="0"
+  groups="0-0:opcode: direct near call|1-4:displacement, little endian: +0x4B"
+  caption="For example, a call at `0x00401000`: the CPU adds the displacement (`0x4B`) to the address right after this 5-byte instruction (`0x00401005`), landing on `0x00401050`."
+%}
+
 An indirect call such as `call eax` or `call [ecx+8]` gets its destination from a register or memory at runtime. Static bytes alone do not reveal one final target, so the first course logger deliberately records only direct calls.
 
 ## Static discovery and live observation are different jobs
@@ -109,6 +116,12 @@ Start with one entry breakpoint while learning the state machine. The completed 
 
 A software breakpoint changes the first byte of an instruction to `0xCC`, the one-byte `int3` instruction. When the CPU executes it, Windows pauses the thread and reports `EXCEPTION_BREAKPOINT` to the debugger. The original `E8` must be remembered so the real call can still execute and can later be restored.
 
+{% include memory-strip.html
+  cells="0x00401000=CC|0x00401001=4B|0x00401002=00|0x00401003=00|0x00401004=00"
+  marks="0"
+  caption="The same 5 bytes with the software breakpoint installed. Only the first byte changes, from `E8` to `CC` (`int3`). The saved original `E8` is what lets the logger restore the real call before it executes."
+%}
+
 ## The two-event breakpoint cycle
 
 One breakpoint hit is not enough. If the debugger immediately writes `0xCC` back at the same address and continues, the thread hits it forever. The logger temporarily restores the call and single-steps exactly one instruction:
@@ -171,12 +184,12 @@ A bounded channel creates **backpressure**: it gives the producer a fixed amount
 
 Keep time-sensitive handling short:
 
-```text
-breakpoint fires
-→ copy register/context fields
-→ re-arm and continue
-→ background worker adds module+offset and symbols
-→ writer stores one line
+```mermaid
+flowchart LR
+    A["breakpoint fires"] --> B["copy register/context fields"]
+    B --> C["re-arm and continue"]
+    C --> D["background worker adds<br/>module+offset and symbols"]
+    D --> E["writer stores one line"]
 ```
 
 Symbols can be slow or unavailable. A module-relative address is still useful:

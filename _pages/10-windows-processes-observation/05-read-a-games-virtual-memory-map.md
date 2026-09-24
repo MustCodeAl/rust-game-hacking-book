@@ -8,6 +8,7 @@ permalink: /pages/10/05/
 chapter: "10.5"
 minutes: 33
 summary: Understand committed pages, guard pages, memory types, and R/W/X protection by printing one exact game module's map with VirtualQueryEx.
+mermaid: true
 ---
 
 ## Memory is managed in pages
@@ -47,6 +48,13 @@ The remaining upper part identifies the virtual page. The translation changes
 the page part; the offset stays the same because it selects one byte inside that
 page.
 
+{% include memory-strip.html
+  cells="=1|=2|=3|=4|=5|=A|=B|=C"
+  groups="0-4:virtual page number: 0x12345"
+  groups2="5-7:offset inside the page: 0xABC"
+  caption="Splitting the hex digits of `0x1234_5ABC` at a 4 KiB (3 hex digit) boundary. Translation changes the page-number part; the offset is untouched."
+%}
+
 Two games can both use virtual address `0x0040_0000` while those addresses map
 to different physical memory. One process can also have no mapping there at
 all. `ReadProcessMemory` takes a process handle precisely so Windows knows
@@ -59,7 +67,14 @@ in the game or scanner.
 
 ## State, type, and protection answer different questions
 
-Windows describes a region using three groups of facts.
+Windows describes a region using three groups of facts — and they are independent axes, not a hierarchy:
+
+```mermaid
+flowchart TD
+    R["One memory region"] --> S["State:<br/>MEM_FREE / MEM_RESERVE / MEM_COMMIT"]
+    R --> T["Type:<br/>MEM_IMAGE / MEM_MAPPED / MEM_PRIVATE"]
+    R --> P["Protection:<br/>R / W / X, plus PAGE_GUARD"]
+```
 
 **State** says whether storage is ready:
 
@@ -100,7 +115,17 @@ This lab reports `RWX` regions but never writes to them or starts a thread there
 
 ## `VirtualQueryEx` returns one matching run
 
-The shared `Process::regions` wrapper begins at an address, calls `VirtualQueryEx`, records the returned `MEMORY_BASIC_INFORMATION`, and advances by `RegionSize`.
+The shared `Process::regions` wrapper begins at an address, calls `VirtualQueryEx`, records the returned `MEMORY_BASIC_INFORMATION`, and advances by `RegionSize`:
+
+```mermaid
+flowchart LR
+    A["VirtualQueryEx(current)"] --> B{"returned == 0?"}
+    B -->|"yes"| C["break: walk is done"]
+    B -->|"no"| D["next = BaseAddress + RegionSize<br/>(checked_add)"]
+    D --> E["ensure next > current"]
+    E --> F["current = next"]
+    F --> A
+```
 
 ```rust
 let returned = unsafe {

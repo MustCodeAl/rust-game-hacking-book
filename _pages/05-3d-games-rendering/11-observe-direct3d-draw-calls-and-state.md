@@ -46,6 +46,13 @@ positive or negative shift from a common origin. If you log it as `u32` a
 perfectly ordinary negative offset appears as a number near four billion, and
 you will be tempted to treat a normal draw as corrupt.
 
+{% include memory-strip.html
+  cells="=FF|=FF|=FF|=FF"
+  groups="0-3:as `i32`: −1, an ordinary negative vertex shift"
+  groups2="0-3:misread as `u32`: 4,294,967,295"
+  caption="For example, `base_vertex_location = −1`. The bits never change; only the reading does."
+%}
+
 The same arithmetic from Lesson 5.3 applies to the counts:
 
 ```text
@@ -107,6 +114,14 @@ fails in a way that looks nothing like the cause. This is the reference-count
 version of the handle discipline from Lesson 10.4, and it deserves the same
 answer: a wrapper whose `Drop` releases, so an early return cannot skip it.
 
+```mermaid
+flowchart TD
+    A["Get call, e.g. OMGetBlendState"] --> B["COM AddRef runs<br/>inside the call"]
+    B --> C{"Release called on<br/>every path, even early returns?"}
+    C -->|"yes"| D["reference count<br/>returns to normal"]
+    C -->|"no"| E["steady reference leak"]
+```
+
 **Querying costs more than logging.** Retrieving several state objects per
 draw, on a thread with a frame deadline, is real work. Sample rather than
 record everything — one draw in a hundred, or only draws whose index count
@@ -145,12 +160,11 @@ sample with the current frame number. The draw index within a frame is then
 meaningful, which is what makes "the UI is the last eleven draws" a statement
 you can check rather than an impression.
 
-```text
-frame 412  draw 0..38    depth pre-pass, no pixel shader
-frame 412  draw 39..174  opaque world geometry
-frame 412  draw 175..190 transparent effects, blending enabled
-frame 412  draw 191..201 UI, depth test disabled
-```
+{% include memory-strip.html
+  column=true
+  cells="draw 0..38=depth pre-pass, no pixel shader|draw 39..174=opaque world geometry|draw 175..190=transparent effects, blending enabled|draw 191..201=UI, depth test disabled"
+  caption="Frame 412's draws, grouped by what the bound state implies. The boundaries come from watching blend and depth-stencil state change, not from asking the draw call what it drew."
+%}
 
 Bound both the samples per frame and the frames retained, exactly as in Lesson
 4.8. An unbounded recorder attached to a render loop will consume memory faster

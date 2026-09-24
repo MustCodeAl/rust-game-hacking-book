@@ -8,6 +8,7 @@ permalink: /pages/8/07/
 chapter: "8.7"
 minutes: 38
 summary: Build a readable egui settings menu, model feature state with enums, send commands to a worker, and clean up safely.
+mermaid: true
 ---
 
 ## A menu is a control surface, not the hack itself
@@ -24,10 +25,12 @@ painting a checkbox, or patch memory sixty times per second. Its job is to edit
 ordinary settings and send deliberate commands to a worker. That separation
 makes the interface responsive and the low-level code reviewable. 🎛️
 
-```text
-egui widgets → owned Settings → channel → tool worker
-                                            ↓
-                               handles, reads, writes, cleanup
+```mermaid
+flowchart LR
+    A["egui widgets"] --> B["owned Settings"]
+    B --> C["channel"]
+    C --> D["tool worker"]
+    D --> E["handles, reads,<br/>writes, cleanup"]
 ```
 
 This tutorial builds a separate desktop window. That is the best first menu:
@@ -185,6 +188,16 @@ overlay, or applies the guarded Wesnoth gold change from Chapter 3.
 
 Keep both the currently edited value and the last value sent:
 
+```mermaid
+flowchart TD
+    A["user edits a widget"] --> B["self.settings changes"]
+    B --> C{"settings == last_applied?"}
+    C -->|"yes"| D["status: “Nothing changed.”"]
+    C -->|"no"| E["send Command::Apply(settings.clone())"]
+    E --> F["last_applied = settings.clone()"]
+    F --> G["status: “Settings sent to the tool worker.”"]
+```
+
 ```rust
 fn apply_if_changed(&mut self) {
     if self.settings == self.last_applied {
@@ -258,6 +271,16 @@ desktop tool menus need the same care.
 4. unhook only hooks it installed;
 5. close its owned handles;
 6. report completion and exit.
+
+```mermaid
+flowchart TD
+    A["MenuApp::on_exit<br/>sends Command::Shutdown"] --> B["stop accepting new<br/>feature commands"]
+    B --> C["release held keys<br/>and mouse buttons"]
+    C --> D["restore bytes or<br/>graphics state changed"]
+    D --> E["unhook only hooks<br/>this tool installed"]
+    E --> F["close owned handles"]
+    F --> G["report completion;<br/>main thread joins worker"]
+```
 
 The main thread joins the worker before returning. A window disappearing is not
 proof that cleanup finished; joining turns cleanup into something the program
