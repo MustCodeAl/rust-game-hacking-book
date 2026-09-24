@@ -1,0 +1,87 @@
+---
+// Every lesson on one page, for the browser's Print → Save as PDF.
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { getCollection, render } from 'astro:content';
+import { CHAPTERS, compareLessons } from '../data/chapters.mjs';
+
+const lessons = (await getCollection('docs', (entry) => Boolean(entry.data.chapter))).sort((a, b) =>
+	compareLessons(a.data.chapter, b.data.chapter),
+);
+const rendered = await Promise.all(lessons.map(async (entry) => ({ entry, Content: (await render(entry)).Content })));
+const chapters = CHAPTERS.map((chapter) => ({
+	chapter,
+	items: rendered.filter(({ entry }) => entry.data.chapter!.startsWith(`${chapter.number}.`)),
+})).filter(({ items }) => items.length > 0);
+---
+
+<StarlightPage
+	frontmatter={{
+		title: 'The complete book',
+		description: 'Every lesson of Game Hacking Academy on one page, ready to print or save as a PDF.',
+		tableOfContents: false,
+		pagefind: false,
+	}}
+>
+	<p class="print-book-intro">
+		Use your browser's Print command and choose “Save as PDF” to keep a copy. Interactive checks are left out of the printed pages.
+	</p>
+	<nav class="print-book-contents" aria-label="Contents">
+		{
+			chapters.map(({ chapter, items }) => (
+				<section>
+					<h2>
+						{chapter.number}. {chapter.title}
+					</h2>
+					<ol>
+						{items.map(({ entry }) => (
+							<li>
+								<a href={`#lesson-${entry.data.chapter!.replace('.', '-')}`}>
+									{entry.data.chapter} — {entry.data.title}
+								</a>
+							</li>
+						))}
+					</ol>
+				</section>
+			))
+		}
+	</nav>
+	{
+		chapters.map(({ items }) =>
+			items.map(({ entry, Content }) => (
+				<article class="print-book-lesson" id={`lesson-${entry.data.chapter!.replace('.', '-')}`}>
+					<p class="print-book-kicker">Lesson {entry.data.chapter}</p>
+					<h2 class="print-book-title">{entry.data.title}</h2>
+					<Content />
+				</article>
+			)),
+		)
+	}
+</StarlightPage>
+
+<style>
+	.print-book-lesson {
+		margin-top: 3rem;
+		padding-top: 2rem;
+		border-top: 2px solid var(--line);
+	}
+
+	.print-book-kicker {
+		color: var(--rust-dark);
+		font-family: var(--mono);
+		font-size: var(--sl-text-xs);
+		text-transform: uppercase;
+	}
+
+	@media print {
+		.print-book-lesson {
+			break-before: page;
+		}
+
+		:global(.academy-quiz),
+		:global(.concept-lab),
+		:global(.ownership-scope),
+		:global(.projection-lab) {
+			display: none;
+		}
+	}
+</style>

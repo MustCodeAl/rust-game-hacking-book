@@ -1,0 +1,83 @@
+---
+// Labelled boxes for bytes, fields, tape cells, stack frames, and tables.
+// Props mirror the old Jekyll include so lessons read the same:
+//   cells    "label=value|label=value|..." (label may be empty: "=64")
+//   marks    "2" or "0-3|6", zero-based boxes to highlight
+//   groups   "0-3:label|4-7:label" braces under box ranges; groups2..4 add rows
+//   column   stack boxes top to bottom, braces on the right
+//   caption  inline Markdown
+import { inlineMarkdown } from '../lib/inline-md';
+
+interface Props {
+	cells: string;
+	marks?: string;
+	groups?: string;
+	groups2?: string;
+	groups3?: string;
+	groups4?: string;
+	column?: boolean;
+	caption?: string;
+	label?: string;
+}
+
+const { cells, marks = '', column = false, caption, label } = Astro.props;
+
+function parseRange(text: string): [number, number] {
+	const [start, end] = text.trim().split('-').map((part) => Number.parseInt(part, 10));
+	return [start, Number.isNaN(end) || end === undefined ? start : end];
+}
+
+const cellList = cells.split('|').map((cell) => {
+	const split = cell.indexOf('=');
+	return split === -1
+		? { label: '', value: cell.trim() }
+		: { label: cell.slice(0, split).trim(), value: cell.slice(split + 1).trim() };
+});
+const markRanges = marks.split('|').filter((part) => part.trim()).map(parseRange);
+const isMarked = (index: number) => markRanges.some(([start, end]) => index >= start && index <= end);
+
+const rowSources = [Astro.props.groups, Astro.props.groups2, Astro.props.groups3, Astro.props.groups4].filter(
+	(row): row is string => Boolean(row),
+);
+const groups = rowSources.flatMap((row, rowIndex) =>
+	row
+		.split('|')
+		.filter((group) => group.trim())
+		.map((group) => {
+			const colon = group.indexOf(':');
+			const [start, end] = parseRange(group.slice(0, colon));
+			return { first: start + 1, last: end + 2, row: rowIndex + 1, text: group.slice(colon + 1).trim() };
+		}),
+);
+---
+
+<figure
+	class:list={['mem-figure', 'not-content', { 'mem-figure--column': column, 'mem-figure--dense': cellList.length > 10 }]}
+	aria-label={label}
+>
+	<div class="mem-strip" style={`--mem-cells: ${cellList.length}; --mem-rows: ${rowSources.length}`}>
+		{
+			cellList.map((cell, index) => (
+				<div class:list={['mem-cell', { 'is-marked': isMarked(index) }]} style={column ? `grid-row: ${index + 1}` : `grid-column: ${index + 1}`}>
+					<span class="mem-cell__label">{cell.label}</span>
+					<span class="mem-cell__value">{cell.value}</span>
+				</div>
+			))
+		}
+		{
+			groups.map((group) => (
+				<div
+					class:list={['mem-group', `mem-group--${group.row}`, { 'mem-group--span': group.last - group.first > 1 }]}
+					style={
+						column
+							? `grid-row: ${group.first} / ${group.last}; grid-column: ${group.row + 1}`
+							: `grid-column: ${group.first} / ${group.last}; grid-row: ${group.row + 1}`
+					}
+				>
+					<span set:html={inlineMarkdown(group.text)} />
+				</div>
+			))
+		}
+	</div>
+	{caption && <figcaption set:html={inlineMarkdown(caption)} />}
+</figure>

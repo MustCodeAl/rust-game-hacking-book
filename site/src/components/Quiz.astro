@@ -1,0 +1,95 @@
+---
+// A knowledge check. learning-widgets.js hydrates it: checking, retrying,
+// shuffling options, and drawing related follow-up questions.
+import { inlineMarkdown } from '../lib/inline-md';
+
+interface Props {
+	id: string;
+	type?: 'multiple-choice' | 'short-answer' | 'tracing';
+	title?: string;
+	prompt: string;
+	options?: string;
+	answer: string;
+	explanation: string;
+	alternatives?: string;
+	program?: string;
+	/** Lesson number; defaults to the current page's. */
+	chapter?: string;
+}
+
+const { id, type = 'multiple-choice', title = 'Pause and predict', prompt, options = '', answer, explanation, alternatives = '', program = '' } =
+	Astro.props;
+// The print book renders lessons outside a Starlight page, where reading
+// `starlightRoute` throws rather than returning undefined.
+let lesson = Astro.props.chapter ?? '';
+if (!lesson) {
+	try {
+		lesson = Astro.locals.starlightRoute.entry.data.chapter ?? '';
+	} catch {
+		lesson = '';
+	}
+}
+const optionList = options
+	.split('||')
+	.map((option) => option.trim())
+	.filter(Boolean);
+---
+
+<section
+	class="academy-quiz not-content"
+	data-quiz-id={id}
+	data-quiz-type={type}
+	data-answer={answer}
+	data-alternatives={alternatives}
+	data-quiz-chapter={lesson.split('.')[0]}
+	data-quiz-lesson={lesson}
+	data-quiz-seed={`${lesson}-${id}`}
+>
+	<div class="academy-quiz__header" role="group" aria-label="Quiz heading">
+		<span class="academy-quiz__number" aria-hidden="true">🧩</span>
+		<div>
+			<span class="academy-quiz__eyebrow">Knowledge check</span>
+			<h3>{title}</h3>
+		</div>
+		<span class="academy-quiz__saved" data-quiz-saved hidden>Saved</span>
+	</div>
+
+	<div class="academy-quiz__prompt"><p set:html={inlineMarkdown(prompt)} /></div>
+	{
+		type === 'tracing' ? (
+			<>
+				<pre class="academy-quiz__program"><code class="language-rust">{program.trim()}</code></pre>
+				<div class="academy-quiz__options" role="group" aria-label="Choose whether the program compiles">
+					<button type="button" data-quiz-option="true" aria-pressed="false">It compiles</button>
+					<button type="button" data-quiz-option="false" aria-pressed="false">It does not compile</button>
+				</div>
+			</>
+		) : type === 'short-answer' ? (
+			<label class="academy-quiz__answer-label">
+				<span>Your answer</span>
+				<input type="text" data-quiz-input autocomplete="off" spellcheck="false" />
+			</label>
+		) : (
+			<div class="academy-quiz__options" role="group" aria-label="Answer choices">
+				{optionList.map((option, index) => (
+					<button type="button" data-quiz-option={String(index)} aria-pressed="false">
+						<span class="academy-quiz__option-letter" aria-hidden="true">{index + 1}</span>
+						<span>{option}</span>
+					</button>
+				))}
+			</div>
+		)
+	}
+
+	<div class="academy-quiz__actions">
+		<button type="button" class="academy-quiz__check" data-quiz-submit>Check answer</button>
+		<button type="button" class="academy-quiz__retry" data-quiz-retry hidden>Try again</button>
+	</div>
+
+	<div class="academy-quiz__feedback" data-quiz-feedback aria-live="polite" hidden>
+		<strong data-quiz-result></strong>
+		<div><p set:html={inlineMarkdown(explanation)} /></div>
+	</div>
+
+	<noscript>Enable JavaScript to check this answer interactively.</noscript>
+</section>
