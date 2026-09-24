@@ -1,0 +1,30 @@
+---
+layout: null
+permalink: /assets/glossary-index.json
+---
+{%- comment -%}
+Machine-readable map of glossary term -> anchor id, generated from the glossary
+page itself so the two can never drift apart. Consumed by academy.js, which
+turns the first bolded occurrence of a known term in a lesson into a link to
+its definition.
+
+The glossary authors every entry as:  <dt id="term-x"><dfn>Name</dfn></dt>
+so splitting on those two markers is enough to recover both halves.
+{%- endcomment -%}
+{%- assign glossary = site.pages | where: "permalink", "/glossary/" | first -%}
+{%- assign chunks = glossary.content | split: '<dt id="' -%}
+[
+{%- assign first = true -%}
+{%- for chunk in chunks offset:1 -%}
+  {%- assign anchor = chunk | split: '"' | first -%}
+  {%- assign halves = chunk | split: '<dfn>' -%}
+  {%- if halves.size > 1 -%}
+    {%- assign name = halves[1] | split: '</dfn>' | first | strip_html | strip -%}
+    {%- if name != "" -%}
+      {%- unless first %},{% endunless -%}
+      {%- assign first = false -%}
+{"t":{{ name | jsonify }},"a":{{ anchor | jsonify }}}
+    {%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+]
