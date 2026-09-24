@@ -1036,6 +1036,11 @@
 
         var direct = normalizeTerm(node.textContent);
         var anchor = byTerm.get(direct);
+        // Lessons often define a term in the plural ("libraries", "console
+        // variables") while the glossary lists the singular.
+        if (!anchor && direct.length > 5 && direct.slice(-3) === "ies") {
+          anchor = byTerm.get(direct.slice(0, -3) + "y");
+        }
         if (!anchor && direct.length > 4 && direct.slice(-1) === "s") {
           anchor = byTerm.get(direct.slice(0, -1));
         }

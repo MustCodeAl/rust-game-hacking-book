@@ -153,6 +153,8 @@ toc_hidden: true
       <dd>A reversible transformation that represents data with fewer bytes. It is not encryption: compressed data may look irregular, but no secret key is required to restore it.</dd>
       <dt id="term-concurrency"><dfn>Concurrency</dfn></dt>
       <dd>Multiple tasks making progress during overlapping time. Parallelism means work literally runs at the same instant; concurrent tasks may instead take turns.</dd>
+      <dt id="term-console-variable"><dfn>Console variable</dfn> <span class="glossary-alias">cvar</span></dt>
+      <dd>A named setting an engine exposes through its in-game console, which can be read or changed while the game runs. Toggling one gives a clean experiment: whatever changes in memory at the same moment is connected to that feature.</dd>
       <dt id="term-contradiction"><dfn>Contradiction</dfn></dt>
       <dd>Evidence that two claims cannot both satisfy the stated model—for example, a decision says “denied” while the correlated game effect still changes canonical state.</dd>
       <dt id="term-control"><dfn>Control</dfn></dt>
@@ -289,6 +291,10 @@ toc_hidden: true
   <section class="glossary-group" aria-labelledby="glossary-g">
     <div class="glossary-group__letter"><h2 id="glossary-g">G</h2><a href="#glossary-top">Top</a></div>
     <dl class="glossary-list">
+      <dt id="term-game-engine"><dfn>Game engine</dfn></dt>
+      <dd>The reusable software that runs a game's loop, draws its frames, loads its files, and manages its objects, on which a particular game's content and rules are built. An engine calls the game's code every frame, which is what separates it from a library. Where a rule lives — engine code, a script, or a data file — decides how you change it and how long the change lasts.</dd>
+      <dt id="term-game-loop"><dfn>Game loop</dfn></dt>
+      <dd>The cycle a running game repeats for as long as it runs: read input, update the world, draw a frame. The engine owns this loop and calls the game's update and draw code from it, which is why once-per-frame calls make reliable places to observe a game.</dd>
       <dt id="term-garbage-collection"><dfn>Garbage collection</dfn></dt>
       <dd>Automatic reclamation of allocated objects that are no longer reachable. In a Lua host, native references and Lua references must agree so live objects are not collected too early or retained forever.</dd>
       <dt id="term-generation"><dfn>Generation</dfn></dt>
@@ -385,10 +391,12 @@ toc_hidden: true
   <section class="glossary-group" aria-labelledby="glossary-l">
     <div class="glossary-group__letter"><h2 id="glossary-l">L</h2><a href="#glossary-top">Top</a></div>
     <dl class="glossary-list">
-      <dt id="term-lifetime"><dfn>Lifetime</dfn></dt>
-      <dd>The period during which a value, pointer, reference, handle, or snapshot remains valid. A correct address can become stale when the object is destroyed or replaced.</dd>
       <dt id="term-layout"><dfn>Layout</dfn></dt>
       <dd>The byte positions, sizes, alignment, and interpretation of fields in a value or object. A recovered layout is versioned evidence, not a promise that later builds keep the same offsets.</dd>
+      <dt id="term-library"><dfn>Library</dfn></dt>
+      <dd>Reusable code that a program calls when it needs something done, such as opening a window or reading the keyboard. The program stays in charge and the library waits to be asked, which is the opposite of an engine, where the engine runs the loop and calls the game's code.</dd>
+      <dt id="term-lifetime"><dfn>Lifetime</dfn></dt>
+      <dd>The period during which a value, pointer, reference, handle, or snapshot remains valid. A correct address can become stale when the object is destroyed or replaced.</dd>
       <dt id="term-little-endian"><dfn>Little-endian</dfn></dt>
       <dd>A byte order that stores the least significant byte of a multi-byte integer at the lowest address. x86 and x86-64 use little-endian ordering for ordinary integer memory values.</dd>
       <dt id="term-loader"><dfn>Loader</dfn></dt>
