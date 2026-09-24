@@ -321,6 +321,8 @@ toc_hidden: true
   <section class="glossary-group" aria-labelledby="glossary-h">
     <div class="glossary-group__letter"><h2 id="glossary-h">H</h2><a href="#glossary-top">Top</a></div>
     <dl class="glossary-list">
+      <dt id="term-halting-problem"><dfn>Halting problem</dfn></dt>
+      <dd>The question of whether a program will eventually stop. No program can answer it correctly for every program and input, which is why analysis tools approximate and why a script host enforces a step budget instead of predicting.</dd>
       <dt id="term-handle"><dfn>Handle</dfn></dt>
       <dd>A numbered ticket standing for something Windows is managing on your behalf — an open process, file, or thread — together with what you are permitted to do with it. It is meaningful only inside the process that obtained it, it is not a pointer to the underlying object, and whoever opens it must close it.</dd>
       <dt id="term-hash"><dfn>Hash</dfn></dt>
@@ -617,6 +619,8 @@ toc_hidden: true
       <dd>Information that can make future behavior differ. A game’s state includes world values, current mode, timers, and pending events—not just visible variables.</dd>
       <dt id="term-state-machine"><dfn>State machine</dfn></dt>
       <dd>A model that names valid states and transitions. It is especially useful when the same input should mean different things in different modes.</dd>
+      <dt id="term-stored-program-computer"><dfn>Stored-program computer</dfn></dt>
+      <dd>A computer that keeps its instructions in the same memory as its data, as ordinary bytes. It is why a disassembler can read code, why a breakpoint is one written byte, and why page protections must decide which bytes may run.</dd>
       <dt id="term-string"><dfn>String</dfn></dt>
       <dd>A sequence representing text under an encoding. In memory it may be length-prefixed, zero-terminated, inline, heap-backed, UTF-8, UTF-16, or something engine-specific.</dd>
       <dt id="term-struct"><dfn>Structure</dfn> <span class="glossary-alias">struct</span></dt>
@@ -657,6 +661,10 @@ toc_hidden: true
       <dd>An operation that changes representation, position, orientation, or scale. Graphics transforms move coordinates between spaces; byte transforms may encode, compress, encrypt, or obfuscate data.</dd>
       <dt id="term-trust-boundary"><dfn>Trust boundary</dfn></dt>
       <dd>A point where data or control crosses between components with different authority or assumptions. Validate at the boundary rather than relying on the sender to have done so.</dd>
+      <dt id="term-turing-complete"><dfn>Turing complete</dfn></dt>
+      <dd>Able to compute anything a Turing machine can, given enough time and memory. Every general-purpose language is, so a mod that ships a script is shipping a program, limited only by what its host exposes.</dd>
+      <dt id="term-turing-machine"><dfn>Turing machine</dfn></dt>
+      <dd>A model of computing: a tape of symbols, a head that reads and writes one cell, a current state, and a rule table saying what to write, where to move, and which state comes next. Real computers compute exactly what it can, only faster.</dd>
       <dt id="term-type"><dfn>Type</dfn></dt>
       <dd>A set of valid values and operations plus a representation contract. Raw bytes do not reveal their type by themselves; the program’s use provides evidence.</dd>
     </dl>
@@ -667,8 +675,12 @@ toc_hidden: true
     <dl class="glossary-list">
       <dt id="term-udp"><dfn>UDP</dfn></dt>
       <dd>A message-oriented transport with no built-in delivery, ordering, or duplicate suppression. Applications choose how to handle loss and reordering.</dd>
+      <dt id="term-undecidable"><dfn>Undecidable</dfn></dt>
+      <dd>Describes a question about programs that no single method answers correctly for every possible program, such as whether a program halts. Specific programs can often still be analyzed; the limit is on one method that works for all of them.</dd>
       <dt id="term-unicode"><dfn>Unicode</dfn></dt>
       <dd>A standard assigning code points to text characters and symbols. UTF-8 and UTF-16 are encodings of those code points, not two different character sets.</dd>
+      <dt id="term-universal-turing-machine"><dfn>Universal Turing machine</dfn></dt>
+      <dd>A Turing machine that reads another machine's rule table from its tape and carries it out. It is the idea behind stored programs, interpreters, virtual machines, and emulators: change the data, not the machine.</dd>
       <dt id="term-unsafe"><dfn>Unsafe boundary</dfn></dt>
       <dd>A small region where code accepts responsibility for facts the compiler cannot prove, such as raw-pointer validity or a foreign ABI. The boundary should state and check its preconditions, then expose a safer interface.</dd>
       <dt id="term-upvalue"><dfn>Upvalue</dfn></dt>
