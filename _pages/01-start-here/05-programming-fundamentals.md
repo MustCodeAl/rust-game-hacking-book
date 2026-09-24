@@ -6,8 +6,8 @@ category: Start Here
 layout: post
 permalink: /pages/1/05/
 chapter: "1.5"
-minutes: 20
-summary: "Learn the programming vocabulary the rest of the book assumes — data, types, state, algorithms, data structures, functions, abstractions, APIs, ABIs, parsing, concurrency, and invariants."
+minutes: 26
+summary: "Learn the programming vocabulary the rest of the book assumes — data, types, state, algorithms, data structures, functions, event-driven programs, abstractions, APIs, ABIs, parsing, concurrency, and invariants."
 ---
 
 Technical words are useful when they name a precise idea. They are not useful
@@ -132,6 +132,96 @@ The return type describes the answer.
 
 Small functions make a tool easier to test. A parser, for example, can be
 tested with saved bytes without launching a game.
+
+## Event-driven programs wait, then respond
+
+Most code in this lesson runs from top to bottom: do this, then this, then stop.
+A great deal of real software does not work that way. A game window, a
+debugger, and a server all spend most of their time waiting for something to
+happen, then responding to it.
+
+That style is called **event-driven programming**. An **event** is a record that
+something happened: a key was pressed, a network message arrived, a timer ran
+out, the window was resized. The program is built around an **event loop** that
+waits for the next event and passes it to the code written for that kind of
+event:
+
+```text
+loop forever:
+    event = wait for the next event
+    find the handler for this kind of event
+    call the handler
+```
+
+The handler is usually a **callback**: a function you give to someone else so
+that they can call it later. You never call it yourself. You register it, and
+the loop calls it when a matching event arrives. That is why "callback" appears
+all over this book — a debugger, a Lua host, and a game engine all call code
+that someone else wrote, at moments they choose.
+
+### Every Windows window has one
+
+Windows makes this concrete. The operating system keeps a queue of messages for
+each window: `WM_KEYDOWN` when a key goes down, `WM_SIZE` when the window is
+resized, `WM_CLOSE` when the close button is clicked. The program takes them out
+one at a time and hands each one to a function it registered for the window,
+called the **window procedure**:
+
+```text
+while GetMessage waits for, and receives, a message:
+    TranslateMessage    turn raw key presses into character messages
+    DispatchMessage     call the window procedure with the message
+```
+
+### Why a game cannot simply wait
+
+`GetMessage` waits. If no message arrives, the thread sits there doing nothing.
+A text editor wants exactly that, because there is nothing to do until you
+type. A game cannot work that way: enemies keep moving and the screen keeps
+redrawing when you touch nothing at all.
+
+So games check the queue with `PeekMessage` instead, which returns at once
+whether or not a message was waiting. The event handling is folded into the
+game loop from Lesson 1.4:
+
+```text
+every frame:
+    while PeekMessage finds a waiting message:
+        handle it              key presses, resizing, closing
+    update the world           runs whether or not anything happened
+    draw the frame
+```
+
+A game is therefore both at once: a loop that runs every frame regardless, and
+an event handler that clears out whatever arrived since the last frame.
+
+### A slow handler holds up everything behind it
+
+A handler must finish quickly, because while it runs, no other event is
+handled. If one handler reads a large file or waits for a lock, every event
+queued behind it waits too.
+
+You have probably seen the result. Windows adds "(Not Responding)" to a
+window's title when the thread that owns it has not taken a message from its
+queue for about five seconds. In a game the same mistake shows up sooner, as a
+stutter or a frozen frame. This is why Lesson 4.8 keeps slow work away from the
+code that samples a game, and why Lesson 5.3 warns that a hook sits on the
+game's critical path: a hook is extra code running inside someone else's
+handler.
+
+### Polling is the alternative when nobody will tell you
+
+The opposite of waiting for an event is **polling**: checking a value
+repeatedly on your own schedule to see whether it has changed. An event loop
+does work only when something happens, while polling does work on every check,
+even when nothing has changed.
+
+Polling still has its place, and this book uses it constantly for one reason: a
+game does not send your tool an event when its health changes. An external tool
+reading another program's memory has nothing to wait on, so it has to look.
+Lesson 4.7 shows how to turn repeated looks into events of your own, by
+comparing each snapshot with the one before it and reacting only to the
+difference.
 
 ## An abstraction hides details behind a smaller interface
 
@@ -284,6 +374,8 @@ You should now be able to distinguish:
 - data, values, types, and state;
 - algorithms and data structures;
 - functions and abstractions;
+- an event loop that waits for events, a game loop that runs every frame, and
+  polling that checks on its own schedule;
 - APIs and ABIs;
 - encoding, serialization, parsing, compression, and encryption;
 - sequential behavior and concurrent behavior;

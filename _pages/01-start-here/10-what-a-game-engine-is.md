@@ -55,7 +55,9 @@ unit or a map is; it waits to be asked.
 
 An engine calls *your* code. It owns the loop, and on every frame it calls the
 game's update and draw functions at the moments it chooses. The game is a guest
-in a loop the engine runs.
+in a loop the engine runs. In the words of Lesson 1.5, the game's update and
+draw functions are callbacks: the game hands them over, and the engine decides
+when they run.
 
 ```mermaid
 flowchart TD

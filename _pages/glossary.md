@@ -131,6 +131,8 @@ toc_hidden: true
       <dd>The part of a thread’s stack used by one active function call, commonly holding a return address, saved registers, local values, and spilled arguments.</dd>
       <dt id="term-call-stack"><dfn>Call stack</dfn></dt>
       <dd>The ordered chain of active function calls on one thread. Reading it answers “who called whom?” only when unwind information and stack state are trustworthy.</dd>
+      <dt id="term-callback"><dfn>Callback</dfn></dt>
+      <dd>A function handed to other code so that code can call it later, at a moment it chooses. You register a callback instead of calling it yourself. Event loops, debuggers, Lua hosts, and game engines all run code this way.</dd>
       <dt id="term-calling-convention"><dfn>Calling convention</dfn></dt>
       <dd>The ABI rules for a function call: where arguments and results go, which registers a callee must preserve, who adjusts the stack, and how the stack is aligned.</dd>
       <dt id="term-camera-space"><dfn>Camera space</dfn> <span class="glossary-alias">view space</span></dt>
@@ -241,6 +243,12 @@ toc_hidden: true
       <dd>A Windows system for structured, timestamped events from the kernel and applications. ETW shows emitted events; absence of an event is not proof that an action never occurred.</dd>
       <dt id="term-evasion"><dfn>Evasion</dfn></dt>
       <dd>Changing observable behavior so a detection or validation rule does not fire. A defensive analysis models the rule, its blind spots, and stronger invariants without assuming one bypass generalizes to other products or versions.</dd>
+      <dt id="term-event"><dfn>Event</dfn></dt>
+      <dd>A record that something happened — a key press, an arriving network message, an expired timer, a resized window — delivered to code that responds to it.</dd>
+      <dt id="term-event-driven-programming"><dfn>Event-driven programming</dfn></dt>
+      <dd>A program structure built around waiting for events and running a handler for each one, instead of running from top to bottom. Window procedures, debuggers, and servers work this way; a game combines it with a loop that runs every frame.</dd>
+      <dt id="term-event-loop"><dfn>Event loop</dfn></dt>
+      <dd>The loop at the centre of an event-driven program: wait for the next event, find its handler, call it, repeat. A handler that runs slowly delays every event queued behind it.</dd>
       <dt id="term-exception"><dfn>Exception</dfn></dt>
       <dd>A synchronous event raised while executing an instruction, such as an access violation or breakpoint. The operating system transfers control to an exception handler or debugger.</dd>
       <dt id="term-export-table"><dfn>Export table</dfn></dt>
@@ -507,12 +515,14 @@ toc_hidden: true
       <dd>A mechanism that causes software or configuration to survive a process exit, logout, or reboot. Defensive review inventories intentional startup paths and treats unowned changes as evidence to investigate.</dd>
       <dt id="term-physical-address"><dfn>Physical address</dfn></dt>
       <dd>A location in the machine’s physical memory address space. Ordinary process pointers are virtual addresses and require page-table translation before they can be related to a physical capture.</dd>
+      <dt id="term-plain-value"><dfn>Plain value</dfn></dt>
+      <dd>The value before an encoding, obfuscation, compression, or encryption transform. “Plain” describes the representation stage, not whether the value is safe or trustworthy.</dd>
       <dt id="term-pointer"><dfn>Pointer</dfn></dt>
       <dd>A value whose meaning is the address of something else. Reading the pointer gives you an address; reading again at that address gives you the data. Nothing in the bytes marks a value as a pointer — the code that uses it decides. Valid use also requires the right process, mapping, protection, type, alignment, and lifetime.</dd>
       <dt id="term-pointer-chain"><dfn>Pointer chain</dfn></dt>
       <dd>A sequence of “add an offset, read the pointer stored there” steps leading from a repeatable base to a dynamic object. Every dereference is a new validity check.</dd>
-      <dt id="term-plain-value"><dfn>Plain value</dfn></dt>
-      <dd>The value before an encoding, obfuscation, compression, or encryption transform. “Plain” describes the representation stage, not whether the value is safe or trustworthy.</dd>
+      <dt id="term-polling"><dfn>Polling</dfn></dt>
+      <dd>Checking a value repeatedly on your own schedule to see whether it changed, instead of waiting to be told. An external tool polls a game's memory because the game sends it no event when a value changes.</dd>
       <dt id="term-postcondition"><dfn>Postcondition</dfn></dt>
       <dd>A fact a function promises after successful completion. Tests should check the postcondition rather than only whether the function returned.</dd>
       <dt id="term-precondition"><dfn>Precondition</dfn></dt>
@@ -701,6 +711,8 @@ toc_hidden: true
       <dd>The long-standing Windows application API family used by both 32-bit and 64-bit desktop programs. The name no longer means “32-bit applications only.”</dd>
       <dt id="term-window-message"><dfn>Window message</dfn></dt>
       <dd>A structured notification delivered to a Windows window procedure, such as input, paint, sizing, or lifecycle events. Posted messages are queued; sent messages may invoke the receiver synchronously.</dd>
+      <dt id="term-window-procedure"><dfn>Window procedure</dfn></dt>
+      <dd>The function a Windows program registers for a window, which the message loop calls with each message — a key press, a resize, a close request. It must return quickly, or the window stops responding.</dd>
       <dt id="term-world-space"><dfn>World space</dfn></dt>
       <dd>The shared coordinate system in which scene objects are placed. An object’s model transform converts its local coordinates into world coordinates.</dd>
       <dt id="term-world-to-screen"><dfn>World-to-screen</dfn></dt>
