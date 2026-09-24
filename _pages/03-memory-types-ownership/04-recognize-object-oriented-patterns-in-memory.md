@@ -8,6 +8,7 @@ permalink: /pages/3/04/
 chapter: "3.4"
 minutes: 42
 summary: Turn repeated pointers, virtual calls, constructors, and update loops into evidence for factories, states, observers, singletons, and component systems.
+mermaid: true
 ---
 
 ## Source patterns do not survive as labels
@@ -50,6 +51,14 @@ mov rax, [rcx]        ; read the first field, possibly a vtable pointer
 call qword ptr [rax+20h] ; call virtual slot 4
 ```
 
+```mermaid
+flowchart LR
+    A["object A<br/>+0x00: table pointer"] --> T["one read-only table<br/>of function addresses"]
+    B["object B<br/>+0x00: table pointer"] --> T
+    C["object C<br/>+0x00: table pointer"] --> T
+    T -->|"slot 4, at +0x20"| F["the function called,<br/>with the object in rcx"]
+```
+
 The evidence supports this small claim:
 
 > Objects at these addresses share a function table, and slot four receives the object address.
@@ -77,6 +86,14 @@ je not_ready
 mov ecx, [rax+30h]
 ```
 
+```mermaid
+flowchart LR
+    F1["recruit code"] --> G["one global pointer"]
+    F2["save code"] --> G
+    F3["interface code"] --> G
+    G --> M["the one manager object"]
+```
+
 One global pointer alone is not proof. It might be a cache or the current scene. Confidence rises when initialization allocates it once, many unrelated call sites reuse it, and shutdown releases it.
 
 ### Factory
@@ -89,13 +106,33 @@ A factory chooses which concrete object to create. A common compiled shape is:
 4. call one of several constructors;
 5. return a common base pointer.
 
+```mermaid
+flowchart TD
+    T["type ID"] --> S{"switch"}
+    S -->|"1"| A["allocate, then call<br/>the first constructor"]
+    S -->|"2"| B["allocate a different size,<br/>call the second constructor"]
+    S -->|"3"| C["allocate, then call<br/>the third constructor"]
+    A --> R["return a pointer<br/>to the common base"]
+    B --> R
+    C --> R
+```
+
 A switch followed by several constructor calls is more useful than the word “factory.” Follow each constructor and compare its first vptr write and field initialization.
 
 ### State or strategy
 
 State and strategy patterns both replace one behavior with another. Memory may contain a pointer to a small behavior object or a function table. The owner delegates work to it each update.
 
-Record when that pointer changes. If it changes when an enemy moves from idle to chase to attack, “state” is a useful name. If it changes when a weapon changes its aiming rule, “strategy” may fit better. The bytes do not care which textbook word you choose; behavior over time is the deciding clue.
+```mermaid
+stateDiagram-v2
+    direction LR
+    Idle --> Chase: sees the player
+    Chase --> Attack: in range
+    Attack --> Chase: target moves away
+    Chase --> Idle: loses the player
+```
+
+Each arrow is a moment when the owner's behavior pointer changes. Record when that pointer changes. If it changes when an enemy moves from idle to chase to attack, “state” is a useful name. If it changes when a weapon changes its aiming rule, “strategy” may fit better. The bytes do not care which textbook word you choose; behavior over time is the deciding clue.
 
 ### Observer
 
@@ -105,6 +142,14 @@ An observer system keeps a collection of listeners and calls them when an event 
 - passes the same event record to each element;
 - makes a direct or virtual call;
 - tolerates an empty collection.
+
+```mermaid
+flowchart LR
+    E["event: a unit died"] --> N["notify loop:<br/>same event record for each"]
+    N --> L1["score panel"]
+    N --> L2["sound system"]
+    N --> L3["achievement tracker"]
+```
 
 Do not confuse this with an ordinary entity update loop. An observer loop usually starts from an event or notification function and passes similar event data to many unlike objects.
 
@@ -118,6 +163,12 @@ Composition stores behavior in separate components rather than one deep inherita
 - tightly packed arrays of positions or health values;
 - systems that loop over one component type at a time.
 
+{% include memory-strip.html
+  cells="=pos 0|=pos 1|=pos 2|=pos 3|=pos 4"
+  groups="0-4:one component type, packed together"
+  caption="A movement system walks this array and touches nothing else."
+%}
+
 If position records are contiguous while unrelated entity fields live elsewhere, do not force them into one giant `Player` structure. The game may be data-oriented.
 
 ## Constructors are layout witnesses
@@ -129,6 +180,13 @@ mov [rcx], rax        ; vptr at +0x00
 mov dword ptr [rcx+8], 64h ; likely integer default 100
 mov qword ptr [rcx+10h], 0 ; likely pointer or 64-bit field
 ```
+
+{% include memory-strip.html
+  cells="+0x00=vptr|+0x04=vptr|+0x08=100|+0x0C=?|+0x10=0|+0x14=0"
+  marks="3"
+  groups="0-1:`mov [rcx], rax`: 8 bytes|2-2:`dword` 100|3-3:not written|4-5:`qword` 0"
+  caption="Each box is four bytes. The three stores reach `+0x18`; the bytes at `+0x0C` are never written, so they stay unknown."
+%}
 
 The last store starts at `+0x10` and writes a `qword`—eight bytes—so the constructor touches bytes through `+0x18` (`0x10 + 8 = 0x18`). That gives a minimum object size of at least `0x18` bytes, but alignment may make the allocation larger. Compare the allocator’s requested size, constructor stores, destructor reads, and ordinary methods. No single function tells the whole story.
 

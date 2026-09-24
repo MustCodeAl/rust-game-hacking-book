@@ -8,6 +8,7 @@ permalink: /pages/3/03/
 chapter: "3.3"
 minutes: 35
 summary: Turn repeated reads, member-function calls, and virtual dispatch into a tested object layout, then inspect it through typed snapshots.
+mermaid: true
 ---
 
 ## The source code is gone, but the layout remains
@@ -46,6 +47,16 @@ Reverse engineering begins with facts the machine exposes and combines them into
 | Class behavior | Objects sharing one table dispatch related methods. | Validated indirect calls and object lifetimes. |
 | Game meaning | This is the active player entity. | Behavior, call context, and lifecycle tests. |
 
+```mermaid
+flowchart BT
+    A["bytes changed"] --> B["an instruction read them"]
+    B --> C["the value flows somewhere"]
+    C --> D["one field behaves like yaw"]
+    D --> E["several fields share a base"]
+    E --> F["objects share methods"]
+    F --> G["this is the active player"]
+```
+
 Do not skip from “bytes changed” straight to “this is definitely a `Player`
 class.” Keep each intermediate claim visible. If a later test fails, you can
 step down one level and see exactly which inference broke.
@@ -83,6 +94,12 @@ For the course build of AssaultCube, our recovered player model contains these u
 | `+0x225` | Name bytes | Compare several bots with different names. |
 | `+0x338` | Dead flag (`u32`) | Observe zero while alive and a changed flag after death. |
 
+{% include memory-strip.html
+  cells="+0x04=x|+0x08=y|+0x0C=z|=unknown|+0x40=yaw|+0x44=pitch|=unknown|+0x225=name|=unknown|+0x338=dead"
+  groups="0-2:position|4-5:view angles"
+  caption="The confirmed landmarks, drawn in order but not to scale. Each `unknown` box stands for bytes nobody has tested yet."
+%}
+
 Notice the gaps. We have not claimed that every byte between `0x0C` and `0x40` is useless. Those bytes may contain velocity, dimensions, pointers, flags, or padding. **Unknown means unproven**, not empty.
 
 Padding is especially easy to miss. CPUs and compilers often place a field at an
@@ -90,12 +107,13 @@ aligned address — usually a multiple of that field's own size — leaving unus
 bytes in between. Three fields declared in this order produce a layout with a
 hole in it:
 
-```text
-offset  size  field
-+0x00   1     dead flag  (u8)
-+0x04   4     health     (u32)    <- not +0x01
-+0x08   4     yaw        (f32)
-```
+{% include memory-strip.html
+  cells="+0x00=00|=??|=??|=??|+0x04=64|=00|=00|=00|+0x08=00|=00|=B4|=42"
+  marks="1-3"
+  groups="0-0:dead|1-3:padding|4-7:health = 100|8-11:yaw = 90.0"
+  groups2="1-4:assume no padding and “health” at +0x01 reads three padding bytes and one byte of the real health"
+  caption="A dead flag, a `u32`, and an `f32`, with the padding the compiler inserts after the one-byte flag."
+%}
 
 The three bytes at `+0x01`, `+0x02`, and `+0x03` hold nothing meaningful. They
 exist only so that `health` begins at a multiple of four. If you assume fields
@@ -126,6 +144,13 @@ Verify the arithmetic in the debugger:
 stopped field address - instruction offset = candidate object base
 0x12340040 - 0x40                       = 0x12340000
 ```
+
+{% include memory-strip.html
+  cells="0x12340000=object base|=· · ·|0x12340040=yaw"
+  marks="2"
+  groups="0-1:the instruction's offset, `40h`"
+  caption="The breakpoint stopped on `movss xmm0, dword ptr [ecx+40h]` at yaw's address, so `ecx` should hold `0x12340000`."
+%}
 
 One matching subtraction is a clue, not proof. Repeat it while turning, respawning, and starting a new match.
 
@@ -182,11 +207,27 @@ read [ecx]           -> 0x00A1_B200    the vtable this object uses
 read [0x00A1_B20C]   -> 0x004C_7710    the function that finally runs
 ```
 
+{% include memory-strip.html
+  cells="0x00A1B200=slot 0|0x00A1B204=slot 1|0x00A1B208=slot 2|0x00A1B20C=0x004C7710"
+  marks="3"
+  groups="3-3:slot 3"
+  caption="The vtable the object's vptr points at: a row of function addresses, four bytes each."
+%}
+
 The offset `0x0C` is 12, and a pointer in a 32-bit process is four bytes, so
 `12 / 4 = 3`: this is the fourth entry counting from zero, which is why it is
 called slot 3. Two objects of different classes executing this identical
 instruction end up in different functions, because the second step read a
 different table.
+
+```mermaid
+flowchart LR
+    C["one call site:<br/>mov eax, [ecx]<br/>call dword ptr [eax+0Ch]"]
+    C -->|"ecx holds a player"| PT["the player class's vtable,<br/>slot 3"]
+    PT --> PF["the player's update"]
+    C -->|"ecx holds a bot"| BT["the bot class's vtable,<br/>slot 3"]
+    BT --> BF["the bot's update"]
+```
 
 Do not label every first pointer a vptr. Test it:
 
@@ -201,6 +242,13 @@ This pattern is common, but the C++ language does not require one universal obje
 ## Inheritance makes the map less tidy
 
 With single inheritance, the base-class part is often placed at the beginning of the derived object. A `BotPlayer` may therefore begin with all fields needed by `Player`, followed by bot-specific state.
+
+{% include memory-strip.html
+  cells="+0x00=vptr for base A|=A's fields|+0x10=vptr for base B|=B's fields|=derived fields"
+  groups="0-4:one allocation, one complete object"
+  groups2="2-3:what a pointer typed as B points at: 0x10 bytes in"
+  caption="Multiple inheritance, with an example offset. A method of `B` receives the object as a pointer to the `B` part, not to the start."
+%}
 
 Multiple inheritance can add more than one base subobject and more than one vptr. A method may even adjust `this` before using it. If two methods appear to use bases a fixed distance apart, do not immediately declare one of them wrong. You may be looking at two views of the same larger object.
 
@@ -248,6 +296,15 @@ A constructor candidate often:
 - calls base constructors before initializing derived fields;
 - writes one or more vptr candidates, sometimes replacing an earlier base vptr;
 - returns the same object or passes it into a registration system.
+
+```mermaid
+flowchart LR
+    A["allocate the block"] --> B["base constructor:<br/>vptr = base table,<br/>base fields = defaults"]
+    B --> C["derived constructor:<br/>vptr = derived table,<br/>derived fields = defaults"]
+    C --> D["registered and used<br/>by the game"]
+    D --> E["destructor: unregister,<br/>release children"]
+    E --> F["block freed: every cached<br/>address to it is stale"]
+```
 
 None of those clues proves “constructor” alone. An ordinary reset function can
 also fill fields with defaults. Confidence rises when allocation, initialization,
@@ -311,6 +368,16 @@ Reading fields separately is also friendlier to an incomplete layout. You do not
 ## Build a read-only object-layout probe
 
 The lab implementation is [`windows-labs/src/bin/object_layout_probe.rs`](https://github.com/MustCodeAl/rust-game-hacking-book/blob/rustgamehackingreimagined/windows-labs/src/bin/object_layout_probe.rs). It opens `ac_client.exe` with read access only, follows the verified local-player and entity-list pointers, then copies the confirmed fields into local snapshots.
+
+Here is the path a pointer takes through the probe before anything is printed:
+
+```mermaid
+flowchart LR
+    A["a pointer read<br/>from the game"] -->|"ObjectAddress::new<br/>refuses null"| B["ObjectAddress"]
+    B -->|"field(offset)<br/>checked_add"| C["field address"]
+    C -->|"read_f32, read_u32:<br/>bytes copied across the process boundary"| D["raw values"]
+    D -->|"plausibility checks"| E["PlayerSnapshot,<br/>a local copy"]
+```
 
 The most important types are deliberately small:
 

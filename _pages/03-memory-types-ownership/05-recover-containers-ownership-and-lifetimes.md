@@ -8,6 +8,7 @@ permalink: /pages/3/05/
 chapter: "3.5"
 minutes: 40
 summary: Identify vectors, strings, handles, component pools, reference counts, and destruction paths without assuming one compiler's private layout.
+mermaid: true
 ---
 
 ## A field layout is only half a model
@@ -54,6 +55,13 @@ capacity_end = 0x0453_1400
 (0x400) / 32 = 32 elements of allocated room
 ```
 
+{% include memory-strip.html
+  cells="0x04531000=0|=1|=2|=· · ·|=9|0x04531140=10|=· · ·|=31"
+  marks="0-4"
+  groups="0-4:live: 0x140 ÷ 32 = 10 elements|5-7:allocated, never constructed: 22"
+  caption="The element storage behind `begin`, `end`, and `capacity_end`. Boxes are elements, not bytes."
+%}
+
 The gap between `end` and `capacity_end` is the container's spare room. That is
 exactly why the count has to come from `end` rather than from the size of the
 allocation — using the allocation would report 32 entities, 22 of which were
@@ -80,6 +88,13 @@ base + index × stride           → one possible array element
 base + index × stride + offset  → one field inside an array element
 ```
 
+{% include memory-strip.html
+  cells="+0x00=record 0|+0x08=field|+0x30=record 1|+0x38=field|+0x60=record 2|+0x68=field"
+  marks="1|3|5"
+  groups="0-1:0x30 bytes|2-3:0x30 bytes|4-5:0x30 bytes"
+  caption="`base + index × 0x30 + 0x08` lands on the highlighted field of each record. Not to scale."
+%}
+
 For example, `base + index * 0x30 + 0x08` suggests records that are `0x30`
 bytes apart and a candidate field eight bytes into each record. Test several
 indexes and compare the same behavior at each calculated address.
@@ -103,11 +118,35 @@ harder.
 
 Many C++ string implementations use a **small-string optimization**. Short names may live directly inside the string object, while longer names use a heap buffer. This explains a confusing observation: one player name looks like text at offset `0x20`, but a longer name makes the same bytes look like a pointer.
 
+Here is one real implementation's layout, the 32-bit Microsoft C++ library's
+`std::string`, holding a short name and then a long one:
+
+{% include memory-strip.html
+  cells="+0x00=Ada, then a zero byte|+0x10=size 3|+0x14=capacity 15"
+  groups="0-0:16 bytes: the text itself"
+  caption="Short: up to 15 characters live inside the object."
+%}
+
+{% include memory-strip.html
+  cells="+0x00=pointer to heap text|+0x10=size 40|+0x14=capacity ≥ 40"
+  marks="0"
+  groups="0-0:the same 16 bytes now start with a pointer"
+  caption="Long: the first four bytes point to a heap buffer, and the capacity tells you which mode you are in."
+%}
+
 Do not read an assumed pointer until you identify the mode flag or length behavior. Compare the same object with names on both sides of the suspected short-string limit. 🔬
 
 ## Linked structures leave different clues
 
 A linked list node usually has one or two neighbor pointers plus a payload. Traversal repeatedly loads a pointer from the current node. A tree adds comparisons and chooses left or right children. A hash table often computes a hash or mask before choosing a bucket.
+
+```mermaid
+flowchart LR
+    A["node A<br/>prev · payload · next"] -->|"next"| B["node B<br/>prev · payload · next"]
+    B -->|"prev"| A
+    B -->|"next"| C["node C<br/>prev · payload · next"]
+    C -->|"prev"| B
+```
 
 Validate structural invariants:
 
@@ -127,6 +166,15 @@ If one owner’s destructor directly destroys the pointed object, and moves clea
 ### Shared ownership
 
 Shared objects often have a separate control block with strong and weak reference counts. Copies increment a count; releases decrement it; a transition to zero calls a destructor. The object pointer and control-block pointer may travel together.
+
+```mermaid
+flowchart LR
+    P1["owner 1<br/>object pointer, control pointer"] --> O["the object"]
+    P2["owner 2<br/>object pointer, control pointer"] --> O
+    P1 --> CB["control block<br/>strong count 2, weak count 1"]
+    P2 --> CB
+    W["a weak observer"] --> CB
+```
 
 Never edit a suspected count. Observe calls around it and confirm whether updates are atomic. A plain integer that happens to rise and fall is not enough evidence.
 
@@ -170,13 +218,26 @@ Set a breakpoint on an owned toy object’s destructor and delete it through the
 
 In an entity-component system, an entity handle may resolve into several pools:
 
-```text
-entity 42 -> transform pool slot 7
-          -> health pool slot 19
-          -> inventory pool: absent
+```mermaid
+flowchart LR
+    E["entity 42"] --> T["transform pool, slot 7"]
+    E --> H["health pool, slot 19"]
+    E -.-> I["inventory pool: absent"]
 ```
 
 A sparse set often combines a sparse index array with a dense component array. Deletion may swap the final dense element into the removed slot, so a component’s address can move even while the entity remains valid.
+
+{% include memory-strip.html
+  cells="slot 0=A|slot 1=B|slot 2=C|slot 3=D"
+  marks="1"
+  caption="A dense component array. Entity B's component is about to be removed."
+%}
+
+{% include memory-strip.html
+  cells="slot 0=A|slot 1=D|slot 2=C"
+  marks="1"
+  caption="Swap-remove: the last element, D, moves into the hole. D's entity did not change, but its component now lives at a different address."
+%}
 
 That is why a stable entity ID is often more meaningful than a cached component pointer.
 
