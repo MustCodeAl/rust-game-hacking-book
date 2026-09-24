@@ -74,10 +74,12 @@
                     {% for academy_chapter_number in (1..13) %}
                         {% assign academy_chapter_index = forloop.index0 %}
                         {% assign academy_chapter_lesson_count = 0 %}
+                        {% assign academy_chapter_posts = "" | split: "," %}
                         {% for academy_count_post in reversed_posts %}
                             {% assign academy_count_chapter = academy_count_post.chapter | split: "." | first | plus: 0 %}
                             {% if academy_count_chapter == academy_chapter_number %}
                                 {% assign academy_chapter_lesson_count = academy_chapter_lesson_count | plus: 1 %}
+                                {% assign academy_chapter_posts = academy_chapter_posts | push: academy_count_post %}
                             {% endif %}
                         {% endfor %}
                         <li class="divider-header" data-academy-chapter="{{ academy_chapter_number }}">
@@ -94,9 +96,27 @@
                             </button>
                         </li>
 
-                        {% for post in reversed_posts %}
-                            {% assign post_chapter_number = post.chapter | split: "." | first | plus: 0 %}
-                            {% if post_chapter_number == academy_chapter_number %}
+                        {% comment %}
+                            Walk lesson numbers in order and look each one up.
+                            Jekyll's `sort` and `where` filters convert values
+                            that look numeric before comparing, so "5.10"
+                            becomes the float 5.1: sorting listed 5.10 above
+                            5.2, and `where` matched "5.1" against 5.10 while
+                            finding nothing for "5.10". Liquid's own `==`
+                            compares the front-matter strings exactly, which is
+                            also how the print page and llms-full.txt order
+                            lessons. Searching only this chapter's lessons keeps
+                            the lookup cheap on every page. The margin past the
+                            lesson count tolerates a gap in numbering.
+                        {% endcomment %}
+                        {% assign academy_lesson_scan = academy_chapter_lesson_count | plus: 5 %}
+                        {% for academy_lesson_number in (1..academy_lesson_scan) %}
+                            {% assign academy_lesson_key = academy_chapter_number | append: "." | append: academy_lesson_number %}
+                            {% assign post = nil %}
+                            {% for academy_candidate in academy_chapter_posts %}
+                                {% if academy_candidate.chapter == academy_lesson_key %}{% assign post = academy_candidate %}{% endif %}
+                            {% endfor %}
+                            {% if post %}
                                 {% if page.url == post.url %}
                                 <li class="chapter active" data-academy-chapter="{{ academy_chapter_number }}" data-level="1.2" data-path="{{site.baseurl}}{{post.url}}">
                                 {% else %}
