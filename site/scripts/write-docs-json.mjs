@@ -9,7 +9,7 @@ const repoRoot = new URL('../../', import.meta.url);
 const docsDir = new URL('../src/content/docs/', import.meta.url);
 const docsPath = 'site/src/content/docs';
 
-const groups = [{ group: 'Start here', pages: [`${docsPath}/index`, `${docsPath}/glossary`] }];
+const groups = [{ group: 'Start here', pages: [`${docsPath}/index`, `${docsPath}/glossary`, `${docsPath}/ai-assistants`] }];
 for (const chapter of CHAPTERS) {
 	let files;
 	try {

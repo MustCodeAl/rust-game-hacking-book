@@ -1,0 +1,155 @@
+---
+// Every lesson in reading order, with its summary and reading time.
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { getCollection } from 'astro:content';
+import { CHAPTERS, compareLessons } from '../data/chapters.mjs';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const lessons = (await getCollection('docs', (entry) => Boolean(entry.data.chapter))).sort((a, b) =>
+	compareLessons(a.data.chapter, b.data.chapter),
+);
+const chapters = CHAPTERS.map((chapter) => {
+	const items = lessons.filter((entry) => entry.data.chapter!.startsWith(`${chapter.number}.`));
+	const minutes = items.reduce((total, entry) => total + (entry.data.minutes ?? 0), 0);
+	return { chapter, items, minutes };
+}).filter(({ items }) => items.length > 0);
+const totalLessons = lessons.length;
+const totalHours = Math.round(chapters.reduce((total, { minutes }) => total + minutes, 0) / 60);
+---
+
+<StarlightPage
+	frontmatter={{
+		title: 'All lessons',
+		description: 'Every lesson of Game Hacking Academy in reading order, with a one-line summary and reading time.',
+		tableOfContents: false,
+	}}
+>
+	<p class="contents-intro">
+		{totalLessons} lessons in {chapters.length} chapters, about {totalHours} hours of reading. Each chapter builds on the ones
+		before it, so reading in order works best the first time through.
+	</p>
+	{
+		chapters.map(({ chapter, items, minutes }) => (
+			<section class="contents-chapter not-content" aria-labelledby={`chapter-${chapter.number}`}>
+				<header>
+					<span class="contents-chapter__emoji" aria-hidden="true">
+						{chapter.emoji}
+					</span>
+					<div>
+						<h2 id={`chapter-${chapter.number}`}>
+							{chapter.number}. {chapter.title}
+						</h2>
+						<p>
+							{chapter.summary} <span class="contents-chapter__time">About {Math.round(minutes / 60 * 10) / 10} hours.</span>
+						</p>
+					</div>
+				</header>
+				<ol>
+					{items.map((entry) => (
+						<li>
+							<a href={`${base}/${entry.id}/`}>
+								<span class="contents-lesson__number">{entry.data.chapter}</span>
+								<span class="contents-lesson__title">{entry.data.title}</span>
+							</a>
+							{entry.data.description && <p>{entry.data.description}</p>}
+							{entry.data.minutes && <span class="contents-lesson__time">{entry.data.minutes} min</span>}
+						</li>
+					))}
+				</ol>
+			</section>
+		))
+	}
+</StarlightPage>
+
+<style>
+	.contents-intro {
+		font-size: var(--sl-text-lg);
+	}
+
+	.contents-chapter {
+		margin-top: 2.5rem;
+	}
+
+	.contents-chapter header {
+		display: flex;
+		gap: 0.9rem;
+		align-items: flex-start;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid var(--sl-color-hairline);
+	}
+
+	.contents-chapter__emoji {
+		font-size: 1.8rem;
+		line-height: 1.2;
+	}
+
+	.contents-chapter h2 {
+		margin: 0;
+		font-size: var(--sl-text-h3);
+		color: var(--sl-color-white);
+	}
+
+	.contents-chapter header p {
+		margin: 0.25rem 0 0;
+		color: var(--sl-color-gray-2);
+	}
+
+	.contents-chapter__time {
+		white-space: nowrap;
+	}
+
+	.contents-chapter ol {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	.contents-chapter li {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 0.1rem 1rem;
+		padding: 0.75rem 0;
+		border-bottom: 1px solid var(--sl-color-hairline-light);
+	}
+
+	.contents-chapter li a {
+		display: flex;
+		gap: 0.6rem;
+		align-items: baseline;
+		text-decoration: none;
+		color: var(--sl-color-white);
+		font-weight: 600;
+	}
+
+	.contents-chapter li a:hover .contents-lesson__title {
+		text-decoration: underline;
+	}
+
+	.contents-lesson__number {
+		font-family: var(--sl-font-mono);
+		font-size: var(--sl-text-sm);
+		color: var(--sl-color-accent-high);
+		min-width: 2.6rem;
+	}
+
+	.contents-chapter li p {
+		grid-column: 1;
+		margin: 0 0 0 3.2rem;
+		color: var(--sl-color-gray-2);
+		font-size: var(--sl-text-sm);
+	}
+
+	.contents-lesson__time {
+		grid-column: 2;
+		grid-row: 1;
+		color: var(--sl-color-gray-3);
+		font-size: var(--sl-text-sm);
+		white-space: nowrap;
+	}
+
+	@media (max-width: 40rem) {
+		.contents-chapter li p {
+			margin-left: 0;
+		}
+	}
+</style>

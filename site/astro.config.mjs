@@ -78,8 +78,10 @@ export default defineConfig({
 					label: 'Start here',
 					items: [
 						{ label: 'Book home', link: '/' },
+						{ label: 'All lessons', link: '/contents/' },
 						{ label: 'Glossary', link: '/glossary/' },
 						{ label: 'Print or save as PDF', link: '/print/' },
+						{ label: 'Using AI assistants', link: '/ai-assistants/' },
 					],
 				},
 				...chapterGroups,
