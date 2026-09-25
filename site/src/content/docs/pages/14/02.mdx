@@ -1,8 +1,8 @@
 ---
 title: "How Device Drivers Work"
-description: "Follow a request from ReadFile or DeviceIoControl through the I/O manager and an I/O request packet to a driver and its hardware, decode a toy device's registers bit by bit, trace a key press from a USB keyboard to a game, and see why Windows demands signed drivers."
+description: "Follow a request from ReadFile or DeviceIoControl through the I/O manager and an I/O request packet to a driver and its hardware, see how a driver uses registers, interrupts, and DMA, trace a key press from a USB keyboard to a game, and see why Windows demands signed drivers."
 chapter: "14.2"
-minutes: 30
+minutes: 18
 author: "attilathedud"
 date: "2026-09-24"
 sidebar:
@@ -10,7 +10,6 @@ sidebar:
   label: "14.2 How Device Drivers Work"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
-import Quiz from '../../../../components/Quiz.astro';
 
 [Lesson 14.1](/pages/14/01/) said that no user program touches hardware.
 Something has to, though. When you press a key, bytes arrive from a keyboard;
@@ -23,9 +22,10 @@ programs and DLLs (Chapter 7), loaded into the kernel's half of memory.
 This lesson follows one request from a program down to a device and back,
 looks at how a driver talks to hardware through registers and interrupts,
 traces a key press from a USB keyboard to a game, and ends with why Windows is
-strict about which drivers it will load. Everything stays conceptual or
-simulated. The lab at the end is an ordinary user-mode program that pretends to
-be a device and its driver.
+strict about which drivers it will load. Everything here stays conceptual.
+[Lesson 14.8](/pages/14/08/) comes back later to decode the same requests and
+registers bit by bit, and its lab runs a pretend device and driver as an
+ordinary user-mode program.
 
 ## Why the kernel owns every device
 
@@ -72,7 +72,7 @@ names the operation, carries the parameters and buffers, travels down the
 driver stack, and comes back up carrying the result.
 
 Here is a read from this lesson's toy keypad, a simple imaginary device that
-the lab simulates, made before any key has been pressed:
+the lab in Lesson 14.8 simulates, made before any key has been pressed:
 
 ```mermaid
 sequenceDiagram
@@ -99,74 +99,14 @@ hardware, it keeps the IRP, returns `STATUS_PENDING`, and completes the IRP
 later, from the code that runs when the device interrupts. Meanwhile the
 program's thread waits inside `ReadFile`.
 
-A `DeviceIoControl` request carries more parameters. These are the parts of
-its IRP that the keypad driver reads (Windows keeps some in the IRP itself and
-some in a per-driver *stack location* attached to it):
-
-<MemoryStrip
-  column
-  cells="operation=IRP_MJ_DEVICE_CONTROL|control code=0x80006004|output length=4 bytes|system buffer=kernel copy of the caller's buffer|requestor=user mode|status=set at completion|information=bytes returned"
-  caption="What a driver reads from an IRP for a `DeviceIoControl` request. *Requestor* says the request came from user mode, so every parameter is untrusted."
-/>
-
-For most control codes the I/O manager uses **buffered I/O**: it copies the
-caller's input into a kernel buffer, the *system buffer*, before the driver
-runs, and copies the output back to the caller after completion. The driver
-never touches the program's memory directly. It still has to respect the
-lengths: the output length says how many bytes the caller's buffer can hold,
-and writing even one byte more would overrun kernel memory.
-
-### A control code is four fields in one number
-
-A control code is a 32-bit number that packs four fields, built by a macro
-called `CTL_CODE`:
-
-- bits 16 to 31, the **device type**: values from `0x8000` up belong to
-  hardware vendors, lower ones to Microsoft;
-- bits 14 and 15, the **access** the caller's handle must hold: 0 for any, 1
-  for read, 2 for write, 3 for both;
-- bits 2 to 13, the **function** number: vendors use `0x800` and up;
-- bits 0 and 1, the **method**, which says how buffers travel: 0 means
-  buffered.
-
-The toy keypad defines one control code, *get status*, with device type
-`0x8000`, function `0x801`, the buffered method, and read access. Packing it
-takes one shift per field:
-
-- `0x8000` shifted left by 16 bits is `0x8000_0000`;
-- the access value 1 shifted left by 14 bits is 2¹⁴ = 16,384 = `0x4000`;
-- `0x801` shifted left by 2 bits is `0x801` × 4 = `0x2004`, because
-  `0x800` × 4 = `0x2000` and 1 × 4 = 4;
-- the method, 0, adds nothing.
-
-`0x8000_0000` + `0x4000` + `0x2004` = `0x8000_6004`. The top half, `0x8000`, is
-the device type, and the low half, `0x6004`, holds the other three fields:
-
-<MemoryStrip
-  cells="15=0|14=1|13=1|12=0|11=0|10=0|9=0|8=0|7=0|6=0|5=0|4=0|3=0|2=1|1=0|0=0"
-  marks="0-1"
-  groups="0-1:access `01`|2-13:function `1000 0000 0001` = `0x801`|14-15:method `00`"
-  groups2="0-3:hex `6`|4-7:hex `0`|8-11:hex `0`|12-15:hex `4`"
-  caption="The low 16 bits of the control code `0x8000_6004`. Access `01` is read; method `00` is buffered."
-/>
-
-The access field is a security check that happens before the driver runs. The
-I/O manager compares it with the rights on the caller's handle and refuses the
-request, without ever calling the driver, if the handle lacks them. A driver
-that declares a powerful command with access 0, *any access*, lets every
-program that can open the device send it, which is one of the classic driver
-mistakes. Drivers are also expected to compare the whole 32-bit code, not just
-the function number, so that a code with the right function but a different
-method or access is refused.
-
-<Quiz
-  id="driver-ioctl-near-miss"
-  title="Spot the near miss"
-  prompt="The keypad driver receives the control code `0x8000_6007` instead of `0x8000_6004`. What changed, and what should the driver do?"
-  options="Only the method bits changed, from `00` to `11`, so the driver should refuse the request because it is not exactly the code it defines||The function number changed to `0x802`, so the driver should run a different command||Nothing that matters: the driver should mask off the low bits and run the command||The access bits changed, so the I/O manager will refuse it before the driver sees it"
-  answer="0"
-  explanation="`0x7` is `0111` and `0x4` is `0100`, so only bits 0 and 1 differ: the method went from 0, buffered, to 3, which passes the caller's raw user-mode addresses instead of a safe kernel copy. Bits 14 and 15 are still `01`, so the I/O manager's access check passes and the decision falls to the driver. A driver that ignored the method would treat raw user pointers as a kernel buffer. Comparing the whole 32-bit value refuses the request."
-/>
+A `DeviceIoControl` request is checked twice. Each control code declares the
+rights that the caller's handle must hold, and the I/O manager refuses a
+request from a handle without them before the driver ever runs. The IRP also
+records that the request came from user mode, so the driver must treat every
+parameter as untrusted: it compares the whole control code with the ones it
+defines, and it never writes more bytes than the request says the caller's
+buffer can hold. [Lesson 14.8](/pages/14/08/#a-control-code-is-four-fields-in-one-number)
+unpacks a control code into its four fields.
 
 ## Registers: how a driver talks to hardware
 
@@ -181,56 +121,23 @@ and writes it with ordinary load and store instructions. x86 also has an older
 mechanism, **port I/O**, with its own `in` and `out` instructions; the classic
 PS/2 keyboard controller answers at ports `0x60` and `0x64`.
 
-The toy keypad, modeled loosely on that PS/2 controller, has four 32-bit
-registers, 16 bytes in all. Suppose the firmware placed them at physical
-address `0xFEB0_1000`: CONTROL at offset `+0x00`, STATUS at `+0x04`, DATA at
-`+0x08`, and ACK at `+0x0C`. STATUS therefore answers at
-`0xFEB0_1000` + 4 = `0xFEB0_1004`. Here is the block after the driver has
-started the device and the A key has been pressed and released:
+The toy keypad, modeled loosely on that PS/2 controller, has four registers,
+each 4 bytes wide, one after another:
 
 <MemoryStrip
-  cells="+0x00=03|+0x01=00|+0x02=00|+0x03=00|+0x04=01|+0x05=02|+0x06=00|+0x07=00|+0x08=1E|+0x09=00|+0x0A=00|+0x0B=00|+0x0C=00|+0x0D=00|+0x0E=00|+0x0F=00"
-  marks="0|4-5|8"
-  groups="0-3:CONTROL `0x00000003`|4-7:STATUS `0x00000201`|8-11:DATA `0x0000001E`|12-15:ACK"
-  caption="The toy keypad's register block, byte by byte. Each register is little-endian, so its lowest byte comes first. DATA shows what a read would return right now."
+  cells="+0x00=CONTROL|+0x04=STATUS|+0x08=DATA|+0x0C=ACK"
+  groups="0-0:driver writes|1-2:driver reads|3-3:driver writes"
+  caption="The toy keypad's register block. Each register is 4 bytes, so each one starts 4 bytes after the last (`0x0C` is 12) and the block fills 4 × 4 = 16 bytes."
 />
 
-**CONTROL**, `0x0000_0003`, is written by the driver. Bit 0, *enable*, makes the
-device scan its keys, and bit 1, *interrupt enable*, lets it interrupt. 3 = 2 +
-1, so both bits are set. The other 30 bits are reserved and must be written as
-0.
-
-**STATUS**, `0x0000_0201`, is read-only and describes the device at this
-moment. Because the register is little-endian, byte `+0x04` holds bits 0 to 7
-and byte `+0x05` holds bits 8 to 15. Byte `+0x04` is `0x01`: bit 0, *data
-ready*, is set, so an event is waiting, and bit 1, *overflow*, is clear. Byte
-`+0x05` is `0x02`: bits 8 to 15 form an 8-bit *count* of waiting events, here
-2. As one number, `0x0201` = 2 × 256 + 1 = 513. Dividing 513 by 256 gives 2
-remainder 1: the count, and the low byte's flags.
-
-**DATA**, `0x0000_001E`, holds the event at the front of the device's queue.
-Bits 0 to 6 are a **scan code**, a number that names a physical key position,
-and bit 7 is set when the key was released rather than pressed. `0x1E` is
-1 × 16 + 14 = 30, binary `0001 1110`. Its bit 7 is 0, so the front event is *A
-pressed*: 30 is the scan code of the A key in the numbering Windows uses, known
-as set 1. The event behind it is `0x9E`:
-
-<MemoryStrip
-  cells="bit 7=1|bit 6=0|bit 5=0|bit 4=1|bit 3=1|bit 2=1|bit 1=1|bit 0=0"
-  marks="0"
-  groups="0-0:released|1-7:scan code `001 1110` = `0x1E`"
-  caption="The second event in the queue, `0x9E`: the same key, released."
-/>
-
-`0x9E` is 9 × 16 + 14 = 158. Bit 7 is worth 2⁷ = 128 = `0x80`, and 158 − 128 =
-30, so the remaining bits name the A key again: *A released*.
-
-**ACK** is write-only and reads as 0. Writing a 1 to bit 0 tells the device
-its interrupt has been handled, and the device lowers its interrupt signal;
-writing a 1 to bit 1 clears the overflow flag. Bits written as 0 change
-nothing. This **write-1-to-clear** convention is common because it lets a
-driver clear one flag without first reading the register to preserve the
-others.
+- **CONTROL** is where the driver switches the device on and allows it to
+  interrupt.
+- **STATUS** tells the driver whether key events are waiting, and how many.
+- **DATA** holds the event at the front of the device's queue: a **scan code**,
+  a number that names a physical key position, plus whether that key was
+  pressed or released. The A key's scan code is `0x1E`.
+- **ACK** is where the driver tells the device that its interrupt has been
+  handled.
 
 Two of these registers break the rule that reading memory changes nothing.
 Reading DATA removes the event it returns, so the next read returns the next
@@ -240,19 +147,12 @@ because the device changes it. So register accesses are never cached, merged,
 or skipped: the kernel maps device memory as uncacheable, and drivers use
 dedicated read-register and write-register routines that the compiler must
 carry out exactly as written.
-
-<Quiz
-  id="driver-status-decode"
-  title="Decode a STATUS value"
-  prompt="The keypad's STATUS register reads `0x0000_0403`. What is the device reporting?"
-  options="Three events waiting, and the device is disabled||Four events waiting, data ready, and at least one event was dropped||1,027 events waiting||Data ready, no overflow, and three events waiting"
-  answer="1"
-  explanation="Split the value by bytes. The low byte, `0x03`, is `0000 0011`, so bit 0 (data ready) and bit 1 (overflow) are both set. The next byte, `0x04`, is the count in bits 8 to 15: 4 events waiting. As one number `0x0403` is 4 × 256 + 3 = 1,027, but only the separate fields mean anything. Four is also the toy keypad's queue size, so the queue was full when an event was dropped."
-/>
+[Lesson 14.8](/pages/14/08/#the-toy-keypads-registers-bit-by-bit) places the
+four registers at a physical address and decodes every bit in them.
 
 ## Interrupts: how a device gets the driver's attention
 
-The driver could read STATUS over and over until *data ready* appears. That is
+The driver could read STATUS over and over until an event appears. That is
 **polling**, and it wastes a processor core on a device that sits idle almost
 all the time. Instead, the keypad raises an **interrupt**, a hardware signal
 that makes the processor stop between two instructions and run the handler the
@@ -269,35 +169,11 @@ A driver's interrupt handling comes in two halves:
   priority, with interrupts enabled again. It does the real work: it drains the
   events, fills the waiting IRP's buffer, and completes the IRP.
 
-Here is that sequence for the two events above, with the value each register
-returns:
-
-```mermaid
-sequenceDiagram
-    participant Dev as Keypad registers
-    participant ISR as Driver ISR
-    participant DPC as Driver DPC
-    participant IO as I/O manager
-    Note over Dev: two events queued,<br/>interrupt line raised
-    Dev->>ISR: interrupt
-    ISR->>Dev: read STATUS
-    Dev-->>ISR: 0x00000201, data ready, 2 waiting
-    ISR->>Dev: write 0x1 to ACK
-    Note over Dev: interrupt line lowered
-    ISR->>DPC: queue the DPC and return
-    DPC->>Dev: read STATUS, then DATA
-    Dev-->>DPC: 0x1E, A pressed
-    DPC->>Dev: read STATUS, then DATA
-    Dev-->>DPC: 0x9E, A released
-    DPC->>Dev: read STATUS
-    Dev-->>DPC: 0x00000000, nothing left
-    DPC->>IO: complete the waiting IRP, 2 bytes
-```
-
-The last read of STATUS returns 0: both events have been read, so the queue is
-empty, and the overflow flag was never set. Completing the IRP hands it back to
-the I/O manager, which copies the 2 bytes into the program's buffer and wakes
-the waiting thread, and `ReadFile` returns with 2 bytes read.
+For a press and release of A, the DPC collects two events, *A pressed* and *A
+released*, and completes the parked read with those 2 bytes. The I/O manager
+copies them into the program's buffer and wakes its thread, and `ReadFile`
+returns. [Lesson 14.8](/pages/14/08/#the-isr-and-the-dpc-register-by-register)
+follows both halves register by register.
 
 ## DMA: letting the device copy the data itself
 
@@ -341,75 +217,37 @@ flowchart TD
     Q --> G["the game's message loop<br/>GetMessage or PeekMessage"]
 ```
 
-### The keyboard's report
-
 A USB device never speaks first. The host controller asks each device for news
 on a fixed schedule, and a keyboard asked 125 times a second is asked every
-1,000 ÷ 125 = 8 milliseconds; many gaming keyboards are asked 1,000 times a
-second, every millisecond. The keyboard answers with a **HID report**, where
-HID, *human interface device*, is the USB standard for keyboards, mice, and
-controllers. In the simple *boot* format that every PC understands, a report is
-8 bytes:
+1,000 ÷ 125 = 8 milliseconds; many gaming keyboards are asked every
+millisecond. The keyboard answers with a **HID report** (HID, *human interface
+device*, is the USB standard for keyboards, mice, and controllers), which lists
+the keys held down at that moment by their HID **usage** numbers. A is usage
+`0x04`.
 
-<MemoryStrip
-  cells="byte 0=02|byte 1=00|byte 2=04|byte 3=00|byte 4=00|byte 5=00|byte 6=00|byte 7=00"
-  marks="0|2"
-  groups="0-0:modifiers|1-1:reserved|2-7:up to six keys held"
-  caption="A boot-format report while left Shift and A are held."
-/>
+The host controller writes the report into RAM by DMA and interrupts, and the
+report climbs the driver stack. The keyboard mapper driver, `KBDHID.SYS`,
+converts usage `0x04` into scan code `0x1E`, the numbering that Windows
+keyboard drivers have used since PS/2 keyboards, and the keyboard class driver,
+`KBDCLASS.SYS`, queues a key-down event.
 
-Byte 0 holds one bit per modifier key: bit 0 is left Ctrl, bit 1 left Shift,
-bit 2 left Alt, bit 3 the left Windows key, and bits 4 to 7 the same four keys
-on the right. `0x02` is binary `0000 0010`, so only bit 1 is set: left Shift.
-Bytes 2 to 7 list up to six keys currently held, each as a HID **usage**
-number. The letters A to Z are usages 4 to 4 + 25 = 29, or `0x04` to `0x1D`, so
-`0x04` is A. Six slots is also why a keyboard reporting in boot format cannot
-report a seventh key held at the same time.
+The **raw input thread**, inside `win32k`, the kernel part of the Windows window
+manager, reads those events. It translates the scan code into a **virtual-key
+code** using the active keyboard layout, updates the key-state table that
+`GetAsyncKeyState` reads ([Lesson 8.6](/pages/8/06/)), and posts the event to
+the message queue of the thread that owns the foreground window. On a US
+layout, scan code `0x1E` becomes `VK_A`, `0x41`, which is also the ASCII code
+for the letter A: 4 × 16 + 1 = 65. For security, Windows opens keyboards
+exclusively for this thread, so an ordinary program cannot read keystrokes
+straight from the keyboard's driver.
 
-### The drivers
-
-The USB host controller writes the report into RAM by DMA and interrupts. Its
-driver and the USB hub driver pass the report up the stack to the HID class
-driver, which understands reports in general. The keyboard mapper driver,
-`KBDHID.SYS`, converts HID usage `0x04` into scan code `0x1E`, the numbering
-that Windows keyboard drivers have used since PS/2 keyboards and that the toy
-keypad used too. The keyboard class driver, `KBDCLASS.SYS`, queues a key-down
-event for scan code `0x1E`. A release carries the same scan code with a
-separate *break* flag, rather than the `0x80` bit of the old PS/2 wire format.
-
-### The raw input thread and the message queue
-
-A thread inside `win32k`, the kernel part of the Windows window manager, reads
-those events. It translates the scan code into a **virtual-key code** using the
-active keyboard layout, updates the key-state table that `GetAsyncKeyState`
-reads ([Lesson 8.6](/pages/8/06/)), and posts the event to the message queue of
-the thread that owns the foreground window. On a US layout, scan code `0x1E`
-becomes `VK_A`, `0x41`, which is also the ASCII code for the letter A:
-4 × 16 + 1 = 65. For security, Windows opens keyboards exclusively for this
-thread, so an ordinary program cannot read keystrokes straight from the
-keyboard's driver.
-
-The game's message loop takes the event out with `GetMessage` or `PeekMessage`
-as a `WM_KEYDOWN` message, or as `WM_INPUT` if the game registered for Raw
-Input. The message's `lParam` packs the details of the key press into 32 bits:
-
-<MemoryStrip
-  cells="=0|=0|=1|=E|=0|=0|=0|=1"
-  groups="0-1:flags|2-3:scan code|4-7:repeat count"
-  groups2="0-1:`0x00`|2-3:`0x1E`|4-7:`0x0001` = 1"
-  caption="The `lParam` of the `WM_KEYDOWN` for a first press of A, `0x001E_0001`, one hex digit per box."
-/>
-
-`0x1E` shifted left by 16 bits is `0x001E_0000`, and adding a repeat count of 1
-gives `0x001E_0001`. The top byte holds flags. For the matching `WM_KEYUP`,
-bit 30 (*the key was down before*) and bit 31 (*the key is being released*)
-are set. Within the top byte, bit 31 is worth `0x80` and bit 30 is worth
-`0x40`, so the top byte becomes `0x80` + `0x40` = `0xC0` and the `lParam` is
-`0xC01E_0001`.
-
-Synthetic input from `SendInput` joins this path at the raw input thread, above
-every driver in the diagram. That is why programs watching input at that level
-can tell such events apart from key presses that came through a keyboard.
+The game's message loop then takes the event out with `GetMessage` or
+`PeekMessage`, as a `WM_KEYDOWN` message, or as `WM_INPUT` if the game
+registered for Raw Input. [Lesson 14.8](/pages/14/08/#a-key-press-in-bytes)
+reads the report and the message bit by bit. Synthetic input from `SendInput`
+joins this path at the raw input thread, above every driver in the diagram,
+which is why programs watching input at that level can tell it apart from key
+presses that came through a keyboard.
 
 ## Why Windows insists on signed drivers
 
@@ -470,66 +308,4 @@ The habits from Lesson 11.5 apply directly: know which drivers are installed,
 give every new one a reason and a trustworthy source, and never lower a Windows
 protection so that someone else's kernel code can load.
 
-## Simulate a device and its driver
-
-The lab [`toy_driver_lab.rs`](/rust-labs/src/bin/toy_driver_lab.rs) builds the
-toy keypad and a driver for it as an ordinary user-mode program. Nothing in it
-touches hardware or the kernel: the register block is a Rust struct, the
-interrupt line is a `bool`, and an IRP is a small struct in a queue. What it
-keeps from the real thing are the rules this lesson described.
-
-The device's register read shows DATA's side effect in one line:
-
-```rust
-fn read32(&mut self, offset: usize) -> Result<u32, BusError> {
-    match register(offset)? {
-        CONTROL => Ok(self.control),
-        STATUS => Ok(self.status()),
-        // Reading DATA is not a pure read: it removes the front event.
-        DATA => Ok(self.events.pop_front().map_or(0, u32::from)),
-        _ => Ok(0), // ACK is write only and reads as zero
-    }
-}
-```
-
-`register` refuses an offset that is not a multiple of 4 or that lies past the
-16-byte block, so a mistyped offset becomes an error instead of a read of the
-wrong register. The driver's ISR is as short as this lesson says it should be:
-
-```rust
-fn isr(&mut self, device: &mut ToyKeypad) -> Result<bool, BusError> {
-    let status = device.read32(STATUS)?;
-    if status & STATUS_DATA_READY == 0 {
-        return Ok(false); // the line is shared, and another device raised it
-    }
-    device.write32(ACK, ACK_INTERRUPT)?;
-    self.dpc_queued = true;
-    Ok(true)
-}
-```
-
-The dispatch routine compares the whole control code and checks the output
-length before it copies anything, and a separate `submit` function plays the
-I/O manager, refusing any request whose handle lacks the access bits its code
-demands.
-
-Build it, then run it from the `rust-labs` folder:
-
-```powershell
-cargo run --bin toy_driver_lab
-```
-
-The program parks a read request, presses and releases A, prints the register
-block drawn above, runs the ISR and the DPC, and shows the read completing with
-`0x1E` and `0x9E`. It then sends four control requests: one from a handle
-without read access, one with the near-miss code `0x8000_6007`, one with a
-2-byte buffer, and a valid one. Finally it presses keys six times with no
-driver running in between, to show the four-slot queue setting its overflow
-flag. The tests beside it check the register bytes from this lesson, the
-write-1-to-clear rule, the overflow, every refused request, and that waiting
-reads complete in order.
-
-Then set `QUEUE_CAPACITY` to 2 and work out which tests must now fail before
-running them.
-
-References: [example I/O request](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/example-i-o-request---the-details), [defining I/O control codes](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/defining-i-o-control-codes), [security issues for I/O control codes](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/security-issues-for-i-o-control-codes), [keyboard and mouse HID client drivers](https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/keyboard-and-mouse-hid-client-drivers), [`WM_KEYDOWN`](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-keydown), [driver signing policy](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/kernel-mode-code-signing-policy--windows-vista-and-later-), and [Microsoft recommended driver block rules](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/design/microsoft-recommended-driver-block-rules).
+References: [example I/O request](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/example-i-o-request---the-details), [security issues for I/O control codes](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/security-issues-for-i-o-control-codes), [keyboard and mouse HID client drivers](https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/keyboard-and-mouse-hid-client-drivers), [driver signing policy](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/kernel-mode-code-signing-policy--windows-vista-and-later-), and [Microsoft recommended driver block rules](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/design/microsoft-recommended-driver-block-rules).

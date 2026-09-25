@@ -1,4 +1,4 @@
-//! JTAG TAP controller lab for Lesson 14.4.
+//! JTAG TAP controller lab for Lesson 14.10.
 //!
 //! Everything here is simulated. The four JTAG wires are function arguments
 //! and return values, and the board is two chips wired into one scan chain:

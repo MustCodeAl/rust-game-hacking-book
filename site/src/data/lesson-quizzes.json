@@ -56,12 +56,12 @@
     "explanation": "Stack frames and return addresses describe active function calls. Walking upward moves from the immediate write toward the higher-level decision that requested it."
   },
   "2.7": {
-    "id": "detour-return-boundary",
-    "title": "Return safely",
-    "prompt": "After a temporary detour runs, where should execution normally return?",
-    "options": "The first whole instruction after the bytes displaced by the detour||The middle of the overwritten instruction||The executable's file header||The beginning of the current stack frame",
+    "id": "cave-preserve-state",
+    "title": "Leave the machine as you found it",
+    "prompt": "A code cave adds one instruction that changes `eax` and the flags, then replays the displaced instructions and jumps back. Why must it save and restore `eax` and the flags around its own work?",
+    "options": "The hooked function was mid-calculation, and the instructions after the jump may still need the values that were in `eax` and the flags||Saving registers makes the cave run faster||The debugger refuses to continue unless every register is saved||Restoring the flags removes the breakpoint from the cave",
     "answer": "0",
-    "explanation": "Variable-length x86 instructions must be decoded as complete units. Returning into the middle changes how the remaining bytes are interpreted."
+    "explanation": "The hook interrupts a function in the middle of its work, so registers, flags, and stack entries may already hold values its later instructions depend on. If the cave leaves `eax` or the flags changed, the original code keeps running with the wrong inputs, and the failure may only show up later, which is why a hook can seem to work once and then crash."
   },
   "2.9": {
     "id": "pointer-path-proof",
@@ -422,6 +422,14 @@
     "options": "Argument locations, calling convention, return use, ownership, and behavior at several call sites||The export name's letter count||The DLL icon||Whether the address is numerically large",
     "answer": "0",
     "explanation": "A raw export address has no Rust type. The conversion is sound only when machine evidence and documentation establish the complete call contract."
+  },
+  "3.9": {
+    "id": "float-exponent-bias",
+    "title": "Explain the bias",
+    "prompt": "Why does an `f32` store its exponent with 127 added instead of storing the power of two directly?",
+    "options": "So an eight-bit field with no minus sign can still hold negative powers of two||So the number takes up less memory||Because 127 is the largest value a byte can hold||So the CPU can skip reading the fraction bits",
+    "answer": "0",
+    "explanation": "The field only holds 0 to 255. Storing the real exponent plus 127 lets the stored values 1 to 254 stand for real exponents −126 to 127, and the reader subtracts 127 to get the power of two back."
   },
   "4.6": {
     "id": "bfs-shortest-route",
@@ -935,6 +943,14 @@
     "answer": "0",
     "explanation": "The state is an output that `decide` rebuilds from the senses every tick. `seen_for` is still at least `REACTION_TICKS` = 3, so Patrol turns straight back into Chase before the act stage runs. An edit lasts only when the inputs agree with it, or when it changes an input the rules read, such as health."
   },
+  "4.10": {
+    "id": "npc-utility-switch-point",
+    "title": "Where the choice flips",
+    "prompt": "A fighter sees an enemy, has no cover, and has no potions left. It scores Attack as 0.4 + 0.6 × h and Take cover as 0.9 − 0.6 × h, where h is its health as a fraction of full health. Below what health does it stop attacking and take cover, and why?",
+    "options": "About 0.42, because utility scoring runs the higher score and the two are equal where 0.4 + 0.6h = 0.9 − 0.6h, which gives 1.2h = 0.5||0.5, because half health is where a utility system always switches||0.25, because that is where healing starts to win||Never, because Attack always scores at least 0.4",
+    "answer": "0",
+    "explanation": "Utility scoring runs whichever option scores highest, so the choice flips where the two lines cross. Adding 0.6h to both sides of 0.4 + 0.6h = 0.9 − 0.6h and taking 0.4 from both gives 1.2h = 0.5, so h = 0.5 ÷ 1.2 ≈ 0.42. Above that health Attack scores more; below it Take cover does. With no potions, Heal scores 0, so the 0.25 switch point never comes into play. Changing one number in either formula moves the crossing, which is how designers tune utility AI."
+  },
   "9.9": {
     "id": "gsav-recompute-checksum",
     "title": "Finish the edit",
@@ -990,5 +1006,45 @@
     "options": "The console has one fixed memory map with no virtual memory or ASLR, so the game's variables sit at the same address on every run||Console games store every value twice, once for the cheat device||Emulators translate every guest address into a PC address that never changes||Old consoles encrypted their RAM, so only fixed addresses could be read",
     "answer": "0",
     "explanation": "Windows gives each process its own virtual address space and places modules and heap allocations differently between runs (Lesson 2.8), so a PC tool has to rediscover values through pointer paths. An old console has fixed RAM at fixed addresses, and its games lay their variables out the same way every time, so an address found once stays valid, and a cheat is just an address and a value."
+  },
+  "14.7": {
+    "id": "syscall-range-check",
+    "title": "Why the kernel checks addresses itself",
+    "prompt": "Kernel pages have their user/supervisor bit cleared, so ring-3 code faults if it touches them. Why must the kernel's `NtReadVirtualMemory` still check that the requested range and the caller's buffer lie in user space?",
+    "options": "The copy runs in ring 0, where supervisor pages are allowed, so without the check a caller could make the kernel read or overwrite kernel memory on its behalf||The check is only needed for 32-bit programs that come through WoW64||The user/supervisor bit is only checked when code is fetched, not when data is read||The check makes the copy faster by skipping page-table walks",
+    "answer": "0",
+    "explanation": "The user/supervisor bit stops code running at ring 3. The copy itself runs in ring 0, inside the kernel, where the processor allows access to supervisor pages. If the kernel accepted a range in its own half of the address space, or one long enough to wrap around to a small address, it would copy kernel memory out to the caller or write the caller's bytes over kernel memory. So the kernel checks every address that user mode hands it before using it."
+  },
+  "14.8": {
+    "id": "driver-ioctl-any-access",
+    "title": "What the access bits protect",
+    "prompt": "A driver defines a control code that writes to its device, with the access bits (bits 14 and 15) set to `00`. Which programs can send it?",
+    "options": "Any program that can open a handle to the device, because access `00` means the I/O manager requires no rights at all||Only programs whose handle holds write access, because the command writes||Only the driver's own service, because control codes are private to a driver||None, because access `00` disables the command",
+    "answer": "0",
+    "explanation": "The I/O manager compares a control code's access bits with the rights on the caller's handle before the driver runs. `00` means any access, so the check passes for every handle. A command that changes the device should declare write access, `10`, so that only handles opened for writing can send it. Powerful commands declared with access `00` are one of the classic driver mistakes that attackers look for."
+  },
+  "14.9": {
+    "id": "vm-popf-no-trap",
+    "title": "Why trap and emulate failed on x86",
+    "prompt": "Before VT-x and AMD-V, why could a hypervisor not simply run a guest kernel in ring 3 and emulate each privileged instruction when it faulted?",
+    "options": "Some instructions that touch the machine's control state, such as `popf` loading the interrupt flag, do not fault in ring 3; they silently do something different, so the hypervisor never gets control||Code in ring 3 runs too slowly for an operating system kernel||A guest kernel refuses to start unless it is running in ring 0||x86 processors could not raise any fault from ring 3",
+    "answer": "0",
+    "explanation": "Trap and emulate needs every sensitive instruction to fault outside the most privileged level, so that the hypervisor gets control. In ring 3, `popf` leaves the interrupt flag alone without faulting, so a guest kernel that used it to switch interrupts on would carry on believing they were on while nothing told the hypervisor. VMware rewrote such instructions with binary translation, Xen changed the guest kernel's source, and VT-x and AMD-V later gave guests their own ring 0."
+  },
+  "14.10": {
+    "id": "jtag-unknown-chain",
+    "title": "Reading a board you know nothing about",
+    "prompt": "A debugger resets the scan chain of a board it knows nothing about and scans out the data registers. How can it tell where each chip's answer begins, without knowing any chip's register lengths?",
+    "options": "Reset selects IDCODE in every chip that has one, every IDCODE's first bit is 1, and a chip without one sits in BYPASS and captures 0, so each first bit says whether 31 more ID bits follow||Every chip shifts out its name as text after reset, ending with a zero byte, so the debugger reads until each zero||The debugger measures how long each chip takes to answer on TDO and splits the bits at the pauses||The TAP controller counts the chips during reset and sends the total first, followed by one ID per chip",
+    "answer": "0",
+    "explanation": "IDCODEs come out lowest bit first, and bit 0 of every IDCODE is fixed at 1, while a bypass register always captures 0. So each chip's first bit tells the debugger what follows: a 1 starts a 32-bit ID, so the next 31 bits belong to the same chip; a 0 is a chip without IDCODE, which contributes that single bit. Reading bit by bit walks the whole chain, starting with the chip nearest TDO."
+  },
+  "14.11": {
+    "id": "emulator-frame-overshoot",
+    "title": "Paying back the overshoot",
+    "prompt": "The toy console's frame budget is 18 cycles. A frame stops at 19 cycles, because the instruction that crossed the budget could not stop halfway. Why does the emulator give the next frame 17 cycles instead of 18?",
+    "options": "Taking the 1-cycle overshoot off the next frame keeps the long-run average at exactly 18 cycles per frame, so the game runs at its original speed||The CPU runs faster in the second frame, so it needs fewer cycles||17 cycles is the most any frame can use without overshooting||The save state taken at the frame boundary uses up one cycle",
+    "answer": "0",
+    "explanation": "An instruction always runs to its end, so a frame can pass its budget: here step 8, an ADD worth 2 cycles, started at 17 and finished at 19. If every frame then got a fresh 18, the extra cycles would pile up and the emulated machine would run ahead of real time. Subtracting each overshoot from the next budget cancels it, so over many frames the average is exactly 18."
   }
 }

@@ -1,4 +1,4 @@
-//! Toy driver lab for Lesson 14.2.
+//! Toy driver lab for Lesson 14.8.
 //!
 //! An ordinary user-mode simulation of a device and the driver that owns it.
 //! `ToyKeypad` plays the hardware: a 16-byte block of registers and a small

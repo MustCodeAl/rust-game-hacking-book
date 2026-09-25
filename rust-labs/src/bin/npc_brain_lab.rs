@@ -1,4 +1,4 @@
-//! NPC brain lab for Lesson 4.9.
+//! NPC brain lab for Lessons 4.9 and 4.10.
 //!
 //! A toy guard senses, decides, and acts once per tick, the way an NPC does
 //! inside a game loop. It shows perception (distance, view cone, and line of
@@ -21,6 +21,8 @@ const FLEE_HEALTH: u32 = 25;
 const SPEED: f32 = 1.0;
 /// Spacing of the samples in the line-of-sight check.
 const SIGHT_STEP: f32 = 0.1;
+/// Guard decisions per second, so each tick lasts 1000 / 10 = 100 ms.
+const TICKS_PER_SECOND: u32 = 10;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Vec2 {
@@ -319,8 +321,9 @@ fn main() {
         };
         let report = guard.tick(player, &walls);
         let state = format!("{:?}", report.state);
+        let millis = tick * 1000 / TICKS_PER_SECOND;
         println!(
-            "  tick {tick:>2}  player at ({:>3.1}, {:>3.1})  sees: {:<5}  state: {state:<20} guard at ({:>3.1}, {:>3.1})",
+            "  tick {tick:>2} ({millis:>4} ms)  player at ({:>3.1}, {:>3.1})  sees: {:<5}  state: {state:<20} guard at ({:>3.1}, {:>3.1})",
             player.x, player.y, report.sees_player, guard.position.x, guard.position.y
         );
     }

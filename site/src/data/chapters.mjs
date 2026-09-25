@@ -3,7 +3,7 @@
 export const CHAPTERS = [
 	{ number: 1, title: 'Start Here', emoji: '🧠', summary: 'How computers run programs, how memory stores numbers and pointers, game data, engines, and first scans.' },
 	{ number: 2, title: 'Debugging & Control Flow', emoji: '🔍', summary: 'Assembly, breakpoints, code caves, moving addresses, and pointer paths.' },
-	{ number: 3, title: 'Memory, Types & Ownership', emoji: '🦀', summary: 'External tools, C++ object layouts, containers, obfuscated values, strings, and DLL contracts.' },
+	{ number: 3, title: 'Memory, Types & Ownership', emoji: '🦀', summary: 'External tools, C++ object layouts, containers, obfuscated values, strings, DLL contracts, and numbers and pointers decoded bit by bit.' },
 	{ number: 4, title: 'Game State & Automation', emoji: '♟️', summary: 'Snapshots, fog of war, state machines, pathfinding, events, telemetry, and how NPCs decide.' },
 	{ number: 5, title: '3D Games & Rendering', emoji: '🧭', summary: 'Coordinates, OpenGL state, aiming, recoil, radar, and overlays.' },
 	{ number: 6, title: 'Protocols, Networks & IPC', emoji: '🌐', summary: 'Packets, framing, local proxies, shared memory, and named pipes.' },

@@ -1,0 +1,226 @@
+---
+title: "How a System Call Crosses into the Kernel"
+description: "Read the privilege level in the cs register and the user/supervisor bit in a page-table entry, then follow one ReadProcessMemory call through ntdll's stub, the kernel's entry code, its address and handle-rights checks, and back with an NTSTATUS."
+chapter: "14.7"
+minutes: 13
+author: "attilathedud"
+date: "2026-09-24"
+sidebar:
+  order: 7
+  label: "14.7 How a System Call Crosses into the Kernel"
+---
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import Quiz from '../../../../components/Quiz.astro';
+
+[Lesson 14.1](/pages/14/01/) showed the processor keeping user-mode code away
+from the kernel and drew one `ReadProcessMemory` call crossing into the kernel
+and back. This lesson opens both up. It reads the bits the processor actually
+checks, then follows that one call a layer at a time, with every value the
+kernel compares along the way.
+
+## The current level is two bits of a register
+
+The processor keeps the current privilege level in the lowest two bits of the
+`cs` register, which tells the processor which code segment it is running. Two
+bits can hold 2 × 2 = 4 patterns, `00`, `01`, `10`, and `11`, which is
+exactly why there are four rings.
+
+Open any 64-bit program in x64dbg and the register panel shows `cs` as `0033`:
+
+<MemoryStrip
+  cells="bit 7=0|bit 6=0|bit 5=1|bit 4=1|bit 3=0|bit 2=0|bit 1=1|bit 0=1"
+  marks="6-7"
+  groups="0-3:hex `3`|4-7:hex `3`"
+  groups2="0-5:which code segment|6-7:level `11` = 3"
+  caption="`cs` = `0x33` in a 64-bit program. The upper bits choose a code segment; the lowest two bits are the current privilege level."
+/>
+
+`0x33` is 3 × 16 + 3 = 51. Each hex digit stands for four bits, so `0x33` is
+`0011 0011`. Its lowest two bits are `11`, which is 2 + 1 = 3: ring 3, user
+mode. The kernel's own code segment is `0x10`, which is `0001 0000`; its lowest
+two bits are `00`, ring 0.
+
+A program cannot promote itself by loading `0x10` into `cs`. The processor
+refuses any change of code segment that would raise the privilege level, except
+through a few entry points that the kernel prepared in advance. The most
+important of them is the `syscall` instruction, and the rest of this lesson
+follows one trip through it.
+
+<Quiz
+  id="kernel-cs-privilege-bits"
+  title="Read the privilege level"
+  prompt="A 32-bit game running on 64-bit Windows shows `cs` = `0023` in x64dbg. At which privilege level is its code running?"
+  options="Ring 0, because `0x23` is smaller than the 64-bit value `0x33`||Ring 3, because `0x23` is `0010 0011` and its lowest two bits are `11`||Ring 2, because `0x23` begins with the digit 2||The value of `cs` says nothing about privilege"
+  answer="1"
+  explanation="Only the lowest two bits of `cs` hold the privilege level. `0x23` is 2 × 16 + 3 = 35, or `0010 0011` in binary, and its lowest two bits are `11` = 3. The upper bits pick a different code segment (a 32-bit one), but the level is still ring 3, user mode."
+/>
+
+## One bit marks a page as the kernel's
+
+Lesson 14.1 said that a page-table entry's **user/supervisor** bit, bit 2,
+decides whether ring 3 may touch the page, and
+[Lesson 11.7](/pages/11/07/) said that the low twelve bits of an entry hold
+flags. Here is the lowest byte of an entry for an ordinary user page:
+
+<MemoryStrip
+  cells="bit 7=0|bit 6=1|bit 5=1|bit 4=0|bit 3=0|bit 2=1|bit 1=1|bit 0=1"
+  marks="5"
+  groups="1-1:dirty|2-2:accessed|5-5:user|6-6:write|7-7:present"
+  caption="The lowest byte of a page-table entry for a user page, `0x67`."
+/>
+
+`0x67` is 6 × 16 + 7 = 103, and 103 = 64 + 32 + 4 + 2 + 1, so bits 6, 5, 2, 1,
+and 0 are set. Bit 0 says the page is present, bit 1 that it may be written,
+and bit 2 that ring 3 may use it. The processor itself sets bit 5, *accessed*,
+the first time the page is used, and bit 6, *dirty*, the first time it is
+written. Bits 3, 4, and 7 control caching and are 0 here.
+
+A page that holds kernel data looks almost the same:
+
+<MemoryStrip
+  cells="bit 7=0|bit 6=1|bit 5=1|bit 4=0|bit 3=0|bit 2=0|bit 1=1|bit 0=1"
+  marks="5"
+  groups="1-1:dirty|2-2:accessed|5-5:user = 0|6-6:write|7-7:present"
+  caption="The same byte for a kernel page, `0x63`. Only bit 2 differs, so ring 3 is refused."
+/>
+
+`0x67` − `0x63` = 4, and 4 = 2², so exactly one bit differs: bit 2. That single
+0 is the whole difference between the game's pages and the kernel's. A kernel
+page can be present, writable, and recently used, and still refuse every access
+from ring 3.
+
+## The same call, one layer at a time
+
+Take a read like the ones in [Lesson 10.3](/pages/10/03/): a handle to the game
+opened with only query and read rights, and a request for 4 bytes at address
+`0x0050_1000`. Lesson 14.1 drew the whole round trip as one sequence diagram,
+from your tool through `kernel32.dll`, `kernelbase.dll`, and `ntdll.dll` to the
+processor and the kernel, and back. This section follows that diagram one
+participant at a time.
+
+### Inside your process
+
+`ReadProcessMemory` in `kernel32.dll` forwards to `kernelbase.dll`
+([Lesson 10.7](/pages/10/07/)), which calls `NtReadVirtualMemory` in
+`ntdll.dll` with the same arguments. The `ntdll` function is a **stub**: a few
+instructions whose only job is to make the system call. On 64-bit Windows its
+core is four instructions:
+
+```text
+mov r10, rcx        ; the first argument moves out of rcx
+mov eax, <number>   ; the system service number: which kernel routine to run
+syscall             ; enter the kernel
+ret                 ; back to kernelbase, with the status in eax
+```
+
+The first line exists because of the first thing `syscall` does. The Windows
+x64 calling convention passes a function's first argument in `rcx`, but
+`syscall` overwrites `rcx` with the return address, so the stub moves the
+argument to `r10` first, and the kernel knows to look for it there.
+
+The number in `eax` is a **system service number**, an index into the kernel's
+table of routines. The numbers are internal to Windows and change between
+builds, which is why this book never copies one into a program. In a debugger
+the stub also shows a test and a jump to an older entry instruction, `int 2Eh`,
+that some configurations use; either way, the processor arrives at an address
+the kernel chose.
+
+### Crossing over
+
+The kernel's entry code assumes that everything user mode handed it could be
+hostile. It switches from the program's stack to a kernel stack that belongs to
+the thread, because the program's stack pointer could point anywhere. It saves
+the user registers so they can be put back exactly. Then it looks the service
+number up in its table, rejects a number that is out of range, and calls the
+kernel's own `NtReadVirtualMemory`.
+
+### Inside the kernel
+
+Most of the kernel's work is checking.
+
+**The address ranges must lie inside user space.** The request covers
+`0x0050_1000` up to `0x0050_1000` + 4 = `0x0050_1004`, and the tool's buffer is
+also a user address. Both are far below the top of user space, which is a
+little under `0x0000_8000_0000_0000` on 64-bit Windows. A range that reached
+into the kernel's half, or one long enough to run past the largest 64-bit
+number and wrap around to a small address, would be rejected here. The
+user/supervisor bit cannot do this job for the kernel: the copy runs in ring 0,
+and ring 0 may touch supervisor pages. So the kernel checks every range itself,
+and that check is why `ReadProcessMemory` cannot read kernel memory, whatever
+handle you hold.
+
+**The handle must carry the right the operation needs.** The kernel finds the
+handle in the tool's handle table and reads the rights granted when the handle
+was opened. Reading needs `PROCESS_VM_READ`, which is `0x0010`. This handle was
+opened with `PROCESS_QUERY_LIMITED_INFORMATION` and `PROCESS_VM_READ`, so its
+rights are `0x1000` + `0x0010` = `0x1010`. Written as bits, one byte at a time:
+
+<MemoryStrip
+  cells="15=0|14=0|13=0|12=1|11=0|10=0|9=0|8=0"
+  marks="3"
+  groups="0-3:hex `1`|4-7:hex `0`"
+  groups2="3-3:query"
+  caption="Bits 15 to 8 of the handle's rights, `0x1010`. `0x1000` is 16³ = 4,096 = 2¹², so it is bit 12."
+/>
+
+<MemoryStrip
+  cells="7=0|6=0|5=0|4=1|3=0|2=0|1=0|0=0"
+  marks="3"
+  groups="0-3:hex `1`|4-7:hex `0`"
+  groups2="2-2:write|3-3:read"
+  caption="Bits 7 to 0. `0x0010` is 16 = 2⁴, bit 4, the read right. Bit 5, the write right, is 0."
+/>
+
+The test is a single AND. The kernel keeps only the bits that are set in both
+the handle's rights and the rights it needs, and allows the operation only if
+every needed bit survived. `0x1010` AND `0x0010` = `0x0010`, the whole
+requirement, so the read is allowed.
+
+`WriteProcessMemory` needs `PROCESS_VM_WRITE`, `0x0020`. That is 2 × 16 = 32 =
+2⁵, bit 5, and bit 5 of `0x1010` is 0, so `0x1010` AND `0x0020` = 0: denied,
+whatever the tool's author intended. The rights were fixed when the handle was
+created, and nothing done with the handle afterward can add to them.
+
+**Only then does it copy.** The game's bytes are visible only through the
+game's page tables, and the tool's buffer only through the tool's. So the
+kernel briefly switches to the game's address space, reads the 4 bytes into
+memory of its own, switches back, and writes them into the tool's buffer. Large
+reads use a temporary kernel mapping of the game's pages instead, with the same
+effect. If a page in the range is missing, the kernel catches the fault, copies
+what it can, and reports a partial result.
+
+### Returning
+
+The kernel places a status code in `rax` and executes `sysret`, the reverse of
+`syscall`: the level drops back to 3, and execution resumes at the address saved
+in `rcx`, which is the `ret` right after `syscall` in the stub.
+
+The status is an **NTSTATUS**, a 32-bit code whose top two bits give its
+severity: `00` success, `01` information, `10` warning, `11` error.
+`STATUS_SUCCESS` is 0. `STATUS_ACCESS_DENIED` is `0xC000_0022`; hex `C` is
+binary `1100`, so its top two bits are `11`, an error. `STATUS_PARTIAL_COPY` is
+`0x8000_000D`; hex `8` is `1000`, so its top two bits are `10`, a warning,
+because some of the bytes did arrive. `kernelbase.dll` translates the status
+into a Win32 error code for `GetLastError`, 5 for access denied and 299 for a
+partial copy, and reports success or failure to your tool.
+
+:::note[A 32-bit game takes one extra hop]
+The book's Windows labs are 32-bit programs. A 32-bit process on 64-bit Windows
+has a 32-bit `ntdll.dll`, whose stubs cannot enter the 64-bit kernel directly.
+Each stub hands its call to the **WoW64** layer (“Windows 32-bit on Windows
+64-bit”), which switches the processor into 64-bit mode, widens every 32-bit
+argument to 64 bits, and makes the same system call through the 64-bit
+`ntdll.dll`. The two modes use different code segments, which is why `cs` reads
+`0023` in a 32-bit program and `0033` in a 64-bit one.
+:::
+
+<Quiz
+  id="kernel-handle-rights-and"
+  title="Predict the kernel's answer"
+  prompt="A tool opened a game with `PROCESS_QUERY_INFORMATION` (`0x0400`) and `PROCESS_QUERY_LIMITED_INFORMATION` (`0x1000`), so its handle's rights are `0x1400`. It calls `ReadProcessMemory`, which needs `PROCESS_VM_READ` (`0x0010`). What happens?"
+  options="The kernel copies the bytes, because a handle that can query a process can also read it||The kernel refuses with `STATUS_ACCESS_DENIED`, because `0x1400` AND `0x0010` is 0||The processor raises a general-protection fault inside the tool||The read succeeds if the tool runs as administrator"
+  answer="1"
+  explanation="`0x0400` is 4 × 256 = 1,024 = 2¹⁰ (bit 10) and `0x1000` is 2¹² (bit 12), so `0x1400` has bits 12 and 10 set. The read needs bit 4, which is 0, so the AND is 0 and the kernel returns an error status. Nothing faults: the system call returns normally with `STATUS_ACCESS_DENIED`, and `kernelbase.dll` reports error 5. Running as administrator affects what `OpenProcess` may grant; it cannot add rights to a handle that already exists."
+/>
+
+References: [process security and access rights](https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights), [using NTSTATUS values](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/using-ntstatus-values), and the [Intel Software Developer Manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html) for `syscall`, privilege levels, and page-table bits.

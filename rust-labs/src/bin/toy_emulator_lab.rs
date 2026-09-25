@@ -1,4 +1,4 @@
-//! Toy emulator lab for Lesson 14.6.
+//! Toy emulator lab for Lesson 14.11.
 //!
 //! A made-up 8-bit console: a CPU with a program counter, registers `A` and
 //! `X`, and a zero flag; 240 bytes of RAM; and two memory-mapped I/O
