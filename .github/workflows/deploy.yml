@@ -1,0 +1,42 @@
+name: Deploy the book to GitHub Pages
+
+on:
+  push:
+    branches: [rustgamehackingreimagined]
+  # Lets you rebuild the site by hand from the Actions tab.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time. A queued run waits instead of cancelling a
+# deployment that is already in progress.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install, build, and upload the Starlight site
+        uses: withastro/action@3eafd002e65cc31b4f0eae0bb05450d521562247 # v6
+        with:
+          # The Astro project lives in site/. Its build script also copies the
+          # lab crates from the repository root into the published files.
+          path: ./site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5

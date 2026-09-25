@@ -1,40 +1,58 @@
 # Game Hacking Academy
 
-The book is a beginner-friendly guide to game internals, memory,
-debugging, graphics, networking, tooling, and supported modding.
+A beginner-friendly book about how games work underneath: memory, assembly,
+debuggers, graphics, networking, file formats, and the tools used to study them.
+The examples and labs are written in Rust.
 
-It begins with a source-grounded questioning method: identify the exact target,
-separate observations from interpretations, verify answers against evidence, and
-retry missed ideas without guessing.
+Read it online at <https://mustcodeal.github.io/rust-game-hacking-book/>.
 
-## Local preview
+## Repository layout
 
-```text
-bundle exec jekyll serve
+| Path | What it holds |
+| --- | --- |
+| `site/` | The book, built with [Astro Starlight](https://starlight.astro.build) |
+| `site/src/content/docs/pages/<chapter>/<lesson>.mdx` | Lesson text |
+| `site/src/content/docs/glossary.mdx` | Glossary |
+| `site/src/data/lesson-quizzes.json` | End-of-lesson knowledge checks |
+| `site/src/components/` | Memory figures, quizzes, labs, and layout overrides |
+| `rust-labs/` | Portable exercises: byte parsing, scanning, math, toy machines |
+| `windows-labs/` | Windows implementations for the memory, debugger, PE, and IPC lessons |
+| `lua-labs/` | The simulated scripting host used in Chapter 12 |
+| `advanced-memory-labs/` | Toy obfuscation, authenticated encryption, offline page-table translation |
+
+## Preview the book locally
+
+```bash
+cd site
+bun install
+bun run dev
 ```
 
-## Portable exercises
+The dev server prints its address, normally
+<http://localhost:4321/rust-game-hacking-book/>. `bun run build` writes the
+static site to `site/dist/`.
 
-```text
+## Publishing
+
+Every push to `rustgamehackingreimagined` runs
+`.github/workflows/deploy.yml`, which builds `site/` and deploys it to GitHub
+Pages. The repository's Pages source must be set to **GitHub Actions**.
+
+## Labs
+
+```bash
 cd rust-labs
 cargo test
 ```
 
-## Windows, Lua, and advanced memory labs
-
-The `windows-labs` crate contains the complete Windows implementations used by
-the memory, debugger, PE, IPC, and game-analysis lessons. Chapter 12's
-simulated scripting host is separate so it can run on any development machine:
-
-```text
+```bash
 cargo run --manifest-path lua-labs/Cargo.toml -- lua-labs/scripts/observer.lua
 cargo test --manifest-path advanced-memory-labs/Cargo.toml
 ```
 
-The advanced crate supports the related lessons in Chapters 3, 9, and 11 with
-toy value obfuscation, XChaCha20-Poly1305 authenticated encryption, and
-read-only x86-64 page-table translation over offline capture files. It contains no DMA hardware
-driver, live memory writer, anti-cheat bypass, or stealth firmware.
+The advanced crate contains no DMA hardware driver, live memory writer,
+anti-cheat bypass, or stealth firmware. Its captures are offline files.
 
-The site is based on
-[jekyll-gitbook](https://github.com/sighingnow/jekyll-gitbook).
+## Earlier versions
+
+The Jekyll edition of the book is kept on the `jekyll-backup` branch.

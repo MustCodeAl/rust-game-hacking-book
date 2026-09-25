@@ -1,9 +1,5 @@
 # Game Hacking Academy · Starlight site
 
-The book is moving from Jekyll to [Astro Starlight](https://starlight.astro.build).
-This folder is the new site; the Jekyll book at the repository root stays live
-until the migration is complete.
-
 ```bash
 bun install
 bun run dev      # http://localhost:4321/rust-game-hacking-book/
@@ -11,10 +7,19 @@ bun run build    # static site in dist/
 ```
 
 - Lessons: `src/content/docs/pages/<chapter>/<lesson>.mdx`
-- End-of-lesson quizzes: `src/data/lesson-quizzes.json`
+- Chapter titles and summaries: `src/data/chapters.mjs`
+- End-of-lesson quizzes: `src/data/lesson-quizzes.json`, keyed by lesson number
+- Chapter review questions: `public/scripts/learning-widgets.js`
 - Figures, quizzes, labs, and layout overrides: `src/components/`
 - Palettes and component styles: `src/styles/`
 - Context7 navigation: `bun run docs-json` regenerates `../docs.json`
 
-Until the cutover, `_pages/` at the repository root is still the source of
-truth; `python3 scripts/import-jekyll.py ..` regenerates the lessons here.
+## Writing lessons in MDX
+
+- Escape `{` and `}` in prose as `\{` and `\}`. Inside code spans and fenced
+  code they need no escaping.
+- Self-close void tags: `<br />`, `<hr />`.
+- MDX has no HTML comments.
+- Draw memory with `<MemoryStrip cells="..." caption="..." />` and flows with a
+  fenced `mermaid` block.
+- Asides use `:::note[Title]`, `:::tip`, `:::caution`, and `:::danger`.
