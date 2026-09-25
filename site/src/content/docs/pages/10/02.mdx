@@ -1,6 +1,6 @@
 ---
 title: "Prove Which Game Build You Have"
-description: "Create and verify a SHA-256 manifest so reverse-engineering notes, RVAs, patterns, mods, and patches stay tied to exact files."
+description: "Create and verify a SHA-256 manifest so RVAs, byte patterns, mods, and patches stay tied to exact files."
 chapter: "10.2"
 minutes: 30
 author: "attilathedud"
@@ -13,7 +13,7 @@ sidebar:
 
 Two files can both call themselves “Wesnoth 1.14.9” and still contain different bytes. A distribution may rebuild the executable, a mod may replace data, or a repair tool may update one DLL without changing the folder name.
 
-That matters because this course uses exact evidence:
+That matters because much of what this course builds depends on exact bytes:
 
 - an RVA belongs to one module layout;
 - a byte pattern belongs to one compiled instruction sequence;
@@ -22,10 +22,10 @@ That matters because this course uses exact evidence:
 
 A **cryptographic hash** turns all file bytes into a fixed-size fingerprint. This lab uses SHA-256. Change one byte and the resulting digest should change dramatically.
 
-Build identity is stronger when separate observations answer separate
-questions:
+Several different facts identify a build, and each one answers a separate
+question:
 
-| Evidence | Question it answers | Important limit |
+| Fact | Question it answers | Important limit |
 |---|---|---|
 | Version label | What release does the program claim? | Different builds can share it. |
 | Live module path | Which file did this process map? | A path does not identify its bytes. |
@@ -193,9 +193,9 @@ clean-install.manifest
 course-mod.manifest
 ```
 
-Do not update `clean-install.manifest` until a changed file looks clean again. Preserve the original baseline, document the mod, and create a second reviewed manifest after the intended change.
+Do not update `clean-install.manifest` until a changed file looks clean again. Keep the original baseline, and create a second, reviewed manifest after the intended change, so each known state has its own list of digests.
 
-For the Urban Terror PK3 lab, record the original archive hash, use the existing `.gha-backup`, and record the rebuilt archive hash. That gives you three pieces of evidence: what you started with, what the tool preserved, and what it created.
+The Urban Terror texture lab from Lesson 9.3 fits this pattern exactly. Before the tool runs, the archive's digest belongs to the clean state. The tool keeps the untouched original as `zUrT43_001.pk3.gha-backup`, so that backup must hash to the same clean digest; if it does not, the original was not preserved. The rebuilt `zUrT43_001.pk3` has a new digest, which belongs to the modded state.
 
 ## Watch for time-of-check/time-of-use
 
@@ -227,6 +227,6 @@ An on-disk hash confirms the file. A live patcher should still check:
 - a version-specific RVA or unique pattern;
 - the exact original bytes at the final address.
 
-Each check answers a different question. Defense improves when independent evidence agrees.
+Each check covers a gap the others leave. The on-disk hash cannot tell which copy of the file the process actually mapped, or whether anything changed the bytes in memory after loading; the original-byte check at the final address can. A patch should go ahead only when every check passes.
 
 Reference: [Microsoft PE format](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format) and [NIST Secure Hash Standard](https://csrc.nist.gov/pubs/fips/180-4/upd1/final).

@@ -9,6 +9,8 @@ sidebar:
   order: 3
   label: "11.3 Resolve Optional Windows APIs Safely"
 ---
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
+
 ## Import tables are not the only way to call an API
 
 Normally the Windows loader resolves a program's imports before `main`. Sometimes a tool supports several Windows versions and wants to use a newer API only when it exists. Then it can:
@@ -44,6 +46,26 @@ type QueryFullProcessImageNameW = unsafe extern "system" fn(
 ```
 
 The pointer type says more than “address of a function.” It records ABI, argument order, mutability, and result width.
+
+`extern "system"` names a different calling convention on each of the two targets this course builds, so the same alias arranges the same four values in two different ways. On 32-bit x86 it means **stdcall**: the caller pushes the arguments from last to first, so when the function starts they sit just above the return address, one per 4-byte stack slot, and the function removes them itself before returning.
+
+<MemoryStrip
+  cells="[esp]=return address|[esp+0x04]=process|[esp+0x08]=flags|[esp+0x0C]=name|[esp+0x10]=size"
+  marks="1-4"
+  groups="1-4:4 arguments × 4 bytes = 16 = `0x10` bytes, removed by `ret 0x10`"
+  caption="32-bit stdcall: the stack as `QueryFullProcessImageNameW` begins. Each argument slot is 4 bytes above the previous one, so the offsets run `0x04`, `0x08`, `0x0C` (12), `0x10` (16)."
+/>
+
+On x86-64, Windows passes the first four integer or pointer arguments in registers, in order, and returns an integer result in `EAX`, the low 32 bits of `RAX`:
+
+<MemoryStrip
+  cells="RCX=process|RDX=flags|R8=name|R9=size|EAX=BOOL result"
+  marks="4"
+  groups="0-3:arguments, first to fourth|4:return value"
+  caption="The x86-64 Windows calling convention: four arguments, four registers. `BOOL` is a 32-bit integer, so `EAX` is enough to carry it."
+/>
+
+That is why a “close enough” signature fails in ways that have nothing to do with pointer size. Declare three parameters instead of four, and a 32-bit caller pushes 12 bytes while the function still removes 16 with `ret 0x10`, leaving the stack pointer 4 bytes away from where the caller expects it. On x86-64 the function reads a fourth argument from `R9` anyway, whatever that register happens to hold, and writes the result length through it as if it were a pointer.
 
 ## Resolve from an already loaded system module
 
@@ -105,6 +127,15 @@ fn query_image_name(
 }
 ```
 
+`length` means two different things on the two sides of the call. Suppose the process is Wesnoth at `C:\Games\Wesnoth 1.14.9\wesnoth.exe`, a 35-character path:
+
+<MemoryStrip
+  cells="[0]=C|[1]=:|=· · ·|[33]=x|[34]=e|[35]=NUL|=· · ·|[32767]=0"
+  marks="0-4"
+  groups="0-4:35 units of text, so `length` comes back as 35|5:not counted|6-7:never read"
+  caption="The buffer after a successful call. Going in, `length` was 32,768, the vector's full size: 2^15 units, room for the longest extended-length Windows path of 32,767 characters plus its terminator. Coming back, it is the number of units written without the terminator, so `buffer[..35]` is exactly the path. The `ensure!` rejects a returned length larger than the buffer, because slicing past the end would panic."
+/>
+
 Use an RAII-owned process handle from the earlier Windows chapters. The dynamic call does not change ownership rules.
 
 ## Design the fallback before lookup
@@ -127,7 +158,7 @@ flowchart TD
     C -- "No" --> F["Use the documented fallback<br/>and label its weaker result"]
     C -- "Yes" --> D["Convert the address to the<br/>exact documented function type"]
     D --> E{"Call succeeds?"}
-    E -- "Yes" --> G["Return the full result<br/>and record its source"]
+    E -- "Yes" --> G["Return the full result<br/>labelled with its source"]
     E -- "No" --> H["Handle the call error<br/>or documented retry case"]
 ```
 

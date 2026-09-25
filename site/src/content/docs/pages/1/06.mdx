@@ -1,22 +1,23 @@
 ---
-title: "A Four-Step Method for Every Experiment"
-description: "Use Identify, Understand, Locate, and Change to turn a game observation into a controlled, repeatable experiment."
+title: "A Four-Step Method for Experiments"
+description: "One way to organize a memory experiment: Identify, Understand, Locate, and Change, so something you see in a game becomes a controlled, repeatable test."
 chapter: "1.6"
-minutes: 16
+minutes: 14
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 6
-  label: "1.6 A Four-Step Method for Every Experiment"
+  label: "1.6 A Four-Step Method for Experiments"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 The fastest way to get completely lost is to open a memory scanner and start
 searching before deciding what you are actually asking. You end up with four
-hundred addresses, no way to tell which one matters, and no record of what you
+hundred addresses, no way to tell which one matters, and no idea which ones you
 already ruled out.
 
-Four steps keep the work in order:
+One way to keep the work in order is to split it into four steps. Treat them as
+a suggestion to adapt, not a rule the rest of the book relies on:
 
 1. **Identify** the exact behavior.
 2. **Understand** how that behavior should work.
@@ -33,7 +34,7 @@ flowchart LR
     L --> C["4. Change<br/>one thing, then measure"]
     C -->|"only the text changed:<br/>you found a display copy"| L
     C -->|"the value snapped back:<br/>another system owns it"| U
-    C -->|"the prediction held"| R["record it, restore,<br/>and repeat from scratch"]
+    C -->|"the prediction held"| R["restore, then repeat<br/>from a fresh start"]
 ```
 
 ## 1. Identify the behavior
@@ -45,7 +46,8 @@ Choose something you can observe and reproduce.
 ✅ “Find the value that decreases by exactly 25 when the local player takes one
 known hit.”
 
-Record the starting conditions:
+The behavior is only repeatable if it starts from the same conditions each
+time:
 
 - exact game build;
 - map, save, or level;
@@ -58,7 +60,7 @@ axis, or toggling one graphics setting. Avoid changing several things at once.
 
 ## 2. Understand how the behavior should work
 
-Before searching memory, write what the game appears to do.
+Before searching memory, work out the rule the game appears to follow.
 
 For health:
 
@@ -66,7 +68,7 @@ For health:
 new_health = max(0, old_health - damage)
 ```
 
-Also write relationships you expect:
+The rule also implies conditions that should always hold:
 
 ```text
 0 <= health <= max_health
@@ -77,13 +79,13 @@ the health bar follows health after an update
 These rules help distinguish the simulation value from text, animation state,
 or a cached display value.
 
-At this stage, the rules are hypotheses. The game may use armor, difficulty
-scaling, delayed damage, or a server-owned result. Write down uncertainty rather
-than silently treating a guess as fact.
+At this stage the rules are guesses. The game may apply armor, difficulty
+scaling, or delayed damage, or a server may own the result, and any of these
+would break the simple formula.
 
 ## Define what your tool is allowed to do
 
-Before code touches another process, write a small contract:
+Before code touches another process, decide its limits in a small contract:
 
 ```text
 Target: Wesnoth 1.14.9, 32-bit Windows build
@@ -91,7 +93,7 @@ Input: process name and expected build fingerprint
 Read: one known module-relative pointer path
 Change: one u32 field after confirming its current value
 Stop: cancel key, version mismatch, invalid pointer, or failed read
-Restore: write the recorded original value when the experiment ends
+Restore: write the saved original value back when the experiment ends
 ```
 
 This contract prevents a small experiment from quietly turning into an
@@ -99,7 +101,7 @@ unbounded tool.
 
 ## 3. Locate the data and code
 
-Use the least complicated observation that can answer the question:
+Use the least complicated technique that can answer the question:
 
 1. scan for the visible value;
 2. make one controlled game change;
@@ -115,23 +117,18 @@ way. The numbers below are only an example, but the shape is typical:
 <MemoryStrip
   cells="first scan for 100=4,012|after spending 25 gold=37|after a second purchase=3|write breakpoint=1 instruction"
   marks="3"
-  caption="Scanning narrows the addresses; the breakpoint then names the code that writes the survivor, which is stronger evidence than any number of matching scans."
+  caption="Scanning narrows the addresses; a write breakpoint then names the instruction that stores to the survivor, which ties the address to the game's own code rather than to a coincidence of values."
 />
 
-An address found once is evidence for that run. Restart the game before calling
-it stable. If the absolute address moves but a module-relative path remains
-valid, record the path and the exact build it belongs to.
+An address found once is valid for that run. Restarting the game shows whether
+it is stable. If the absolute address moves but a module-relative path keeps
+working, the path is what carries over, and only for the exact build it was
+found in.
 
-Keep a table while you work:
-
-| Observation | Evidence | Confidence | Next test |
-|---|---|---:|---|
-| candidate changes with visible gold | two scans | medium | spend a different amount |
-| instruction writes candidate after purchase | write breakpoint | high | inspect the object base |
-| path survives restart | three launches | higher | test another save |
-
-Confidence is not proof. It tells you how much independent evidence supports the
-current explanation.
+Each kind of check rules out a different mistake. A second scan with a
+different amount rules out an unrelated value that happened to match once. A
+write breakpoint shows which instruction owns the value. A restart shows
+whether the path survives a new process.
 
 ## 4. Change one thing and measure the result
 
@@ -145,7 +142,7 @@ game update.
 
 Then:
 
-1. record the original bytes or value;
+1. save the original bytes or value so you can restore them;
 2. confirm the value still matches what you expect;
 3. apply one bounded change;
 4. observe the immediate and next-update results;
@@ -154,8 +151,7 @@ Then:
 
 If only the text changes, you probably found a display copy. If the value snaps
 back, another system owns or recomputes it. If unrelated fields break, your type,
-width, or address may be wrong. These failures improve the model when you record
-them.
+width, or address may be wrong.
 
 ## Use tests and types for quick feedback
 
@@ -173,39 +169,15 @@ fn rejects_an_unexpected_current_value() {
 }
 ```
 
-The compiler checks types. Tests check examples. Debugger observations check the
-running game. Use all three feedback sources rather than depending on memory.
-
-## Record enough to repeat the experiment
-
-Use a note like this:
-
-```text
-Question:
-Target build and fingerprint:
-Starting state:
-Prediction:
-Address or path:
-Original bytes/value:
-Single change:
-Immediate result:
-Result after next update:
-Restore result:
-What the evidence supports:
-What remains uncertain:
-Next test:
-```
-
-Good notes turn a lucky result into a procedure another person—or you next
-week—can repeat.
+The compiler checks types, tests check examples, and the debugger checks the
+running game. Each one catches mistakes the other two cannot.
 
 ## Checkpoint
 
 You should now be able to plan an experiment that:
 
-- names one observable behavior;
-- records expected rules and uncertainty;
-- locates data through repeated evidence;
+- names one repeatable behavior;
+- states the rules it expects and where they might not hold;
+- narrows candidates with controlled changes and a breakpoint;
 - makes one reversible change;
-- uses tests, types, and observations for feedback;
-- records enough information to reproduce the result.
+- uses the compiler, tests, and the debugger for feedback.

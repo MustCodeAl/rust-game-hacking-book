@@ -2,13 +2,15 @@
 title: "Analyze State and Integrity Checks"
 description: "Trace what an integrity check actually covers, where its decision is consumed, and whether a stale or partial result can protect the promised state."
 chapter: "13.2"
-minutes: 46
+minutes: 50
 author: "attilathedud"
 date: "2026-08-31"
 sidebar:
   order: 2
   label: "13.2 Analyze State and Integrity Checks"
 ---
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
+
 ## Prerequisites
 
 You should understand byte ranges, hashes, snapshots, state transitions, and
@@ -21,7 +23,8 @@ An integrity check answers a narrow question such as, “Do these bytes equal th
 expected bytes?” It does not automatically prove that the whole process, file,
 object, or later operation is unchanged.
 
-Before evaluating a check, write down five boundaries:
+Every integrity check has five boundaries, and a passing result means nothing
+outside them:
 
 | Boundary | Question to answer |
 |---|---|
@@ -50,9 +53,9 @@ flowchart LR
     E --> G[Postcondition check]
 ```
 
-If a result is cached, copied to another object, or checked far away from the
-effect, label those edges. Each edge creates a question about identity and
-freshness.
+A result that is cached, copied to another object, or checked far from the
+effect adds edges to this path. Each added edge is a place where the result can
+stop describing the object, and the moment, it was computed for.
 
 ## A toy integrity record
 
@@ -87,6 +90,32 @@ The checksum includes every field used to identify the record and interpret
 health. The range invariant is checked separately because a matching checksum
 does not make an impossible value meaningful.
 
+For the record used in the examples below, player 7 with 80 of 100 health at
+generation 3, the checksum works out like this:
+
+```text
+player_id  wrapping_mul(31)    7 × 31                  =    217
+health                                                 +     80
+max_health rotate_left(7)      100 × 2^7 = 100 × 128   + 12,800
+generation rotate_left(13)     3 × 2^13 = 3 × 8,192    + 24,576
+checksum                                               = 37,673
+```
+
+`rotate_left(7)` moves every bit of the 32-bit word seven places toward the
+high end, and any bit pushed off the top re-enters at the bottom. For a small
+number nothing reaches the top. 100 is `1100100` in binary, seven bits wide
+because it is less than 2⁷ = 128, so after moving seven places its highest bit
+sits at position 6 + 7 = 13, far below bit 31. The rotation is then exactly a
+multiplication by 2⁷. The same reasoning turns `3.rotate_left(13)` into
+3 × 2¹³. The total, 37,673, is far below 2³² (about 4.3 billion), so none of the
+wrapping operations actually wraps.
+
+<MemoryStrip
+  cells="player_id=7|health=80|max_health=100|generation=3|checksum=37,673"
+  groups="0-3:inputs to `covered_checksum`|4:stored result"
+  caption="`verify` recomputes a checksum from the first four fields and compares it with the fifth. A field left out of the braced range could change without the comparison noticing."
+/>
+
 ## Distinguish four failure classes
 
 ### Incomplete coverage
@@ -95,29 +124,26 @@ A check covers `health` but ignores `max_health` or `player_id`. The bytes can
 be internally consistent while describing the wrong entity or an impossible
 range.
 
-Watch it happen to the record above. Start from a perfectly ordinary player:
+Watch it happen to the record above. Suppose `covered_checksum` had been written
+without the `max_health` term — an easy omission, since the field is rarely the
+one being updated. For player 7 that shorter sum is 217 + 80 + 24,576 = 24,873,
+and 24,873 is what the record stores. Now change `max_health` from 100 to 60
+and recompute nothing:
 
-```text
-player_id  7
-health     80
-max_health 100
-generation 3
-checksum   matches
-```
-
-Now suppose `covered_checksum` had been written without the `max_health` term —
-an easy omission, since the field is rarely the one being updated. Change
-`max_health` from 100 to 60 and recompute nothing:
-
-```text
-max_health 100 -> 60
-checksum   unchanged, and still matches
-health     80, which is now above the maximum
-```
+<MemoryStrip
+  cells="player_id=7|health=80|max_health=60|generation=3|checksum=24,873"
+  marks="2"
+  groups="0-1:covered|2:not covered|3:covered|4:stored result"
+  caption="The shorter checksum after `max_health` drops from 100 to 60. The changed box is outside every covered range, so recomputing still gives 217 + 80 + 24,576 = 24,873, while health 80 now exceeds the maximum of 60."
+/>
 
 The checksum is doing its job correctly. It is reporting that every byte it
 covers is unchanged, and that is true. The record is still impossible, because
 the damage was done to a field the check never looked at.
+
+The complete `covered_checksum` catches the same edit. With `max_health = 60`
+its third term becomes 60 × 128 = 7,680, so the sum becomes
+217 + 80 + 7,680 + 24,576 = 32,553, which no longer equals the stored 37,673.
 
 This is why `verify` has two clauses rather than one. The checksum answers "did
 the covered bytes change?" and the range test answers "is this record
@@ -135,6 +161,24 @@ simulation object. The check and effect refer to different state.
 The program verifies generation 17, the object changes to generation 18, and a
 later operation trusts the old `true`. This is a time-of-check/time-of-use
 problem.
+
+```mermaid
+sequenceDiagram
+    participant C as Checker
+    participant R as Player record
+    participant W as Other code
+    participant U as Guarded operation
+    C->>R: verify covered fields at generation 17
+    R-->>C: valid
+    C->>U: hand over the cached result true
+    W->>R: heal, generation becomes 18
+    U->>R: apply effect, trusting true
+    Note over R,U: true described generation 17, but the record is now generation 18
+```
+
+The result was correct when it was computed. It went stale because nothing tied
+it to the generation it described. A consumer that compares the result's
+generation with the record's current generation refuses it at the last step.
 
 ### Ambiguous failure
 
@@ -200,7 +244,7 @@ That mutation test proves the test suite notices missing coverage.
 - **Integrity:** confidence that state still satisfies its required relation.
 - **Coverage:** the exact data and conditions examined by a check.
 - **Canonical state:** the state the game actually uses to decide an effect.
-- **Freshness:** whether evidence still describes the state being consumed.
+- **Freshness:** whether a check result still describes the state being consumed.
 - **TOCTOU:** a gap in which state changes between checking and using it.
 - **Postcondition:** a property that must hold after an operation completes.
 

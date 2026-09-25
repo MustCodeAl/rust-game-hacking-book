@@ -9,6 +9,8 @@ sidebar:
   order: 8
   label: "12.8 Values, Tables, Strings, and Garbage Collection"
 ---
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
+
 ## Dynamic values still need a representation
 
 The host often knows a value’s type at compile time. Lua decides many operations at run time. An interpreter therefore carries a tag with each value:
@@ -27,16 +29,30 @@ enum Value {
 
 The IDs here are handles into VM-owned storage. That keeps interpreter objects under one memory manager instead of handing scripts raw native pointers.
 
+Three stack slots show the idea. Each value carries its tag beside its payload,
+and an operation reads the tags before it touches any payload:
+
+<MemoryStrip
+  cells="tag=Integer|payload=42|tag=Table|payload=id 3|tag=Nil|payload=unused"
+  groups="0-1:`Value::Integer(42)`|2-3:`Value::Table(TableId(3))`|4-5:`Value::Nil`"
+  caption="`+` checks both tags first. Two `Integer` tags let it add the payloads; an `Integer` beside a `Table` fails the check, and this VM raises a type error instead of adding a number to a handle (real Lua first looks for an `__add` metamethod). The `Table` payload is not a pointer: id 3 is looked up in storage the VM owns."
+/>
+
 ## A Lua table combines array-like and map-like storage
 
 Lua uses tables for sequences, records, dictionaries, objects, and module namespaces. An implementation can optimize common integer keys with an array part while keeping other keys in a hash-map part:
 
-```text
-array part:  ["red", "green", "blue"]
-map part:    { name = "palette", selected = 2 }
+```lua
+local palette = { "red", "green", "blue", name = "palette", selected = 2 }
 ```
 
-This is an implementation strategy, not two separate Lua values. The language still presents one table.
+<MemoryStrip
+  cells="1=red|2=green|3=blue|name=palette|selected=2"
+  groups="0-2:array part: keys 1 to 3, found by position|3-4:hash part: found by hashing the key"
+  caption="One table, two storage areas, as the Lua 5.4 implementation builds it. The constructor counts three positional values and two named fields, so it sizes a 3-slot array part and a 2-node hash part. `palette[2]` is a direct array read; `palette.name` hashes the string `name` to choose a node."
+/>
+
+This is an implementation strategy, not two separate Lua values. The language still presents one table. It also explains why `pairs` promises no meaningful order: it walks the array part first and then the hash nodes in node order, and node order follows the keys' hash values rather than the order they were written.
 
 When the host converts a `Vec` to Lua, it writes keys `1`, `2`, and `3`. When it converts a record, it writes named keys such as `health` and `position`. The script can use both forms, but the host should document which shape it promises.
 
@@ -44,7 +60,15 @@ When the host converts a `Vec` to Lua, it writes keys `1`, `2`, and `3`. When it
 
 Repeated source names and table keys can create many duplicate strings. An interpreter may **intern** strings: store one canonical copy and let values carry a small ID or shared reference.
 
-Interning makes equality fast, but it adds lifetime work. The interpreter must know when no live value, table key, closure, or compiled function still needs the string.
+```mermaid
+flowchart LR
+    K1["key in table A<br/>String(0)"] --> S0["string table, slot 0<br/>health"]
+    K2["key in table B<br/>String(0)"] --> S0
+    K3["constant in a compiled function<br/>String(0)"] --> S0
+```
+
+Checking whether two interned strings are equal is then one integer comparison,
+`0 == 0`, however long the text is. Interning makes equality fast, but it adds lifetime work. The interpreter must know when no live value, table key, closure, or compiled function still needs the string.
 
 ## Reference counting handles sharing, not every cycle
 

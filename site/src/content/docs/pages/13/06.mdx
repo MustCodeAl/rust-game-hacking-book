@@ -16,19 +16,23 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 You should understand C++ object layouts, vtables, member offsets, container
 headers, pointer chains, x86-64 addressing modes, and build fingerprints.
 
-## An offset is a versioned hypothesis
+## An offset belongs to one exact build
 
-If one build reads health from `[rcx+0x138]`, the durable fact is not merely
-`0x138`. The stronger statement is:
+If one build reads health from `[rcx+0x138]`, the number `0x138` is true only
+for that build. The complete statement is:
 
-> In this exact build, a method receiving the candidate player object in `rcx`
-> repeatedly reads a four-byte value at offset `0x138`; the value follows
-> controlled health changes and satisfies the observed health invariants.
+> In this exact build, a method receiving the player object in `rcx` reads a
+> four-byte health value at offset `0x138`.
+
+An update can recompile the class with a field added, removed, or reordered,
+and the same offset then lands on something else. An offset therefore belongs
+to one exact build, and it has to be checked again after every update before it
+is used.
 
 The target invariant is:
 
-> A layout is accepted only for the build and object identity supported by its
-> evidence, and every field read is bounded and semantically validated.
+> A layout is used only on the build and the object it was recovered from, and
+> every field read is bounded and checked for a sensible value.
 
 Unpacked, that is four separate demands. Use an offset only on the exact build
 you proved it on. Use it only on an object you have confirmed is the one you
@@ -36,7 +40,7 @@ meant. Never read past the end of that object. And check that the value coming
 back makes sense before believing it — a four-byte read that succeeds is not
 the same thing as a four-byte read that returned health.
 
-## Recover a layout from independent evidence
+## Recover a layout from several independent checks
 
 ```mermaid
 flowchart TD
@@ -50,11 +54,13 @@ flowchart TD
     H --> I["Replay regression captures"]
 ```
 
-Do not let one memory scan decide the structure. Combine static access
-patterns, runtime value transitions, object identity, and relationships among
-fields.
+One memory scan cannot settle a structure: a four-byte 100 at some offset fits
+health, ammunition, or a coincidence equally well. Static access patterns,
+runtime value transitions, object identity, and relationships among fields each
+rule out different wrong answers, so a layout is accepted only where they
+agree.
 
-## Build an offset evidence table
+## Build an offset table
 
 Suppose several methods access one candidate object:
 
@@ -67,8 +73,9 @@ Suppose several methods access one candidate object:
 | `0x13C` | 4 | upper bound for previous field | stable per entity class | max-health candidate |
 
 The relationship `0 <= health <= max_health` is stronger than “both numbers
-look reasonable.” Adjacent fields and shared access paths create structural
-evidence.
+look reasonable.” The clamp that stores health at `0x138` reads its upper bound
+from `0x13C`, so one instruction sequence ties the two candidates together and
+each supports the other.
 
 ## Distinguish identity from shape
 
@@ -107,8 +114,10 @@ enum Confidence {
 }
 ```
 
-Keep evidence and confidence beside the numeric offsets in generated metadata.
-Do not turn a candidate into a field merely because a name is convenient.
+Generated metadata stores the confidence level beside each numeric offset,
+together with the accesses and value transitions that earned it, so a
+`Candidate` never becomes a trusted field just because it has a convenient
+name.
 
 ## Migrate after an update by matching behavior
 
@@ -119,7 +128,7 @@ When a new build moves fields:
    carefully versioned pattern;
 3. collect member accesses again instead of adding a constant to every offset;
 4. replay the same controlled game transitions;
-5. rebuild the evidence table;
+5. rebuild the offset table;
 6. compare field relationships, not just individual values;
 7. create a new layout record and keep the old record immutable;
 8. run captured-snapshot regression tests for both builds.
@@ -131,7 +140,7 @@ flowchart TD
     A["fingerprint the new build"] --> B["find the same behavioral<br/>function again"]
     B --> C["collect member accesses again<br/>(not: add a constant offset)"]
     C --> D["replay the same controlled<br/>game transitions"]
-    D --> E["rebuild the evidence table"]
+    D --> E["rebuild the offset table"]
     E --> F["compare field relationships"]
     F --> G["new immutable layout record"]
     G --> H["regression test both builds"]
@@ -180,11 +189,11 @@ Validation should reject:
 - generation changes during a multi-field read;
 - an unsupported build rather than falling back to the nearest known layout.
 
-## Score evidence without hiding it
+## Score candidates without hiding the reasons
 
 A score helps rank candidates but does not replace the underlying facts:
 
-| Evidence | Example weight |
+| Check | Example weight |
 |---|---:|
 | Controlled health transition matched | +4 |
 | Damage function stores at offset | +3 |
@@ -193,7 +202,8 @@ A score helps rank candidates but does not replace the underlying facts:
 | Generation changed during read | reject |
 | Build identity unknown | reject |
 
-Record the contributing observations so a high score can be audited.
+The score is stored with the list of checks that produced it, so a high score
+can be audited.
 
 ## Glossary terms introduced here
 
@@ -201,11 +211,12 @@ Record the contributing observations so a high score can be audited.
 - **Shape check:** validation that bytes have a plausible structure.
 - **Identity check:** validation that the object is the intended instance.
 - **Generation:** a counter distinguishing reuse of the same storage slot.
-- **Cross-validation:** supporting a claim with independent forms of evidence.
+- **Cross-validation:** confirming a field with independent checks, such as an
+  access pattern, a value transition, and a range relation, that all agree.
 - **Build fingerprint:** stable data used to identify one exact binary version.
 
 ## Checkpoint
 
 You should now be able to reconstruct an object from access patterns and field
 relationships, carry uncertainty explicitly, and migrate to a new build by
-repeating evidence rather than guessing how far old offsets moved.
+collecting its accesses again rather than guessing how far old offsets moved.

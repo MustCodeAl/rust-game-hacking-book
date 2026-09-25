@@ -9,6 +9,8 @@ sidebar:
   order: 4
   label: "12.4 Expose Snapshots Instead of Raw Memory"
 ---
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
+
 ## Do not turn Lua into an untyped memory API
 
 After building a memory reader, it is tempting to expose this:
@@ -66,6 +68,21 @@ struct EntitySnapshot {
 ```
 
 There are no process addresses in this type. A script cannot keep a stale pointer because it never receives one.
+
+Here is one entity as a hypothetical build lays it out in game memory, and the
+same entity after the observer has copied it into a snapshot and the host has
+turned that into a Lua table:
+
+<MemoryStrip
+  cells="+0x10=7|+0x30=4.0|+0x34=9.0|+0x38=2.0|+0x3C=1|+0x40=0x1F2A8C40"
+  groups="0:id, `u32`|1-3:position, three `f32`|4:alive byte|5:name pointer"
+  caption="Game memory, labelled by offset from the start of the object; only the fields the snapshot needs are shown. Each `f32` is 4 bytes wide, so `x`, `y`, and `z` sit at `0x30`, `0x30 + 4 = 0x34`, and `0x34 + 4 = 0x38`. The one-byte alive flag at `0x3C` is followed by 3 unused bytes, because an 8-byte pointer starts on a multiple of 8 and `0x40` (64 = 8 × 8) is the next one. The name itself is not stored here: the object holds the address of text kept elsewhere, which the observer follows and copies with a length limit."
+/>
+
+<MemoryStrip
+  cells="id=7|name=archer|position.x=4.0|position.y=9.0|position.z=2.0|alive=true"
+  caption="The Lua table the script receives. Every value arrives under a name, the alive byte `1` has become the boolean `true`, and no offset or pointer survives the copy."
+/>
 
 ## A snapshot has a time and version
 
@@ -132,6 +149,23 @@ game.request({
 ```
 
 The host can reject a request based on a snapshot that is too old. This is safer than pretending copied data is live.
+
+```mermaid
+sequenceDiagram
+    participant G as Game
+    participant H as Host
+    participant L as Lua script
+    G->>H: state at sequence 41
+    H->>L: snapshot 41, entity 7 alive
+    G->>H: entity 7 despawns at sequence 42
+    L->>H: request select_entity 7, based_on 41
+    H->>H: check entity 7 against sequence 42
+    H-->>L: refused, entity 7 no longer exists
+```
+
+The script did nothing wrong: entity 7 really was alive in snapshot 41. The
+game moved on while the script was deciding, and `based_on` lets the host see
+that the request describes a moment that has already passed.
 
 ## Requests are data, not commands
 

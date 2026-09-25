@@ -9,6 +9,8 @@ sidebar:
   order: 2
   label: "12.2 Use Tables, Functions, and Metatables"
 ---
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
+
 ## Lua tables represent arrays, records, and maps
 
 A Lua table maps keys to values. These are all tables:
@@ -49,6 +51,20 @@ for index, item in ipairs(list) do
     print(index, item)
 end
 ```
+
+`ipairs` starts at key 1 and stops at the first missing key. A **hole**, a
+missing key in the middle of a sequence, therefore ends the loop early:
+
+```lua
+list[2] = nil -- { "sword", "shield", "potion" } now has a hole at key 2
+```
+
+<MemoryStrip
+  cells="1=sword|2=nil|3=potion|4=nil"
+  marks="1"
+  groups="0:visited by `ipairs`|1:`ipairs` stops here|2-3:never reached"
+  caption="After `list[2] = nil`, `ipairs` never sees `potion`. The length operator is no safer: `#list` may return 1 or 3, because each is a **border**, a key whose value is present while the next key's value is missing, and Lua promises only that `#` returns some border."
+/>
 
 Use `pairs` when keys are not a simple sequence:
 
@@ -109,6 +125,17 @@ local attack_ready = make_cooldown(3)
 local heal_ready = make_cooldown(10)   -- separate remaining, separate countdown
 ```
 
+Following `attack_ready(true)` through five calls in a row shows the private
+`remaining` at work. The first call finds `remaining` at 0, so it fires and
+sets `remaining` to 3; each later call finds it above 0, subtracts 1, and
+refuses, until it is back at 0 and the next call fires again:
+
+<MemoryStrip
+  cells="call 1=fires, 3|call 2=blocked, 2|call 3=blocked, 1|call 4=blocked, 0|call 5=fires, 3"
+  marks="0|4"
+  caption="The result of each `attack_ready(true)` call and the value `remaining` holds afterward. `heal_ready` owns a different `remaining`, so none of these calls moves its countdown."
+/>
+
 That is why closures suit bot code so well: each piece of timed behavior can
 own its own state without the rest of the script being able to reach in and
 disturb it.
@@ -167,6 +194,19 @@ ask `Bot` what to do,” and `Bot.__index = Bot` says “what to do is: look ins
 two steps it is ordinary. Forgetting to set `__index` is the classic beginner
 mistake — the metatable is attached, every method lookup still returns `nil`,
 and nothing in the error explains why.
+
+Drawn out, the whole arrangement is two references. `scout`'s metatable is
+`Bot`, and `Bot.__index` points back at `Bot` itself:
+
+```mermaid
+flowchart LR
+    S["scout<br/>name = &quot;scout&quot;<br/>state = &quot;plan&quot;"] -->|"metatable"| B["Bot<br/>__index = Bot<br/>new = function<br/>set_state = function"]
+    B -->|"__index"| B
+```
+
+`set_state` appears only in the right-hand box. A lookup that misses in `scout`
+follows the metatable arrow, finds `__index`, and follows the loop to search
+`Bot`, where the key exists.
 
 When `scout` has no `set_state` key, its metatable's `__index` points to `Bot`, so Lua looks there. This resembles method lookup, but it is not a compiled C++ vtable. It is a runtime table rule that scripts can inspect and change.
 

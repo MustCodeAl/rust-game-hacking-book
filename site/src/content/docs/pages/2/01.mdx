@@ -62,8 +62,8 @@ sequenceDiagram
 ```
 
 Many debuggers pause the rest of the process while you inspect one event. That
-prevents other game threads from changing the evidence underneath you, but it
-also means audio, rendering, and network work temporarily stop.
+prevents other game threads from changing registers and memory while you read
+them, but it also means audio, rendering, and network work temporarily stop.
 
 ## Disassembly versus debugging
 
@@ -71,21 +71,23 @@ also means audio, rendering, and network work temporarily stop.
 
 **Debugging** watches those instructions run. It lets you see what the registers and memory contain at that exact moment.
 
-The stronger model is **static evidence versus dynamic evidence**:
+Reading code without running it is called **static analysis**. Watching it run
+is **dynamic analysis**. They answer different questions:
 
 | View | What it can establish |
 |---|---|
 | Disassembly | possible instructions, branch targets, referenced constants, and call relationships |
 | Live debugging | the path actually taken, concrete register values, live addresses, and the thread that executed it |
 
-Neither view replaces the other. Static analysis shows paths your one test did not
-take. Dynamic analysis tests whether your interpretation matches a real game event.
-Use them as two measurements of the same program.
+Neither view replaces the other. The disassembly shows paths that one test run
+did not take. The live debugger shows which path a real game event actually
+took, and with which values.
 
 A **decompiler** goes one step further and guesses at higher-level expressions,
 loops, and function arguments. Those guesses can be useful, but the machine
 code is the final record of what the CPU executes. A friendly decompiler name
-such as `player_health` is a hypothesis until behavior supports it.
+such as `player_health` is only a guess until the program's behavior matches
+it.
 
 ## What a decompiler can recover—and what it cannot
 
@@ -107,12 +109,13 @@ flowchart TD
 
 Every upward step is useful, but it adds interpretation. Two different source
 programs can compile to the same machine behavior, so exact original source is
-often unknowable. The goal is a model that explains the observed behavior, not
-a perfect historical transcript.
+often unknowable. What you can recover is a description that matches what the
+machine code does, not a perfect transcript of the original source.
 
-Treat pseudocode as an editable notebook:
+Pseudocode is a draft, and most decompilers let you rename values and change
+types in it:
 
-- rename a value only after you can explain the evidence;
+- rename a value once its use is clear from the code and from live values;
 - change a type when instruction width, signedness, API contracts, and live
   values agree;
 - check the control-flow graph — the map of which instruction can run after
@@ -123,35 +126,10 @@ Treat pseudocode as an editable notebook:
 This prevents a common failure chain: one guessed pointer becomes a guessed
 structure, which gives every field a confident-looking but incorrect name. 🔎
 
-## Test explanations against recorded evidence
+## Start from a value you can see
 
-Reverse engineering is an inference problem. You cannot see the missing source
-directly, so you build a model that predicts what the compiled program should
-do and compare that prediction with an observation. One loop looks like this:
-
-```mermaid
-flowchart TD
-    A["Ask one observable question"] --> B["Collect static evidence"]
-    B --> C["Form a model"]
-    C --> D["Predict a behavior"]
-    D --> E["Collect dynamic evidence"]
-    E --> F{"Prediction matches?"}
-    F -->|"No"| C
-    F -->|"Yes"| G["Keep the model<br/>with its evidence"]
-```
-
-Static evidence includes bytes, imports, strings, and possible control-flow
-paths. Dynamic evidence includes the path actually taken, live values, timing,
-and effects. A useful model must explain both kinds. Change one input at a time
-so a different observation can be connected to a specific cause.
-
-Different practice targets may use 32-bit or 64-bit code, different calling
-conventions, and different build settings. Transfer the investigation process,
-not literal addresses or register choices from a worked example.
-
-## Write the debugging question before using the tools
-
-Do not scroll through thousands of instructions hoping one looks important. Begin with a question:
+Scrolling through thousands of instructions hoping one looks important rarely
+works. A visible value gives you a way in:
 
 > Which instruction changes my gold when I recruit a unit?
 
@@ -159,10 +137,15 @@ Then:
 
 1. Find the gold address with a memory scanner.
 2. Set a breakpoint on writes to that address.
-3. Perform exactly one gold-changing action.
+3. Perform exactly one gold-changing action, so the pause can be tied to that
+   action.
 4. Inspect the instruction that triggered the pause.
 
 You used a visible value as a trail back to the code.
+
+Different practice targets may use 32-bit or 64-bit code, different calling
+conventions, and different build settings. The technique carries over from a
+worked example; its addresses and register choices do not.
 
 ## Registers hold values the CPU is using now
 
@@ -206,13 +189,13 @@ sub dword ptr [ebx+30h], eax
 
 The register names alone do not prove those meanings. Compare the calculated
 address with the gold address, compare `eax` with the known unit price, and
-repeat the action. Debugging turns guesses into evidence by joining instruction,
-state, and behavior.
+repeat the action. If the address equals the gold address and `eax` equals the
+price every time, this instruction is the one that spends gold.
 
 The **call stack** answers another question: “Which chain of function calls
 brought this thread here?” A low-level update function may be called by a
-recruit action, an AI simulation, and a save loader. The caller helps explain
-which use you observed.
+recruit action, an AI simulation, and a save loader. The caller tells you which
+of those uses triggered this pause.
 
 ## Recover source-level meaning from machine state
 

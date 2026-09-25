@@ -257,13 +257,14 @@ cargo build --release --target i686-pc-windows-msvc `
 
 The count may change between runs because games create and retire worker threads. A TID is temporary and can eventually be reused. Do not store it as a version-specific constant.
 
-Base priority is scheduling input, not “importance.” The currently busy rendering thread might have the same base priority as an idle worker. Use ETW CPU samples or debugger evidence to understand actual activity.
+Base priority is scheduling input, not “importance.” The currently busy rendering thread might have the same base priority as an idle worker. ETW CPU samples and debugger stacks show which threads are actually doing work.
 
-Likewise, a TID does not identify a permanent role. To infer what a thread is doing,
-combine several observations: its start address or module, stack samples over time,
-CPU and wait activity, thread description when available, and the game behavior
-that coincides with that activity. One paused stack is a clue, not a lifetime job
-title.
+Likewise, a TID does not identify a permanent role. A thread's role shows up in
+several places: its start address or module, its stack sampled over time, its CPU
+and wait activity, its thread description when the game sets one, and which game
+events line up with that activity. One paused stack shows only what the thread was
+doing at that instant. In an engine with a job system, the same worker thread can
+be mixing audio in one sample and decompressing a texture in the next.
 
 ## How the Wesnoth debugger uses a context safely
 
@@ -287,7 +288,7 @@ The state machine prevents one thread's single-step event from being mistaken fo
 
 ## Why this lesson does not hijack threads
 
-Changing another thread's instruction pointer, queuing executable work to it, or suspending service threads is not required to understand game execution. Those operations can deadlock a process, strand locks, corrupt state, or disable diagnostic evidence.
+Changing another thread's instruction pointer, queuing executable work to it, or suspending service threads is not required to understand game execution. Those operations can deadlock a process, strand locks, corrupt state, or stop the diagnostics that would explain the failure.
 
 The course inventories threads read-only and changes a context only inside the explicit breakpoint lifecycle of the version-matched Wesnoth debugger, where every event is continued exactly once.
 

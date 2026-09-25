@@ -9,6 +9,8 @@ sidebar:
   order: 7
   label: "4.7 Make a Bot Responsive with Events and Debouncing"
 ---
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
+
 ## Polling is not the same as reacting
 
 An observer might read the same fact twenty times per second:
@@ -29,8 +31,8 @@ GoldChanged { before: 120, after: 145 }
 
 The event says **what changed**, while a snapshot says **what is true now**. Keeping both ideas separate prevents a bot from performing the same action on every poll.
 
-A responsive loop should turn noisy observations into one deliberate action in
-stages, rather than connecting every poll directly to a click:
+A responsive loop should turn noisy polls into one deliberate action in stages,
+rather than connecting every poll directly to a click:
 
 ```mermaid
 flowchart TD
@@ -55,7 +57,17 @@ That difference controls behavior. A level-triggered rule such as `if menu_open 
 - use an edge event for one-time work, such as recording that a turn began;
 - use both when an action needs a starting event and an ongoing confirmation.
 
-Events are interpretations, not raw truth. If the observer misses snapshots, `120 -> 145` proves the endpoints but not whether the game passed through `130`. Name an event `GoldChanged`, not `GoldEarned`, unless other evidence proves why it changed.
+Here are six polls of `menu_open` and what each kind of rule does with them:
+
+<MemoryStrip
+  cells="poll 1=false|poll 2=false|poll 3=true|poll 4=true|poll 5=true|poll 6=false"
+  marks="2|5"
+  groups="2-4:level rule: clicks on 3 polls"
+  groups2="2-2:edge: `MenuOpened`|5-5:edge: `MenuClosed`"
+  caption="The level rule fires on every poll where the menu is open, so one opening produces three clicks. The edge rule compares each poll with the one before and fires only at the two highlighted polls, where the value changed."
+/>
+
+Events are interpretations, not raw truth. If the observer misses snapshots, `120 -> 145` proves the endpoints but not whether the game passed through `130`. Name an event `GoldChanged`, not `GoldEarned`, unless something else shows why it changed.
 
 ## Diff two validated snapshots
 
@@ -122,11 +134,30 @@ poll 4   health 3452816845     new allocation, uninitialized bytes (0xCDCDCDCD)
 poll 5   health 100            the new scene, fully constructed
 ```
 
-Debouncing buys correctness with latency, and that trade is exactly why the
-sample count deserves thought. Requiring three consistent samples at twenty
-polls per second delays every genuine change by roughly 150 milliseconds. That
-is cheap for "the match ended" and far too slow for "an enemy appeared." Choose
-the requirement per value rather than once for the whole bot.
+The strange value on poll 4 is the byte `0xCD`, which Microsoft's debug heap
+writes into every fresh allocation, repeated four times. One `0xCD` is
+12 × 16 + 13 = 205, so the four bytes read as
+205 × 256³ + 205 × 256² + 205 × 256 + 205 = 3,452,816,845.
+
+A debouncer keeps two things: the last **accepted** value, and a **candidate**
+value with a count. Each poll does one of three things. A poll equal to the
+accepted value clears the candidate. A poll equal to the candidate adds one to
+its count. Any other value becomes a new candidate with a count of 1. When the
+candidate's count reaches the required number, it becomes the accepted value
+and the debouncer reports one change.
+
+With three required polls, here is the trace above, followed by 20 points of
+real damage that take health from 100 to 100 − 20 = 80:
+
+<MemoryStrip
+  cells="poll 1=100|poll 2=0|poll 3=0|poll 4=0xCDCDCDCD|poll 5=100|poll 6=80|poll 7=80|poll 8=80"
+  marks="7"
+  groups="1-2:candidate `0`: count 1, 2|3-3:new candidate: 1|5-7:candidate `80`: count 1, 2, 3"
+  groups2="0-4:accepted stays `100`: no event|7-7:accepted becomes `80`"
+  caption="No glitch value lasts three polls in a row, so none of them reaches the bot, and poll 5 clears the candidate by matching the accepted `100`. The real change is accepted on its third matching poll, poll 8, and produces exactly one event."
+/>
+
+The code follows those three cases:
 
 ```rust
 #[derive(Debug)]
@@ -162,13 +193,23 @@ impl<T: Clone + Eq> Debouncer<T> {
 }
 ```
 
-Debouncing adds delay, so use it for noisy or safety-critical transitions, not every coordinate in a smooth animation.
+Debouncing buys correctness with **latency**, and the cost is easy to work out.
+At twenty polls per second, polls are 1000 ÷ 20 = 50 milliseconds apart. The
+change is accepted on the third poll that shows it, which comes two gaps,
+2 × 50 = 100 milliseconds, after the first. That first poll can itself arrive up
+to 50 milliseconds after the real change, so every genuine change reaches the
+bot 100 to 150 milliseconds late. “Three polls” means nothing without the
+polling rate: at 100 polls per second the gaps are 10 milliseconds, and the
+same rule costs only 20 to 30 milliseconds.
 
-Debouncing is a small trade: it exchanges **latency** for **confidence**. Requiring three matching samples makes a one-sample glitch less likely to trigger an action, but it also delays every real transition. Choose the count together with the polling rate and the speed of the game state; “three samples” has no useful meaning without time.
+That delay is cheap for “the match ended” and far too slow for “an enemy
+appeared.” Choose the requirement per value rather than once for the whole bot,
+and use debouncing for noisy or safety-critical transitions, not for every
+coordinate in a smooth animation.
 
 ## Add cooldowns after actions
 
-After requesting “end turn,” wait for evidence that the turn changed. Do not send the same input again merely because the next 50 ms poll still shows the old turn.
+After requesting “end turn,” wait until a snapshot shows that the turn changed. Do not send the same input again merely because the next 50 ms poll still shows the old turn.
 
 A useful action record contains:
 
@@ -177,6 +218,24 @@ A useful action record contains:
 - the state change that will confirm success;
 - a timeout;
 - a cancellation reason.
+
+The pending action is a small state machine of its own. While it exists, the
+bot sends nothing, and each poll either confirms it, counts it down, or times it
+out:
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Idle
+    Idle --> Pending: bot sends end turn once
+    Pending --> Pending: old turn and polls_left above 0, count down by 1
+    Pending --> Idle: turn changed, confirmed
+    Pending --> Idle: old turn and polls_left is 0, timed out
+```
+
+The timeout is a number of polls, so it becomes a time through the polling
+rate: starting from `polls_left: 20` at one poll every 50 milliseconds gives the
+game 20 × 50 = 1000 milliseconds, one second, to show the new turn.
 
 ```rust
 enum PendingAction {
@@ -208,6 +267,6 @@ In a full program, distinguish confirmed success from timeout in the result. The
 6. Wait for its confirmation or timeout.
 7. Stop immediately if the target disappears or the user cancels.
 
-This design is useful far beyond game automation. File watchers, user interfaces, network clients, and monitoring tools all turn repeated observations into meaningful events while controlling duplicate work.
+This design is useful far beyond game automation. File watchers, user interfaces, network clients, and monitoring tools all turn repeated polls into meaningful events while controlling duplicate work.
 
 Make repeated requests **idempotent** when you can: sending the same request twice should have the same final effect as sending it once. “Select entity 7” can be idempotent; “move selection to the next entity” is not. Idempotence does not replace cooldowns, but it limits damage when a timeout hides a successful first action.

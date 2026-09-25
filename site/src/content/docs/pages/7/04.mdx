@@ -85,8 +85,8 @@ instruction*, not merely return one arbitrary address.
 Do not weaken a pattern until it matches an unknown build and then declare
 success. If the course supports only one build, an exact fingerprint plus a
 build-specific signature is more honest than pretending the signature is
-portable. The goal is evidence that generalizes across the profiles you named,
-not the longest or shortest possible byte string.
+portable. The goal is a pattern that finds the same instruction in every build
+you named, not the longest or shortest possible byte string.
 
 ```mermaid
 flowchart TD
@@ -221,7 +221,7 @@ This separation matters. `ReadProcessMemory` works at the Windows boundary and c
 
 ```rust
 fn unique_match(matches: &[usize]) -> anyhow::Result<usize> {
-    // 🎯 “First result wins” hides ambiguity. All three evidence states are
+    // 🎯 “First result wins” hides ambiguity. All three match counts are
     // handled explicitly so a weak pattern cannot choose code by accident.
     match matches {
         [only] => Ok(*only),
@@ -239,7 +239,7 @@ The three outcomes mean different things:
 - one match means the signature has located one candidate, which still needs semantic verification;
 - several matches mean the signature does not contain enough identity.
 
-Do not “fix” ambiguity by silently lengthening the scan to another unrelated section. Improve the evidence around the intended instruction.
+Do not “fix” ambiguity by silently lengthening the scan to another unrelated section. Extend the pattern into the instructions around the intended one until only it matches.
 
 ## Verify surrounding meaning
 
@@ -283,7 +283,7 @@ the standard to use when AI or autocomplete suggests tests too: ask what
 incorrect implementation would make the test fail. If the answer is “none,”
 the test is decoration.
 
-Patterns are evidence locators. They do not replace target-version checks or instruction decoding.
+A pattern only finds where bytes match. It does not replace target-version checks or instruction decoding.
 
 ## Read the complete program as a pipeline
 
@@ -293,7 +293,7 @@ The executable at the end of the lesson has five phases:
 2. `process.module` returns the current base and mapped size of `wesnoth.exe`.
 3. `process.regions` asks Windows how that module is divided and keeps readable executable regions.
 4. Each accepted region is copied before `.windows(3)` compares local slices.
-5. The program prints all evidence and refuses success unless the match count is exactly one.
+5. The program prints every match and refuses success unless the match count is exactly one.
 
 Notice what it does **not** do: it does not scan every allocation, patch the result, or assume matching bytes prove the instruction’s meaning. Those are separate decisions with separate checks.
 

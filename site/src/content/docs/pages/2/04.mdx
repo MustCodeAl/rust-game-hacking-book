@@ -82,9 +82,9 @@ Do not copy the exact register or offset from this page. Read the instruction in
 
 ![The instruction that changes player gold](/assets/images/2/4/reversing11.png)
 
-## Read the evidence
+## Ask the five assembly questions
 
-Ask the five assembly questions:
+Apply the five questions to the paused instruction:
 
 1. **What is read?** The current gold and the price in a register.
 2. **What is written?** Four bytes at the gold field.
@@ -92,11 +92,11 @@ Ask the five assembly questions:
 4. **Signed or unsigned?** Test nearby comparisons before deciding.
 5. **Where next?** The following instruction unless a branch changes the path.
 
-Now compare the price register with the unit’s price. If they match and the destination points to the gold address, you have strong evidence.
+Now compare the price register with the unit’s price. If they match and the destination is the gold address, this instruction is the one that charges for a recruit.
 
 ## Read an instruction as state transition
 
-For `sub dword ptr [reg+offset], eax`, write the complete before-and-after statement:
+For `sub dword ptr [reg+offset], eax`, the complete before-and-after effect is:
 
 ```text
 address = register value + offset
@@ -131,17 +131,18 @@ The bracketed expression accesses memory. Without brackets, `esi+30h` would be
 an address calculation rather than a read or write of the bytes at that
 address.
 
-Record the live register values and calculate the destination yourself. If
-`esi + 0x30` equals the candidate gold address, the debugger has connected the
-instruction to the data you observed.
+Read the live value of `esi` in the register panel and add `0x30` yourself. For
+example, if `esi` holds `0x0A3C1200`, the destination is
+`0x0A3C1200 + 0x30 = 0x0A3C1230`. If the sum equals the candidate gold address,
+this instruction writes the gold you found.
 
 ## Test with a reversible patch
 
-Record the original instruction bytes. Temporarily replace the **entire** subtraction instruction with the same number of `nop` bytes.
+Copy the original instruction bytes first, so you can write them back. Then temporarily replace the **entire** subtraction instruction with the same number of `nop` bytes.
 
 ![Filling the instruction with NOP bytes](/assets/images/2/4/reversing12.png)
 
-Resume and recruit another unit. If gold no longer decreases, the test supports your conclusion. Restore the original bytes immediately afterward.
+Resume and recruit another unit. If gold no longer decreases, this instruction is the one that subtracts the price. Restore the original bytes immediately afterward.
 
 ![The patched instruction](/assets/images/2/4/reversing14.png)
 
@@ -162,5 +163,3 @@ Checking the original bytes is crucial. Refusing to patch an unknown version is 
 Remove the breakpoint through x64dbg’s Breakpoints tab and confirm the original instruction is restored.
 
 ![The Breakpoints tab](/assets/images/2/4/reversing15.png)
-
-Your lab note should include the gold address, instruction address, original bytes, price register, and the observed result.

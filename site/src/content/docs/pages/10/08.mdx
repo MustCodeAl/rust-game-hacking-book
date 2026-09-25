@@ -9,6 +9,8 @@ sidebar:
   order: 8
   label: "10.8 Capture a Small Dump of the Current Process"
 ---
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
+
 ## A dump is a saved debugging snapshot
 
 A live debugger reads a running process. A **dump file** saves selected process state so it can be inspected later. A minidump may include:
@@ -38,7 +40,7 @@ heap object or exception record may mean “not captured,” not “never existe
 
 ## Why dumps help reverse engineering
 
-A reproducible crash often disappears when you attach a debugger and change timing. A dump freezes evidence close to the failure and lets you answer:
+A reproducible crash often disappears when you attach a debugger and change timing. A dump saves the process state close to the failure without a debugger attached, and from that file alone you can answer:
 
 - Which thread failed?
 - Which module contained the instruction pointer?
@@ -53,6 +55,15 @@ A dump does not record every earlier event. Combine it with logs or an ETW trace
 `MiniDumpWriteDump` can accept a process handle and PID. This course program deliberately uses `GetCurrentProcess` and `GetCurrentProcessId`, so it can dump only itself through this code path. It does not search for a game PID or request another process handle.
 
 It also avoids `MiniDumpWithFullMemory`. A normal dump plus thread and unloaded-module information is enough to learn the workflow without copying every private page in the process.
+
+In the source, that choice is the `dump_type` value. Each optional stream has its own bit, and `|` sets several bits at once:
+
+<MemoryStrip
+  cells="bits 15–12=0001|bits 11–8=0000|bits 7–4=0010|bits 3–0=0000"
+  marks="0|2"
+  groups="0:bit 12, thread info|2:bit 5, unloaded modules|3:bit 1, full memory, left 0"
+  caption="`dump_type` in binary. `MiniDumpWithThreadInfo` is `0x1000` = 4,096 = 2^12, so it is bit 12. `MiniDumpWithUnloadedModules` is `0x20` = 32 = 2^5, bit 5. `MiniDumpNormal` is 0: it sets no bit and names the baseline dump. Together they make `0x1020` = 4,096 + 32 = 4,128. `MiniDumpWithFullMemory` would be `0x2`, bit 1, and this lab leaves it clear."
+/>
 
 <details class="lab-source">
 <summary>Complete lab source: self_minidump.rs</summary>
@@ -137,7 +148,7 @@ fn main() {
 
 That is why `drop(file)` appears after the Windows call. Closing it first would leave `file_handle` as a stale number.
 
-The output uses `create_new(true)`, which refuses to replace an existing dump. Crash evidence should not vanish because the same command ran twice.
+The output uses `create_new(true)`, which refuses to replace an existing dump. Running the same command twice should not destroy the first dump.
 
 ## Build and capture
 
@@ -176,19 +187,27 @@ The self-dump is captured during a normal function call, so it does not contain 
 
 A stack trace is a chain of function frames. The top frame is where the selected thread was when captured. Frames below it are callers that led there.
 
+<MemoryStrip
+  column
+  cells="top=inside MiniDumpWriteDump|=self_minidump::main|=Rust runtime start-up|=C runtime start-up|bottom=Windows thread start-up in kernel32 and ntdll"
+  marks="0"
+  groups="0:where the thread was at capture|1-4:callers, each waiting for the frame above it to return"
+  caption="A simplified `k` listing for the thread that wrote the self-dump, newest call on top. Read from the bottom up, it replays the calls in the order they happened: Windows starts the thread, the C and Rust runtimes start up, `main` runs, and `main` calls `MiniDumpWriteDump`. A real listing splits each box into several frames."
+/>
+
 Names may be missing when matching symbols are unavailable. In that case, WinDbg may show a module plus an offset:
 
 ```text
-gha_windows_labs!self_minidump+0x1234
+self_minidump+0x1234
 ```
 
-The offset is still useful when paired with the exact build hash and module base. This is the same base-plus-offset thinking used throughout the course.
+The offset is still useful when paired with the exact build hash and module base: it names the byte `0x1234` past the start of `self_minidump.exe` as loaded, and in one exact build that is one specific instruction.
 
 ## Create a controlled crash exercise safely
 
-Do not corrupt a running game's memory just to obtain a dump. Instead, make a tiny separate test program that returns an error or panics, enable Windows Error Reporting local dumps for that one executable in a disposable VM, and inspect the result.
+Do not corrupt a running game's memory just to obtain a dump. Instead, make a tiny separate test program that crashes on purpose, enable Windows Error Reporting local dumps for that one executable in a disposable VM, and inspect the result.
 
-A panic is not necessarily a native access violation. The dump and `!analyze` output will differ depending on panic strategy, exception handling, and how the dump was captured. Describe what the evidence shows instead of forcing it to match a screenshot.
+Not every Rust failure is a crash that Windows Error Reporting can see. Returning an error from `main` prints it and exits with code 1. A panic under Rust's default unwinding strategy is caught by the runtime, which prints the message and exits with code 101. Both are ordinary exits, so there is nothing to dump. A panic in a program built with `panic = "abort"` is different: it ends in a fail-fast exception, code `0xC0000409`, which Windows Error Reporting does capture, and `!analyze` then reports that exception rather than an access violation.
 
 ## Dump limitations
 

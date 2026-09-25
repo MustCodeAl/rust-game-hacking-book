@@ -60,8 +60,22 @@ This layered model gives a useful debugging order:
    that function's contract;
 4. a gameplay error can occur even when all three earlier layers succeeded.
 
-“The script failed” is therefore only a starting observation. Record the layer,
-instruction or source location, values, and host call involved.
+```mermaid
+flowchart LR
+    SRC["Source text"] --> PAR["Lexer and parser"]
+    PAR -->|"stops here"| E1["Syntax error:<br/>no runnable function"]
+    PAR --> VM["VM runs bytecode"]
+    VM -->|"stops here"| E2["Runtime type error:<br/>unsuitable values"]
+    VM --> HOST["Host function"]
+    HOST -->|"stops here"| E3["Host-API error:<br/>contract violated"]
+    HOST --> GAME["Game state changes"]
+    GAME -->|"wrong result"| E4["Gameplay error:<br/>nothing is raised"]
+```
+
+“The script failed” therefore does not say which layer failed. The same words
+cover all four, and each one has a different cause and a different fix. Only
+the gameplay error raises nothing: every layer did what it was asked, and the
+request itself was wrong.
 
 ## Lua is dynamically typed
 
@@ -107,6 +121,16 @@ second.health = 75
 assert(first.health == 75) -- both names reach the same table
 ```
 
+```mermaid
+flowchart LR
+    F["local first"] --> T["one table in Lua's heap<br/>health = 75"]
+    S["local second"] --> T
+```
+
+`second = first` copied the reference, the arrow, not the table it points to.
+There is only one `health` field, so the write through `second` is the value
+read through `first`.
+
 That is aliasing. It is convenient, but it means ownership is a host-and-runtime
 policy rather than a simple “one variable owns one table” rule. The garbage
 collector reclaims an object only after it can no longer be reached from Lua
@@ -118,6 +142,26 @@ Lua with a host-defined metatable; light userdata is essentially an unowned raw
 pointer value. A sound API avoids exposing a pointer whose native object may die
 while Lua still holds it. Stable handles with generation checks, copied
 snapshots, or host-managed reference objects make the lifetime rule explicit.
+
+A handle with a generation check works like this. The host keeps entities in
+numbered slots, and each slot has a **generation** counter that goes up by one
+every time the slot is given to a new entity. A script receives the pair
+(slot, generation) instead of an address. When the script hands the pair back,
+the host compares its generation with the slot's current one. If the entity
+died and the slot was reused, the two numbers differ and the host refuses the
+request instead of acting on the new occupant:
+
+```mermaid
+flowchart LR
+    subgraph RAW["Light userdata: a raw pointer"]
+        A1["Lua holds address 0x2A40"] --> A2["native object freed,<br/>memory reused"]
+        A2 --> A3["the pointer now reaches<br/>whatever lives there"]
+    end
+    subgraph HANDLE["Handle: slot and generation"]
+        B1["Lua holds slot 3,<br/>generation 6"] --> B2["slot 3 reused,<br/>generation now 6 + 1 = 7"]
+        B2 --> B3["6 does not match 7:<br/>the host refuses"]
+    end
+```
 
 ## Calls cross a real stack boundary
 
@@ -207,9 +251,10 @@ cargo run --manifest-path lua-labs/Cargo.toml -- scripts/observer.lua
 
 The host works on Windows, macOS, and Linux because it uses a simulated snapshot. Later you can connect the same API shape to one of the book's read-only Windows observers.
 
-## Keep versions and trust visible
+## Versions and trust differ between games
 
-When a game loads Lua mods, document:
+Games that load Lua mods differ in each of these, and each one changes what a
+script can do or how its failures show up:
 
 - Lua version or dialect;
 - search paths and file names;

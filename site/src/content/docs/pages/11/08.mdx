@@ -1,23 +1,39 @@
 ---
-title: "Validate DMA Evidence and Keep the Lab Defensive"
-description: "Preserve capture provenance, verify translations, understand IOMMU defenses, and turn raw offline bytes into cautious object evidence."
+title: "Validate a DMA Capture and Keep the Lab Defensive"
+description: "Preserve capture provenance, cross-check translations, understand IOMMU defenses, and decode raw offline bytes into validated object snapshots."
 chapter: "11.8"
 minutes: 34
 author: "attilathedud"
 date: "2026-08-14"
 sidebar:
   order: 8
-  label: "11.8 Validate DMA Evidence and Keep the Lab Defensive"
+  label: "11.8 Validate a DMA Capture and Keep the Lab Defensive"
 ---
-## A hexdump is not yet evidence
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
+
+## A clean translation can still be the wrong one
 
 Page-table translation can produce an address and still answer the wrong question. You may have the wrong CR3, a stale object pointer, a different build, or a capture taken between two related updates.
 
-Treat every result as a claim that needs independent checks.
+None of those mistakes makes the walk fail. A wrong CR3 is still a valid page-table root for some other address space, a stale pointer can still land on mapped memory, and another build's object still has bytes where the old layout expects fields. A successful walk means only that the page tables in the file lead somewhere; each stage below checks, in a different way, that the somewhere is the object you meant:
+
+```mermaid
+flowchart TD
+    F["capture file"] --> H{"SHA-256 matches the<br/>provenance digest?"}
+    H -->|"no"| S1["stop: the file changed"]
+    H -->|"yes"| T["walk the page tables<br/>with the recorded CR3"]
+    T -->|"NonCanonical, NotPresent,<br/>or OutOfRange"| S2["stop: no translation"]
+    T -->|"physical address"| X{"a second translator<br/>gives the same address?"}
+    X -->|"no"| S3["stop: wrong CR3 or<br/>a translator bug"]
+    X -->|"yes"| D["decode the object layout"]
+    D --> I{"every invariant holds?"}
+    I -->|"no"| S4["reject: wrong object,<br/>wrong build, or stale pointer"]
+    I -->|"yes"| P["accept a PlayerSnapshot"]
+```
 
 ## Preserve capture provenance
 
-For every image, record:
+A capture file is only bytes; nothing inside it says where it came from. The facts needed to interpret it travel beside it, in a provenance record that covers:
 
 - who created it and how it was captured;
 - source machine or virtual machine;
@@ -29,15 +45,17 @@ For every image, record:
 - CR3 source and the process it belongs to;
 - SHA-256 digest of the unchanged file.
 
-Keep an original read-only copy. Run experiments on a working copy. If the digest changes, stop and explain why before continuing.
+Keep the original read-only and run experiments on a working copy, so a mistake can never alter the only copy. If the original's digest stops matching the record, stop: every translation made from the file assumed the recorded bytes, so none of them can be trusted until the change is explained.
 
 ## Cross-check a translation three ways
 
-A strong lab compares:
+Three independent checks catch different mistakes:
 
 1. the capture translator’s physical result;
 2. a debugger or hypervisor translation for the same snapshot;
 3. semantic structure checks on the resulting bytes.
+
+The second translator catches a bug in the first. The structure checks catch the case both translators share: a correct translation of the wrong thing.
 
 For an object model, semantic checks might include:
 
@@ -49,7 +67,15 @@ For an object model, semantic checks might include:
 - container begin/end/capacity relationships make sense;
 - handles resolve with matching generations.
 
-One plausible field is weak evidence. Several independent invariants agreeing is much stronger. 🔍
+Here is how several of those checks land on one small object, a toy 64-bit player layout:
+
+<MemoryStrip
+  cells="+0x00=vptr|+0x08=health|+0x0C=x|+0x10=y|+0x14=z|+0x18=begin|+0x20=end|+0x28=capacity"
+  groups="0:in module `.rdata`|1:0 to max|2-4:finite floats, no NaN or infinity|5-7:item list, begin ≤ end ≤ capacity"
+  caption="A 48-byte `PlayerLayout`: an 8-byte vtable pointer, a 4-byte health value, three 4-byte floats, and three 8-byte container pointers, so 8 + 4 + 3 × 4 + 3 × 8 = 48 = 3 × 16 = `0x30` bytes, and `PlayerLayout::SIZE` is 48. Each brace is a check on different bytes."
+/>
+
+A single field can look right by accident: plenty of unrelated memory holds a small integer that could pass for health. Four checks on different bytes, each failing in its own way, rarely all pass at a wrong address, so an object that passes every one is far more likely to be the one you meant.
 
 ## Separate capture parsing from game meaning
 
@@ -67,6 +93,12 @@ fn read_player(
 ```
 
 The capture layer understands physical ranges and page tables. The layout layer understands fields and invariants. The presentation layer prints a `PlayerSnapshot`.
+
+```mermaid
+flowchart LR
+    C["capture layer<br/>physical ranges, page tables"] -->|"bytes, or a MemoryError"| L["layout layer<br/>fields and invariants"]
+    L -->|"PlayerSnapshot, or a PlayerReadError"| P["presentation layer<br/>prints the snapshot"]
+```
 
 This separation keeps an object-layout mistake from corrupting translation code and makes each layer independently testable.
 
@@ -88,25 +120,27 @@ Do not disable Secure Boot, virtualization-based protections, an IOMMU, or Kerne
 ## Study “bypasses” as failed assumptions
 
 A bypass is not magic. It usually means a protection checked one signal while
-the unwanted behavior arrived through a different path. Defensive engineering
-starts by naming the failed assumption without turning it into an evasion
-recipe:
+the unwanted behavior arrived through a different path. Each kind of gap is one
+wrong assumption inside the control, and each can be tested in a toy lab without
+writing an evasion recipe:
 
-| Defensive gap | Question to ask | Safer lab test |
+| Defensive gap | What the control wrongly assumed | Safer lab test |
 |---|---|---|
-| Coverage gap | Which execution, input, or memory paths does the control not observe? | Send labeled events through toy paths and compare logs |
-| Identity gap | Did the policy trust a name, signer, PID, or handle that can change? | Restart/rebuild the toy target and verify identity is re-evaluated |
-| Time gap | Can trusted state change after the check but before use? | Pause between validation and use, mutate a fixture, and expect rejection |
-| Parser gap | Do producer and consumer disagree about lengths or encodings? | Feed a corpus of bounded malformed fixtures into both parsers |
-| Privilege gap | Did a higher-privilege component accept a request it should reject? | Exercise a fake broker with least-privilege test tokens |
-| Telemetry gap | Did the control block something without recording enough evidence? | Assert that every allow, deny, timeout, and parse failure has an event |
-| Recovery gap | Does a crash leave hooks, input, bytes, or handles in a bad state? | Inject worker errors and verify reverse-order cleanup |
+| Coverage gap | Every execution, input, and memory path passes the point it observes | Send labeled events through toy paths and compare logs |
+| Identity gap | The name, signer, PID, or handle it trusted cannot change | Restart/rebuild the toy target and verify identity is re-evaluated |
+| Time gap | Trusted state stays the same between the check and the use | Pause between validation and use, mutate a fixture, and expect rejection |
+| Parser gap | Producer and consumer agree about lengths and encodings | Feed a corpus of bounded malformed fixtures into both parsers |
+| Privilege gap | Requests reaching a higher-privilege component are already safe to accept | Exercise a fake broker with least-privilege test tokens |
+| Telemetry gap | A blocked action needs no event of its own | Assert that every allow, deny, timeout, and parse failure has an event |
+| Recovery gap | A crash cannot leave hooks, input, bytes, or handles in a bad state | Inject worker errors and verify reverse-order cleanup |
 
-Turn each claim into an **invariant**. For example: “a write command is accepted
-only when the target build matches, the address belongs to an expected writable region,
-the old bytes match, and observation-only mode is off.” Then test every rejected
-condition in a toy adapter. This teaches why controls fail and how to strengthen
-them without distributing anti-cheat or endpoint-defense evasion techniques.
+An assumption becomes testable once it is stated as an **invariant**, a condition
+that must hold every time. For example: “a write command is accepted only when
+the target build matches, the address belongs to an expected writable region,
+the old bytes match, and observation-only mode is off.” A toy adapter can then
+exercise every rejected condition. This shows why controls fail and how to
+strengthen them without distributing anti-cheat or endpoint-defense evasion
+techniques.
 
 ```rust
 fn validate_write_request(request: &WriteRequest, state: &LabState) -> Result<(), Denial> {
@@ -121,6 +155,23 @@ fn validate_write_request(request: &WriteRequest, state: &LabState) -> Result<()
     Ok(())
 }
 ```
+
+Each `?` is a separate exit, so each broken assumption produces its own named denial, and a test can target exactly one of them:
+
+```mermaid
+flowchart TD
+    R["write request"] --> A{"write policy<br/>allows writes?"}
+    A -->|"no"| D1["Denial::ReadOnly"]
+    A -->|"yes"| B{"build_id matches<br/>the verified build?"}
+    B -->|"no"| D2["Denial::WrongBuild"]
+    B -->|"yes"| C{"range inside a<br/>writable region?"}
+    C -->|"no"| D3["Denial::OutsideAllowedRegion"]
+    C -->|"yes"| E{"current bytes equal<br/>the expected bytes?"}
+    E -->|"no"| D4["Denial::StateChanged"]
+    E -->|"yes"| OK["Ok, the write may proceed"]
+```
+
+The byte comparison runs last, immediately before the write would happen, which keeps the time gap between that check and the use as short as the code allows.
 
 The defensive lesson is to make assumptions explicit, require several
 independent signals, keep permissions narrow, and fail closed with useful
@@ -144,14 +195,12 @@ Those actions are unnecessary for learning page tables, memory models, object pa
 ## A final advanced workflow
 
 1. Choose an open-source game or toy program you can rebuild with symbols.
-2. Predict one class or component pattern from the stripped build.
-3. Record constructors, destructors, vtables, containers, and ownership clues.
+2. Reconstruct one class or component from the stripped build.
+3. Locate its constructors, destructors, vtable, containers, and ownership patterns.
 4. Create an offline snapshot or synthetic fixture.
 5. Translate one virtual address with the capture reader.
 6. Decode only bounded fields into a typed snapshot.
 7. Validate the snapshot with several invariants.
-8. Compare your prediction with debug symbols or source.
+8. Check the reconstruction against the debug symbols or source.
 9. Turn every discovered assumption into a unit test.
 10. Store or delete the capture according to its data-handling rules.
-
-The important advanced skill is not reading more bytes. It is knowing exactly what each byte proves, what it does not prove, and how to test the difference.

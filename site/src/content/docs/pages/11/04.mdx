@@ -197,9 +197,10 @@ flowchart TD
     B -->|"denied — fixed code"| E["events.push(Denied)"]
 ```
 
-This is a **telemetry gap**, not a control bypass. It still matters because
-missing evidence hides repeated mistakes and makes a control difficult to
-test. Compute the decision, then record both outcomes:
+This is a **telemetry gap**, not a control bypass. It still matters because a
+denial that leaves no event hides repeated mistakes and makes the control
+difficult to test. The fix computes the decision first and then logs it,
+whichever way it went:
 
 ```rust
 let result = if effect_based_policy(command, false) {
@@ -214,23 +215,24 @@ Do not log secrets, raw memory, authentication keys, or giant payloads. A useful
 event records time, operation category, verified target identity, allow/deny
 decision, and a bounded reason code.
 
-## Turn a public “recipe” into a safe research question
+## The anatomy of a bypass
 
-When you encounter an evasion claim, translate it into this worksheet instead
-of copying its operational commands:
+Published evasion write-ups are usually operational recipes. Underneath the
+commands, each one describes the same parts, and this lab's bypass contains
+every one of them:
 
-| Question | Example answer from this lab |
+| Part | In this lab |
 |---|---|
-| What promise did the control make? | Read-only mode prevents state change |
-| Which input or path was checked? | One command name |
-| Which equivalent effect was not checked? | Another command reached the same sink |
-| What observable evidence proves the gap? | Weak policy returned true for `ApplyPatch` |
-| Where should the invariant live? | At the shared state-changing boundary |
-| What regression test keeps it fixed? | Every `ChangesState` variant is denied in read-only mode |
+| The promise the control made | Read-only mode prevents state change |
+| What the control actually checked | One command name |
+| The equivalent effect it missed | Another command reached the same sink |
+| The observable result | The weak policy returned true for `ApplyPatch` |
+| Where the invariant belongs | At the shared state-changing boundary |
+| The regression test that keeps it fixed | Every `ChangesState` variant is denied in read-only mode |
 
-This method is original and reproducible.
-It teaches the reasoning behind bypasses without packaging real-world evasion
-steps that could be aimed at someone else's machine.
+Described by its parts, a bypass is a gap between what a control promised and
+what it checked. That is something a defender can close, and nothing in the
+description is a step that could be aimed at someone else's machine.
 
 ## A detector observes proxies, not intent
 
@@ -249,14 +251,15 @@ rule can be wrong in two directions:
 This is why a strong repair protects the important **effect boundary** instead
 of trusting one environmental clue. In the toy lab, “state must not change in
 read-only mode” is an invariant. A process name, timing threshold, or single
-flag is only evidence that might help explain a violation; it is not the
+flag is only a signal that often accompanies a violation; it is not the
 invariant itself.
 
-For a controlled fixture, vary one condition at a time and write down a small
-confusion matrix. Test attached and detached runs, slow and fast machines, and
-expected diagnostic tools. If the rule blocks legitimate observation, that is
-a compatibility bug worth fixing rather than proof that every observer is
-hostile.
+The four-outcome table above is called a **confusion matrix**. Testing a rule
+against a controlled fixture fills it in one condition at a time: attached and
+detached runs, slow and fast machines, and the diagnostic tools a legitimate
+user is expected to run. A rule that fires on a legitimate debugger or profiler
+lands in the false-positive row, and that is a compatibility bug worth fixing
+rather than proof that every observer is hostile.
 
 Use signal families as a checklist for honest tests and false-positive review,
 not as a list of concealment tricks. The goal is to understand what the detector

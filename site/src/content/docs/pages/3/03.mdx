@@ -29,22 +29,22 @@ public:
 
 The compiler does **not** normally copy that neat declaration into the finished `.exe`. Names such as `Player`, `position`, and `update` may disappear. The running program still needs a repeatable arrangement of bytes, though. It must know where each player's position begins, where the name lives, and which function to call.
 
-Reversing a class means rebuilding a useful description of that arrangement from evidence. This does not restore the original source. It produces a tested model that explains what the machine does. 🧠
+Reversing a class means rebuilding a description of that arrangement from what the running program does. It does not restore the original source; it produces a layout that matches the machine code and the program's behavior. 🧠
 
 This lesson uses **AssaultCube 1.2.0.2 32-bit Windows** in a local bot match. Offsets are version-specific. A different build may have a different layout.
 
-## Build confidence from several kinds of evidence
+## From changing bytes to a class
 
-Reverse engineering begins with facts the machine exposes and combines them into useful descriptions. A broader description explains more behavior, but it also needs more independent tests.
+Recovering a class works upward through several levels, and each level is shown by a different technique:
 
-| Level | Example claim | Confidence source |
+| Level | Example | What shows it |
 | --- | --- | --- |
-| Bytes | Four bytes at this address changed. | Direct memory observation. |
+| Bytes | Four bytes at this address changed. | Reading the memory before and after. |
 | Instruction | `movss` read those four bytes. | Decoded machine code. |
 | Data flow | The value reaches the view-angle calculation. | Register and memory tracing. |
 | Field | Offset `+0x40` behaves like yaw. | Controlled turns across many instances. |
 | Object | Several fields share one stable base address. | Repeated `base + offset` accesses. |
-| Class behavior | Objects sharing one table dispatch related methods. | Validated indirect calls and object lifetimes. |
+| Class behavior | Objects sharing one table dispatch related methods. | Checked indirect calls and object lifetimes. |
 | Game meaning | This is the active player entity. | Behavior, call context, and lifecycle tests. |
 
 ```mermaid
@@ -57,9 +57,10 @@ flowchart BT
     F --> G["this is the active player"]
 ```
 
-Do not skip from “bytes changed” straight to “this is definitely a `Player`
-class.” Keep each intermediate claim visible. If a later test fails, you can
-step down one level and see exactly which inference broke.
+Each level rests on the ones below it. If `+0x40` turns out not to be yaw, the
+object and class levels built on that field have to be checked again, which is
+why a jump from “bytes changed” straight to “this is a `Player` class” is so
+easy to get wrong.
 
 ## Separate five object-layout terms
 
@@ -237,7 +238,7 @@ Do not label every first pointer a vptr. Test it:
 4. Objects believed to share a class should usually share the same table pointer.
 5. Breaking on one table entry should show a sensible method receiving the object as `this`.
 
-This pattern is common, but the C++ language does not require one universal object layout. Link-time optimization, devirtualization, multiple inheritance, and custom engines can change the evidence.
+This pattern is common, but the C++ language does not require one universal object layout. Link-time optimization, devirtualization, multiple inheritance, and custom engines can all change it.
 
 ## Inheritance makes the map less tidy
 
@@ -257,10 +258,9 @@ that code can ask what class an object really is while the program is running.
 It is what makes `dynamic_cast` possible.
 
 When it is present it can expose type-descriptor clues near virtual tables,
-sometimes including a readable class name. Treat such a name as supporting
-evidence and nothing more. Release builds can strip RTTI entirely, and a name
-tells you what the class was called without telling you where any of its fields
-sit.
+sometimes including a readable class name. That name tells you what the class
+was called and nothing more: release builds can strip RTTI entirely, and a
+name does not tell you where any of the class's fields sit.
 
 ## One object can have several useful identities
 
@@ -280,9 +280,10 @@ stub that fixes something up and then jumps to the real function — may adjust
 that adjusted pointer can produce negative offsets and a broken layout even
 though the pointer is valid for its particular base view.
 
-When two candidate bases differ by the same small constant, record both views
-and trace where the adjustment happens. Do not force them into one diagram
-until constructor, destructor, and call-site evidence agree.
+When two candidate bases always differ by the same small constant, they are
+usually two views of one object. The thunk or call site that adds the constant
+shows where the adjustment happens, and the constructor, which writes both
+vptrs, shows how the two views sit inside one allocation.
 
 ## Constructors and destructors reveal a timeline
 
@@ -306,43 +307,30 @@ flowchart LR
     E --> F["block freed: every cached<br/>address to it is stale"]
 ```
 
-None of those clues proves “constructor” alone. An ordinary reset function can
-also fill fields with defaults. Confidence rises when allocation, initialization,
-base calls, vptr transitions, normal game creation, and later destruction form
-one consistent timeline.
+None of those clues identifies a constructor alone, because an ordinary reset
+function can also fill fields with defaults. What a reset function does not do
+is run right after an allocation, call base constructors first, and switch the
+vptr from the base table to the derived table.
 
 Destructors provide the other half: they reveal child cleanup, unregistering,
 reference releases, pool returns, and the point after which a cached address is
 stale. For a memory tool, this lifetime boundary matters more than recovering
 the original C++ class name.
 
-## Recover a structure as an experiment
+## Recover a structure step by step
 
-Use this repeatable workflow rather than guessing from one memory window:
+One memory window is not enough to recover a structure. A repeatable sequence is:
 
 1. **Anchor one field.** Find a value with an obvious controlled behavior, such as yaw, health, or ammunition.
-2. **Find code that uses it.** Break on access and record the base register plus displacement.
-3. **Propose an object base.** Subtract the displacement from the known field address.
-4. **Collect nearby candidates.** Observe adjacent aligned values as position, view, health, and state change.
+2. **Find code that uses it.** Break on access. The instruction's base register and displacement give the field's offset: `[ecx+40h]` means the field sits `0x40` bytes (4 × 16 = 64) past the address in `ecx`.
+3. **Propose an object base.** Subtract the displacement from the known field address: a yaw at `0x12340040` read through `[ecx+40h]` gives a base of `0x12340040 − 0x40 = 0x12340000`.
+4. **Collect nearby candidates.** Watch adjacent aligned values as position, view, health, and state change.
 5. **Compare instances.** Inspect the local player and several bots at the same offsets.
 6. **Assign types carefully.** Check byte width, signedness, endianness, value range, and how instructions consume the field.
 7. **Trace methods.** Look for repeated `this + offset` accesses and virtual calls.
-8. **Test lifetimes.** Join, die, respawn, leave, and start a new match. Record when pointers become null or objects are replaced.
-9. **Write confidence beside every field.** Mark it confirmed, likely, or unknown and state the experiment that would disprove it.
+8. **Test lifetimes.** Join, die, respawn, leave, and start a new match. The moments when pointers become null or objects are replaced mark where cached addresses stop being valid.
 
-A useful notebook entry looks like this:
-
-```text
-+0x40  f32  yaw  CONFIRMED
-Evidence: changes only with horizontal view; read by [ecx+40h]
-Tested: local player + 4 bots, death/respawn, 3 clean launches
-
-+0x48  ???? possible roll  LOW CONFIDENCE
-Evidence: small float near view fields; no controlled change yet
-Next test: spectate a rolling entity or trace all reads
-```
-
-That last line matters. A good reverse engineer records what would prove an idea wrong.
+A field nobody has managed to change on purpose stays unnamed, as `field_48` or plain padding, until a controlled change or a traced read shows what it holds.
 
 ## Do not turn a remote address into a reference
 
@@ -507,10 +495,9 @@ Before moving on, explain these ideas without debugger vocabulary:
 - `this` tells a member function which instance it is handling;
 - a vptr commonly connects an object to a table of virtual methods;
 - padding and inheritance can create gaps or multiple object views;
-- a recovered class is a versioned hypothesis supported by repeated experiments;
+- a recovered layout belongs to one game build and can be wrong wherever it has not been tested;
 - a remote address is not a valid local reference.
 
-This evidence-based method also appears in debuggers, crash analyzers,
-compatibility tools, profilers, and digital-forensics programs. Each tool
-recovers structure from raw memory without pretending that the original source
-code is still present.
+The same technique appears in debuggers, crash analyzers, compatibility tools,
+profilers, and digital-forensics programs. Each one recovers structure from raw
+memory without the original source code.

@@ -9,6 +9,8 @@ sidebar:
   order: 5
   label: "9.5 Extract Mod Archives Without Escaping the Game Folder"
 ---
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
+
 ## An archive contains names, not trusted paths
 
 A `.zip` can claim that an entry is named:
@@ -42,6 +44,22 @@ The escape happens later, when the operating system resolves each `..` while
 opening the file. Absolute entry names are worse still: joining an absolute
 path onto a base discards the base completely, so the result is simply whatever
 path the archive asked for.
+
+Resolving the joined path one component at a time shows where it leaves the
+folder:
+
+```mermaid
+flowchart TD
+    A["Start: C:\Games\Wesnoth\mods"] -->|"first .."| B["C:\Games\Wesnoth"]
+    B -->|"second .."| C["C:\Games"]
+    C -->|"third .."| D["Root of drive C:"]
+    D -->|"Windows, then System32"| E["C:\Windows\System32"]
+    E -->|"example.dll"| F["C:\Windows\System32\example.dll"]
+```
+
+Each `..` climbs one level, so three of them undo the three folders below the
+drive root, and every component after that walks down a path the mod folder
+never contained.
 
 The safe rule is therefore simple: **every extracted file must remain beneath one destination root after validation**.
 
@@ -100,8 +118,9 @@ fn extract_mod(zip_path: &Path, destination: &Path) -> anyhow::Result<()> {
 }
 ```
 
-The size limit prevents one PK3 entry from expanding forever. A real Urban
-Terror archive tool should also verify that the copy reached the end of the
+The size limit, 64 × 1,024 × 1,024 = 67,108,864 bytes (64 MiB), prevents one
+PK3 entry from expanding forever; Urban Terror's `.pk3` asset archives are zip
+files under another extension. A real Urban Terror archive tool should also verify that the copy reached the end of the
 entry; otherwise an oversized file would be silently truncated. Check the
 declared size before copying, then compare it with the number of bytes actually
 written.
@@ -123,6 +142,25 @@ An archive with 50,000 tiny files can cause trouble even if every path is enclos
 
 Apply limits before and during extraction. Declared compressed and uncompressed sizes are claims from the archive; count the bytes actually written and maintain a checked running total. Stop with an error if either the declaration or the real output crosses policy.
 
+```mermaid
+flowchart TD
+    A{"Another entry<br/>in the archive?"} -->|"no"| G["Inspect the complete staged tree"]
+    A -->|"yes"| B{"Declared size over<br/>the per-file limit?"}
+    B -->|"yes"| X["Stop with an error<br/>and discard staging"]
+    B -->|"no"| C["Copy up to the per-file limit,<br/>counting the bytes written"]
+    C --> D{"Bytes left in the entry<br/>after the limit?"}
+    D -->|"yes"| X
+    D -->|"no"| E{"Bytes written equal<br/>the declared size?"}
+    E -->|"no"| X
+    E -->|"yes"| F{"Running total over<br/>the archive limit?"}
+    F -->|"yes"| X
+    F -->|"no"| A
+```
+
+The declared size is checked first because it costs nothing, but only the
+counted bytes are trusted: an entry that declares 10 bytes and then produces
+more is caught by the count, not by the declaration.
+
 ## Stage, inspect, then install
 
 Do not unpack directly over a working game directory. Use this transaction:
@@ -141,13 +179,34 @@ If validation fails, delete only the known staging directory. The game remains u
 
 ## Treat file extensions as hints
 
-Renaming an executable to `grass.png` does not make it an image. For formats you understand, inspect magic bytes and parse headers:
+Renaming an executable to `grass.png` does not make it an image. For formats you understand, inspect the **magic bytes** — fixed bytes at the start of a file that identify its format — and parse headers:
 
 ```rust
 fn looks_like_png(bytes: &[u8]) -> bool {
     bytes.starts_with(b"\x89PNG\r\n\x1a\n")
 }
 ```
+
+The escaped string in that code is eight bytes, and each one is there to catch a
+particular kind of damage:
+
+<MemoryStrip
+  cells="0=89|1=50|2=4E|3=47|4=0D|5=0A|6=1A|7=0A"
+  marks="0|4-7"
+  groups="0-0:not ASCII|1-3:`P` `N` `G`|4-5:CR LF|6-6:DOS end of file|7-7:LF"
+  caption="The PNG signature, numbered from 0. The highlighted bytes exist to detect a damaged transfer."
+/>
+
+`0x89` is 8 × 16 + 9 = 137. ASCII, the standard table of character codes, stops
+at 127, so no plain text file starts with this byte, and a transfer that strips
+the top bit (worth 128) from every byte turns it into 137 − 128 = 9, `0x09`,
+which no longer matches. Bytes 1 to 3 are the ASCII codes for `P`, `N`, and `G`,
+so the format's name is readable in a hex editor. `0D 0A` is a Windows line
+ending (carriage return, line feed) and the final `0A` is a Unix one: a transfer
+that converts line endings in either direction inserts or deletes a byte, so the
+damage is caught before any pixels are decoded. `0x1A` is the character old DOS
+tools treated as the end of a text file, which stopped them printing the binary
+data after it.
 
 Magic bytes are still not a complete security check, but they catch obvious mismatches. A real image decoder should validate dimensions and allocation limits before loading pixels.
 

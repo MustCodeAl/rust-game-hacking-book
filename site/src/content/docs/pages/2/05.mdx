@@ -27,7 +27,7 @@ Now you are back in the caller. Repeat this carefully to move from the low-level
 
 When x86 executes `call`, it places a return address on the stack before jumping to the callee. That address points to the instruction the caller expects to run next. A debugger’s call stack combines return addresses with known module ranges and function information to show the nested route that reached the breakpoint.
 
-The stack is useful evidence, but it may be incomplete. Optimizations can inline functions, reuse stack space, or omit traditional frame pointers. Confirm an important caller by returning to it or placing a breakpoint at its call site and reproducing the action.
+The call stack a debugger shows is a reconstruction, and it may be incomplete. Optimizations can inline functions, reuse stack space, or omit traditional frame pointers. Confirm an important caller by returning to it or placing a breakpoint at its call site and reproducing the action.
 
 ## Recognize dispatcher code
 
@@ -44,7 +44,8 @@ je close_menu
 
 The constants will not have friendly names in the debugger. You create those names from experiments.
 
-Trigger one menu item at a time and record which branch runs:
+Triggering one menu item at a time shows which branch each one takes. In one run
+of this book's build:
 
 ```text
 Action: Recruit
@@ -56,13 +57,12 @@ Compared value: 5
 Taken destination: 0x00CC_AF20
 ```
 
-Those destinations are from one run of one build, and yours will not match.
-Record your own, the way Lesson 2.4 asked you to read your own instruction
-rather than copy the one on the page. What transfers is the shape: two actions,
-two constants, two different branch targets, all from the same comparison
-chain.
+Those destinations belong to one run of one build, and yours will not match.
+What carries over is the shape: two actions, two constants, two different
+branch targets, all from the same comparison chain.
 
-Several observations turn anonymous numbers into a useful enum:
+Once each constant is matched to an action, the anonymous numbers become an
+enum:
 
 ```rust
 #[repr(u32)]
@@ -74,7 +74,7 @@ enum MenuAction {
 
 The enum is your model, not a claim about the original source type.
 
-The comparison value alone is not enough. Record where it came from: a register, a stack argument, or a field inside a menu object. Also record whether another branch changed it before the dispatcher. Those details distinguish “menu command ID” from a temporary loop counter that merely happened to equal `3`.
+The comparison value alone is not enough. Where it came from matters: a register, a stack argument, or a field inside a menu object, and whether another branch changed it before the dispatcher. Those details distinguish “menu command ID” from a temporary loop counter that merely happened to equal `3`.
 
 ## Separate “where” from “why”
 
@@ -126,8 +126,7 @@ the whole of Lesson 2.9. The comparison that guarded the block may sit
 immediately above, or in the caller, having already decided this purchase was
 affordable before the call was made.
 
-Answer one at a time and write the answer down before starting the next. The
-common way to get lost is to chase `eax` upward, notice an interesting branch
+Answering them one at a time matters. The common way to get lost is to chase `eax` upward, notice an interesting branch
 on the way, follow that instead, and end up unable to say which question you
 were answering.
 
@@ -143,12 +142,11 @@ Then verify:
 
 1. original bytes are back;
 2. the normal menu behavior works;
-3. no stale breakpoint remains;
-4. your notes describe the unmodified baseline.
+3. no stale breakpoint remains.
 
 ## A plain-English function sketch
 
-After the experiments, write pseudocode before writing code:
+The recovered behavior fits in a few lines of pseudocode:
 
 ```text
 when the player chooses a menu item:
@@ -161,18 +159,14 @@ when the player chooses a menu item:
         run the matching menu action
 ```
 
-Pseudocode is not wasted work. It separates the idea from register names and addresses. If you cannot explain the function in plain English, you are not ready to automate it.
-
-Annotate uncertainty instead of inventing names:
+Pseudocode separates the idea from register names and addresses, so the same sketch describes the function in any build even though every address changes. Parts whose purpose is not known yet can keep neutral names instead of invented ones:
 
 ```text
-if candidate_action == 3:       # observed as Recruit in three trials
-    check unknown_flag          # branch exists; meaning not proved yet
-    call create_unit_candidate  # creates a unit in the positive trials
+if candidate_action == 3:       # Recruit in all three trials
+    check unknown_flag          # the branch exists; its purpose is unknown
+    call create_unit_candidate  # a unit appeared every time this ran
     subtract gold
 ```
-
-Good reverse-engineering notes separate observed facts, strong inferences, and unanswered questions. That makes the next experiment obvious.
 
 ## Checkpoint
 

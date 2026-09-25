@@ -21,7 +21,7 @@ remote bytes  →  validated copied snapshot  →  display or analysis
 ```
 
 The remote process may change immediately after the read. `PlayerSnapshot` is
-therefore a record of one observation, not a live reference into Wesnoth.
+therefore a copy of the values at one moment, not a live reference into Wesnoth.
 This distinction keeps the rest of the program safe and makes timestamps and
 failed reads honest.
 
@@ -46,14 +46,14 @@ inline records:  base + index × record_size
 pointer table:   read pointer at base + index × pointer_size
 ```
 
-Do not apply the inline formula until debugger evidence shows a consistent
-stride between real players.
+The inline formula applies only once the debugger shows a consistent stride
+between real players.
 
 The goal is not to guess a distance and hope. We will use two known players and the debugger to learn how the game indexes them.
 
 ## Observe the income loop
 
-Set a breakpoint on the gold update used at the end of a turn. Record the object pointer each time the instruction runs.
+Set a breakpoint on the gold update used at the end of a turn. Each time the instruction runs, read the object pointer it uses.
 
 ![An income breakpoint firing](/assets/images/4/1/wesnoth1.png)
 
@@ -83,7 +83,7 @@ This suggests:
 record address = table base + player index × record size
 ```
 
-Confirm the theory with at least two known players. A difference between two addresses is evidence, not yet a complete layout.
+Two known players confirm it: their record addresses should differ by exactly one record size. That difference gives the stride, not yet the complete layout of a record.
 
 ## Model only confirmed fields
 
@@ -125,10 +125,10 @@ fn read_player(
 
 `PlayerSnapshot` owns copied values. It does not pretend that remote memory is a safe local reference.
 
-The layout object stores knowledge separately from observations. `gold: 4`
-means “the current model places gold four bytes from each record’s base.” It
-does not make the model true. Range checks and behavior tests decide whether
-the model remains usable for this exact build.
+The layout object keeps the offsets apart from the values read through them.
+`gold: 4` means “gold sits four bytes from each record’s base in this build.”
+Storing the number does not make it true; range checks and behavior tests
+decide whether it still holds for this exact build.
 
 ## Read until the model says stop
 
@@ -173,8 +173,8 @@ Compare that with silently skipping records that fail:
 ```
 
 :::note[Why this version?]
-A missing row is evidence of a bad layout, a changing
-process, or an unreadable record—not proof that the player does not exist.
+A missing row means a bad layout, a changing process, or
+an unreadable record, not that the player does not exist.
 Collecting `Result` stops at the first untrusted row, so the dashboard never
 presents a partial table as complete. The count cap also prevents a corrupted
 count from turning one bad read into thousands of reads.
@@ -209,7 +209,7 @@ player 2 gold: [[0x017E_ED18] + 0xA90] + 0x274
                                              └─ 0x270 + 4
 ```
 
-Turn that observation into a real reader:
+Those paths become a real reader:
 
 ```rust
 const PLAYER_ROOT: usize = 0x017E_ED18;

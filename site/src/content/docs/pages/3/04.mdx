@@ -1,6 +1,6 @@
 ---
 title: "Recognize Object-Oriented Patterns in Memory"
-description: "Turn repeated pointers, virtual calls, constructors, and update loops into evidence for factories, states, observers, singletons, and component systems."
+description: "Recognize the shapes that factories, states, observers, singletons, and component systems leave in compiled code: repeated pointers, virtual calls, constructors, and update loops."
 chapter: "3.4"
 minutes: 42
 author: "attilathedud"
@@ -15,9 +15,9 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 A C++ programmer may write a class named `EnemyFactory`, a `State` interface, and an `Observer` list. The processor never sees those friendly names. After compilation it sees addresses, loads, stores, comparisons, and calls.
 
-That sounds discouraging, but design patterns still leave **shapes** in memory and code. A vtable is a row of function pointers. A factory allocates an object and initializes it. An observer loop walks a collection and calls similar functions. Reverse engineering means collecting several of these clues and proposing the simplest model that explains them all. 🧩
+That sounds discouraging, but design patterns still leave **shapes** in memory and code. A vtable is a row of function pointers. A factory allocates an object and initializes it. An observer loop walks a collection and calls similar functions. One shape alone is common in unrelated code, but several that fit together usually point to one pattern. 🧩
 
-Symbols from a debug build are excellent answer keys after you make your first prediction. Compare them with the layout inferred from the version-pinned executable.
+When debug symbols exist for a build, they give the real names and layouts, so they can check a layout recovered from the version-pinned executable.
 
 ## A pattern name communicates intent
 
@@ -37,11 +37,10 @@ be tested separately. Do not add a factory, observer, or trait hierarchy only
 because the name sounds professional. A smaller function or enum is often the
 clearer design.
 
-In a compiled game, treat a pattern name as a **hypothesis**. It helps your
-notes communicate a likely role; it does not recreate the original source or
-prove the programmer's intention.
+In a compiled game, a pattern name describes a likely role. It does not
+recreate the original source or prove what the programmer intended.
 
-## Begin with observations, not class names
+## Start from what the code does, not class names
 
 Suppose three heap objects all begin with the same pointer. That pointer leads into a read-only section containing executable addresses. Several call sites do this:
 
@@ -59,19 +58,13 @@ flowchart LR
     T -->|"slot 4, at +0x20"| F["the function called,<br/>with the object in rcx"]
 ```
 
-The evidence supports this small claim:
+What this code shows is small:
 
 > Objects at these addresses share a function table, and slot four receives the object address.
 
-It does **not** yet prove the source class name, inheritance tree, or method name. Good notes separate facts from guesses:
+Slot four is at `+0x20` because each slot holds one 8-byte function address on 64-bit Windows, and `0x20` is 2 × 16 = 32 bytes, which is 32 ÷ 8 = 4 slots past slot zero.
 
-| Confidence | Statement |
-|---|---|
-| Observed | Offset `0x00` points into read-only module memory. |
-| Observed | Entries in that table point to executable module pages. |
-| Strong inference | Offset `0x00` is a C++ vptr. |
-| Working name | The object behaves like an `Actor`. |
-| Unknown | Whether `Actor` was the original source name. |
+The code does **not** show the source class name, the inheritance tree, or the method name. Two facts can be checked directly: offset `0x00` points into read-only module memory, and the entries of that table point to executable module pages. Together they match how C++ compilers implement a vptr, so offset `0x00` is very likely one. A name such as `Actor` is a label chosen from the object's behavior; nothing in the binary says what the original class was called.
 
 ## Five patterns and the clues they leave
 
@@ -94,7 +87,7 @@ flowchart LR
     G --> M["the one manager object"]
 ```
 
-One global pointer alone is not proof. It might be a cache or the current scene. Confidence rises when initialization allocates it once, many unrelated call sites reuse it, and shutdown releases it.
+One global pointer alone does not make a singleton; it might be a cache or the current scene. A singleton is allocated once during initialization, reused by many unrelated call sites, and released at shutdown.
 
 ### Factory
 
@@ -132,7 +125,7 @@ stateDiagram-v2
     Chase --> Idle: loses the player
 ```
 
-Each arrow is a moment when the owner's behavior pointer changes. Record when that pointer changes. If it changes when an enemy moves from idle to chase to attack, “state” is a useful name. If it changes when a weapon changes its aiming rule, “strategy” may fit better. The bytes do not care which textbook word you choose; behavior over time is the deciding clue.
+Each arrow is a moment when the owner's behavior pointer changes. If it changes when an enemy moves from idle to chase to attack, “state” is a useful name. If it changes when a weapon changes its aiming rule, “strategy” may fit better. The bytes do not care which textbook word you choose; behavior over time is the deciding clue.
 
 ### Observer
 
@@ -195,11 +188,11 @@ The last store starts at `+0x10` and writes a `qword`—eight bytes—so the con
 1. Collect several live object addresses from the exact local build.
 2. Group objects by their first pointer and validate that it leads to executable function entries.
 3. Find code that writes that first pointer; it may be a constructor.
-4. Find code that allocates the object and note the requested size.
+4. Find code that allocates the object and read the requested size.
 5. Label every repeated field access as `field_08`, `field_10`, and so on.
-6. Observe which actions change each field.
-7. Find virtual call slots and record their arguments and side effects.
-8. Propose a pattern only after several observations agree.
+6. Watch which actions change each field.
+7. Find virtual call slots and trace their arguments and side effects.
+8. Name a pattern only when several of these shapes agree.
 9. Compare with source or debug symbols as a final answer key.
 
 The goal is not to make the class diagram look impressive. The goal is to build a model that correctly predicts what the program will do next.
@@ -207,7 +200,7 @@ The goal is not to make the class diagram look impressive. The goal is to build 
 ## Common mistakes
 
 - ❌ Naming a class from one interesting string.
-- ✅ Naming fields provisionally and recording the evidence.
+- ✅ Naming fields provisionally, such as `field_08`, until their behavior is clear.
 - ❌ Treating every first pointer as a vptr.
 - ✅ Checking page permissions and several table entries.
 - ❌ Assuming inheritance because two objects share fields.

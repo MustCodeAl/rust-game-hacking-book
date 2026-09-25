@@ -74,8 +74,8 @@ For this exact Urban Terror build, `count > 500` is the original course filter. 
 
 Keep the classifier pure. It should not call OpenGL or change memory, which makes it easy to test with recorded samples.
 
-Purity also makes uncertainty visible. Return `Unknown` when the observations do
-not support a category. A confident-looking wrong label is harder to diagnose than
+Purity also makes uncertainty visible. Return `Unknown` when the sample does not
+match any category. A confident-looking wrong label is harder to diagnose than
 an explicit unknown.
 
 ```text
@@ -89,7 +89,7 @@ recorded draw state ──► pure classifier ──► category
 
 A colored result gives immediate feedback, but “some players turned red” is not enough. Count four outcomes across a small labeled capture:
 
-| Observation | Meaning |
+| Outcome | Name |
 |---|---|
 | player colored | true positive |
 | non-player colored | false positive |
@@ -109,7 +109,7 @@ Precision asks “when the classifier says player, how often is it right?” Rec
 asks “of all player draws, how many did it find?” If a denominator is zero, report
 the metric as undefined instead of inventing a perfect score.
 
-Keep the recorded samples separate from the classifier implementation. Then a new rule can be evaluated against the same evidence instead of judged from memory.
+Keep the recorded samples separate from the classifier implementation. Then a new rule can be scored against the same samples, so a change in precision or recall comes from the rule and not from a different capture.
 
 ## Apply color for one draw
 
@@ -243,12 +243,12 @@ does not automatically recognize the object everywhere. Conversely, a call site
 may draw many categories through a shared material pass.
 
 When color appears twice, through a mirror, or only in a shadow, add the current
-framebuffer, shader/program, and pass position to the observation before changing
+framebuffer, shader/program, and pass position to the draw sample before changing
 the category rule.
 
-## Use better evidence than one number
+## Identify a category with more than one number
 
-A vertex count can be a quick first filter, not a durable identifier. Combine independent clues and include `Unknown` when they disagree.
+A vertex count can be a quick first filter, not a durable identifier. Combine independent draw properties and return `Unknown` when they disagree.
 
 ```rust
 fn likely_player(sample: DrawSample, profile: &TargetProfile) -> bool {

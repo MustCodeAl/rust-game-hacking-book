@@ -9,11 +9,13 @@ sidebar:
   order: 1
   label: "11.1 Inventory Every DLL Loaded by the Game"
 ---
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
+
 ## A module name is not a full identity
 
 A game may report that it loaded `opengl32.dll`, `zlib1.dll`, or another familiar name. The name alone does not say which file supplied the bytes. The full path, file hash, signer, architecture, and loaded range provide stronger identity.
 
-That matters for debugging as well as defense. Loading the wrong version of a legitimate DLL can cause missing exports, crashes, changed structure layouts, or code patterns that no longer match the course notes.
+That matters for debugging as well as defense. Loading the wrong version of a legitimate DLL can cause missing exports, crashes, changed structure layouts, or code patterns that no longer match the ones this course uses.
 
 ## Imports begin a dependency graph
 
@@ -51,6 +53,26 @@ When code supplies only a DLL name instead of a full path, Windows follows docum
 
 Do not reduce that to “Windows always checks this one folder first.” The precise order depends on how the load was requested and the Windows environment.
 
+For the most common case, an unpackaged desktop program that calls `LoadLibrary` with a bare name while safe DLL search mode is on (the default), Microsoft documents this order:
+
+```mermaid
+flowchart TD
+    A["LoadLibrary with a bare DLL name"] --> B{"DLL redirection, an API set,<br/>or a side-by-side manifest?"}
+    B -->|"yes"| R["load the DLL it points to"]
+    B -->|"no"| C{"a module with that name<br/>already loaded?"}
+    C -->|"yes"| U["reuse the loaded module"]
+    C -->|"no"| K{"listed in KnownDLLs?"}
+    K -->|"yes"| S["load the trusted<br/>system copy"]
+    K -->|"no"| F1["search 1: the application's directory"]
+    F1 --> F2["search 2: the system directory"]
+    F2 --> F3["search 3: the 16-bit system directory"]
+    F3 --> F4["search 4: the Windows directory"]
+    F4 --> F5["search 5: the current directory"]
+    F5 --> F6["search 6: the directories on PATH"]
+```
+
+The first searched folder that contains a file with that name supplies the DLL. Every check above the numbered searches happens before any folder is searched, which is why a planted file cannot stand in for a KnownDLL. With safe DLL search mode off, the current directory moves up to second place, right after the application's directory; holding it back at fifth place, behind the system directories, is what the setting does. Packaged apps and a few redirection features add steps that the diagram leaves out.
+
 Safer application design uses:
 
 - supported installation directories with controlled permissions;
@@ -72,6 +94,16 @@ Each `MODULEENTRY32W` includes:
 - `szModule`: short module name;
 - `szExePath`: full file path;
 - the owner PID and module handles used by Windows.
+
+The structure has a fixed layout, and the caller must set `dwSize` first because that layout's size differs between 32-bit and 64-bit builds. In the 32-bit build this course uses, it looks like this:
+
+<MemoryStrip
+  column
+  cells="+0x000=dwSize|+0x004=th32ModuleID|+0x008=th32ProcessID|+0x00C=GlblcntUsage|+0x010=ProccntUsage|+0x014=modBaseAddr|+0x018=modBaseSize|+0x01C=hModule|+0x020=szModule, 256 UTF-16 units|+0x220=szExePath, 260 UTF-16 units"
+  marks="5-6|8-9"
+  groups="0:the caller sets this|5-6:the module's loaded range|8-9:NUL-terminated names"
+  caption="`MODULEENTRY32W` in a 32-bit build. The first eight fields are 4 bytes each, so they fill 8 × 4 = 32 = 2 × 16 = `0x20` bytes. `szModule` holds 256 UTF-16 units of 2 bytes each: 512 = 2 × 256 = `0x200` bytes, so `szExePath` starts at `0x20` + `0x200` = `0x220`. It holds 260 units: 520 = 512 + 8 = `0x208` bytes, so the structure ends at `0x220` + `0x208` = `0x428`, which is 4 × 256 + 2 × 16 + 8 = 1,064 bytes. That is the size Rust's `size_of` reports for the structure, and so the value the lab puts in `dwSize` for this build. A 64-bit build widens the two pointer fields to 8 bytes and aligns them, so its size is different."
+/>
 
 <details class="lab-source">
 <summary>Complete lab source: module_inventory.rs</summary>
@@ -180,16 +212,16 @@ Repeat the experiment for AssaultCube and Urban Terror:
 .\target\i686-pc-windows-msvc\release\module_inventory.exe Quake3-UrT.exe
 ```
 
-## Turn the list into evidence
+## Turn the list into a baseline
 
-For every non-system module in an approved baseline, record:
+An approved baseline describes each non-system module with:
 
 - full canonical path;
 - SHA-256 hash from the integrity-manifest lesson;
 - file size and version;
 - expected publisher or project source;
 - why and when the game loads it;
-- which exact game build the record belongs to.
+- which exact game build the entry belongs to.
 
 A different module is not automatically malicious. It may be a graphics capture layer, accessibility tool, language pack, supported mod, or updated dependency. Investigate before removing anything.
 
@@ -197,20 +229,40 @@ A different module is not automatically malicious. It may be a graphics capture 
 
 The module list is a moment-in-time view. A DLL may load or unload immediately afterward. A module manually mapped without normal loader registration may not appear in the ToolHelp loader list. A protected or cross-architecture target may restrict enumeration.
 
-Use multiple independent signals when the question matters:
+A DLL that loads and unloads between two snapshots appears in neither list, even
+though its code ran inside the game:
 
-- ToolHelp module list;
-- ETW image-load events over time;
-- file hashes and signatures;
-- the process memory map;
-- the PE import table;
-- debugger module events.
+```mermaid
+sequenceDiagram
+    participant Tool as module_inventory
+    participant Game as game process
+    participant ETW as ETW trace session
+    Tool->>Game: snapshot 1
+    Game-->>Tool: module list A
+    Game->>Game: LoadLibrary maps helper.dll
+    Game-->>ETW: image-load event, helper.dll
+    Game->>Game: FreeLibrary unmaps helper.dll
+    Game-->>ETW: image-unload event, helper.dll
+    Tool->>Game: snapshot 2
+    Game-->>Tool: module list A again
+    Note over Tool,ETW: both snapshots miss helper.dll,<br/>while the trace shows it came and went
+```
 
-Agreement is stronger than one list.
+Each of these sources sees module loading from a different place, so each one
+covers something another misses:
+
+- ToolHelp module list: the modules the loader has registered, at one instant;
+- ETW image-load events: every image mapping and unmapping over time, including
+  DLLs that came and went between snapshots;
+- file hashes and signatures: which bytes are on disk, and who signed them;
+- the process memory map: every committed region, including executable memory
+  that no module in the list accounts for;
+- the PE import table: which DLLs the executable declares it needs before it runs;
+- debugger module events: load and unload notifications as they happen.
 
 ## Keep defensive observation separate from loader manipulation
 
-The course does not hide modules, unlink loader entries, overwrite an existing module, or exploit search-order mistakes. Those actions damage the loader evidence this chapter is teaching you to collect.
+The course does not hide modules, unlink loader entries, overwrite an existing module, or exploit search-order mistakes. Those actions corrupt the loader records that this chapter's tools read, and that debuggers and crash reporters rely on too.
 
 The complete inventory is [`module_inventory.rs`](/windows-labs/src/bin/module_inventory.rs). Combine its paths with [`integrity_manifest.rs`](/windows-labs/src/bin/integrity_manifest.rs) for a repeatable baseline.
 

@@ -21,13 +21,13 @@ flowchart TD
     B --> C["Copy bounded chunks"]
     C --> D["Decode typed values"]
     D --> E["Store candidate addresses"]
-    E --> F["Filter on next observation"]
+    E --> F["Filter with the next scan"]
 ```
 
 The Windows calls are only the outer shell. Candidate filtering uses checked local slices.
 
 :::note
-🔎 **Scanner mindset:** every new observation should remove candidates. If a scan adds unexplained addresses, revisit the value type, range, or filtering rule.
+🔎 A filter pass re-reads only the addresses already on the candidate list, so it can remove candidates but never add them. If the list grows, the program rescanned memory instead of filtering; if it stops shrinking, check the value type, the range, and the filtering rule.
 :::
 
 ## What the scanner is searching
@@ -194,13 +194,13 @@ need to consume or copy it.
 
 Update `previous` for candidates that survive.
 
-The `Filter` enum makes every supported relationship explicit. A string such as `"decreased"` could be misspelled and discovered only at runtime; an enum lets the compiler force every `match` to handle each case. `previous` belongs beside the address because “changed” always compares two observations of the same candidate.
+The `Filter` enum makes every supported relationship explicit. A string such as `"decreased"` could be misspelled and discovered only at runtime; an enum lets the compiler force every `match` to handle each case. `previous` belongs beside the address because “changed” always compares two reads of the same candidate.
 
 ## Expect regions to disappear
 
 The target can free or change a region between enumeration and reading. Treat an unreadable candidate as removed, not as a reason to crash the scan.
 
-This is a normal race, not necessarily a bug. Between the region query and the read, the game can free an allocation, change its protection, or exit. The scanner’s snapshot is always slightly behind the running process. A robust tool reports skipped work and continues with evidence that is still valid.
+This is a normal race, not necessarily a bug. Between the region query and the read, the game can free an allocation, change its protection, or exit. The scanner’s snapshot is always slightly behind the running process. A robust tool reports skipped work and continues with the candidates it can still read.
 
 Return a scan report:
 
@@ -245,7 +245,7 @@ fn write_candidate(
     replacement: u32,
 ) -> anyhow::Result<()> {
     // ⚠️ The game continued after the scan. Confirm the candidate still holds
-    // the observation the user selected before changing anything.
+    // the value the last scan saw before changing anything.
     let current = process.read_u32(candidate.address)?;
     anyhow::ensure!(
         current == candidate.previous,
@@ -441,12 +441,12 @@ This ordering explains why the program is more than a `ReadProcessMemory` loop. 
 | Symptom | Phase to inspect |
 |---|---|
 | Zero first-pass candidates | Value type, endianness, range permissions, or target build |
-| Candidate cap reached | Initial value is too common; choose a more distinctive observation |
+| Candidate cap reached | Initial value is too common; start from a less common value |
 | Good first pass, zero second pass | Entered value, timing, or a value stored in another representation |
 | Read failures grow rapidly | Target exited or memory layout changed during the scan |
-| One address survives but write is refused | The value changed after filtering; repeat the observation |
+| One address survives but write is refused | The value changed after filtering; scan again |
 
-The refusal cases are successful safety behavior. They prevent a plausible address from being treated as certain after its evidence has expired.
+The refusal cases are successful safety behavior. They stop the program from writing to an address whose last read is out of date.
 
 <ConceptLab
   id="candidate-scan-filter"
@@ -461,5 +461,5 @@ The refusal cases are successful safety behavior. They prevent a plausible addre
   prompt="A first scan finds every address containing 100. You spend points and the visible value becomes 75. What should the next scan keep?"
   options="Every address that has ever contained 100||Only old candidates that now contain 75||Every readable address containing 75, ignoring the first scan||Only addresses in executable pages"
   answer="1"
-  explanation="The first scan creates a candidate set. The second observation asks which members of that same set changed to the new value. Repeating controlled changes removes unrelated copies until a small, explainable group remains."
+  explanation="The first scan creates a candidate set. The second scan asks which members of that same set changed to the new value. Repeating controlled changes removes unrelated copies until a small, explainable group remains."
 />

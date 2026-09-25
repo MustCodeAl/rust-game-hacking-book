@@ -1,28 +1,28 @@
 ---
-title: "Model State, Invariants, and Evidence"
-description: "Turn a vague game-analysis question into an explicit state model, a falsifiable hypothesis, and evidence another person can reproduce."
+title: "Model Game State and Invariants"
+description: "Describe a game system as explicit state, transitions, and invariants, then locate the control that keeps each invariant true, the detector that reports a failure, and the authoritative copy of state a control has to guard."
 chapter: "13.1"
-minutes: 42
+minutes: 30
 author: "attilathedud"
-date: "2026-08-31"
+date: "2026-09-24"
 sidebar:
   order: 1
-  label: "13.1 Model State, Invariants, and Evidence"
+  label: "13.1 Model Game State and Invariants"
 ---
 ## Prerequisites
 
 You should already be able to:
 
 - distinguish a value from the address that currently stores it;
-- record a game build and repeat one controlled action;
+- identify the exact game build a tool is running against;
 - read a small state machine and a timestamped event log;
-- separate observation from a state-changing operation.
+- tell a read-only observer apart from code that changes game state.
 
 ## What bypass analysis means in this chapter
 
-A **bypass** is a path that reaches an outcome without satisfying the control
-that was supposed to guard it. In a game, the mismatch is often between a
-convenient proxy and the real rule:
+A **bypass** is a path that reaches an outcome without satisfying the
+**control**, the code that was supposed to guard it. In a game, the mismatch is
+often between a convenient proxy and the real rule:
 
 | Proxy that gets checked | Property that actually matters |
 |---|---|
@@ -37,12 +37,9 @@ a path where the proxy and the real property disagree. Later lessons apply that
 pattern to integrity checks, anti-debug behavior, encoded values, hooks, and
 object layouts.
 
-## Begin with the property that must remain true
+## An invariant is a property that must stay true
 
-Advanced analysis becomes manageable when you stop asking only, “Which byte
-changed?” and ask, “Which property of the system does this byte help preserve?”
-
-An **invariant** is a statement that must be true whenever the system reaches a
+An **invariant** is a statement that must be true whenever the system is in a
 valid state. Examples include:
 
 - ammunition never becomes negative;
@@ -51,25 +48,28 @@ valid state. Examples include:
 - a rendering hook is either fully installed or fully removed;
 - a read-only observer never changes the game state.
 
-The invariant is the measuring stick. An address, instruction, field name, or
-log message is evidence about that property—not the property itself.
+An invariant does not live at one address. The health bound
+`0 <= health <= max_health` can be enforced by a clamp instruction, depend on a
+`max_health` field, and be reported by a log line, all at the same time. Each of
+those is a place where the rule is kept or reported, and a bug in one of them
+leaves the rule itself unchanged: a state with `health = 120` and
+`max_health = 100` is invalid whichever of the three failed to catch it.
 
-## Separate state, invariants, controls, signals, evidence, and findings
-
-These terms are related, but they are not interchangeable:
+## State, transitions, controls, and detectors
 
 | Term | Precise meaning | Example in a toy game |
 |---|---|---|
-| **State** | Values needed to describe the system at one moment | `health = 48`, `mode = Playing` |
-| **Transition** | An event and rule that move state to another valid state | Damage changes health from 48 to 43 |
+| **State** | Values needed to describe the system at one moment | `health = 48`, `mode = Alive` |
+| **Transition** | An event and rule that move state to another valid state | 5 damage changes health from 48 to 43 |
 | **Invariant** | A property required of every valid state or transition | `0 <= health <= max_health` |
-| **Observation** | A measurement that does not prove its own cause | A write breakpoint reports one store instruction |
-| **Hypothesis** | A falsifiable explanation for observations | “This store commits post-armor damage” |
-| **Finding** | A supported claim with impact, evidence, and limits | The store violates the health bound on build X |
 
-A **control** attempts to preserve an invariant. A **detector** reports evidence
-that the invariant may have failed. A detector can be noisy while the control
-still works, or quiet while the control is incomplete.
+A control keeps an invariant true, usually by refusing or limiting a transition
+before it takes effect. A damage routine that stops health at 0 instead of
+letting it go negative is a control. A **detector** reports that an invariant
+may already have failed, such as a scan that logs any entity whose health
+exceeds its maximum. The two are separate pieces of code, so they fail
+separately: a detector can be noisy while the control still works, or quiet
+while the control is incomplete.
 
 ```mermaid
 flowchart LR
@@ -79,10 +79,42 @@ flowchart LR
     DET -->|"quiet"| BAD["the control can<br/>still be incomplete"]
 ```
 
-## Draw the state before inspecting implementation details
+## A control guards one copy of the state
 
-Suppose an entity can be alive, downed, or removed. Write that model before
-searching memory:
+A game keeps several copies of the same fact. The simulation's entity object
+holds health, the health bar keeps its own copy for drawing, a script receives
+one in a snapshot, and in a networked game the server keeps a record while each
+client keeps a prediction of it. Exactly one copy is **authoritative**: the one
+whose value decides what happens next. In a single-player game that is usually
+the simulation object. In a multiplayer game with an authoritative server it is
+the server's record, and each client's copy is a prediction that the server can
+overwrite.
+
+```mermaid
+flowchart LR
+    REQ["Damage or heal request"] --> CTRL{"Control:<br/>keep health between<br/>0 and max_health"}
+    CTRL --> AUTH["Authoritative copy:<br/>simulation entity,<br/>or the server's record"]
+    AUTH -->|"copied each frame"| UI["Health-bar cache"]
+    AUTH -->|"copied on request"| SNAP["Script snapshot"]
+    AUTH -->|"sent over the network"| PRED["Client prediction"]
+```
+
+A control protects only the copy it runs against. Code that validates the
+health bar's copy and then applies damage to the simulation object has checked
+one copy and changed another; Lesson 13.2 calls this the wrong source of truth.
+**Server authority** is the same rule at network scale: the server validates
+every client request against its own record, because anything a client
+computed can be altered on the client's machine before it is sent.
+
+The copies hold the same number most of the time, so reading a matching value
+does not say which copy was read. Timing does. The authoritative copy changes
+first and decides the next transition; every other copy catches up afterward,
+on its own schedule.
+
+## Draw the state machine
+
+Suppose an entity can be alive, downed, or removed. A state diagram lists every
+allowed transition:
 
 ```mermaid
 stateDiagram-v2
@@ -95,29 +127,26 @@ stateDiagram-v2
     Removed --> [*]
 ```
 
-Now a useful question appears: does the observed `health` field change before
-or after the `Alive -> Downed` transition? A single memory sample cannot answer
-that. A timestamped trace can.
+The diagram raises a question that one memory sample cannot answer: does the
+stored `health` field change before or after the `Alive -> Downed` transition?
+A sample shows one moment. A trace of timestamped events shows the order.
 
-## Record evidence as structured data
+## Trace state changes as typed events
 
-Free-form notes are easy to misread. Use a small schema:
-
-```mermaid
-flowchart LR
-    O["Observation"] --> SEQ["sequence: log order"]
-    O --> TICK["tick: game clock"]
-    O --> SRC["source: which observer"]
-    O --> EID["entity_id"]
-    O --> EV["event: Event"]
-    EV --> HR["HealthRead { value }"]
-    EV --> HW["HealthWrite { before, after }"]
-    EV --> MC["ModeChanged { before, after }"]
-```
+A **trace** is a list of events in the order they were logged, each saying what
+changed, when, and which observer saw it. Typed fields let a program check the
+trace:
 
 ```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    Alive,
+    Downed,
+    Removed,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Observation {
+struct TraceEvent {
     sequence: u64,
     tick: u64,
     source: &'static str,
@@ -133,72 +162,43 @@ enum Event {
 }
 ```
 
-`sequence` establishes log order. `tick` connects the event to the game clock.
-`source` says which observer produced it. The event carries typed fields rather
-than one sentence that must be parsed later.
+`sequence` gives log order. `tick` connects the event to the game clock.
+`source` names the observer that produced the event. Because an event carries
+typed fields rather than a sentence, a test can ask directly whether a
+`HealthWrite` ending at 0 comes before the `ModeChanged` to `Downed` for the
+same entity. A short trace for entity 7:
 
-Do not mistake sequence for causality. If event A appears before event B, A may
-have caused B, both may share a cause, or the observers may have different
-buffering delays. Repeat the experiment and change one input at a time.
+```text
+sequence  tick  source        entity  event
+      41   900  health watch       7  HealthWrite { before: 6, after: 0 }
+      42   900  mode watch         7  ModeChanged { before: Alive, after: Downed }
+      43   901  health bar         7  HealthRead { value: 0 }
+```
 
-## State what evidence would disprove a hypothesis
+Health reaches 0 at tick 900 and the mode changes in the same tick. The health
+bar, which draws from a copy, shows 0 only at tick 901, one tick later.
 
-“This probably controls health” is difficult to disprove. A useful hypothesis
-predicts an observable result:
-
-> If the instruction commits final health, then changing armor while holding
-> raw damage constant will change the stored delta, and exactly one write will
-> occur before the transition to `Downed`.
-
-Write the competing explanation too:
-
-> The instruction only updates a display cache; authoritative health changes
-> earlier at a different address.
-
-Then design observations that separate the two explanations. Watching the
-value, the transition, and the next UI refresh is stronger than staring at one
-disassembly window.
-
-## Combine several kinds of evidence
-
-| Strength | Evidence | What it supports |
-|---:|---|---|
-| 1 | One matching value | A possible representation |
-| 2 | Controlled value change | A behavioral association |
-| 3 | Repeated reads or writes at a stable instruction | A recurring code/data relationship |
-| 4 | Perturbation with predicted results | A causal hypothesis |
-| 5 | Clean restarts and multiple builds | Stability and version limits |
-| 6 | Automated regression fixture | A claim that can be rechecked |
-
-More evidence does not make a conclusion permanent. It makes the claim and
-limits clearer.
-
-## Report the result so it can be retested
-
-A compact technical finding contains:
-
-1. **claim** — the exact behavior observed;
-2. **scope** — build, architecture, mode, and configuration;
-3. **invariant** — the property expected to hold;
-4. **preconditions** — state needed to reproduce it;
-5. **procedure** — bounded steps and changed variables;
-6. **evidence** — trace, bytes, call stack, or fixture output;
-7. **impact** — which behavior becomes wrong or unreliable;
-8. **repair** — where the invariant should be enforced;
-9. **retest** — the test that distinguishes fixed from unfixed behavior;
-10. **limits** — what the evidence does not prove.
+Log order is not cause. Event 41 appearing before event 42 fits the damage
+causing the transition, but it also fits both events sharing one cause, or two
+observers that flushed their output at different times. Lesson 13.7 adds
+correlation IDs, which tie together the events of one action even when log
+order misleads.
 
 ## Glossary terms introduced here
 
 - **Invariant:** a property required of every valid state or transition.
-- **Observation:** a measured fact whose cause still needs reasoning.
-- **Hypothesis:** an explanation that predicts evidence and can be disproved.
 - **Control:** logic intended to preserve an invariant.
 - **Detector:** logic that reports a possible invariant failure.
-- **Finding:** a scoped, evidence-backed technical conclusion.
+- **Authoritative state:** the one copy of a value whose contents decide what
+  happens next.
+- **Server authority:** a design in which the server's record is authoritative
+  and every client request is validated against it.
+- **Trace:** events listed in the order they were logged, each with its time
+  and source.
 
 ## Checkpoint
 
-You should now be able to turn “find the health code” into a state model, a
-precise invariant, two competing hypotheses, a structured trace, and a retest
-that another person can reproduce.
+You should now be able to describe a game system as state and transitions,
+state the invariants it must keep, find the control that enforces each one and
+the copy of state that control guards, and tell a control apart from a
+detector.

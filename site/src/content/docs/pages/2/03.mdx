@@ -1,6 +1,6 @@
 ---
 title: "Breakpoints and Tiny Experiments"
-description: "Pause on an instruction or memory access, inspect the evidence, and continue without losing the thread."
+description: "Pause on an instruction or memory access, inspect registers, memory, and the call stack, and continue without losing the thread."
 chapter: "2.3"
 minutes: 12
 author: "attilathedud"
@@ -21,23 +21,23 @@ A breakpoint asks the debugger to pause when a specific event happens. The two k
 
 The pause is useful because the thread's register state and current instruction are still available. You get one precise sample of execution: what this thread was about to do, which values it held, and how it reached this point.
 
-A breakpoint is a condition for collecting evidence, not proof by itself. A
-write breakpoint on health may fire for damage, healing, loading, respawning,
-and initialization. Record the triggering action and call stack so you can tell
-those uses apart.
+A breakpoint tells you that one condition happened, not why. A write breakpoint
+on health may fire for damage, healing, loading, respawning, and
+initialization, all through the same instruction. The action you performed just
+before the pause, and the call stack at the pause, tell those uses apart.
 
 ## A pause is one instant on one thread
 
 A process can contain many threads. When one thread hits a breakpoint, another may have updated nearby state just before the debugger stopped everything. The snapshot is real, but it is not automatically the whole causal story.
 
-Record four kinds of context:
+Four kinds of context explain a pause:
 
 - **time:** what player action immediately preceded the pause;
 - **thread:** which thread executed the instruction;
-- **data:** which registers and memory locations the instruction used;
+- **data:** which registers and memory locations the instruction used; usually only two registers matter, the one that forms the memory address and the one the value moves into or out of;
 - **control:** which call path and branches led here.
 
-Then repeat the same action. A useful breakpoint fires at a consistent point for the behavior you are studying. A noisy breakpoint may still be correct, but it needs a stronger filter such as a specific thread, object pointer, call site, or condition.
+Repeating the same action shows whether the breakpoint is useful. A useful breakpoint fires at a consistent point for the behavior you are studying. A noisy breakpoint may still be correct, but it needs a stronger filter such as a specific thread, object pointer, call site, or condition.
 
 This is the difference between a **trace** and an **explanation**. A trace records what executed. An explanation connects that execution to a game rule and survives repeated tests.
 
@@ -214,29 +214,12 @@ Before patching, ask:
 1. How many complete bytes does the instruction occupy?
 2. Which registers, memory, flags, or special stacks does it change?
 3. Does later code rely on those changes?
-4. What exact observation would support the hypothesis?
+4. What should visibly change in the game if the patch works?
 5. How will the original bytes be restored?
 
 :::danger
-Always record the original bytes before patching. An incomplete replacement can make the CPU decode the remaining bytes as a completely different instruction.
+Always save a copy of the original bytes before patching, so they can be written back. An incomplete replacement can make the CPU decode the remaining bytes as a completely different instruction.
 :::
-
-## A disciplined breakpoint note
-
-When a breakpoint fires, record:
-
-```text
-Triggering action:
-Instruction address:
-Instruction:
-Registers that look like pointers:
-Memory value before:
-Memory value after:
-Call stack clue:
-Next question:
-```
-
-Do not try to understand every register. Identify the one that connects the instruction to your question.
 
 ## Represent debug events as explicit states
 
@@ -255,9 +238,9 @@ An enum gives each event a clear shape. Pattern matching then forces us to decid
 <Quiz
   id="breakpoint-evidence"
   type="multiple-choice"
-  title="Treat a pause as evidence"
+  title="One instruction, several uses"
   prompt="A write breakpoint on the player's health fires while damage is taken. What is the best next step?"
-  options="Assume the instruction only handles damage||Delete every other breakpoint and patch immediately||Record the instruction, registers, old value, new value, and triggering action||Change all writable values near the address"
+  options="Assume the instruction only handles damage||Delete every other breakpoint and patch immediately||Check the call stack, then heal, load, and respawn to see which of those also reach the same instruction||Change all writable values near the address"
   answer="2"
-  explanation="A breakpoint tells you that the condition happened; it does not explain every role of the instruction. Recording the surrounding evidence lets you compare damage, healing, loading, and respawning before deciding what the code means."
+  explanation="A breakpoint tells you that the condition happened; it does not tell you every role of the instruction. The same write can run for damage, healing, loading, and respawning, and the call stack at each pause shows which path led there."
 />

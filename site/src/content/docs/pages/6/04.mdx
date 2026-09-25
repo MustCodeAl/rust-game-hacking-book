@@ -9,6 +9,8 @@ sidebar:
   order: 4
   label: "6.4 Replay a Protocol Through a State Machine"
 ---
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
+
 ## A packet parser is only the first layer
 
 Parsing one message tells you what its bytes mean. A protocol also defines **when** that message is legal.
@@ -21,7 +23,7 @@ Disconnected -> Connected -> Greeted -> InLobby -> InMatch -> Closed
 
 A chat message before the greeting may be invalid even when its length and UTF-8 text parse perfectly. That makes protocol reversing a state-machine problem as well as a byte-parsing problem.
 
-Replay processes the saved evidence in order. A record changes the modeled
+Replay processes the saved frames in order. A record changes the modeled
 session only after both its bytes and its transition have passed validation:
 
 ```mermaid
@@ -39,15 +41,23 @@ the replay never needs to invent a replacement state.
 
 ## A message log and a session state are different things
 
-The capture is an ordered log of observations. The session state is a model produced by applying those observations:
+The capture is an ordered log of the frames that crossed the connection. The session state is a model produced by applying their messages in order:
 
 ```text
 initial state + message 1 + message 2 + ... -> current modeled state
 ```
 
-Keep the raw log immutable and rebuild the model from it. If a parser or transition rule changes, you can replay the same evidence and see exactly where the new interpretation diverges. Editing the stored “current state” by hand loses that history.
+For a five-frame capture of one short session, starting from `Connected`:
 
-Not every message is an event that happened exactly once. A snapshot may repeat a fact, an acknowledgment may refer to an earlier request, and a retransmitted request may appear twice. Record direction, sequence identifiers, and timing before deciding whether duplicate bytes mean duplicate actions.
+<MemoryStrip
+  cells="frame 0=Greeting v1|frame 1=LobbyJoined|frame 2=Chat|frame 3=MatchStarted|frame 4=Goodbye"
+  groups="0-0:→ Greeted|1-1:→ InLobby|2-2:stays InLobby|3-3:→ InMatch|4-4:→ Closed"
+  caption="The boxes are the log; the labels under them are the state after each frame is applied. The log never stores a state, so a corrected rule can rebuild every state from the same five frames."
+/>
+
+Keep the raw log immutable and rebuild the model from it. If a parser or transition rule changes, you can replay the same log and see exactly which frame now produces a different result. Editing the stored “current state” by hand loses that history.
+
+Not every message is an event that happened exactly once. A snapshot may repeat a fact, an acknowledgment may refer to an earlier request, and a retransmitted request may appear twice. Store direction, sequence identifiers, and timing with each frame; without them, duplicate bytes cannot be told apart from duplicate actions.
 
 ## Model states and messages separately
 
@@ -121,6 +131,28 @@ fn apply(state: &mut SessionState, message: &Message) -> Result<(), ProtocolErro
 }
 ```
 
+Drawn as a diagram, `apply` is this state machine:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Connected
+    Connected --> Greeted: Greeting version 1
+    Greeted --> InLobby: LobbyJoined with a room name
+    InLobby --> InMatch: MatchStarted with a scenario
+    InLobby --> InLobby: Chat
+    InMatch --> InMatch: Chat
+    Connected --> Closed: Goodbye
+    Greeted --> Closed: Goodbye
+    InLobby --> Closed: Goodbye
+    InMatch --> Closed: Goodbye
+```
+
+Each arrow is one arm of the `match`. A message with no arrow out of the
+current state, such as `Chat` while `Greeted`, falls through to the last arm and
+returns `IllegalTransition`. A `Greeting` with any version other than 1 is
+refused by its own arm with `UnsupportedVersion`, and `Goodbye` is accepted in
+every state, including `Closed` itself.
+
 This looks more verbose than a chain of `if` statements. The benefit is coverage: the compiler helps you notice new states and message variants that need rules.
 
 ## Store captures as direction plus bytes
@@ -185,12 +217,21 @@ Useful negative replays include:
 - insert an unknown message type;
 - exceed the maximum accepted text length.
 
-The expected outcome is a precise error at a precise frame, never an out-of-bounds read or an infinite wait.
+The expected outcome is a precise error at a precise frame, never an out-of-bounds read or an infinite wait. Replaying `Greeting` twice, for example, stops at frame 1 with an `IllegalTransition` error for state `Greeted`, because the state machine has no `Greeting` arrow out of `Greeted`.
+
+A length larger than the available payload has to fail before any message is decoded:
+
+<MemoryStrip
+  cells="0=00|1=00|2=00|3=09|4=43|5=44|6=45|7=??|8=??|9=??|10=??|11=??|12=??"
+  marks="7-12"
+  groups="0-3:length field: 9|4-6:3 payload bytes present|7-12:6 bytes the frame claims but does not have"
+  caption="The big-endian length `00 00 00 09` promises 9 payload bytes, but only 3 follow, so 9 − 3 = 6 are missing. A parser that trusted the length would read 6 bytes past the end of the frame; a checked slice turns that into an error for this frame instead."
+/>
 
 For messages that may be retried, test **idempotence** explicitly. Applying the same acknowledgment twice should either preserve the same state or return a clear duplicate error; it should not create a second match, grant a reward twice, or move backward in the session.
 
 ## Why replay beats manual clicking
 
-A capture preserves one observation. A replay turns it into a repeatable test. When you change the parser, framing code, or session rules, the same evidence runs again in milliseconds.
+A capture preserves one session. A replay turns it into a repeatable test: when you change the parser, framing code, or session rules, the same frames run through them again in milliseconds.
 
 Keep live-network code at the edge. Feed the bytes it receives into the same parser and state machine tested by replay. That design keeps transport separate from parsing and makes the protocol model reproducible. 🌐

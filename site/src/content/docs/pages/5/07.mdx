@@ -1,6 +1,6 @@
 ---
 title: "Trace Camera Recoil"
-description: "Decompose recoil into input, weapon kick, spread, camera shake, and recovery; then identify each contribution with time-series evidence."
+description: "Decompose recoil into input, weapon kick, spread, camera shake, and recovery; then separate each contribution by logging values over time."
 chapter: "5.7"
 minutes: 23
 author: "attilathedud"
@@ -51,7 +51,7 @@ measurement.
 
 ## Observe one axis at a time
 
-In an offline AssaultCube session, record view angles while:
+In an offline AssaultCube session, log view angles while:
 
 - standing still;
 - moving the mouse;
@@ -61,14 +61,15 @@ In an offline AssaultCube session, record view angles while:
 
 Recoil may change the same yaw and pitch values as the mouse, or it may update separate kick values that are combined later.
 
-Record time as well as values. A single before-and-after pair shows total
+Log time as well as values. A single before-and-after pair shows total
 movement; a short time series shows whether the kick happens instantly and how
 recovery behaves across later frames.
 
-Use a monotonic timestamp and record the frame or simulation tick when available.
-Wall-clock timestamps can jump; a monotonic clock measures elapsed duration. Also
-record the weapon, fire mode, and whether the shot was accepted. Otherwise a reload
-or dry-fire sample can be mistaken for zero recoil.
+Give each sample a monotonic timestamp and, when available, the frame or
+simulation tick. Wall-clock timestamps can jump; a monotonic clock measures
+elapsed duration. Each sample also needs the weapon, fire mode, and whether the
+shot was accepted. Otherwise a reload or dry-fire sample can be mistaken for zero
+recoil.
 
 ## Break on the angle write
 
@@ -191,9 +192,9 @@ variance = sum((sample - mean)²) / (count - 1)   when count > 1
 Variance describes observed variation; it does not prove which random-number
 source or probability distribution produced it.
 
-## Test a code hypothesis carefully
+## Test one instruction with a temporary patch
 
-A temporary debugger patch can show whether one instruction contributes to recoil. Record and restore the original bytes, change one instruction, and compare the same controlled shot.
+A temporary debugger patch can show whether one instruction contributes to recoil. Keep a copy of the original bytes so you can restore them, change one instruction, and compare the same controlled shot.
 
 ![A candidate recoil instruction](/assets/images/5/7/cube6.png)
 
@@ -241,7 +242,7 @@ let mut no_recoil = plan.apply(&process)?;
 
 Fire a single shot before and after enabling it. Ammo and firing animation should still work, but the camera should no longer kick upward. Restore the original three bytes and confirm recoil returns.
 
-## What the recoil experiment proves
+## Recoil is a sum of layers
 
 Many effects are layers:
 
@@ -263,7 +264,7 @@ assigning meaning to one component.
 
 ## Common false conclusions
 
-| Observation | What it does **not** prove |
+| What changed | What it does **not** prove |
 |---|---|
 | camera no longer rises | projectile spread is gone |
 | weapon model stops moving | aim direction is unchanged |

@@ -1,6 +1,6 @@
 ---
 title: "Capture a Local Protocol"
-description: "Capture your own local client/server session, isolate one action, and turn a noisy stream into labeled observations."
+description: "Capture your own local client/server session, isolate one action, and work out how its bytes are framed."
 chapter: "6.2"
 minutes: 17
 author: "attilathedud"
@@ -32,15 +32,13 @@ and destination port—the four-tuple used below.
 
 ## Capture answers “what crossed,” not “why”
 
-A network trace records bytes and timing at one observation point. It does not contain the sender's variable names, the receiver's interpretation, or proof that one UI action caused one packet. Build that connection with controlled contrast:
+A network trace records bytes and timing at one capture point. It does not contain the sender's variable names, the receiver's interpretation, or any record of which UI action caused which packet. That link comes from changing one thing at a time:
 
 1. capture a quiet baseline;
 2. perform exactly one distinctive local action;
 3. repeat the action with one changed input;
 4. compare both directions and several repetitions;
 5. confirm the candidate fields in the open-source client or server.
-
-Label facts by layer. “TCP payload bytes changed” is direct capture evidence. “This field is chat text” is an interpretation that needs parsing and behavioral confirmation.
 
 ## Build a controlled capture
 
@@ -66,7 +64,7 @@ tcp.port == 15000
 
 For the Wesnoth 1.14.9 lab, keep `15000`: that is `wesnothd`’s default listening port. Launch `wesnothd.exe`, choose **Connect to Server** in the game, and enter `localhost:15000`.
 
-Then label a timeline:
+Perform the actions at known times, so each burst of packets can be matched to the action just before it:
 
 ```text
 00:00 connect
@@ -80,7 +78,7 @@ A distinctive message such as `hello-17` is easier to find than “hi.”
 
 ## Direction matters
 
-Record the four-tuple for one connection:
+One connection has one four-tuple, and each direction reads it the other way round:
 
 ```text
 client IP : client port → server IP : server port
@@ -169,7 +167,7 @@ After the four-byte frame length, both of those later frames begin with gzip mag
 └─ length 47 ┘  └─ gzip data
 ```
 
-Do the same controlled capture with usernames `IEUser` and `FFFAAAKKKEEE`. The second name makes repeated-character compression easier to notice. By the end of this experiment, your notebook should say:
+Do the same controlled capture with usernames `IEUser` and `FFFAAAKKKEEE`. The second name makes repeated-character compression easier to notice. Put together, the Wesnoth 1.14.9 connection works like this:
 
 ```text
 target: Wesnoth 1.14.9 + local wesnothd
@@ -179,22 +177,6 @@ negotiation: 00 00 00 00
 normal frame: u32 big-endian compressed length + gzip(Simple WML)
 login order: negotiation → version → username → lobby
 ```
-
-## Record each protocol field and observation
-
-```text
-Transport: TCP
-Direction: client → local server
-Frame header length:
-Length-field byte order:
-Compression:
-Message kind:
-Test input:
-Observed byte range:
-Confidence:
-```
-
-Use confidence labels such as “confirmed,” “likely,” and “unknown.” A good protocol model preserves uncertainty.
 
 ## Checkpoint
 

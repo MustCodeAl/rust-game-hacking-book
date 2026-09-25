@@ -33,7 +33,7 @@ Treat a machine-level function boundary as four connected contracts:
 
 Calling conventions mainly answer transport. They do not answer ownership or lifetime. A function can correctly receive a pointer in `rcx` and still crash later because the caller freed the buffer too early. Likewise, a return value in `rax` might be a borrowed pointer, an owned allocation, a handle, or merely a status code.
 
-Write each conclusion with its evidence. “The callee reads four bytes and never stores the pointer” supports a short read-only borrow. “The pointer is saved in a global” means the data may need to outlive the call. This turns a guessed signature into a reviewable contract.
+Each part of the contract follows from something the machine code does. A callee that reads four bytes through the pointer and never stores it needs only a short read-only borrow. A callee that saves the pointer in a global needs the data to outlive the call.
 
 ## Begin with the caller
 
@@ -56,7 +56,7 @@ test eax, eax
 jne start_failed
 ```
 
-Write plain-English observations before guessing types:
+Read in plain English, before any types are guessed, the call site says:
 
 1. The caller puts zero in the first argument register.
 2. It makes an indirect call through an imported function slot.
@@ -71,11 +71,11 @@ type GhaStart = unsafe extern "system" fn(argument: *mut core::ffi::c_void) -> u
 
 `extern "system"` selects the platform's Windows **ABI**—application binary interface, the complete machine-level agreement between compiled pieces: which registers or stack slots carry arguments, who cleans up the stack, and where the return value lands. It is the compiled counterpart to a source-level API. `unsafe` is honest: the compiler cannot prove that a raw address really points to a function with this exact contract.
 
-## Build an evidence table
+## Where each part of the contract shows up
 
-Do not let a decompiler choose the final types for you. Record evidence from several places:
+A decompiler's guessed types are only a starting point. Each question about the contract has a place in the machine code that settles it:
 
-| Question | Evidence to collect |
+| Question | Where the answer shows up |
 | --- | --- |
 | Argument count | Registers or stack slots prepared at several call sites |
 | Argument type | How the callee reads it: dereference, arithmetic, comparison, or API pass-through |
@@ -166,9 +166,9 @@ For x64 Windows there is one main user-mode convention, but argument type and ow
 
 ## Test with a contract matrix
 
-Use the DLL from `windows-labs` and record results instead of calling an unknown third-party export:
+Test against the DLL from `windows-labs` rather than an unknown third-party export. Each test has an expected result:
 
-| Test | Expected observation |
+| Test | Expected result |
 | --- | --- |
 | First call with null | Returns `Started` |
 | Second call | Returns `AlreadyRunning` |
@@ -176,12 +176,12 @@ Use the DLL from `windows-labs` and record results instead of calling an unknown
 | Wrong architecture | Windows refuses to load the DLL |
 | Stop after start | Export returns and worker observes the stop flag |
 
-Then compare your inferred contract with `windows-labs/src/windows_impl/dll.rs`. Differences are useful: they show exactly which part of the machine evidence you misunderstood.
+The source in `windows-labs/src/windows_impl/dll.rs` then shows the real contract, and any difference from the recovered one points at the exact part of the machine code that was misread.
 
 ## Working practices for an undocumented DLL
 
 - Never guess a function pointer type and “try it” in an important process.
-- Use the disposable course fixture and record its exact build identity.
+- Use the disposable course fixture; a contract recovered from it applies to that exact build.
 - Treat every pointer's size, mutability, lifetime, and ownership as a separate question.
 - Preserve an `Unknown` result path.
 - Keep loading, resolving, converting, calling, and unloading as visible stages.

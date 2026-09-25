@@ -9,6 +9,7 @@ sidebar:
   order: 1
   label: "6.1 How Multiplayer Messages Move"
 ---
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
 
 ## Client and server
@@ -35,7 +36,7 @@ The client usually sends an **intent**, not the final truth.
 
 The client and server each hold local state, and messages connect those states over time. They are not one program with a slow shared variable. The server may accept, reject, reorder, or combine requests according to its rules, while the client may predict a result before confirmation arrives.
 
-When reversing a local open-source protocol, record whether a field is an **intent**, an **acknowledgment**, a **snapshot**, or a **delta**. A coordinate in a move request may be a desired destination; the same coordinate in a server update may be the accepted position. Equal-looking bytes can have different authority.
+A field's meaning depends on the kind of message that carries it. An **intent** asks for something; an **acknowledgment** confirms that an earlier message arrived or was applied; a **snapshot** reports the whole state; a **delta** reports only what changed. A coordinate in a move request may be a desired destination; the same coordinate in a server update may be the accepted position. Equal-looking bytes can have different authority.
 
 ## Packets and protocols
 
@@ -64,8 +65,8 @@ byte layout on its own only ever answers the second one.
 
 :::note
 📦 **Watch for:** the same bytes can be perfectly valid at one point in a
-conversation and meaningless at another. Record *when* a message is legal, not
-only what it contains.
+conversation and meaningless at another. A protocol model has to check *when* a
+message is legal, not only what it contains.
 :::
 
 A simple framed message might contain:
@@ -103,17 +104,49 @@ network:           loopback IP packets
 
 When something fails, ask which layer broke. A correct TCP connection does not prove the WML is valid. A valid gzip stream does not prove the length prefix used the right byte order.
 
+The receiver undoes the layers in the opposite order, and each step has its own
+way to fail:
+
+```mermaid
+flowchart TD
+    A["Bytes arrive from the TCP stream"] --> B["Framing: split off one frame<br/>using the big-endian length"]
+    B --> C["Compression: gunzip the payload"]
+    C --> D["Serialization: parse the WML tags"]
+    D --> E["Meaning: build a typed Message"]
+    B -.->|"length above the maximum"| X["Stop with an error<br/>that names the layer"]
+    C -.->|"not a valid gzip stream"| X
+    D -.->|"unbalanced or unknown tags"| X
+```
+
 **Serialization** turns structured values into bytes. **Framing** tells the receiver where one serialized message ends. **Transport** moves bytes between endpoints. Keeping those jobs separate makes both the explanation and the code easier to test.
 
 ## Byte order is part of the protocol
 
-The same integer has more than one possible byte order. Wesnoth’s four-byte frame length is big endian, so decimal `258` is:
+The same integer has more than one possible byte order. Decimal `258` is
+1 × 256 + 2, so as a four-byte number it has one byte worth 256 (`01`), one byte
+worth 1 (`02`), and two zero bytes. Wesnoth’s four-byte frame length is big
+endian, which puts the byte worth the most first:
 
-```text
-00 00 01 02
-```
+<MemoryStrip
+  cells="+0=00|+1=00|+2=01|+3=02"
+  groups="0-0:× 16,777,216|1-1:× 65,536|2-2:× 256|3-3:× 1"
+  groups2="0-3:1 × 256 + 2 × 1 = 258"
+  caption="Big endian, the order Wesnoth sends on the wire."
+/>
 
-On little-endian x86 memory, a native `u32` with the same value would usually appear as `02 01 00 00`. Network code must follow the protocol, not the host CPU’s default. That is why the reader uses `u32::from_be_bytes` rather than a pointer cast.
+On little-endian x86 memory, a native `u32` with the same value would usually
+appear in the opposite order:
+
+<MemoryStrip
+  cells="+0=02|+1=01|+2=00|+3=00"
+  groups="0-0:× 1|1-1:× 256|2-2:× 65,536|3-3:× 16,777,216"
+  groups2="0-3:2 × 1 + 1 × 256 = 258"
+  caption="Little endian, the order of a native `u32` in x86 memory: the same value with its four bytes reversed."
+/>
+
+Read with the wrong order, the wire bytes `00 00 01 02` become `0x02010000`,
+which is 2 × 16,777,216 + 1 × 65,536 = 33,619,968: a frame length of more than
+33 million bytes. Network code must follow the protocol, not the host CPU’s default. That is why the reader uses `u32::from_be_bytes` rather than a pointer cast.
 
 ## TCP is a stream
 
@@ -135,6 +168,13 @@ sent:       [00 00 00 02][41 42]  [00 00 00 03][43 44 45]
 read #1 ->  00 00 00 02 41 42 00 00      one message, plus half a header
 read #2 ->  00 03 43 44 45               the remainder
 ```
+
+<MemoryStrip
+  cells="0=00|1=00|2=00|3=02|4=41|5=42|6=00|7=00|8=00|9=03|10=43|11=44|12=45"
+  groups="0-3:length 2|4-5:`AB`|6-9:length 3|10-12:`CDE`"
+  groups2="0-7:read #1: 8 bytes|8-12:read #2: 5 bytes"
+  caption="The 4 + 2 + 4 + 3 = 13 bytes on the wire, numbered from 0. In ASCII, `41 42` is `AB` and `43 44 45` is `CDE`. Read #1 stops after box 7, halfway through the second length field, so the receiver must keep boxes 6 and 7 until read #2 brings boxes 8 and 9."
+/>
 
 Neither read lands on a message boundary. The receiver has to hold what it has
 in a buffer, remove complete messages when enough bytes have arrived, and keep
@@ -215,12 +255,12 @@ Several similar-looking states can therefore coexist:
 | Historical state | Rewind or lag-compensation query | Past server tick or time |
 
 This explains why a coordinate found in memory can be correct yet appear to
-“snap back.” You may have observed the predicted or rendered copy while a later
-server snapshot replaced it. Before assigning meaning to a field, record which
-thread writes it, whether its update follows input or packets, and which tick or
-sequence number travels beside it.
+“snap back.” You may have found the predicted or rendered copy while a later
+server snapshot replaced it. Three facts tell the copies apart: which thread
+writes the field, whether its updates follow input or incoming packets, and which
+tick or sequence number travels beside it.
 
-## Ordering needs explicit evidence
+## Ordering has to be carried in the message
 
 Packet arrival order is not automatically simulation order. UDP packets can
 arrive late or twice; even over TCP, one stream can contain application events
@@ -292,7 +332,7 @@ For learning, use:
 - captured bytes provided by a challenge;
 - application logs you control.
 
-## Use captures to test protocol claims
+## Captures in this chapter stay local
 
 The capture, replay, and proxy examples use loopback or a local test server. That keeps timing, state changes, and failures observable while you learn what each protocol layer contributes.
 
