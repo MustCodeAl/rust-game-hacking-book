@@ -1565,10 +1565,6 @@
   function start() {
     initializeLearningWidgets(document);
 
-    if (window.gitbook && window.gitbook.events) {
-      window.gitbook.events.bind("page.change", () => initializeLearningWidgets(document));
-    }
-
     const bookBody = document.querySelector("main") || document.body;
     if (window.MutationObserver && bookBody) {
       new MutationObserver((mutations) => {
