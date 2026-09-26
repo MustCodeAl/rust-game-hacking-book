@@ -2,7 +2,7 @@
 title: "Understand Threads, Contexts, and Stacks"
 description: "Learn how threads execute, what a CPU context contains, why stacks are call histories, and how to inventory a game's threads without changing them."
 chapter: "10.6"
-minutes: 30
+minutes: 33
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
@@ -66,6 +66,48 @@ The overlay may observe a combination that was never a complete game state. This
 is an **interleaving** problem. “It worked ten times” does not prove it is safe,
 because the scheduler may choose a different order on the next run.
 
+### A race that loses an update
+
+A bug whose result depends on which thread happens to run first is a **race
+condition**. The torn read above is one. The most common kind loses a write.
+
+"Add 500 gold" is one line of source code, but the CPU does it in three steps:
+read the value into a register, add, and write the result back. Put two threads
+on the same `gold` field, one adding a 500-gold quest reward and one taking 300
+for a purchase, and let the scheduler interleave them:
+
+| Step | Reward thread | Purchase thread | `gold` in memory |
+|---|---|---|---|
+| 1 | reads 1,000 | | 1,000 |
+| 2 | | reads 1,000 | 1,000 |
+| 3 | 1,000 + 500 = 1,500 | 1,000 − 300 = 700 | 1,000 |
+| 4 | writes 1,500 | | 1,500 |
+| 5 | | writes 700 | 700 |
+
+The player should have 1,000 + 500 − 300 = 1,200 and has 700. The reward
+vanished, because the purchase thread wrote a result computed from a value that
+was already out of date. Most runs interleave harmlessly, with one thread
+finishing before the other starts, which is why a race can pass every test and
+still fail for a player.
+
+A mutex fixes it by making read, add, and write one unit: the purchase thread
+waits at step 2 until the reward thread has written 1,500, then reads 1,500 and
+writes 1,200. For a single number, an atomic add does the same job more cheaply;
+on x86, `lock xadd` performs the whole read, add, and write as one indivisible
+instruction.
+
+The lock has its own failure, **deadlock**. Moving gold from player A to player B
+means locking both. If one thread locks A and then waits for B, while another
+thread locks B and then waits for A, each holds what the other needs and neither
+ever continues. Taking locks in one agreed order, say always the lower player ID
+first, makes that cycle impossible, as
+[Lesson 11.2](/pages/11/02/#why-ordinary-looking-work-can-deadlock) shows for
+the Windows loader lock.
+
+The same lost update appears whenever two writers share one value: a tool that
+writes a value the game is also updating every frame is racing the game, and one
+of the two writes will be lost.
+
 Synchronization creates an agreement about ordering or exclusive access. A mutex
 can protect a group of fields as one critical section. An atomic operation can make
 one small value indivisible. A queue can transfer ownership of work from one thread
@@ -94,7 +136,7 @@ Concurrent code needs two kinds of reasoning:
 - **Progress:** can the intended work eventually happen, or can threads wait
   forever?
 
-A mutex may improve safety but create a **deadlock** if two threads acquire locks
+A mutex may improve safety but create a deadlock if two threads acquire locks
 in opposite orders. A thread may be safe yet suffer **starvation** if other work
 continually wins access. A spin loop may make progress in a test and waste an
 entire core in the real game.

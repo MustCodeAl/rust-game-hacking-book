@@ -138,7 +138,18 @@ Do not read an assumed pointer until you identify the mode flag or length behavi
 
 ## Linked structures leave different clues
 
-A linked list node usually has one or two neighbor pointers plus a payload. Traversal repeatedly loads a pointer from the current node. A tree adds comparisons and chooses left or right children. A hash table often computes a hash or mask before choosing a bucket.
+A vector keeps its elements side by side, so code finds element *n* with
+arithmetic. Three other common containers give up that arithmetic in exchange
+for something else, and each exchange leaves a recognisable pattern in the code
+that walks it.
+
+### A linked list: every element points to the next
+
+A **linked list** stores each element in its own heap block, called a **node**,
+together with the address of the next node, and often the previous one too. It
+exists to make inserting and removing cheap. Taking the first of 10,000 elements
+out of a vector means sliding the other 9,999 down one place; taking it out of a
+doubly linked list means rewriting two pointers in its neighbours.
 
 ```mermaid
 flowchart LR
@@ -147,6 +158,37 @@ flowchart LR
     B -->|"next"| C["node C<br/>prev · payload · next"]
     C -->|"prev"| B
 ```
+
+The price is that a list has no arithmetic shortcut. Reaching the 1,000th node
+takes 1,000 reads, each one loading the next pointer out of the node just
+reached. That repeated load from a fixed offset inside the current node, such as
+`mov eax, [eax+4]` in a loop, is the list's clue. The nodes are wherever the
+allocator put them, not in one block.
+
+### A search tree: each comparison discards half
+
+A **binary search tree** node holds a key and two child pointers: smaller keys
+go to the left, larger ones to the right. Finding a key means comparing and
+stepping left or right, and each step throws away about half of what is left,
+so a tree of 1,000,000 entries needs only about 20 steps: halving 1,000,000
+twenty times reaches 1, because 2²⁰ = 1,048,576. `std::map` is built on such a
+tree. Its clue is a loop that compares a key and then loads one of two pointers
+depending on the result. Its failure is lopsidedness: keys inserted in sorted
+order all go the same way and turn the tree into a slow list, which is why real
+implementations rebalance themselves.
+
+### A hash table: arithmetic picks the bucket
+
+A **hash table** turns the key into a number, its **hash**, and uses that number
+to pick one slot, or **bucket**, in an array of buckets. Only the entries in that
+bucket are checked, so a lookup costs about the same with 10 entries or
+10,000,000. With 16 buckets, a hash of `0x5A3` selects bucket
+`0x5A3 & 0xF` = 3, because the mask `0xF` keeps only the last hex digit. The
+clue is arithmetic on the key (multiplies, shifts, XORs), then that mask or a
+remainder, then a short walk through one bucket. Two keys can land in the same
+bucket, a **collision**, which is why each bucket may hold a short list.
+[Lesson 12.2](/pages/12/02/#how-a-map-finds-a-key) shows the same idea inside
+Lua's tables.
 
 Validate structural invariants:
 

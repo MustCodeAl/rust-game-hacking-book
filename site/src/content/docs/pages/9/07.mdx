@@ -1,14 +1,16 @@
 ---
 title: "Check File Hashes and Authenticode Trust"
-description: "Understand hashes, publisher signatures, certificate trust, WinVerifyTrust state, exact return checks, offline revocation limits, and unsigned open-source builds."
+description: "Understand hashes, public and private keys, how a signature is made and checked, certificate trust, WinVerifyTrust state, exact return checks, offline revocation limits, and unsigned open-source builds."
 chapter: "9.7"
-minutes: 34
+minutes: 37
 author: "attilathedud"
 date: "2026-08-04"
 sidebar:
   order: 7
   label: "9.7 Check File Hashes and Authenticode Trust"
 ---
+import Quiz from '../../../../components/Quiz.astro';
+
 ## A hash and a signature answer different questions
 
 A SHA-256 hash is a fingerprint of exact bytes. Change one byte and the fingerprint should change dramatically. A saved baseline can answer:
@@ -42,6 +44,74 @@ An **Authenticode signature** connects the file's digest to a signing certificat
 > “Does this file still match a signature made by a publisher whose certificate chain Windows trusts under this policy?”
 
 Neither answer proves that software has no bugs or that you personally intended to install this version.
+
+### How a signature is made and checked
+
+A **digital signature** is a number computed from a file's hash with a secret
+key, which anyone can check with a matching key that is not secret. It fixes the
+compromised-page problem above: an attacker who controls the page can replace
+the file and the hash, but cannot produce a signature that checks out, because
+they do not have the secret.
+
+That needs **public-key cryptography**, where keys are made in pairs. The
+**private key** never leaves the publisher. The **public key** is given to
+everyone; for Authenticode it travels inside the publisher's certificate. The
+pair has one property that makes everything work: a signature made with the
+private key is accepted by the matching public key and by no other, and knowing
+the public key does not let anyone work out the private one.
+
+```mermaid
+flowchart TB
+    subgraph pub["The publisher, once"]
+        F1["game.exe"] --> H1["SHA-256 hash"]
+        H1 --> S["private key turns<br/>the hash into a signature"]
+    end
+    subgraph you["Your machine, every check"]
+        F2["game.exe as downloaded"] --> H2["SHA-256 hash,<br/>computed again"]
+        SG["signature and certificate"] --> K["public key from<br/>the certificate"]
+        K --> C{"does the signature<br/>match this hash?"}
+        H2 --> C
+    end
+    S --> SG
+```
+
+Walk the two ways it can fail. Change one byte of the file and your machine
+computes a different hash, so the signature no longer matches it. Replace the
+signature with one the attacker made using their own key pair, and it only
+checks out against the attacker's public key, whose certificate Windows does
+not trust.
+
+A comparison often used for public keys is an open padlock: you hand out as many
+as you like and keep the only key, so anyone can lock a box for you and only you
+can open it. That picture describes encrypting a message *to* someone. A
+signature runs the other way: only the private-key holder can make one, and
+anyone can check it. Nothing is hidden, either; a signed file stays perfectly
+readable. The signature only proves which key approved these exact bytes.
+
+Why can nobody forge one? Real keys are numbers hundreds of digits long, chosen
+so that checking a signature takes a fraction of a millisecond while making one
+without the private key would take longer than the age of the universe. The same
+kind of gap shows up with small numbers. Multiplying 7 × 17 = 119 is quick.
+Given only 119, finding the two numbers means trying divisors: 2 fails, 3 fails,
+5 fails, and 7 gives 119 ÷ 7 = 17. Checking a proposed answer is one division.
+RSA, a common signature scheme, builds its keys on this gap between multiplying
+and factoring, with numbers so large that the trying never finishes.
+
+The same machinery sits behind the padlock icon in a web browser, driver
+signing in [Lesson 14.2](/pages/14/02/), and a console's secure boot in
+[Lesson 14.5](/pages/14/05/#secure-boot-a-chain-of-trust). Its limits are the
+ones this lesson keeps returning to: a signature says who approved the bytes,
+not that the bytes are safe, and if a publisher's private key is stolen, the
+thief can sign anything until the certificate is revoked.
+
+<Quiz
+  id="signature-key-roles"
+  title="Which key does what?"
+  prompt="A publisher signs a game patch, and Windows checks the signature on your machine. Which key does each side use?"
+  options="The publisher makes the signature with its private key; Windows checks it with the public key from the certificate||The publisher makes the signature with its public key; Windows checks it with the private key||Both sides use the same shared secret key||Windows needs no key, because the hash alone proves who made the file"
+  answer="0"
+  explanation="Only the private key can make a signature that the matching public key accepts, so it never leaves the publisher. The public key travels inside the certificate, where anyone can use it to check. If checking needed the private key, every user would hold the secret needed to sign malware."
+/>
 
 ## Unsigned does not mean malicious
 

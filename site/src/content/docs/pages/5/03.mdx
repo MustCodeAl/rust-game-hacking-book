@@ -141,6 +141,24 @@ static ORIGINAL_DRAW_ELEMENTS: OnceLock<GlDrawElements> = OnceLock::new();
 
 Initialization must resolve and store the real function before the wrapper can forward calls. Avoid resolving it recursively through your own wrapper.
 
+That warning is about **recursion**, a function calling itself. Recursion is a
+normal technique when each call handles a smaller piece of the problem and one
+case, the **base case**, answers without calling again. Finding your row in a
+dark cinema works like that: you ask the person in front which row they are in,
+they ask the person in front of them, and so on until someone in row 1 says
+"row 1"; each answer then travels back with 1 added. Every question still
+waiting for its answer is a **stack frame**, the return address and local values
+that [Lesson 1.3](/pages/1/03/#the-stack-automatic-and-tied-to-function-calls)
+showed each call keeping until it returns.
+
+If the stored "original" pointer actually points at your wrapper, the wrapper
+forwards every call to itself. It is asking itself which row it is in and waiting
+for its own answer, so there is no base case. Each call adds another frame, the
+thread's stack (1 MiB by default on Windows) fills after thousands of calls, and
+Windows raises a stack-overflow exception that crashes the game, usually during
+the very first draw call. That is the "Infinite recursion" row in the table at
+the end of this lesson.
+
 ## Forward first
 
 Begin with a transparent wrapper:

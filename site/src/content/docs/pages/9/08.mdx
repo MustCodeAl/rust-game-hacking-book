@@ -1,8 +1,8 @@
 ---
 title: "Encryption, Hashes, and Key Lifecycles"
-description: "Separate encoding, hashing, MACs, encryption, and authenticated encryption, then protect a toy save payload with current RustCrypto APIs."
+description: "Separate encoding, hashing, MACs, symmetric and public-key encryption, and authenticated encryption, see why a random key cannot be guessed, then protect a toy save payload with current RustCrypto APIs."
 chapter: "9.8"
-minutes: 42
+minutes: 46
 author: "attilathedud"
 date: "2026-08-14"
 sidebar:
@@ -24,6 +24,27 @@ These words are often mixed together. Their jobs are not interchangeable:
 | AEAD | Yes, with key | Yes | Hide plaintext **and** authenticate it and its context |
 
 AEAD means *authenticated encryption with associated data*. It is usually the right starting point for a new encrypted file or message because confidentiality without tamper detection is incomplete.
+
+### One shared key or a key pair
+
+The lab uses **symmetric** encryption: one key both locks and unlocks, so
+whoever encrypts and whoever decrypts must hold the same secret. It is fast, and
+XChaCha20 can encrypt gigabytes per second, but it leaves a problem: the key has
+to reach the other side without anyone copying it on the way.
+
+**Public-key** encryption, the key-pair idea from
+[Lesson 9.7](/pages/9/07/#how-a-signature-is-made-and-checked), removes that
+problem. You publish a public key that anyone can use to lock a message for you,
+and only your private key opens it, like handing out open padlocks and keeping
+the only key. The price is that public-key operations are far slower and can only
+handle small messages directly.
+
+So real systems use both. Public-key cryptography carries a fresh random
+symmetric key to the other side, or lets the two sides agree on one, and the
+symmetric key then encrypts the actual data. A browser does exactly this each
+time it opens an HTTPS connection. The lab skips the first half because the
+program that seals a save is the same program that opens it, on the same PC,
+which is why its hard question is where to keep the key, not how to send it.
 
 ## Start with the threat model, not the cipher name
 
@@ -149,6 +170,39 @@ to open it.
 The demo uses a visible repeated key only to make one local round trip
 repeatable. A real save or profile tool must load protected key material instead
 of compiling the key into the executable.
+
+### Why nobody guesses the key
+
+Taking the key is the realistic attack, because guessing it is hopeless. Trying
+every possible key, a **brute-force** attack, always works in the end; the
+question is when the end arrives. Work it out for a 128-bit key.
+
+Each extra bit doubles the number of keys, so 128 bits give 2¹²⁸ keys. To size
+that, use 2¹⁰ = 1,024, which is a little more than 1,000: every 10 bits multiply
+the count by about 1,000. 128 bits is twelve groups of 10 bits plus 8 more, so
+2¹²⁸ is roughly 1,000¹² × 2⁸ = 256 × 10³⁶. Each 1,024 is slightly more than
+1,000, which lifts the exact value to about 3.4 × 10³⁸.
+
+Now be generous to the attacker: a billion computers, each testing a trillion
+keys every second, is 10⁹ × 10¹² = 10²¹ keys per second. A year has
+60 × 60 × 24 × 365 = 31,536,000 seconds, about 3.2 × 10⁷, so that is about
+3.2 × 10²⁸ keys a year. Dividing gives
+
+```text
+3.4 × 10³⁸ keys  ÷  3.2 × 10²⁸ keys per year  ≈  1.1 × 10¹⁰ years
+```
+
+about 11 billion years to try them all, close to the 13.8-billion-year age of the
+universe. The lab's key is 256 bits, and 2²⁵⁶ is 2¹²⁸ multiplied by itself, so its
+count is that enormous number squared.
+
+Brute force stops being hopeless when the secret is small. A six-letter
+lowercase password has 26⁶ possibilities: 26 × 26 × 26 = 17,576, and
+17,576 × 17,576 = 308,915,776. At a billion guesses per second, that is all of
+them in about a third of a second. That is why encryption keys are random 128- or
+256-bit values rather than passwords, and why a password that must protect a key
+is first run through a deliberately slow key-derivation function, so each guess
+costs the attacker real time.
 
 Think of a key as having a lifecycle rather than merely a location:
 

@@ -60,6 +60,36 @@ Each scan keeps only the addresses that already survived every earlier one — t
 
 The scanner never rescans the whole process after the first pass. It re-reads only the surviving addresses. This makes later passes faster and preserves the history needed for filters such as increased, decreased, changed, and unchanged.
 
+### How the work grows
+
+How much faster is worth working out, because the same reasoning decides whether
+any tool feature is usable. Suppose the game has 400 MiB of readable memory and
+each candidate is a 4-byte value:
+
+| Pass | What it reads | Bytes read |
+|---|---|---|
+| first scan | every readable byte: 400 × 1,048,576 | 419,430,400 |
+| second scan | 40,000 candidates × 4 bytes | 160,000 |
+| third scan | 18 candidates × 4 bytes | 72 |
+
+The second pass reads about 2,600 times less than the first
+(419,430,400 ÷ 160,000 ≈ 2,621), and it no longer depends on how big the game
+is at all, only on how many candidates survived.
+
+The first scan's cost grows in step with its input: give the game twice the
+memory and the scan reads twice the bytes. Programmers write that as **O(n)**,
+read "order n", where *n* is the size of the input. Some costs do not grow at
+all: finding one candidate's previous value in a hash table keyed by address
+takes about the same time with 40 candidates or 40,000, as
+[Lesson 3.5](/pages/3/05/#a-hash-table-arithmetic-picks-the-bucket) explains.
+That is **O(1)**, like shipping a box, which takes a day whether it holds one
+game or ten. And a loop inside a loop multiplies. Comparing every one of the
+40,000 candidates with every other takes 40,000 × 40,000 = 1,600,000,000
+comparisons, 40,000 times the work of reading the list once, and doubling the
+candidates makes it four times worse. That is **O(n²)**. Before adding a scan
+feature, ask what happens to the work when the memory or the candidate list
+doubles.
+
 ## Describe readable regions
 
 ```rust
