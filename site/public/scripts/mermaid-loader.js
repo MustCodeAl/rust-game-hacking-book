@@ -16,6 +16,10 @@ async function renderDiagrams() {
 		startOnLoad: false,
 		theme: 'default',
 		securityLevel: 'strict',
+		// Without this, Mermaid names each diagram after Date.now(), so two
+		// diagrams rendered in the same millisecond share an id and the second
+		// is drawn into the first. A counter keeps every id on the page unique.
+		deterministicIds: true,
 		flowchart: { htmlLabels: true, useMaxWidth: true },
 	});
 	await mermaid.run({ nodes: blocks });
