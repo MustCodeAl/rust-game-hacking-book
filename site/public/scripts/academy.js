@@ -105,6 +105,41 @@
     setPressed("data-background-choice", root.dataset.academyBackground || "theme");
     setPressed("data-semantic-choice", root.dataset.academySemantic === "off" ? "off" : "on");
     setPressed("data-ligature-choice", root.dataset.academyLigatures === "on" ? "on" : "off");
+    syncPanelToggles();
+  }
+
+  // The lesson list on the left and "On this page" on the right can each be
+  // hidden. A button's aria-pressed is "true" while its panel is showing.
+  var PANELS = {
+    sidebar: { key: "gha-sidebar", attribute: "academySidebar", label: "the lesson list", shortcut: "Alt+N" },
+    toc: { key: "gha-toc", attribute: "academyToc", label: "“On this page”", shortcut: "Alt+O" }
+  };
+
+  function panelShown(name) {
+    return root.dataset[PANELS[name].attribute] !== "hidden";
+  }
+
+  function syncPanelToggles() {
+    document.querySelectorAll("[data-panel-toggle]").forEach(function (button) {
+      var name = button.getAttribute("data-panel-toggle");
+      if (!PANELS[name]) return;
+      var shown = panelShown(name);
+      button.setAttribute("aria-pressed", shown ? "true" : "false");
+      button.title = (shown ? "Hide " : "Show ") + PANELS[name].label + " (" + PANELS[name].shortcut + ")";
+    });
+  }
+
+  function applyPanel(name, shown) {
+    var panel = PANELS[name];
+    if (!panel) return;
+    root.dataset[panel.attribute] = shown ? "shown" : "hidden";
+    if (shown) storageRemove(panel.key);
+    else storageSet(panel.key, "hidden");
+    syncPanelToggles();
+  }
+
+  function togglePanel(name) {
+    applyPanel(name, !panelShown(name));
   }
 
   function applyTheme(id) {
@@ -185,7 +220,7 @@
     var target = event.target.closest(
       "[data-theme-choice], [data-mode-choice], [data-code-mode-choice], [data-syntax-palette-choice], " +
       "[data-background-choice], [data-semantic-choice], [data-ligature-choice], [data-theme-reset], " +
-      "[data-print-book], .theme-switcher__toggle"
+      "[data-print-book], [data-panel-toggle], .theme-switcher__toggle"
     );
     if (!target) {
       closeThemeMenus(event.target.closest("[data-theme-switcher]"));
@@ -199,6 +234,7 @@
     if ("backgroundChoice" in data) return applyBackground(data.backgroundChoice);
     if ("semanticChoice" in data) return applySemanticSetting(data.semanticChoice);
     if ("ligatureChoice" in data) return applyLigatureSetting(data.ligatureChoice);
+    if ("panelToggle" in data) return togglePanel(data.panelToggle);
     if ("themeReset" in data) {
       applyTheme("paper");
       applyMode("auto");
@@ -207,6 +243,8 @@
       applySyntaxPalette("academy");
       applySemanticSetting("on");
       applyLigatureSetting("off");
+      applyPanel("sidebar", true);
+      applyPanel("toc", true);
       return;
     }
     if ("printBook" in data) {
@@ -242,7 +280,9 @@
       KeyC: function () { applyCodeMode(root.dataset.academyCodeMode === "light" ? "dark" : "light"); },
       KeyS: function () { applySyntaxPalette(cycle(SYNTAX_PALETTES, root.dataset.academySyntax || "academy")); },
       KeyH: function () { applySemanticSetting(root.dataset.academySemantic === "off" ? "on" : "off"); },
-      KeyL: function () { applyLigatureSetting(root.dataset.academyLigatures === "on" ? "off" : "on"); }
+      KeyL: function () { applyLigatureSetting(root.dataset.academyLigatures === "on" ? "off" : "on"); },
+      KeyN: function () { togglePanel("sidebar"); },
+      KeyO: function () { togglePanel("toc"); }
     };
     if (!actions[event.code]) return;
     event.preventDefault();
