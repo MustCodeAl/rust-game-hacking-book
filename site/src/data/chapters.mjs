@@ -23,6 +23,16 @@ export function chapterOf(lesson) {
 	return CHAPTERS.find((chapter) => chapter.number === number);
 }
 
+/**
+ * Which of the palette's four accent colours a chapter wears, 1 to 4 in turn:
+ * chapter 1 takes the first, chapter 5 the first again. The home card, the
+ * sidebar number, and the lesson header all use it, so a chapter keeps one
+ * colour wherever it appears.
+ */
+export function chapterTone(number) {
+	return ((Math.max(1, number) - 1) % 4) + 1;
+}
+
 /** Compare two lesson numbers numerically, so "5.10" sorts after "5.9". */
 export function compareLessons(a, b) {
 	const [ac, al] = String(a).split('.').map(Number);

@@ -4,6 +4,33 @@
    scrolls, which keeps long lessons smooth. */
 
 /* --------------------------------------------------------------------------
+   Colour
+   -------------------------------------------------------------------------- */
+
+/* Each palette has four accent colours. Chapters take them in turn, and so do
+   a lesson's sections: the build writes data-tone="1" to "4" on each lesson
+   header, home card, and section heading, and these rules turn that number
+   into --tone. The rules below paint with --tone, so choosing another palette
+   recolours all of them. */
+:root {
+  --tone-1: var(--rust);
+  --tone-2: var(--accent-2);
+  --tone-3: var(--accent-3);
+  --tone-4: var(--accent-4);
+}
+
+/* The high-contrast palette's first accent is a highlighter yellow, too pale
+   for text and thin lines on white, so its link blue stands in. */
+:root[data-academy-theme="contrast"] {
+  --tone-1: var(--rust-dark);
+}
+
+[data-tone] { --tone: var(--tone-1); }
+[data-tone="2"] { --tone: var(--tone-2); }
+[data-tone="3"] { --tone: var(--tone-3); }
+[data-tone="4"] { --tone: var(--tone-4); }
+
+/* --------------------------------------------------------------------------
    Canvas
    -------------------------------------------------------------------------- */
 
@@ -133,6 +160,19 @@ starlight-menu-button button {
   counter-increment: gha-chapter;
 }
 
+/* Chapter n is list item n + 1, after "Start here", and wears the chapter's
+   colour on its number and its open lesson. The sidebar stays dark in light
+   palettes too, so the colour is lifted toward the sidebar's text colour,
+   which keeps the darker light-palette accents readable on it. */
+#starlight__sidebar ul.top-level > li {
+  --tone: var(--tone-1);
+  --tone-on-night: color-mix(in srgb, var(--tone) 72%, var(--sidebar-text));
+}
+
+#starlight__sidebar ul.top-level > li:nth-child(4n + 3) { --tone: var(--tone-2); }
+#starlight__sidebar ul.top-level > li:nth-child(4n + 4) { --tone: var(--tone-3); }
+#starlight__sidebar ul.top-level > li:nth-child(4n + 5) { --tone: var(--tone-4); }
+
 #starlight__sidebar summary {
   padding-block: 0.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
@@ -156,7 +196,7 @@ starlight-menu-button button {
 #starlight__sidebar ul.top-level > li + li .group-label .large::before {
   flex: none;
   min-width: 1.9rem;
-  color: var(--rust);
+  color: var(--tone-on-night);
   content: counter(gha-chapter, decimal-leading-zero);
   font-family: var(--mono);
   font-size: 0.72rem;
@@ -180,8 +220,8 @@ starlight-menu-button button {
 #starlight__sidebar a[aria-current="page"]:hover {
   color: var(--sidebar-hover);
   font-weight: 700;
-  background: color-mix(in srgb, var(--rust) 24%, transparent);
-  box-shadow: inset 3px 0 0 var(--rust);
+  background: color-mix(in srgb, var(--tone-on-night, var(--rust)) 34%, transparent);
+  box-shadow: inset 4px 0 0 var(--tone-on-night, var(--rust));
 }
 
 #starlight__sidebar .caret {
@@ -625,11 +665,50 @@ starlight-menu-button button {
   letter-spacing: -0.045em;
 }
 
-/* Starlight puts the title and the lesson body in separate padded panels, so
-   the Jekyll header's own bottom margin and the panel divider are not needed:
-   the header's accent rule already closes it. */
+/* The lesson header is a card washed in its chapter's colour, closed by a band
+   of the palette's four colours. Starlight puts the title and the lesson body
+   in separate padded panels, so the Jekyll header's bottom margin and the
+   panel divider are not needed. */
 .content-panel .lesson-header {
   margin-bottom: 0;
+  padding: clamp(1.25rem, 3vw, 1.9rem) clamp(1.1rem, 3vw, 2rem) clamp(1.45rem, 3vw, 2.1rem);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--tone) 24%, var(--line));
+  border-radius: 16px;
+  background:
+    radial-gradient(130% 150% at 0% 0%, color-mix(in srgb, var(--tone) 17%, transparent), transparent 60%),
+    linear-gradient(135deg, transparent 55%, color-mix(in srgb, var(--tone) 8%, transparent)),
+    var(--surface);
+}
+
+.content-panel .lesson-header::after {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: auto;
+  height: 4px;
+  background: linear-gradient(90deg, var(--tone-1), var(--tone-2), var(--tone-3), var(--tone-4));
+}
+
+.lesson-header .lesson-kicker {
+  align-items: center;
+}
+
+.lesson-header .lesson-kicker > span:first-child {
+  padding: 0.3rem 0.7rem;
+  color: color-mix(in srgb, var(--tone) 72%, var(--ink));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tone) 16%, transparent);
+}
+
+.lesson-header .lesson-kicker span + span::before {
+  color: var(--tone);
+}
+
+.lesson-header .lesson-stats span {
+  color: color-mix(in srgb, var(--tone) 62%, var(--ink));
+  border-color: color-mix(in srgb, var(--tone) 38%, transparent);
+  background: color-mix(in srgb, var(--tone) 8%, transparent);
 }
 
 .content-panel:has(.lesson-header) + .content-panel {
@@ -672,52 +751,51 @@ starlight-menu-button button {
   letter-spacing: -0.025em;
 }
 
-/* Numbered sections: a thin rule with a short accent above each h2, and the
-   section's number set small before its title. */
+/* Numbered sections. Each h2 is a card in its section's colour: a solid
+   spine, the section number in a filled chip, and a tint that fades across
+   the card. The h2 carries the colour number; the card is its wrapper. */
 .sl-markdown-content > .sl-heading-wrapper.level-h2 {
+  --tone: var(--tone-1);
   position: relative;
   counter-increment: lesson-section;
-  margin-top: 3.2rem;
-  margin-bottom: 0.9rem;
-  padding-top: 1.15rem;
-  border-top: 1px solid var(--line);
+  margin-top: 3rem;
+  margin-bottom: 1rem;
+  padding: 0.8rem 1.1rem;
+  border: 1px solid color-mix(in srgb, var(--tone) 26%, transparent);
+  border-left: 4px solid var(--tone);
+  border-radius: 4px 12px 12px 4px;
+  background: linear-gradient(100deg, color-mix(in srgb, var(--tone) 15%, transparent), color-mix(in srgb, var(--tone) 4%, transparent) 62%, transparent);
   line-height: 1.22;
   scroll-margin-top: 5rem;
 }
 
-.sl-markdown-content > .sl-heading-wrapper.level-h2::before {
-  position: absolute;
-  top: -2px;
-  left: 0;
-  width: 2.75rem;
-  height: 3px;
-  content: "";
-  border-radius: 0 0 3px 3px;
-  background: linear-gradient(90deg, var(--rust), var(--accent-2));
-}
+.sl-markdown-content > .sl-heading-wrapper.level-h2:has(> h2[data-tone="2"]) { --tone: var(--tone-2); }
+.sl-markdown-content > .sl-heading-wrapper.level-h2:has(> h2[data-tone="3"]) { --tone: var(--tone-3); }
+.sl-markdown-content > .sl-heading-wrapper.level-h2:has(> h2[data-tone="4"]) { --tone: var(--tone-4); }
 
-/* A lesson that opens straight into its first section already has the title's
-   rule above it; a second rule would only double it. */
+/* A lesson that opens straight into its first section needs no gap above it. */
 .sl-markdown-content > .sl-heading-wrapper.level-h2:first-child {
   margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
 }
 
-.sl-markdown-content > .sl-heading-wrapper.level-h2:first-child::before {
-  display: none;
-}
-
+/* The chip's fill leans toward the text colour and its number takes the page
+   colour, so the pair keeps its contrast in light and dark palettes alike. */
 .sl-markdown-content > .sl-heading-wrapper.level-h2 h2::before {
   display: inline-block;
+  min-width: 2.3em;
   margin-right: 0.7rem;
-  color: color-mix(in srgb, var(--rust) 82%, var(--ink-soft));
+  padding: 0.24em 0.5em;
+  color: var(--paper);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--tone) 86%, var(--ink));
   content: counter(lesson-section, decimal-leading-zero);
   font-family: var(--mono);
-  font-size: 0.72em;
-  font-weight: 600;
+  font-size: 0.58em;
+  font-weight: 700;
   letter-spacing: 0.04em;
-  vertical-align: 0.12em;
+  line-height: 1.2;
+  text-align: center;
+  vertical-align: 0.28em;
 }
 
 .sl-markdown-content > .sl-heading-wrapper.level-h2 h2 {
@@ -790,7 +868,7 @@ starlight-menu-button button {
   box-shadow: var(--shadow);
 }
 
-/* Tables: a dark header row and zebra stripes inside a scrollable card. */
+/* Tables: a tinted header row and zebra stripes inside a scrollable card. */
 .table-scroll {
   width: 100%;
   margin: 1.6em 0;
@@ -825,9 +903,9 @@ starlight-menu-button button {
 }
 
 .sl-markdown-content .table-scroll th {
-  color: var(--inverse-text);
-  background: var(--night-soft);
-  box-shadow: inset 0 3px 0 var(--accent-2);
+  color: color-mix(in srgb, var(--accent-2) 58%, var(--ink));
+  background: color-mix(in srgb, var(--accent-2) 15%, var(--paper));
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--accent-2) 50%, transparent);
   font-family: var(--mono);
   font-size: 0.72em;
   letter-spacing: 0.06em;
@@ -897,17 +975,24 @@ starlight-menu-button button {
   color: var(--ink);
 }
 
-/* Previous and next lesson cards. */
+/* Previous and next lesson cards, each lightly tinted in its own colour. */
 .pagination-links a {
-  border: 1px solid var(--line);
+  --tone: var(--tone-1);
+  border: 1px solid color-mix(in srgb, var(--tone) 28%, var(--line));
   border-radius: 10px;
-  background: var(--surface);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--tone) 13%, transparent), transparent 70%),
+    var(--surface);
   transition: transform 160ms ease, border-color 160ms ease;
+}
+
+.pagination-links a[rel="next"] {
+  --tone: var(--tone-2);
 }
 
 .pagination-links a:hover,
 .pagination-links a:focus-visible {
-  border-color: var(--rust);
+  border-color: var(--tone);
   transform: translateY(-2px);
 }
 

@@ -43,6 +43,9 @@ if (git(['status', '--porcelain', '--', 'site', 'rust-labs', 'docs.json'], root)
 }
 const source = git(['rev-parse', '--short', 'HEAD'], root);
 
+// Start from an empty dist/, so a build that silently does nothing (a broken
+// `bun` on PATH, say) cannot publish the previous build as if it were new.
+rmSync(distDir, { recursive: true, force: true });
 execFileSync('bun', ['run', 'build'], { cwd: siteDir, stdio: 'inherit' });
 if (!existsSync(join(distDir, 'index.html'))) {
 	console.error('The build did not produce site/dist/index.html; nothing was published.');
