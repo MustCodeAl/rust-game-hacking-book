@@ -1,5 +1,10 @@
 // Render ```mermaid blocks (turned into <pre class="mermaid"> at build time).
 //
+// The published site arrives with its diagrams already drawn:
+// scripts/prerender-diagrams.mjs runs this file in a browser after each build
+// and writes the SVGs into the pages. This script draws only what that step
+// could not, such as every diagram under `astro dev`.
+//
 // Mermaid is large, so it is fetched only when the first diagram is about to
 // scroll into view, and each diagram is drawn as it approaches instead of all
 // of them at once when the page opens. The version is pinned so a diagram that
@@ -8,7 +13,6 @@ const MERMAID_URL = 'https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.es
 
 let mermaidReady = null;
 let queue = Promise.resolve();
-let nextId = 0;
 const pending = new Set();
 
 function loadMermaid() {
@@ -51,12 +55,22 @@ function fitViewBox(svg) {
 	svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 }
 
+// Name the SVG after the diagram's text (the build's `data-diagram` hash), so a
+// drawing made here and one made while building are the same markup. Ids must
+// stay unique on a page: Mermaid finds its scratch element by id, and each
+// SVG's styles and arrowheads refer to it. So a diagram that appears twice on
+// one page gets a numbered id the second time.
+function diagramId(block) {
+	const base = `mermaid-${block.dataset.diagram || 'diagram'}`;
+	let id = base;
+	for (let copy = 2; document.getElementById(id); copy++) id = `${base}-${copy}`;
+	return id;
+}
+
 async function renderBlock(block) {
 	if (block.dataset.processed) return;
 	const mermaid = await loadMermaid();
-	// Each diagram gets its own id; two diagrams sharing one would be drawn
-	// into the same SVG.
-	const id = `academy-mermaid-${nextId++}`;
+	const id = diagramId(block);
 	try {
 		// Drawing inside the block itself, as mermaid.run does, lets Mermaid
 		// measure labels in the book's font; measured anywhere else, the boxes
