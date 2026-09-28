@@ -1,0 +1,444 @@
+# Game Hacking Academy · Systems Field Guide
+
+> A beginner-friendly systems course for learning how games, memory, debuggers, graphics, networking, and reverse-engineering tools work.
+
+Canonical book: https://mustcodeal.github.io/rust-game-hacking-book/
+Sitemap: https://mustcodeal.github.io/rust-game-hacking-book/sitemap.xml
+Source repository: https://github.com/MustCodeAl/rust-game-hacking-book
+Full lesson text and code: https://mustcodeal.github.io/rust-game-hacking-book/llms-full.txt
+
+## What this documentation is
+
+Game Hacking Academy is a beginner-first course of 131 lessons about how games and Windows programs work internally. It starts with computer-science fundamentals, then applies them to debugging, reverse engineering, memory inspection, graphics, networking, file formats, Windows APIs, Lua, advanced object models, integrity analysis, robust hooks, and update-resistant layouts. Code blocks default to Rust; assembly and Lua are labeled when they are the subject.
+
+The intended reader may have little or no programming experience. Explanations therefore define new vocabulary before using it, walk through concrete examples, derive every number they show, draw memory and control flow as figures, show complete code where practical, and finish with quizzes or interactive labs. When answering from this book, preserve that plain-English teaching style.
+
+Lesson 1.1 describes one optional way to study technical material: asking questions checked against a source and retrying missed ideas. Later lessons do not depend on it.
+
+## Course scope
+
+Recurring examples include:
+
+- The Battle for Wesnoth 1.14.9 for strategy-game state, gold, map data, files, and local protocol exercises.
+- AssaultCube 1.2.0.2 for local bot-match memory, aiming math, recoil, radar, rendering, and overlay exercises.
+- Urban Terror 4.3.4 for rendering and hook examples.
+- Wyrmsun 5.0.1 for data-driven unit and asset modding.
+- Purpose-built programs in `rust-labs` and `windows-labs` for memory, process, debugger, PE, IPC, and Windows API exercises.
+
+## How lessons are written
+
+Each lesson explains one mechanism directly: what the computer stores or does, why it works that way, and how to see it with a tool or a small program. Labs are deterministic Rust programs or offline fixtures, and examples that touch a real game use a version-pinned build in a local match.
+
+When answering from the book, keep its technical cautions: an address found in one run is a location, not a stable identity, because the game can place the same object elsewhere next time; and results depend on the game version, the architecture (32-bit or 64-bit), and the permissions the tool runs with.
+
+## Technical baseline
+
+- Primary language: stable Rust, with `unsafe` isolated and explained when Windows or raw memory requires it.
+- Verified course baseline on 2026-08-14: Rust 2024 edition, `windows` 0.62 (`0.62.2` in the lockfile), iced-x86 `1.21.0`, `eframe`/`egui` 0.36 for the menu lab, and `anyhow` 1.x.
+- Primary operating system: Windows 10 or Windows 11.
+- Main Windows binding: the Rust `windows` crate.
+- Architectures discussed: x86 and x86-64, with explicit attention to pointer width and calling conventions.
+- Supporting crates include `anyhow`, `thiserror`, `bytemuck`, `iced-x86`, and standard-library networking and synchronization types where appropriate.
+- Common tools include WinDbg or x64dbg, Process Explorer, Cheat Engine, Wireshark, Cargo, and Visual Studio Build Tools.
+- Code snippets favor named variables, checked sizes, typed wrappers, cleanup through `Drop`, visible safety comments, and actionable errors.
+
+## Topic routing for retrieval
+
+- An optional study method, computer basics, game data, RAM, bits and place values, hexadecimal, little-endian byte order, types, pointers and pointee types, virtual memory, stacks, heaps, ownership, repeatable experiments, and first scans, the build toolchain from source to process, what a game engine is and how it relates to the game built on it, and Turing machines, stored-program computers, Turing completeness, and the halting problem's limits on program analysis: Chapter 1.
+- Debuggers, assembly, registers, flags, breakpoints, call stacks, code caves, detours, ASLR, pointer chains, and pointer-path verification: Chapter 2.
+- Ownership and types for memory tools, raw-pointer `.offset()`, `unsafe`, external reads, C++ classes, design patterns, containers, ownership clues, obfuscated values, strings, ABI boundaries, and bit-by-bit decoding of powers of two, two's complement, IEEE 754 floats (sign, biased exponent, fraction, hidden bit, rounding, special values), pointer sizes, and pointer arithmetic: Chapter 3.
+- Strategy-game state, guarded snapshots, fog of war, state-machine macros, coordinate systems, pathfinding, events, test bots, bounded telemetry, and how NPCs perceive and decide (game-loop ticks, dot-product view cones, line of sight, guard state machines, reaction delays, utility scoring, behavior trees, and an NPC's state byte and structure layout in memory): Chapter 4.
+- Vectors, angles, OpenGL state, crosshair tests, target selection, recoil, radar, world-to-screen projection, overlays, and Direct3D COM vtable dispatch with draw-call and render-state observation: Chapter 5.
+- Clients, servers, packets, TCP streams, message framing, parsing, Wesnoth chat, transparent local proxies, shared memory, and named pipes: Chapter 6.
+- PE files, RVA translation, export tables, byte-pattern scanning, memory scanning, disassembly, debugger loops, call logging, and ETW observation: Chapter 7.
+- DLLs, process injection, detours, import-table hooks, parallel scanners, `GetAsyncKeyState`, `SendInput`, window messages, egui menus, and reliable tool integration: Chapter 8.
+- Save files, hex editors and binary save layouts (file offsets, little-endian fields, magic numbers, version fields, length-prefixed strings, and byte-sum checksums), structured data, textures, data-driven mods, safe archive extraction, reversible manifests, hashes, Authenticode trust, authenticated encryption, and key lifecycles: Chapter 9.
+- Processes, build fingerprints, least-privilege and RAII handles, memory maps, threads, contexts, stacks, Windows API layers, crash dumps, and identifying whether a game is native, Mono, IL2CPP, .NET, or JVM before choosing a method: Chapter 10.
+- DLL inventories, loader lock, optional Windows APIs, harmless toy-control tests, kernel-boundary defense, x86-64 page tables, IOMMUs, and read-only offline DMA captures: Chapter 11.
+- Embedded Lua, tables, host APIs, safe snapshots, state machines, script limits, VM bytecode, values, garbage collection, call frames, and closures: Chapter 12.
+- Advanced game-state invariants, integrity coverage, anti-debug state machines, obfuscated values, robust hooks, layout migration, trace comparison, analysis of eleven recurring bypass patterns with runnable toy repairs: Chapter 13.
+- Operating-system kernels (user and kernel mode, privilege rings and the `cs` privilege bits, the user/supervisor page bit, the `syscall` path from `ReadProcessMemory` to `NtReadVirtualMemory`, handle-rights checks, NTSTATUS, scheduling, interrupts, bug checks), device drivers (driver stacks, the I/O manager, IRPs, `CTL_CODE` control-code fields, memory-mapped registers, ISRs and DPCs, a toy keypad driver lab, the USB keyboard input stack, driver signing, the vulnerable driver blocklist), hypervisors (type 1 and type 2, trap and emulate, VT-x and AMD-V, VM exits, two-stage address translation and its cost, VM snapshots, detecting a VM with `cpuid`, VBS and memory integrity), JTAG and hardware debug (boundary scan, the TAP controller and all 16 of its states, counting chips through BYPASS, IDCODE fields, halting a Cortex-M core through DHCSR, SWD request packets, locked debug ports), how game consoles are built (SoCs, unified memory, secure boot chains, anti-rollback, attestation, homebrew law), and emulators (fetch–decode–execute, dynamic recompilation, memory-mapped I/O, cycle timing and frame budgets, save states, cheat codes, a toy 8-bit console traced cycle by cycle). Lessons 14.1–14.6 introduce each topic; 14.7–14.11 follow the kernel, drivers, hypervisors, JTAG, and emulators down to the bits: Chapter 14.
+- Plain-English definitions and distinctions for terminology across the course: the glossary.
+
+## Important vocabulary
+
+- Address: a numbered location in one process's virtual address space.
+- Pointer: a value interpreted as an address. Its own size is set by the process (4 bytes in 32-bit, 8 in 64-bit); its pointee type decides what is read at the destination and how far pointer arithmetic steps.
+- Type: how many bytes a value occupies and what its bits mean. The same bytes can be a `u32`, an `i32`, or an `f32`.
+- Offset: a distance from a known base address or object start.
+- Module: a loaded executable or DLL with its own image base.
+- RVA: a relative virtual address measured from a PE image base.
+- ASLR: a Windows defense that moves module bases between runs.
+- Register: a tiny, fast storage location inside the CPU.
+- Instruction pointer: the register naming the next machine instruction.
+- Stack: per-thread memory used for calls, return addresses, and many local values.
+- Heap: process memory used for dynamically allocated objects whose lifetimes do not follow one function call.
+- Calling convention: the agreement describing argument locations, return values, stack cleanup, and preserved registers.
+- Breakpoint: a controlled pause used to inspect program state.
+- Hook or detour: a reversible redirection from an original instruction path to owned code and back.
+- Code cave: executable space used by a detour; safe examples in this course preserve displaced instructions and provide rollback.
+- Pattern scan: finding a byte sequence with optional wildcards instead of trusting one absolute address.
+- Protocol: the set of agreements that gives exchanged bytes meaning.
+- Framing: the rule that separates messages inside a byte stream.
+- ABI: the binary-level agreement that lets separately compiled code call each other.
+- PE: the Portable Executable format used by Windows EXE and DLL files.
+- RAII: tying cleanup to a value's lifetime so resources close automatically.
+
+## Repository map
+
+- `site/`: the Astro Starlight site that publishes the book.
+- `site/src/content/docs/pages/<chapter>/<lesson>.mdx`: the source of every numbered lesson.
+- `site/src/data/lesson-quizzes.json`: end-of-lesson quiz prompts, options, answers, and explanations.
+- `site/src/components/`: memory figures, quizzes, interactive labs, and layout overrides.
+- `site/public/scripts/`: the palette picker, glossary links, quiz engine, and Mermaid loader.
+- `site/public/assets/images/`: lesson screenshots and other static media.
+- `rust-labs/`: portable Rust exercises and tests.
+- `windows-labs/`: Windows-specific Rust implementations and lab binaries.
+
+## Suggested Context7 retrieval behavior
+
+- Use the topic-routing section to choose a chapter, then retrieve the most specific lesson URL below.
+- When a question spans concepts, retrieve the prerequisite lesson as well as the implementation lesson. For example, pair virtual memory from Chapter 1 with an external-memory implementation from Chapter 3.
+- Prefer the exact version-pinned page over a generic answer when discussing a named game.
+- Keep distinctions such as address versus identity, bytes versus meaning, TCP read versus message, and user mode versus kernel mode.
+- Include the explanation around a code sample. The book intentionally explains why each Windows flag, pointer check, buffer size, register save, or cleanup step exists.
+- Preserve the book's version, architecture, state-authority, and least-privilege assumptions when adapting an example.
+
+## Representative code
+
+These small examples establish the book's coding style. Retrieve the linked lesson or `llms-full.txt` for the surrounding explanation, complete implementations, Cargo features, safety invariants, and exercises.
+
+### Checked address arithmetic
+
+Never assume that adding an offset cannot overflow. Use a checked operation and make failure visible:
+
+```rust
+fn field_address(object_base: usize, field_offset: usize) -> Option<usize> {
+    object_base.checked_add(field_offset)
+}
+
+fn main() {
+    let player_base = 0x1234_0000usize;
+    let health_offset = 0x30usize;
+
+    match field_address(player_base, health_offset) {
+        Some(address) => println!("health field: {address:#x}"),
+        None => eprintln!("address calculation overflowed"),
+    }
+}
+```
+
+### A readable byte-pattern scanner
+
+`Exact` bytes must match. `Any` bytes are wildcards used for addresses or displacements that may change between builds:
+
+```rust
+#[derive(Clone, Copy, Debug)]
+enum PatternByte {
+    Exact(u8),
+    Any,
+}
+
+fn find_pattern(bytes: &[u8], pattern: &[PatternByte]) -> Option<usize> {
+    if pattern.is_empty() || pattern.len() > bytes.len() {
+        return None;
+    }
+
+    bytes.windows(pattern.len()).position(|window| {
+        window.iter().zip(pattern).all(|(actual, expected)| match expected {
+            PatternByte::Exact(wanted) => actual == wanted,
+            PatternByte::Any => true,
+        })
+    })
+}
+
+fn main() {
+    let code = [0x48, 0x8B, 0x45, 0x20, 0x89, 0x01];
+    let pattern = [
+        PatternByte::Exact(0x48),
+        PatternByte::Exact(0x8B),
+        PatternByte::Any,
+        PatternByte::Any,
+    ];
+
+    assert_eq!(find_pattern(&code, &pattern), Some(0));
+}
+```
+
+### Length-prefixed TCP messages
+
+TCP is a stream, so one `read` is not guaranteed to contain one complete message. A frame header states the payload length, and `read_exact` gathers that many bytes:
+
+```rust
+use std::io::{self, Read, Write};
+
+const MAX_FRAME_SIZE: usize = 1024 * 1024;
+
+fn read_frame(reader: &mut impl Read) -> io::Result<Vec<u8>> {
+    let mut length_bytes = [0u8; 4];
+    reader.read_exact(&mut length_bytes)?;
+
+    let length = u32::from_be_bytes(length_bytes) as usize;
+    if length > MAX_FRAME_SIZE {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "frame is larger than the configured limit",
+        ));
+    }
+
+    let mut payload = vec![0u8; length];
+    reader.read_exact(&mut payload)?;
+    Ok(payload)
+}
+
+fn write_frame(writer: &mut impl Write, payload: &[u8]) -> io::Result<()> {
+    let length = u32::try_from(payload.len())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "payload is too large"))?;
+
+    writer.write_all(&length.to_be_bytes())?;
+    writer.write_all(payload)
+}
+```
+
+### A Windows handle that cleans itself up
+
+The `windows` crate exposes Win32 handles directly. This wrapper makes ownership explicit and closes the handle when the Rust value leaves scope:
+
+```rust
+use windows::Win32::Foundation::{CloseHandle, HANDLE};
+
+#[derive(Debug)]
+struct OwnedHandle(HANDLE);
+
+impl OwnedHandle {
+    fn new(handle: HANDLE) -> Option<Self> {
+        (!handle.is_invalid()).then_some(Self(handle))
+    }
+
+    fn raw(&self) -> HANDLE {
+        self.0
+    }
+}
+
+impl Drop for OwnedHandle {
+    fn drop(&mut self) {
+        if !self.0.is_invalid() {
+            // SAFETY: this value uniquely owns one valid Win32 handle. 🛡️
+            unsafe {
+                let _ = CloseHandle(self.0);
+            }
+        }
+    }
+}
+```
+
+### Turning an RVA into a live address
+
+ASLR can move a module, but an RVA remains a distance from that module's current base:
+
+```rust
+fn live_address(module_base: usize, rva: u32) -> Option<usize> {
+    module_base.checked_add(rva as usize)
+}
+
+let current_image_base = 0x0000_7ff6_2000_0000usize;
+let function_rva = 0x0001_42a0u32;
+let function_address = live_address(current_image_base, function_rva)
+    .expect("module base plus RVA must fit in usize");
+
+assert_eq!(function_address, 0x0000_7ff6_2001_42a0);
+```
+
+## How to use this book
+
+- Begin with Chapter 1 if the reader is new to computers, memory, programming, or reverse engineering.
+- Explain unfamiliar terms in plain English before using them.
+- Treat unlabeled code as the book's default language; assembly, PowerShell, and Lua are labeled explicitly.
+- Preserve the technical scope stated on each page: exact builds, local test servers, bounded inputs, and reversible changes.
+- Prefer the canonical chapter URLs below rather than guessing paths.
+
+## Chapters and lessons
+
+### 1. Start Here
+
+- [1.1 — Learn How to Ask and Answer Good Questions](https://mustcodeal.github.io/rust-game-hacking-book/pages/1/01/): Learn a simple way to look up an unfamiliar idea, explain it accurately, correct mistakes, and remember it later. Estimated reading time: 14 minutes.
+- [1.2 — How a Computer Runs a Game](https://mustcodeal.github.io/rust-game-hacking-book/pages/1/02/): Follow a game from its file on disk to a running process that reads input, updates memory, and draws frames. Estimated reading time: 16 minutes.
+- [1.3 — How Memory Actually Works](https://mustcodeal.github.io/rust-game-hacking-book/pages/1/03/): Learn how bytes, addresses, values, types, pointers, offsets, stacks, heaps, and snapshots fit together in a running game. Estimated reading time: 25 minutes.
+- [1.4 — How Games Organize Data](https://mustcodeal.github.io/rust-game-hacking-book/pages/1/04/): See how game loops, objects, fields, collections, identities, rules, and display copies organize a changing world. Estimated reading time: 18 minutes.
+- [1.5 — Programming Fundamentals](https://mustcodeal.github.io/rust-game-hacking-book/pages/1/05/): Learn the programming vocabulary the rest of the book assumes — data, types, state, algorithms, data structures, functions, event-driven programs, abstractions, APIs, ABIs, parsing, concurrency, and invariants. Estimated reading time: 26 minutes.
+- [1.6 — A Four-Step Method for Experiments](https://mustcodeal.github.io/rust-game-hacking-book/pages/1/06/): One way to organize a memory experiment: Identify, Understand, Locate, and Change, so something you see in a game becomes a controlled, repeatable test. Estimated reading time: 14 minutes.
+- [1.7 — Build a Safe Windows Lab](https://mustcodeal.github.io/rust-game-hacking-book/pages/1/07/): Set up a Windows virtual machine with the compiler, debugger, memory scanner, course code, and recovery snapshots. Estimated reading time: 16 minutes.
+- [1.8 — Your First Memory Experiment](https://mustcodeal.github.io/rust-game-hacking-book/pages/1/08/): Find, test, and change one gold value in Wesnoth, and see what each scan does and does not prove. Estimated reading time: 18 minutes.
+- [1.9 — From Source Code to a Running Program](https://mustcodeal.github.io/rust-game-hacking-book/pages/1/09/): Follow the stages that turn source code into an EXE and then into a process, and see why field names disappear, why offsets are fixed for one build, and why imports are filled in last. Estimated reading time: 20 minutes.
+- [1.10 — What a Game Engine Is](https://mustcodeal.github.io/rust-game-hacking-book/pages/1/10/): Separate the reusable engine from the game built on it, see which engine each course game uses, and learn why where a rule lives decides how you change it. Estimated reading time: 18 minutes.
+- [1.11 — What Any Computer Can Compute](https://mustcodeal.github.io/rust-game-hacking-book/pages/1/11/): Build a Turing machine by hand, see why one computer can run every program, and learn which questions about programs no tool can always answer. Estimated reading time: 22 minutes.
+
+### 2. Debugging & Control Flow
+
+- [2.1 — Debug a Running Game Step by Step](https://mustcodeal.github.io/rust-game-hacking-book/pages/2/01/): Learn what a debugger actually does and why pausing one instruction can answer a big question. Estimated reading time: 9 minutes.
+- [2.2 — Assembly in Plain English](https://mustcodeal.github.io/rust-game-hacking-book/pages/2/02/): Understand what assembly is, how the CPU executes it, and how registers, memory, flags, stacks, and calls fit together. Estimated reading time: 30 minutes.
+- [2.3 — Breakpoints and Tiny Experiments](https://mustcodeal.github.io/rust-game-hacking-book/pages/2/03/): Pause on an instruction or memory access, inspect registers, memory, and the call stack, and continue without losing the thread. Estimated reading time: 12 minutes.
+- [2.4 — Find the Code That Spends Gold](https://mustcodeal.github.io/rust-game-hacking-book/pages/2/04/): Follow a known gold address backward to the exact instruction that changes it. Estimated reading time: 20 minutes.
+- [2.5 — Read a Function Backward](https://mustcodeal.github.io/rust-game-hacking-book/pages/2/05/): Follow callers and dependencies from one gold-changing instruction to the menu decision that caused it. Estimated reading time: 23 minutes.
+- [2.6 — Code Caves and Detours](https://mustcodeal.github.io/rust-game-hacking-book/pages/2/06/): Understand how a small detour can run extra instructions and still return the game to its original path. Estimated reading time: 14 minutes.
+- [2.7 — Trace a Code-Cave Detour](https://mustcodeal.github.io/rust-game-hacking-book/pages/2/07/): Build a temporary debugger-only detour, prove every hop, and restore the target. Estimated reading time: 17 minutes.
+- [2.8 — Why Addresses Move](https://mustcodeal.github.io/rust-game-hacking-book/pages/2/08/): Understand dynamic allocation, module bases, ASLR, and why a pointer path survives when one raw address does not. Estimated reading time: 18 minutes.
+- [2.9 — Find and Verify a Pointer Path](https://mustcodeal.github.io/rust-game-hacking-book/pages/2/09/): Trace the player object back to a stable module-relative starting point and prove it across restarts. Estimated reading time: 20 minutes.
+
+### 3. Memory, Types & Ownership
+
+- [3.1 — Ownership, Types, and Unsafe Boundaries](https://mustcodeal.github.io/rust-game-hacking-book/pages/3/01/): Learn the ownership, address, byte-buffer, error, and operating-system boundaries used by every memory tool. Estimated reading time: 28 minutes.
+- [3.2 — Build an External Memory Tool](https://mustcodeal.github.io/rust-game-hacking-book/pages/3/02/): Open the target, read a verified address, and write through a small checked process-memory wrapper. Estimated reading time: 24 minutes.
+- [3.3 — Recover C++ Classes and Memory Structures](https://mustcodeal.github.io/rust-game-hacking-book/pages/3/03/): Turn repeated reads, member-function calls, and virtual dispatch into a tested object layout, then inspect it through typed snapshots. Estimated reading time: 35 minutes.
+- [3.4 — Recognize Object-Oriented Patterns in Memory](https://mustcodeal.github.io/rust-game-hacking-book/pages/3/04/): Recognize the shapes that factories, states, observers, singletons, and component systems leave in compiled code: repeated pointers, virtual calls, constructors, and update loops. Estimated reading time: 42 minutes.
+- [3.5 — Recover Containers, Ownership, and Lifetimes](https://mustcodeal.github.io/rust-game-hacking-book/pages/3/05/): Identify vectors, strings, handles, component pools, reference counts, and destruction paths without assuming one compiler's private layout. Estimated reading time: 40 minutes.
+- [3.6 — Analyze Obfuscated Values Without Guessing](https://mustcodeal.github.io/rust-game-hacking-book/pages/3/06/): Learn the difference between representation and security, trace small encode/decode paths, and implement a reversible value plus integrity check. Estimated reading time: 38 minutes.
+- [3.7 — Find and Handle Game Text](https://mustcodeal.github.io/rust-game-hacking-book/pages/3/07/): Trace visible text to bytes, understand encodings and terminators, and build checked strings at FFI boundaries. Estimated reading time: 16 minutes.
+- [3.8 — Reconstruct a DLL Function Contract](https://mustcodeal.github.io/rust-game-hacking-book/pages/3/08/): Infer an exported function's parameters, calling convention, result, and ownership rules before wrapping it in a small typed API. Estimated reading time: 28 minutes.
+- [3.9 — Decode Numbers and Pointers Bit by Bit](https://mustcodeal.github.io/rust-game-hacking-book/pages/3/09/): Work out by hand how whole numbers, negative numbers, and f32 floats are stored, and exactly what a pointer's type controls. Estimated reading time: 24 minutes.
+
+### 4. Game State & Automation
+
+- [4.1 — Build a Strategy-Game Observer](https://mustcodeal.github.io/rust-game-hacking-book/pages/4/01/): Reuse one verified player layout to read several local-match players and print a clean typed snapshot. Estimated reading time: 18 minutes.
+- [4.2 — Build a Stable Snapshot and Guarded Action Pipeline](https://mustcodeal.github.io/rust-game-hacking-book/pages/4/02/): Turn live Wesnoth reads into a stable typed snapshot, keep observation separate from action, and verify every guarded write. Estimated reading time: 26 minutes.
+- [4.3 — Read Fog-of-War Data as a Grid](https://mustcodeal.github.io/rust-game-hacking-book/pages/4/03/): Treat a map as indexed data, trace one tile’s visibility flag, and visualize it only in an offline lab. Estimated reading time: 16 minutes.
+- [4.4 — Design a Macro as a State Machine](https://mustcodeal.github.io/rust-game-hacking-book/pages/4/04/): Turn a repetitive action into explicit states, guarded transitions, and a stop-safe worker. Estimated reading time: 22 minutes.
+- [4.5 — Build a Coordinate-Based Test Bot](https://mustcodeal.github.io/rust-game-hacking-book/pages/4/05/): Find player, target, and cursor coordinates, then keep movement logic separate from raw memory reads. Estimated reading time: 21 minutes.
+- [4.6 — Search a Tile Map with BFS and A-Star](https://mustcodeal.github.io/rust-game-hacking-book/pages/4/06/): Turn a recovered grid into a tested route while separating map observation, graph search, and game input. Estimated reading time: 36 minutes.
+- [4.7 — Make a Bot Responsive with Events and Debouncing](https://mustcodeal.github.io/rust-game-hacking-book/pages/4/07/): Convert changing snapshots into meaningful events so an offline bot reacts once, waits safely, and avoids frantic repeated input. Estimated reading time: 25 minutes.
+- [4.8 — Build a Bounded Game Telemetry Recorder](https://mustcodeal.github.io/rust-game-hacking-book/pages/4/08/): Sample live game state without write rights, move file I/O off the observation path, count dropped events, and close a versioned log cleanly. Estimated reading time: 35 minutes.
+- [4.9 — How In-Game AI and NPCs Decide What to Do](https://mustcodeal.github.io/rust-game-hacking-book/pages/4/09/): Follow a toy guard one game-loop tick at a time: three sensing checks, a state machine with a reaction delay, a sixteen-tick run, and what editing its state byte in memory would do. Estimated reading time: 17 minutes.
+- [4.10 — Compute an NPC's View Cone, Utility Scores, and Memory Layout](https://mustcodeal.github.io/rust-game-hacking-book/pages/4/10/): Work through the arithmetic inside Lesson 4.9's toy guard: Pythagoras and the dot product behind its view cone, stepped line-of-sight checks, utility scores and their switch points, behavior trees, and the byte offsets of its structure. Estimated reading time: 22 minutes.
+
+### 5. 3D Games & Rendering
+
+- [5.1 — 3D Math You Can Picture](https://mustcodeal.github.io/rust-game-hacking-book/pages/5/01/): Build a precise explanation of 3D coordinates, vectors, bases, transformations, cameras, and perspective before using renderer-specific details. Estimated reading time: 27 minutes.
+- [5.2 — Trace Render-State Flags](https://mustcodeal.github.io/rust-game-hacking-book/pages/5/02/): Follow visible graphics state from game objects through meshes, shaders, rasterization, depth testing, and the final framebuffer. Estimated reading time: 25 minutes.
+- [5.3 — Observe OpenGL Draw Calls](https://mustcodeal.github.io/rust-game-hacking-book/pages/5/03/): Understand indexed drawing, observe OpenGL calls without stalling the render thread, and connect parameters to geometry and state. Estimated reading time: 30 minutes.
+- [5.4 — Color-Code Render Categories](https://mustcodeal.github.io/rust-game-hacking-book/pages/5/04/): Treat temporary color as a controlled classification experiment while accounting for materials, lighting, blending, and color space. Estimated reading time: 20 minutes.
+- [5.5 — Detect What the Crosshair Points At](https://mustcodeal.github.io/rust-game-hacking-book/pages/5/05/): Understand camera rays, collision queries, occlusion, and semantic target results before tracing the game’s crosshair-selection path. Estimated reading time: 26 minutes.
+- [5.6 — Aim Math and Target Selection](https://mustcodeal.github.io/rust-game-hacking-book/pages/5/06/): Derive yaw and pitch from vectors, measure true angular error, rank valid targets, and reason about target points, timing, and projectile motion. Estimated reading time: 35 minutes.
+- [5.7 — Trace Camera Recoil](https://mustcodeal.github.io/rust-game-hacking-book/pages/5/07/): Decompose recoil into input, weapon kick, spread, camera shake, and recovery; then separate each contribution by logging values over time. Estimated reading time: 23 minutes.
+- [5.8 — How a Radar Decides What to Show](https://mustcodeal.github.io/rust-game-hacking-book/pages/5/08/): Reconstruct radar enumeration, filtering, translation, rotation, scale, clipping, and marker semantics as separate testable stages. Estimated reading time: 23 minutes.
+- [5.9 — Project 3D Points onto a 2D Overlay](https://mustcodeal.github.io/rust-game-hacking-book/pages/5/09/): Derive and test the complete world-view-clip-NDC-viewport pipeline, including projection conventions, clipping, depth, and stable overlay placement. Estimated reading time: 44 minutes.
+- [5.10 — Reach a Direct3D Method Through Its Vtable](https://mustcodeal.github.io/rust-game-hacking-book/pages/5/10/): Work out why a Direct3D method has no export to hook, derive a vtable index instead of memorizing one, and install and remove a swap-chain hook in a program you wrote yourself. Estimated reading time: 34 minutes.
+- [5.11 — Observe Direct3D Draw Calls and State](https://mustcodeal.github.io/rust-game-hacking-book/pages/5/11/): Read a Direct3D draw call, understand why the same arguments mean different things in Direct3D 9 and 11, and label geometry using bound state rather than guesswork. Estimated reading time: 32 minutes.
+
+### 6. Protocols, Networks & IPC
+
+- [6.1 — How Multiplayer Messages Move](https://mustcodeal.github.io/rust-game-hacking-book/pages/6/01/): Understand clients, servers, framing, streams, ticks, snapshots, deltas, prediction, reconciliation, and message ordering. Estimated reading time: 24 minutes.
+- [6.2 — Capture a Local Protocol](https://mustcodeal.github.io/rust-game-hacking-book/pages/6/02/): Capture your own local client/server session, isolate one action, and work out how its bytes are framed. Estimated reading time: 17 minutes.
+- [6.3 — Parse and Rebuild a Message](https://mustcodeal.github.io/rust-game-hacking-book/pages/6/03/): Turn a captured local chat frame into a bounds-checked parser and serializer with round-trip tests. Estimated reading time: 30 minutes.
+- [6.4 — Replay a Protocol Through a State Machine](https://mustcodeal.github.io/rust-game-hacking-book/pages/6/04/): Turn captured local messages into a deterministic replay test that checks framing, ordering, timeouts, and legal protocol transitions. Estimated reading time: 30 minutes.
+- [6.5 — Build a Wesnoth Chat Bot](https://mustcodeal.github.io/rust-game-hacking-book/pages/6/05/): Perform Wesnoth 1.14.9’s real local handshake, log in, read gzip-framed WML, and answer a chat command. Estimated reading time: 24 minutes.
+- [6.6 — Build a Transparent Local TCP Proxy](https://mustcodeal.github.io/rust-game-hacking-book/pages/6/06/): Relay a loopback connection in both directions, preserve framing, and log bounded metadata without changing bytes. Estimated reading time: 20 minutes.
+- [6.7 — Share a Small Message Through Memory](https://mustcodeal.github.io/rust-game-hacking-book/pages/6/07/): Learn named shared memory, paging-file-backed mappings, views, length-prefixed data, access rights, lifetimes, synchronization, and deterministic cleanup with two local processes. Estimated reading time: 34 minutes.
+- [6.8 — Send Framed Messages Through a Local Named Pipe](https://mustcodeal.github.io/rust-game-hacking-book/pages/6/08/): Learn named-pipe servers and clients, byte versus message mode, framing, bounded reads, connection races, local-only scope, and handle ownership. Estimated reading time: 38 minutes.
+
+### 7. Windows Binaries & Analysis Tools
+
+- [7.1 — Read a Windows EXE Like a Map](https://mustcodeal.github.io/rust-game-hacking-book/pages/7/01/): Parse PE headers and sections with bounded reads so addresses, imports, and executable code stop looking like mystery numbers. Estimated reading time: 24 minutes.
+- [7.2 — Turn RVAs into Live Game Addresses](https://mustcodeal.github.io/rust-game-hacking-book/pages/7/02/): Translate among PE file offsets, RVAs, preferred addresses, and live addresses with checked section and ASLR calculations. Estimated reading time: 28 minutes.
+- [7.3 — Parse a DLL's Export Table Safely](https://mustcodeal.github.io/rust-game-hacking-book/pages/7/03/): Learn PE32 and PE32+ data directories, RVAs, section mappings, export names, ordinals, address entries, and forwarded exports with a bounded parser. Estimated reading time: 42 minutes.
+- [7.4 — Build a Pattern Scanner](https://mustcodeal.github.io/rust-game-hacking-book/pages/7/04/): Find version-tolerant byte signatures with wildcards, bounded scans, and tests that reject ambiguous matches. Estimated reading time: 35 minutes.
+- [7.5 — Build a Small Memory Scanner](https://mustcodeal.github.io/rust-game-hacking-book/pages/7/05/): Enumerate readable regions, scan copied bytes, filter candidates, and write only after an exact guarded check. Estimated reading time: 35 minutes.
+- [7.6 — Build a Disassembler with iced-x86](https://mustcodeal.github.io/rust-game-hacking-book/pages/7/06/): Decode real variable-length x86 instructions with a tested decoder library instead of reinventing the instruction tables. Estimated reading time: 22 minutes.
+- [7.7 — Build a Minimal Windows Debugger](https://mustcodeal.github.io/rust-game-hacking-book/pages/7/07/): Turn Windows debug events into a state machine, then break on Wesnoth’s real income instruction and inspect live gold updates. Estimated reading time: 24 minutes.
+- [7.8 — Build a Call Logger](https://mustcodeal.github.io/rust-game-hacking-book/pages/7/08/): Combine scanning, instruction decoding, breakpoints, and bounded logging to observe real calls in the course games. Estimated reading time: 35 minutes.
+- [7.9 — Observe a Game with ETW](https://mustcodeal.github.io/rust-game-hacking-book/pages/7/09/): Use Event Tracing for Windows and a small controller to record a short performance trace of a game. Estimated reading time: 28 minutes.
+
+### 8. DLLs, Hooks & In-Process Tools
+
+- [8.1 — Build an In-Process Library](https://mustcodeal.github.io/rust-game-hacking-book/pages/8/01/): Create a Windows DLL while keeping loader-lock rules, raw pointers, and initialization boundaries visible. Estimated reading time: 20 minutes.
+- [8.2 — Inject a DLL into a Game Process](https://mustcodeal.github.io/rust-game-hacking-book/pages/8/02/): Build a DLL injector for the exact game versions used in this book and control every Windows resource lifetime. Estimated reading time: 20 minutes.
+- [8.3 — Manage a Detour](https://mustcodeal.github.io/rust-game-hacking-book/pages/8/03/): Turn the debugger-only code-cave experiment into a verified, reversible patch plan. Estimated reading time: 24 minutes.
+- [8.4 — Hook Your Own Import Table](https://mustcodeal.github.io/rust-game-hacking-book/pages/8/04/): Parse a PE32 import table, redirect one MessageBoxW call inside the lab process, and restore the original pointer automatically. Estimated reading time: 28 minutes.
+- [8.5 — Parallelize a Pattern Scanner Without Losing Control](https://mustcodeal.github.io/rust-game-hacking-book/pages/8/05/): Copy game code once, divide immutable local snapshots across workers, cap results, cancel broad scans, and restore deterministic output. Estimated reading time: 32 minutes.
+- [8.6 — Choose the Right Windows Input Path](https://mustcodeal.github.io/rust-game-hacking-book/pages/8/06/): Poll a hotkey, send balanced input, compare window messages, and choose the smallest Windows API for a local game tool. Estimated reading time: 34 minutes.
+- [8.7 — Build a Menu for Your Local Tool](https://mustcodeal.github.io/rust-game-hacking-book/pages/8/07/): Build a readable egui settings menu, model feature state with enums, send commands to a worker, and clean up safely. Estimated reading time: 38 minutes.
+- [8.8 — Turn Experiments into One Reliable Tool](https://mustcodeal.github.io/rust-game-hacking-book/pages/8/08/): Refactor separate prototypes into typed features with shared snapshots, clean toggles, and guaranteed restoration. Estimated reading time: 25 minutes.
+- [8.9 — Draw a Menu with the Game's Own Text Function](https://mustcodeal.github.io/rust-game-hacking-book/pages/8/09/): Reuse the print function you already located to draw a menu inside the game, and handle the cursor wrapping, key edges, and string lifetimes that make it work. Estimated reading time: 26 minutes.
+
+### 9. Game Files, Mods & Integrity
+
+- [9.1 — Check Game Files Before Touching Memory](https://mustcodeal.github.io/rust-game-hacking-book/pages/9/01/): Learn how saves, configuration, textures, maps, and archives differ from live process memory. Estimated reading time: 11 minutes.
+- [9.2 — Find and Edit Save Data Safely](https://mustcodeal.github.io/rust-game-hacking-book/pages/9/02/): Locate a save with Process Monitor, compare controlled snapshots, and write changes atomically. Estimated reading time: 17 minutes.
+- [9.3 — Replace a Texture Reversibly](https://mustcodeal.github.io/rust-game-hacking-book/pages/9/03/): Trace a visible surface to its texture, preserve the required format, and package a clean replacement. Estimated reading time: 15 minutes.
+- [9.4 — Make a Data-Driven Unit Mod](https://mustcodeal.github.io/rust-game-hacking-book/pages/9/04/): Clone an existing Flare unit definition, change one field at a time, and validate the result with a tiny linter. Estimated reading time: 18 minutes.
+- [9.5 — Extract Mod Archives Without Escaping the Game Folder](https://mustcodeal.github.io/rust-game-hacking-book/pages/9/05/): Validate archive paths, sizes, file types, and replacement steps before installing a game mod. Estimated reading time: 27 minutes.
+- [9.6 — Build a Reversible Mod Manifest](https://mustcodeal.github.io/rust-game-hacking-book/pages/9/06/): Record every installed file, original hash, replacement hash, and restore action so a game mod can be audited and removed cleanly. Estimated reading time: 24 minutes.
+- [9.7 — Check File Hashes and Authenticode Trust](https://mustcodeal.github.io/rust-game-hacking-book/pages/9/07/): Understand hashes, public and private keys, how a signature is made and checked, certificate trust, WinVerifyTrust state, exact return checks, offline revocation limits, and unsigned open-source builds. Estimated reading time: 37 minutes.
+- [9.8 — Encryption, Hashes, and Key Lifecycles](https://mustcodeal.github.io/rust-game-hacking-book/pages/9/08/): Separate encoding, hashing, MACs, symmetric and public-key encryption, and authenticated encryption, see why a random key cannot be guessed, then protect a toy save payload with current RustCrypto APIs. Estimated reading time: 46 minutes.
+- [9.9 — Read and Edit a Binary File in a Hex Editor](https://mustcodeal.github.io/rust-game-hacking-book/pages/9/09/): Read a hex editor's offset, byte, and character columns, decode the fields of a small binary save, find a field by comparing two saves, and recompute the checksum after an edit. Estimated reading time: 32 minutes.
+
+### 10. Processes, Handles & Threads
+
+- [10.1 — Meet the Process Behind the Game](https://mustcodeal.github.io/rust-game-hacking-book/pages/10/01/): Understand processes, threads, the PEB, the TEB, loader lists, and why supported snapshots are safer than guessing at internal pointers. Estimated reading time: 24 minutes.
+- [10.2 — Prove Which Game Build You Have](https://mustcodeal.github.io/rust-game-hacking-book/pages/10/02/): Create and verify a SHA-256 manifest so RVAs, byte patterns, mods, and patches stay tied to exact files. Estimated reading time: 30 minutes.
+- [10.3 — Ask Windows for the Smallest Process Handle](https://mustcodeal.github.io/rust-game-hacking-book/pages/10/03/): Learn access tokens, integrity levels, process DACLs, access masks, and least privilege through a buildable query tool. Estimated reading time: 26 minutes.
+- [10.4 — Make Windows Handles Close Themselves](https://mustcodeal.github.io/rust-game-hacking-book/pages/10/04/): Learn handle tables, raw handles, ownership, leaks, double-close bugs, and RAII through a visible handle-count experiment. Estimated reading time: 25 minutes.
+- [10.5 — Read a Game's Virtual-Memory Map](https://mustcodeal.github.io/rust-game-hacking-book/pages/10/05/): Understand committed pages, guard pages, memory types, and R/W/X protection by printing one exact game module's map with VirtualQueryEx. Estimated reading time: 33 minutes.
+- [10.6 — Understand Threads, Contexts, and Stacks](https://mustcodeal.github.io/rust-game-hacking-book/pages/10/06/): Learn how threads execute, what a CPU context contains, why stacks are call histories, and how to inventory a game's threads without changing them. Estimated reading time: 33 minutes.
+- [10.7 — Follow a Windows API Call Down the Stack](https://mustcodeal.github.io/rust-game-hacking-book/pages/10/07/): Understand Win32, native APIs, system calls, user mode, kernel mode, exports, forwarded functions, and ASLR with a read-only address inspector. Estimated reading time: 28 minutes.
+- [10.8 — Capture a Small Dump of the Current Process](https://mustcodeal.github.io/rust-game-hacking-book/pages/10/08/): Write a deliberately small self-minidump, then inspect threads, modules, registers, and stacks in WinDbg. Estimated reading time: 24 minutes.
+- [10.9 — Identify the Engine and Runtime First](https://mustcodeal.github.io/rust-game-hacking-book/pages/10/09/): Work out whether a game is native, Mono, IL2CPP, .NET, or Java before choosing a method, because the runtime decides whether addresses, offsets, and names mean anything. Estimated reading time: 26 minutes.
+
+### 11. DLL Loading, Defenses & DMA
+
+- [11.1 — Inventory Every DLL Loaded by the Game](https://mustcodeal.github.io/rust-game-hacking-book/pages/11/01/): Learn DLL dependency resolution, module paths, snapshots, baselines, and search-order risk through a read-only module inventory. Estimated reading time: 30 minutes.
+- [11.2 — Keep Real Work Out of DllMain](https://mustcodeal.github.io/rust-game-hacking-book/pages/11/02/): Understand DLL mapping, import resolution, process-attach notifications, loader lock, deadlocks, and the course library's two-stage startup design. Estimated reading time: 27 minutes.
+- [11.3 — Resolve Optional Windows APIs Safely](https://mustcodeal.github.io/rust-game-hacking-book/pages/11/03/): Inspect a DLL export at runtime, prove its ABI, and provide a documented fallback when a Windows version does not expose it. Estimated reading time: 29 minutes.
+- [11.4 — Break and Repair Three Toy Defenses](https://mustcodeal.github.io/rust-game-hacking-book/pages/11/04/): Reproduce three harmless evasion patterns against deliberately weak controls, observe the gap, and repair the invariant. Estimated reading time: 32 minutes.
+- [11.5 — Defend the Kernel Boundary](https://mustcodeal.github.io/rust-game-hacking-book/pages/11/05/): Understand why game labs stay in user mode, inventory loaded drivers without changing them, and harden Windows against unsafe kernel tooling. Estimated reading time: 22 minutes.
+- [11.6 — How DMA Sees Memory](https://mustcodeal.github.io/rust-game-hacking-book/pages/11/06/): Understand physical RAM, virtual addresses, page tables, CR3, IOMMUs, and why this book studies DMA through owned offline captures. Estimated reading time: 40 minutes.
+- [11.7 — Translate an Offline DMA Capture](https://mustcodeal.github.io/rust-game-hacking-book/pages/11/07/): Build and test a bounded x86-64 page-table walker that turns virtual addresses into physical offsets inside an offline capture file. Estimated reading time: 48 minutes.
+- [11.8 — Validate a DMA Capture and Keep the Lab Defensive](https://mustcodeal.github.io/rust-game-hacking-book/pages/11/08/): Preserve capture provenance, cross-check translations, understand IOMMU defenses, and decode raw offline bytes into validated object snapshots. Estimated reading time: 34 minutes.
+
+### 12. Lua Automation
+
+- [12.1 — Why Games Use Lua](https://mustcodeal.github.io/rust-game-hacking-book/pages/12/01/): Follow Lua from source text through bytecode and the VM, then reason about values, garbage collection, host calls, and capability boundaries. Estimated reading time: 32 minutes.
+- [12.2 — Use Tables, Functions, and Metatables](https://mustcodeal.github.io/rust-game-hacking-book/pages/12/02/): Read Lua's one-based sequences, record-style tables, closures, colon methods, and metatable lookups without pretending they are fixed records. Estimated reading time: 30 minutes.
+- [12.3 — Embed Lua in the Host](https://mustcodeal.github.io/rust-game-hacking-book/pages/12/03/): Create a Lua 5.4 interpreter with mlua, load only needed libraries, expose typed host functions, and report script errors with context. Estimated reading time: 35 minutes.
+- [12.4 — Expose Snapshots Instead of Raw Memory](https://mustcodeal.github.io/rust-game-hacking-book/pages/12/04/): Connect a Windows observer to Lua through immutable snapshots and bounded action requests without handing scripts arbitrary pointers. Estimated reading time: 33 minutes.
+- [12.5 — Write a Lua Bot as a State Machine](https://mustcodeal.github.io/rust-game-hacking-book/pages/12/05/): Make scripted automation predictable with named states, guarded transitions, one action at a time, timeouts, and a permanent stop path. Estimated reading time: 31 minutes.
+- [12.6 — Limit, Test, and Debug Lua Scripts](https://mustcodeal.github.io/rust-game-hacking-book/pages/12/06/): Put memory and instruction budgets around scripts, preserve useful tracebacks, test bad inputs, and disable failing automation cleanly. Estimated reading time: 30 minutes.
+- [12.7 — From Lua Source to a Tiny Virtual Machine](https://mustcodeal.github.io/rust-game-hacking-book/pages/12/07/): Follow source text through tokens, syntax, bytecode, a value stack, and a bounded interpreter loop. Estimated reading time: 42 minutes.
+- [12.8 — Values, Tables, Strings, and Garbage Collection](https://mustcodeal.github.io/rust-game-hacking-book/pages/12/08/): See how a dynamic language represents values, why tables combine array and map behavior, and why automatic memory management must understand shared references and cycles. Estimated reading time: 38 minutes.
+- [12.9 — Call Frames, Closures, and Upvalues](https://mustcodeal.github.io/rust-game-hacking-book/pages/12/09/): Understand VM call frames, multiple returns, captured locals, open and closed upvalues, and the host boundary where native functions enter Lua. Estimated reading time: 40 minutes.
+
+### 13. Advanced Game Hacking
+
+- [13.1 — Model Game State and Invariants](https://mustcodeal.github.io/rust-game-hacking-book/pages/13/01/): Describe a game system as explicit state, transitions, and invariants, then locate the control that keeps each invariant true, the detector that reports a failure, and the authoritative copy of state a control has to guard. Estimated reading time: 30 minutes.
+- [13.2 — Analyze State and Integrity Checks](https://mustcodeal.github.io/rust-game-hacking-book/pages/13/02/): Trace what an integrity check actually covers, where its decision is consumed, and whether a stale or partial result can protect the promised state. Estimated reading time: 50 minutes.
+- [13.3 — Model Anti-Debug Behavior as a State Machine](https://mustcodeal.github.io/rust-game-hacking-book/pages/13/03/): Replace a vague list of debugger signals with an observable state machine, explicit decisions, false-positive tests, and game invariants that do not depend on one environmental clue. Estimated reading time: 45 minutes.
+- [13.4 — Recover Obfuscated Game Values](https://mustcodeal.github.io/rust-game-hacking-book/pages/13/04/): Recover a reversible toy value transform from read and write paths, distinguish obfuscation from encryption, and verify the model with round-trip and mutation tests. Estimated reading time: 55 minutes.
+- [13.5 — Engineer Robust Hooks and Detours](https://mustcodeal.github.io/rust-game-hacking-book/pages/13/05/): Treat a hook as a versioned, concurrent state transition with instruction, ABI, re-entry, cleanup, and failure invariants—not merely a jump that happens to work once. Estimated reading time: 52 minutes.
+- [13.6 — Recover Object Layouts Across Updates](https://mustcodeal.github.io/rust-game-hacking-book/pages/13/06/): Reconstruct object fields from access patterns and invariants, score competing layouts, and migrate a tool across game updates without trusting stale offsets. Estimated reading time: 50 minutes.
+- [13.7 — Diagnose Game Behavior with Telemetry](https://mustcodeal.github.io/rust-game-hacking-book/pages/13/07/): Design bounded events that connect game inputs, decisions, and effects; compare traces; and turn a suspected control gap into a reproducible detection and repair test. Estimated reading time: 47 minutes.
+- [13.8 — Analyze Bypass Patterns in Game Controls](https://mustcodeal.github.io/rust-game-hacking-book/pages/13/08/): Analyze three recurring game-control bypass patterns with small inline examples, then use decision traces and paired tests to prove what the control actually guards. Estimated reading time: 58 minutes.
+- [13.9 — Eight More Bypass Patterns and Their Repairs](https://mustcodeal.github.io/rust-game-hacking-book/pages/13/09/): Reproduce eight recurring control failures against a runnable toy lab, then move each invariant to the boundary where the effect actually happens. Estimated reading time: 55 minutes.
+
+### 14. Kernels, Hardware & Consoles
+
+- [14.1 — What an Operating System Kernel Does](https://mustcodeal.github.io/rust-game-hacking-book/pages/14/01/): See how the processor separates user mode from kernel mode, how a system call carries ReadProcessMemory into the Windows kernel and back, what the kernel does with its authority, why its bugs stop the whole machine, and why some anti-cheat runs there. Estimated reading time: 18 minutes.
+- [14.2 — How Device Drivers Work](https://mustcodeal.github.io/rust-game-hacking-book/pages/14/02/): Follow a request from ReadFile or DeviceIoControl through the I/O manager and an I/O request packet to a driver and its hardware, see how a driver uses registers, interrupts, and DMA, trace a key press from a USB keyboard to a game, and see why Windows demands signed drivers. Estimated reading time: 18 minutes.
+- [14.3 — Hypervisors and Virtual Machines](https://mustcodeal.github.io/rust-game-hacking-book/pages/14/03/): Learn what a hypervisor is, how Intel VT-x and AMD-V let a guest run at full speed until a VM exit, how two stages of address translation keep each guest inside its own memory, what a snapshot restores, and how Windows uses its hypervisor to protect its own kernel. Estimated reading time: 18 minutes.
+- [14.4 — Hardware Debugging with JTAG](https://mustcodeal.github.io/rust-game-hacking-book/pages/14/04/): See how a four-wire port built to test solder joints became the deepest debugger a chip has: boundary scan, scan chains, the TAP controller, halting a processor from outside, SWD, and why shipped devices lock the port. Estimated reading time: 18 minutes.
+- [14.5 — How Game Consoles Are Built](https://mustcodeal.github.io/rust-game-hacking-book/pages/14/05/): See a console as a fixed PC-like computer, follow its software stack and secure boot chain of trust, and learn why signed, encrypted software makes consoles harder to modify than PCs, why online services ban modified consoles, and where homebrew stands. Estimated reading time: 20 minutes.
+- [14.6 — How Emulators Work](https://mustcodeal.github.io/rust-game-hacking-book/pages/14/06/): See how an emulator imitates a whole console in software: the fetch–decode–execute loop, interpreters and dynamic recompilers, memory-mapped I/O, cycle timing, graphics, audio, save states, cheat codes, and where the legal line runs. Estimated reading time: 18 minutes.
+- [14.7 — How a System Call Crosses into the Kernel](https://mustcodeal.github.io/rust-game-hacking-book/pages/14/07/): Read the privilege level in the cs register and the user/supervisor bit in a page-table entry, then follow one ReadProcessMemory call through ntdll's stub, the kernel's entry code, its address and handle-rights checks, and back with an NTSTATUS. Estimated reading time: 13 minutes.
+- [14.8 — How a Driver Decodes Requests and Registers](https://mustcodeal.github.io/rust-game-hacking-book/pages/14/08/): Unpack a DeviceIoControl request and its 32-bit control code, decode the toy keypad's registers bit by bit, follow its ISR and DPC register by register, read the bytes of a USB key press and its WM_KEYDOWN message, and run the device and its driver as a simulation. Estimated reading time: 18 minutes.
+- [14.9 — How a Guest Runs Under a Hypervisor](https://mustcodeal.github.io/rust-game-hacking-book/pages/14/09/): See why early x86 hypervisors could not simply trap a guest kernel's privileged instructions, translate one guest address through both stages digit by digit, count the memory reads the second stage adds, and learn how software can tell it is running in a virtual machine. Estimated reading time: 10 minutes.
+- [14.10 — How a Debugger Drives JTAG and SWD](https://mustcodeal.github.io/rust-game-hacking-book/pages/14/10/): Drive a JTAG port one clock at a time: a shift register at work, all 16 TAP controller states, counting chips through BYPASS, decoding an IDCODE, halting an Arm core with one memory write, and building an SWD request, with a lab that simulates a two-chip scan chain. Estimated reading time: 23 minutes.
+- [14.11 — How an Emulator Runs a Toy Console](https://mustcodeal.github.io/rust-game-hacking-book/pages/14/11/): Follow a made-up 8-bit console through a whole program: its seven instructions and their cycle costs, a traced run, the interpreter in Rust, the memory map as code, frame budgets, a save state byte by byte, and a cheat code racing a register, with a lab that runs it all. Estimated reading time: 20 minutes.
+
+## Additional resources
+
+- [About and learning path](https://mustcodeal.github.io/rust-game-hacking-book/)
+- [Glossary](https://mustcodeal.github.io/rust-game-hacking-book/glossary/)
+- [Repository README](https://github.com/MustCodeAl/rust-game-hacking-book#readme)
+- [Portable Rust exercises](https://github.com/MustCodeAl/rust-game-hacking-book/tree/rustgamehackingreimagined/rust-labs)
+- [Windows exercises](https://github.com/MustCodeAl/rust-game-hacking-book/tree/rustgamehackingreimagined/windows-labs)
+- [Lua host and scripts](https://github.com/MustCodeAl/rust-game-hacking-book/tree/rustgamehackingreimagined/lua-labs)
+- [Advanced memory, cryptography, and offline capture labs](https://github.com/MustCodeAl/rust-game-hacking-book/tree/rustgamehackingreimagined/advanced-memory-labs)
+- [Full book text and code for retrieval](https://mustcodeal.github.io/rust-game-hacking-book/llms-full.txt)
