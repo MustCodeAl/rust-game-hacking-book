@@ -1,14 +1,28 @@
 ---
 // One card per chapter that has lessons, so a new chapter appears here as
-// soon as its first lesson exists.
+// soon as its first lesson exists. Each card says how many lessons the chapter
+// holds and roughly how long it takes to read.
 import { getCollection } from 'astro:content';
 import { CHAPTERS } from '../../data/chapters.mjs';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const lessons = await getCollection('docs', (entry) => Boolean(entry.data.chapter));
-const present = new Set(lessons.map((entry) => Number.parseInt(entry.data.chapter!.split('.')[0], 10)));
-const chapters = CHAPTERS.filter((chapter) => present.has(chapter.number));
-const rustChapters = new Set([3, 8, 12]);
+
+const stats = new Map<number, { count: number; minutes: number }>();
+for (const entry of lessons) {
+	const number = Number.parseInt(entry.data.chapter!.split('.')[0], 10);
+	const current = stats.get(number) ?? { count: 0, minutes: 0 };
+	current.count += 1;
+	current.minutes += Number(entry.data.minutes ?? 0);
+	stats.set(number, current);
+}
+const chapters = CHAPTERS.filter((chapter) => stats.has(chapter.number));
+
+function readingTime(minutes: number) {
+	if (minutes < 60) return `${minutes} min`;
+	const hours = Math.round((minutes / 60) * 2) / 2;
+	return `about ${hours} h`;
+}
 ---
 
 <div class="section-heading not-content" id="course-map">
@@ -19,12 +33,23 @@ const rustChapters = new Set([3, 8, 12]);
 
 <div class="course-grid not-content">
 	{
-		chapters.map((chapter) => (
-			<a class:list={['course-card', { 'course-card--rust': rustChapters.has(chapter.number) }]} href={`${base}/pages/${chapter.number}/01/`}>
-				<span>{String(chapter.number).padStart(2, '0')}</span>
-				<h3>{chapter.title}</h3>
-				<p>{chapter.summary}</p>
-			</a>
-		))
+		chapters.map((chapter) => {
+			const { count, minutes } = stats.get(chapter.number)!;
+			return (
+				<a class="course-card" href={`${base}/pages/${chapter.number}/01/`}>
+					<span class="course-card__top">
+						<span class="course-card__emoji" aria-hidden="true">
+							{chapter.emoji}
+						</span>
+						<span class="course-card__number">Chapter {String(chapter.number).padStart(2, '0')}</span>
+					</span>
+					<h3>{chapter.title}</h3>
+					<p>{chapter.summary}</p>
+					<span class="course-card__meta">
+						{count} lessons · {readingTime(minutes)}
+					</span>
+				</a>
+			);
+		})
 	}
 </div>

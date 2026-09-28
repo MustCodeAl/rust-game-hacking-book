@@ -27,6 +27,47 @@ export function mermaidBlocks() {
 }
 
 /**
+ * Wrap each table in a scrollable, labelled region while building, so a wide
+ * table scrolls inside its card instead of stretching the page, and no script
+ * has to rearrange the page after it loads.
+ */
+export function scrollableTables() {
+	return {
+		name: 'academy-scrollable-tables',
+		element: {
+			filter: ['table'],
+			visit(node) {
+				return {
+					type: 'element',
+					tagName: 'div',
+					properties: {
+						className: ['table-scroll'],
+						role: 'region',
+						ariaLabel: 'Scrollable lesson table',
+						tabIndex: 0,
+					},
+					children: [node],
+				};
+			},
+		},
+	};
+}
+
+/** Let the browser fetch lesson images only as they near the screen, and decode them off the main thread. */
+export function lazyImages() {
+	return {
+		name: 'academy-lazy-images',
+		element: {
+			filter: ['img'],
+			visit(node, ctx) {
+				if (!node.properties?.loading) ctx.setProperty(node, 'loading', 'lazy');
+				if (!node.properties?.decoding) ctx.setProperty(node, 'decoding', 'async');
+			},
+		},
+	};
+}
+
+/**
  * Prefix the site's base path onto root-relative links and images, so lesson
  * Markdown can keep writing `/pages/1/03/` whatever the deployment path is.
  */

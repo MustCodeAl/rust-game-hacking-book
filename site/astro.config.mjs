@@ -5,7 +5,7 @@ import starlight from '@astrojs/starlight';
 import { ExpressiveCodeTheme } from '@astrojs/starlight/expressive-code';
 import { satteri } from '@astrojs/markdown-satteri';
 import { academyCodeTheme } from './src/data/code-theme.mjs';
-import { basePathLinks, mermaidBlocks } from './src/plugins/satteri-academy.mjs';
+import { basePathLinks, lazyImages, mermaidBlocks, scrollableTables } from './src/plugins/satteri-academy.mjs';
 import { CHAPTERS } from './src/data/chapters.mjs';
 
 const SITE = 'https://mustcodeal.github.io';
@@ -26,8 +26,13 @@ export default defineConfig({
 	site: SITE,
 	base: BASE,
 	trailingSlash: 'always',
+	// Fetch a lesson as soon as the pointer rests on its link, so the click
+	// that follows usually finds the page already downloaded.
+	prefetch: { prefetchAll: true, defaultStrategy: 'hover' },
 	markdown: {
-		processor: satteri({ hastPlugins: [mermaidBlocks(), basePathLinks(BASE)] }),
+		processor: satteri({
+			hastPlugins: [mermaidBlocks(), scrollableTables(), lazyImages(), basePathLinks(BASE)],
+		}),
 	},
 	integrations: [
 		starlight({
@@ -56,6 +61,7 @@ export default defineConfig({
 				'./src/styles/home.css',
 			],
 			components: {
+				Head: './src/components/overrides/Head.astro',
 				PageTitle: './src/components/overrides/PageTitle.astro',
 				MarkdownContent: './src/components/overrides/MarkdownContent.astro',
 				ThemeSelect: './src/components/overrides/ThemeSelect.astro',

@@ -1,7 +1,8 @@
 // Game Hacking Academy page features for the Starlight site: the reader-theme
-// panel, code-block badges and semantic colours, lesson-text cues, the reading
-// progress bar, the projection playground, and glossary links. Ported from the
-// Jekyll theme's academy.js; the GitBook-specific parts stayed behind.
+// panel, semantic code colours, the reading progress bar, the projection
+// playground, and glossary links. Anything that would rewrite the whole page
+// on load (table wrappers, code badges) is done by the build or by CSS instead,
+// and the rest runs lazily, so a long lesson stays quick to open and scroll.
 (function () {
   "use strict";
 
@@ -18,16 +19,6 @@
   var CODE_MODES = ["dark", "light"];
   var SYNTAX_PALETTES = ["academy", "cyber", "aurora", "solar", "ocean", "mono"];
   var BACKGROUND_TONES = ["theme", "warm", "cool", "rose", "neutral"];
-
-  // A badge names the language a block is written in. An empty label means no
-  // badge: a plain `text` fence holds a memory layout or a derivation, not code.
-  var LANGUAGE_LABELS = {
-    asm: "x86 assembly", nasm: "x86 assembly", c: "C", cpp: "C++", diff: "before → after",
-    powershell: "PowerShell", ps1: "PowerShell", rust: "Rust", toml: "TOML", lua: "Lua",
-    json: "JSON", sh: "Shell", bash: "Shell", shell: "Shell", python: "Python", js: "JavaScript",
-    javascript: "JavaScript", ts: "TypeScript", html: "HTML", css: "CSS", yaml: "YAML", ini: "INI",
-    md: "Markdown", text: "", txt: "", plaintext: ""
-  };
 
   var SEMANTIC_TOKENS = {
     safety: [
@@ -249,7 +240,12 @@
     }
     if ("printBook" in data) {
       closeThemeMenus();
-      requestAnimationFrame(function () { window.print(); });
+      // Diagrams are drawn as they scroll into view; draw the rest first so the
+      // printout has every one.
+      var diagramsReady = window.academyRenderAllDiagrams ? window.academyRenderAllDiagrams() : Promise.resolve();
+      diagramsReady.then(function () {
+        requestAnimationFrame(function () { window.print(); });
+      });
       return;
     }
     var switcher = target.closest("[data-theme-switcher]");
@@ -319,17 +315,6 @@
     return Array.prototype.map.call(frame.querySelectorAll(".ec-line"), function (line) {
       return line.textContent;
     }).join("\n");
-  }
-
-  function labelCodeBlocks() {
-    codeFrames().forEach(function (frame) {
-      if (frame.dataset.languageId) return;
-      var language = frameLanguage(frame);
-      var label = LANGUAGE_LABELS[language];
-      if (label === undefined) label = language;
-      frame.dataset.languageId = language;
-      if (label) frame.dataset.languageLabel = label;
-    });
   }
 
   // Variants declared in this page's Rust enums, so `State::Chase` and a bare
@@ -461,67 +446,46 @@
     });
   }
 
+  // Colour each block only as it comes near the screen, so a long lesson never
+  // pays up front for blocks the reader has not reached.
+  var semanticObserver = null;
+  var semanticVariants = null;
+
+  function pageVariants() {
+    if (!semanticVariants) semanticVariants = findDeclaredEnumVariants();
+    return semanticVariants;
+  }
+
   function refreshSemanticHighlighting() {
     var frames = codeFrames();
-    frames.forEach(clearSemanticHighlighting);
-    if (root.dataset.academySemantic === "off") return;
-    var variants = findDeclaredEnumVariants();
-    frames.forEach(function (frame) { highlightFrame(frame, variants); });
+    if (semanticObserver) semanticObserver.disconnect();
+    frames.forEach(function (frame) {
+      if (frame.dataset.semanticReady) clearSemanticHighlighting(frame);
+    });
+    if (root.dataset.academySemantic === "off" || !frames.length) return;
+    if (!("IntersectionObserver" in window)) {
+      frames.forEach(function (frame) { highlightFrame(frame, pageVariants()); });
+      return;
+    }
+    semanticObserver = new IntersectionObserver(function (entries, observer) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        observer.unobserve(entry.target);
+        highlightFrame(entry.target, pageVariants());
+      });
+    }, { rootMargin: "600px 0px" });
+    frames.forEach(function (frame) { semanticObserver.observe(frame); });
+  }
+
+  // Work the reader cannot see waits until the browser has nothing else to do.
+  function whenIdle(task) {
+    if ("requestIdleCallback" in window) window.requestIdleCallback(task, { timeout: 2000 });
+    else window.setTimeout(task, 200);
   }
 
   // ------------------------------------------------------------------
-  // Lesson text: icons for headings and comparison cells, scrollable tables,
-  // and the reading progress bar.
+  // The reading progress bar
   // ------------------------------------------------------------------
-
-  function decorateLessonText() {
-    var rules = [
-      { pattern: /^checkpoint\b/i, emoji: "✅" },
-      { pattern: /^(?:avoid|do not|never|wrong|bad|fragile)\b/i, emoji: "❌" },
-      { pattern: /^(?:a safe|good|correct|preferred|recommended|verified)\b/i, emoji: "✅" },
-      { pattern: /^(?:scope|safety|permission)\b/i, emoji: "🛡️" },
-      { pattern: /^(?:test|try|run the (?:lab|tool)|exercise)\b/i, emoji: "🧪" }
-    ];
-    document.querySelectorAll(".sl-markdown-content :is(h2, h3)").forEach(function (heading) {
-      if (heading.dataset.emojiReady === "true" || heading.closest(".not-content")) return;
-      heading.dataset.emojiReady = "true";
-      var text = heading.textContent.trim();
-      var rule = rules.find(function (candidate) { return candidate.pattern.test(text); });
-      if (!rule) return;
-      var icon = document.createElement("span");
-      icon.className = "lesson-heading__emoji";
-      icon.setAttribute("aria-hidden", "true");
-      icon.textContent = rule.emoji;
-      heading.insertBefore(icon, heading.firstChild);
-    });
-    document.querySelectorAll(".sl-markdown-content :is(th, td)").forEach(function (cell) {
-      if (cell.dataset.comparisonCue === "true" || cell.closest(".not-content")) return;
-      cell.dataset.comparisonCue = "true";
-      var text = cell.textContent.trim();
-      var emoji = null;
-      if (/^(?:do not|don't|never|avoid|bad|wrong|fragile|incorrect)\b/i.test(text)) emoji = "❌";
-      else if (/^(?:good|a good|correct|safer?|recommended|preferred|verified)\b/i.test(text)) emoji = "✅";
-      if (!emoji) return;
-      var cue = document.createElement("span");
-      cue.className = "comparison-cue";
-      cue.setAttribute("aria-hidden", "true");
-      cue.textContent = emoji;
-      cell.insertBefore(cue, cell.firstChild);
-    });
-  }
-
-  function enhanceLessonTables() {
-    document.querySelectorAll(".sl-markdown-content table").forEach(function (table) {
-      if (table.closest(".not-content, .table-scroll")) return;
-      var wrapper = document.createElement("div");
-      wrapper.className = "table-scroll";
-      wrapper.setAttribute("role", "region");
-      wrapper.setAttribute("aria-label", "Scrollable lesson table");
-      wrapper.setAttribute("tabindex", "0");
-      table.parentNode.insertBefore(wrapper, table);
-      wrapper.appendChild(table);
-    });
-  }
 
   function bindReadingProgress() {
     if (!document.querySelector(".lesson-header") || document.querySelector(".reading-progress")) return;
@@ -532,18 +496,22 @@
     document.body.appendChild(bar);
     var fill = bar.firstChild;
     var scheduled = false;
+    // Scaling the bar is handled by the compositor; changing its width would
+    // make the browser redo layout on every scrolled frame.
     function update() {
       scheduled = false;
       var remaining = document.documentElement.scrollHeight - window.innerHeight;
-      var percent = remaining > 0 ? (window.scrollY / remaining) * 100 : 0;
-      fill.style.width = Math.min(100, Math.max(0, percent)) + "%";
+      var ratio = remaining > 0 ? window.scrollY / remaining : 0;
+      fill.style.transform = "scaleX(" + Math.min(1, Math.max(0, ratio)) + ")";
     }
     window.addEventListener("scroll", function () {
       if (scheduled) return;
       scheduled = true;
       requestAnimationFrame(update);
     }, { passive: true });
-    update();
+    // Measure on the next frame, after the browser's own first layout, rather
+    // than forcing that layout early by reading scrollHeight right now.
+    requestAnimationFrame(update);
   }
 
   function initProjectionPlaygrounds() {
@@ -752,13 +720,10 @@
 
   function initializePageFeatures() {
     initThemeSwitcher();
-    labelCodeBlocks();
     refreshSemanticHighlighting();
-    decorateLessonText();
-    enhanceLessonTables();
     bindReadingProgress();
     initProjectionPlaygrounds();
-    linkGlossaryTerms();
+    whenIdle(linkGlossaryTerms);
     highlightGlossaryTarget();
     bindGlossaryHighlight();
   }
