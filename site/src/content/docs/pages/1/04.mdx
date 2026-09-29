@@ -14,13 +14,13 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 We have already followed one value through a CPU instruction (Lesson 1.2)
 and grouped it with one player's other values (Lesson 1.3). Now we can write
 a small program that uses those ideas. We will start with 100 gold and ask
-what happens when an item costs 25. Lesson 1.7 will show the bytes this
+what happens when an item costs 25. Lesson 1.8 will show the bytes this
 program uses before we try to find them in a running game.
 
-The examples below are Rust. Read each new part before trying to predict
-a result. The complete program comes after the pieces it uses. Then we will
-use the same purchase rule to compare program logic, collections, and a few
-ways to organize code.
+Call the two players in this lesson Ada and Bo. Ada starts with 100 gold
+and Bo with 40. The short Rust fragments each explain one idea, and the
+next lesson runs a separate complete program. Here we will also compare
+program logic, collections, and ways to organize code.
 
 ## Data, values, and types
 
@@ -28,7 +28,7 @@ ways to organize code.
 bytes mean when interpreted, and a **type** tells the program how to
 interpret and use them. For example, the four bytes `50 00 00 00` can
 represent the number 80 when read as a little-endian `u32`. We will work
-through the byte order in Lesson 1.7. For now, notice that “four bytes”
+through the byte order in Lesson 1.8. For now, notice that “four bytes”
 and “80 health” describe different levels of the same information.
 
 <MemoryStrip
@@ -176,9 +176,8 @@ gold amount here.
 
 ## A data structure organizes values
 
-Lesson 1.3 grouped gold, health, and maximum health into one record.
-That lesson followed Ada through a purchase and damage. Here we start a
-fresh run with her original 100 gold and 80 health so the program can
+We can group gold, health, and maximum health into one record. For this
+example, Ada starts with 100 gold and 80 health so the program can
 perform the purchase itself.
 That record is a **data structure**: a chosen way to organize related
 values. Rust uses `struct` to describe its shape:
@@ -257,64 +256,22 @@ require writing a third purchase rule.
 
 The `Player` record groups fields belonging to **one** player; the array
 groups **several** players. Both are data structures, chosen for different
-questions. We will compare other useful collections after following this
-array through a complete program.
+questions. We will compare other useful collections after tracing this array.
 
-## Run the complete example
+## Trace the two-player result
 
-This program combines the pieces above. `main` is the function Rust
-starts when you run the program. `println!` writes text to the
-terminal; each pair of braces in its quoted text is filled with the
-next value supplied after the text.
+The function, record, and loop fragments above show
+both outcomes without seeing a longer program yet:
 
-```rust
-struct Player {
-    gold: u32,
-    health: u32,
-    max_health: u32,
-}
+| Player | Gold before | Cost | Gold after | Health afterward |
+| --- | ---: | ---: | ---: | --- |
+| Ada | 100 | 25 | 75 | 80/100 |
+| Bo | 40 | 25 | 15 | 50/80 |
 
-fn spend_if_possible(gold: u32, cost: u32) -> u32 {
-    if gold >= cost {
-        return gold - cost;
-    }
-    return gold;
-}
-
-fn main() {
-    let mut players = [
-        Player { gold: 100, health: 80, max_health: 100 },
-        Player { gold: 40, health: 50, max_health: 80 },
-    ];
-
-    for player in &mut players {
-        player.gold = spend_if_possible(player.gold, 25);
-    }
-
-    println!(
-        "Ada has {} gold and {}/{} health",
-        players[0].gold, players[0].health, players[0].max_health
-    );
-    println!(
-        "Bo has {} gold and {}/{} health",
-        players[1].gold, players[1].health, players[1].max_health
-    );
-}
-```
-
-`players[0]` selects the first record, Ada; `players[1]` selects
-the second, Bo. Arrays count positions from zero. The dot then selects
-each record's gold field. The program prints:
-
-```text
-Ada has 75 gold and 80/100 health
-Bo has 15 gold and 50/80 health
-```
-
-The code is longer than the idea it expresses, but every part now has
-a reason: values represent gold, a branch guards the subtraction, a
-function names the rule, records keep related state together, and a
-loop applies the rule to several records.
+The same purchase rule visits each record. It changes gold, not health.
+[The Rust Primer](/pages/1/05/#grow-one-runner-into-the-full-two-runner-program)
+runs a separate stamina-based program with two runners and shows how Rust
+lends each record to a function in turn.
 
 ## Programming logic: sequence, selection, and repetition
 
@@ -376,36 +333,18 @@ example, is written `Vec<u32>`. `K` and `V` stand for a map's key and
 value types. A queue can be implemented with Rust's `VecDeque`, which
 lets us add at the back and take from the front.
 
-Here are three small examples. Each one answers a different question about
-the same game:
+The array we used has a fixed number of slots. A vector keeps numbered
+slots but can grow, which fits a history of gold samples:
 
 ```rust
-use std::collections::{HashMap, VecDeque};
-
 let mut recent_gold = vec![100, 75];
-recent_gold.push(65);                    // keep one more sample
-let second_sample = recent_gold[1];      // numbered position: 75
-
-let mut gold_by_name = HashMap::new();
-gold_by_name.insert("Ada", 75);
-if let Some(amount) = gold_by_name.get("Ada") {
-    println!("Ada has {amount} gold");   // key lookup: 75
-}
-
-let mut pending = VecDeque::new();
-pending.push_back("buy item");
-pending.push_back("heal");
-let next_action = pending.pop_front();   // arrival order: buy item
+recent_gold.push(65);
 ```
 
-`vec!` creates a growable vector; `push` adds another value. Index `[1]`
-selects its second item because indexes start at zero. The map's `insert`
-associates the key `"Ada"` with 75. `get` may find no such key, so
-`Some(amount)` means it found one; the matching `if let` runs only then.
-The queue's `pop_front` may also find nothing if the queue is empty. Here
-it returns the first action, leaving `"heal"` to be handled next. Rust
-wraps these possibly absent results in `Some` or `None`; [Lesson
-3.1](/pages/3/01/) explains that type fully.
+A hash map instead answers “what value belongs to this key?” A queue
+answers “what item arrived next?” [The Rust Primer](/pages/1/05/#try-the-growable-collections-in-rust)
+runs all three as small code examples, including what happens when a
+lookup or queue has no answer.
 
 A grid can be a vector of rows, so `tiles[row][column]` reaches a tile.
 A graph stores which waypoints connect; [Lesson 4.6](/pages/4/06/) uses
@@ -458,22 +397,11 @@ that duplication.
 
 ### Object-oriented: keep behavior with its data
 
-A `Player` record already keeps related data together. In Rust, an `impl`
-block can give that type a **method**, a function called through one
-player value:
-
-```rust
-impl Player {
-    fn buy(&mut self, cost: u32) {
-        self.gold = spend_if_possible(self.gold, cost);
-    }
-}
-```
-
-Here `self` is the player receiving the call; `&mut` lets the method
-change that player's gold. After creating a mutable Ada, `ada.buy(25)`
-uses the same rule as before. The method has a convenient home because it
-acts on player state. Rust methods do not require class inheritance;
+A `Player` record already keeps related data together. A method can put
+the purchase behavior beside that record, so `ada.buy(25)` reads as an
+action on Ada. [The Rust Primer](/pages/1/05/#put-behavior-next-to-a-struct-with-impl)
+shows the same organization with `impl Runner` and explains why a method
+receives editable access to its runner. Rust methods do not require class inheritance;
 [Lesson 3.3](/pages/3/03/) later examines how a compiled C++ game's
 classes and methods appear in memory.
 
@@ -543,10 +471,10 @@ concrete check when unfamiliar state or a recovered field might be wrong.
 [Lesson 13.1](/pages/13/01/)
 uses such rules in deeper game-state investigations.
 
-## Read unfamiliar code in a fixed order
+## Follow the data through unfamiliar code
 
 Return to `spend_if_possible` rather than trying to hold the whole page
-in your head. Ask five questions in order:
+in your head. One useful route is to ask five questions:
 
 1. **What enters?** Gold and cost, both `u32` values.
 2. **What can stop or change the path?** `gold >= cost` chooses the return.
@@ -555,29 +483,25 @@ in your head. Ask five questions in order:
 5. **Who stores that result?** The caller's assignment to `gold` or
    `player.gold`.
 
-That order works again for a new function or event handler: find the
-inputs and types, checks, state changes, and output. When a line still
-feels dense, break it into smaller expressions and repeat the questions.
+The same questions work for a new function or event handler: find the
+inputs and types, checks, state changes, and output. A dense line can be
+broken into smaller expressions to see which value each one produces.
 
-## Checkpoint
+## What the gold program shows
 
-Before moving on, try to explain:
+`mut` permits gold to change while cost stays fixed. The 10-gold case
+takes the failed branch of `gold >= cost`, so `spend_if_possible` returns
+unchanged gold. One loop applies that same function to Ada and Bo. The
+three-price trace combines ordered steps, a branch, and repetition.
 
-- why `gold` needs `mut` but `cost` does not;
-- what happens with 10 gold and a cost of 25, and which comparison
-  makes it happen;
-- what values enter `spend_if_possible` and what it returns;
-- why the loop changes Ada and Bo without two separate rules;
-- where sequence, selection, and repetition appear in the three-price example;
-- why a vector fits a growing history, a hash map fits a lookup by name,
-  and a queue fits pending actions;
-- why a displayed “Gold: 75” label may still be different data from
-  the `gold` field the purchase rule uses;
-- how procedural, object-oriented, functional, and event-driven styles
-  would organize the same purchase rule;
-- what rule `valid_health` checks and how to read an unfamiliar function.
+A vector keeps a growing history; a hash map answers a lookup by key;
+a queue keeps pending actions in arrival order. A visible “Gold: 75”
+label can be separate from the `gold` field the rule reads. Procedural,
+object-oriented, functional, and event-driven styles can organize the
+same rule in different places, while `valid_health` checks that player
+health stays within its allowed range.
 
-We have made a small, known program and can account for its state.
-[Hacking Fundamentals](/pages/1/05/) turns that understanding into a careful
-question about a running game: how could we find and test the value
-that actually controls a purchase?
+[The Rust Primer](/pages/1/05/) uses a different game action to make the
+Rust syntax executable. [Hacking Fundamentals](/pages/1/06/) then turns
+an observed purchase into a question about a running game: which value
+actually controls it?

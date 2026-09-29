@@ -147,9 +147,14 @@ The user identified `gh-pages` as the target edition. Recheck the plan's source-
 The full-book pass is implemented on `codex/book-revision`. Read
 `BOOK_REVISION_PROGRESS.md` for the branch, current reading order, relocation
 map, and validation. `BOOK_REVISION_AUDIT.md` records the disposition of all
-131 lessons. Lessons 1.3, 1.4, and 1.5 are Game, Programming, and Hacking
-Fundamentals. The complete memory model is Lesson 1.7, directly before the
-first memory experiment in 1.8. Keep the explanatory early code snippets,
+132 lessons. Lessons 1.3, 1.4, 1.5, and 1.6 are Game Fundamentals, Programming
+Fundamentals, the Rust Primer, and Hacking Fundamentals. The complete memory
+model is Lesson 1.8, directly before the first memory experiment in 1.9.
+Treat Ada and Bo as local example names, not cross-lesson prerequisites.
+The Rust Primer has its own Mira/Sol stamina scenario; later lessons must
+reintroduce literal sample names and values when needed. Do not turn the
+optional Lesson 1.1 study routine into a required ending for every lesson.
+Keep the explanatory early code snippets,
 detailed later labs, diagrams, and relocated material in the reading path.
 Review and merge the authored source into `rustgamehackingreimagined` after
 checks; keep that checkout's unrelated local edits intact. Do not publish

@@ -5,13 +5,15 @@
 Prepared 2026-09-28. The user subsequently authorized a full-book revision on
 a new branch. Read [BOOK_REVISION_PROGRESS.md](BOOK_REVISION_PROGRESS.md) for
 implemented lessons and checks and [BOOK_REVISION_AUDIT.md](BOOK_REVISION_AUDIT.md)
-for the disposition of all 131 lessons. Publication remains a separate step.
+for the disposition of all 132 current lessons (131 original lessons plus the
+new Rust Primer). Publication remains a separate step.
 
 The prerequisite findings below use the lesson numbers from the original
 source audit. During implementation, the user asked for the memory model to
-sit immediately before the first scan. The current Chapter 1 order maps old
-1.3→new 1.7, old 1.4→new 1.3, old 1.5→new 1.4, old 1.6→new 1.5, and old
-1.7→new 1.6. Lesson 1.8 keeps its number. Use the progress ledger and current
+sit immediately before the first scan, and for a substantial Rust Primer
+between programming and hacking. The current Chapter 1 order maps old
+1.3→new 1.8, old 1.4→new 1.3, old 1.5→new 1.4, old 1.6→new 1.6, old
+1.7→new 1.7, and old 1.8→new 1.9. The Rust Primer is new 1.5. Use the progress ledger and current
 page titles for the implemented order.
 
 ## 1. The user's actual request
@@ -141,7 +143,12 @@ Use this sequence naturally, without printing the same template on every page:
 Rules:
 
 - Explain what a thing is, what it does, and why the reader needs it before asking them to manipulate it.
-- Use a stable example within a lesson and across adjacent lessons. Change one relevant property at a time.
+- Keep one example stable within a lesson. A later lesson can use a fresh,
+  self-contained situation: recap the concept it needs, without requiring
+  readers to remember a previous character name, number, or sample program.
+- Do not impose the optional study routine from Lesson 1.1 on later lessons.
+  Keep concrete technical tests and lab checks, while allowing readers to
+  use their own way of making sense of a concept.
 - The first example is worked by the author. Independent prediction comes after the necessary explanation, not before it.
 - Name the inputs, intermediate change, and resulting output/state. For a code block, explain every new piece of notation needed to understand it.
 - Teach data before asking the reader to recognize its representation in Rust, assembly, a debugger, or a hex dump.

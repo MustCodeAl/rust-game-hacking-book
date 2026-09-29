@@ -90,10 +90,10 @@ the distinction in code.
 
 ## Ownership and borrowing
 
-Every value has one owner. Other code can borrow it. This first example also
-needs one small result type: `Option<usize>` means a found byte offset
-(`Some(offset)`) or no match (`None`). The next section works through the
-missing-value case in full.
+An owned Rust value can be lent for reading with `&T` or for editing with
+`&mut T`. The [Rust Primer](/pages/1/05/) introduced those forms and
+`Option` for a value that may be absent. Here a search returns
+`Option<usize>`: a found byte offset (`Some(offset)`) or no match (`None`).
 
 ```rust
 fn find_value(bytes: &[u8], needle: [u8; 4]) -> Option<usize> {
@@ -113,15 +113,10 @@ and how many elements are available. Indexing and `windows` use the length to
 avoid walking beyond the allocation. A raw pointer by itself carries no such
 length.
 
-<OwnershipScope
-  id="string-move"
-  example="move-string"
-/>
-
-The visualizer separates two ideas that are easy to mix up. The `String` value
-on the stack is small bookkeeping; the text it owns is elsewhere on the heap.
-A move transfers responsibility for that heap allocation. It does not copy the
-word `gold`, and it does not leave two independent owners behind.
+Assigning an owned `String` to a new owner makes the old name unusable;
+the [Primer's interactive view](/pages/1/05/#copy-a-number-move-an-owned-string)
+shows that transfer. The remote reader here borrows a slice instead of
+moving its whole byte buffer into every search function.
 
 Borrowing is different from moving. A borrow gives code temporary permission
 to use a value without taking responsibility for freeing it. Shared borrows
@@ -174,34 +169,15 @@ pointer cast would silently depend on layout, alignment, size, and host byte
 order. Low-level code is easier to review when every conversion states its
 assumption.
 
-### Show when a value may be missing
+### A missing value at a memory boundary
 
-The `Option<u32>` return type above means the function may return
-`Some(number)` or `None`. `Some` carries a value; `None` says
-there is no value. Here is the gold exercise that would have been too
-early on the book's first page:
-
-```rust
-fn spend_gold(gold: u32, cost: u32) -> Option<u32> {
-    gold.checked_sub(cost)
-}
-
-fn main() {
-    let remaining = spend_gold(100, 25);
-    let too_expensive = spend_gold(10, 25);
-    println!("{remaining:?}");
-    println!("{too_expensive:?}");
-}
-```
-
-`checked_sub` subtracts when the result fits in `u32`; it returns
-`None` when the cost exceeds the gold. The first call therefore
-prints `Some(75)`, and the second prints `None`. The `:?` in
-`println!` asks Rust to show the `Option` in its debug form.
-Now predict `spend_gold(100, 100)` before running it: the result
-fits, so it is `Some(0)`, not `None`. Rust's
-[`checked_sub` reference](https://doc.rust-lang.org/std/primitive.u32.html#method.checked_sub)
-specifies that behavior.
+`Some(0)` holds a valid zero; `None` means no value was produced. The
+same distinction protects a memory read. `read_u32` returns
+`Some(number)` only after it has obtained four bytes and decoded them;
+if the local buffer is too short, it returns `None` instead of reading
+past the end. The `?` operator in this `Option`-returning function means
+“return `None` now if this step has no value.” The next boundary needs
+an actual error reason, so it uses `Result`.
 
 ## Errors are part of the function
 
@@ -525,12 +501,12 @@ address.rs    checked address and pointer-chain logic
 
 The Windows calls may be `unsafe`. Finding a value in a byte slice, filtering candidates, parsing numbers, and printing results do not need to be.
 
-## Checkpoint
+## The boundary carried into the tool
 
-Before continuing, make sure you can explain:
-
-- why `u32` and `usize` are different;
-- what a borrowed slice is;
-- how `Option` differs from `Result`;
-- why a raw pointer needs a safety contract;
-- why we isolate `unsafe` instead of spreading it through the program.
+`u32` is always four bytes; `usize` follows the tool's pointer width. A
+borrowed slice lends access to bytes without transferring ownership.
+`Option` represents an absent value, while `Result` carries success or a
+failure reason. Raw pointers cannot prove their own validity, so every
+dereference needs a safety contract. The external reader in the next lesson
+keeps the necessary `unsafe` Windows calls at one boundary and hands ordinary
+owned, typed values to the rest of the program.
