@@ -15,10 +15,10 @@
 //! 12 + n    4    checksum, u32 little endian: the sum of every earlier byte
 //! ```
 //!
-//! The example save for `Ada`, level 3, with 250 gold is 19 bytes long:
+//! The example save for `Nia`, level 3, with 250 gold is 19 bytes long:
 //!
 //! ```text
-//! 47 53 41 56 01 00 FA 00 00 00 03 03 41 64 61 38 03 00 00
+//! 47 53 41 56 01 00 FA 00 00 00 03 03 4E 69 61 4A 03 00 00
 //! ```
 //!
 //! Everything here works on byte slices in memory, so the rules can be tested
@@ -61,8 +61,8 @@ const EXAMPLE_SAVE: [u8; 19] = [
     0xFA, 0x00, 0x00, 0x00, // gold 250
     0x03, // level 3
     0x03, // name length 3
-    0x41, 0x64, 0x61, // "Ada"
-    0x38, 0x03, 0x00, 0x00, // checksum 0x338 = 824
+    0x4E, 0x69, 0x61, // "Nia"
+    0x4A, 0x03, 0x00, 0x00, // checksum 0x34A = 842
 ];
 
 /// The decoded contents of one save.
@@ -382,49 +382,49 @@ fn main() -> Result<(), SaveError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EXAMPLE_SAVE, NAME_LENGTH_OFFSET, Save, SaveError, checksum, differing_offsets, encode,
-        hex_dump, parse, patch_gold, patch_gold_without_checksum,
+        checksum, differing_offsets, encode, hex_dump, parse, patch_gold,
+        patch_gold_without_checksum, Save, SaveError, EXAMPLE_SAVE, NAME_LENGTH_OFFSET,
     };
 
-    fn ada() -> Save {
+    fn nia() -> Save {
         Save {
             version: 1,
             gold: 250,
             level: 3,
-            name: String::from("Ada"),
+            name: String::from("Nia"),
         }
     }
 
     #[test]
     fn the_example_decodes_to_its_documented_fields() {
-        assert_eq!(parse(&EXAMPLE_SAVE), Ok(ada()));
+        assert_eq!(parse(&EXAMPLE_SAVE), Ok(nia()));
     }
 
     #[test]
-    fn the_example_checksum_is_the_byte_sum_824() {
-        // 305 (GSAV) + 1 (version) + 250 (gold) + 3 + 3 + 262 (Ada) = 824.
-        assert_eq!(checksum(&EXAMPLE_SAVE[..15]), 824);
-        assert_eq!(824, 0x338);
-        assert_eq!(EXAMPLE_SAVE[15..], [0x38, 0x03, 0x00, 0x00]);
+    fn the_example_checksum_is_the_byte_sum_842() {
+        // 305 (GSAV) + 1 (version) + 250 (gold) + 3 + 3 + 280 (Nia) = 842.
+        assert_eq!(checksum(&EXAMPLE_SAVE[..15]), 842);
+        assert_eq!(842, 0x34A);
+        assert_eq!(EXAMPLE_SAVE[15..], [0x4A, 0x03, 0x00, 0x00]);
     }
 
     #[test]
     fn encoding_the_fields_reproduces_the_example_bytes() {
-        assert_eq!(encode(&ada()).as_deref(), Ok(&EXAMPLE_SAVE[..]));
+        assert_eq!(encode(&nia()).as_deref(), Ok(&EXAMPLE_SAVE[..]));
     }
 
     #[test]
     fn patching_gold_to_1250_rewrites_gold_and_checksum() {
         let patched = patch_gold(&EXAMPLE_SAVE, 1250).expect("the example is valid");
-        // 1250 = 0x4E2, and 824 - 250 + (0xE2 + 0x04) = 804 = 0x324.
+        // 1250 = 0x4E2, and 842 - 250 + (0xE2 + 0x04) = 822 = 0x336.
         assert_eq!(
             patched,
             [
-                0x47, 0x53, 0x41, 0x56, 0x01, 0x00, 0xE2, 0x04, 0x00, 0x00, 0x03, 0x03, 0x41, 0x64,
-                0x61, 0x24, 0x03, 0x00, 0x00,
+                0x47, 0x53, 0x41, 0x56, 0x01, 0x00, 0xE2, 0x04, 0x00, 0x00, 0x03, 0x03, 0x4E, 0x69,
+                0x61, 0x36, 0x03, 0x00, 0x00,
             ]
         );
-        assert_eq!(checksum(&patched[..15]), 804);
+        assert_eq!(checksum(&patched[..15]), 822);
         assert_eq!(parse(&patched).map(|save| save.gold), Ok(1250));
     }
 
@@ -438,13 +438,13 @@ mod tests {
     fn gold_patched_without_the_checksum_is_rejected() {
         let broken =
             patch_gold_without_checksum(&EXAMPLE_SAVE, 9999).expect("the example is valid");
-        // 9999 = 0x270F, and 824 - 250 + (0x0F + 0x27) = 628.
+        // 9999 = 0x270F, and 842 - 250 + (0x0F + 0x27) = 646.
         assert_eq!(broken[6..10], [0x0F, 0x27, 0x00, 0x00]);
         assert_eq!(
             parse(&broken),
             Err(SaveError::ChecksumMismatch {
-                stored: 824,
-                computed: 628,
+                stored: 842,
+                computed: 646,
             })
         );
     }
@@ -456,8 +456,8 @@ mod tests {
         assert_eq!(
             parse(&edited),
             Err(SaveError::ChecksumMismatch {
-                stored: 824,
-                computed: 825,
+                stored: 842,
+                computed: 843,
             })
         );
     }
@@ -532,7 +532,7 @@ mod tests {
     fn a_longer_name_moves_the_checksum() {
         let grace = Save {
             name: String::from("Grace"),
-            ..ada()
+            ..nia()
         };
         let bytes = encode(&grace).expect("the name is short ASCII");
         // 12 + 5 = 17, so the checksum sits at 17..21 and the file is 21 bytes.
@@ -546,11 +546,11 @@ mod tests {
     fn names_that_do_not_fit_the_format_are_refused() {
         let accented = Save {
             name: String::from("Zoë"),
-            ..ada()
+            ..nia()
         };
         let too_long = Save {
             name: "A".repeat(256),
-            ..ada()
+            ..nia()
         };
         assert_eq!(encode(&accented), Err(SaveError::BadName));
         assert_eq!(encode(&too_long), Err(SaveError::BadName));
@@ -562,7 +562,7 @@ mod tests {
         let mut lines = dump.lines();
         assert_eq!(
             lines.next(),
-            Some("00000000  47 53 41 56 01 00 FA 00 00 00 03 03 41 64 61 38  GSAV........Ada8")
+            Some("00000000  47 53 41 56 01 00 FA 00 00 00 03 03 4E 69 61 4A  GSAV........NiaJ")
         );
         let second = lines.next().expect("19 bytes need two rows");
         assert!(second.starts_with("00000010  03 00 00 "));
