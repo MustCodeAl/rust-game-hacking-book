@@ -1,14 +1,19 @@
 ---
-title: "Design a Macro as a State Machine"
-description: "Turn a repetitive action into explicit states, guarded transitions, and a stop-safe worker."
+title: "Automation as a Feedback Loop"
+description: "Use a recruitment loop to see why feedback, named states, confirmation, and a safe stop make automation reliable."
 chapter: "4.4"
 minutes: 22
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 4
-  label: "4.4 Design a Macro as a State Machine"
+  label: "4.4 Automation as a Feedback Loop"
 ---
+In a Wyrmsun local match, a bot that presses Recruit whenever gold is high
+could queue several workers before the first purchase appears on screen. A
+useful macro needs to know whether it has requested an action, whether the
+game accepted it, and when to stop trying.
+
 ## A macro is not “press keys forever”
 
 A reliable macro knows what state it is in, which condition allows the next step, and when to stop.
@@ -82,6 +87,11 @@ same sequence should produce the same decisions without launching the game.
 
 ## Model states with an enum
 
+The bot needs a state for each distinct obligation. `Acting` remembers that a
+recruitment was requested, `Cooldown` stores how long to wait after a
+confirmed action, and `Recovering` carries a reason for a failed one. A
+single enum value means the bot occupies only one of these states at a time.
+
 ```rust
 #[derive(Debug)]
 enum MacroState {
@@ -97,6 +107,13 @@ enum MacroState {
 Impossible combinations disappear. We cannot accidentally be both `Acting` and `Cooldown`.
 
 ## Keep observations separate
+
+The game snapshot below is a copy of facts the bot has validated, not the
+bot's intention. `next_state` receives that copy, the current macro state,
+and a stop request. It chooses one next state without pressing a key or
+writing to the game. For example, `Ready` with at least 100 resources becomes
+`Acting`; it does not become `Cooldown` until a later snapshot confirms the
+action.
 
 ```rust
 #[derive(Debug)]
@@ -145,6 +162,11 @@ fn next_state(state: MacroState, game: &GameSnapshot, stop: bool) -> MacroState 
 This transition function is safe, deterministic, and easy to test without a game.
 
 ## Test the decision logic
+
+Feed the transition function a ready, active snapshot with enough resources,
+then set `stop` to `true`. The expected result is `Stopped`, because a user
+stop must outrank a possible recruit action. The test pins that priority
+without launching Wyrmsun.
 
 ```rust
 #[test]
@@ -224,7 +246,7 @@ Before unloading an in-process library, set the stop flag, wait for the worker t
 You can complete the state-machine and recorded-snapshot tests above before
 loading code into a game. The pinned Wyrmsun port below is a deeper
 application to revisit after [Lesson 8.3](/pages/8/03/) teaches verified
-detours and [Lesson 8.6](/pages/8/06/) teaches the input worker. Its concrete
+detours and [Lesson 8.5](/pages/8/06/) teaches the input worker. Its concrete
 addresses and hooks are retained here so the bot design can be compared with
 the original course's running implementation.
 

@@ -1,13 +1,13 @@
 ---
-title: "Build a Call Logger"
-description: "Combine scanning, instruction decoding, breakpoints, and bounded logging to observe real calls in the course games."
+title: "Call Tracing and Bounded Logs"
+description: "Connect scanning, decoding, breakpoints, and bounded logging to a trace of calls made by a running game."
 chapter: "7.8"
 minutes: 35
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 8
-  label: "7.8 Build a Call Logger"
+  label: "7.8 Call Tracing and Bounded Logs"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -151,6 +151,10 @@ The stepping map is keyed by thread ID because several game threads can hit diff
 
 ## Capture a compact event
 
+When the single-step pause reveals a call's destination, copy only the facts
+needed to answer “who called where, on which thread, and when?” The writer
+can format this small owned record after the target is running again:
+
 ```rust
 #[derive(Debug)]
 struct CallEvent {
@@ -167,6 +171,11 @@ Do not automatically dump the entire stack or arbitrary pointed-to memory. Recor
 The event is a snapshot of facts already available while the thread is paused. `call_site` and `target` explain control flow; `thread_id` separates timelines; `stack_pointer` helps compare call contexts without copying unknown stack contents.
 
 ## Use a bounded channel
+
+The debug loop and the log writer run at different speeds. A bounded channel
+holds at most 1,024 copied events; when it fills, the debugger can count a
+dropped event instead of leaving the game paused while disk output catches
+up:
 
 ```rust
 use std::sync::mpsc::{self, SyncSender};
@@ -201,6 +210,11 @@ wesnoth.exe + 0x1B4D00
 Address resolution is delayed because the debug-event loop has a deadline: every target thread remains stopped until `ContinueDebugEvent`. Expensive formatting, symbol lookup, and file I/O belong on a background worker after the minimal register facts have been copied.
 
 ## Log a versioned format
+
+The paused thread supplied the addresses; the background writer now records
+them with a target fingerprint and explicit column names. In this example,
+one row says that thread 4108 reached a call site at time 15,234
+microseconds and the call resolved to the listed target:
 
 ```text
 # gha-call-log v1

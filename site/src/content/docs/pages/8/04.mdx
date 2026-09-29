@@ -1,13 +1,13 @@
 ---
-title: "Hook Your Own Import Table"
-description: "Parse a PE32 import table, redirect one MessageBoxW call inside the lab process, and restore the original pointer automatically."
+title: "Import Table Hooks"
+description: "See how an imported function pointer can be redirected inside a controlled process and safely restored."
 chapter: "8.4"
 minutes: 28
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 4
-  label: "8.4 Hook Your Own Import Table"
+  label: "8.4 Import Table Hooks"
 ---
 ## What the Import Address Table does
 
@@ -172,6 +172,10 @@ flowchart LR
     B --> C["VirtualProtect(slot, 4, old)<br/>restore original protection"]
 ```
 
+The helper below receives a validated PE32 import slot and the replacement
+32-bit function pointer. It performs exactly those three operations and
+returns success only after the original page protection is restored:
+
 ```rust
 unsafe fn write_slot(slot: *mut u32, value: u32) -> anyhow::Result<()> {
     let mut old = PAGE_PROTECTION_FLAGS::default();
@@ -189,7 +193,9 @@ unsafe fn write_slot(slot: *mut u32, value: u32) -> anyhow::Result<()> {
 }
 ```
 
-The patch owns the original pointer:
+Changing one pointer is not the whole lifecycle. The owning guard below
+remembers the original destination and puts it back when the guard is
+dropped, so the third message box in this lab uses the normal import again:
 
 ```rust
 struct IatPatch {
@@ -212,7 +218,16 @@ impl Drop for IatPatch {
 
 This is RAII applied to reverse engineering: owning the modification also means owning the cleanup.
 
+If restoring page protection fails after the pointer write, the slot may
+already contain the replacement even though `write_slot` returns an error.
+A complete installer must retain enough state to retry or roll back that
+partial installation; the returned `Result` alone does not undo it.
+
 ## Run the complete three-message proof
+
+Run this from `windows-labs` in the Windows VM. The three message boxes let
+you observe the original import, the redirected call, and the restored call
+in that order.
 
 ```powershell
 cargo run --release --target i686-pc-windows-msvc --bin iat_hook_lab

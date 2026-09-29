@@ -1,6 +1,6 @@
 # Beginner-first lesson progression: execution plan for Claude
 
-**Status: full-book revision implemented on `codex/book-revision` and published to `gh-pages` through PR #2.**
+**Status: the first full-book revision was published to `gh-pages` through PR #2; a second structural pass on `codex/book-revision` strengthens its guide, reference, and tutorial roles.**
 
 Prepared 2026-09-28. The user subsequently authorized a full-book revision on
 a new branch. Read [BOOK_REVISION_PROGRESS.md](BOOK_REVISION_PROGRESS.md) for

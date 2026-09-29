@@ -1,13 +1,13 @@
 ---
-title: "Turn Experiments into One Reliable Tool"
-description: "Refactor separate prototypes into typed features with shared snapshots, clean toggles, and guaranteed restoration."
-chapter: "8.8"
+title: "Reliable Tool Architecture and Cleanup"
+description: "Bring typed features, shared snapshots, clean toggles, and guaranteed restoration together in one dependable local tool."
+chapter: "8.7"
 minutes: 25
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
-  order: 8
-  label: "8.8 Turn Experiments into One Reliable Tool"
+  order: 7
+  label: "8.7 Reliable Tool Architecture and Cleanup"
 ---
 ## Combining code exposes hidden problems
 
@@ -105,6 +105,11 @@ Copy once, then let every feature read from the copy.
 
 ## Give every feature a lifecycle
 
+A radar overlay needs a different per-frame action from a recoil patch, but
+both must answer the same lifecycle questions: when is it enabled, what does
+it do with this frame's snapshot, and how does it undo its own changes? The
+interface below makes those moments explicit for every feature:
+
 ```rust
 trait Feature {
     fn name(&self) -> &'static str;
@@ -117,6 +122,11 @@ trait Feature {
 Only patching or hooking features need work in `enable` and `disable`. Pure observer features may only implement `update`.
 
 ## Model configuration with enums
+
+Three booleans named `show_teammates`, `show_opponents`, and
+`show_everyone` could all become true after a sequence of clicks. Yet the
+overlay can display only one of those modes at a time. Store that choice as
+one enum value, alongside the independent radar and debug switches:
 
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -138,6 +148,11 @@ struct Settings {
 An enum prevents impossible combinations such as three different overlay booleans being true at the same time.
 
 ## Route input as commands
+
+A key press should request a change, not let the input thread reach into a
+feature while the update loop is using it. The input side can send a small
+command; the update loop then applies it to its own `Settings`. For example,
+`CycleOverlay` takes `Off` to `Teammates` and eventually back to `Off`:
 
 ```rust
 enum Command {
@@ -170,6 +185,11 @@ The input thread sends commands through a channel. The update loop owns and chan
 
 ## Contain feature failures
 
+If a frame lacks a valid projection matrix, the overlay may fail while the
+radar and debug reader can continue. Each feature's `update` therefore
+returns a result, and the owner disables just the failing feature after
+recording which one failed:
+
 ```rust
 for feature in &mut features {
     if let Err(error) = feature.update(&frame) {
@@ -196,6 +216,11 @@ flowchart TD
 Do not unload code while another thread may still execute it.
 
 ## Keep version facts outside feature logic
+
+An offset is a fact about one supported game build, not a universal property
+of the overlay feature. Put build identity and discovered locations together
+in a profile, so changing the supported build does not silently change
+feature logic:
 
 ```rust
 struct TargetProfile {

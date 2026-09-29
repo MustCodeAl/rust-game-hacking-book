@@ -1,14 +1,19 @@
 ---
-title: "Read Fog-of-War Data as a Grid"
-description: "Treat a map as indexed data, trace one tile’s visibility flag, and visualize it only in an offline lab."
+title: "Maps as Grids of Game State"
+description: "Understand a map as indexed game state, then trace and visualize one tile's visibility in an offline lab."
 chapter: "4.3"
 minutes: 16
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 3
-  label: "4.3 Read Fog-of-War Data as a Grid"
+  label: "4.3 Maps as Grids of Game State"
 ---
+A player record is one object. A map asks the same memory question thousands
+of times: which tile is this, and what does this player know about it? In a
+Wesnoth match, terrain and visibility may describe the same location but live
+in different layers of state. Coordinates give us a way to relate them.
+
 ## A map is usually a grid
 
 A rectangular map can be flattened into a one-dimensional array:
@@ -27,6 +32,10 @@ fn tile_index(x: usize, y: usize, width: usize, height: usize) -> Option<usize> 
     y.checked_mul(width)?.checked_add(x)
 }
 ```
+
+On a three-column, two-row map, tile `(2, 1)` becomes index `1 × 3 + 2 = 5`.
+Tile `(3, 1)` is outside the map and returns `None`. The checked multiplication
+also refuses dimensions so large that the index would overflow `usize`.
 
 Never trust coordinates from remote memory until they pass bounds checks.
 
@@ -78,6 +87,11 @@ Do not assume a value such as `0xFFFF_FFFF` means “visible.” It may mean `-1
 
 ## Model visibility as states
 
+Suppose repeated observations show `0` for hidden tiles, `1` for explored
+tiles, and `2` for visible tiles in this exact build. Decode those raw values
+into named states so later code cannot confuse visibility with terrain. Keep
+every other number as `Unknown` until it has been investigated.
+
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Visibility {
@@ -100,6 +114,12 @@ fn decode_visibility(raw: u32) -> Visibility {
 Keep `Unknown`. Silently treating a new value as visible would hide the fact that the byte has a state the model does not know about.
 
 ## Read a bounded layer
+
+Give the reader a verified layer base and map dimensions. It first checks
+`width × height`, caps the tile count, copies four bytes per tile from the
+game process, then decodes each copied `u32` with the mapping above. The
+result is an owned vector of visibility states, not a pointer into live game
+memory.
 
 ```rust
 fn read_visibility_layer(

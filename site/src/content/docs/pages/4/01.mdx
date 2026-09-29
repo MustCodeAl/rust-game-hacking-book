@@ -1,15 +1,25 @@
 ---
-title: "Build a Strategy-Game Observer"
-description: "Reuse one verified player layout to read several local-match players and print a clean typed snapshot."
+title: "From One Player to a Game-State Snapshot"
+description: "See how one verified player layout becomes a bounded, typed snapshot of every side in a local match."
 chapter: "4.1"
 minutes: 18
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 1
-  label: "4.1 Build a Strategy-Game Observer"
+  label: "4.1 From One Player to a Game-State Snapshot"
 ---
 import Quiz from '../../../../components/Quiz.astro';
+
+A gold scan gives us one value for one player. In a strategy match, that is
+rarely enough: several sides may have the same gold while their identities and
+income differ. An observer has to turn verified fields into a useful view of
+the whole match without pretending it owns the game's changing state.
+
+The chapter grows that observer into a model of game behavior. Snapshots and
+tile grids explain what the world contains; feedback, paths, and events
+explain how a tool reacts; a bounded recorder makes observations useful over
+time. Finally, an NPC shows how the game itself senses and chooses.
 
 ## What an observer does
 
@@ -45,6 +55,11 @@ them apart:
 inline records:  base + index × record_size
 pointer table:   read pointer at base + index × pointer_size
 ```
+
+For an illustrative inline table starting at `0x1000` with 32-byte records,
+player index 2 begins at `0x1040`: two strides of `0x20` bytes after the base.
+In a pointer table, that same calculation locates a pointer slot; reading the
+slot gives the record address. The two layouts require different read steps.
 
 The inline formula applies only once the debugger shows a consistent stride
 between real players.
@@ -189,6 +204,11 @@ count from turning one bad read into thousands of reads.
 `collect()` stops on the first error and returns it with no half-trusted table.
 
 ## Print a useful dashboard
+
+Once `read_players` has returned validated snapshots, display one line per
+side. The loop uses each snapshot's slot, gold, and signed income; `{:+}`
+shows whether income adds to or drains gold. A failed read ends with an error
+before the dashboard can present a partial set as complete.
 
 ```rust
 for player in read_players(&process, table, count, &layout)? {

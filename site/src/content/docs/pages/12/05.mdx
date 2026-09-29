@@ -1,14 +1,20 @@
 ---
-title: "Write a Lua Bot as a State Machine"
-description: "Make scripted automation predictable with named states, guarded transitions, one action at a time, timeouts, and a permanent stop path."
+title: "State Machines for Lua Automation"
+description: "Named states, guarded transitions, timeouts, and a stop path make a scripted game observer predictable."
 chapter: "12.5"
 minutes: 31
 author: "attilathedud"
 date: "2026-08-14"
 sidebar:
   order: 5
-  label: "12.5 Write a Lua Bot as a State Machine"
+  label: "12.5 State Machines for Lua Automation"
 ---
+Imagine a helper script that selects the next living unit in a local game. It
+can observe a snapshot, request one selection, and wait for confirmation. If it
+repeats the request as fast as the interpreter can run, it may never observe the
+result or respond to a stop signal. Named states give each step a place and a
+condition for moving on.
+
 ## Define the bot's states and transitions first
 
 This loop is short and dangerous to reason about:
@@ -47,6 +53,10 @@ Do not put every game fact into the state name. `WAITING_FOR_SELECTION` describe
 
 ## Represent states as strings carefully
 
+The five names below are control phases, not game facts. The `bot` record holds
+the current phase and the data needed while waiting: a chosen entity, the
+sequence number of the request, and a timeout counter.
+
 ```lua
 local State = {
     OBSERVE = "observe",
@@ -68,6 +78,12 @@ Lua has no built-in enum. A table of constants reduces spelling mistakes and giv
 
 ## One update performs bounded work
 
+Each host call supplies a current snapshot and runs at most one branch. This
+sketch uses the `State` table above, the host's `game.request`, and the
+`choose_nearest_living` helper defined below. The result is `false` only when
+the bot has stopped; otherwise the changed `bot` record says which phase comes
+next.
+
 ```lua
 local function update(bot, snapshot)
     if bot.state == State.OBSERVE then
@@ -75,16 +91,16 @@ local function update(bot, snapshot)
         bot.state = State.CHOOSE
 
     elseif bot.state == State.CHOOSE then
-        bot.selected = choose_nearest_living(snapshot.entities)
+        bot.selected = choose_nearest_living(bot.snapshot.entities)
         bot.state = bot.selected and State.REQUEST or State.STOP
 
     elseif bot.state == State.REQUEST then
         game.request({
             kind = "select_entity",
             id = bot.selected.id,
-            based_on = snapshot.sequence,
+            based_on = bot.snapshot.sequence,
         })
-        bot.request_sequence = snapshot.sequence
+        bot.request_sequence = bot.snapshot.sequence
         bot.wait_ticks = 20
         bot.state = State.WAIT
 
@@ -109,6 +125,12 @@ end
 
 The host calls `update` at a controlled rate. The script does not own an infinite loop and cannot flood actions between frames.
 
+`OBSERVE` stores one snapshot. `CHOOSE` reads that same version, and `REQUEST`
+tags its proposed action with the stored sequence number; the host checks the
+request against current game state before acting. Later `WAIT` calls use the
+latest snapshot to see whether selection was confirmed. Keeping those two
+snapshots distinct is why a stale choice cannot silently become authority.
+
 Bounded work makes scheduling visible. One call performs at most one transition and proposes at most one action. The host can measure it, stop between calls, and prevent a fast script loop from starving rendering or input processing.
 
 ```mermaid
@@ -119,10 +141,11 @@ sequenceDiagram
     Host->>Bot: call 1 (state = Observe)
     Bot->>Bot: store snapshot, state = Choose
     Host->>Bot: call 2 (state = Choose)
-    Bot->>Bot: choose_nearest_living()
+    Bot->>Bot: choose_nearest_living(), state = Request
+    Host->>Bot: call 3 (state = Request)
     Bot->>Game: game.request(select_entity)
     Bot->>Bot: wait_ticks = 20, state = Wait
-    Host->>Bot: call 3.. (state = Wait)
+    Host->>Bot: call 4.. (state = Wait)
     Bot->>Bot: not confirmed yet, wait_ticks -= 1
     Host->>Bot: call N (state = Wait)
     Bot->>Bot: snapshot.selected_id matches,<br/>state = Observe

@@ -156,6 +156,14 @@ reintroduce literal sample names and values when needed. Do not turn the
 optional Lesson 1.1 study routine into a required ending for every lesson.
 Keep the explanatory early code snippets,
 detailed later labs, diagrams, and relocated material in the reading path.
+The book serves three purposes: guide readers through a prerequisite path,
+teach each mechanism with an explained example, and let readers return to a
+concept by title or search. A code block needs enough nearby context to show
+its purpose, inputs, and observable result. Chapter 13 remains **Advanced Game
+Hacking**. Several later chapters now display lessons in a different order
+from their historical URL filenames; use each page's `chapter` and
+`sidebar.order` metadata for reading order, and keep the URL stable. The
+`docs.json` generator follows that metadata too.
 The user clarified that `gh-pages` is the final target. The revised authored
 source remains on `codex/book-revision`; its complete static build was merged
 into `gh-pages` through PR #2. PR #1 mistakenly merged the authored source into

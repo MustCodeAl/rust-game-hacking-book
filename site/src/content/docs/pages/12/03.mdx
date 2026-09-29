@@ -1,13 +1,13 @@
 ---
-title: "Embed Lua in the Host"
-description: "Create a Lua 5.4 interpreter with mlua, load only needed libraries, expose typed host functions, and report script errors with context."
+title: "The Host–Script Boundary"
+description: "An embedded Lua VM can act only through the host functions and libraries the game exposes; typed contracts and error context keep that boundary clear."
 chapter: "12.3"
 minutes: 35
 author: "attilathedud"
 date: "2026-08-14"
 sidebar:
   order: 3
-  label: "12.3 Embed Lua in the Host"
+  label: "12.3 The Host–Script Boundary"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -49,6 +49,10 @@ Lua plans with owned data; the host decides whether each plan is still valid at 
 
 ## Load only the libraries you need
 
+The Rust host creates the interpreter and selects three standard-library
+groups. `new_with` returns an error if setup fails; `?` passes that error to
+the caller before any script runs.
+
 ```rust
 use mlua::{Lua, LuaOptions, StdLib};
 
@@ -63,6 +67,10 @@ This lab needs table helpers, string formatting, and math. It does not load the 
 Removing libraries is not a complete hostile-code sandbox. It is still good capability hygiene: a script cannot call a function that does not exist in its environment.
 
 ## Expose one host function
+
+The script needs a way to report what it observed. This closure accepts one
+Lua string, prints it with a prefix in the host process, and returns success;
+registering it under `log` makes the name callable from Lua.
 
 ```rust
 let log = lua.create_function(|_, message: String| {
@@ -110,7 +118,9 @@ The stack passes through three states:
 
 ## Prefer a namespace table
 
-Avoid filling the global environment with dozens of unrelated functions:
+The single global `log` works for a first example, but a host with many
+functions needs an obvious boundary. Put those functions under one `game`
+table, so the next script call spells out who supplied the behavior:
 
 ```rust
 let game = lua.create_table()?;
@@ -173,6 +183,10 @@ game, and the key is only its place in the sequence.
 
 ## Load a named script with context
 
+`script_path` is the file the host chose to run. Rust reads its text, gives the
+Lua chunk that path as a name for errors, and executes it; failure at any step
+returns to the host through `?`.
+
 ```rust
 let source = std::fs::read_to_string(&script_path)?;
 lua.load(&source)
@@ -200,6 +214,11 @@ Do not let a script run during partial API construction. Do not hold a mutable g
 This is a two-phase boundary. During **planning**, Lua reads an immutable snapshot and returns proposed actions. During **commit**, the host checks that the target, snapshot version, entity IDs, and game rules are still valid before acting. A plan based on an old snapshot is rejected instead of being applied to a different moment.
 
 ## Run all three useful scripts
+
+The observer logs copied entity data. The nearest-entity script measures living
+candidates and proposes one selection; the state-machine script proposes a
+marker and then stops. Compare those proposals with the host's accepted-action
+output after each run.
 
 ```powershell
 cargo run --manifest-path lua-labs/Cargo.toml -- scripts/observer.lua

@@ -1,18 +1,24 @@
 ---
-title: "Diagnose Game Behavior with Telemetry"
-description: "Design bounded events that connect game inputs, decisions, and effects; compare traces; and turn a suspected control gap into a reproducible detection and repair test."
-chapter: "13.7"
+title: "Telemetry as Evidence of Game Behavior"
+description: "Bounded event traces connect inputs, decisions, and effects so a suspected control gap becomes a testable claim."
+chapter: "13.2"
 minutes: 47
 author: "attilathedud"
 date: "2026-08-31"
 sidebar:
-  order: 7
-  label: "13.7 Diagnose Game Behavior with Telemetry"
+  order: 2
+  label: "13.2 Telemetry as Evidence of Game Behavior"
 ---
-## Prerequisites
+An invariant names what a game must keep true. To know whether a control
+actually enforced it, we need evidence of the input, decision, and effect in
+the same run. A useful trace follows that path without recording more state
+than the question requires.
 
-You should understand structured events, monotonic clocks, thread IDs, state
-machines, bounded queues, and the difference between correlation and causation.
+Suppose the game rejects an action just before a health value changes. Those
+two events are close in time, but proximity does not prove the rejection caused
+the change. Structured events, a monotonic clock, thread IDs, and a bounded
+queue let us reconstruct the state-machine path without confusing correlation
+with causation.
 
 ## Telemetry should explain a decision path
 
@@ -114,6 +120,11 @@ flowchart LR
     K --> K3["EffectFinished { changed, generation }"]
     K --> K4["EventsDropped { count }"]
 ```
+
+The diagram becomes two Rust types below. `GameEvent` stores the fields common
+to every observation; `EventKind` carries the data specific to a snapshot,
+decision, effect, or dropped-event report. A consumer can order events by
+`sequence` and join one request's path by `correlation_id`.
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,5 +1,5 @@
 ---
-title: "Build an External Memory Tool"
+title: "How External Tools Read Game Memory"
 description: "Open the target, read a verified address, and write through a small checked process-memory wrapper."
 chapter: "3.2"
 minutes: 24
@@ -7,7 +7,7 @@ author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 2
-  label: "3.2 Build an External Memory Tool"
+  label: "3.2 How External Tools Read Game Memory"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
@@ -36,7 +36,7 @@ Windows maps virtual addresses separately for each process. Reading a local
 pointer with the same number would inspect the tool's own memory. A process
 **handle** names the target and carries the rights granted for this opening;
 the Windows read uses that handle with the target address and a byte count.
-Lesson 10.4 later examines handles in more depth.
+Lesson 10.5 later examines handles in more depth.
 
 For this lab, the program discovers `wesnoth.exe` with the Windows ToolHelp API,
 opens it, resolves the verified pointer chain, and performs the guarded write.
@@ -92,7 +92,7 @@ flowchart LR
     B -->|"+ 0x4"| C["player one's gold"]
 ```
 
-This is the practical result from lesson 2.9. Confirm it in Cheat Engine before running the tool: add a pointer manually, use `0x017EED18` as the base, then add offsets `0xA90` and `0x4`. Start three fresh local matches and verify that it resolves to the gold shown in the game each time.
+This is the practical result from Lesson 2.7. Confirm it in Cheat Engine before running the tool: add a pointer manually, use `0x017EED18` as the base, then add offsets `0xA90` and `0x4`. Start three fresh local matches and verify that it resolves to the gold shown in the game each time.
 
 :::tip
 These constants belong to **Wesnoth 1.14.9, 32-bit Windows**. They are intentionally concrete so you can reproduce the hack. On any other build these addresses can point somewhere else, so stop before reading or writing.
@@ -246,6 +246,13 @@ The public method returns a normal `u32`. Raw pointers never escape the wrapper.
 
 ## Read the verified gold
 
+The wrapper now returns ordinary values, so the caller can follow the
+previously verified pointer path without touching raw pointers. In this
+example, `wesnoth_gold_address` resolves the current run's gold field;
+`read_u32` copies its four bytes into the tool. A successful run prints the
+address and the current gold value. A missing process, invalid path, or failed
+read returns an error through `?` instead of printing a made-up result.
+
 ```rust
 use anyhow::{Context, Result};
 
@@ -273,6 +280,13 @@ flowchart TD
     E -->|"no"| F["return false"]
     E -->|"yes"| G["return true"]
 ```
+
+The method below turns the diagram into a checked write. Given an address,
+the value we expect there, and a replacement, it returns `Ok(false)` without
+writing if the value has changed. A matching value permits one four-byte
+write, and the result is `true` only when Windows reports all four bytes
+written. Another game thread can still race this check, so the caller must
+treat the result as evidence for this attempt, not a permanent guarantee.
 
 ```rust
 use windows::Win32::System::Diagnostics::Debug::WriteProcessMemory;

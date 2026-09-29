@@ -112,7 +112,28 @@ contents follows the new order.
   that limitation accurately. The lab source itself was not redesigned in
   this editorial pass.
 
-## Handoff
+## Structural and reference pass
+
+The 2026-09-29 structural pass treats the book as a **guide, reference, and
+tutorial**. Chapter openings state the path, concept-led titles and summaries
+make lessons findable later, and worked snippets explain their inputs,
+operation, and result. Chapter 13 keeps the title **Advanced Game Hacking**.
+The complete source remains 132 lessons in 14 chapters, with the same 272
+Mermaid diagrams, 100 image links, 212 MemoryStrips, 41 quizzes, and 2,228
+fence lines as before this pass. The final build produced 138 pages and the
+generated HTML check found no missing pages or fragments among 27,228 local
+links (excluding the generated 404 page's self-link).
+
+Lessons in Chapters 2, 8, 9, 10, 13, and 14 now display in a clearer
+prerequisite order. Their existing `/pages/<chapter>/<file>/` URLs remain
+stable; the displayed lesson number and `sidebar.order` live in MDX
+frontmatter and can differ from the filename. The quiz keys, contents page,
+sidebar, print edition, and `docs.json` navigation use the displayed order.
+New work must use that metadata rather than sorting page filenames. The
+Chapter 14 overview/deep-dive pairs now sit together; console architecture
+precedes the later hardware-debugging section, which it previews locally.
+
+## Publication workflow
 
 The revised site is published on `gh-pages`; the editable lesson source remains
 on `codex/book-revision`. For a later content update, use the

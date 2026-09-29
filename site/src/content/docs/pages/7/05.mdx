@@ -1,13 +1,13 @@
 ---
-title: "Build a Small Memory Scanner"
-description: "Enumerate readable regions, scan copied bytes, filter candidates, and write only after an exact guarded check."
+title: "Memory Regions and Value Scanning"
+description: "Understand region permissions, copied snapshots, candidate filtering, and guarded writes in a value scanner."
 chapter: "7.5"
 minutes: 35
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 5
-  label: "7.5 Build a Small Memory Scanner"
+  label: "7.5 Memory Regions and Value Scanning"
 ---
 import ConceptLab from '../../../../components/ConceptLab.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -98,6 +98,11 @@ doubles.
 
 ## Describe readable regions
 
+`VirtualQueryEx` describes ranges of a target process, but the scanner needs
+only a few facts from each Windows structure. This local record holds the
+range and the permission decisions without pretending that its bytes are
+already available to read:
+
 ```rust
 #[derive(Clone, Copy, Debug)]
 struct MemoryRegion {
@@ -125,6 +130,12 @@ current = next;
 The progress check prevents an infinite loop if Windows or a wrapper ever reports a zero-sized region. `checked_add` treats address overflow as an error instead of wrapping from the top of the address space back to zero.
 
 ## Scan copied chunks
+
+Suppose the visible gold value is 1,000. The number becomes four little-endian
+bytes, `E8 03 00 00`, and the scan compares that byte pattern with each
+four-byte window in a copied chunk. Its `base` argument is the target address
+where that copied chunk began, so a match at local offset 12 becomes target
+address `base + 12`:
 
 ```rust
 fn find_u32_in_chunk(base: usize, bytes: &[u8], wanted: u32) -> Vec<usize> {
@@ -158,6 +169,11 @@ The complete program reads 1 MiB chunks. Adjacent chunks overlap by three bytes 
 />
 
 ## Keep candidate values
+
+After the first pass, the important fact is no longer only *where* a value
+was found. The next pass must compare a new read with the previous read at
+that same address. Store both together, then make the possible comparisons
+named choices:
 
 ```rust
 #[derive(Clone, Copy, Debug)]
@@ -273,6 +289,11 @@ Limits are correctness rules:
 Without these limits, perfectly memory-safe code can still make an unusable program.
 
 ## Guard writes
+
+Finding one candidate is still an observation, not permission to replace it.
+The game may have changed the value since the last scan. This final write
+checks the exact address and previous value immediately before changing four
+bytes; a mismatch returns an error and leaves memory alone:
 
 ```rust
 fn write_candidate(

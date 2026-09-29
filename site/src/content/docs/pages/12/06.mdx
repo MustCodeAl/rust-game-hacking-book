@@ -1,14 +1,19 @@
 ---
-title: "Limit, Test, and Debug Lua Scripts"
-description: "Put memory and instruction budgets around scripts, preserve useful tracebacks, test bad inputs, and disable failing automation cleanly."
+title: "Script Budgets, Errors, and Recovery"
+description: "Memory and instruction limits, tracebacks, and failure handling keep useful scripts from overrunning their host."
 chapter: "12.6"
 minutes: 30
 author: "attilathedud"
 date: "2026-08-14"
 sidebar:
   order: 6
-  label: "12.6 Limit, Test, and Debug Lua Scripts"
+  label: "12.6 Script Budgets, Errors, and Recovery"
 ---
+Suppose that helper script encounters a missing unit halfway through a turn.
+The game still needs to draw the next frame and let the player regain control.
+The script host therefore needs a clear error report, a bound on work, and a
+safe way to disable the failing script.
+
 ## A script can fail without being malicious
 
 Common mistakes include:
@@ -73,7 +78,8 @@ report the exact budget. Do not quietly continue with half-produced output.
 
 ## Limit memory
 
-The lab host applies a four-megabyte Lua allocation limit:
+The lab host applies a four-mebibyte Lua allocation limit. The multiplication
+converts four mebibytes to bytes before the host sets the limit:
 
 ```rust
 let lua = mlua::Lua::new_with(
@@ -90,7 +96,11 @@ The limit covers Lua-managed allocations, not every resource a host callback mig
 
 ## Limit instructions
 
-`mlua` can call a host hook after a chosen number of VM instructions:
+`mlua` can call a host hook after a chosen number of VM instructions. The hook
+may run while Lua is executing, so its counter has to be shared safely with
+the Rust closure: `Arc` shares ownership of the counter, and `Mutex` protects
+one update to it at a time. The clone shares the same counter; it does not
+reset the budget.
 
 ```rust
 use std::sync::{Arc, Mutex};

@@ -1,16 +1,21 @@
 ---
-title: "Build a Stable Snapshot and Guarded Action Pipeline"
-description: "Turn live Wesnoth reads into a stable typed snapshot, keep observation separate from action, and verify every guarded write."
+title: "Why Snapshots Need Guarded Actions"
+description: "Learn why live reads go stale and how snapshots, separate observation, and verified writes protect a game-state tool."
 chapter: "4.2"
 minutes: 26
 author: "attilathedud"
 date: "2026-08-06"
 sidebar:
   order: 2
-  label: "4.2 Build a Stable Snapshot and Guarded Action Pipeline"
+  label: "4.2 Why Snapshots Need Guarded Actions"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
+
+The observer in the previous lesson copied player state for display. A tool
+that changes state faces a harder problem: gold can change after the read but
+before the write. If income arrives in that gap, a blind write may overwrite
+it. We need a pipeline that treats every observation as temporary evidence.
 
 ## One long function hides where it can fail
 
@@ -125,6 +130,10 @@ flowchart TD
     F -->|"no"| G["report failure"]
     F -->|"yes"| H["success"]
 ```
+
+In the code below, `observed` is the snapshot the caller approved. A fresh
+snapshot must match it before any write; afterward, a read-back must equal
+`replacement`. Each added line enforces one arrow in the diagram.
 
 ```diff
  fn replace_gold(

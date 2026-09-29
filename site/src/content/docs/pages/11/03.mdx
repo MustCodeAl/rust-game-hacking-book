@@ -1,13 +1,13 @@
 ---
-title: "Resolve Optional Windows APIs Safely"
-description: "Inspect a DLL export at runtime, prove its ABI, and provide a documented fallback when a Windows version does not expose it."
+title: "Dynamic Windows API Resolution"
+description: "Runtime export lookup turns an optional Windows API into a checked capability with an explicit ABI and fallback."
 chapter: "11.3"
 minutes: 29
 author: "attilathedud"
 date: "2026-08-14"
 sidebar:
   order: 3
-  label: "11.3 Resolve Optional Windows APIs Safely"
+  label: "11.3 Dynamic Windows API Resolution"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -68,6 +68,12 @@ On x86-64, Windows passes the first four integer or pointer arguments in registe
 That is why a “close enough” signature fails in ways that have nothing to do with pointer size. Declare three parameters instead of four, and a 32-bit caller pushes 12 bytes while the function still removes 16 with `ret 0x10`, leaving the stack pointer 4 bytes away from where the caller expects it. On x86-64 the function reads a fourth argument from `R9` anyway, whatever that register happens to hold, and writes the result length through it as if it were a pointer.
 
 ## Resolve from an already loaded system module
+
+The resolver starts with `kernel32.dll` in the current process. It looks up
+`QueryFullProcessImageNameW` by its exported name, returns `None` if that name
+is absent, and otherwise converts the address to the ABI-checked function type
+established above. The caller can then choose the fallback rather than calling
+an unknown address.
 
 ```rust
 use windows::{

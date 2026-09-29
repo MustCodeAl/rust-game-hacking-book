@@ -1,5 +1,5 @@
 ---
-title: "Reconstruct a DLL Function Contract"
+title: "What a DLL Function Promises Its Caller"
 description: "Infer an exported function's parameters, calling convention, result, and ownership rules before wrapping it in a small typed API."
 chapter: "3.8"
 minutes: 28
@@ -7,8 +7,12 @@ author: "attilathedud"
 date: "2026-08-14"
 sidebar:
   order: 8
-  label: "3.8 Reconstruct a DLL Function Contract"
+  label: "3.8 What a DLL Function Promises Its Caller"
 ---
+The text call in the previous lesson depended on a valid string pointer that
+stayed alive long enough. A DLL function has the same kind of hidden agreement
+with its caller, even when its export name is visible.
+
 ## A function name is not a contract
 
 A DLL export table may reveal a name such as `gha_start`, `GetPlayer`, or `FormatMessage`. That name only tells you that other code can locate the function. It does not fully explain:
@@ -48,6 +52,10 @@ flowchart LR
     C -->|"yes"| D["success path"]
     C -->|"no"| E["start_failed"]
 ```
+
+These instructions are the machine-level version of that path. Read them in
+order: clear `ecx`, call the export through its import slot, test the returned
+`eax`, and branch on a nonzero result.
 
 ```nasm
 xor ecx, ecx
@@ -97,6 +105,11 @@ flowchart LR
     C --> D["typed GhaStart<br/>function pointer"]
     D --> E["the rest of the program<br/>calls it safely"]
 ```
+
+The resolver below takes the loaded module handle, asks for the exact
+`gha_start` export, and converts the returned address to one typed function
+pointer. A missing export must return an error; a found address is still safe
+to call only if the contract inferred above is correct for this DLL build.
 
 ```rust
 use core::ffi::c_void;
@@ -201,3 +214,7 @@ The source in `windows-labs/src/windows_impl/dll.rs` then shows the real contrac
 - Keep loading, resolving, converting, calling, and unloading as visible stages.
 
 This same method works for undocumented game plug-ins, supported mod SDKs, and old middleware. The goal is not merely to make one call succeed. The goal is to explain the interface well enough that a small wrapper can enforce it.
+
+Every recovered contract also depends on the exact meaning of its primitive
+values. The final lesson of this chapter looks below the names `u32`, `f32`,
+and pointer to show how their bits support the layouts we have used.

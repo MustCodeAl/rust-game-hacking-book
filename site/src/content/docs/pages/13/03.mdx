@@ -1,18 +1,18 @@
 ---
-title: "Model Anti-Debug Behavior as a State Machine"
-description: "Replace a vague list of debugger signals with an observable state machine, explicit decisions, false-positive tests, and game invariants that do not depend on one environmental clue."
-chapter: "13.3"
+title: "Anti-Debug Signals and Responses"
+description: "Anti-debug behavior is a sequence of signals, interpretations, and responses; explicit states expose false positives and weak assumptions."
+chapter: "13.4"
 minutes: 45
 author: "attilathedud"
 date: "2026-08-31"
 sidebar:
-  order: 3
-  label: "13.3 Model Anti-Debug Behavior as a State Machine"
+  order: 4
+  label: "13.4 Anti-Debug Signals and Responses"
 ---
-## Prerequisites
-
-You should understand debugger events, timers, threads, state machines, and the
-difference between a game rule and evidence about the environment.
+A pause at a breakpoint may change a timer reading without changing any game
+rule. A debugger event is likewise evidence about the environment, not a
+verdict about the player's actions. We will use threads, timers, and a small
+state machine to keep the signal, decision, and response separate.
 
 ## Treat the behavior as a protocol
 
@@ -51,6 +51,11 @@ The target invariant is:
 > state validity is enforced independently at the state-changing boundary.
 
 ## Separate signal, interpretation, and response
+
+These two Rust enums make the distinction visible in the type system. A
+`Signal` stores one observation; an `Assessment` names what the detector can
+reasonably conclude from it. Neither type grants permission to change game
+state.
 
 ```rust
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -184,6 +189,11 @@ report the threshold and sample count. A threshold without its distribution is
 not a reproducible result.
 
 ## Make the toy detector observable
+
+Given a measured delay and the recorded 99th-percentile limit from a clean
+run, this function returns `Ordinary` at or below that limit and
+`NeedsAnotherSample` above it. The event record keeps the input and reason so
+a later test can reconstruct the decision.
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq)]

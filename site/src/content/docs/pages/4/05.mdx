@@ -1,14 +1,20 @@
 ---
-title: "Build a Coordinate-Based Test Bot"
-description: "Find player, target, and cursor coordinates, then keep movement logic separate from raw memory reads."
+title: "From Coordinates to Target Selection"
+description: "Trace player and enemy positions in offline Flare, then choose actions from validated coordinates rather than fixed timings."
 chapter: "4.5"
 minutes: 21
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 5
-  label: "4.5 Build a Coordinate-Based Test Bot"
+  label: "4.5 From Coordinates to Target Selection"
 ---
+The Wyrmsun macro reacts to an action with a clear result: a unit was
+recruited or it was not. In Flare, an enemy keeps moving. A fixed instruction
+such as “hold right for one second” can be correct at the start and wrong a
+moment later. Position becomes an observation the bot must refresh before
+choosing its next action.
+
 ## Begin with coordinates you can control
 
 Use Flare 1.12 in an offline test area. Stand at an easy location, move only left and right, and scan for a changing floating-point value.
@@ -34,6 +40,11 @@ Once the player position is known, inspect nearby fields and the code that reads
 Do not assume every object shares the same layout. Confirm offsets separately.
 
 ## Copy memory into snapshots
+
+Copy each confirmed position into a small `Vec2` value, then group the player,
+enemies, and cursor in one `WorldSnapshot`. This is the input to decision
+logic: the bot works from local values captured together and does not keep a
+remote pointer alive while it chooses what to do.
 
 ```rust
 #[derive(Clone, Copy, Debug)]
@@ -89,6 +100,11 @@ Range checks prove only that a coordinate is plausible, not that it belongs to t
 
 ## Choose a target
 
+Given a player at `(0, 0)` and enemies at `(3, 4)` and `(1, 0)`, the nearest
+valid target is `(1, 0)`. The function below first discards implausible
+coordinates, then compares distance for the survivors. An empty or entirely
+invalid enemy list returns `None` rather than inventing a target.
+
 ```rust
 fn nearest_enemy(player: Vec2, enemies: &[Vec2]) -> Option<Vec2> {
     enemies.iter()
@@ -104,6 +120,11 @@ fn nearest_enemy(player: Vec2, enemies: &[Vec2]) -> Option<Vec2> {
 This decision code has no raw memory access and can be unit-tested with made-up coordinates.
 
 ## Separate decision from action
+
+`decide` turns a snapshot into an intent, never an input event. An invalid
+player position means `Stop`; no valid enemy means `Wait`; otherwise the
+nearest enemy becomes `MoveTo(position)`. The platform-specific action layer
+can later decide how to carry out that intent.
 
 ```rust
 #[derive(Debug)]

@@ -1,13 +1,13 @@
 ---
 title: "How Device Drivers Work"
-description: "Follow a request from ReadFile or DeviceIoControl through the I/O manager and an I/O request packet to a driver and its hardware, see how a driver uses registers, interrupts, and DMA, trace a key press from a USB keyboard to a game, and see why Windows demands signed drivers."
-chapter: "14.2"
+description: "Drivers translate operating-system requests into hardware work through I/O packets, registers, interrupts, and DMA, including the path from key press to game input."
+chapter: "14.3"
 minutes: 18
 author: "attilathedud"
 date: "2026-09-24"
 sidebar:
-  order: 2
-  label: "14.2 How Device Drivers Work"
+  order: 3
+  label: "14.3 How Device Drivers Work"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -23,7 +23,7 @@ This lesson follows one request from a program down to a device and back,
 looks at how a driver talks to hardware through registers and interrupts,
 traces a key press from a USB keyboard to a game, and ends with why Windows is
 strict about which drivers it will load. Everything here stays conceptual.
-[Lesson 14.8](/pages/14/08/) comes back later to decode the same requests and
+The next lesson decodes the same requests and
 registers bit by bit, and its lab runs a pretend device and driver as an
 ordinary user-mode program.
 
@@ -72,7 +72,7 @@ names the operation, carries the parameters and buffers, travels down the
 driver stack, and comes back up carrying the result.
 
 Here is a read from this lesson's toy keypad, a simple imaginary device that
-the lab in Lesson 14.8 simulates, made before any key has been pressed:
+the lab in Lesson 14.4 simulates, made before any key has been pressed:
 
 ```mermaid
 sequenceDiagram
@@ -105,7 +105,7 @@ request from a handle without them before the driver ever runs. The IRP also
 records that the request came from user mode, so the driver must treat every
 parameter as untrusted: it compares the whole control code with the ones it
 defines, and it never writes more bytes than the request says the caller's
-buffer can hold. [Lesson 14.8](/pages/14/08/#a-control-code-is-four-fields-in-one-number)
+buffer can hold. [Lesson 14.4](/pages/14/08/#a-control-code-is-four-fields-in-one-number)
 unpacks a control code into its four fields.
 
 ## Registers: how a driver talks to hardware
@@ -147,7 +147,7 @@ because the device changes it. So register accesses are never cached, merged,
 or skipped: the kernel maps device memory as uncacheable, and drivers use
 dedicated read-register and write-register routines that the compiler must
 carry out exactly as written.
-[Lesson 14.8](/pages/14/08/#the-toy-keypads-registers-bit-by-bit) places the
+[Lesson 14.4](/pages/14/08/#the-toy-keypads-registers-bit-by-bit) places the
 four registers at a physical address and decodes every bit in them.
 
 ## Interrupts: how a device gets the driver's attention
@@ -172,7 +172,7 @@ A driver's interrupt handling comes in two halves:
 For a press and release of A, the DPC collects two events, *A pressed* and *A
 released*, and completes the parked read with those 2 bytes. The I/O manager
 copies them into the program's buffer and wakes its thread, and `ReadFile`
-returns. [Lesson 14.8](/pages/14/08/#the-isr-and-the-dpc-register-by-register)
+returns. [Lesson 14.4](/pages/14/08/#the-isr-and-the-dpc-register-by-register)
 follows both halves register by register.
 
 ## DMA: letting the device copy the data itself
@@ -235,7 +235,7 @@ keyboard drivers have used since PS/2 keyboards, and the keyboard class driver,
 The **raw input thread**, inside `win32k`, the kernel part of the Windows window
 manager, reads those events. It translates the scan code into a **virtual-key
 code** using the active keyboard layout, updates the key-state table that
-`GetAsyncKeyState` reads ([Lesson 8.6](/pages/8/06/)), and posts the event to
+`GetAsyncKeyState` reads ([Lesson 8.5](/pages/8/06/)), and posts the event to
 the message queue of the thread that owns the foreground window. On a US
 layout, scan code `0x1E` becomes `VK_A`, `0x41`, which is also the ASCII code
 for the letter A: 4 × 16 + 1 = 65. For security, Windows opens keyboards
@@ -244,7 +244,7 @@ straight from the keyboard's driver.
 
 The game's message loop then takes the event out with `GetMessage` or
 `PeekMessage`, as a `WM_KEYDOWN` message, or as `WM_INPUT` if the game
-registered for Raw Input. [Lesson 14.8](/pages/14/08/#a-key-press-in-bytes)
+registered for Raw Input. [Lesson 14.4](/pages/14/08/#a-key-press-in-bytes)
 reads the report and the message bit by bit. Synthetic input from `SendInput`
 joins this path at the raw input thread, above every driver in the diagram,
 which is why programs watching input at that level can tell it apart from key
@@ -256,7 +256,7 @@ Loading a driver puts new code into ring 0, where, as Lesson 14.1 showed,
 nothing sits beneath it to catch its mistakes and nothing can overrule it. So
 Windows checks where a driver came from before loading it. 64-bit Windows
 refuses kernel-mode code without a valid digital signature, the kind of
-signature [Lesson 9.7](/pages/9/07/) checked on game files. Since Windows 10
+signature [Lesson 9.8](/pages/9/07/) checked on game files. Since Windows 10
 version 1607, on a PC with Secure Boot on, a new driver must be signed by
 Microsoft itself, through its hardware developer program, which requires the
 publisher to prove its identity with an extended-validation certificate.
@@ -272,7 +272,7 @@ look for exactly those drivers, old and legitimately signed, and load one to
 borrow its bug. Microsoft's answer is the **vulnerable driver blocklist**: a
 list of signed drivers known to be exploitable, which Windows refuses to load.
 Since the Windows 11 2022 update the blocklist is on by default, and it is
-always enforced when memory integrity is on. [Lesson 14.3](/pages/14/03/)
+always enforced when memory integrity is on. [Lesson 14.5](/pages/14/03/)
 explains memory integrity, which uses the hypervisor to stop even kernel code
 from creating new executable code. [Lesson 11.5](/pages/11/05/) showed how to
 list the drivers loaded on your own machine and why each new one deserves a

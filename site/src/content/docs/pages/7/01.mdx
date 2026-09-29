@@ -1,13 +1,13 @@
 ---
-title: "Read a Windows EXE Like a Map"
-description: "Parse PE headers and sections with bounded reads so addresses, imports, and executable code stop looking like mystery numbers."
+title: "What a Windows Executable Contains"
+description: "Use the PE header and section map to understand where a Windows executable keeps code, data, imports, and addresses."
 chapter: "7.1"
 minutes: 24
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 1
-  label: "7.1 Read a Windows EXE Like a Map"
+  label: "7.1 What a Windows Executable Contains"
 ---
 import ConceptLab from '../../../../components/ConceptLab.astro';
 import Quiz from '../../../../components/Quiz.astro';
@@ -15,6 +15,12 @@ import Quiz from '../../../../components/Quiz.astro';
 ## Why an EXE needs a map
 
 A Windows `.exe` is not one solid blob of CPU instructions. It is a **Portable Executable**, usually shortened to **PE**. Its headers tell Windows where the code, read-only data, writable data, imports, resources, and relocation information live.
+
+First we will learn the file's map and use it to translate positions on disk
+into live addresses. Then we will ask two different runtime questions: where
+are candidate bytes or values, and which instructions actually execute?
+Scanners, a disassembler, a debugger, and ETW each answer a different part.
+Knowing the map keeps their addresses anchored to a real build.
 
 The same section occupies a place in the file and a place in memory, and those two places are numbered differently. A position in the file is a **file offset**. A position in the loaded image is an **RVA**, a relative virtual address, meaning a distance from wherever Windows put the module. Use two layouts connected by the section table:
 
@@ -49,6 +55,12 @@ header should stop the parse before its numbers are trusted.
 
 ## The path through the headers
 
+The diagram above is a parser's route, not six unrelated names. Each
+structure either confirms that this is a PE image or tells us where the next
+structure begins. Read this indentation as a chain of dependencies: we
+cannot trust a section row until the headers that locate its table have
+passed their checks.
+
 ```text
 DOS header (starts with MZ)
 └─ e_lfanew points to the PE signature
@@ -57,7 +69,10 @@ DOS header (starts with MZ)
          └─ section table describes .text, .data, .rdata, and friends
 ```
 
-The “optional” header is not optional for an executable image. That old name survives because object files can omit it.
+The “optional” header is not optional for an executable image. That old name
+survives because object files can omit it. The parser's useful result is a
+bounded section table; the next lesson uses its rows to translate an RVA
+into the corresponding file bytes.
 
 ## Read numbers without pointer casts
 

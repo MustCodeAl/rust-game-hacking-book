@@ -1,13 +1,13 @@
 ---
 title: "Hardware Debugging with JTAG"
-description: "See how a four-wire port built to test solder joints became the deepest debugger a chip has: boundary scan, scan chains, the TAP controller, halting a processor from outside, SWD, and why shipped devices lock the port."
-chapter: "14.4"
+description: "JTAG began as a board-test port and became a hardware debugging path through scan chains, the TAP controller, and SWD."
+chapter: "14.8"
 minutes: 18
 author: "attilathedud"
 date: "2026-09-24"
 sidebar:
-  order: 4
-  label: "14.4 Hardware Debugging with JTAG"
+  order: 8
+  label: "14.8 Hardware Debugging with JTAG"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
@@ -16,11 +16,14 @@ Every debugger in this book so far has been a program asking other software for
 permission. The debugger of [Lesson 7.7](/pages/7/07/) asks Windows to pause a
 thread, and Windows agrees because the debugger holds the right access.
 [Lesson 14.1](/pages/14/01/) showed the processor enforcing a boundary between
-user mode and the kernel, and [Lesson 14.3](/pages/14/03/) put a hypervisor
+user mode and the kernel, and [Lesson 14.5](/pages/14/03/) put a hypervisor
 underneath the kernel. This lesson goes below all of them, to a debugger that
 asks no software at all, because it is wired into the chip.
 
-It began as something far more modest: a way to find bad solder joints.
+A console's boot and signing rules can restrict software tools. A physical
+debug port crosses a different boundary, which is why shipped devices usually
+lock it too. To see how the port gained such reach, start with its original
+job: finding bad solder joints.
 
 ## Why circuit boards needed a test port
 
@@ -60,7 +63,7 @@ one-bit cells in which, on every clock tick, each cell takes its neighbour's
 value, so a new bit enters at one end and the bit at the far end falls out. The
 captured levels can therefore leave one at a time through a single wire while a
 new pattern arrives through another. This row is the chip's **boundary-scan
-register**, and [Lesson 14.10](/pages/14/10/#shift-registers-many-bits-through-one-wire)
+register**, and [Lesson 14.9](/pages/14/10/#shift-registers-many-bits-through-one-wire)
 shifts a four-pin chip's register one clock at a time.
 
 Chips on the same board are linked the same way, the output wire of one chip
@@ -137,11 +140,11 @@ The standard defines 16 states in all. The path above exists twice: once for a
 **instruction register**, described next. The remaining states choose between
 the two copies, leave the shifting, and let the debugger pause partway through a
 scan and resume without starting over.
-[Lesson 14.10](/pages/14/10/#the-tap-controller-all-16-states) draws all 16
+[Lesson 14.9](/pages/14/10/#the-tap-controller-all-16-states) draws all 16
 states and follows them one clock at a time.
 
 One more property makes the controller impossible to lose: from any state, five
-clocks with TMS at 1 reach Test-Logic-Reset, as Lesson 14.10 checks state by
+clocks with TMS at 1 reach Test-Logic-Reset, as Lesson 14.9 checks state by
 state. A debugger unsure where the controller is sends five 1s on TMS and starts
 again from a known place.
 
@@ -165,7 +168,7 @@ Those two small registers let a debugger explore a board it knows nothing
 about. Right after reset, one data scan reads the ID of every chip that has one.
 And with every chip in BYPASS, each chip adds exactly one bit to the chain, so
 timing a single 1 from TDI to TDO counts the chips.
-[Lesson 14.10](/pages/14/10/#worked-example-count-the-chips-on-a-chain) does
+[Lesson 14.9](/pages/14/10/#worked-example-count-the-chips-on-a-chain) does
 both on a two-chip board.
 
 ## From a test port to a debugger
@@ -211,7 +214,7 @@ performs bus reads and writes for the debugger. So halting the core takes one
 memory write: a value with its halt bit set, written into a debug control
 register, stops the core before its next instruction, and reading RAM afterwards
 takes one memory read.
-[Lesson 14.10](/pages/14/10/#halting-a-cortex-m-core-with-one-write) builds
+[Lesson 14.9](/pages/14/10/#halting-a-cortex-m-core-with-one-write) builds
 that value bit by bit and follows the write to the core.
 
 ## SWD: the same debugger on two wires
@@ -237,7 +240,7 @@ Many chips offer both protocols on shared pins, with SWDIO on the TMS pin and
 SWCLK on the TCK pin, and a special bit sequence switches the port from one to
 the other. Behind either protocol sits the same debug port, so halting,
 stepping, and memory access work the same way.
-[Lesson 14.10](/pages/14/10/#inside-an-swd-request) builds the first request a
+[Lesson 14.9](/pages/14/10/#inside-an-swd-request) builds the first request a
 debugger usually sends, bit by bit.
 
 ## Why shipped devices lock the port
@@ -247,7 +250,7 @@ care what software the chip runs. A debugger that can halt the core and read
 memory can read whatever that memory holds, such as encryption keys, a game
 console's decrypted code, or a phone owner's data. It can also write memory,
 so it can change code that secure boot
-([Lesson 14.5](/pages/14/05/#secure-boot-a-chain-of-trust)) checked a moment
+([Lesson 14.7](/pages/14/05/#secure-boot-a-chain-of-trust)) checked a moment
 earlier. The protections of Chapters 10 and 11 — privilege levels, memory
 protection, the kernel boundary — are all enforced by the processor that the
 debugger has just stopped.
@@ -285,7 +288,7 @@ sequenceDiagram
 ```
 
 Each part closes a specific gap. The **nonce**, a number used once
-([Lesson 9.8](/pages/9/08/)), makes old answers useless, because a recorded
+([Lesson 9.9](/pages/9/08/)), makes old answers useless, because a recorded
 signature covers a different number. The chip ID makes each answer good for one
 unit, so a signature leaked from a repair bench unlocks nothing else. The
 private key never leaves the maker, so knowing exactly how the protocol works,
@@ -314,5 +317,5 @@ document it, because their owners are the developers.
   explanation="Memory protection is enforced by the running processor as it executes code. A halted core executes nothing, and the debug unit performs its own bus reads. That is why production devices lock the port in hardware, with fuses and authentication, instead of relying on software running on the chip."
 />
 
-The JTAG lab is in [Lesson 14.10](/pages/14/10/#simulate-a-tap-controller): a
+The JTAG lab is in [Lesson 14.9](/pages/14/10/#simulate-a-tap-controller): a
 simulated two-chip scan chain that you drive one clock at a time.

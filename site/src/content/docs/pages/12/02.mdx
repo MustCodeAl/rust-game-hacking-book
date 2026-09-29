@@ -1,13 +1,13 @@
 ---
-title: "Use Tables, Functions, and Metatables"
-description: "Read Lua's one-based sequences, record-style tables, closures, colon methods, and metatable lookups without pretending they are fixed records."
+title: "Lua Tables, Functions, and Metatables"
+description: "Lua's flexible tables and first-class functions express records, sequences, callbacks, methods, and lookup behavior."
 chapter: "12.2"
 minutes: 30
 author: "attilathedud"
 date: "2026-08-14"
 sidebar:
   order: 2
-  label: "12.2 Use Tables, Functions, and Metatables"
+  label: "12.2 Lua Tables, Functions, and Metatables"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -109,6 +109,12 @@ Do not rely on a meaningful order from `pairs`: it follows the hash part's slot 
 
 ## Functions are values
 
+Suppose a script must rank targets without choosing one yet. The two input
+tables below are positions. The function subtracts their coordinates and
+returns squared distance, which preserves the nearest-to-farthest order without
+calculating a square root. Assigning the function to `scoring_rule` copies a
+callable value, so the rule can later be passed to other code.
+
 ```lua
 local function squared_distance(a, b)
     local dx = b.x - a.x
@@ -120,9 +126,16 @@ local scoring_rule = squared_distance
 print(scoring_rule({ x = 0, y = 0 }, { x = 3, y = 4 })) -- 25
 ```
 
-A function can be stored in a table, passed to another function, and returned. This is why a game can register callbacks such as `on_turn_started`.
+The points `(0, 0)` and `(3, 4)` differ by 3 and 4; `3² + 4²` is 25, the printed
+result. A function can also be stored in a table, passed to another function,
+and returned. This is why a game can register callbacks such as
+`on_turn_started`.
 
 ## Closures remember surrounding values
+
+An action may need a cooldown that survives between calls without becoming a
+global variable. `make_cooldown` takes the wait length and returns a function
+that remembers its own `remaining` counter:
 
 ```lua
 local function make_cooldown(required_ticks)
@@ -173,6 +186,10 @@ disturb it.
 
 ## The colon supplies `self`
 
+Lua uses `:` to pass the table on the left as an extra first argument. The
+first call below passes `bot` explicitly, while the second passes `Bot` because
+that is the table before the colon. Watch which table receives `state = "plan"`.
+
 ```lua
 local Bot = {}
 
@@ -188,6 +205,11 @@ Bot:set_state("plan")      -- colon form: Bot becomes self
 Colon syntax is convenient, but the last line above changes the `Bot` table itself, not `bot`. To share methods through a prototype, Lua code commonly uses a metatable.
 
 ## Metatables change fallback behavior
+
+The previous `Bot` table had a method, but a separate `bot` record did not
+inherit it. Here `Bot:new` attaches `Bot` as the new record's metatable. The
+`__index` rule then lets `scout:set_state` find the method on `Bot`, leaving
+`scout.state` as `"plan"`.
 
 ```lua
 local Bot = {}

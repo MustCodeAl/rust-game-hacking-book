@@ -1,19 +1,19 @@
 ---
-title: "Encryption, Hashes, and Key Lifecycles"
-description: "Separate encoding, hashing, MACs, symmetric and public-key encryption, and authenticated encryption, see why a random key cannot be guessed, then protect a toy save payload with current RustCrypto APIs."
-chapter: "9.8"
+title: "Encryption and Key Lifecycles"
+description: "Compare encoding, hashing, MACs, and encryption, then follow the keys and metadata needed to protect a save."
+chapter: "9.9"
 minutes: 46
 author: "attilathedud"
 date: "2026-08-14"
 sidebar:
-  order: 8
-  label: "9.8 Encryption, Hashes, and Key Lifecycles"
+  order: 9
+  label: "9.9 Encryption and Key Lifecycles"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 ## Five tools with different jobs
 
-Lesson 9.7 used a hash to compare exact files and a signature to check a publisher's approval. Suppose instead that a save contains private data and the owner wants to keep its contents unreadable on disk. That calls for encryption and a plan for the key. The related words are easy to mix up, so first give each tool one job.
+Lesson 9.8 used a hash to compare exact files and a signature to check a publisher's approval. Suppose instead that a save contains private data and the owner wants to keep its contents unreadable on disk. That calls for encryption and a plan for the key. The related words are easy to mix up, so first give each tool one job.
 
 These words are often mixed together. Their jobs are not interchangeable:
 
@@ -35,7 +35,7 @@ efficient for large payloads, but it leaves a problem: the key has
 to reach the other side without anyone copying it on the way.
 
 **Public-key** cryptography uses a public/private key pair, as
-[Lesson 9.7](/pages/9/07/#how-a-signature-is-made-and-checked) showed for
+[Lesson 9.8](/pages/9/07/#how-a-signature-is-made-and-checked) showed for
 signatures. In a public-key *encryption* scheme, anyone with your public key
 can protect a small message for you, while your private key is needed to open
 it. Picture giving out open padlocks and keeping their key. That picture does
@@ -109,6 +109,12 @@ flowchart LR
 The associated data is not encrypted; it is included in the authentication calculation.
 
 ## Complete sealing code
+
+Here the inputs are a 32-byte key, the save bytes, and context such as save
+slot and format version. `seal` generates a fresh nonce, encrypts and
+authenticates the save plus its context, then stores the nonce before the
+ciphertext so the opener can use the same nonce later. The key stays outside
+the returned envelope:
 
 ```rust
 use chacha20poly1305::{
@@ -240,6 +246,9 @@ without recovery can detect damage while leaving the player unable to continue.
 
 ## Run and test the lab
 
+From the repository root, the first command runs the small encryption demo;
+the second checks that valid data opens and changed data is rejected.
+
 ```powershell
 cargo run --manifest-path advanced-memory-labs/Cargo.toml --bin crypto_demo
 cargo test --manifest-path advanced-memory-labs/Cargo.toml crypto
@@ -275,3 +284,10 @@ different promise because producing a valid tag requires the secret key.
 - ❌ Do not hardcode real save/profile keys in source code.
 - ❌ Do not reuse a nonce with the same key.
 - ❌ Do not log keys or decrypted secrets.
+
+The file lessons have now taken a saved value from readable text to binary
+fields, mod assets, archives, integrity checks, and encrypted payloads. Each
+format has its own rules, but the shared habit is to identify the bytes, parse
+them within bounds, verify the expected form, and keep a way back. Chapter 10
+returns to live memory and asks Windows which process, modules, and regions
+the tool is actually observing.

@@ -1,5 +1,5 @@
 ---
-title: "Find and Handle Game Text"
+title: "How Text Becomes Bytes in a Game"
 description: "Trace visible text to bytes, understand encodings and terminators, and build checked strings at FFI boundaries."
 chapter: "3.7"
 minutes: 16
@@ -7,7 +7,7 @@ author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 7
-  label: "3.7 Find and Handle Game Text"
+  label: "3.7 How Text Becomes Bytes in a Game"
 ---
 ## Text is bytes plus an agreement
 
@@ -96,6 +96,11 @@ fn decode_utf16le(bytes: &[u8]) -> Result<String, &'static str> {
 }
 ```
 
+For copied bytes `41 00 00 00`, the caller first finds the two-byte zero
+terminator and passes the preceding `41 00` slice. The function rebuilds
+`0x0041` as one UTF-16 unit and returns `Ok("A")`. Passing an odd number of
+bytes returns an error instead of silently dropping the last byte.
+
 ## Use `CString` for C boundaries
 
 Many C-style functions expect a zero byte at the end:
@@ -179,4 +184,6 @@ not end the string. A C-style terminator marks the end of the encoded
 sequence, and `CString` owns a terminated buffer while rejecting interior
 zeros. The pointer passed to a print function is useful only while that
 buffer remains alive, so tracing a text call means checking both its bytes
-and its lifetime.
+and its lifetime. That is one part of a larger function contract: the caller
+and callee must also agree on argument positions, return values, and ownership.
+The next lesson reconstructs those promises from a DLL's machine code.

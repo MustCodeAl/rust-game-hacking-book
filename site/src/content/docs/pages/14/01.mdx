@@ -1,6 +1,6 @@
 ---
 title: "What an Operating System Kernel Does"
-description: "See how the processor separates user mode from kernel mode, how a system call carries ReadProcessMemory into the Windows kernel and back, what the kernel does with its authority, why its bugs stop the whole machine, and why some anti-cheat runs there."
+description: "The processor separates user and kernel authority. System calls, scheduling, memory, interrupts, and drivers show what the kernel does for a running game."
 chapter: "14.1"
 minutes: 18
 author: "attilathedud"
@@ -23,8 +23,13 @@ programs away from the kernel's powers? How does a program ask the kernel for
 something anyway? What does the kernel do with its authority? And why can one
 kernel bug stop the whole computer, when a bug in a game only ends the game?
 A four-byte `ReadProcessMemory` request will carry these questions through the
-user/kernel boundary. [Lesson 14.7](/pages/14/07/) later reads the exact bits
+user/kernel boundary. The next lesson reads the exact bits
 the processor checks and follows the request one layer at a time.
+
+From there, each layer gets both a working model and a closer look at its
+mechanism: drivers turn requests into device work, hypervisors contain whole
+guest machines, console designs restrict what boots, hardware debug ports
+reach the chip, and emulators recreate that hardware in software.
 
 ## Two modes, enforced by the processor
 
@@ -48,9 +53,9 @@ processors define four levels, numbered 0 to 3 and usually drawn as nested
 - **user mode**, ring 3, for everything else: games, browsers, debuggers, and
   every tool in this book.
 
-[Lesson 10.7](/pages/10/07/) introduced the two modes as permission levels. The
+[Lesson 10.8](/pages/10/07/) introduced the two modes as permission levels. The
 processor records the current level in two bits of one of its registers, which
-[Lesson 14.7](/pages/14/07/#the-current-level-is-two-bits-of-a-register) reads
+[Lesson 14.2](/pages/14/07/#the-current-level-is-two-bits-of-a-register) reads
 in a debugger. What matters here is what the processor refuses to do while the
 level is 3.
 
@@ -77,7 +82,7 @@ blocks the game. With [KVA shadow](https://www.microsoft.com/en-us/msrc/blog/201
 the user-mode page table omits most kernel mappings and keeps only the pages
 needed to enter the kernel; entry code switches to the fuller kernel page
 table. In either arrangement, a game cannot read or write the kernel's
-privileged pages. [Lesson 14.7](/pages/14/07/#one-bit-marks-a-page-as-the-kernels)
+privileged pages. [Lesson 14.2](/pages/14/07/#one-bit-marks-a-page-as-the-kernels)
 compares the flag bits of a user page and a kernel page.
 
 Put the two checks together and user-mode code is boxed in. It cannot run the
@@ -106,7 +111,7 @@ before doing anything with it.
 
 ## Follow one call into the kernel and back
 
-Take a read like the ones in [Lesson 10.3](/pages/10/03/): a handle to the game
+Take a read like the ones in [Lesson 10.4](/pages/10/03/): a handle to the game
 opened with only query and read rights, and a request for 4 bytes at address
 `0x0050_1000`. Here is the whole round trip:
 
@@ -131,7 +136,7 @@ sequenceDiagram
 ```
 
 Your tool's call passes through `kernel32.dll` and `kernelbase.dll`, the layers
-that [Lesson 10.7](/pages/10/07/) followed down the stack, to
+that [Lesson 10.8](/pages/10/07/) followed down the stack, to
 `NtReadVirtualMemory` in `ntdll.dll`. That function is only a few instructions
 long: it puts a **service number**, which tells the kernel which of its
 routines to run, into the `eax` register, and executes `syscall`.
@@ -151,7 +156,7 @@ code in `eax`, here `STATUS_SUCCESS`, which is 0, and executes `sysret`, the
 reverse of `syscall`, which drops the level back to 3 and resumes your thread
 after its `syscall`. On a failure, `kernelbase.dll` turns the status into the
 error number that `GetLastError` reports, such as 5 for access denied.
-[Lesson 14.7](/pages/14/07/#the-same-call-one-layer-at-a-time) follows each
+[Lesson 14.2](/pages/14/07/#the-same-call-one-layer-at-a-time) follows each
 step with the values involved, including the arithmetic of the rights check.
 
 ## The kernel runs only when a door opens
@@ -190,7 +195,7 @@ fault, and vector 14 is the page fault. Devices are given vectors from 32 up.
 ### It schedules threads
 
 A computer has a handful of processor cores and, at any moment, hundreds or
-thousands of threads ([Lesson 10.6](/pages/10/06/) described ready, running,
+thousands of threads ([Lesson 10.7](/pages/10/06/) described ready, running,
 and waiting threads). The kernel's **scheduler** decides which ready thread
 runs on each core. It keeps the right to decide through a timer interrupt. By
 default, Windows sets a timer to interrupt 64 times a second, once every
@@ -212,7 +217,7 @@ time the game touches one of the new pages, the processor finds no valid entry
 and raises a page fault. The kernel picks a free physical page, fills it with
 zeros so that no other process's old data can leak into it, writes the entry,
 and runs the faulting instruction again. The game never sees the fault.
-[Lesson 10.5](/pages/10/05/) looked at the result from outside, and
+[Lesson 10.6](/pages/10/05/) looked at the result from outside, and
 [Lesson 11.6](/pages/11/06/) walked the tables themselves.
 
 ### It handles interrupts
@@ -223,13 +228,13 @@ finishes its current instruction, saves where it was, enters ring 0 if it was
 not there already, and runs the handler for that vector. The interrupted code,
 kernel or user, resumes afterward as if nothing had happened. Handlers must be
 short, because other work on that core waits while they run;
-[Lesson 14.2](/pages/14/02/) shows how drivers split the work.
+[Lesson 14.3](/pages/14/02/) shows how drivers split the work.
 
 ### It owns devices through drivers
 
 No user program touches a device's hardware. Each device is owned by a
 **driver**, kernel code that knows that one device's registers and rules, and
-the kernel routes every request for the device through it. Lesson 14.2 follows
+the kernel routes every request for the device through it. Lesson 14.3 follows
 one request all the way down to the hardware.
 
 ### It enforces security checks
@@ -237,8 +242,8 @@ one request all the way down to the hardware.
 Every check in this lesson, the handle's rights and the address ranges alike,
 runs in ring 0, because a check performed in user mode could be skipped by the
 very program it restricts. The kernel also enforces the access tokens and
-integrity levels from Lesson 10.3, the page protections from Lesson 10.5, and
-the signing rules that decide which drivers may load at all (Lesson 14.2).
+integrity levels from Lesson 10.4, the page protections from Lesson 10.6, and
+the signing rules that decide which drivers may load at all (Lesson 14.3).
 
 ## Why a kernel bug takes the whole machine down
 
@@ -251,7 +256,7 @@ The kernel is the safety net under every user-mode program.
 
 There is no separate part of Windows that can repair arbitrary damage to its
 own kernel state. A hypervisor may isolate a whole guest from the host, as
-Lesson 14.3 will show, but it cannot resume a guest kernel whose internal
+Lesson 14.5 will show, but it cannot resume a guest kernel whose internal
 records are already corrupted. Kernel code does catch faults it expects, such
 as touching a user buffer that another thread may have freed; the copy behind
 `ReadProcessMemory` is written to catch exactly those. But a driver that follows
@@ -277,13 +282,13 @@ flowchart TD
 That deliberate stop is a **bug check**, better known as the blue screen.
 Windows shows a stop code, such as `0x50` PAGE_FAULT_IN_NONPAGED_AREA or `0xD1`
 DRIVER_IRQL_NOT_LESS_OR_EQUAL, writes a crash dump of the whole machine if it
-can ([Lesson 10.8](/pages/10/08/) captured a dump of one process), and
+can ([Lesson 10.9](/pages/10/08/) captured a dump of one process), and
 restarts.
 
 This is why the book keeps its experiments in user mode
 ([Lesson 11.5](/pages/11/05/)) and inside a virtual machine. A crash in a
 user-mode lab ends one process, and even a bug check inside a virtual machine
-stops only that virtual machine ([Lesson 14.3](/pages/14/03/)).
+stops only that virtual machine ([Lesson 14.5](/pages/14/03/)).
 
 ## Why some anti-cheat runs a kernel component
 

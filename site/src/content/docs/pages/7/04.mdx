@@ -1,13 +1,13 @@
 ---
-title: "Build a Pattern Scanner"
-description: "Find version-tolerant byte signatures with wildcards, bounded scans, and tests that reject ambiguous matches."
+title: "Byte Signatures and Pattern Scanning"
+description: "See how byte patterns locate candidate instructions across known builds, and why wildcards and semantic checks matter."
 chapter: "7.4"
 minutes: 35
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 4
-  label: "7.4 Build a Pattern Scanner"
+  label: "7.4 Byte Signatures and Pattern Scanning"
 ---
 import Quiz from '../../../../components/Quiz.astro';
 
@@ -102,6 +102,13 @@ flowchart TD
 
 ## Represent exact and wildcard bytes
 
+A written signature such as `29 47 04 E8 ?? ?? ?? ??` contains two different
+kinds of instruction: compare this byte exactly, or accept any byte at this
+position. Represent that choice in the type rather than reserving a magic
+value like zero. The matcher below receives copied code bytes, a starting
+offset, and that typed pattern; it returns `false` when the whole pattern
+would run past the buffer.
+
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PatternByte {
@@ -164,6 +171,11 @@ The function borrows both slices. It does not copy the module again and does not
 
 ## Scan safely
 
+One safe comparison is not a scan yet. The next function tries every start
+position where the full pattern could fit, collecting offsets in the *local*
+buffer. If the buffer has three bytes and the pattern has two, both starts
+0 and 1 must be considered; start 1 is easy to miss with an exclusive range.
+
 ```rust
 fn find_all(bytes: &[u8], pattern: &[PatternByte]) -> Vec<usize> {
     // ⚠️ An empty pattern would otherwise appear to match between every byte,
@@ -186,6 +198,10 @@ For `n` input bytes and an `m`-byte pattern, this simple algorithm does at most 
 The early return handles two important edge cases. An empty pattern would otherwise “match” at every offset, and subtracting a longer pattern length from the input length would underflow.
 
 ## Parse a friendly pattern
+
+The scanner's type is precise, but writing `PatternByte::Exact` eight times
+for every trial is awkward. A small parser turns the familiar spaced hex form
+into that type. A mistyped token becomes an error before any memory is scanned:
 
 ```rust
 fn parse_pattern(text: &str) -> anyhow::Result<Vec<PatternByte>> {
@@ -220,6 +236,11 @@ Libraries such as `goblin` can parse PE files, but live in-memory images still n
 This separation matters. `ReadProcessMemory` works at the Windows boundary and can fail because a page changed. Once the bytes are in a local `Vec<u8>`, the matching loop uses only checked slices: no remote pointers, no changing protections, and no partial Windows reads during comparisons.
 
 ## Require one match
+
+The scan returns a list because one pattern can occur more than once. Before
+turning an offset into a candidate instruction address, make the three
+possible counts explicit. Returning the first entry would disguise an
+ambiguous signature as a successful find.
 
 ```rust
 fn unique_match(matches: &[usize]) -> anyhow::Result<usize> {
@@ -256,6 +277,10 @@ After a match:
 ![Comparing a signature across versions](/assets/images/7/2/pattern6.png)
 
 ## Test edge cases
+
+A two-byte pattern at the end of a three-byte buffer exercises the range
+boundary that ordinary middle-of-buffer examples miss. The expected offset
+is 1, so this test catches an accidental exclusive upper bound:
 
 ```rust
 #[test]

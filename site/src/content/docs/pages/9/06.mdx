@@ -1,13 +1,13 @@
 ---
-title: "Build a Reversible Mod Manifest"
-description: "Record every installed file, original hash, replacement hash, and restore action so a game mod can be audited and removed cleanly."
-chapter: "9.6"
+title: "Reversible Mods and Manifests"
+description: "Use a manifest to record installed files, hashes, and restore actions so a mod can be checked and removed."
+chapter: "9.7"
 minutes: 24
 author: "attilathedud"
 date: "2026-08-14"
 sidebar:
-  order: 6
-  label: "9.6 Build a Reversible Mod Manifest"
+  order: 7
+  label: "9.7 Reversible Mods and Manifests"
 ---
 ## “Copy these files” is not an uninstall plan
 
@@ -41,6 +41,11 @@ the recovery code whether an original file still needs restoring.
 
 ## Model operations before touching disk
 
+Installing a new file and replacing an existing one need different undo
+actions. A new file can later be removed; a replaced file needs its backup
+restored. Record that distinction, the expected hashes, and the stage each
+operation has reached before writing anything:
+
 ```rust
 #[derive(Clone, Debug)]
 enum PlannedChange {
@@ -68,6 +73,11 @@ enum ChangeStatus {
 The distinction between `Create` and `Replace` prevents an uninstaller from deleting a file that existed before the mod.
 
 ## Verify before replacement
+
+An install plan may be correct when created and stale five minutes later
+after a game update. Compare the file's current hash with the hash recorded
+when the plan was made. If they differ, this replacement must stop instead
+of overwriting someone else's change:
 
 ```rust
 fn may_replace(current: [u8; 32], expected: [u8; 32]) -> anyhow::Result<()> {

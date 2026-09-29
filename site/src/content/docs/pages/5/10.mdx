@@ -1,13 +1,13 @@
 ---
-title: "Reach a Direct3D Method Through Its Vtable"
-description: "Work out why a Direct3D method has no export to hook, derive a vtable index instead of memorizing one, and install and remove a swap-chain hook in a program you wrote yourself."
+title: "Direct3D Interfaces and Vtables"
+description: "Understand how COM vtables expose Direct3D methods, why export lookup differs from OpenGL, and how a reversible swap-chain hook works."
 chapter: "5.10"
 minutes: 34
 author: "attilathedud"
 date: "2026-09-03"
 sidebar:
   order: 10
-  label: "5.10 Reach a Direct3D Method Through Its Vtable"
+  label: "5.10 Direct3D Interfaces and Vtables"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -18,23 +18,24 @@ instruction inside it. OpenGL is a C API: `opengl32.dll` exports that
 function, so `GetProcAddress` can hand you its entry address. Lesson 8.4
 later teaches a separate import-table technique for named functions.
 
-Open `d3d11.dll` in the export inspector from Lesson 7.3 and look for
-`Present`. It is not there. Neither is `DrawIndexed`, `Draw`, or any other
-method you might want to watch. The exports are a short list — mostly
-`D3D11CreateDevice` and friends — and none of them is the function that runs
-once per frame.
+An **export** is a function a DLL makes findable by name. Ask
+`GetProcAddress` for `Present` in `d3d11.dll`, or inspect that DLL's export
+list: the method is not there. Neither are `DrawIndexed` and `Draw`. The
+public names are mostly creators such as `D3D11CreateDevice`, not the method
+that runs once per frame. Lesson 7.3 later shows where a PE file stores its
+export list; that file-format detail is not needed to follow this lookup.
 
 This is not obfuscation. Direct3D is built on **COM**, the Component Object
 Model — Microsoft's convention for handing out objects whose methods are reached
 through a table of function pointers rather than by name. COM does not expose
 methods as exports. It exposes objects.
 
-## A COM interface is a vtable, which you have already met
+## A COM interface stores a table of methods
 
-In Lesson 3.3 you recovered C++ classes by recognizing that an object begins
-with a pointer to a table of function addresses. A COM interface pointer is
-exactly that arrangement, promised by the ABI rather than recovered from
-disassembly:
+A C++ object may begin with a pointer to a table of function addresses,
+called a **vtable**. A COM interface pointer uses that arrangement as a
+published ABI contract, rather than leaving it for us to infer from
+disassembly. Lesson 3.3 showed the same memory shape in a game object:
 
 Picture a numbered control panel. Button 8 on an `IDXGISwapChain` is labeled
 `Present` by the interface contract, but the panel does not contain a universal
@@ -129,10 +130,12 @@ flowchart LR
     E --> F["Candidate Present address<br/>in this process"]
 ```
 
-Compare this with pattern scanning in Lesson 7.4, which searches bytes, and
-export lookup in Lesson 8.4, which needs an exported name. The temporary object
-asks the runtime for a method pointer without a byte signature. It still
-requires a compatibility check against the actual object and runtime.
+There are now three distinct ways to find code: a named export asks a DLL for a
+public function, a byte pattern searches for an instruction sequence, and this
+temporary COM object supplies the address of its own method. Only the last
+one tells us where this object's `Present` implementation lives. It still
+requires a compatibility check against the actual object and runtime. Lesson
+7.4 expands the byte-pattern case.
 
 **Do not copy that absolute pointer from a separate helper process into a
 game.** Each process has its own virtual address space, and a graphics runtime
@@ -145,15 +148,17 @@ explains why identical numbers alone do not identify the same object.
 
 ## Do this to a program you wrote
 
-As in Lesson 8.4, the target is your own. Write a minimal Direct3D 11 program —
+The target here is your own program. Write a minimal Direct3D 11 program —
 a window, a device, a swap chain, a clear-and-present loop — and hook that.
 Every mistake is then yours to observe, and nothing depends on a specific game
 build.
 
-The vtable commonly lives on a protected page, so writing to a verified slot
-in this owned lab needs the same page-protection discipline as the byte patches
-in Lesson 8.3. A shared vtable slot can affect every object using that table in
-this process, so save its original pointer and keep the experiment scoped:
+The vtable commonly lives on a protected page: the program can read the slot,
+but a normal write fails. `VirtualProtect` temporarily makes the pointer-sized
+slot writable. Save both the original pointer and the previous protection,
+write the replacement, then restore the protection immediately. A shared
+vtable slot can affect every object using that table in this process, so the
+experiment must also restore the pointer when it ends:
 
 ```rust
 // 🛡️ SAFETY: `slot` points into the vtable read from a live swap chain, the
@@ -175,7 +180,10 @@ unsafe {
 ```
 
 Restore the previous protection rather than leaving the page writable. A page
-you widened stays widened for the life of the process.
+you widened stays widened for the life of the process. This short code shows
+the two protection changes and the pointer swap; a complete hook guard must
+also roll back if the second protection change fails. Lesson 8.3 applies the
+same verification and rollback reasoning to patched instruction bytes.
 
 ## The replacement must match the ABI exactly
 

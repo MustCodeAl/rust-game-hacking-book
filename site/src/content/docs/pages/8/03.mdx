@@ -1,13 +1,13 @@
 ---
-title: "Manage a Detour"
-description: "Turn the debugger-only code-cave experiment into a verified, reversible patch plan."
+title: "Detours and Reversible Patches"
+description: "Understand how a detour redirects execution, preserves displaced instructions, verifies target bytes, and restores the original path."
 chapter: "8.3"
 minutes: 44
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 3
-  label: "8.3 Manage a Detour"
+  label: "8.3 Detours and Reversible Patches"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -22,7 +22,7 @@ A hook changes running machine code, so the final write is necessarily low-level
 - cleanup in `Drop`;
 - clear errors.
 
-![The Wesnoth debugger-only detour introduced in Lesson 2.7](/assets/images/3/4/wesnoth1.png)
+![The Wesnoth debugger-only detour introduced in Lesson 2.9](/assets/images/3/4/wesnoth1.png)
 
 ## Define the patch's safety model first
 
@@ -50,6 +50,12 @@ wrong write.
 
 ## Represent a patch as data
 
+Before writing to a process, describe exactly which address will change,
+which bytes must already be there, and which same-length bytes will replace
+them. A `PatchPlan` is only that description: constructing or validating it
+cannot modify the game. Equal lengths also mean the planned overwrite cannot
+silently spill beyond the verified instruction span:
+
 ```rust
 #[derive(Debug)]
 struct PatchPlan {
@@ -74,6 +80,10 @@ impl PatchPlan {
 The planner performs no raw memory access. A disassembler should determine the whole-instruction span; never choose it by counting five arbitrary bytes.
 
 ## Verify before writing
+
+The plan's `expected` bytes are a build identity check at the precise hook
+site. Copy that many live bytes, compare them before any write, and return an
+error if the running executable disagrees with the chosen profile:
 
 ```rust
 fn verify_hook(process: &Process, plan: &PatchPlan) -> anyhow::Result<()> {
@@ -115,6 +125,11 @@ to undo the patch.
 If bytes differ, stop. Do not add a “force” switch to a beginner tool.
 
 ## Own the applied state
+
+Once the replacement is installed, cleanup needs the original bytes even if
+the caller returns early. `AppliedPatch` owns that restoration record. An
+explicit `restore` can report an error, while `Drop` makes one final
+best-effort attempt when the guard leaves scope:
 
 ```rust
 struct AppliedPatch<'a> {
@@ -158,6 +173,10 @@ flowchart LR
     F["from<br/>(the jump's own address)"] -->|"+ 5<br/>(the jump's own length)"| N["next_instruction<br/>(first byte after the jump)"]
     N -->|"rel32 = to − next_instruction"| T["to<br/>(the cave's address)"]
 ```
+
+This helper turns the diagram into five instruction bytes. It checks that the
+destination fits the jump's signed 32-bit displacement instead of truncating
+an out-of-range address.
 
 ```rust
 fn rel32(from: usize, to: usize) -> Option<i32> {

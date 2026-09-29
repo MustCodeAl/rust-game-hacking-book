@@ -1,13 +1,13 @@
 ---
-title: "Build a Wesnoth Chat Bot"
-description: "Perform Wesnoth 1.14.9’s real local handshake, log in, read gzip-framed WML, and answer a chat command."
+title: "Clients, Handshakes, and Chat Automation"
+description: "See a complete protocol client perform Wesnoth's local handshake, read framed messages, and respond to one chat command."
 chapter: "6.5"
 minutes: 24
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 5
-  label: "6.5 Build a Wesnoth Chat Bot"
+  label: "6.5 Clients, Handshakes, and Chat Automation"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -51,6 +51,11 @@ and it lets the command handler work with events instead of raw network bytes.
 
 ## Connect with timeouts
 
+Before reading protocol bytes, the client needs a connection that cannot
+silently drift to another host or wait forever for a stalled local server.
+`connect_local` accepts one socket address, checks that it is the course
+loopback endpoint, then sets finite connect, read, and write waits:
+
 ```rust
 use std::{
     io::{self, Read, Write},
@@ -85,6 +90,12 @@ Lesson 6.3’s `encode_wesnoth_frame` performs the gzip compression and adds the
   cells="byte 0-3=`u32` length, big-endian|byte 4..=gzip-compressed WML, that many bytes"
   caption="The frame `read_frame` parses below. It trusts only the four-byte header at first, then reads exactly `length` more bytes before decompressing."
 />
+
+The two helpers implement the strip in opposite directions. `send_wml`
+frames text and writes all bytes; `read_frame` reads the four-byte length,
+checks the cap, then reads that many payload bytes before a decoder sees
+them. A short TCP read is normal, so both paths use the exact-read/write
+operations:
 
 ```rust
 fn send_wml(stream: &mut TcpStream, wml: &str) -> anyhow::Result<()> {
@@ -126,6 +137,11 @@ flowchart TD
     B -->|"other error"| F["return the error"]
 ```
 
+This quiet-period reader is only for the unframed negotiation reply. It
+collects successive TCP reads until the server closes or pauses briefly,
+while the size cap prevents an unexpected reply from growing forever.
+After login, `read_frame` uses the protocol's length field instead:
+
 ```rust
 fn read_server_batch(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
     stream.set_read_timeout(Some(Duration::from_millis(250)))?;
@@ -159,6 +175,11 @@ Keep this helper for negotiation only. Once the session is in the lobby, use the
 
 ## Perform the Wesnoth 1.14.9 login
 
+The parser and frame writer now have a concrete job. The course server first
+expects four zero negotiation bytes, then a version message and a login
+message in compressed WML frames. `log_in` sends them in that order and reads
+each reply before advancing; a nickname is validated before it enters WML:
+
 ```rust
 fn log_in(stream: &mut TcpStream, nickname: &str) -> anyhow::Result<()> {
     let nickname = simple_field(nickname)?;
@@ -186,6 +207,10 @@ fn log_in(stream: &mut TcpStream, nickname: &str) -> anyhow::Result<()> {
 If the server rejects the version, compare the decompressed frame with the one produced by the official 1.14.9 client. Do not randomly change compressed bytes; fix the WML and recompress it.
 
 ## Answer `\wave`
+
+Once the login succeeds, the client announces itself and loops over framed
+server messages. A decoded `\wave` event will produce the reply described
+above; ordinary messages leave the connection running:
 
 ```rust
 fn run(address: SocketAddr, nickname: String) -> anyhow::Result<()> {

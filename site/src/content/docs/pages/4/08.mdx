@@ -1,16 +1,23 @@
 ---
-title: "Build a Bounded Game Telemetry Recorder"
-description: "Sample live game state without write rights, move file I/O off the observation path, count dropped events, and close a versioned log cleanly."
+title: "Sampling Game State Under Load"
+description: "Record changing game state without delaying observation, hiding dropped samples, or losing the log's meaning."
 chapter: "4.8"
 minutes: 35
 author: "attilathedud"
 date: "2026-08-06"
 sidebar:
   order: 8
-  label: "4.8 Build a Bounded Game Telemetry Recorder"
+  label: "4.8 Sampling Game State Under Load"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
+
+Once repeated polls have become meaningful events, we may want a record of
+them. A log can answer when gold changed or whether an action timed out, but
+recording must not hold up the game or disguise samples it failed to capture.
+When samples arrive faster than they can be stored, the writer creates
+**backpressure**. A bounded queue makes us choose explicitly what happens
+when it fills.
 
 ## The recorder must not stall the game
 
@@ -100,6 +107,11 @@ flowchart TD
     B -->|"Full"| D["dropped += 1"]
     B -->|"Disconnected"| E["bail: writer stopped early"]
 ```
+
+The `match` below implements those outcomes: accepted events keep sampling,
+a full queue increments a visible loss count, and a dead writer stops the
+recorder. With a full queue, `try_send` returns immediately instead of
+waiting while the observed game runs.
 
 ```rust
 match sender.try_send(event) {

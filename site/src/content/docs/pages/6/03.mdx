@@ -1,13 +1,13 @@
 ---
-title: "Parse and Rebuild a Message"
-description: "Turn a captured local chat frame into a bounds-checked parser and serializer with round-trip tests."
+title: "Message Parsing and Serialization"
+description: "Connect raw chat frames to typed messages through bounded parsing, serialization, and round-trip checks."
 chapter: "6.3"
 minutes: 30
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 3
-  label: "6.3 Parse and Rebuild a Message"
+  label: "6.3 Message Parsing and Serialization"
 ---
 import ConceptLab from '../../../../components/ConceptLab.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -86,6 +86,12 @@ inspect the expected message fields and connection state. Calling every failure 
 ![Several controlled chat messages](/assets/images/6/3/packet1.png)
 
 ## Read with a cursor
+
+The four-byte length at the front of the captured frame must be read before
+the compressed body, and every read must stop at the captured buffer's end.
+A cursor pairs the borrowed bytes with the next unread position. If a read
+fails, the position stays where it was, so an error cannot leave a parser
+halfway through a claimed field:
 
 ```rust
 #[derive(Debug)]
@@ -248,6 +254,11 @@ Use `flate2`:
 flate2 = "1"
 ```
 
+With the gzip encoder available, the next function accepts a chat field as
+text and rejects quotes or line breaks that would change the simple WML
+structure. Only validated fields go into the message before compression
+and length framing:
+
 ```rust
 use flate2::{Compression, write::GzEncoder};
 use std::io::Write;
@@ -296,6 +307,11 @@ Encoding runs the decoding pipeline in reverse:
 Gzip and zlib can both use the DEFLATE compression algorithm but wrap it in different headers and checksums. “Same compression algorithm” does not mean “same wire format.” Matching the observed wrapper is part of implementing the protocol.
 
 ## Round-trip tests
+
+Feed the serializer one sender and one message, then give its frame to the
+decoder. If the resulting WML still contains both values, the length,
+compression wrapper, UTF-8 text, and field quoting agree between these two
+functions for this case:
 
 ```rust
 #[test]

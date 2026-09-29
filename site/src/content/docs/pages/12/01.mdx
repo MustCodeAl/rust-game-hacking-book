@@ -15,6 +15,11 @@ the game. That changes the first question: instead of asking where a value
 lives in memory, ask which values and actions the game deliberately gives to
 a script. Lua is one common language for that boundary.
 
+We will first write small Lua scripts and define the host API that contains
+them. Once those pieces work, we will open the interpreter itself: source text
+becomes bytecode, and bytecode runs on a virtual machine with its own values,
+stack, and lifetime rules.
+
 ## Compiled engine, flexible script
 
 The native host is normally compiled ahead of time into machine code. Changing its source means building a new executable or library.
@@ -78,6 +83,10 @@ For these lessons we pin the lab to **Lua 5.4** through `mlua 0.12`. Other games
 
 ## The values you meet first
 
+These declarations put seven different kinds of value behind local names.
+Nothing runs merely because the function value is created; `decide` can be
+called later, while the other values can be read or changed by later code.
+
 ```lua
 local name = "bot_alpha"       -- string
 local health = 100              -- integer number
@@ -117,6 +126,9 @@ function, the host must still validate the fields it receives.
 
 ## Local versus global names
 
+The two assignments below look similar, but only the first declares a name
+private to its scope. The second writes into Lua's shared global environment.
+
 ```lua
 local selected = nil -- visible only in this scope ✅
 state = "running"   -- creates or replaces a global name ⚠️
@@ -137,10 +149,16 @@ The book's lab exposes a narrow interface instead:
 
 ```lua
 local entities = game.snapshot()
-game.request({ kind = "select_entity", id = entities[2].id })
+if entities[2] then
+    game.request({ kind = "select_entity", id = entities[2].id })
+end
 ```
 
-`game.snapshot()` returns copied sample data. `game.request` accepts only a small list of validated actions. The script never receives a process handle, arbitrary pointer, command shell, or raw Windows API.
+`game.snapshot()` returns copied sample data. If a second entity exists, the
+script asks to select its ID; the host can still reject the request if that ID
+is no longer valid. `game.request` accepts only a small list of validated
+actions. The script never receives a process handle, arbitrary pointer,
+command shell, or raw Windows API.
 
 This is **capability design**: code can do only what the values and functions in its environment allow.
 

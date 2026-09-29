@@ -1,13 +1,13 @@
 ---
-title: "Replay a Protocol Through a State Machine"
-description: "Replay captured local messages through legal session states, then extend the model to real-time ticks, snapshots, and message ordering."
+title: "Protocol State Machines and Replay"
+description: "Understand legal message order through session states, replay, real-time ticks, snapshots, and sequence numbers."
 chapter: "6.4"
 minutes: 39
 author: "attilathedud"
 date: "2026-08-14"
 sidebar:
   order: 4
-  label: "6.4 Replay a Protocol Through a State Machine"
+  label: "6.4 Protocol State Machines and Replay"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -61,6 +61,11 @@ Not every message is an event that happened exactly once. A **snapshot** can rep
 
 ## Model states and messages separately
 
+Receiving a well-formed `Chat` message is different from being ready to
+accept it. A connection begins in `Connected`, reaches a lobby only after
+greeting and room messages, and can then accept chat. These enums keep the
+connection state and the parsed message as separate facts:
+
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SessionState {
@@ -91,6 +96,11 @@ enum ProtocolError {
 The parser creates `Message` values. The session machine decides whether each value makes sense now.
 
 ## Make transitions explicit
+
+Now pair the current state with one parsed message. A version-1 greeting
+moves `Connected` to `Greeted`; an unsupported version returns a precise
+error; a chat message in the lobby leaves the state unchanged. The match
+below makes every accepted transition visible in one place:
 
 ```rust
 fn apply(state: &mut SessionState, message: &Message) -> Result<(), ProtocolError> {
@@ -177,6 +187,12 @@ struct CapturedFrame {
 Redact account names or chat content before committing fixtures. A local test capture should contain only invented data.
 
 ## Replay without a network
+
+Replay takes recorded frames and the parser used for this protocol version.
+It starts from `Connected`, validates each frame's size and delay, parses its
+bytes, and applies the resulting message to the session state. The returned
+state is what that exact log means under the current rules; the error names
+the frame where interpretation stopped:
 
 ```rust
 use anyhow::Context;

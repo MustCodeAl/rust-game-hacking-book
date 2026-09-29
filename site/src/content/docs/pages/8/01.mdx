@@ -1,17 +1,24 @@
 ---
-title: "Build an In-Process Library"
-description: "Create a Windows DLL while keeping loader-lock rules, raw pointers, and initialization boundaries visible."
+title: "In-Process DLLs and Loader Boundaries"
+description: "Understand what changes when Rust code runs inside a game process and how DLL loading constrains initialization."
 chapter: "8.1"
 minutes: 20
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 1
-  label: "8.1 Build an In-Process Library"
+  label: "8.1 In-Process DLLs and Loader Boundaries"
 ---
 ## External versus in-process
 
 An external tool uses Windows to cross a process boundary. An in-process library is loaded into the target and shares its virtual address space.
+
+The preceding chapter taught us to observe a program from outside. Here the
+tool becomes a guest inside one exact game build. We will follow its DLL
+loading and cleanup, then learn how detours and import hooks redirect calls,
+and finally give the tool input and menus without losing control of the
+changes it made. A parallel scanner at the end is an optional performance
+case study built on the same ownership rules.
 
 The two routes reach the same bytes through different doors:
 
@@ -55,6 +62,11 @@ flowchart TD
 Each stage earns the capabilities used by the next one, and shutdown releases them in a controlled order.
 
 ## Create a DLL project
+
+The first artifact is a library that Windows can load, not a standalone
+executable with a `main` function. Start with Cargo's library template;
+the following configuration then asks Rust to emit a C-compatible dynamic
+library and includes the Windows types used at its boundary:
 
 ```powershell
 cargo new --lib wesnoth_lab
@@ -172,6 +184,10 @@ flowchart LR
     G0 -->|"read u32"| G["game object"]
     G -->|"+ GOLD_OFFSET (0x0004)"| GOLD["gold field (u32, writable)"]
 ```
+
+The resolver below reads both live pointer values in that order. The constants
+identify the known root and field offsets; the returned gold pointer belongs
+only to the current verified match, and the worker uses it for one write.
 
 ```rust
 const PLAYER_ROOT: *const u32 = 0x017E_ED18 as *const u32;

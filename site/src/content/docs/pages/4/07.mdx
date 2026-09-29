@@ -1,15 +1,20 @@
 ---
-title: "Make a Bot Responsive with Events and Debouncing"
-description: "Convert changing snapshots into meaningful events so an offline bot reacts once, waits safely, and avoids frantic repeated input."
+title: "When Changed State Becomes an Event"
+description: "Turn repeated polls into meaningful events with snapshot differences, debouncing, confirmation, and cooldowns."
 chapter: "4.7"
 minutes: 25
 author: "attilathedud"
 date: "2026-08-14"
 sidebar:
   order: 7
-  label: "4.7 Make a Bot Responsive with Events and Debouncing"
+  label: "4.7 When Changed State Becomes an Event"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+
+A route planner can compute one good path and still make a bad bot if it treats
+every read of the same target position as a fresh command. The difference
+between “the enemy is at this tile” and “the enemy just moved to this tile”
+is the beginning of an event-driven design.
 
 ## Polling is not the same as reacting
 
@@ -70,6 +75,12 @@ Here are six polls of `menu_open` and what each kind of rule does with them:
 Events are interpretations, not raw truth. If the observer misses snapshots, `120 -> 145` proves the endpoints but not whether the game passed through `130`. Name an event `GoldChanged`, not `GoldEarned`, unless something else shows why it changed.
 
 ## Diff two validated snapshots
+
+Compare two snapshots only after each has passed its own read and identity
+checks. If gold changes from 120 to 145 while `menu_open` changes from
+`false` to `true`, `diff` returns both `GoldChanged { before: 120, after: 145 }`
+and `MenuOpened`. Repeated identical snapshots return an empty vector, so
+the bot has no new event to act on.
 
 ```rust
 #[derive(Clone, Debug, PartialEq)]

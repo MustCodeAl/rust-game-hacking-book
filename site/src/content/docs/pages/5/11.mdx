@@ -1,13 +1,13 @@
 ---
-title: "Observe Direct3D Draw Calls and State"
-description: "Read a Direct3D draw call, understand why the same arguments mean different things in Direct3D 9 and 11, and label geometry using bound state rather than guesswork."
+title: "Direct3D Draw Calls and Bound State"
+description: "Read Direct3D draw calls in the context of their bound state and compare what the same arguments mean in Direct3D 9 and 11."
 chapter: "5.11"
 minutes: 32
 author: "attilathedud"
 date: "2026-09-03"
 sidebar:
   order: 11
-  label: "5.11 Observe Direct3D Draw Calls and State"
+  label: "5.11 Direct3D Draw Calls and Bound State"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -23,7 +23,11 @@ surrounding state you can see from inside the call.
 
 ## Read the arguments precisely
 
-The Direct3D 11 indexed draw is compact:
+The Direct3D 11 indexed draw looks compact because buffers, shaders, and
+topology are already bound to the context. Its function type has the hidden
+COM object pointer first, followed by a count and two offsets. Those three
+numbers choose geometry within the bound buffers; they do not identify a
+game object by themselves:
 
 ```rust
 type DrawIndexedFn = unsafe extern "system" fn(
@@ -118,11 +122,12 @@ state. From a `DrawIndexed` hook you retrieve what is bound with the context's
 Two practical consequences follow, and they catch people out:
 
 **Those `Get` calls hand you a reference.** COM `Get*` methods call `AddRef`
-on what they return. Every object you retrieve on a path that runs thousands
-of times per second must be released, or you leak steadily until something
-fails in a way that looks nothing like the cause. This is the reference-count
-version of the handle discipline from Lesson 10.4, and it deserves the same
-answer: a wrapper whose `Drop` releases, so an early return cannot skip it.
+on what they return, increasing the object's reference count by one. Each
+successful query therefore creates one matching `Release` obligation. On a
+path that runs thousands of times per second, forgetting even one release
+causes a steady leak. Put the returned pointer in a Rust wrapper whose
+`Drop` calls `Release`; then an early return cannot skip cleanup. Lesson 10.5
+later applies the same ownership idea to Windows handles.
 
 ```mermaid
 flowchart TD
@@ -152,8 +157,10 @@ grouping holds:
 | blend state | opaque geometry versus transparent effects |
 | draw order within a frame | rendering passes: depth, opaque, transparent, UI |
 
-Every one of these is a proxy, and Lesson 13.8 explains why proxies deserve
-suspicion. A shader shared by characters and crates does not distinguish them.
+Every one of these is a **proxy**: an observable clue that may correlate with
+the category we care about, without being the category itself. A shader shared
+by characters and crates does not distinguish them. Lesson 13.8 later returns
+to the risks of treating a proxy as proof.
 Test a grouping by changing something you control — move, equip a different
 weapon, walk into another room — and check that the group changes the way the
 label says it should. A label that matched in one frame can be an accident of

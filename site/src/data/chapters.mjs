@@ -1,20 +1,20 @@
 // The book's chapters, in reading order. The sidebar, lesson headers, print
 // book, and llms.txt all read this list, so a new chapter is added once here.
 export const CHAPTERS = [
-	{ number: 1, title: 'Start Here', emoji: '🧠', summary: 'Computer, game, programming, and hacking fundamentals; a Rust primer, safe lab, memory model, and first value scan.' },
-	{ number: 2, title: 'Debugging & Control Flow', emoji: '🔍', summary: 'Assembly, breakpoints, code caves, moving addresses, and pointer paths.' },
-	{ number: 3, title: 'Memory, Types & Ownership', emoji: '🦀', summary: 'External tools, C++ object layouts, containers, obfuscated values, strings, DLL contracts, and numbers and pointers decoded bit by bit.' },
-	{ number: 4, title: 'Game State & Automation', emoji: '♟️', summary: 'Snapshots, fog of war, state machines, pathfinding, events, telemetry, and how NPCs decide.' },
-	{ number: 5, title: '3D Games & Rendering', emoji: '🧭', summary: 'Coordinates, OpenGL state, aiming, recoil, radar, and overlays.' },
-	{ number: 6, title: 'Protocols, Networks & IPC', emoji: '🌐', summary: 'Packets, framing, local proxies, shared memory, and named pipes.' },
-	{ number: 7, title: 'Windows Binaries & Analysis Tools', emoji: '🧰', summary: 'PE files, exports, scanners, disassemblers, debuggers, call logs, and ETW.' },
-	{ number: 8, title: 'DLLs, Hooks & In-Process Tools', emoji: '🛠️', summary: 'DLLs, injection, detours, imports, input, menus, and reliable tool design.' },
-	{ number: 9, title: 'Game Files, Mods & Integrity', emoji: '🗂️', summary: 'Saves, hex editing, textures, unit data, safe archives, reversible manifests, signatures, and encryption.' },
-	{ number: 10, title: 'Processes, Handles & Threads', emoji: '🪟', summary: 'Build identity, least-privilege handles, memory maps, threads, API layers, and crash dumps.' },
-	{ number: 11, title: 'DLL Loading, Defenses & DMA', emoji: '🛡️', summary: 'DLL loading, optional APIs, harmless toy defenses, the kernel boundary, and offline DMA captures.' },
-	{ number: 12, title: 'Lua Automation', emoji: '🌙', summary: 'Tables, host APIs, snapshots, state machines, limits, and virtual-machine internals.' },
-	{ number: 13, title: 'Advanced Game Hacking', emoji: '🧩', summary: 'Game-state invariants, integrity gaps, anti-debug behavior, value transforms, robust hooks, update-resistant layouts, and bypass analysis.' },
-	{ number: 14, title: 'Kernels, Hardware & Consoles', emoji: '🔌', summary: 'Kernels, device drivers, hypervisors, JTAG, game consoles, and emulators.' },
+	{ number: 1, title: 'Game Hacking Foundations', emoji: '🧠', summary: 'From computer and game loops to Rust, memory, and a first scan: learn the core model before the tools.' },
+	{ number: 2, title: 'Instructions, Debuggers, and Addresses', emoji: '🔍', summary: 'Follow changing game state through assembly, breakpoints, stable addresses, and reversible detours.' },
+	{ number: 3, title: 'Types, Object Layouts, and Boundaries', emoji: '🦀', summary: 'Turn bytes into typed values and object layouts across process and language boundaries.' },
+	{ number: 4, title: 'Game State, Decisions, and Automation', emoji: '♟️', summary: 'Model a game as snapshots, decisions, and feedback before building guarded observers and automation.' },
+	{ number: 5, title: '3D Space, Cameras, and Rendering', emoji: '🧭', summary: 'Connect coordinates, camera motion, and rendering state to what the player sees.' },
+	{ number: 6, title: 'Messages Across Networks and Processes', emoji: '🌐', summary: 'Follow messages from bytes and framing through protocol states, proxies, and local channels.' },
+	{ number: 7, title: 'Executable Files and Runtime Analysis', emoji: '🧰', summary: 'Read executable layout, then use scanning, disassembly, debugging, and traces to explain running code.' },
+	{ number: 8, title: 'In-Process Code, Hooks, and Tool Design', emoji: '🛠️', summary: 'Understand how code enters a process, redirects calls, receives input, and stays reversible.' },
+	{ number: 9, title: 'Game Files, Mods, and Trust', emoji: '🗂️', summary: 'Read text and binary saves, assets, and mods as formats with integrity and trust constraints.' },
+	{ number: 10, title: 'Windows Process Internals', emoji: '🪟', summary: 'Deepen the process model through build identity, access rights, virtual memory, threads, API paths, and dumps.' },
+	{ number: 11, title: 'Process Boundaries, Defenses, and DMA', emoji: '🛡️', summary: 'Trace DLL loading and guarded process boundaries before examining physical-memory captures.' },
+	{ number: 12, title: 'Lua, Host Boundaries, and Virtual Machines', emoji: '🌙', summary: 'Use Lua to express game behavior safely, then see how its host interface and virtual machine work.' },
+	{ number: 13, title: 'Advanced Game Hacking', emoji: '🧩', summary: 'Reason from invariants and telemetry to integrity failures, value transforms, hooks, and repairs.' },
+	{ number: 14, title: 'Kernels, Hardware, and Consoles', emoji: '🔌', summary: 'Follow execution beyond user mode into kernels, drivers, hypervisors, hardware, and emulators.' },
 ];
 
 /** The chapter record for a lesson number such as "5.10". */
