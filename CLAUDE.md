@@ -166,7 +166,8 @@ from their historical URL filenames; use each page's `chapter` and
 `docs.json` generator follows that metadata too.
 The user clarified that `gh-pages` is the final target. The revised authored
 source remains on `codex/book-revision`; its complete static build was merged
-into `gh-pages` through PR #2. PR #1 mistakenly merged the authored source into
+into `gh-pages` through PR #2, and the structural follow-up through PR #4.
+PR #1 mistakenly merged the authored source into
 `rustgamehackingreimagined`, and PR #3 reverted that merge. For future edits,
 build from the authored source and publish the generated output through a
 branch based on `gh-pages`. Keep the original checkout's unrelated local files

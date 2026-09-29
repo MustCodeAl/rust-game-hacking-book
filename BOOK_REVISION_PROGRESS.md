@@ -18,6 +18,10 @@ the original editorial contract and source investigation.
 - The complete build from source commit `88d55eb` was merged into `gh-pages`
   through [PR #2](https://github.com/MustCodeAl/rust-game-hacking-book/pull/2)
   (merge commit `066897f`). The public primer page shows the new lesson.
+  The later structural and code-context pass from source commit `63271d8`
+  was merged into `gh-pages` through
+  [PR #4](https://github.com/MustCodeAl/rust-game-hacking-book/pull/4)
+  (merge commit `049245b`).
   [PR #1](https://github.com/MustCodeAl/rust-game-hacking-book/pull/1)
   mistakenly merged the authored source into `rustgamehackingreimagined`;
   [PR #3](https://github.com/MustCodeAl/rust-game-hacking-book/pull/3)
