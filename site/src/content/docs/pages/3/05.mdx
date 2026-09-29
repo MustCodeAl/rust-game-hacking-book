@@ -80,6 +80,39 @@ one element to the next.
 
 Those checks describe meaning. They remain useful even if a compiler changes field order.
 
+## One collection can arrange the same fields in different ways
+
+Lesson 1.4 grouped one player's ID, health, position, and team into a
+record. With several players, one implementation can put complete records
+side by side. Player 1 is highlighted here:
+
+<MemoryStrip
+  cells="=id 0|=hp 0|=pos 0|=team 0|=id 1|=hp 1|=pos 1|=team 1"
+  marks="4-7"
+  groups="0-3:player 0|4-7:player 1"
+  caption="Array of structures: fields for one player sit together."
+/>
+
+Another implementation can keep a separate collection for each kind of
+field. Player 1's information is now spread among the collections:
+
+<MemoryStrip
+  cells="=id 0|=id 1|=hp 0|=hp 1|=pos 0|=pos 1|=team 0|=team 1"
+  marks="1|3|5|7"
+  groups="0-1:IDs|2-3:health|4-5:positions|6-7:teams"
+  caption="Structure of arrays: one field type sits together, while one player's fields are spread out."
+/>
+
+The diagrams show *logical order*, not exact byte sizes. Both layouts
+represent the same players. The first can be convenient when code handles
+one complete player at a time. The second can reduce unrelated data read
+into the CPU cache when code sweeps across only positions or only health.
+Neither is automatically faster for every workload. Watch the addresses a
+repeating instruction visits: a fixed stride through records suggests the
+first arrangement; separate dense runs of one field suggest the second.
+An entity-component system can take the separation further by putting
+components in distinct pools, as shown later in this lesson.
+
 ## Fixed offsets and scaled offsets answer different questions
 
 Machine code often exposes an address formula. Read the formula before naming
@@ -199,6 +232,13 @@ Validate structural invariants:
 
 The visited set is important. Corrupted data could form a cycle and otherwise trap a scanner forever.
 
+Before choosing a container model, ask what the game actually does with
+the data: does it need an ordered list, lookup by key, first-in-first-out
+work, a tile grid, or links between waypoints? Then ask whether items can
+be inserted or removed while you read them. Those questions connect the
+shape you observe to the operation it supports; a readable address alone
+cannot identify a container.
+
 ## Raw pointers, smart pointers, and handles
 
 ### Unique ownership
@@ -243,6 +283,12 @@ struct Slot<T> {
 ```
 
 The index chooses a slot. The generation proves that the slot still represents the same logical object. If a deleted entity’s slot is reused, its generation changes and old handles stop resolving. ✅
+
+For example, a saved handle for slot 12 with generation 3 resolves only
+while slot 12 still reports generation 3. If that enemy dies and a new
+enemy occupies slot 12 with generation 4, the old handle is rejected.
+The slot may hold a real living object at a valid address; the
+generation mismatch is what reveals that it is the *wrong* object.
 
 ## Follow destruction as carefully as construction
 

@@ -67,6 +67,27 @@ an `i686-pc-windows-msvc` tool and 64 bits in an x86-64 tool. A game’s `u32`
 health value stays four bytes on both. Address width and value width answer
 different questions.
 
+### Give equal-sized values different meanings
+
+A player ID and a health amount might both fit in a `u32`, yet swapping
+them should be an error. Rust can wrap the same stored bits in distinct
+types:
+
+```rust
+struct PlayerId(u32);
+struct Health(u32);
+
+fn damage(target: PlayerId, amount: Health) { /* ... */ }
+// damage(Health(50), PlayerId(3)); // rejected: the arguments are swapped
+```
+
+These are **newtypes**. The wrapper tells the compiler that equal byte
+representations do not mean interchangeable values. The same technique
+keeps a remote address, a byte offset, and a game value from being passed
+to the wrong parameter just because all three happen to be integers.
+Chapter 1 first kept these ideas separate in words; a newtype can enforce
+the distinction in code.
+
 ## Ownership and borrowing
 
 Every value has one owner. Other code can borrow it:
@@ -150,6 +171,35 @@ pointer cast would silently depend on layout, alignment, size, and host byte
 order. Low-level code is easier to review when every conversion states its
 assumption.
 
+### Show when a value may be missing
+
+The `Option<u32>` return type above means the function may return
+`Some(number)` or `None`. `Some` carries a value; `None` says
+there is no value. Here is the gold exercise that would have been too
+early on the book's first page:
+
+```rust
+fn spend_gold(gold: u32, cost: u32) -> Option<u32> {
+    gold.checked_sub(cost)
+}
+
+fn main() {
+    let remaining = spend_gold(100, 25);
+    let too_expensive = spend_gold(10, 25);
+    println!("{remaining:?}");
+    println!("{too_expensive:?}");
+}
+```
+
+`checked_sub` subtracts when the result fits in `u32`; it returns
+`None` when the cost exceeds the gold. The first call therefore
+prints `Some(75)`, and the second prints `None`. The `:?` in
+`println!` asks Rust to show the `Option` in its debug form.
+Now predict `spend_gold(100, 100)` before running it: the result
+fits, so it is `Some(0)`, not `None`. Rust's
+[`checked_sub` reference](https://doc.rust-lang.org/std/primitive.u32.html#method.checked_sub)
+specifies that behavior.
+
 ## Errors are part of the function
 
 Use `Result<T, E>` when callers need to know why an operation failed:
@@ -232,6 +282,29 @@ error. Then classify the final decision:
 
 This makes failure part of the design. “Keep going” is safe only when the next
 iteration starts from fresh, validated state.
+
+## Put uncertain reads behind one boundary
+
+The scanner and the game-specific logic should not each repeat Windows
+handle checks, byte counts, and error conversion. An **abstraction** gives
+that work one named interface. This sketch describes the operation the
+rest of a tool needs, without claiming that the method alone makes an
+address safe:
+
+```rust
+trait MemoryReader {
+    fn read_u32(&self, address: usize) -> anyhow::Result<u32>;
+}
+```
+
+`trait` states a behavior another type can implement. `&self` lets
+the method use an existing reader, `address` is the location to request,
+and `Result` carries either the decoded `u32` or an error. The
+implementation still must verify the target process, readable region,
+requested length, and actual bytes returned. The scanner can then ask
+for a value through `read_u32` while one implementation owns the
+operating-system boundary. This is the useful boundary that the old
+Lesson 1.5 only named before its prerequisites were in place.
 
 ## Give each game helper one obvious import path
 

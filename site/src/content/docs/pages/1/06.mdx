@@ -1,20 +1,48 @@
 ---
-title: "A Four-Step Method for Experiments"
-description: "One way to organize a memory experiment: Identify, Understand, Locate, and Change, so something you see in a game becomes a controlled, repeatable test."
+title: "Hacking Fundamentals"
+description: "Turn an observed game behavior into a testable question, narrow possible causes, and make one reversible change with a four-step method."
 chapter: "1.6"
-minutes: 14
+minutes: 18
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 6
-  label: "1.6 A Four-Step Method for Experiments"
+  label: "1.6 Hacking Fundamentals"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
-The fastest way to get completely lost is to open a memory scanner and start
-searching before deciding what you are actually asking. You end up with four
-hundred addresses, no way to tell which one matters, and no idea which ones you
-already ruled out.
+Lesson 1.5 built a program where a purchase changes 100 gold to 75.
+In a game whose source we are not reading during the experiment, the
+screen still shows the result, but it does not identify the rule or the
+stored value that caused it. **Game hacking** in this book means
+investigating that behavior and making a deliberate, testable change to
+the game or its data.
+
+## Start with evidence, not an address
+
+An observation is what you can actually see: after a 25-gold purchase,
+the display changes from 100 to 75. An explanation is a **hypothesis**:
+perhaps a four-byte value in the game's memory stores the gold used by
+the purchase rule. Other explanations are possible. The game may keep a
+display copy, recalculate gold from other data, or let a server decide
+the result. A matching number is therefore a candidate, not a conclusion.
+
+```mermaid
+flowchart TD
+    A["action: buy an item for 25"] --> O["observation: screen shows 100 → 75"]
+    O --> H["hypothesis: one stored value controls purchases"]
+    H --> T["test: change one candidate, then try a purchase"]
+    T --> E["evidence: did the rule change, only the text, or neither?"]
+```
+
+The fastest way to get completely lost is to open a memory scanner and
+start searching before deciding what you are asking. You can end up with
+hundreds of addresses, no way to tell which matters, and no record of
+which ones you have ruled out. A scanner finds values that match a
+question; a debugger can later show the instruction that reads or writes
+a candidate. Neither tool supplies the meaning by itself.
+
+## Four steps for a controlled experiment
 
 One way to keep the work in order is to split it into four steps. Treat them as
 a suggestion to adapt, not a rule the rest of the book relies on:
@@ -28,7 +56,7 @@ The steps can repeat. A failed change often sends you back to improve what you
 understand or locate a different copy:
 
 ```mermaid
-flowchart LR
+flowchart TD
     I["1. Identify<br/>one behavior you can repeat"] --> U["2. Understand<br/>the rules it should follow"]
     U --> L["3. Locate<br/>the data and the code"]
     L --> C["4. Change<br/>one thing, then measure"]
@@ -43,8 +71,8 @@ Choose something you can observe and reproduce.
 
 ❌ “Find player stuff.”
 
-✅ “Find the value that decreases by exactly 25 when the local player takes one
-known hit.”
+✅ “Find the value that decreases by exactly 25 when the local player buys one
+known item.”
 
 The behavior is only repeatable if it starts from the same conditions each
 time:
@@ -61,8 +89,16 @@ axis, or toggling one graphics setting. Avoid changing several things at once.
 ## 2. Understand how the behavior should work
 
 Before searching memory, work out the rule the game appears to follow.
+For the purchase from Lesson 1.5, our first guess is:
 
-For health:
+```text
+if gold >= cost:
+    new_gold = gold - cost
+else:
+    new_gold = gold
+```
+
+Try the same idea on another behavior. For health, a first guess might be:
 
 ```text
 new_health = max(0, old_health - damage)
@@ -76,8 +112,18 @@ dead becomes true when health reaches 0
 the health bar follows health after an update
 ```
 
-These rules help distinguish the simulation value from text, animation state,
-or a cached display value.
+The health calculation, stored result, and visible bar are connected,
+but they need not be one stored value:
+
+```mermaid
+flowchart TD
+    E["damage event: input"] --> C["calculate 80 − 25: temporary result"]
+    C --> S["store health = 55: game state"]
+    S --> B["resize the health bar: derived display"]
+```
+
+These rules help distinguish a value used by the game's rules from text,
+animation state, or a cached display value.
 
 At this stage the rules are guesses. The game may apply armor, difficulty
 scaling, or delayed damage, or a server may own the result, and any of these
@@ -85,7 +131,9 @@ would break the simple formula.
 
 ## Define what your tool is allowed to do
 
-Before code touches another process, decide its limits in a small contract:
+Before code touches another process, decide its limits in a small contract.
+This is a preview of the external tools built later in the book; you do
+not need to implement it for the first memory experiment:
 
 ```text
 Target: Wesnoth 1.14.9, 32-bit Windows build
@@ -99,6 +147,11 @@ Restore: write the saved original value back when the experiment ends
 This contract prevents a small experiment from quietly turning into an
 unbounded tool.
 
+The module-relative pointer path is a route to a value that can survive
+an address moving between runs of one exact build. Chapter 3 teaches how
+to check each part of that route. For now, the useful limit is simpler:
+verify the game build and current value before changing anything.
+
 ## 3. Locate the data and code
 
 Use the least complicated technique that can answer the question:
@@ -107,9 +160,30 @@ Use the least complicated technique that can answer the question:
 2. make one controlled game change;
 3. filter the candidate addresses;
 4. repeat until the list is small;
-5. set a breakpoint on the strongest candidate;
+5. later, set a breakpoint on the strongest candidate;
 6. observe which instruction reads or writes it;
 7. follow the object pointer and surrounding fields.
+
+The first lab stops after scanning, filtering, and testing a candidate.
+The breakpoint and object steps become practical after Chapters 2 and 3
+teach the required tools and pointer model.
+
+Inside one scan, the scanner follows an algorithm over readable memory:
+
+```mermaid
+flowchart TD
+    R["visit the next readable region"] --> C["read a bounded chunk"]
+    C --> M["compare each position with the search value"]
+    M --> K["record matching addresses"]
+    K --> N{"more regions?"}
+    N -->|"yes"| R
+    N -->|"no"| L["later: re-read only earlier candidates and keep matches"]
+```
+
+An algorithm is a repeatable set of steps. The scanner does not know
+what gold means; it compares bytes according to the value and type you
+supplied. Even a small choice such as checking only every fourth byte
+can miss a value at another alignment.
 
 Each controlled change throws away the candidates that did not change the same
 way. The numbers below are only an example, but the shape is typical:
@@ -127,8 +201,10 @@ found in.
 
 Each kind of check rules out a different mistake. A second scan with a
 different amount rules out an unrelated value that happened to match once. A
-write breakpoint shows which instruction owns the value. A restart shows
-whether the path survives a new process.
+**write breakpoint** pauses the game when an instruction writes to a chosen
+address. Chapter 2 teaches how to use one. It shows which instruction
+changed the candidate; a restart shows whether the path survives a new
+process.
 
 ## 4. Change one thing and measure the result
 
@@ -181,3 +257,8 @@ You should now be able to plan an experiment that:
 - narrows candidates with controlled changes and a breakpoint;
 - makes one reversible change;
 - uses the compiler, tests, and the debugger for feedback.
+
+[Lesson 1.7](/pages/1/07/) prepares a repeatable Windows lab. [Lesson
+1.8](/pages/1/08/) then walks through the first gold scan with screenshots,
+one test at a time. That lab uses a 15-gold recruit instead of this
+lesson's 25-gold item; the question-and-test method stays the same.

@@ -1,240 +1,200 @@
 ---
-title: "How Games Organize Data"
-description: "See how game loops, objects, fields, collections, identities, rules, and display copies organize a changing world."
+title: "Game Fundamentals"
+description: "Follow a game's input, rules, changing state, and display; then grow one player's values into records and collections."
 chapter: "1.4"
-minutes: 18
+minutes: 21
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 4
-  label: "1.4 How Games Organize Data"
+  label: "1.4 Game Fundamentals"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
-A game must remember what exists and what is happening now. That information is
-the game's **state**: player health, unit positions, inventory items, current
-animation, map tiles, score, and thousands of other values.
+Lesson 1.3 showed how the number 100 can live at an address in a running
+game. To understand why that number changes, we need a small model of the
+game around it: what the player does, which rule runs, what the game
+remembers, and what it shows.
 
-The code updates that state. The renderer and user interface read parts of it to
-show you a frame.
+## A game turns actions into a changing world
 
-## The game loop reads, updates, and draws
+A player supplies **input**, such as buying an item or pressing a movement
+key. The game applies **rules** to its current **state**—the information it
+remembers about the world. It then draws or plays an **output** that the
+player can perceive. A common game loop repeats those steps as play
+continues:
 
 ```mermaid
-flowchart LR
-    Input[Read input and events] --> Update[Update game state]
-    Update --> Draw[Draw the current state]
-    Draw --> Input
+flowchart TD
+    I["input: buy an item"] --> R["update: can the player pay?"]
+    R --> S["state: gold 100 → 75"]
+    S --> D["draw: show Gold: 75"]
+    D --> N["next input and update"]
 ```
 
-Real engines have more stages and may use several threads, but this order gives
-you three separate questions:
+The example takes the successful purchase path. If the player has only 10
+gold and the item costs 25, the rule leaves gold unchanged. The screen
+reports what the game decided; it does not decide the purchase itself.
+Later in this lesson we will see why the screen may even hold a separate
+copy of that result.
 
-1. What input or event entered the game?
-2. Which state changed because of it?
-3. Which state did the renderer or interface display?
+Games can also update enemies, timers, physics, or music without a fresh
+button press. The important cycle is that rules read the current world,
+change it, and produce something the player can observe. [Lesson
+1.10](/pages/1/10/) explains how a game engine supplies much of the
+machinery for that cycle.
 
-Those questions prevent you from assuming that a number on screen is the one
-the simulation uses.
+A game remembers more than one number. It might track one player's gold,
+current health, and maximum health at the same time. How can it keep those
+values together and apply the same rule to many players?
 
-## Related values are grouped into records
+## One player has related values
 
-Values that describe one thing are often stored together. In source code, that
-record might look like this:
+Suppose a player starts with 100 gold, 80 health, and a maximum of 100
+health. These values are part of the changing game state.
+
+```text
+player:
+    gold = 100
+    health = 80
+    max_health = 100
+```
+
+The labels tell us what each value means. If the player buys an item for 25
+gold, gold becomes 75, while health stays 80. If the player then takes 20
+damage, health becomes 60, while gold stays 75. The changes belong to one
+player, but each rule uses a different part of that player's state.
+
+A group of related named values is a **record**. Each value inside it is
+a **field**. The record lets the program talk about a player's gold without
+confusing it with that player's health. It also gives later memory work a
+question to ask: which nearby stored values belong to the same player?
+
+<MemoryStrip
+  cells="gold=75|health=60|max_health=100"
+  groups="0-2:one player's related fields"
+  caption="After the purchase and the hit, three different values still belong to one player record."
+/>
+
+## One record becomes several players
+
+Now imagine a second player with 40 gold and 50 health. Copying the first
+player's field names into `gold2`, `health2`, and so on would work for two
+players, but every new player would demand more special-case code. Instead,
+the game can keep several player records in a **collection**:
+
+| Player | Gold | Health | Maximum health |
+| --- | ---: | ---: | ---: |
+| Ada | 75 | 60 | 100 |
+| Bo | 40 | 50 | 80 |
+
+The table is a picture of two records, not a claim that RAM stores a table
+with headings. A compiled game generally stores values as bytes, without
+source-code field names beside them. Lesson 1.3 showed how a type tells code
+how to read those bytes.
+
+Suppose both players collect one coin. We could write “Ada's gold becomes
+76; Bo's gold becomes 41.” For many players, repeating a single rule is
+simpler:
+
+```text
+for each player in the collection:
+    add 1 to that player's gold
+```
+
+That repeated pass is a **loop**. One pass handles Ada (75 becomes 76);
+the next handles Bo (40 becomes 41). The rule stays the same when the
+collection grows. This is the reason to introduce a collection and a loop,
+rather than a list of data-structure names to memorize.
+
+```mermaid
+flowchart TD
+    Rule["add one coin"] --> Ada["Ada: 75 → 76"]
+    Ada --> Bo["Bo: 40 → 41"]
+    Bo --> More["next player, if any"]
+```
+
+## The same idea in Rust
+
+Rust gives a record type a name with `struct`. We can describe the three
+numeric fields from our example:
 
 ```rust
-#[derive(Debug, Clone)]
 struct Player {
-    id: u32,
+    gold: u32,
     health: u32,
     max_health: u32,
-    position: [f32; 3],
-    team: u8,
 }
 ```
 
-Each named value is a **field**. The whole `Player` value is one record.
+`Player` is the record type. Each line inside the braces names a field,
+then gives its type after a colon. Lesson 1.3 introduced `u32`: a
+four-byte, non-negative whole number. The comma separates fields. This
+declaration describes the shape of a player; it does not create Ada or Bo.
+Lesson 1.5 will create values, change fields, and write a loop in Rust.
 
-The game can then store many records in a collection:
+A game's actual layout may differ from this source-level sketch. A memory
+tool has to infer fields from the bytes and the instructions that use them.
+[Lessons 3.3–3.5](/pages/3/03/) develop that recovery in detail, including
+alternative layouts and objects that move or disappear.
 
-```rust
-let players: Vec<Player> = Vec::new();
-```
+## Rules connect fields
 
-This source-level view is useful, but a compiled game does not store field names
-beside the bytes. Reverse engineering recovers the likely record from field
-offsets, access patterns, and behavior.
-
-## The same game state can use different memory layouts
-
-One engine may keep every player's fields together. Player 1's fields are
-highlighted:
-
-<MemoryStrip
-  cells="=id 0|=hp 0|=pos 0|=team 0|=id 1|=hp 1|=pos 1|=team 1"
-  marks="4-7"
-  groups="0-3:player 0|4-7:player 1"
-  caption="Array of structures: one player's fields sit side by side."
-/>
-
-Another may keep each kind of field in its own array. The same player's fields
-are now spread out:
-
-<MemoryStrip
-  cells="=id 0|=id 1|=hp 0|=hp 1|=pos 0|=pos 1|=team 0|=team 1"
-  marks="1|3|5|7"
-  groups="0-1:ids|2-3:health|4-5:positions|6-7:teams"
-  caption="Structure of arrays: each kind of field sits side by side, and one player is spread across four arrays."
-/>
-
-An entity-component system may store position, health, and rendering components
-in separate pools connected by an entity ID.
-
-Engines choose between these for a practical reason. The first layout keeps one
-player's fields side by side, which suits code that handles one player at a
-time. The second keeps each field's values side by side, which suits code that
-sweeps across every player touching only one field: a physics step that reads
-positions and ignores everything else moves far less unrelated data through the
-CPU's cache. You cannot tell which choice an engine made by staring at a single
-value. You can tell by looking at what sits immediately around it and by
-watching which addresses one instruction visits as a loop repeats.
-
-These layouts store the same data in different orders, and the instructions
-that read the values show which one a game uses.
-
-## Identity, address, and lifetime answer different questions
-
-Suppose an enemy object is currently stored at address `0x5000`.
-
-- **Identity:** which enemy is this?
-- **Address:** where are its bytes right now?
-- **Lifetime:** during which time is that address still the same enemy?
-
-Games often reuse memory. After one enemy disappears, a new enemy may later use
-address `0x5000`. The address stayed the same while the identity changed.
-
-Many engines solve this with a **handle** made from an index plus a generation
-number. The index chooses a slot, and the generation is a counter that goes up
-every time that slot is reused. Code compares the generation carried by the
-handle against the generation currently sitting in the slot:
-
-```text
-handle {slot: 12, generation: 3}    slot 12 holds generation 3    -> accepted
-    ... that enemy dies, and slot 12 is reused for a new enemy ...
-handle {slot: 12, generation: 3}    slot 12 holds generation 4    -> rejected
-```
-
-```mermaid
-flowchart LR
-    H["your tool's handle<br/>slot 12, generation 3"] --> S["slot 12 in the game's table<br/>now holds generation 4"]
-    S --> Q{"do the generations match?"}
-    Q -->|"no: 3 is not 4"| R["reject: a different enemy<br/>now lives in this slot"]
-```
-
-Notice what the stale handle points at: a real, living object at a valid
-address. Nothing about the memory looks broken. The generation mismatch is the
-only thing that reveals this is not the object the holder meant. A tool that
-keeps a reference to a game object has the same problem, so it needs to store
-something that proves which object it is, such as the generation, not only
-where the object was.
-
-## An invariant is a rule the game can never legally break
-
-A single value can look completely reasonable while the object it belongs to is
-impossible. Health of 80 is fine. Health of 80 in an object whose maximum is 60
-is not — no legal sequence of game events could have produced that pair.
-
-A statement that valid game state must always satisfy is called an
-**invariant**. The word means what it sounds like: whatever else changes while
-you play, this does not vary.
+Having fields together also lets the game check relationships between them.
+Ada's health of 60 fits her maximum of 100. A health value of 120 with a
+maximum of 100 would violate the simple rule
 
 ```text
 0 <= health <= max_health
-inventory_count <= inventory_capacity
-entity_generation matches slot_generation
-position coordinates are finite numbers
 ```
 
-Note what these have in common. Every one relates two or more pieces of state
-to each other, rather than saying a single number is “sensible.” That is the
-whole source of their power, and it is why invariants come up in every later
-chapter of this book — as the thing you use to confirm a field is real, and, in
-Chapter 13, as the thing a game control is supposed to protect.
+We do not need a new data structure to explain this rule. It is a
+relationship the game should preserve when it applies damage or healing.
+Lesson 1.5 keeps both fields in its working player record. Later chapters
+call a rule that must remain true an **invariant** and show how to test one
+when recovering a game's data.
 
-Checking a relationship is stronger than checking one field, because a single
-field can rarely look wrong on its own. A health of 80 is entirely plausible —
-until you read `max_health` from the same object and find 60. Each number is
-believable by itself; together they prove the pair did not come from one valid
-object. In practice that is how you discover that an offset is wrong, that a
-structure shifted in a newer game build, or that you accidentally read two
-fields from two different objects.
+An address alone does not prove that a player record is still the same
+player. The game can remove a player and use that memory for someone else.
+For this first pass, remember that an address tells you *where* to look now;
+it does not guarantee an object's identity forever. Lesson 3.5 develops
+ways to recognize identity and lifetime.
 
-## A displayed value may be a copy
+## The display can hold a copy
 
-One idea can exist in several places:
-
-- the simulation's current health;
-- a cached copy prepared for rendering;
-- text such as `"Health: 80"`;
-- a previous value used for animation;
-- a network prediction waiting for confirmation.
+After Ada collects a coin, the game may store 76 as her current gold and
+also prepare the text `"Gold: 76"` for the screen. The text is derived
+from the number, but it is not necessarily the number that the purchase
+rule reads.
 
 ```mermaid
 flowchart LR
-    S["simulation health: 80<br/>read by the damage rules"] --> C["render cache: 80"]
-    C --> T["on-screen text 'Health: 80'"]
-    S --> A["last frame's value: 85<br/>used to animate the bar"]
-    N["in multiplayer:<br/>the server's value"] -.->|"confirms or corrects"| S
+    Input["Ada collects one coin"] --> State["gameplay gold: 75 becomes 76"]
+    State --> Rule["purchase rule reads 76"]
+    State --> Display["display text: Gold: 76"]
 ```
 
-Only the first box decides anything. If you change a display copy, the number
-on screen may change while damage rules still use the simulation value. If you change a previous-frame copy, the change
-may vanish immediately.
+If someone changes only the display text to `"Gold: 999"`, the screen may
+show 999 while the purchase rule still sees 76. Changing a displayed copy
+can affect appearance without changing gameplay. This is why observing a
+matching number in memory is only the start of an investigation. Later
+lessons compare what changes after a purchase with what the game actually
+uses to decide whether the purchase is allowed.
 
-To identify a field, observe both reads and writes:
+In multiplayer, a server may also hold the value that decides the shared
+result. Chapter 6 explains that extra boundary after we have followed one
+local game's state.
 
-- which code writes it when the game changes;
-- which code reads it before an important decision;
-- whether the value survives another update;
-- whether related invariants still hold.
+## Checkpoint
 
-## Data processing depends on shape
+You should now be able to explain:
 
-Before writing code that processes game data, ask:
+- how input, a rule, game state, and a displayed result fit into one loop;
+- why gold, health, and maximum health belong in one player record;
+- what a field and a collection add to that record;
+- how a loop gives two players the same one-coin update;
+- why 120 health with a maximum of 100 breaks a rule about those fields;
+- why changing the displayed text need not change the gold used by gameplay.
 
-1. Is there one item or a collection?
-2. Does order matter?
-3. Does each item have named fields?
-4. Do items form parent/child or graph relationships?
-5. Can the collection change while it is being read?
-
-The answers guide your choice of data structure and algorithm. A list of
-players, a tile grid, a tree of scene nodes, and a network of waypoints should
-not all be processed as if they had the same shape.
-
-## Single-player and multiplayer can have different owners
-
-In a single-player game, the local process often owns the state used to decide
-the result.
-
-In a multiplayer game, the local client may keep a predicted copy while a server
-owns the official shared state. Changing the local copy can affect one screen
-without changing what the server accepts.
-
-The technical question is not simply “where is the number?” It is “which system
-uses this value to make the decision I care about?”
-
-## A practical checklist
-
-When you inspect game data, ask:
-
-1. What object or collection does this value belong to?
-2. What type and field layout fit the observed instructions?
-3. Which code writes the value?
-4. Which code reads it before a decision or draw?
-5. What identifies the object if its address is reused?
-6. Which relationships should always remain true?
-7. Is this the deciding state, a cache, a display copy, or a prediction?
-
-Later chapters answer these questions with breakpoints, memory snapshots,
-object-layout recovery, rendering traces, and network captures.
+We have described the update in words. [Lesson 1.5](/pages/1/05/) turns the
+same player's values and rules into a small Rust program.

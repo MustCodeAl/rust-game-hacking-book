@@ -13,8 +13,9 @@ import ConceptLab from '../../../../components/ConceptLab.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
 
-Your health bar says 100. You take a hit and it says 75. Somewhere inside the
-computer, something that was 100 is now 75.
+Lesson 1.2 followed gold as the CPU changed it. Health works the same way:
+your health bar says 100, you take a hit, and it says 75. Somewhere inside the
+running game, a stored value changed.
 
 This lesson is about where that number actually lives and what it is made of.
 Nearly everything later in the book — finding a value, following a pointer,
@@ -46,8 +47,10 @@ which is exactly why saving a game has to write a file to the drive.
 
 ## Memory is a very long row of numbered boxes
 
-Picture RAM as an enormous row of boxes. Each box holds one **byte**, and each
-box has a permanent number called its **address**.
+Picture a process's memory as an enormous row of boxes. Each box holds one
+**byte**, and each box has a number called its **address**. The number tells
+the process where to look during that run; it need not identify the same data
+after the game restarts.
 
 That really is most of the idea. Memory is boxes, one byte each, each with an
 address. Here are four of them:
@@ -57,11 +60,11 @@ address. Here are four of them:
   caption="Four boxes of RAM. The small label is each box's address; the number inside is the byte stored there."
 />
 
-Both the addresses and the bytes are written in **hexadecimal**, a way of
-writing numbers that the next two sections build up from scratch. The `0x`
-prefix on an address announces it. Inside the boxes, each byte is shown as two
-hex digits with the prefix left off, which is also how debuggers and hex dumps
-display bytes.
+Lesson 1.2 introduced **hexadecimal** as another way to write numbers. The
+`0x` prefix on an address announces it. Inside the boxes, each byte is shown
+as two hex digits with the prefix left off, which is also how debuggers and
+hex dumps display bytes. The next two sections show why the first byte,
+`64`, represents decimal 100.
 
 ### Inside a byte: eight bits and their place values
 
@@ -487,9 +490,10 @@ locker, which is the address-reuse problem in the next section.
 These two statements sound like they contradict each other. Both are true, and
 holding them apart prevents a whole category of bug.
 
-While a heap object is alive it stays where it is. The allocator will not move
-it behind your back, so an address you found for a living enemy keeps working
-for as long as that enemy exists.
+An individually allocated heap object commonly stays at its allocated address
+while it lives. But a game can move values between allocations, and a growable
+collection may relocate its contents. You must establish what the address
+belongs to before assuming it will keep working.
 
 The moment the object is freed, its address returns to the pool and can be
 handed to the very next thing that asks. The old address is still perfectly
@@ -506,10 +510,9 @@ readable. It now refers to something else entirely.
   caption="After enemy A is freed, the allocator hands the same address to enemy B. A tool that still treats `0x5000` as enemy A reads without error, and is now wrong."
 />
 
-So a heap address is stable in a way a stack address never is — but stable means
-"stable while that object lives," not "permanently means that object." This
-exact failure shows up at the end of the lesson, where `0x5000` quietly stops
-being enemy A and starts being enemy B.
+An address may remain useful for the lifetime of one allocation, but it does
+not permanently mean one object. This exact failure shows up at the end of
+the lesson, where `0x5000` quietly stops being enemy A and starts being enemy B.
 
 Stack memory offers not even that much. Its bytes are reused constantly, as one
 call returns and the next one claims the same space, so a stack address rarely
@@ -578,9 +581,10 @@ object lasts until the game deletes it. A loaded module stays valid until it
 unloads.
 
 Nothing announces these endings. The address does not change colour when the
-object behind it dies. This is why solid tools check identity and version
-instead of assuming an address they found once is still correct — an idea
-Lesson 1.4 turns into generation counters.
+object behind it dies. This is why solid tools re-check what they found
+instead of assuming an address they found once is still correct. Lesson 1.4
+uses a simpler player example; [Lesson 3.5](/pages/3/05/) returns to
+generation counters as one way to track object identity.
 
 ## The game does not hold still while you read it
 
