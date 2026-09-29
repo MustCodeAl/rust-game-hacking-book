@@ -156,6 +156,10 @@ reintroduce literal sample names and values when needed. Do not turn the
 optional Lesson 1.1 study routine into a required ending for every lesson.
 Keep the explanatory early code snippets,
 detailed later labs, diagrams, and relocated material in the reading path.
-Review and merge the authored source into `rustgamehackingreimagined` after
-checks; keep that checkout's unrelated local edits intact. Do not publish
-the site without explicit authorization.
+The user clarified that `gh-pages` is the final target. The revised authored
+source remains on `codex/book-revision`; its complete static build was merged
+into `gh-pages` through PR #2. PR #1 mistakenly merged the authored source into
+`rustgamehackingreimagined`, and PR #3 reverted that merge. For future edits,
+build from the authored source and publish the generated output through a
+branch based on `gh-pages`. Keep the original checkout's unrelated local files
+intact.

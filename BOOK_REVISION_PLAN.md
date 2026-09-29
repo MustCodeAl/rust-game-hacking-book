@@ -1,6 +1,6 @@
 # Beginner-first lesson progression: execution plan for Claude
 
-**Status: full-book revision implemented on `codex/book-revision`; merge review pending.**
+**Status: full-book revision implemented on `codex/book-revision` and published to `gh-pages` through PR #2.**
 
 Prepared 2026-09-28. The user subsequently authorized a full-book revision on
 a new branch. Read [BOOK_REVISION_PROGRESS.md](BOOK_REVISION_PROGRESS.md) for
@@ -377,10 +377,12 @@ These checks are planned, not run as part of preparing this document:
 6. If lessons are added or renamed, use the existing `rtk proxy bun run docs-json` from `site/`, then review its changes. Do not regenerate it needlessly for prose-only edits.
 7. Report failures, environmental blockers, and unrun checks honestly. Do not fix unrelated implementation issues under the guise of this editorial task.
 8. The user has authorized finishing and committing the revision on a new
-   branch, then asking Claude to merge it when it is ready. Do not publish or
-   deploy without separate authorization. A future publication should rebuild
-   the corrected authored source for the user-designated `gh-pages` edition,
-   not patch generated pages by hand.
+   branch, then asking Claude to merge it when it is ready. The user later
+   clarified that `gh-pages` is the final target and authorized correcting the
+   branch: the complete generated build was merged through PR #2. The mistaken
+   merge into `rustgamehackingreimagined` was reverted through PR #3. Future
+   publications should rebuild authored source for `gh-pages`, not patch
+   generated pages by hand.
 
 ## 11. Session handoff
 

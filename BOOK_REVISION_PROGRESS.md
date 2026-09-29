@@ -11,13 +11,19 @@ the original editorial contract and source investigation.
 - The local generated `gh-pages` commit `53b95329a4bb0e5fa368e34d979639465af43040`
   says it was published from authored source `db494a5`. This branch began at
   that source commit (`db494a556adfb47a2073d4196c917039a86b8d04`).
-- The original `rustgamehackingreimagined` checkout contains unrelated local
-  changes. This work uses an isolated managed worktree and has not overwritten
-  them. Authored lessons, quizzes, contents data, and guidance changed; the
-  generated `gh-pages` tree was not hand-edited.
-- The live local preview is
-  [the book](http://127.0.0.1:4322/rust-game-hacking-book/). Publishing that
-  preview to `gh-pages` is outside this revision.
+- The original checkout contains unrelated local files. This work uses
+  isolated managed worktrees and has not overwritten them. Authored lessons,
+  quizzes, contents data, and guidance changed; generated pages were rebuilt
+  from that source rather than hand-edited.
+- The complete build from source commit `88d55eb` was merged into `gh-pages`
+  through [PR #2](https://github.com/MustCodeAl/rust-game-hacking-book/pull/2)
+  (merge commit `066897f`). The public primer page shows the new lesson.
+  [PR #1](https://github.com/MustCodeAl/rust-game-hacking-book/pull/1)
+  mistakenly merged the authored source into `rustgamehackingreimagined`;
+  [PR #3](https://github.com/MustCodeAl/rust-game-hacking-book/pull/3)
+  reverted it, restoring that branch's original source tree.
+- The live local preview remains
+  [the book](http://127.0.0.1:4322/rust-game-hacking-book/).
 
 ## Reading path
 
@@ -108,8 +114,9 @@ contents follows the new order.
 
 ## Handoff
 
-Review the committed `codex/book-revision` branch against
-`rustgamehackingreimagined`, using the [full audit](BOOK_REVISION_AUDIT.md)
-and this ledger. Merge the authored-source changes after review and checks.
-Keep the original checkout's unrelated local changes intact. Do not publish
-`gh-pages` as part of this merge.
+The revised site is published on `gh-pages`; the editable lesson source remains
+on `codex/book-revision`. For a later content update, use the
+[full audit](BOOK_REVISION_AUDIT.md) and this ledger, rebuild the complete
+site, and merge its generated output into `gh-pages` through a branch based on
+that publication branch. Keep the original checkout's unrelated local files
+intact.
