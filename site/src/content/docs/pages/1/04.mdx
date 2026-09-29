@@ -1,240 +1,507 @@
 ---
-title: "How Games Organize Data"
-description: "See how game loops, objects, fields, collections, identities, rules, and display copies organize a changing world."
+title: "Programming Fundamentals"
+description: "Build a small Rust program and use it to understand logic, collections, and ways to organize code."
 chapter: "1.4"
-minutes: 18
+minutes: 35
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 4
-  label: "1.4 How Games Organize Data"
+  label: "1.4 Programming Fundamentals"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
-A game must remember what exists and what is happening now. That information is
-the game's **state**: player health, unit positions, inventory items, current
-animation, map tiles, score, and thousands of other values.
+We have already followed one value through a CPU instruction (Lesson 1.2)
+and grouped it with one player's other values (Lesson 1.3). Now we can write
+a small program that uses those ideas. We will start with 100 gold and ask
+what happens when an item costs 25. Lesson 1.8 will show the bytes this
+program uses before we try to find them in a running game.
 
-The code updates that state. The renderer and user interface read parts of it to
-show you a frame.
+Call the two players in this lesson Ada and Bo. Ada starts with 100 gold
+and Bo with 40. The short Rust fragments each explain one idea, and the
+next lesson runs a separate complete program. Here we will also compare
+program logic, collections, and ways to organize code.
 
-## The game loop reads, updates, and draws
+## Data, values, and types
+
+**Data** is information stored or sent as bytes. A **value** is what those
+bytes mean when interpreted, and a **type** tells the program how to
+interpret and use them. For example, the four bytes `50 00 00 00` can
+represent the number 80 when read as a little-endian `u32`. We will work
+through the byte order in Lesson 1.8. For now, notice that “four bytes”
+and “80 health” describe different levels of the same information.
+
+<MemoryStrip
+  cells="=50|=00|=00|=00"
+  groups="0-3:four stored bytes"
+  groups2="0-3:read as a u32: the value 80"
+  caption="A type tells code how to interpret stored data."
+/>
+
+The number 100 is a **literal**: a value written directly in the code.
+A **variable** is a name for a value the program can use. This first
+fragment names the current gold and the cost:
+
+```rust
+let mut gold: u32 = 100;
+let cost: u32 = 25;
+```
+
+`let` introduces a variable. `gold` and `cost` are names we chose.
+The colon gives each variable a **type**. Game Fundamentals used `u32` for
+a non-negative whole number stored in four bytes. The equals sign sets
+the starting value, and the semicolon ends the statement. `mut` means
+the value named `gold` may change. We do not need to change `cost`,
+so it has no `mut`.
+
+The type keeps different kinds of value apart. `80` can be a `u32` health
+amount, `"Ada"` can be text, and `true` can be a `bool` answer to a question.
+Adding two health amounts makes sense; adding the player name to health does
+not. Later, Lesson 3.1 will show how types can even distinguish two numbers
+that happen to use the same underlying bytes, such as a player ID and a
+health amount.
+
+At this point, gold is 100 and cost is 25. To calculate a purchase, the
+program reads both values, subtracts cost, and stores the result back in
+gold:
+
+```rust
+gold = gold - cost;
+```
+
+The right side is calculated first: 100 − 25 = 75. The equals sign then
+assigns 75 to `gold`. The cost stays 25.
+
+<MemoryStrip
+  cells="gold before=100|cost=25|gold after=75"
+  groups="0-2:read 100 and 25, subtract, then store 75"
+  caption="The assignment changes gold. It does not change the cost."
+/>
+
+## State is information that can change
+
+The program's **state** is the information it remembers at one moment.
+Before the assignment, `gold` is 100; afterward, it is 75. The cost is an
+input to that calculation. The subtraction result is a temporary value
+until it is stored as the new gold. A screen might then show the derived
+text `"Gold: 75"`, but that text is not necessarily the stored amount the
+next purchase checks.
 
 ```mermaid
 flowchart LR
-    Input[Read input and events] --> Update[Update game state]
-    Update --> Draw[Draw the current state]
-    Draw --> Input
+    Input["input: buy an item for 25"] --> Calc["calculate 100 − 25"]
+    Calc --> State["store gold = 75"]
+    State --> Display["draw Gold: 75"]
 ```
 
-Real engines have more stages and may use several threads, but this order gives
-you three separate questions:
+This input → calculation → stored state → display path helps us ask which
+value a later piece of code actually reads. Game Fundamentals first showed
+that the display may hold a copy; Hacking Fundamentals will turn that
+observation into an experiment.
 
-1. What input or event entered the game?
-2. Which state changed because of it?
-3. Which state did the renderer or interface display?
+## An algorithm is a repeatable procedure
 
-Those questions prevent you from assuming that a number on screen is the one
-the simulation uses.
-
-## Related values are grouped into records
-
-Values that describe one thing are often stored together. In source code, that
-record might look like this:
+What if gold is only 10 and the cost is 25? A purchase should not be
+allowed. Because `u32` cannot represent a negative number, blindly
+subtracting would also be the wrong operation. We need the branch from
+Lesson 1.2:
 
 ```rust
-#[derive(Debug, Clone)]
-struct Player {
-    id: u32,
-    health: u32,
-    max_health: u32,
-    position: [f32; 3],
-    team: u8,
+if gold >= cost {
+    gold = gold - cost;
 }
 ```
 
-Each named value is a **field**. The whole `Player` value is one record.
+`>=` asks whether gold is greater than or equal to cost. The answer is
+a **boolean** value, either `true` or `false`. `if` runs the
+instructions between the braces only when the answer is true. Starting
+with 100 gold, the comparison is true and gold becomes 75. Starting
+with 10, it is false and gold remains 10. The braces mark the group of
+statements controlled by the branch.
 
-The game can then store many records in a collection:
+```mermaid
+flowchart TD
+    Start["read gold and cost"] --> Check{"gold ≥ cost?"}
+    Check -->|"yes"| Subtract["subtract cost from gold"]
+    Check -->|"no"| Keep["keep the current gold"]
+    Subtract --> Result["resulting gold"]
+    Keep --> Result
+```
+
+This gives us a repeatable **algorithm**, meaning a procedure with
+ordered steps: read the current gold, compare it with the cost, and
+subtract only if the player can pay. The same procedure works for 100 gold
+and for 10 gold. An algorithm is the plan; Rust code is one exact way to
+express it. Its three building blocks are already visible here: do steps
+in **sequence**, use `if` to **select** a path, and later use a loop to
+**repeat** work for several players.
+
+## A function gives a name to a behavior
+
+A **function** gives a behavior a name so another part of the program
+can use it. This one takes a gold amount and a cost, then gives back
+the gold amount after a permitted purchase:
 
 ```rust
-let players: Vec<Player> = Vec::new();
+fn spend_if_possible(gold: u32, cost: u32) -> u32 {
+    if gold >= cost {
+        return gold - cost;
+    }
+    return gold;
+}
 ```
 
-This source-level view is useful, but a compiled game does not store field names
-beside the bytes. Reverse engineering recovers the likely record from field
-offsets, access patterns, and behavior.
+`fn` begins the function definition. The names inside parentheses
+are its **parameters**: the two input values it will receive. Each
+has a `u32` type. The arrow `-> u32` says the returned value is
+also a `u32`. `return` sends the value back to whoever used the
+function. If there is enough gold, it returns the subtraction. If
+there is not, it returns the original amount. The final `return`
+also shows that functions do not have to run every line: the first
+return ends that call.
 
-## The same game state can use different memory layouts
+For example, `spend_if_possible(100, 25)` returns 75.
+`spend_if_possible(10, 25)` returns 10. Those expressions **call**
+the same function with different inputs. They do not change a
+variable by themselves; the caller must store the returned value:
 
-One engine may keep every player's fields together. Player 1's fields are
-highlighted:
+```rust
+gold = spend_if_possible(gold, cost);
+```
+
+This simple result does not tell the caller whether a purchase happened
+when the cost is zero. A later lesson introduces types that can
+represent success or failure explicitly. We only need the resulting
+gold amount here.
+
+## A data structure organizes values
+
+We can group gold, health, and maximum health into one record. For this
+example, Ada starts with 100 gold and 80 health so the program can
+perform the purchase itself.
+That record is a **data structure**: a chosen way to organize related
+values. Rust uses `struct` to describe its shape:
+
+```rust
+struct Player {
+    gold: u32,
+    health: u32,
+    max_health: u32,
+}
+```
+
+Each line inside the braces is a named **field**. Now we can create one
+player value:
+
+```rust
+let ada = Player {
+    gold: 100,
+    health: 80,
+    max_health: 100,
+};
+```
+
+The braces supply the three field values. A comma separates fields;
+the semicolon ends the `let` statement. `ada.gold` reads Ada's
+gold field. `ada.health` reads her health. The dot selects a field
+from this particular record.
+
+The pair `health` and `max_health` has a rule: a valid player's
+health should be between zero and the maximum. For Ada, 80 is within
+0 to 100. If a mistaken update made health 120 while the maximum
+stayed 100, the record would violate that rule. We will name this
+kind of rule an **invariant** below. For now, check the relationship
+instead of trusting either field alone.
+
+## Apply one operation to several players
+
+Suppose Ada has 100 gold and Bo has 40. We want to charge each of
+them 25. A **collection** stores several values. The square brackets
+below make a fixed-size array containing two `Player` records:
+
+```rust
+let mut players = [
+    Player { gold: 100, health: 80, max_health: 100 },
+    Player { gold: 40, health: 50, max_health: 80 },
+];
+```
+
+We make `players` mutable because its records' gold values will
+change. A **loop** repeats one operation for each record:
+
+```rust
+for player in &mut players {
+    player.gold = spend_if_possible(player.gold, 25);
+}
+```
+
+Read `for player in ...` as “take each player in turn.” The
+`&mut players` part lets the loop access the existing records so
+it can change them; Rust calls this a mutable borrow. We will study
+borrowing more fully when a tool begins reading another process in
+Chapter 3. Here, the important effect is that the loop changes the
+records in the collection, rather than temporary copies.
+
+On the first pass, Ada's 100 becomes 75. On the second, Bo's 40
+becomes 15. If Bo had only 10, his gold would stay 10 because the
+function's comparison would reject that purchase. The same named
+operation works for both players; adding a third record would not
+require writing a third purchase rule.
 
 <MemoryStrip
-  cells="=id 0|=hp 0|=pos 0|=team 0|=id 1|=hp 1|=pos 1|=team 1"
-  marks="4-7"
-  groups="0-3:player 0|4-7:player 1"
-  caption="Array of structures: one player's fields sit side by side."
+  cells="Ada before=100|Ada after=75|Bo before=40|Bo after=15"
+  groups="0-1:first loop pass|2-3:second loop pass"
+  caption="One 25-gold purchase rule visits two records and produces two results."
 />
 
-Another may keep each kind of field in its own array. The same player's fields
-are now spread out:
+The `Player` record groups fields belonging to **one** player; the array
+groups **several** players. Both are data structures, chosen for different
+questions. We will compare other useful collections after tracing this array.
 
-<MemoryStrip
-  cells="=id 0|=id 1|=hp 0|=hp 1|=pos 0|=pos 1|=team 0|=team 1"
-  marks="1|3|5|7"
-  groups="0-1:ids|2-3:health|4-5:positions|6-7:teams"
-  caption="Structure of arrays: each kind of field sits side by side, and one player is spread across four arrays."
-/>
+## Trace the two-player result
 
-An entity-component system may store position, health, and rendering components
-in separate pools connected by an entity ID.
+The function, record, and loop fragments above show
+both outcomes without seeing a longer program yet:
 
-Engines choose between these for a practical reason. The first layout keeps one
-player's fields side by side, which suits code that handles one player at a
-time. The second keeps each field's values side by side, which suits code that
-sweeps across every player touching only one field: a physics step that reads
-positions and ignores everything else moves far less unrelated data through the
-CPU's cache. You cannot tell which choice an engine made by staring at a single
-value. You can tell by looking at what sits immediately around it and by
-watching which addresses one instruction visits as a loop repeats.
+| Player | Gold before | Cost | Gold after | Health afterward |
+| --- | ---: | ---: | ---: | --- |
+| Ada | 100 | 25 | 75 | 80/100 |
+| Bo | 40 | 25 | 15 | 50/80 |
 
-These layouts store the same data in different orders, and the instructions
-that read the values show which one a game uses.
+The same purchase rule visits each record. It changes gold, not health.
+[The Rust Primer](/pages/1/05/#grow-one-runner-into-the-full-two-runner-program)
+runs a separate stamina-based program with two runners and shows how Rust
+lends each record to a function in turn.
 
-## Identity, address, and lifetime answer different questions
+## Programming logic: sequence, selection, and repetition
 
-Suppose an enemy object is currently stored at address `0x5000`.
+The purchase program combines three simple ways for instructions to flow.
+A **sequence** does one step and then the next. A **selection** chooses a
+path based on a condition, as `if` did for the purchase. **Repetition**
+runs steps again, as `for` did for the two players. These are not three
+special kinds of program; they are building blocks you can combine.
 
-- **Identity:** which enemy is this?
-- **Address:** where are its bytes right now?
-- **Lifetime:** during which time is that address still the same enemy?
+Suppose Ada meets three prices in order: 25, 90, and 10. Start with 100
+gold and trace this short Rust fragment:
 
-Games often reuse memory. After one enemy disappears, a new enemy may later use
-address `0x5000`. The address stayed the same while the identity changed.
-
-Many engines solve this with a **handle** made from an index plus a generation
-number. The index chooses a slot, and the generation is a counter that goes up
-every time that slot is reused. Code compares the generation carried by the
-handle against the generation currently sitting in the slot:
-
-```text
-handle {slot: 12, generation: 3}    slot 12 holds generation 3    -> accepted
-    ... that enemy dies, and slot 12 is reused for a new enemy ...
-handle {slot: 12, generation: 3}    slot 12 holds generation 4    -> rejected
+```rust
+let mut gold = 100;
+for cost in [25, 90, 10] {
+    if gold >= cost {
+        gold = gold - cost;
+    }
+}
 ```
+
+The array supplies prices in **sequence**. The `for` loop **repeats**
+the body once per price. The `if` **selects** whether subtraction runs
+on that pass. Follow the stored gold, not just the prices:
+
+| Pass | Price | Comparison | What happens to gold? |
+| --- | ---: | --- | --- |
+| Start | — | — | 100 |
+| 1 | 25 | 100 ≥ 25 is true | 100 → 75 |
+| 2 | 90 | 75 ≥ 90 is false | remains 75 |
+| 3 | 10 | 75 ≥ 10 is true | 75 → 65 |
+
+The final gold is 65. Order matters: if the 90-gold purchase came first,
+it could succeed while the later 25-gold purchase would fail. This is why
+reading unfamiliar logic means finding both **which** steps can run and
+**when** they run. A `while` loop also repeats, but it keeps going while
+its condition remains true; the `for` loop here has a known collection
+of three prices. Later lessons combine these same forms into scanners,
+parsers, and game bots.
+
+## Choose a collection for the question
+
+The fixed array of two `Player` records was enough when we knew there were
+exactly two. What if players can join, we need one player's score by name,
+or we must handle pending actions in arrival order? Those are different
+questions, and different collections make each one natural:
+
+| Collection | Picture it as | Good first use | Important limit |
+| --- | --- | --- | --- |
+| Array, `[T; N]` | numbered slots with a fixed count | two known players, three prices | its count does not grow |
+| Vector, `Vec<T>` | numbered slots that can grow | players joining or a history of health samples | removing from the middle shifts later items |
+| Hash map, `HashMap<K, V>` | a key pointing to its value | find Ada's gold by her name or ID | a key may be missing; order is not the promise |
+| Queue, `VecDeque<T>` | a line of waiting items | handle actions in arrival order | it is for the next item, not fast arbitrary lookup |
+| Grid | rows and columns | map tiles at `(row, column)` | boundaries must be checked |
+| Graph | places and their connections | waypoints and reachable paths | you must store and inspect the connections |
+
+`T` stands for the kind of item stored. A vector of `u32` values, for
+example, is written `Vec<u32>`. `K` and `V` stand for a map's key and
+value types. A queue can be implemented with Rust's `VecDeque`, which
+lets us add at the back and take from the front.
+
+The array we used has a fixed number of slots. A vector keeps numbered
+slots but can grow, which fits a history of gold samples:
+
+```rust
+let mut recent_gold = vec![100, 75];
+recent_gold.push(65);
+```
+
+A hash map instead answers “what value belongs to this key?” A queue
+answers “what item arrived next?” [The Rust Primer](/pages/1/05/#try-the-growable-collections-in-rust)
+runs all three as small code examples, including what happens when a
+lookup or queue has no answer.
+
+A grid can be a vector of rows, so `tiles[row][column]` reaches a tile.
+A graph stores which waypoints connect; [Lesson 4.6](/pages/4/06/) uses
+one to search for a route. These are arrangements of data, not magic
+algorithms. Choose by the operation you need: **next by position, look up
+by key, take the oldest, or visit neighbors**. [Lesson 3.5](/pages/3/05/)
+shows how their layouts can be recognized in a running game.
 
 ```mermaid
-flowchart LR
-    H["your tool's handle<br/>slot 12, generation 3"] --> S["slot 12 in the game's table<br/>now holds generation 4"]
-    S --> Q{"do the generations match?"}
-    Q -->|"no: 3 is not 4"| R["reject: a different enemy<br/>now lives in this slot"]
+flowchart TD
+    Ask["What do I need to find?"] --> Pos{"a numbered position?"}
+    Pos -->|yes| Vec["array or vector"]
+    Pos -->|no| Key{"a named key?"}
+    Key -->|yes| Map["hash map"]
+    Key -->|no| Next{"the next waiting item?"}
+    Next -->|yes| Queue["queue"]
+    Next -->|no| Neighbor["a tile or connected neighbor? grid or graph"]
 ```
 
-Notice what the stale handle points at: a real, living object at a valid
-address. Nothing about the memory looks broken. The generation mismatch is the
-only thing that reveals this is not the object the holder meant. A tool that
-keeps a reference to a game object has the same problem, so it needs to store
-something that proves which object it is, such as the generation, not only
-where the object was.
+## Programming paradigms: ways to organize the same rule
 
-## An invariant is a rule the game can never legally break
+A **programming paradigm** is a style for organizing instructions and
+responsibilities. It does not change what a purchase means. Ada still
+starts with 100 gold, pays 25 if she can, and ends with 75. The styles
+answer a different question: *where should that rule live, and how should
+other code use it?*
 
-A single value can look completely reasonable while the object it belongs to is
-impossible. Health of 80 is fine. Health of 80 in an object whose maximum is 60
-is not — no legal sequence of game events could have produced that pair.
+| Style | Main idea | Our purchase example |
+| --- | --- | --- |
+| Procedural or imperative | Write the steps that change state | Check gold, then subtract cost. |
+| Object-oriented | Put related data and behavior together | A `Player` has gold and a `buy` method. |
+| Functional | Calculate an output from inputs without changing hidden state | `spend_if_possible(100, 25)` returns 75. |
+| Event-driven | Run a handler when something happens | A Buy click calls the purchase rule. |
 
-A statement that valid game state must always satisfy is called an
-**invariant**. The word means what it sounds like: whatever else changes while
-you play, this does not vary.
+### Procedural: follow the steps
 
-```text
-0 <= health <= max_health
-inventory_count <= inventory_capacity
-entity_generation matches slot_generation
-position coordinates are finite numbers
+The first version we wrote is procedural. It says **how** to update the
+variable, in order:
+
+```rust
+if gold >= cost {
+    gold = gold - cost;
+}
 ```
 
-Note what these have in common. Every one relates two or more pieces of state
-to each other, rather than saying a single number is “sensible.” That is the
-whole source of their power, and it is why invariants come up in every later
-chapter of this book — as the thing you use to confirm a field is real, and, in
-Chapter 13, as the thing a game control is supposed to protect.
+That is often the clearest way to begin. It becomes awkward only if every
+screen and bot copies the same purchase steps, because one later rule
+change would have to be repeated everywhere. Our named function solves
+that duplication.
 
-Checking a relationship is stronger than checking one field, because a single
-field can rarely look wrong on its own. A health of 80 is entirely plausible —
-until you read `max_health` from the same object and find 60. Each number is
-believable by itself; together they prove the pair did not come from one valid
-object. In practice that is how you discover that an offset is wrong, that a
-structure shifted in a newer game build, or that you accidentally read two
-fields from two different objects.
+### Object-oriented: keep behavior with its data
 
-## A displayed value may be a copy
+A `Player` record already keeps related data together. A method can put
+the purchase behavior beside that record, so `ada.buy(25)` reads as an
+action on Ada. [The Rust Primer](/pages/1/05/#put-behavior-next-to-a-struct-with-impl)
+shows the same organization with `impl Runner` and explains why a method
+receives editable access to its runner. Rust methods do not require class inheritance;
+[Lesson 3.3](/pages/3/03/) later examines how a compiled C++ game's
+classes and methods appear in memory.
 
-One idea can exist in several places:
+### Functional: make the result visible
 
-- the simulation's current health;
-- a cached copy prepared for rendering;
-- text such as `"Health: 80"`;
-- a previous value used for animation;
-- a network prediction waiting for confirmation.
+Our `spend_if_possible` function illustrates a functional style. Given
+100 and 25, it returns 75. It does not secretly reach out and change
+Ada. The caller decides whether to store the answer:
 
-```mermaid
-flowchart LR
-    S["simulation health: 80<br/>read by the damage rules"] --> C["render cache: 80"]
-    C --> T["on-screen text 'Health: 80'"]
-    S --> A["last frame's value: 85<br/>used to animate the bar"]
-    N["in multiplayer:<br/>the server's value"] -.->|"confirms or corrects"| S
+```rust
+let next_gold = spend_if_possible(100, 25); // 75
 ```
 
-Only the first box decides anything. If you change a display copy, the number
-on screen may change while damage rules still use the simulation value. If you change a previous-frame copy, the change
-may vanish immediately.
+That makes the calculation easy to check with different inputs. A larger
+program can mix this style with state-changing methods; the two are
+useful for different jobs.
 
-To identify a field, observe both reads and writes:
+### Event-driven: respond when something happens
 
-- which code writes it when the game changes;
-- which code reads it before an important decision;
-- whether the value survives another update;
-- whether related invariants still hold.
+A real game stays open instead of running `main` once and closing. A
+Buy click can produce an **event**, and the interface or game engine can
+call a registered **handler** in response:
 
-## Data processing depends on shape
+```rust
+fn on_buy_click(player: &mut Player) {
+    player.gold = spend_if_possible(player.gold, 25);
+}
+```
 
-Before writing code that processes game data, ask:
+This shows the handler's job, not a complete window setup. A game also
+updates and draws while no one clicks. [Lesson 8.6](/pages/8/06/)
+explains Windows messages and game loops; [Lesson 4.7](/pages/4/07/)
+compares events with checking for changes on a schedule. For now, notice
+that the event-driven style decides **when** the familiar purchase rule
+runs.
 
-1. Is there one item or a collection?
-2. Does order matter?
-3. Does each item have named fields?
-4. Do items form parent/child or graph relationships?
-5. Can the collection change while it is being read?
+One game can use all four styles: an event calls a handler, which asks a
+player method to update state using a small calculation. A paradigm is a
+way to organize work, not a team you must join forever.
 
-The answers guide your choice of data structure and algorithm. A list of
-players, a tile grid, a tree of scene nodes, and a network of waypoints should
-not all be processed as if they had the same shape.
+## An abstraction hides details behind a smaller interface
 
-## Single-player and multiplayer can have different owners
+Calling `spend_if_possible(100, 25)` lets another part of the program use
+the purchase rule without repeating its branch and subtraction. That is
+an **abstraction**: a smaller interface hides useful steps. It still has
+to keep its promise. If the caller and function disagree about the
+inputs, the friendly name does not repair the mistake. [Lesson
+3.8](/pages/3/08/) later explains source-level APIs and machine-level
+ABIs when we begin calling compiled game functions.
 
-In a single-player game, the local process often owns the state used to decide
-the result.
+## An invariant is a rule valid state must keep true
 
-In a multiplayer game, the local client may keep a predicted copy while a server
-owns the official shared state. Changing the local copy can affect one screen
-without changing what the server accepts.
+The earlier health rule is an **invariant**: when player state is valid,
+`health <= max_health` must hold. A small function can check it:
 
-The technical question is not simply “where is the number?” It is “which system
-uses this value to make the decision I care about?”
+```rust
+fn valid_health(health: u32, max_health: u32) -> bool {
+    health <= max_health
+}
+```
 
-## A practical checklist
+For our `u32` values, zero is already the smallest possible number. If
+Ada has 80 health and a maximum of 100, the function returns `true`; for
+120 and 100 it returns `false`. The purchase rule has its own condition:
+only subtract a cost when the player can pay. An invariant gives you a
+concrete check when unfamiliar state or a recovered field might be wrong.
+[Lesson 13.1](/pages/13/01/)
+uses such rules in deeper game-state investigations.
 
-When you inspect game data, ask:
+## Follow the data through unfamiliar code
 
-1. What object or collection does this value belong to?
-2. What type and field layout fit the observed instructions?
-3. Which code writes the value?
-4. Which code reads it before a decision or draw?
-5. What identifies the object if its address is reused?
-6. Which relationships should always remain true?
-7. Is this the deciding state, a cache, a display copy, or a prediction?
+Return to `spend_if_possible` rather than trying to hold the whole page
+in your head. One useful route is to ask five questions:
 
-Later chapters answer these questions with breakpoints, memory snapshots,
-object-layout recovery, rendering traces, and network captures.
+1. **What enters?** Gold and cost, both `u32` values.
+2. **What can stop or change the path?** `gold >= cost` chooses the return.
+3. **What state changes inside?** None; this function calculates a result.
+4. **What leaves?** A `u32`: 75 for `(100, 25)`, or 10 for `(10, 25)`.
+5. **Who stores that result?** The caller's assignment to `gold` or
+   `player.gold`.
+
+The same questions work for a new function or event handler: find the
+inputs and types, checks, state changes, and output. A dense line can be
+broken into smaller expressions to see which value each one produces.
+
+## What the gold program shows
+
+`mut` permits gold to change while cost stays fixed. The 10-gold case
+takes the failed branch of `gold >= cost`, so `spend_if_possible` returns
+unchanged gold. One loop applies that same function to Ada and Bo. The
+three-price trace combines ordered steps, a branch, and repetition.
+
+A vector keeps a growing history; a hash map answers a lookup by key;
+a queue keeps pending actions in arrival order. A visible “Gold: 75”
+label can be separate from the `gold` field the rule reads. Procedural,
+object-oriented, functional, and event-driven styles can organize the
+same rule in different places, while `valid_health` checks that player
+health stays within its allowed range.
+
+[The Rust Primer](/pages/1/05/) uses a different game action to make the
+Rust syntax executable. [Hacking Fundamentals](/pages/1/06/) then turns
+an observed purchase into a question about a running game: which value
+actually controls it?

@@ -49,10 +49,11 @@ misleading result:
 | writer disconnects | stop recording and return an error |
 | target memory becomes unreadable | mark the run incomplete; never repeat the last value as if it were new |
 | an older reader sees a new schema | reject the unknown version or use a reader written for it |
-| shutdown begins | close producers, drain accepted events, flush, and join the writer |
+| shutdown begins | close producers, drain accepted events, flush, join the writer, and report counts |
 
-This is why counters, versions, and a clean-shutdown marker are part of the data
-model. They let a later graph distinguish “gold stayed at 100” from “the tool
+This is why the current recorder counts dropped samples and versions its file.
+A durable clean-shutdown marker is the next extension described below. These
+facts let a later graph distinguish “gold stayed at 100” from “the tool
 stopped observing for two seconds.” 📉
 
 ## Define the smallest useful event
@@ -114,6 +115,15 @@ match sender.try_send(event) {
 ```
 
 Dropping an event sounds bad, but silently pausing every target thread can be worse. The important rule is **make loss visible**. The final report prints both written and dropped counts.
+
+Picture the queue as 128 numbered spaces between the sampler and the writer.
+Suppose the writer stalls while 127 spaces are occupied. The next sample takes
+space 128. Another sample arrives before the writer removes anything, so
+`try_send` returns `Full`; the sampler increments `dropped` to 1 and continues.
+When the writer resumes and removes one event, a later sample can enter again.
+The queue absorbed a short delay, but it did not make the disk faster or keep
+every sample. In the finished log, the count of one dropped event warns that
+the measured timeline has a gap even if the surrounding gold values look flat.
 
 Different tools can choose different policies:
 
@@ -185,10 +195,11 @@ record:
 
 Do not silently reinterpret old columns after a format change. Create `v2`.
 
-## Write explicit start, event, and end records
+## Design an explicit end record for a later format
 
-Treat one telemetry file as a complete record rather than a pile of unrelated
-lines:
+The linked `gold_telemetry.rs` writes a v1 header and detail rows, then prints
+written and dropped counts to the console. It **does not yet write a trailer**.
+If the file itself must prove how a run ended, extend it to v2 with three parts:
 
 1. the **header** says how to interpret the run;
 2. the **detail rows** contain repeated observations;
@@ -203,7 +214,7 @@ For example:
 />
 
 ```text
-# gha-gold-telemetry v1
+# gha-gold-telemetry v2
 # target=wesnoth.exe build=1.14.9 sample_ms=50
 elapsed_ms,gold
 0,100
@@ -211,11 +222,11 @@ elapsed_ms,gold
 # end written=2 dropped=0 clean_shutdown=true
 ```
 
-The repeated rows are useful only when the surrounding facts are trustworthy.
-If `clean_shutdown=false` or the writer reports dropped samples, analysis code
-can label the run incomplete instead of quietly treating a gap as normal game
-behavior. A footer also gives you a cheap consistency check: the number of data
-rows should agree with `written`.
+This v2 example is a design exercise, not the output of the v1 code below. A
+v2 writer would write the trailer after draining accepted events, and its
+reader would check that the number of rows matches `written`. A missing trailer,
+`clean_shutdown=false`, or nonzero dropped count would label the run incomplete
+instead of quietly treating a gap as normal game behavior.
 
 ## Sampling is an observation, not perfect time
 
@@ -469,12 +480,11 @@ Also simulate a writer that exits early. `Disconnected` must become an error rat
   explanation="The debug loop should restore state and continue promptly. A bounded queue controls memory, nonblocking send avoids holding the target for disk I/O, and an explicit loss counter keeps lost events from going unnoticed."
 />
 
-## Checkpoint
+## What the recording can claim
 
-You are ready to reuse this pipeline when you can explain:
-
-- why events contain copied facts instead of handles or borrowed buffers;
-- what a full queue means;
-- why accepted and dropped counts both matter;
-- why dropping the last sender is a clean shutdown signal;
-- why timestamps are measured rather than inferred from sample number.
+Each event owns a copy of the facts it needs; it cannot keep a borrowed
+debug-event buffer or process handle alive by accident. A full bounded queue
+means producers outran the writer, so the written and dropped counts both
+belong in the result. Dropping the last sender lets the writer drain accepted
+events and end cleanly. Each event carries a measured timestamp because a
+sample number alone cannot reveal delays or gaps in observation.

@@ -13,6 +13,8 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 ## Processes normally have separate address spaces
 
+The proxy copied messages between sockets. A supported game add-on and a separate visualizer could instead agree on a local shared byte region. The message still needs a layout and a lifetime; only the transport changes.
+
 Two running programs can both use the address `0x00400000`, yet those numbers can refer to completely different physical storage. Each process has its own virtual address space.
 
 That separation is a safety feature. A map helper should not need to patch a game process merely to receive a supported event from a mod. Windows provides **interprocess communication**, or IPC, for programs that intentionally cooperate.
@@ -72,6 +74,8 @@ Memory has no built-in `String` type. Both programs must agree on a layout:
 
 The four-byte length makes embedded zero bytes unambiguous and lets the reader reject impossible sizes before creating a string slice.
 
+This is the beginning of **serialization**: turning structured information into an agreed byte representation.
+
 ```diff
  fn read_text(bytes: &[u8]) -> anyhow::Result<&str> {
 -    let end = bytes.iter().position(|byte| *byte == 0)
@@ -108,7 +112,15 @@ CPU and the compiler may reorder the two stores anyway. Closing it takes a
 sequence number the reader checks before and after copying, or a real
 synchronization object.
 
-This is the beginning of **serialization**: turning structured information into an agreed byte representation.
+For a small concrete case, suppose the old payload is `READY` (five bytes)
+and the writer announces a new seven-byte payload `RUNNING` before copying it.
+The reader can observe length 7 alongside `READY` and two old padding bytes.
+Seven bytes fit inside the mapping, and zero bytes are valid UTF-8, so both
+checks in `read_text` can succeed while the message is not the one the writer
+meant to publish. The sequence diagram shows that exact gap between publishing
+the length and finishing the payload. A shared map is like a notice board both
+programs can see; visibility does not give either program an agreed moment to
+read a completed notice.
 
 ## Build the writer and reader
 
@@ -312,3 +324,5 @@ The one-shot lab avoids concurrent writes. A real design needs synchronizationâ€
 The buildable source is [`shared_memory_lab.rs`](/windows-labs/src/bin/shared_memory_lab.rs).
 
 References: [sharing files and memory](https://learn.microsoft.com/en-us/windows/win32/memory/sharing-files-and-memory), [creating named shared memory](https://learn.microsoft.com/en-us/windows/win32/memory/creating-named-shared-memory), [`CreateFileMappingW`](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-createfilemappingw), and [`MapViewOfFile`](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile).
+
+Lesson 6.8 uses a named pipe when the producer and consumer would rather exchange one request and one reply than coordinate reads of a shared region.

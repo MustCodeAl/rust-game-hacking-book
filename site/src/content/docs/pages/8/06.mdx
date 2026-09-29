@@ -13,6 +13,8 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 ## “Send a key” can mean three different things
 
+Our DLL now has a controlled lifecycle, and the scanner can do work off the game thread. A local tool also needs a deliberate way to start or stop a feature. Pressing a menu hotkey, sending a synthetic key to an offline game, and calling a window procedure solve different problems, even though all three sound like “input.”
+
 Windows has several input paths because programs receive interaction in
 different ways:
 
@@ -52,6 +54,94 @@ debugging. ⌨️
 A game may combine several paths: Raw Input for aiming, ordinary window messages for menus, and polled key state for a developer console. Observe how the target consumes input before choosing an API. Sending `WM_KEYDOWN` to a window that reads device state is not a failed keyboard event; it is the wrong abstraction.
 
 Always pair a down transition with an up transition, including cancellation and error paths. A state machine should own which synthetic inputs are currently held so shutdown can release exactly those inputs.
+
+## A window receives messages through a loop
+
+The message path makes more sense if we first follow an ordinary
+window. A key press or resize can place a message in the thread's
+queue. A **message loop** retrieves it and `DispatchMessage` calls
+the window's **window procedure**. That procedure is a callback: a
+function the application provides so Windows can call it when a
+message is dispatched. For example, it might respond to `WM_SIZE`
+by updating the window's layout. Microsoft's
+[window-message walkthrough](https://learn.microsoft.com/en-us/windows/win32/learnwin32/window-messages)
+shows this path.
+
+```text
+message arrives for a window
+loop retrieves it
+DispatchMessage calls that window's procedure
+procedure handles it and returns
+loop retrieves the next message
+```
+
+`GetMessage` waits when no queued message is available. That suits a
+window that has nothing to do until the next event. A game often must
+update its world even when the player touches nothing. Its loop can
+use `PeekMessage` to check for waiting messages without blocking,
+then continue to update and draw. This is a conceptual comparison,
+not complete Win32 source:
+
+```text
+ordinary event loop:
+    wait for a message with GetMessage
+    translate and dispatch it
+
+game-style loop:
+    while PeekMessage finds a waiting message:
+        translate and dispatch it
+    update the world
+    draw the next frame
+```
+
+The waiting path and the continuously updating path look different:
+
+```mermaid
+flowchart TD
+    W["wait for a message: the thread sleeps"] --> H["handle it"]
+    H --> W
+```
+
+```mermaid
+flowchart TD
+    P["handle waiting messages; continue at once if there are none"] --> U["update the world"]
+    U --> D["draw the frame"]
+    D --> P
+```
+
+`TranslateMessage` can post character messages derived from key
+messages; `DispatchMessage` sends a retrieved message to its
+window procedure. `PeekMessage` reports no available queued
+message without waiting, which is why the game-style loop can
+continue its own work. The exact handling of Raw Input and other
+message types varies by application; do not assume every game
+consumes `WM_KEYDOWN` as its gameplay input. See Microsoft's
+[`GetMessageW`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmessagew)
+and [`PeekMessageW`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-peekmessagew)
+references for their return and queue rules.
+
+The callback must also return promptly. While a window procedure is
+busy reading a large file or waiting on a network request, other
+messages for windows on that thread cannot be handled. The window
+may stop repainting or responding to input. Microsoft's
+[window-procedure guidance](https://learn.microsoft.com/en-us/windows/win32/learnwin32/writing-the-window-procedure#avoiding-bottlenecks-in-your-window-procedure)
+explains this bottleneck. The same concern appears when a hook adds
+work to a game's time-sensitive path: move slow work elsewhere and
+make overload visible, as Lesson 4.8 does for a recorder.
+
+<MemoryStrip
+  cells="being handled=WM_KEYDOWN, reading a large file|waiting=WM_MOUSEMOVE|waiting=WM_PAINT|waiting=WM_CLOSE"
+  marks="0"
+  groups="1-3:these messages wait until the first handler returns"
+  caption="One thread's message queue. A slow first handler delays movement, repainting, and close handling."
+/>
+
+**Polling** is the other side of this distinction. If no one sends
+your tool a message when the game's gold changes, the tool can check
+the value on its own schedule. It does work even when nothing changed.
+[Lesson 4.7](/pages/4/07/) shows how to compare successive snapshots
+so many polls produce one meaningful event instead of many repeated
+actions.
 
 ## Read a hotkey with `GetAsyncKeyState`
 

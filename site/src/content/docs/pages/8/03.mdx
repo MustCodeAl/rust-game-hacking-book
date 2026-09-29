@@ -2,7 +2,7 @@
 title: "Manage a Detour"
 description: "Turn the debugger-only code-cave experiment into a verified, reversible patch plan."
 chapter: "8.3"
-minutes: 24
+minutes: 44
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
@@ -22,7 +22,7 @@ A hook changes running machine code, so the final write is necessarily low-level
 - cleanup in `Drop`;
 - clear errors.
 
-![The debugger-only detour from the earlier lab](/assets/images/3/4/wesnoth1.png)
+![The Wesnoth debugger-only detour introduced in Lesson 2.7](/assets/images/3/4/wesnoth1.png)
 
 ## Define the patch's safety model first
 
@@ -245,48 +245,283 @@ The replacement has to fit in that same six-byte span:
   caption="The patched bytes, still six bytes long. `rel32` is not written here because it depends on where the DLL happens to load; `near_jump` computes it once the cave's real address is known."
 />
 
-The x86 cave can preserve state, call the gold-changing helper, replay those instructions, and return. The two functions below share one cave: the first does the actual gold write, and the second is the jump target that wraps it and gets back to `0x00CCAF90`:
+## Trace the jump and saved CPU state
 
-```mermaid
-flowchart TD
-    A["execution reaches 0x00CCAF8A,<br/>now the jump into the cave"] --> B["pushfd, pushad<br/>(save flags and all registers)"]
-    B --> C["call cave_body<br/>sets Wesnoth gold to 888"]
-    C --> D["popad, popfd<br/>(restore registers and flags)"]
-    D --> E["replay the displaced bytes:<br/>mov eax, dword ptr [ecx]<br/>lea esi, [esi]"]
-    E --> F["jmp 0x00CCAF90<br/>(resume address)"]
+Suppose the DLL placed `terrain_cave` at `0x6F201000`. Then:
+
+```text
+displacement = 0x6F201000 - (0x00CCAF8A + 5)
+             = 0x6F201000 - 0x00CCAF8F
+             = 0x6E536071
 ```
 
+<MemoryStrip
+  cells="0x00CCAF8A=E9|=71|=60|=53|=6E|=90"
+  groups="0-0:`jmp`|1-4:`0x6E536071`, little endian|5-5:`nop`"
+/>
+
+Two things follow from that. Because the value is relative, the same five bytes
+mean different destinations at different addresses, so a working jump cannot be
+copied to another location and still land anywhere sensible. And because the
+value is signed, jumping backward is perfectly ordinary: a cave at a lower
+address simply produces a negative displacement.
+
+The CPU therefore goes to our DLL instead. Our cave borrows control, preserves
+the interrupted computation, changes gold, performs the behavior we removed,
+and gives control back at `0x00CCAF90`. The original function never returns to
+the hook address, so there is no loop.
+
+This is a tiny example of **control-flow redirection**, a computer-science idea
+used by debuggers, profilers, hot-patching systems, instrumentation tools, and
+game hooks.
+
+The cave interrupts a function in the middle of its work. That function had
+values sitting in registers and a comparison result sitting in the flags, and
+it expects to find all of them untouched when execution resumes. Everything the
+cave does — including the ordinary Rust inside `cave_body` — is free to
+overwrite them. `pushad` copies all eight general-purpose registers onto the
+stack and `pushfd` copies the flags; `popfd` and `popad` restore them in the
+opposite order, so the interrupted function never notices that anything
+happened.
+
+<MemoryStrip
+  column
+  cells="esp+32=flags, from pushfd|esp+28=eax|esp+24=ecx|esp+20=edx|esp+16=ebx|esp+12=esp as it was before pushad|esp+8=ebp|esp+4=esi|esp →=edi"
+  marks="8"
+  groups="0-0:`pushfd`|1-8:`pushad`, in the order it pushes them"
+  caption="The cave's stack after `pushfd` and `pushad`, with `esp` at the bottom. `popad` then `popfd` take everything back in the opposite order."
+/>
+
+There is no universal “save every register” rule. `pushfd`/`pushad` is easy to
+understand for this small 32-bit teaching cave. In a performance-sensitive
+hook, inspect which values are live and preserve exactly what the inserted code
+may change. The stack must also be balanced: every `push` needs a matching
+`pop`, and the called function's convention must agree with the cave.
+
+
+The cave now needs a complete owner: one function changes the gold field, one preserves and restores the interrupted CPU state, and one installs a verified, reversible jump.
+
+This is the actual cave from the build-checked Windows project:
+
 ```rust
-#[cfg(target_arch = "x86")]
+use std::ptr;
+use anyhow::{Context, Result};
+use gha_windows_labs::{LocalPatch, near_jump};
+
+const PLAYER_ROOT: usize = 0x017E_ED18;
+const GAME_OFFSET: usize = 0x0A90;
+const GOLD_OFFSET: usize = 0x0004;
+
+const HOOK: usize = 0x00CC_AF8A;
+const RESUME: usize = 0x00CC_AF90;
+const ORIGINAL: [u8; 6] = [0x8B, 0x01, 0x8D, 0x74, 0x26, 0x00];
+
+/// Follow Wesnoth's real pointer path and change the live gold field.
+///
+/// # Safety
+/// Run only inside the documented 32-bit Wesnoth build with a local match open.
+unsafe fn set_gold(amount: u32) -> Result<()> {
+    // 🛡️ SAFETY: the supported-game profile identifies this pointer root.
+    let player = unsafe { ptr::read_volatile(PLAYER_ROOT as *const u32) } as usize;
+    anyhow::ensure!(player != 0, "start a local match first");
+
+    let side_pointer_address = player
+        .checked_add(GAME_OFFSET)
+        .context("side-pointer address overflowed")?;
+    // 🛡️ SAFETY: the verified player record stores a 32-bit side pointer here.
+    let side = unsafe {
+        ptr::read_volatile(side_pointer_address as *const u32)
+    } as usize;
+    anyhow::ensure!(side != 0, "current side pointer is null");
+
+    let gold_address = side
+        .checked_add(GOLD_OFFSET)
+        .context("gold address overflowed")?;
+    // 🛡️ SAFETY: the current side record stores its four-byte gold value at +4.
+    unsafe { ptr::write_volatile(gold_address as *mut u32, amount) };
+    Ok(())
+}
+
 extern "C" fn cave_body() {
-    let _ = set_wesnoth_gold(888);
+    // ⚠️ A naked assembly function cannot return Result. A missing match simply
+    // leaves gold unchanged; startup already verified the game executable.
+    let _ = unsafe { set_gold(888) };
 }
 
 #[cfg(target_arch = "x86")]
 #[unsafe(naked)]
-unsafe extern "C" fn wesnoth_cave() {
+unsafe extern "C" fn terrain_cave() {
     core::arch::naked_asm!(
+        // 📦 Save the flags and eight general-purpose 32-bit registers.
         "pushfd",
         "pushad",
+
+        // 🛡️ The helper performs the pointer checks and gold write.
         "call {body}",
+
+        // 🔁 Put the interrupted thread back exactly as we found it.
         "popad",
         "popfd",
+
+        // ✅ Replay the behavior of all instructions replaced at the hook.
         "mov eax, dword ptr [ecx]",
         "lea esi, [esi]",
+
+        // 🧭 Continue at the first untouched Wesnoth instruction.
         "jmp {resume}",
         body = sym cave_body,
-        resume = const 0x00CC_AF90,
+        resume = const RESUME,
     );
+}
+
+#[cfg(target_arch = "x86")]
+fn install_terrain_hook() -> Result<LocalPatch> {
+    let cave_address = terrain_cave as *const () as usize;
+    let jump = near_jump(HOOK, cave_address)?;
+
+    let mut detour = [0x90_u8; 6];
+    detour[..5].copy_from_slice(&jump); // E9 plus signed rel32
+
+    // 🧹 LocalPatch refuses a different build, makes the code page writable,
+    // writes all six bytes, flushes the instruction cache, restores the page
+    // protection, and owns ORIGINAL so Drop can restore it later.
+    LocalPatch::apply(HOOK, &ORIGINAL, &detour)
 }
 ```
 
-Build the DLL for 32-bit Windows. Create the six-byte replacement as a five-byte `E9 rel32` jump followed by `0x90`, verify the live bytes still equal the recorded original, change the page protection, write the patch, flush the instruction cache, and restore the old protection.
+Here is the important difference between “the address worked once” and a hook
+whose assumptions are visible:
 
-Those actions are fully implemented—rather than delegated to an imaginary
-wrapper—in [`local_patch.rs`](/windows-labs/src/windows_impl/local_patch.rs).
-The build-checked Wesnoth cave and installer are in
-[`game_hooks.rs`](/windows-labs/src/windows_impl/game_hooks.rs). Lesson 2.6
-prints the complete hook, pointer write, instruction replay, and run command in
-one place.
+```diff
+ unsafe fn set_gold(amount: u32) -> Result<()> {
+     let player = ptr::read_volatile(PLAYER_ROOT as *const u32) as usize;
+-    let side = *(player.add(GAME_OFFSET) as *const u32) as usize;
+-    *((side + GOLD_OFFSET) as *mut u32) = amount;
++    let side_pointer_address = player.checked_add(GAME_OFFSET)
++        .context("side-pointer address overflowed")?;
++    let side = ptr::read_volatile(side_pointer_address as *const u32) as usize;
++    anyhow::ensure!(side != 0, "current side pointer is null");
++    let gold_address = side.checked_add(GOLD_OFFSET)
++        .context("gold address overflowed")?;
++    ptr::write_volatile(gold_address as *mut u32, amount);
+     Ok(())
+ }
+```
 
-When you choose **Terrain Description**, gold should become `888`. Disable the feature and restore all six original bytes; choosing the menu item again should leave gold unchanged. That final restoration test is part of the hack, not optional cleanup.
+:::note[Why this version?]
+`checked_add` prevents a bad pointer plus offset from
+wrapping around to a believable low address. The null check turns “no active
+side” into an ordinary error. Volatile access tells the compiler that this
+memory can change outside the compiler's view, but it does **not** make an invalid
+pointer safe. That is why the build check, pointer path, and narrow `unsafe`
+boundary are still required. `LocalPatch` then owns the separate responsibility
+of restoring the original instructions.
+:::
+
+This is not pseudocode. The complete definitions of [`LocalPatch` and
+`near_jump`](/windows-labs/src/windows_impl/local_patch.rs), including
+`VirtualProtect`, `FlushInstructionCache`, and automatic restoration, are part
+of the project. The exact cave above lives in [`game_hooks.rs`](/windows-labs/src/windows_impl/game_hooks.rs).
+
+Build it as 32-bit because the naked function uses x86 registers and the target
+stores four-byte pointers:
+
+```powershell
+cd windows-labs
+cargo build --release --target i686-pc-windows-msvc
+```
+
+Inject the resulting DLL with the course injector:
+
+```powershell
+.\target\i686-pc-windows-msvc\release\injector.exe `
+  wesnoth.exe `
+  .\target\i686-pc-windows-msvc\release\gha_windows_labs.dll
+```
+
+Press **F1** to install the cave. Right-click a tile and choose **Terrain
+Description**. Gold becomes `888` before the description is shown. Press **F1**
+again to restore all six original bytes; repeat the menu action and gold should
+stay unchanged. Press **End** to stop the worker and restore any remaining
+patch.
+
+
+## Reuse the same detour for a live text field
+
+The first hook changes a game value at a terrain-description event. The next case starts from a different observation: the game passes a live text pointer to its print function. The patch manager, checked relative jump, saved bytes, and restoration rule stay the same; the cave changes what it reads and writes.
+
+Now use the real target. On the **Den of Onis** map, right-click a Ford tile and open **Terrain Description**. Search for a distinctive part of the description, then change the first letter of each candidate until the displayed text changes. In the book’s run, the live string began at `0x10CE996B`.
+
+Set a read breakpoint on one byte of that string and open the description again. Step out until you reach `0x005ED114`. Here `edx` leads to the text object, and the call at `0x005ED129` prints it. The original print target is `0x005E9630`; execution continues at `0x005ED12E`.
+
+For the debugger-only experiment, place a cave at `0x01343E1B`, replace the five-byte call at `0x005ED129` with a relative jump, and assemble:
+
+```nasm
+pushad
+mov eax, dword ptr [edx]
+inc byte ptr [eax]
+popad
+call 0x005E9630
+jmp 0x005ED12E
+```
+
+This deliberately changes the first byte each time the description is drawn: `A` becomes `B`, then `C`, and so on. It is visible proof that the cave receives the live text pointer and still replays the original call.
+
+The installer uses the checked `near_jump` helper from the first hook. Its displacement is measured from the end of the five-byte jump, and it rejects an unreachable cave.
+
+Before writing, verify that the five original bytes still encode the expected call. When disabling the hack, restore those exact saved bytes. Close and reopen the description between tests so each character change is obvious.
+
+## Turn the text cave into the complete second-player gold patch
+
+The finished hook keeps the same five-byte patch point, original print call, and resume address. Instead of incrementing one letter, it follows Wesnoth's verified in-process pointer chain and writes the second player's gold as decimal text:
+
+```text
+[0x017EED18] → player object
+player + 0x0A90 → game/side object
+game + 0x0274 → second player's gold
+[EDX] → start of the live output text buffer
+```
+
+The helper checks every pointer, caps the displayed value at `999`, converts it into at most three ASCII digits, and copies exactly three bytes into the existing buffer. The naked cave supplies the live `EDX`, preserves flags and registers, replays the original print call, and resumes the game:
+
+```rust
+#[unsafe(naked)]
+unsafe extern "C" fn wesnoth_stat_cave() {
+    core::arch::naked_asm!(
+        "pushfd",
+        "pushad",
+        "push edx",
+        "call {prepend}",
+        "add esp, 4",
+        "popad",
+        "popfd",
+        "call {original}",
+        "jmp {resume}",
+        prepend = sym prepend_second_player_gold,
+        original = const 0x005E_9630,
+        resume = const 0x005E_D12E,
+    );
+}
+
+pub fn install_wesnoth_stat_hook() -> anyhow::Result<LocalPatch> {
+    let expected = near_call(0x005E_D129, 0x005E_9630)?;
+    let replacement = near_jump(
+        0x005E_D129,
+        wesnoth_stat_cave as *const () as usize,
+    )?;
+    LocalPatch::apply(0x005E_D129, &expected, &replacement)
+}
+```
+
+Inject the 32-bit DLL into `wesnoth.exe`, open the terrain description during the two-player local scenario, and press **F2**. The first three characters change to the other player's live gold. Press **F2** again or **End** to restore the original call bytes.
+
+The complete helper, decimal conversion, cave, and installer are in [`wesnoth_hooks.rs`](/windows-labs/src/windows_impl/wesnoth_hooks.rs). The hotkey and patch lifetime are in [`dll.rs`](/windows-labs/src/windows_impl/dll.rs).
+
+The first hook redirects a verified instruction span; the second redirects a verified call. Both restore exactly what they displaced. [Lesson 8.4](/pages/8/04/) changes a different boundary: an imported function pointer rather than instruction bytes.
+
+To transfer either example to another build, start from the observation that
+led to the hook: which action reaches the instruction, and which register or
+pointer holds the value at that moment? Then re-measure the complete
+instruction span, expected bytes, cave reachability, displaced behavior,
+resume address, and restoration result in that build. The Wesnoth addresses
+above are evidence for one 32-bit version, not reusable offsets.

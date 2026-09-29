@@ -82,12 +82,15 @@ struct FrameSnapshot {
 }
 ```
 
-Every field in there was read at the same moment, and that is the whole reason
-the type exists. If the radar reads the player list while the overlay reads the
-camera matrix a few milliseconds later, the two features are describing
-different instants, and markers land where enemies used to be. Bundling them
-means the features cannot disagree with each other, because there is only one
-set of facts to disagree about.
+Every feature receives the same owned set of fields from one bounded
+observation pass. If the radar reads the player list on one pass while the
+overlay independently reads the camera matrix a few milliseconds later, the
+features describe different updates, and markers can land where enemies used
+to be. Bundling the fields means both features use the same captured values.
+It does **not** make the reads atomic: the game can update an entity between
+two reads within that pass. Validate the resulting snapshot and, if the game
+exposes a tick or generation counter, check it before and after the copy or
+retry when it changes.
 
 The camera matrix and viewport travel with the players for that exact reason.
 Projecting this frame's positions through last frame's camera is wrong in a way
@@ -97,7 +100,7 @@ instead of the timing.
 
 `Vec<PlayerSnapshot>` is owned rather than borrowed, so nothing here points back
 into the game. A feature holding a reference into an entity the game then frees
-is the stale-pointer failure from Lesson 1.3, arriving through the back door.
+is the stale-pointer failure from Lesson 1.8, arriving through the back door.
 Copy once, then let every feature read from the copy.
 
 ## Give every feature a lifecycle
@@ -239,7 +242,7 @@ At startup, verify an original instruction signature at every address you plan t
 | AssaultCube 1.2.0.2 | triggerbot | no recoil | reveal radar | aimbot | internal ESP |
 | Urban Terror 4.3.4 | memory wallhook | OpenGL wallhack | OpenGL chams | — | — |
 
-**End** stops the worker and restores every active patch. Flare and Wyrmsun use their dedicated in-game automation loops from chapter 4 instead of this function-key table.
+**End** stops the worker and restores every active patch. Flare and Wyrmsun, the offline automation targets from Chapter 4, use their dedicated in-game loops instead of this function-key table.
 
 Load one supported profile after fingerprinting the target. Features receive verified addresses and layouts instead of hardcoding them.
 

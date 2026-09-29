@@ -1,7 +1,7 @@
 // The book's chapters, in reading order. The sidebar, lesson headers, print
 // book, and llms.txt all read this list, so a new chapter is added once here.
 export const CHAPTERS = [
-	{ number: 1, title: 'Start Here', emoji: '🧠', summary: 'How computers run programs, how memory stores numbers and pointers, game data, engines, and first scans.' },
+	{ number: 1, title: 'Start Here', emoji: '🧠', summary: 'Computer, game, programming, and hacking fundamentals; a Rust primer, safe lab, memory model, and first value scan.' },
 	{ number: 2, title: 'Debugging & Control Flow', emoji: '🔍', summary: 'Assembly, breakpoints, code caves, moving addresses, and pointer paths.' },
 	{ number: 3, title: 'Memory, Types & Ownership', emoji: '🦀', summary: 'External tools, C++ object layouts, containers, obfuscated values, strings, DLL contracts, and numbers and pointers decoded bit by bit.' },
 	{ number: 4, title: 'Game State & Automation', emoji: '♟️', summary: 'Snapshots, fog of war, state machines, pathfinding, events, telemetry, and how NPCs decide.' },

@@ -152,6 +152,11 @@ is insufficient if the original draw obtains its color from a bound array.
 
 ## Understand the build-specific Urban Terror fallback
 
+The pure classifier and whole-draw restoration rule above are the general
+lesson. The following fallback is an exact-build in-process case, using the
+hook lifecycle from [Lesson 8.3](/pages/8/03/); it is an optional deeper pass
+until that boundary has been taught.
+
 The clean design above wraps one whole draw: capture, change, draw, restore. The
 course's Urban Terror 4.3.4 cave is different. It runs in the middle of
 `glDrawElements`, so it cannot surround the call and restore a snapshot after
@@ -169,7 +174,8 @@ const GL_COLOR_ARRAY: u32 = 0x8076;
 const GL_TEXTURE_COORD_ARRAY: u32 = 0x8078;
 ```
 
-Conceptually, its state transition is:
+For comparison, a whole-call wrapper can make the color transition explicit
+around one call:
 
 ```rust
 // SAFETY: every pointer was resolved from the current opengl32.dll and this
@@ -189,10 +195,14 @@ unsafe {
 }
 ```
 
-Keep the depth-state calls from the previous lesson around this block. In the
-pinned Urban Terror build, player-sized models should appear through walls in
-bright red. If the HUD, world, or later effects stay tinted, the assumed
-defaults did not match the state owned by that render pass.
+The pinned Urban Terror cave runs *inside* `glDrawElements`, so it cannot
+literally use that whole-call wrapper. For player-sized draws, its companion
+depth calls use `depth_range(0.0, 0.0)` and `depth_func(GL_ALWAYS)` so the
+highlighted geometry passes the depth test. On the next ordinary draw, the
+fallback sets `depth_range(0.0, 1.0)` and `depth_func(GL_LEQUAL)` along with
+the color defaults shown above. Player-sized models should appear through
+walls in bright red. If the HUD, world, or later effects stay tinted, those
+assumed defaults did not match the state owned by that render pass.
 
 :::caution
 This is an exact-build, best-effort fallback—not general OpenGL state
@@ -206,9 +216,10 @@ changing anything.
 
 Try `count <= 500`, `count > 500`, and no filter while logging samples. The visual differences let you prove which calls your classifier actually catches instead of treating the threshold as magic.
 
-The compiled DLL uses the naked cave from the previous lesson. It resolves all
-seven required OpenGL exports, switches to `OPENGL_CHAMS`, and applies this
-documented fallback from the render thread. Inject it and press **F3** to toggle
+The compiled DLL uses a naked x86 cave inside Urban Terror's `glDrawElements`
+path. It resolves all seven required OpenGL exports, switches to
+`OPENGL_CHAMS`, and applies this documented fallback from the render thread.
+Inject it and press **F3** to toggle
 chams; press **End** to restore normal rendering and the original instruction:
 
 ```powershell
@@ -260,11 +271,12 @@ fn likely_player(sample: DrawSample, profile: &TargetProfile) -> bool {
 
 Version the profile and refuse to activate on an unrecognized build.
 
-## Checkpoint
+## Verify the color test
 
-The lesson succeeds when:
+The exact-build result has four observable checks:
 
 - the normal frame is unchanged with classification disabled;
 - only the intended offline model category changes color;
-- state is restored after every call;
+- the exact-build fallback leaves no visible state leak across the tested frame,
+  while a reusable whole-draw wrapper restores captured state after every call;
 - unknown samples remain unknown instead of being forced into a category.

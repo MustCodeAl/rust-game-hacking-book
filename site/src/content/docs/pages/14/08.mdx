@@ -12,9 +12,10 @@ sidebar:
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
 
-[Lesson 14.2](/pages/14/02/) followed a request from a program down to the toy
-keypad and back, and a key press from a USB keyboard up to a game, without
-opening any of the numbers on the way. This lesson opens them: the parameters
+[Lesson 14.2](/pages/14/02/) followed a request from a program down to a
+made-up keypad and back, and a key press from a USB keyboard up to a game. The
+keypad has a *get status* command and four 32-bit registers named CONTROL,
+STATUS, DATA, and ACK. This lesson opens the numbers on those paths: the parameters
 of a `DeviceIoControl` request, the four fields packed into a control code, the
 keypad's registers byte by byte, the values its interrupt handlers read, and
 the bytes of a real key press. It ends with a lab that runs the keypad and its
@@ -32,12 +33,12 @@ itself and some in a per-driver *stack location* attached to it):
   caption="What a driver reads from an IRP for a `DeviceIoControl` request. *Requestor* says the request came from user mode, so every parameter is untrusted."
 />
 
-For most control codes the I/O manager uses **buffered I/O**: it copies the
-caller's input into a kernel buffer, the *system buffer*, before the driver
-runs, and copies the output back to the caller after completion. The driver
-never touches the program's memory directly. It still has to respect the
-lengths: the output length says how many bytes the caller's buffer can hold,
-and writing even one byte more would overrun kernel memory.
+The toy control code uses **buffered I/O**. Its method bits tell the I/O
+manager to copy the caller's input into a kernel *system buffer* before the
+driver runs, then copy the output back after completion. With this method, the
+driver works on that buffer rather than the program's pointer. It still has to
+respect the lengths: the output length says how many bytes the caller's buffer
+can hold, and writing even one byte more would overrun kernel memory.
 
 ## A control code is four fields in one number
 
@@ -111,7 +112,7 @@ method or access is refused.
 
 ## The toy keypad's registers, bit by bit
 
-Lesson 14.2 named the toy keypad's four 32-bit registers, which take
+The toy keypad's four 32-bit registers take
 4 × 4 = 16 bytes in all. Suppose the firmware placed them at physical address
 `0xFEB0_1000`: CONTROL at offset `+0x00`, STATUS at `+0x04`, DATA at `+0x08`,
 and ACK at `+0x0C`. STATUS therefore answers at `0xFEB0_1000` + 4 =
@@ -324,3 +325,5 @@ Then set `QUEUE_CAPACITY` to 2 and work out which tests must now fail before
 running them.
 
 References: [defining I/O control codes](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/defining-i-o-control-codes), [security issues for I/O control codes](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/security-issues-for-i-o-control-codes), [keyboard and mouse HID client drivers](https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/keyboard-and-mouse-hid-client-drivers), and [`WM_KEYDOWN`](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-keydown).
+
+For the specific buffered method used in the toy code, see [Microsoft's IOCTL buffer descriptions](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/buffer-descriptions-for-i-o-control-codes).

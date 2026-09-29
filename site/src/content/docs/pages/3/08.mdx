@@ -154,6 +154,20 @@ Keep `Unknown`. A future DLL can add a status without making your wrapper silent
 
 ## Prove the calling convention
 
+A source-level **API** can say that a function accepts one address and
+returns a number. The **ABI** answers the machine-level question of
+where that address arrives. On a 32-bit build, one convention might
+put it in a register while another expects it on the stack. The
+functions can look identical at the source level, yet the callee
+reads the wrong location if caller and callee disagree.
+
+```mermaid
+flowchart TD
+    A["one source API: read_u32(address)"] --> B["ABI 1: address arrives in ecx"]
+    A --> C["ABI 2: address arrives on the stack at esp+4"]
+    C -.->|"caller follows ABI 2, callee expects ABI 1"| X["callee reads ecx and gets an unrelated value"]
+```
+
 A wrong ABI can appear to work in one small test and still corrupt registers or the stack. The call itself may return without crashing; the damage shows up later, when an unrelated function reads garbage from a register it expected the callee to preserve, or when a mismatched stack-cleanup convention leaves `esp` off by a few bytes and a later `ret` lands somewhere nonsensical. Check:
 
 1. Which architecture is the caller and DLL?

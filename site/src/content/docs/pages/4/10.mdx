@@ -251,11 +251,12 @@ tune.
 ## Behavior trees, briefly
 
 Larger games often organize NPC logic as a **behavior tree** instead. The lab
-does not build one, but the idea is short. The leaves of the tree are conditions
-(“is health 25 or less?”) and actions (“flee”). The inner nodes decide the order.
-A **selector** tries its children from left to right and stops at the first one
-that succeeds. A **sequence** runs its children in order and stops at the first
-one that fails. The engine evaluates the tree from the root every tick.
+does not build one, but the idea is a priority checklist whose entries can
+contain smaller checklists. The leaves are conditions (“is health 25 or
+less?”) and actions (“flee”). A **selector** tries its children from left to
+right and stops at the first one that succeeds. A **sequence** runs its
+children in order and stops at the first one that fails. This simplified tree
+starts at the root each tick.
 
 The guard's priorities fit in one selector:
 
@@ -266,6 +267,16 @@ flowchart TD
     R --> S["Sequence<br/>a last known spot exists,<br/>then search there"]
     R --> P["Action<br/>patrol the route"]
 ```
+
+Walk through one tick. At 30 health, the first sequence fails its health
+check, so the selector tries the next one. If the player remains visible for
+three ticks and is within attack range, that sequence chooses attack; if they
+are farther away, it chooses chase. At 20 health, the first sequence reaches
+flee and the selector does not inspect the attack or patrol branches. The
+diagram shows priority, not the pathfinding or animation code inside an action.
+In a production tree, a long-running action can also return *running* so the
+engine knows it has not succeeded or failed yet; such a tree must define how
+that state is resumed or checked on the next tick.
 
 Compare it with the guard's
 [state diagram](/pages/4/09/#decide-a-finite-state-machine). The four arrows
@@ -330,7 +341,7 @@ that the lab gives every new guard:
 The target field is an id rather than a pointer. Some games store a raw pointer
 to the target object instead, and that pointer goes stale when the target is
 destroyed and its memory reused, the problem that generation-checked handles in
-[Lesson 1.4](/pages/1/04/) solve.
+[Lesson 1.3](/pages/1/03/) solve.
 
 ### A state value that means nothing
 

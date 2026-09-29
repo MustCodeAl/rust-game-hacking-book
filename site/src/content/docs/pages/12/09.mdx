@@ -137,6 +137,22 @@ When `mlua` registers `game.log`, it builds a callable Lua value backed by a hos
 
 The callback should be short and bounded. A Lua instruction budget cannot interrupt arbitrary blocking work performed inside native host code.
 
+The Lua C API makes this boundary concrete with an indexed value stack. A
+native callback reads arguments from stack slots, validates them, pushes
+return values, and reports how many it returned. `mlua` wraps much of that
+protocol, but stack balance and error conversion still exist underneath:
+
+```text
+before call: [function][argument 1][argument 2]
+native code: validate arguments, perform bounded work
+after call:  [return value 1]
+```
+
+Treat a host callback like a small parser. Specify accepted types and ranges,
+reject invalid input before side effects, and return an error in the form the
+runtime expects. A panic or native exception must not cross a C ABI boundary
+uncontrolled.
+
 ## Re-entrancy adds nested host and VM call frames
 
 A host callback may call Lua again, which may call another host function. This is **re-entrancy**. The host needs a clear policy for locks and mutable game state.

@@ -19,7 +19,7 @@ Imagine that a game originally contained this C++ class:
 class Player {
 public:
     virtual void update();
-    Vec3 position;
+    Vec3 position; // three coordinate numbers; Chapter 5 develops the math
     float yaw;
     float pitch;
     char name[32];
@@ -158,6 +158,27 @@ One matching subtraction is a clue, not proof. Repeat it while turning, respawni
 ## The hidden `this` pointer
 
 A C++ call such as `player.update()` looks as if it passes no player argument. A non-static member function still needs to know **which** player it should update. The compiler supplies a hidden argument called `this`.
+
+### The call's frame and the object's lifetime
+
+That argument belongs to one call's working state. Each thread has a **stack**
+region for return addresses and temporary call data. On 32-bit x86, `esp`
+marks its current top. Calling another function claims a new **stack frame**;
+returning releases that frame. The object that `this` points to can live much
+longer on the heap. The pointer in a call frame and the object it names have
+different lifetimes:
+
+<MemoryStrip
+  column
+  cells="0x0019FF80=main: return address and locals|0x0019FF50=update_world: return address and locals|0x0019FF30=apply_damage: return address and locals|esp →=scratch: the next call writes here"
+  marks="2"
+  groups="0-2:in use, released newest first|3-3:free"
+  caption="One thread's stack on 32-bit x86. Each call claims a frame below the previous one. When `apply_damage` returns, `esp` moves back up; a later call can reuse those bytes. The player object reached through `this` need not disappear with this frame."
+/>
+
+This explains why a debugger's call stack can lead you to the caller but a
+saved address of one of its temporary values cannot be assumed valid after
+the call returns. Lesson 3.5 will trace the longer lifetimes of heap objects.
 
 For the 32-bit Microsoft C++ convention commonly called `__thiscall`, `this` usually arrives in `ecx`:
 
@@ -486,17 +507,15 @@ Addresses and values will differ. The important checks are structural:
 
 **“A successful read proves the address is right.”** Windows can copy readable but unrelated bytes. Validate meaning, not only access.
 
-## What you should be able to explain
+## The layout is a versioned model
 
-Before moving on, explain these ideas without debugger vocabulary:
-
-- an object base is the starting address of one instance;
-- a field offset is the byte distance from that start;
-- `this` tells a member function which instance it is handling;
-- a vptr commonly connects an object to a table of virtual methods;
-- padding and inheritance can create gaps or multiple object views;
-- a recovered layout belongs to one game build and can be wrong wherever it has not been tested;
-- a remote address is not a valid local reference.
+An object base is the start of one instance, and each field offset is a byte
+distance from that base. The hidden `this` argument selects the instance for
+a member call; a vptr commonly leads to its virtual-method table. Padding
+and inheritance can add gaps or make one object reachable through several
+base views. Those observations form a layout model for the tested game build,
+not a promise for every build. A remote object address remains an address in
+the game process, never a valid local Rust reference.
 
 The same technique appears in debuggers, crash analyzers, compatibility tools,
 profilers, and digital-forensics programs. Each one recovers structure from raw

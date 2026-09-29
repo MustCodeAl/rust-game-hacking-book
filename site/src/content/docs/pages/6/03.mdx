@@ -10,6 +10,7 @@ sidebar:
   label: "6.3 Parse and Rebuild a Message"
 ---
 import ConceptLab from '../../../../components/ConceptLab.astro';
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
 
 ## Parse the real Wesnoth frame
@@ -26,6 +27,38 @@ The first four bytes do **not** include themselves in the length. If the header 
 This four-byte prefix solves a problem TCP does not solve for us: message boundaries. A TCP `read` might return two header bytes now and the rest later, or it might return several complete frames together. The receiver therefore accumulates bytes until it has four, interprets the advertised length, then accumulates exactly that many payload bytes.
 
 Big-endian means the most significant byte comes first. A length of 78 is hexadecimal `0x0000004E`, so the wire contains `00 00 00 4E`. `u32::from_be_bytes` documents that agreement directly; shifting bytes by hand would be harder to review.
+
+The header is a claim from the sender, not permission to allocate whatever
+it asks for. Compare two headers followed by four bytes currently available:
+
+```text
+00 00 00 04  61 62 63 64   -> claims 4 bytes; four are present
+FF FF FF FF  61 62 63 64   -> claims 4,294,967,295 bytes
+```
+
+<MemoryStrip
+  cells="=00|=00|=00|=04|=a|=b|=c|=d"
+  groups="0-3:claimed length: 4|4-7:four payload bytes"
+  caption="An acceptable four-byte payload: the header and available payload agree."
+/>
+
+<MemoryStrip
+  cells="=FF|=FF|=FF|=FF|=a|=b|=c|=d"
+  marks="0-3"
+  groups="0-3:claimed length: 4,294,967,295|4-7:four payload bytes seen so far"
+  caption="The header is structurally valid but exceeds the configured size limit. More TCP bytes could arrive; waiting for this advertised size is still unacceptable."
+/>
+
+The second header is four valid bytes, but its advertised size is not an
+acceptable frame for this parser. Code that allocates from that claim
+could request nearly four gigabytes. First reject any length above the
+configured maximum; only then wait for the advertised number of payload
+bytes, with a bounded buffer and a way to stop a stalled connection.
+Having only four payload bytes *so far* does not by itself prove a
+network frame is false, because TCP may deliver the rest later.
+After a complete frame is assembled, the parser checks its exact
+length before decoding it. This separates byte validation from the
+later question of whether the decoded chat message makes sense.
 
 ## Keep five layers separate
 

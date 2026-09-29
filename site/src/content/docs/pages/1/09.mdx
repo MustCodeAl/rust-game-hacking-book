@@ -1,164 +1,155 @@
 ---
-title: "From Source Code to a Running Program"
-description: "Follow the stages that turn source code into an EXE and then into a process, and see why field names disappear, why offsets are fixed for one build, and why imports are filled in last."
+title: "Your First Memory Experiment"
+description: "Find, test, and change one gold value in Wesnoth, and see what each scan does and does not prove."
 chapter: "1.9"
-minutes: 20
+minutes: 18
 author: "attilathedud"
-date: "2026-09-08"
+date: "2026-07-30"
 sidebar:
   order: 9
-  label: "1.9 From Source Code to a Running Program"
+  label: "1.9 Your First Memory Experiment"
 ---
-import MemoryStrip from '../../../../components/MemoryStrip.astro';
+An address names a location, while a type tells a program what its bytes
+mean. We will use a memory scanner on Wesnoth: observe a gold value,
+search for matching bytes, make one in-game change, and filter the results.
 
-This book keeps making two claims. Field names are gone from the finished game.
-Offsets stay put for one build but can move in the next one.
+The goal is not merely to reach a final address. The goal is to understand why
+each scan removes some candidates and why one test still does not prove that a
+candidate is the main game-play value.
 
-Both are true, and both are consequences of how a program gets built. Once you
-have seen the stages, you stop having to take them on faith — and you can
-predict which facts about a game will survive an update and which will not.
+## Prepare the target
 
-## Four stages, each deciding something different
+Use the course build of Wesnoth 1.14.9 in the Windows VM. Start a local match and
+pause before recruiting a unit.
 
-```mermaid
-flowchart TD
-    A["Source files<br/>names, types, comments"] --> B["Compiler"]
-    B -->|"fixes every structure's layout,<br/>then drops field and local names"| C["Object files"]
-    C --> D["Linker"]
-    D -->|"resolves function names, lays out the image,<br/>records a preferred base and the imports it needs"| E["EXE or DLL on disk"]
-    E --> F["Windows loader"]
-    F -->|"picks the base, applies relocations,<br/>writes real addresses into the import slots"| G["Running process"]
+![A Wesnoth match showing the gold value](/assets/images/1/5/wesnoth1.png)
+
+Suppose the screen shows 100 gold and the unit you plan to recruit costs 15.
+After recruiting, the visible value should become 100 − 15 = 85.
+
+## Attach Cheat Engine to the game process
+
+Open Cheat Engine, choose the process button, and select the running Wesnoth
+process.
+
+![Choosing the Wesnoth process](/assets/images/1/5/wesnoth2.png)
+
+Attaching tells Cheat Engine which process address space to read. It does not
+yet tell the scanner where gold is or how it is stored.
+
+## Perform the first value scan
+
+Enter the visible gold amount. Use:
+
+- **Value Type:** 4 Bytes;
+- **Scan Type:** Exact Value;
+- **Value:** the current gold amount.
+
+Start the first scan.
+
+![The first scan for gold](/assets/images/1/5/wesnoth3.png)
+
+The scan will probably find many addresses. That is expected. The number 100 can
+appear in timers, object fields, capacities, interface data, and unrelated
+allocations.
+
+At this point, each result proves only this:
+
+> These four bytes were readable as the integer 100 when the scanner checked
+> them.
+
+It does not prove that the address controls gold.
+
+## Change the game once
+
+Return to Wesnoth and perform the planned action. Recruit the unit and read the
+new gold value off the screen.
+
+![Gold after recruiting a unit](/assets/images/1/5/wesnoth4.png)
+
+If the value changed from 100 to 85, return to Cheat Engine, enter 85, and choose
+**Next Scan**.
+
+The scanner does not search the whole process from the beginning. It checks the
+previous candidate addresses and keeps only those that now contain 85. In set
+notation:
+
+```text
+new_candidates = old_candidates ∩ addresses_currently_equal_to_85
 ```
 
-The important thing is that each stage throws away information the next one
-does not need. By the time you attach a debugger, three stages have already
-discarded things you might have wanted.
+You do not need the symbol memorized. It means “keep items that are in both
+groups.”
 
-## The compiler decides layout, and stops needing your names
+## Repeat with a different change
 
-The compiler reads one source file at a time and produces an **object file** —
-`.obj` with the Microsoft toolchain. Two decisions it makes are the ones you
-live with for the rest of this book.
+Make another controlled change with a different result. For example, recruit a
+unit with another cost or end a turn if the scenario changes gold in a known
+way. Enter the new gold value and perform another **Next Scan**.
 
-First, it fixes the layout of every structure. It chooses the order of fields,
-inserts the padding Lesson 3.3 describes, and works out that health sits 48
-bytes into the player object. That number is then baked directly into the
-instructions it emits, which is why you see `[ecx+0x30]` rather than anything
-mentioning health.
+![A narrowed list of candidate addresses](/assets/images/1/5/wesnoth6.png)
 
-Second, having done that, it no longer needs the word `health` at all. The
-name was how *you* referred to the field; the machine refers to it by distance.
-Names of local variables and fields simply stop existing at this point. They
-are not hidden or encrypted. There is nowhere left for them to be.
+Using different values is important. If you repeat only 100 → 85 → 100, an
+unrelated value that happens to follow the same pattern can remain in the list.
 
-Function names survive slightly longer, because the linker still has work to do
-with them.
+Continue until you have a small number of candidates. Do not assume the first
+remaining address is correct.
 
-## The linker resolves names, then it does not need them either
+## Test one candidate reversibly
 
-Your game is many object files plus libraries, and one file's call to a function
-defined in another is, at this point, an unresolved name. The **linker** matches
-each of those up, lays the sections out into the final image, and rewrites every
-call to use a real location.
+Add one candidate to the address list. Before changing it:
 
-After that, the names have served their purpose. Debug information can be kept
-— the Microsoft toolchain puts it in a separate `.pdb` file — but the EXE
-itself does not need it to run, and a shipped game usually does not include it.
+1. copy its current value so you can put it back;
+2. confirm the game still shows the expected gold;
+3. choose a small replacement value;
+4. write the replacement once;
+5. observe the screen and one real purchase;
+6. restore the original value.
 
-This is the honest answer to "why can't I just see the function names?" They
-were consumed by the process that produced the file. A stripped binary is not
-an obfuscated one; it is simply a binary that kept only what the CPU requires.
+![The edited gold value in Wesnoth](/assets/images/1/5/wesnoth9.png)
 
-## Two things the linker deliberately leaves unfinished
+Different results support different explanations:
 
-Not everything can be decided at build time, and the two exceptions are exactly
-the ones later chapters spend time on.
+| What happens | Likely meaning |
+|---|---|
+| the number and purchase rules change | strong candidate for game-play state |
+| only the text changes | likely a display copy |
+| the value changes back on the next update | another system recomputes or owns it |
+| nothing visible changes | unrelated value or a copy used elsewhere |
+| nearby behavior breaks | wrong address, type, or field width may have been changed |
 
-**Where the module will be.** The linker does not know which address Windows
-will choose, so it records a preferred base and includes a table of every
-location that would need adjusting if a different base is used. That is why
-Lesson 2.8 can promise that offsets within a module stay fixed while the base
-moves: the image is laid out as one block, and the loader relocates the block.
+A single run can mislead, because an unrelated value might change at the same
+moment by coincidence. Getting the same result again from the same starting
+state makes that explanation less likely.
 
-**Where the DLL functions will be.** The linker knows the game calls
-`MessageBoxW` in `user32.dll`, but not the address, which will not exist until
-the DLL is mapped. So it writes down the requirement — which DLL, which
-function — and leaves a table of slots for the loader to fill with real
-addresses. That table is the Import Address Table:
+## Why several copies may all be related
 
-<MemoryStrip
-  column
-  cells="on disk=a reference to the name MessageBoxW in user32.dll|in memory=the address of MessageBoxW, written by the loader"
-  marks="1"
-  caption="One Import Address Table slot. The game's code calls through the slot, so the call works only once the loader has written the real address there."
-/>
+The game can legitimately keep more than one gold-related value:
 
-Lesson 8.4 hooks a program's own copy of this table — a technique that works
-precisely because the linker left the address for someone else to fill in.
+- the current simulation value;
+- a previous value used by an animation;
+- text prepared for the interface;
+- a value in a replay, event, or network message;
+- a temporary calculation.
 
-## The loader turns a file into a process
+That is why value scanning is usually the start of reverse engineering. A write
+breakpoint later shows which instruction changes the strongest candidate. The
+surrounding instructions can reveal the object base and other fields.
 
-The loader maps the sections into memory with the right permissions, applies
-those relocations if it picked a different base, fills in the import table,
-prepares thread-local storage, and runs the initialisation code. Chapter 11
-follows this in detail, because it is also the sequence that makes `DllMain`
-such a constrained place to work.
+## Treat the address as temporary
 
-Now the two layouts of Lesson 7.1 make sense as what they are: the same content
-arranged for storage on disk and arranged for execution in memory, by two
-different stages with different requirements.
+The address you found belongs to this run of the game. After a restart, gold
+may live somewhere else, because the process layout and the heap can change
+between runs. [Lesson 1.10](/pages/1/10/) explains why a program's build and
+loading stages produce both moving addresses and more stable, build-specific
+distances. Chapter 2 then follows a candidate value to the instruction that
+changes it.
 
-## What this predicts about updates
+## What the scan established
 
-The practical payoff is knowing which kinds of location survive a new game
-version.
-
-| What you found | Survives a rebuild? | Why |
-|---|---|---|
-| A raw address from one run | No | The loader may pick another base |
-| An offset from the module base | Usually, within one build | Fixed when the linker laid out the image |
-| A field offset like `+0x30` | Usually, within one build | Fixed when the compiler chose the layout |
-| A byte pattern | Often | Survives unless that code was recompiled differently |
-| "Health is 48 bytes in" | Only for that build | A new field earlier in the structure shifts it |
-
-That last row is the one Lesson 13.6 turns into a migration procedure. A field
-inserted in the middle of a structure moves everything after it and nothing
-before it, because the compiler recalculated the layout — not because anything
-was deliberately moved to inconvenience you:
-
-<MemoryStrip
-  cells="+0x00=id|+0x04=health|+0x08=max_health|+0x0C=gold"
-  caption="The player structure in one build."
-/>
-
-<MemoryStrip
-  cells="+0x00=id|+0x04=armor|+0x08=health|+0x0C=max_health|+0x10=gold"
-  marks="1"
-  groups="2-4:each moved 4 bytes later"
-  caption="The next build adds `armor`. `id` keeps its offset; every field after the new one moves."
-/>
-
-## Optimization is why the code does not match the source
-
-One more consequence, and it explains a lot of confusing disassembly. An
-optimising build is allowed to produce anything that behaves the same. It can
-paste a small function into each of its callers so no call remains, keep a
-variable only in a register so it never touches memory, drop a variable whose
-result is never used, reorder work, and merge two identical functions.
-
-So when a function you expected is missing, the usual explanation is not that
-it was hidden. It is that the compiler decided the fastest way to do that work
-did not involve a separate function. This is also why a debug build and a
-release build of the same source can be so different to read, and why an
-address or offset belongs to the exact build it came from.
-
-## Checkpoint
-
-You should now be able to explain:
-
-- which stage decides a structure's field offsets, and when;
-- why field names are absent from a shipped binary rather than hidden in it;
-- what the linker leaves unfinished, and which chapter exploits each gap;
-- why a module-relative offset survives a restart but a raw address does not;
-- why an inserted field moves some offsets and leaves others alone;
-- why an optimised build may contain no trace of a function in the source.
+The first scan returned readable candidates that matched while it ran;
+it did not identify “the gold address.” Each controlled game change
+filtered that candidate set. Changing one survivor and then making a
+real purchase showed whether it affected gameplay, only the display,
+or neither. Restoring the original value leaves the game in a known
+state for another run.
