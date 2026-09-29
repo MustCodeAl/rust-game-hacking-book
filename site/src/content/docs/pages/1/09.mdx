@@ -1,6 +1,6 @@
 ---
 title: "From Source Code to a Running Program"
-description: "Follow the stages that turn source code into an EXE and then into a process, and see why field names disappear, why offsets are fixed for one build, and why imports are filled in last."
+description: "Follow source code through compilation, linking, and loading to see why a scanned address moves while a build-specific offset can remain useful."
 chapter: "1.9"
 minutes: 20
 author: "attilathedud"
@@ -11,45 +11,50 @@ sidebar:
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
-This book keeps making two claims. Field names are gone from the finished game.
-Offsets stay put for one build but can move in the next one.
+Lesson 1.8 found a gold address in one running game. After a restart, that
+absolute address may move. Yet an instruction's distance from the start
+of its module can remain useful for the same build. The compiler's source
+name for the gold field may be absent from the released executable too.
 
-Both are true, and both are consequences of how a program gets built. Once you
-have seen the stages, you stop having to take them on faith — and you can
-predict which facts about a game will survive an update and which will not.
+These differences come from the stages that turn source into a running
+process. Follow those stages and you can ask which facts survive a restart,
+which require the exact build, and which must be rediscovered after an
+update.
 
 ## Four stages, each deciding something different
 
 ```mermaid
 flowchart TD
     A["Source files<br/>names, types, comments"] --> B["Compiler"]
-    B -->|"fixes every structure's layout,<br/>then drops field and local names"| C["Object files"]
+    B -->|"chooses compiled layouts;<br/>many source names are no longer needed"| C["Object files"]
     C --> D["Linker"]
     D -->|"resolves function names, lays out the image,<br/>records a preferred base and the imports it needs"| E["EXE or DLL on disk"]
     E --> F["Windows loader"]
     F -->|"picks the base, applies relocations,<br/>writes real addresses into the import slots"| G["Running process"]
 ```
 
-The important thing is that each stage throws away information the next one
-does not need. By the time you attach a debugger, three stages have already
-discarded things you might have wanted.
+Each stage keeps what the next stage needs. A release build may omit
+information that helped the programmer but is unnecessary for execution.
+Debug information can preserve some names separately; we will distinguish
+that case below.
 
 ## The compiler decides layout, and stops needing your names
 
-The compiler reads one source file at a time and produces an **object file** —
-`.obj` with the Microsoft toolchain. Two decisions it makes are the ones you
-live with for the rest of this book.
+The compiler translates source into object code, often stored in `.obj`
+files by the Microsoft toolchain used for these Windows C++ examples. Two
+of its decisions matter throughout this book.
 
-First, it fixes the layout of every structure. It chooses the order of fields,
-inserts the padding Lesson 3.3 describes, and works out that health sits 48
-bytes into the player object. That number is then baked directly into the
-instructions it emits, which is why you see `[ecx+0x30]` rather than anything
-mentioning health.
+First, it chooses a compiled layout according to the language's rules.
+For an example player structure, it may insert the padding Lesson 3.3
+describes and put health 48 bytes into the object. The emitted instruction
+can then use `[ecx+0x30]`, the base address plus 48 bytes, without naming
+health.
 
-Second, having done that, it no longer needs the word `health` at all. The
-name was how *you* referred to the field; the machine refers to it by distance.
-Names of local variables and fields simply stop existing at this point. They
-are not hidden or encrypted. There is nowhere left for them to be.
+Second, the machine instruction no longer needs the word `health`. The
+name helped the programmer refer to the field; the instruction uses its
+distance from the object base. A normal release executable often omits
+local and field names, though debug information can preserve them. A
+missing name is not evidence that it was encrypted or hidden.
 
 Function names survive slightly longer, because the linker still has work to do
 with them.
@@ -57,17 +62,22 @@ with them.
 ## The linker resolves names, then it does not need them either
 
 Your game is many object files plus libraries, and one file's call to a function
-defined in another is, at this point, an unresolved name. The **linker** matches
-each of those up, lays the sections out into the final image, and rewrites every
-call to use a real location.
+defined in another may still be an unresolved reference. The **linker** matches
+references to definitions it has, lays the sections out into the final image,
+and records the references that a loader must finish later. A call to an
+internal game function can be resolved here; a call into a DLL still needs the
+DLL's address at run time.
 
-After that, the names have served their purpose. Debug information can be kept
-— the Microsoft toolchain puts it in a separate `.pdb` file — but the EXE
-itself does not need it to run, and a shipped game usually does not include it.
+After that, many internal names have served their purpose. Debug
+information can be kept — the Microsoft toolchain often puts it in a
+separate `.pdb` file — but the EXE does not need it to run. Imports and
+exports can still carry names in the executable; the next section shows
+why an imported function name may remain.
 
-This is the honest answer to "why can't I just see the function names?" They
-were consumed by the process that produced the file. A stripped binary is not
-an obfuscated one; it is simply a binary that kept only what the CPU requires.
+This explains why a debugger may show an imported Windows function's name
+but only a numeric address for an internal game function. A binary without
+debug symbols is not necessarily obfuscated; it may simply lack source
+names that execution does not require.
 
 ## Two things the linker deliberately leaves unfinished
 
@@ -108,23 +118,44 @@ Now the two layouts of Lesson 7.1 make sense as what they are: the same content
 arranged for storage on disk and arranged for execution in memory, by two
 different stages with different requirements.
 
+### Follow one location across two runs
+
+Suppose the linker placed an instruction `0x1350` bytes from the beginning of
+the game's module. In one run, Windows loads that module at `0x00400000`; in
+another, it loads it at `0x00600000`. The instruction did not move *within the
+module*, even though its absolute address changed:
+
+| Run | Module base | Instruction offset | Instruction address |
+|---|---:|---:|---:|
+| first | `0x00400000` | `0x1350` | `0x00401350` |
+| second | `0x00600000` | `0x1350` | `0x00601350` |
+
+The same distinction applies inside an object, but the starting point is
+different. If the compiler put `health` at `+0x30` within a player object,
+and that object begins at `0x01A2B000` in the first run, its health field is at
+`0x01A2B030`. A newly created player at `0x0208C000` puts the same field at
+`0x0208C030`. The module offset measures from the **loaded module**; the field
+offset measures from **that particular object**. Neither offset alone is a
+complete address. Later pointer work uses this distinction every time it adds
+an offset to a base address.
+
 ## What this predicts about updates
 
 The practical payoff is knowing which kinds of location survive a new game
 version.
 
-| What you found | Survives a rebuild? | Why |
+| What you found | Safe to reuse? | Why |
 |---|---|---|
-| A raw address from one run | No | The loader may pick another base |
-| An offset from the module base | Usually, within one build | Fixed when the linker laid out the image |
-| A field offset like `+0x30` | Usually, within one build | Fixed when the compiler chose the layout |
-| A byte pattern | Often | Survives unless that code was recompiled differently |
-| "Health is 48 bytes in" | Only for that build | A new field earlier in the structure shifts it |
+| A raw address from one run | No reliable reuse after a restart | The module or object may have a different base |
+| An offset from the module base | Usually after a restart of the same build | The linker fixed its place within that image |
+| A field offset like `+0x30` | Usually for objects of that type in the same build | The compiler chose the layout |
+| A byte pattern | Verify it in each build | Compilation or linking can change its bytes |
+| "Health is 48 bytes in" | Recheck after a rebuild | A new field earlier in the structure may shift it |
 
-That last row is the one Lesson 13.6 turns into a migration procedure. A field
-inserted in the middle of a structure moves everything after it and nothing
-before it, because the compiler recalculated the layout — not because anything
-was deliberately moved to inconvenience you:
+That last row is the one Lesson 13.6 turns into a migration procedure. In
+this fixed-order example, inserting a field moves the later fields and
+leaves the earlier ones in place. Other layout rules can change more, so
+measure the new build rather than assuming the same shift everywhere:
 
 <MemoryStrip
   cells="+0x00=id|+0x04=health|+0x08=max_health|+0x0C=gold"
@@ -157,8 +188,13 @@ address or offset belongs to the exact build it came from.
 You should now be able to explain:
 
 - which stage decides a structure's field offsets, and when;
-- why field names are absent from a shipped binary rather than hidden in it;
+- why many source names may be absent from a release binary while import
+  names or separate debug information can remain;
 - what the linker leaves unfinished, and which chapter exploits each gap;
-- why a module-relative offset survives a restart but a raw address does not;
+- why a module-relative offset can survive a restart even when a raw address
+  changes;
 - why an inserted field moves some offsets and leaves others alone;
 - why an optimised build may contain no trace of a function in the source.
+
+[Lesson 1.10](/pages/1/10/) now follows the other side of the question:
+whether a game's rule comes from executable code, a data file, or a script.

@@ -2,7 +2,7 @@
 title: "Find and Edit Save Data Safely"
 description: "Locate a save with Process Monitor, compare controlled snapshots, and write changes atomically."
 chapter: "9.2"
-minutes: 17
+minutes: 24
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
@@ -11,7 +11,7 @@ sidebar:
 ---
 ## Locate the save by behavior
 
-Use Flare 1.12 with a disposable character. Start Process Monitor and filter to the game process.
+Lesson 9.1 followed one Flare character's Physical value from running state into `avatar.txt`. Now we will prove the exact path, change that file once, and ask Flare to load it. Use Flare 1.12 with a disposable character. Start Process Monitor and filter to the game process.
 
 ![Filtering Process Monitor to the target](/assets/images/8/2/procmon1.png)
 
@@ -32,11 +32,11 @@ Open `avatar.txt` first. It contains the character XP and `build` values; `stash
 
 ## Make two controlled saves
 
-Create:
+Compare two disposable saves from the same character. Make one intended change through the game, such as spending one available point on Physical, and record the visible result. For example:
 
-- save A with 100 gold;
-- save B with 101 gold;
-- no other intentional changes.
+- save A has `build=5,1,1,2`;
+- save B has `build=6,1,1,2` after Physical rises from 5 to 6;
+- no other intentional action occurs between saves.
 
 Compare them:
 
@@ -51,6 +51,8 @@ fn differing_offsets(left: &[u8], right: &[u8]) -> Vec<usize> {
 ```
 
 If the files differ almost everywhere, compression, encryption, timestamps, or a checksum may be involved.
+
+This helper compares only the shared prefix because `zip` ends with the shorter file. Check the two total lengths separately; an inserted field or newline also counts as a difference.
 
 The two-save comparison is a controlled experiment, not proof that every changed
 byte belongs to gold. Games may update play time, random state, timestamps, object
@@ -77,14 +79,16 @@ fn parse_key_values(text: &str) -> anyhow::Result<BTreeMap<String, String>> {
 }
 ```
 
-Then require the exact field:
+This small example makes the field names visible, but collecting directly into a map would keep only one of two repeated `build=` lines. The complete editor below checks that the target line occurs exactly once and preserves the other lines and their newline style.
+
+Then require the exact field and change its complete value:
 
 ```rust
-let gold = values.get_mut("gold").context("save has no gold field")?;
-*gold = "250".to_owned();
+let build = values.get_mut("build").context("save has no build field")?;
+*build = "30,30,30,30".to_owned();
 ```
 
-Flare’s real save is not the tiny `gold=...` example. In the exact 1.12 capture, the new character has:
+In the exact Flare 1.12 capture, the new character has:
 
 ```text
 xp=0

@@ -28,6 +28,14 @@ flowchart TD
 
 The handle is not the process itself. It is a Windows-managed reference plus a specific set of permissions.
 
+Think of the PID as the number on a catalogue entry and the handle as a claim
+ticket issued for a particular visit. Knowing the number lets you *ask*;
+Windows checks the caller and the target before issuing a ticket marked with
+the allowed operations. The analogy ends there: a handle is an opaque value
+meaningful to Windows in this process, and an API checks its recorded rights,
+not a handwritten label. This is why finding the right PID does not rescue a
+handle that lacks `PROCESS_VM_READ`.
+
 ## Treat a handle as a capability
 
 A capability combines a reference to an object with authority to perform particular operations. A process handle opened for limited queries can identify the process and ask for its image path, but it cannot become a memory-writing handle because a later function wishes it could.
@@ -226,3 +234,8 @@ The "group of bits" from the top of this lesson is not a metaphor. Microsoft doc
 The complete buildable tool is [`access_probe.rs`](/windows-labs/src/bin/access_probe.rs).
 
 References: [Microsoft process security and access rights](https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights), [`OpenProcess`](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess), and [`QueryFullProcessImageNameW`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-queryfullprocessimagenamew).
+
+Transfer the idea to a file: `CreateFileW` can return a handle opened for
+reading only. Knowing the path does not turn that existing handle into a
+writing one. The file API may succeed at a read and refuse a write for the
+same reason this chapter's query-only process handle cannot read game memory.

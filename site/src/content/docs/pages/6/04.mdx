@@ -1,8 +1,8 @@
 ---
 title: "Replay a Protocol Through a State Machine"
-description: "Turn captured local messages into a deterministic replay test that checks framing, ordering, timeouts, and legal protocol transitions."
+description: "Replay captured local messages through legal session states, then extend the model to real-time ticks, snapshots, and message ordering."
 chapter: "6.4"
-minutes: 30
+minutes: 39
 author: "attilathedud"
 date: "2026-08-14"
 sidebar:
@@ -57,7 +57,7 @@ For a five-frame capture of one short session, starting from `Connected`:
 
 Keep the raw log immutable and rebuild the model from it. If a parser or transition rule changes, you can replay the same log and see exactly which frame now produces a different result. Editing the stored “current state” by hand loses that history.
 
-Not every message is an event that happened exactly once. A snapshot may repeat a fact, an acknowledgment may refer to an earlier request, and a retransmitted request may appear twice. Store direction, sequence identifiers, and timing with each frame; without them, duplicate bytes cannot be told apart from duplicate actions.
+Not every message is an event that happened exactly once. A **snapshot** can repeat a whole state, while an **acknowledgment** refers to an earlier request. A retransmitted request may appear twice. Store direction, sequence identifiers, and timing with each frame; without them, duplicate bytes cannot be told apart from duplicate actions. The real-time section below works through those identifiers in detail.
 
 ## Model states and messages separately
 
@@ -205,6 +205,8 @@ The test does not sleep for `after_ms`. It validates timing metadata determinist
 
 Deterministic replay requires controlling every input that affects a transition: message order, clock readings, random choices, configuration, and initial state. If the same fixture sometimes reaches different states, one of those inputs is still hidden. Pass it into the model instead of reading a real clock or global setting from inside `apply`.
 
+For example, imagine a lobby rule that closes a connection if no greeting arrives within five seconds. The same captured `Greeting` should be accepted at 4,900 ms and rejected at 5,100 ms when a test supplies those times to a virtual clock. Reading the wall clock inside `apply` would make the result depend on how fast the test machine runs. The small `replay` function above only checks that `after_ms` is plausible; a timeout test needs a clock-aware version of the model. The same rule applies when testing cooldowns or turn timers in another game.
+
 ## Mutate one fact at a time
 
 Useful negative replays include:
@@ -230,8 +232,109 @@ A length larger than the available payload has to fail before any message is dec
 
 For messages that may be retried, test **idempotence** explicitly. Applying the same acknowledgment twice should either preserve the same state or return a clear duplicate error; it should not create a second match, grant a reward twice, or move backward in the session.
 
+Think of a toy server processing a request `claim reward #42`. If the reply is lost, the client may send the same request again. The server can remember request `#42` and return the earlier result, or reject it as a duplicate; adding five gold again would be a bug. The identifier is what makes “same request” testable. A repeated `Chat` with identical text could instead be a new message, so matching bytes alone is not a safe duplicate rule.
+
 ## Why replay beats manual clicking
 
 A capture preserves one session. A replay turns it into a repeatable test: when you change the parser, framing code, or session rules, the same frames run through them again in milliseconds.
 
 Keep live-network code at the edge. Feed the bytes it receives into the same parser and state machine tested by replay. That design keeps transport separate from parsing and makes the protocol model reproducible. 🌐
+
+## From session replay to real-time state
+
+The Wesnoth lobby replay above checked whether each message was legal in one conversation. A fast action game adds a second question: which version of the world should the client draw while messages are still travelling? The same capture, framing, and state-machine discipline applies, but ticks and sequence numbers become part of the state.
+
+## Real-time games replicate a simulation, not just variables
+
+Most action games advance the world in discrete **ticks**. If a server runs at
+60 ticks per second, one simulation step is approximately:
+
+```text
+tick duration = 1 second / 60 = 16.67 milliseconds
+```
+
+The client samples input, labels it, and sends a command. The server processes
+commands during its own ticks and periodically sends a snapshot or delta. The
+client then draws frames between confirmed server states:
+
+```mermaid
+sequenceDiagram
+    participant I as Input sampler
+    participant C as Client simulation
+    participant S as Server simulation
+    participant R as Renderer
+    I->>C: command 418: move right
+    C->>C: predict command 418
+    C->>S: command 418
+    S->>S: validate and simulate tick 9021
+    S-->>C: tick 9021, ack 418, state delta
+    C->>C: reconcile prediction
+    C->>R: interpolate a display state
+```
+
+Several similar-looking states can therefore coexist:
+
+A field's meaning depends on the kind of message carrying it. The earlier move request was an **intent**. An **acknowledgment** confirms that a command arrived or was applied. A **snapshot** reports enough state to stand alone, while a **delta** reports only changes from an identified earlier state. The coordinate `(10, 14)` in a request would be a desired destination; in the server's reply it is an accepted position. Equal-looking bytes can have different authority.
+
+| State | Purpose | Important label |
+|---|---|---|
+| Last confirmed state | What the server has accepted | Server tick or snapshot ID |
+| Predicted state | Immediate response to local input | Last locally simulated command |
+| Interpolated state | Smooth display of remote objects | Render timestamp between snapshots |
+| Historical state | Rewind or lag-compensation query | Past server tick or time |
+
+This explains why a coordinate found in memory can be correct yet appear to
+“snap back.” You may have found the predicted or rendered copy while a later
+server snapshot replaced it. Three facts tell the copies apart: which thread
+writes the field, whether its updates follow input or incoming packets, and which
+tick or sequence number travels beside it.
+
+## Ordering has to be carried in the message
+
+Packet arrival order is not automatically simulation order. UDP packets can
+arrive late or twice; even over TCP, one stream can contain application events
+whose own timestamps refer to different moments. Protocols commonly carry:
+
+- a monotonically increasing sequence number;
+- a server tick or timestamp;
+- an acknowledgment of the newest processed command;
+- a bit mask acknowledging several earlier packets;
+- a baseline ID telling which snapshot a delta modifies.
+
+Sequence numbers often wrap. For an unsigned `N`-bit counter, comparisons must
+use modular arithmetic and accept only a bounded forward window, not a plain
+`incoming > current` test.
+
+Work through one 16-bit wraparound. The last accepted sequence number is
+`65534`, and the next two packets carry `65535` and then `0`:
+
+```text
+current  incoming   naive: incoming > current    (incoming - current) mod 65536
+65534    65535      65535 > 65534  -> accept     1   -> accept
+65535    0          0 > 65535      -> reject     1   -> accept
+```
+
+The naive test gets the first packet right and the second one wrong. `0` really
+is one step newer than `65535`, but as a plain integer it is smaller, so the
+packet is thrown away. It gets worse from there: `current` never advances past
+`65535`, so every sequence number after the wrap looks old in the same way, and
+the connection appears to stop receiving updates entirely.
+
+The modular test asks a different question — how far forward is `incoming` from
+`current`, counting the wrap? `(0 - 65535) mod 65536` is `1`, a single step
+ahead, so the packet is accepted and `current` moves on. Accept only while that
+distance stays inside an agreed window such as `1..=32767`. A distance of
+`32768` is exactly halfway around a 16-bit counter and cannot be classified as
+newer or older from the sequence number alone, so this rule refuses it. A
+genuinely old packet computes a distance near 65536, which also falls outside
+the window. The exact window is part of the protocol contract and deserves
+boundary tests; [RFC 1982's serial-number arithmetic](https://www.rfc-editor.org/info/rfc1982/)
+explains the half-range limit.
+
+A **snapshot** contains enough state to stand alone. A **delta** contains changes
+relative to a named baseline. Applying a delta to the wrong baseline may parse
+perfectly and still create nonsense. Robust tooling keeps the baseline ID with
+the bytes, refuses missing dependencies, and bounds how long incomplete state
+may wait.
+
+The live bot in Lesson 6.5 returns to the simpler Wesnoth lobby conversation. It uses the same separation between framed bytes, decoded messages, and legal session actions that replay made visible.

@@ -45,10 +45,12 @@ When the host turns a `Vec` into a Lua sequence, it must add one to the zero-bas
 ### How a map finds a key
 
 Inside, a Lua table has two parts: an **array part** for the keys 1, 2, 3, … of
-a sequence, and a **hash part** for every other key. The hash part is a hash
-table. Lua turns the key into a number, its **hash**, and uses that number to
-pick one slot, so finding `position.y` means computing one hash and checking one
-slot, however many keys the table holds.
+a sequence, and a **hash part** for other keys. The hash part is a hash table.
+It turns a key into a number, its **hash**, to choose a starting slot. A lookup
+checks the key there and, if another key collided with it, follows the
+collision link until it finds the requested key or proves it absent. Hashing
+usually narrows a lookup to a small part of the table; it does not promise one
+comparison every time.
 
 Suppose the hash part has 4 slots, numbered 0 to 3, and the string `"y"` hashes
 to 22. Lua keeps the remainder after dividing by the slot count: 22 ÷ 4 is 5
@@ -60,15 +62,15 @@ last two bits, `10`, are 2.
   cells="slot 0=z · 2.0|slot 1=empty|slot 2=y · 5.5|slot 3=x · 10.0"
   marks="2"
   groups="2-2:22 ÷ 4 leaves 2"
-  caption="An illustration of the hash part of `position` with 4 slots, assuming the key `y` hashes to 22. Each key sits where its hash sends it, not where the script wrote it."
+  caption="A collision-free illustration of the hash part of `position` with 4 slots, assuming the key `y` hashes to 22. A real collision can place a key in another slot and link it from its starting slot."
 />
 
-Two things follow. `pairs` walks the slots in slot order, so keys come out in
-hash order rather than the order the script wrote them, and the order can change
-completely when the table grows and Lua moves every key into a larger set of
-slots. And two keys can hash to the same slot, a **collision**; Lua then links
-the second key from the first, so lookups still work but slow down a little when
-many keys collide. [Lesson 3.5](/pages/3/05/#a-hash-table-arithmetic-picks-the-bucket)
+Two things follow. The Lua language promises no useful order from `pairs`; it
+does not reproduce the order in which the script wrote fields. Lua 5.4's
+implementation traverses its storage, and a table resize can change that
+order. Two keys can also hash to the same starting slot, a **collision**; Lua
+links the displaced key so lookups still work, though long collision chains
+cost extra comparisons. [Lesson 3.5](/pages/3/05/#a-hash-table-arithmetic-picks-the-bucket)
 shows what the same idea looks like in a compiled C++ program.
 
 ## Iterate according to the shape

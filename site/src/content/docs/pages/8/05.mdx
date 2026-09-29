@@ -122,6 +122,13 @@ Why not create one thread per region? A module can contain many runs, and thread
 
 A weak pattern can match thousands of locations. A per-thread limit is not enough: eight workers with a 4,096-item limit could still produce 32,768 items.
 
+With a toy global cap of three, suppose worker 1 has recorded two matches and
+worker 2 finds two more. Both cannot simply read “2 of 3 used” and then append:
+that would publish four. Each must reserve one slot through the shared counter;
+only one of worker 2's two matches can obtain the remaining slot. This is the
+safety promise in the table above. Cancellation is the separate progress
+promise: workers stop scanning once no more slots can be reserved.
+
 The scanner reserves each result through one atomic counter:
 
 ```rust
@@ -162,6 +169,11 @@ anyhow::ensure!(matches.len() == 1, "expected one match");
 ```
 
 Sorting after the merge makes logs, tests, and human review repeatable. Deduplication is defensive; clipped memory regions should not overlap, but downstream correctness should not depend on that hope.
+
+The same design works for an offline archive or asset scanner: first collect
+bounded, immutable input chunks, let workers inspect separate chunks, then
+apply one global output limit and sort results. The game-specific part here is
+the capture boundary, where bytes come from a changing process.
 
 This distinction matters:
 

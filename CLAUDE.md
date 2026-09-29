@@ -144,11 +144,13 @@ Before revising lesson content or continuing work on the book's teaching progres
 
 The user identified `gh-pages` as the target edition. Recheck the plan's source-versus-published-branch distinction before editing; do not hand-edit generated pages or switch branches over existing work.
 
-The plan's "planning only" status records the earlier planning session. The
-user has since requested implementation on a new branch and asked that the
-revisions keep the book informative and visual. Read
-`BOOK_REVISION_PROGRESS.md` for the revised foundation sequence, relocated
-material and visuals, validation, and next batch before continuing. Lessons
-1.4 and 1.6 are now Game Fundamentals and Hacking Fundamentals. Keep the
-original detailed labs, diagrams, and later teaching homes in the reading
-path. Do not publish the site without explicit authorization.
+The full-book pass is implemented on `codex/book-revision`. Read
+`BOOK_REVISION_PROGRESS.md` for the branch, current reading order, relocation
+map, and validation. `BOOK_REVISION_AUDIT.md` records the disposition of all
+131 lessons. Lessons 1.3, 1.4, and 1.5 are Game, Programming, and Hacking
+Fundamentals. The complete memory model is Lesson 1.7, directly before the
+first memory experiment in 1.8. Keep the explanatory early code snippets,
+detailed later labs, diagrams, and relocated material in the reading path.
+Review and merge the authored source into `rustgamehackingreimagined` after
+checks; keep that checkout's unrelated local edits intact. Do not publish
+the site without explicit authorization.

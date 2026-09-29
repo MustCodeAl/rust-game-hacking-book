@@ -1,8 +1,18 @@
 # Beginner-first lesson progression: execution plan for Claude
 
-**Status: planning only. No lesson revisions have been implemented.**
+**Status: full-book revision implemented on `codex/book-revision`; merge review pending.**
 
-Prepared 2026-09-28. Read this plan when the user next asks you to revise the book; reading it is not permission to start a rewrite, commit, or publish.
+Prepared 2026-09-28. The user subsequently authorized a full-book revision on
+a new branch. Read [BOOK_REVISION_PROGRESS.md](BOOK_REVISION_PROGRESS.md) for
+implemented lessons and checks and [BOOK_REVISION_AUDIT.md](BOOK_REVISION_AUDIT.md)
+for the disposition of all 131 lessons. Publication remains a separate step.
+
+The prerequisite findings below use the lesson numbers from the original
+source audit. During implementation, the user asked for the memory model to
+sit immediately before the first scan. The current Chapter 1 order maps old
+1.3→new 1.7, old 1.4→new 1.3, old 1.5→new 1.4, old 1.6→new 1.5, and old
+1.7→new 1.6. Lesson 1.8 keeps its number. Use the progress ledger and current
+page titles for the implemented order.
 
 ## 1. The user's actual request
 
@@ -20,7 +30,8 @@ This is **not** a request to:
 - turn the book into a mandatory study-method or quiz routine;
 - replace all existing prose, discard technical depth, change the implementation language, or redesign the site.
 
-The current deliverable is this plan and its discovery instruction in `CLAUDE.md`, not rewritten lessons or code.
+This plan now guides the authorized implementation; the progress ledger records
+what was actually changed and verified.
 
 ## 2. Branch and source-of-truth rules
 
@@ -358,7 +369,11 @@ These checks are planned, not run as part of preparing this document:
 5. If runnable examples are changed in a later authorized implementation, run the relevant existing crate tests (for example `rtk proxy cargo test --manifest-path rust-labs/Cargo.toml` from the repository root). Inspect the affected crate first. Do not claim Windows execution was tested on macOS.
 6. If lessons are added or renamed, use the existing `rtk proxy bun run docs-json` from `site/`, then review its changes. Do not regenerate it needlessly for prose-only edits.
 7. Report failures, environmental blockers, and unrun checks honestly. Do not fix unrelated implementation issues under the guise of this editorial task.
-8. Do not commit or deploy without explicit authorization. A future publication should rebuild the corrected authored source for the user-designated `gh-pages` edition, not patch generated pages by hand.
+8. The user has authorized finishing and committing the revision on a new
+   branch, then asking Claude to merge it when it is ready. Do not publish or
+   deploy without separate authorization. A future publication should rebuild
+   the corrected authored source for the user-designated `gh-pages` edition,
+   not patch generated pages by hand.
 
 ## 11. Session handoff
 

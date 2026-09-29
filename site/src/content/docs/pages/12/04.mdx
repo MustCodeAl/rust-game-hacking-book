@@ -69,6 +69,34 @@ struct EntitySnapshot {
 
 There are no process addresses in this type. A script cannot keep a stale pointer because it never receives one.
 
+Why avoid raw pointers here? Lua can represent native objects through
+**userdata**. Full userdata has Lua-managed storage and a host-defined
+metatable; light userdata is essentially an unowned pointer value. If a native
+entity dies while a script retains its raw address, the same address may later
+belong to a different entity. A copied snapshot avoids that lifetime problem
+for observation. When a request needs persistent identity, use a validated
+handle rather than a remembered address.
+
+A handle can pair a numbered slot with a **generation** counter. Every time a
+slot is reused for a new entity, its generation changes. Suppose Lua remembers
+slot 3, generation 6. If that entity dies and slot 3 is reused at generation 7,
+the host rejects the stale pair rather than acting on the new occupant:
+
+```mermaid
+flowchart LR
+    subgraph RAW["Light userdata: a raw pointer"]
+        A1["Lua holds address 0x2A40"] --> A2["native object freed,<br/>memory reused"]
+        A2 --> A3["the pointer now reaches<br/>whatever lives there"]
+    end
+    subgraph HANDLE["Handle: slot and generation"]
+        B1["Lua holds slot 3,<br/>generation 6"] --> B2["slot 3 reused,<br/>generation now 6 + 1 = 7"]
+        B2 --> B3["6 does not match 7:<br/>the host refuses"]
+    end
+```
+
+Lesson 3.5 developed the same identity rule for a game collection. Here it
+protects the boundary between a script's request and a changing game world.
+
 Here is one entity as a hypothetical build lays it out in game memory, and the
 same entity after the observer has copied it into a snapshot and the host has
 turned that into a Lua table:

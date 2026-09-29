@@ -57,17 +57,18 @@ Set a breakpoint on the gold update used at the end of a turn. Each time the ins
 
 ![An income breakpoint firing](/assets/images/4/1/wesnoth1.png)
 
-If the function loops through players, the object pointer should change while the instruction stays the same. Nearby instructions may calculate an index:
+If the function loops through players, the object pointer should change while the instruction stays the same. Nearby 32-bit x86 instructions may calculate an index in this shape:
 
 ```nasm
-imul rax, rdx, record_size
-add rax, player_table
+imul eax, edx, record_size
+add eax, player_table
 ```
 
-That pair is the array-indexing formula from Lesson 1.4, written out in two
-instructions. The three-operand `imul` multiplies the index in `rdx` by a
-constant and puts the result in `rax`; the `add` then moves that distance from
-the start of the table.
+That pair is the collection indexing introduced in Lesson 1.3 and the
+scaled-offset formula examined in Lesson 3.5, written as two instructions.
+The three-operand `imul` multiplies the index in `edx` by a constant and puts
+the result in `eax`; the `add` then moves that distance from the table's start.
+This is an illustrative shape, not a claimed byte-for-byte Wesnoth listing.
 
 The constant is the useful part. You do not have to infer the record size by
 finding two players and subtracting their addresses — the instruction states
@@ -115,10 +116,15 @@ fn read_player(
     let base = table.checked_add(record_offset)
         .context("player record address overflowed")?;
 
+    let gold_address = base.checked_add(layout.gold)
+        .context("gold field address overflowed")?;
+    let income_address = base.checked_add(layout.income)
+        .context("income field address overflowed")?;
+
     Ok(PlayerSnapshot {
         slot: u32::try_from(index)?, // ✅ Reject an index that cannot fit the model.
-        gold: process.read_u32(base + layout.gold)?,
-        income: process.read_i32(base + layout.income)?,
+        gold: process.read_u32(gold_address)?,
+        income: process.read_i32(income_address)?,
     })
 }
 ```

@@ -1,109 +1,96 @@
 # Book revision progress
 
-Updated 2026-09-28. This is the implementation ledger for
-[BOOK_REVISION_PLAN.md](BOOK_REVISION_PLAN.md). The plan's opening
-"planning only" notice describes its earlier preparation, before the user
-authorized this revision.
+Updated 2026-09-28. The full-book teaching pass is implemented on
+`codex/book-revision`. [BOOK_REVISION_AUDIT.md](BOOK_REVISION_AUDIT.md)
+records a prerequisite, teaching thread, and disposition for **each of the
+131 authored lessons**. [BOOK_REVISION_PLAN.md](BOOK_REVISION_PLAN.md) records
+the original editorial contract and source investigation.
 
-## Target and scope
+## Branch and edition
 
-- Published target: local `gh-pages` at
-  `53b95329a4bb0e5fa368e34d979639465af43040`, whose commit message
-  identifies source `db494a5`.
-- Authored source: `db494a556adfb47a2073d4196c917039a86b8d04`,
-  also the starting commit of `codex/book-revision`. Only authored
-  MDX and related teaching data are being edited.
-- The original checkout had unrelated modified plugin/CSS files and
-  untracked agent files. Work is isolated in a managed worktree. Those
-  local changes have not been copied into this branch.
-- TokenSave listed the eleven Chapter 1 lessons; a filesystem count
-  verified 131 authored lesson MDX files in all 14 chapters.
-- The user explicitly requires smoother teaching **without losing
-  information** and wants many visuals retained. A topic removed from
-  an opening page must have a real teaching home elsewhere, not just
-  a future promise in this ledger.
-- The present batch is the foundation sequence in Lessons 1.1–1.6 and
-  its necessary relocation and cross-reference edits. It is not a
-  disposition of all 131 lessons. Do not describe the whole book as
-  revised on the strength of this pilot.
+- The local generated `gh-pages` commit `53b95329a4bb0e5fa368e34d979639465af43040`
+  says it was published from authored source `db494a5`. This branch began at
+  that source commit (`db494a556adfb47a2073d4196c917039a86b8d04`).
+- The original `rustgamehackingreimagined` checkout contains unrelated local
+  changes. This work uses an isolated managed worktree and has not overwritten
+  them. Authored lessons, quizzes, contents data, and guidance changed; the
+  generated `gh-pages` tree was not hand-edited.
+- The live local preview is
+  [the book](http://127.0.0.1:4322/rust-game-hacking-book/). Publishing that
+  preview to `gh-pages` is outside this revision.
 
-## Foundation pilot
+## Reading path
 
-| Lesson and status | Previously taught knowledge | New teaching and running example | Section chain and first-use check |
-| --- | --- | --- | --- |
-| `1/01` Learn How to Ask and Answer Good Questions — revised | None required. | Optional study loop; one checkable question about a visible jump; worked 100 − 25 gold change. | Broad question → controlled visible action → read/explain/correct → worked example → help request. Pointer/offset and `Option` prediction no longer precede teaching. |
-| `1/02` How a Computer Runs a Game — revised pilot | Only ordinary arithmetic and the gold action from 1.1. | CPU, instruction, register, program, input/output, function, branch, number representation, language, OS, process, thread; one 100 → 101 / 100 → 99 example. | Connected parts → CPU instruction → program → named operation → choice → representation → language → OS/application → running game → memory question. Pseudocode is labeled as such; no Rust syntax is assumed. |
-| `1/03` How Memory Actually Works — retained with targeted corrections | CPU, RAM, bit/byte/hex, process from 1.2. | Address/value/type, byte order, pointer/dereference/offset, lifetime and snapshot using health 100 → 75. | Bridges from the earlier changing gold value, then preserves the numbered-box derivation and worked pointer sections. Corrected the claim that addresses are permanent and clarified that collections can move values even during an entity's life. Existing diagrams, lab, and inline quiz remain. |
-| `1/04` Game Fundamentals — revised | Stored values, types, address/lifetime from 1.3. | Input → rule → changing world → visible result, then one player's gold/health → record/fields → two players/collection → loop → health rule → display copy. | The same player state grows one concept at a time. Rust `struct` follows the conceptual record and explains each field. The existing detailed engine lesson remains at 1.10. Advanced layout diagrams and generation-handle mechanics now live in 3.5. |
-| `1/05` Programming Fundamentals — revised | Functions/branches from 1.2; types from 1.3; records/collections from 1.4. | One gold-spending Rust program: literals/variables → guarded arithmetic → function/return → player records → loop → result. | Each new syntax piece is explained before the complete runnable program. The result traces Ada 100 → 75 and Bo 40 → 15. Advanced examples were merged into the later lessons listed below. |
-| `1/06` Hacking Fundamentals — revised | Gold program from 1.5; game state, display copy, and rules from 1.4; address/value from 1.3. | Observed 100 → 75 gold → hypothesis about controlling state → one test → four-step experiment, then transfer to health. | The earlier four-step method, contract, scan example, MemoryStrip, and code test remain. Breakpoints, pointer paths, and external code are marked as later work. The screenshot lab remains at 1.8. |
+Chapter 1 now goes from computer basics to **Game Fundamentals (1.3)**,
+**Programming Fundamentals (1.4)**, **Hacking Fundamentals (1.5)**, and the
+Windows lab (1.6). **How Memory Actually Works (1.7)** sits immediately
+before **Your First Memory Experiment (1.8)**. The source-to-running-program,
+engine, and computation lessons follow. The contents, links, and chapter data
+match this order.
 
-### Visual continuity
+The opening uses one changing gold value to motivate each concept. CPU,
+instruction, program, function, branch, record, collection, rule, address,
+pointer, and scan are introduced when the example needs them. Chapter 1
+still contains small Rust examples: a one-line operation in 1.2, records and
+loops in 1.3–1.4, a display-copy example in 1.5, and the existing memory and
+first-scan examples. Programming Fundamentals retains beginner explanations
+of data and types, state, algorithms, sequence/selection/repetition,
+arrays, vectors, hash maps, queues, grids and graphs, programming paradigms,
+abstractions, invariants, and reading unfamiliar code. Encoding, polling,
+concurrency, and ABI mechanics remain with the later lessons that use them.
+Its complete two-player Rust program was compiled
+and produced Ada with 75 gold and 80/100 health and Bo with 15 gold and
+50/80 health.
 
-- 1.1 keeps its optional study-loop diagram and a question-anatomy strip,
-  adapted from the original gold/address question to a first-lesson jump question.
-- 1.2 now has the parts flow, branch flow, byte/hex strip, and game-loop flow.
-- 1.3 retains its existing memory strips, pointer diagrams, concept lab, and quiz.
-- 1.4 has a game-cycle flow, player-record strip, two-player loop flow, and display-copy flow.
-- 1.5 has a variable-change strip, guarded-branch flow, and two-player loop strip.
-- 1.6 retains its experiment-cycle flow and narrowing strip and adds an
-  observation-to-test flow. The former 1.5 health-state and scanner-algorithm
-  diagrams now sit beside their worked examples here.
-- The two alternative-layout memory strips from the former 1.4 are now in 3.5,
-  after the basic record and collection have been taught.
-- The former 1.5 GetMessage/PeekMessage flows and busy-handler strip are
-  integrated into 8.6; its API/ABI flow is in 3.8, two packet-length strips
-  are in 6.3, and its pointer-race sequence is in 10.6. The earlier byte/type
-  strip is covered by the more detailed byte/type strips already in 1.3.
-- Across the 17 changed lessons, Mermaid diagrams now number 39 versus 37
-  before, MemoryStrips 36 versus 34, and existing image links remain 12.
+Every later chapter was read and either revised or explicitly retained in
+the audit. Later topics that did not have the original Academy's explanatory
+model now begin with a concrete problem, derive the mechanism, test an edge
+case, and reuse the idea in a second situation where useful. The supplied
+*40 Key Computer Science Concepts Explained In Layman’s Terms* article
+informed that analogy-first teaching pattern. Its analogies were treated as
+illustrations, not as authority for technical claims.
 
-## Relocated material and dependent surfaces
+## Material moved to its teaching home
 
-| Earlier passage or concept | Teaching home and action | Earlier summary and dependent surface |
+| Starting point | Teaching home | What remains near the starting point |
 | --- | --- | --- |
-| 1.1 `Option<u32>` / `checked_sub` prediction | Merged as a worked example and later prediction in `3/01`, after `Option` is explained. | 1.1 keeps only an ordinary gold calculation. The 1.1 end quiz still tests the optional study loop. |
-| 1.2 detailed threads/shared memory/debugger timing | `10/06` already teaches process/thread split, shared data, scheduling, races and snapshot timing. | 1.2 gives a sufficient first process/thread model. |
-| 1.2 byte order and typed memory interpretation | `1/03` already provides the full byte/hex derivation and endian walkthrough. | 1.2 introduces one byte and one conversion first. |
-| 1.2 keyboard/Windows layer diagram | `8/06` now explains the window message path; `14/02` already traces a USB key to a game. Its stale link back to 1.2 was corrected. | 1.2 teaches OS services and input at the beginner level. |
-| 1.4 array-of-structures, structure-of-arrays, cache behavior, ECS | The two layout diagrams and their access-pattern explanation were moved to `3/05`; that lesson already develops component pools and address movement. | 1.4 gives one complete record/collection/loop baseline. |
-| 1.4 generation-based identity | `3/05` already had handle code; its worked slot-12/generation-3-versus-4 explanation was restored there. | 1.3 and 1.4 keep a simple lifetime warning. |
-| 1.4 choosing a data structure from the data's shape | The selection questions were merged into `3/05` after its container examples. | 1.4 motivates a collection through two players. |
-| 1.4 health/max-health validity and display copies | Both remain as worked examples in the revised 1.4; `13/01` later deepens invariants. | The 1.4 quiz now tests records and the loop, not an untaught byte interpretation. |
-| 1.5 newtypes, ownership, `Option`/`Result`, raw-pointer boundaries | `3/01` already teaches ownership, errors and unsafe boundaries; the newtype and `MemoryReader` examples were merged there. | 1.5 explains only the minimal `&mut` loop use and points to Chapter 3 for full borrowing. |
-| 1.5 Windows message loop, callback, `GetMessage`/`PeekMessage`, slow handler | Merged as a worked path and both loop diagrams plus the slow-handler strip into `8/06`, with links to current Microsoft documentation. `4/08` already covers moving slow work off an observation path. | 1.2 retains the simple game loop. |
-| 1.5 polling versus events | `4/07` already develops polling, edge detection, and one action per change; `8/06` now connects it to the message-loop comparison. | 1.5 does not require a full event-loop implementation. |
-| 1.5 API versus ABI | `3/08` already has the detailed contract; the explicit source-API-versus-machine-ABI mismatch example and diagram were merged there. | Chapter 1 mentions OS services without ABI mechanics. |
-| 1.5 encodings, parsing, length validation | `6/03` now includes the honest versus impossible length worked example and both length strips in its real frame parser. `9/01` and `9/09` already teach save formats, encoding, and bounded file parsing. | 1.3 supplies byte and type basics before these lessons. |
-| 1.5 concurrency lost-update example | `10/06` already contains the full 1,000 + 500 − 300 interleaving table and its repair. The pointer-race sequence diagram from 1.5 now illustrates its atomicity-violation section. | Chapter 1 keeps only a first thread definition. |
-| 1.5 invariant and code-reading method | The simple health/max-health relationship remains in 1.4 and 1.5; `13/01` develops invariants and controls. `3/01` already teaches input, error, state, and result analysis in its worked boundaries. | No quiz now requires advanced API abstractions in 1.5. |
+| Former 1.3 memory lesson | Current 1.7, immediately before the first scan; process snapshot, stack frame, heap reuse, and typed-pointee details in 3.2, 3.3, 3.5, and 3.9 | A first byte/value model in 1.2 and memory links from the fundamentals lessons. |
+| Former 1.4 game fundamentals | Current 1.3; advanced container layouts, ECS, and generation handles in 3.5 | One player record, two-player collection, loop, health rule, and display-copy model. |
+| Former 1.5 programming fundamentals | Current 1.4 keeps core concepts at beginner depth; ownership and `Option`/`Result` in 3.1, ABI mechanics in 3.8, packet framing/encoding in 6.3 and 9.1, polling in 4.7, message-loop mechanics in 8.6, and race repair in 10.6 | A runnable gold-purchase program and short explanatory examples for types, state, logic flow, collections, paradigms, abstraction, and invariants. |
+| Former 1.6 hacking fundamentals | Current 1.5 | The gold-change hypothesis, experiment cycle, narrowed scan, diagram, and short code sample. |
+| 2.6 and 3.7 complete injected-code detours | Full implementation and lifecycle in 8.3 | Small x86 and bounded byte-reading examples, conceptual diagrams, and debugger practice in 2.7. |
+| 6.1 deeper tick/snapshot/delta mechanisms | 6.4, after message framing and replay | The first shared-game and network model. |
+| 12.1 advanced scripting VM, failure, host, and GC detail | 12.4 and 12.6–12.9, beside the corresponding implementation lessons | A compact first Lua observer example and the script-to-host mental model. |
 
-The externally supplied end quizzes for 1.1–1.6 were checked. Quizzes
-for 1.2–1.5 were aligned with the taught examples; the 1.6 question
-already matches the retained method. Incoming references
-from `4/09` and `14/02` were updated when their former 1.4/1.2
-passages moved. The 1.10 callback reference to the former 1.5 was
-corrected. Lesson paths and chapter order have not changed. Lessons 1.4
-  and 1.6 now bear the two requested fundamentals titles; their previous
-  material was expanded in place rather than removed. Lessons 1.7 and 1.8
-  now bridge directly from the method into the unchanged lab screenshots.
+This is a redistribution of detail. Labs, images, and downstream references
+were kept and reconciled. Across all authored lessons, the source has **268
+Mermaid diagrams versus 266 before**, **100 standard image links before and
+after**, **211 MemoryStrips versus 208 before**, and **821 other fenced code
+blocks versus 806 before**. These are source counts against `db494a5`;
+visual inspection confirmed that
+the rendered examples and mobile memory strip are legible and that the
+contents follows the new order.
 
-## Verification and remaining work
+## Verification
 
-- `git diff --check` passed after the fundamentals and visual relocations.
-- The site build passed after the fundamentals and visual relocations:
-  137 pages built and 268 Mermaid diagrams prerendered across 113 pages.
-- The final Lesson 1.5 program compiled and printed Ada with 75 gold
-  and 80/100 health, and Bo with 15 gold and 50/80 health.
-- The live preview uses
-  `http://127.0.0.1:4322/rust-game-hacking-book/pages/1/02/`.
-  The browser confirmed the route, heading, quiz, neighboring lesson
-  links, and first rendered diagram. Game Fundamentals and Hacking
-  Fundamentals both showed their new headings, contents, diagrams,
-  quizzes, and neighboring lesson links in the live preview. Check
-  mobile-sized diagrams before handoff.
-- The next coherent batch is `1/07–1/11`, followed by the gold-value
-  handoff into `2/01`. The 1.8 screenshot lab and 1.10 engine lesson
-  are intentionally preserved. Chapters 2–14 still need their full
-  paragraph-by-paragraph audit and a recorded disposition for every
-  lesson. No publication has been run.
+- The site builds 137 HTML pages. Build-time module-directive warnings do
+  not fail the build.
+- All 131 lesson files have a matching quiz key. Frontmatter chapter/order/
+  label values and fenced-code balance passed the consistency check.
+- The generated HTML link crawl checked 24,965 lesson and navigation links
+  and found no missing page or fragment targets.
+- `git diff --check` passed. Desktop and 390-pixel mobile previews were
+  inspected for the beginner sequence and representative later chapters.
+- Windows-only labs were not executed on this macOS host. One existing
+  `windows-labs/src/bin/injector.rs` approach assumes the local
+  `LoadLibraryW` address is valid in a remote process; Lesson 8.2 now states
+  that limitation accurately. The lab source itself was not redesigned in
+  this editorial pass.
+
+## Handoff
+
+Review the committed `codex/book-revision` branch against
+`rustgamehackingreimagined`, using the [full audit](BOOK_REVISION_AUDIT.md)
+and this ledger. Merge the authored-source changes after review and checks.
+Keep the original checkout's unrelated local changes intact. Do not publish
+`gh-pages` as part of this merge.

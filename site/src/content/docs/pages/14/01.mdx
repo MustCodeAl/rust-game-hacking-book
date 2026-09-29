@@ -12,11 +12,11 @@ sidebar:
 
 Every tool in this book has asked Windows for something: a handle to a game, a
 copy of four bytes, a list of loaded modules. Each time, something checked
-whether the tool was allowed to ask, did the work, and sometimes said no. That
-something is the **kernel**: the core of the operating system, the one program
-that runs with the processor's full authority, and the one every other program
-must go through to reach anything shared, such as another process's memory, the
-disk, the screen, or the network card.
+whether the tool was allowed to ask, did the work, and sometimes said no. The
+**kernel** is the core of the operating system that coordinates those requests
+with the processor's highest operating-system privilege. Ordinary programs go
+through its controlled services to reach shared resources such as another
+process's memory, the disk, the display, or a network device.
 
 This lesson answers four questions. How does the processor keep ordinary
 programs away from the kernel's powers? How does a program ask the kernel for
@@ -68,21 +68,23 @@ settings. At ring 3, each of these raises a **general-protection fault**
 instead of running, and the kernel turns the fault into an exception that
 normally ends the program.
 
-**Memory marked for the kernel.** Every page-table entry carries a
-**user/supervisor** bit, bit 2. When that bit is 0, the page is a supervisor
-page, and any access from ring 3 causes a page fault, even though the address
-is valid and the page is present. Windows maps its own code and data into the
-upper half of every 64-bit process's address space, from
-`0xFFFF_8000_0000_0000` upward, and clears bit 2 on every one of those pages.
-The kernel can share an address space with the game, and the game still cannot
-touch it. [Lesson 14.7](/pages/14/07/#one-bit-marks-a-page-as-the-kernels)
+**Memory marked for the kernel.** Page-table entries carry a
+**user/supervisor** bit, bit 2. When it is 0 on a present mapping, a ring-3
+access causes a page fault. Windows reserves a system range of virtual
+addresses for the kernel. In a traditional shared page table, kernel pages can
+be mapped there alongside a game's pages, but their supervisor bit still
+blocks the game. With [KVA shadow](https://www.microsoft.com/en-us/msrc/blog/2018/03/kva-shadow-mitigating-meltdown-on-windows),
+the user-mode page table omits most kernel mappings and keeps only the pages
+needed to enter the kernel; entry code switches to the fuller kernel page
+table. In either arrangement, a game cannot read or write the kernel's
+privileged pages. [Lesson 14.7](/pages/14/07/#one-bit-marks-a-page-as-the-kernels)
 compares the flag bits of a user page and a kernel page.
 
 Put the two checks together and user-mode code is boxed in. It cannot run the
 instructions that change the rules, and it cannot touch the memory where the
 rules are kept, including the page tables themselves.
 
-## A system call is the only way in
+## A system call is how a program asks
 
 If ring 3 cannot touch kernel memory or raise its own level, how does
 `ReadProcessMemory` ever reach code that can read another process? Through a
@@ -247,8 +249,11 @@ exception for that one process. The program's own handler, a debugger, or
 Windows Error Reporting deals with it, and in the worst case one process ends.
 The kernel is the safety net under every user-mode program.
 
-Nothing sits under the kernel. Kernel code does catch faults it expects, such as
-touching a user buffer that another thread may have freed; the copy behind
+There is no separate part of Windows that can repair arbitrary damage to its
+own kernel state. A hypervisor may isolate a whole guest from the host, as
+Lesson 14.3 will show, but it cannot resume a guest kernel whose internal
+records are already corrupted. Kernel code does catch faults it expects, such
+as touching a user buffer that another thread may have freed; the copy behind
 `ReadProcessMemory` is written to catch exactly those. But a driver that follows
 a bad pointer by mistake raises a fault inside the kernel itself, and all
 kernel code and all drivers share one address space and one set of data
@@ -264,7 +269,7 @@ flowchart TD
     B -->|"ring 3"| C["kernel handles the page fault"]
     C --> D["access violation for<br/>that one process"]
     D --> E["the process handles it or ends,<br/>everything else keeps running"]
-    B -->|"ring 0, unexpected"| F["no layer below<br/>to recover it"]
+    B -->|"ring 0, unexpected"| F["no general in-OS repair<br/>for damaged kernel state"]
     F --> G["shared kernel state<br/>may be half updated"]
     G --> H["bug check: stop code,<br/>crash dump, restart"]
 ```
