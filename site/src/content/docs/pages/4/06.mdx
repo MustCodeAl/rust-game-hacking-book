@@ -53,20 +53,6 @@ some tiles cost more to enter, such as deep water, rough ground, or a slope,
 “fewest steps” and “cheapest route” stop being the same question, and BFS
 confidently answers the wrong one. Closing that gap is what A-Star is for.
 
-Here is the smallest case where the two questions disagree. `S` is the start,
-`G` is the goal, and entering `M` costs 9 instead of the ground cost of 1:
-
-```text
-ground  ground  ground
-S       M       G
-ground  ground  ground
-```
-
-BFS finds the direct route in two moves: `S → M → G`. Its travel cost is
-9 + 1 = 10. Going around the top takes four moves but costs 1 + 1 + 1 + 1 =
-4. A weighted search should choose the longer route because it answers the
-cost question. This is a limit of BFS's guarantee, not a flaw in its queue.
-
 ```rust
 use std::collections::{HashMap, VecDeque};
 
@@ -184,10 +170,7 @@ mistake harder to express.
 
 ## A-Star adds a useful guess
 
-A-Star uses the known route cost plus a **heuristic**, an estimate of the
-remaining cost. On a four-direction grid where every legal move costs at
-least 1, Manhattan distance counts the minimum number of horizontal and
-vertical moves and cannot overestimate that cost:
+A-Star uses the known route cost plus a heuristic: an estimate of the remaining distance. On a four-direction grid, Manhattan distance is a safe estimate:
 
 ```rust
 fn manhattan(a: Tile, b: Tile) -> u32 {
@@ -195,21 +178,11 @@ fn manhattan(a: Tile, b: Tile) -> u32 {
 }
 ```
 
-The heuristic must not overestimate if you want the cheapest-path guarantee.
-For movement costs with a different verified minimum, multiply Manhattan
-distance by that minimum. If a legal move can cost zero, the safe estimate
-from this rule is zero. The search priority is:
+The heuristic must not overestimate if you want the shortest-path guarantee. If terrain has costs, use:
 
 ```text
 priority = cost already paid + estimated cost remaining
 ```
-
-For the muddy grid above, the direct route has cost 10 and the top route has
-cost 4. The estimate guides which tile A-Star explores next; the accumulated
-cost still decides whether a newly found route improves an old one. If the
-game permits diagonal moves, Manhattan distance can overestimate: `(0,0)` to
-`(1,1)` might be one diagonal move while Manhattan counts two. Choose an
-estimate that matches the actual movement rules.
 
 Do not include hidden enemy positions in the heuristic. A legitimate observer should plan from information the local game state actually reveals.
 

@@ -13,10 +13,9 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 ## The OpenGL method does not transfer
 
-Lesson 5.3 found `glDrawElements` by its exported name, then detoured an
-instruction inside it. OpenGL is a C API: `opengl32.dll` exports that
-function, so `GetProcAddress` can hand you its entry address. Lesson 8.4
-later teaches a separate import-table technique for named functions.
+Lesson 5.3 hooked `glDrawElements` by name. That worked because OpenGL is a C
+API: `opengl32.dll` exports a function with that name, so `GetProcAddress` can
+hand you its address, and Lesson 8.4's import-table technique applies directly.
 
 Open `d3d11.dll` in the export inspector from Lesson 7.3 and look for
 `Present`. It is not there. Neither is `DrawIndexed`, `Draw`, or any other
@@ -35,13 +34,6 @@ In Lesson 3.3 you recovered C++ classes by recognizing that an object begins
 with a pointer to a table of function addresses. A COM interface pointer is
 exactly that arrangement, promised by the ABI rather than recovered from
 disassembly:
-
-Picture a numbered control panel. Button 8 on an `IDXGISwapChain` is labeled
-`Present` by the interface contract, but the panel does not contain a universal
-street address for the code behind it. One object supplies a vtable pointer;
-slot 8 in that table supplies the function pointer for this implementation.
-The panel picture helps with the stable *number*. The two real memory reads
-below are what locate the code in this process:
 
 ```text
 swap_chain          ->  0x0000_01F4_8A20_0000   the object
@@ -108,17 +100,15 @@ before relying on it. A number copied from a forum post may have been counted
 for a different interface or SDK version, and a hook installed at the wrong
 index replaces whichever method actually lives in that slot.
 
-## Find a vtable inside the process you control
+## Getting the vtable without touching the game
 
-Here is a useful lab technique. To learn where `Present` lives in **your own
-running program**, create a small temporary swap chain inside that same
-process and inspect its vtable. You need not first find the main window's swap
-chain.
+Here is the part that surprises people. To learn where the game's `Present`
+lives, you do not need to find the game's swap chain at all.
 
-Objects of one interface implementation commonly share a vtable. A temporary
-object therefore gives a candidate function address for that implementation.
-Confirm that the real swap chain in this process uses the same method entry
-before relying on it; another implementation may use a different table.
+All objects created from one interface implementation share a single vtable.
+So you can create your own swap chain, in your own process, read the pointers
+out of its table, and those are the same function addresses the game's swap
+chain uses:
 
 ```mermaid
 flowchart LR
@@ -126,22 +116,20 @@ flowchart LR
     B --> C["Read the vtable pointer from the object"]
     C --> D["Copy slot 8"]
     D --> E["Release your objects"]
-    E --> F["Candidate Present address<br/>in this process"]
+    E --> F["That address is the runtime's Present"]
 ```
 
-Compare this with pattern scanning in Lesson 7.4, which searches bytes, and
-export lookup in Lesson 8.4, which needs an exported name. The temporary object
-asks the runtime for a method pointer without a byte signature. It still
-requires a compatibility check against the actual object and runtime.
+This is worth comparing with two techniques you already know. Pattern scanning
+(Lesson 7.4) searches for bytes and needs re-checking every build. Export
+lookup (Lesson 8.4) needs an export that does not exist here. Creating a
+throwaway device asks the runtime itself for the answer, needs no signature,
+and keeps working across driver and runtime updates — because you are reading
+the same table the runtime just handed you.
 
-**Do not copy that absolute pointer from a separate helper process into a
-game.** Each process has its own virtual address space, and a graphics runtime
-or driver can expose a different implementation. To study a separate offline
-target, inspect its own swap chain or create the probe inside its process after
-the DLL lifecycle from Chapter 8 is understood. A module-relative address may
-be translated only after confirming the same module build and method body in
-both processes. [Microsoft's virtual-address documentation](https://learn.microsoft.com/en-us/windows/win32/memory/virtual-address-space)
-explains why identical numbers alone do not identify the same object.
+It is the same reasoning as Lesson 8.2's `LoadLibraryW` address, and it has the
+same limit. It works because both sides load the same implementation into the
+same session. It is not a general licence to assume one process's addresses
+mean anything in another.
 
 ## Do this to a program you wrote
 
@@ -150,10 +138,8 @@ a window, a device, a swap chain, a clear-and-present loop — and hook that.
 Every mistake is then yours to observe, and nothing depends on a specific game
 build.
 
-The vtable commonly lives on a protected page, so writing to a verified slot
-in this owned lab needs the same page-protection discipline as the byte patches
-in Lesson 8.3. A shared vtable slot can affect every object using that table in
-this process, so save its original pointer and keep the experiment scoped:
+The vtable lives in the runtime's read-only data, so writing to it needs the
+same page-protection dance as the byte patches in Lesson 2.6:
 
 ```rust
 // 🛡️ SAFETY: `slot` points into the vtable read from a live swap chain, the

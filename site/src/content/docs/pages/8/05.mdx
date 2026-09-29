@@ -122,13 +122,6 @@ Why not create one thread per region? A module can contain many runs, and thread
 
 A weak pattern can match thousands of locations. A per-thread limit is not enough: eight workers with a 4,096-item limit could still produce 32,768 items.
 
-With a toy global cap of three, suppose worker 1 has recorded two matches and
-worker 2 finds two more. Both cannot simply read “2 of 3 used” and then append:
-that would publish four. Each must reserve one slot through the shared counter;
-only one of worker 2's two matches can obtain the remaining slot. This is the
-safety promise in the table above. Cancellation is the separate progress
-promise: workers stop scanning once no more slots can be reserved.
-
 The scanner reserves each result through one atomic counter:
 
 ```rust
@@ -169,11 +162,6 @@ anyhow::ensure!(matches.len() == 1, "expected one match");
 ```
 
 Sorting after the merge makes logs, tests, and human review repeatable. Deduplication is defensive; clipped memory regions should not overlap, but downstream correctness should not depend on that hope.
-
-The same design works for an offline archive or asset scanner: first collect
-bounded, immutable input chunks, let workers inspect separate chunks, then
-apply one global output limit and sort results. The game-specific part here is
-the capture boundary, where bytes come from a changing process.
 
 This distinction matters:
 
@@ -404,12 +392,12 @@ Do these tests without a game process. Only the small capture layer requires Win
   explanation="Remote memory changes and Windows reads can fail. Copying once keeps that unstable boundary in one stage; workers then perform deterministic comparisons over immutable slices."
 />
 
-## What makes the parallel result trustworthy
+## Checkpoint
 
-The finished scanner relies on five linked properties:
+You understand the advanced scanner when you can explain:
 
-- copying process bytes first gives workers stable local input;
-- one global match cap bounds the total result, regardless of worker count;
-- cancellation stops unnecessary work after the cap is reached;
-- sorting makes the returned address order reproducible;
-- one unique match still needs semantic verification before use, however fast the scan ran.
+- why process copying happens before parallel scanning;
+- why the match cap is global rather than per worker;
+- why cancellation is separate from result storage;
+- why sorted results are part of correctness, not cosmetic output;
+- why a faster ambiguous pattern is still unusable.

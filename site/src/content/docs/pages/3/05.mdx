@@ -22,32 +22,6 @@ Imagine that offset `0x40` points to a weapon. Knowing that does not answer the 
 
 These are **lifetime** questions. A reliable memory tool needs them because an address that was correct one frame ago may now belong to a different allocation.
 
-The **heap** is memory handed out by an allocator for objects whose lifetime
-does not simply end when the creating function returns. A spawned enemy, a
-resized list, or a text buffer can live across many calls; the game later
-releases or reuses its allocation. Unlike a call's stack frame, cleanup is
-controlled by an owner or a game event. An individually allocated object
-commonly stays at one address while that allocation lives, but containers can
-move their elements when they grow and an allocator can reuse a freed address.
-
-Follow one address through two different owners:
-
-<MemoryStrip
-  cells="0x5000=enemy A · health 100|0x5080=free|0x5100=chat text"
-  caption="Before: enemy A lives at `0x5000`."
-/>
-
-<MemoryStrip
-  cells="0x5000=enemy B · health 87|0x5080=free|0x5100=chat text"
-  marks="0"
-  caption="After A is freed, the allocator reuses `0x5000` for B. The address is readable but no longer identifies A."
-/>
-
-A pointer being non-null and readable therefore does not prove object identity.
-Check its owner, generation or other identity fields, and the event that ends
-its lifetime. This is the deeper version of the brief address warning in
-Lesson 1.8.
-
 ## Recognize behavior before naming a container
 
 Compiler libraries have implementation details that can change. Instead of memorizing one screenshot of `std::vector`, recognize its behavior.
@@ -106,39 +80,6 @@ one element to the next.
 
 Those checks describe meaning. They remain useful even if a compiler changes field order.
 
-## One collection can arrange the same fields in different ways
-
-Lesson 1.3 grouped one player's ID, health, position, and team into a
-record. With several players, one implementation can put complete records
-side by side. Player 1 is highlighted here:
-
-<MemoryStrip
-  cells="=id 0|=hp 0|=pos 0|=team 0|=id 1|=hp 1|=pos 1|=team 1"
-  marks="4-7"
-  groups="0-3:player 0|4-7:player 1"
-  caption="Array of structures: fields for one player sit together."
-/>
-
-Another implementation can keep a separate collection for each kind of
-field. Player 1's information is now spread among the collections:
-
-<MemoryStrip
-  cells="=id 0|=id 1|=hp 0|=hp 1|=pos 0|=pos 1|=team 0|=team 1"
-  marks="1|3|5|7"
-  groups="0-1:IDs|2-3:health|4-5:positions|6-7:teams"
-  caption="Structure of arrays: one field type sits together, while one player's fields are spread out."
-/>
-
-The diagrams show *logical order*, not exact byte sizes. Both layouts
-represent the same players. The first can be convenient when code handles
-one complete player at a time. The second can reduce unrelated data read
-into the CPU cache when code sweeps across only positions or only health.
-Neither is automatically faster for every workload. Watch the addresses a
-repeating instruction visits: a fixed stride through records suggests the
-first arrangement; separate dense runs of one field suggest the second.
-An entity-component system can take the separation further by putting
-components in distinct pools, as shown later in this lesson.
-
 ## Fixed offsets and scaled offsets answer different questions
 
 Machine code often exposes an address formula. Read the formula before naming
@@ -178,11 +119,10 @@ time settle it:
 Many C++ string implementations use a **small-string optimization**. Short names may live directly inside the string object, while longer names use a heap buffer. This explains a confusing sight: one player name looks like text at offset `0x20`, but a longer name makes the same bytes look like a pointer.
 
 Here is one real implementation's layout, the 32-bit Microsoft C++ library's
-`std::string`, holding the three-character example name `Ivy` and then a
-longer one. The name is only sample text; its length is what matters:
+`std::string`, holding a short name and then a long one:
 
 <MemoryStrip
-  cells="+0x00=Ivy, then a zero byte|+0x10=size 3|+0x14=capacity 15"
+  cells="+0x00=Ada, then a zero byte|+0x10=size 3|+0x14=capacity 15"
   groups="0-0:16 bytes: the text itself"
   caption="Short: up to 15 characters live inside the object."
 />
@@ -229,10 +169,10 @@ allocator put them, not in one block.
 
 A **binary search tree** node holds a key and two child pointers: smaller keys
 go to the left, larger ones to the right. Finding a key means comparing and
-stepping left or right. In a **balanced** tree, each step discards roughly half
-the remaining possibilities, so a tree of 1,000,000 entries needs about 20
-steps: 2²⁰ = 1,048,576. `std::map` typically maintains such a balanced tree.
-Its clue is a loop that compares a key and then loads one of two pointers
+stepping left or right, and each step throws away about half of what is left,
+so a tree of 1,000,000 entries needs only about 20 steps: halving 1,000,000
+twenty times reaches 1, because 2²⁰ = 1,048,576. `std::map` is built on such a
+tree. Its clue is a loop that compares a key and then loads one of two pointers
 depending on the result. Its failure is lopsidedness: keys inserted in sorted
 order all go the same way and turn the tree into a slow list, which is why real
 implementations rebalance themselves.
@@ -241,9 +181,8 @@ implementations rebalance themselves.
 
 A **hash table** turns the key into a number, its **hash**, and uses that number
 to pick one slot, or **bucket**, in an array of buckets. Only the entries in that
-bucket are checked. With a suitable hash and enough buckets for the entries,
-lookup is usually close to constant time as the table grows; collisions or a
-full table can make it slower. With 16 buckets, a hash of `0x5A3` selects bucket
+bucket are checked, so a lookup costs about the same with 10 entries or
+10,000,000. With 16 buckets, a hash of `0x5A3` selects bucket
 `0x5A3 & 0xF` = 3, because the mask `0xF` keeps only the last hex digit. The
 clue is arithmetic on the key (multiplies, shifts, XORs), then that mask or a
 remainder, then a short walk through one bucket. Two keys can land in the same
@@ -259,13 +198,6 @@ Validate structural invariants:
 - traversal needs a maximum-node limit and a visited-address set.
 
 The visited set is important. Corrupted data could form a cycle and otherwise trap a scanner forever.
-
-Before choosing a container model, ask what the game actually does with
-the data: does it need an ordered list, lookup by key, first-in-first-out
-work, a tile grid, or links between waypoints? Then ask whether items can
-be inserted or removed while you read them. Those questions connect the
-shape you observe to the operation it supports; a readable address alone
-cannot identify a container.
 
 ## Raw pointers, smart pointers, and handles
 
@@ -311,12 +243,6 @@ struct Slot<T> {
 ```
 
 The index chooses a slot. The generation proves that the slot still represents the same logical object. If a deleted entity’s slot is reused, its generation changes and old handles stop resolving. ✅
-
-For example, a saved handle for slot 12 with generation 3 resolves only
-while slot 12 still reports generation 3. If that enemy dies and a new
-enemy occupies slot 12 with generation 4, the old handle is rejected.
-The slot may hold a real living object at a valid address; the
-generation mismatch is what reveals that it is the *wrong* object.
 
 ## Follow destruction as carefully as construction
 

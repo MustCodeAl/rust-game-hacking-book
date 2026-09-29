@@ -24,18 +24,15 @@ stateDiagram-v2
     Acting --> Recovering: action failed
     Cooldown --> Ready: timer elapsed
     Recovering --> Ready: state is valid again
-    Waiting --> Stopped: stop requested
     Ready --> Stopped: stop requested
-    Acting --> Stopped: stop requested
     Cooldown --> Stopped: stop requested
-    Recovering --> Stopped: stop requested
 ```
 
 Every arrow has a reason. That is much easier to debug than nested `if` statements and sleeps.
 
 ## Find the action, then find what it requires
 
-The offline Wyrmsun 5.0.1 debugger trace reaches a unit-creation call:
+The original lesson traced a unit-creation path:
 
 ![A recruit-unit function in the debugger](/assets/images/4/3/macro2.png)
 
@@ -105,20 +102,15 @@ struct GameSnapshot {
     player_ready: bool,
     resources: u32,
     action_confirmed: bool,
-    action_failed: bool,
-    state_valid: bool,
 }
 
 fn next_state(state: MacroState, game: &GameSnapshot, stop: bool) -> MacroState {
     if stop {
         return MacroState::Stopped;
     }
-    if !game.match_active {
-        return MacroState::Waiting;
-    }
 
     match state {
-        MacroState::Waiting if game.player_ready && game.state_valid => {
+        MacroState::Waiting if game.match_active && game.player_ready => {
             MacroState::Ready
         }
         MacroState::Ready if game.resources >= 100 => {
@@ -127,15 +119,9 @@ fn next_state(state: MacroState, game: &GameSnapshot, stop: bool) -> MacroState 
         MacroState::Acting { .. } if game.action_confirmed => {
             MacroState::Cooldown { ticks_left: 5 }
         }
-        MacroState::Acting { .. } if game.action_failed => {
-            MacroState::Recovering { reason: "action was not accepted".into() }
-        }
         MacroState::Cooldown { ticks_left: 0 } => MacroState::Ready,
         MacroState::Cooldown { ticks_left } => {
             MacroState::Cooldown { ticks_left: ticks_left - 1 }
-        }
-        MacroState::Recovering { .. } if game.state_valid && game.player_ready => {
-            MacroState::Ready
         }
         current => current,
     }
@@ -154,8 +140,6 @@ fn stops_from_any_active_state() {
         player_ready: true,
         resources: 500,
         action_confirmed: false,
-        action_failed: false,
-        state_valid: true,
     };
 
     assert!(matches!(
@@ -219,14 +203,7 @@ loop {
 
 Before unloading an in-process library, set the stop flag, wait for the worker to exit, and restore any temporary state.
 
-## Wire it to Wyrmsun 5.0.1 after the DLL lessons
-
-You can complete the state-machine and recorded-snapshot tests above before
-loading code into a game. The pinned Wyrmsun port below is a deeper
-application to revisit after [Lesson 8.3](/pages/8/03/) teaches verified
-detours and [Lesson 8.6](/pages/8/06/) teaches the input worker. Its concrete
-addresses and hooks are retained here so the bot design can be compared with
-the original course's running implementation.
+## Wire it to Wyrmsun 5.0.1
 
 This is the original course's **macro bot**, rebuilt as an explicit state machine.
 

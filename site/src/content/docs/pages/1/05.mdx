@@ -1,678 +1,464 @@
 ---
-title: "A Rust Primer for the Game Labs"
-description: "Express programming logic in Rust: name state, choose a path, repeat work, group values, borrow safely, and handle missing or failed results."
+title: "Programming Fundamentals"
+description: "Learn the programming vocabulary the rest of the book assumes — data, types, state, algorithms, data structures, functions, event-driven programs, abstractions, APIs, ABIs, parsing, concurrency, and invariants."
 chapter: "1.5"
-minutes: 48
+minutes: 26
 author: "attilathedud"
-date: "2026-09-28"
+date: "2026-07-30"
 sidebar:
   order: 5
-  label: "1.5 A Rust Primer for the Game Labs"
+  label: "1.5 Programming Fundamentals"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
-import OwnershipScope from '../../../../components/OwnershipScope.astro';
 
-This lesson gives Rust syntax a purpose. A program runs steps in order,
-chooses between possible steps, repeats a step, and keeps related state
-together. Rust has familiar ways to express each of those ideas. We will
-build one small program around a fictional runner named Mira, who has 12
-stamina. A dash uses 4 stamina. A second runner named Sol will let us see
-why the same rule can serve several records.
+Technical words are useful when they name a precise idea. They are not useful
+when they only make a simple idea sound harder. This lesson defines the words
+that later chapters use often.
 
-| Programming question | Rust expression in this lesson |
-| --- | --- |
-| What happens first, next, and last? | Statements in `main`, function calls, and assignments. |
-| Which path should run? | `if`, `match`, and `if let`. |
-| What should repeat, and when should it stop? | `for`, `while`, `loop`, and collection iterators. |
-| Which values belong together? | `struct`, collections, and `enum`. |
-| Who can read or change a value? | `&`, `&mut`, ownership, and methods. |
-| What if a value is missing or an operation fails? | `Option`, `Result`, and `?`. |
+You do not need to memorize the page. Return to it when a term appears in code.
 
-## Give the code a place to run
+## Data, values, and types
 
-**Cargo** is the tool normally used to build and run Rust projects. After
-installing a Rust toolchain, a terminal can check that Cargo is available:
+Start with three words that get used interchangeably and really should not be.
 
-```text
-cargo --version
+**Data** is stored information — bytes sitting somewhere. A **value** is one
+piece of that data, interpreted a particular way. A **type** is the thing that
+says which interpretation to use, and therefore which operations make sense.
+
+The bytes `50 00 00 00` are data. Read as a `u32`, the value is 80:
+
+<MemoryStrip
+  cells="=50|=00|=00|=00"
+  groups="0-3:data: four stored bytes"
+  groups2="0-3:value: 80, once the type `u32` says how to read them"
+/>
+
+Doubling that value is a sensible thing to do; adding the text `"Ada"` to it is not, and the type is
+how the compiler knows the difference before you ever run the program.
+
+```rust
+let health: u32 = 80;
+let player_name: &str = "Ada";
+let is_alive: bool = true;
 ```
 
-A version number means the command is ready. If it is not installed, the
-[official Rust installation guide](https://www.rust-lang.org/tools/install)
-explains the supported setup. You can read this primer now and run it after
-the Windows lab setup in Lesson 1.7.
+Here, `80`, `"Ada"`, and `true` are values. Their types are `u32`, `&str`, and
+`bool`.
 
-Make a project in a folder you control:
+Types catch mistakes before the program runs. They also document meaning. A
+`PlayerId(u32)` and a `Health(u32)` store identical bits, but giving them
+separate types means the compiler refuses to let you pass one where the other
+belongs:
 
-```text
-cargo new rust_stamina_primer --vcs none
-cd rust_stamina_primer
+```rust
+struct PlayerId(u32);
+struct Health(u32);
+
+fn damage(target: PlayerId, amount: Health) { /* ... */ }
+
+// damage(Health(50), PlayerId(3));   // rejected: the arguments are swapped
 ```
 
-Cargo creates `Cargo.toml`, which describes the project, and
-`src/main.rs`, which holds the starting program. Replace the contents of
-`src/main.rs` with the complete program below. The shorter fragments before
-it each isolate one idea; do not paste all of them into the same file.
-`cargo run` compiles and
-runs it. `cargo check` checks the code without producing a program you
-can run. The [official Cargo chapter](https://doc.rust-lang.org/book/ch01-03-hello-cargo.html)
-walks through these same commands.
+Written as two plain `u32` parameters, that swap compiles happily and misbehaves
+at runtime instead. This is the cheapest bug prevention available, and later
+chapters lean on it constantly to keep addresses, offsets, and game values from
+being mistaken for one another.
+
+## State is information that can change
+
+The **state** of a program is the information that describes it at one moment.
+If health changes from 80 to 55, the program moved from one state to another.
+
+Some values are inputs, some are temporary calculations, and some become stored
+state. Naming that difference helps you trace cause and effect:
 
 ```mermaid
 flowchart LR
-    Source["src/main.rs<br/>source you edit"] --> Cargo["cargo run<br/>compile"]
-    Cargo --> Program["running program<br/>prints Mira's stamina"]
+    E["damage event<br/>an input"] --> C["calculate 80 − 25<br/>a temporary value"]
+    C --> S["store health = 55<br/>state"]
+    S --> B["resize the health bar<br/>derived from state"]
 ```
 
-## Name the state, then run steps in order
+The stored simulation health and the displayed health-bar width are related,
+but they are not necessarily the same value.
 
-Start with three values, each with a distinct job. The statements run from
-top to bottom; later statements can use names created earlier:
+## An algorithm is a repeatable procedure
 
-```rust
-let mut stamina: u32 = 12;
-let cost = 4_u32;
-let can_dash = stamina >= cost;
-```
+An **algorithm** is a clear sequence of steps for solving a kind of problem.
+For example, a basic value scanner:
 
-`let` binds a name. `mut` permits a later assignment to `stamina`.
-The `: u32` is an explicit type; the `_u32` on `4` gives the literal
-that type too. Rust can infer that `cost` is a `u32` and `can_dash` is a
-`bool`, because `>=` produces `true` or `false`. A semicolon ends each
-statement. To update state, assign a new value to the same name:
+1. visits readable memory regions;
+2. reads a bounded chunk;
+3. compares each possible value with the search value;
+4. records matching addresses;
+5. repeats later using only the previous candidates.
 
-```rust
-stamina = stamina - cost; // first calculate 12 - 4, then store 8
-```
-
-## Selection: run only the path that fits
-
-The assignment above assumes the runner has enough stamina. To express a rule with
-two possible paths, use `if` and `else`:
-
-```rust
-if can_dash {
-    stamina = stamina - cost;
-} else {
-    println!("Not enough stamina");
-}
-```
-
-With 12 stamina, the first branch runs and stamina becomes 8. The `else` branch
-would run for 2 stamina and a 4-stamina cost. The braces group the statements
-belonging to each path. This is **selection**: test a condition, then run
-the matching branch. Later, `match` and `if let` will select by the shape
-of a result instead of a true/false condition.
-
-## Repetition: apply the same rule to several inputs
-
-A `for` loop repeats a body for each item in a collection. Here the loop
-tries three dash costs in order, carrying the current stamina into the next
-attempt:
-
-```rust
-let mut stamina = 12_u32;
-for cost in [4, 10, 2] {
-    if stamina >= cost {
-        stamina -= cost;
-    }
-}
-// stamina is 6: use 4, skip 10, use 2
-```
-
-`stamina -= cost` is short for `stamina = stamina - cost`. The trace is 12 → 8;
-10 needs more stamina than remains, so stamina stays 8; using 2 leaves 6. The code
-shows **repetition** without writing the dash check three times.
-
-Use `for` when there is a collection to visit. Use `while` when the
-condition determines whether another pass is needed:
-
-```rust
-let mut attempts = 0;
-while attempts < 3 {
-    attempts += 1;
-    println!("Attempt {attempts}");
-}
-// prints Attempt 1, Attempt 2, Attempt 3
-```
-
-Use `loop` when the body decides exactly when to stop:
-
-```rust
-let mut remaining = 2;
-loop {
-    if remaining == 0 {
-        break;
-    }
-    remaining -= 1;
-}
-```
-
-The important question is always **what makes the repetition stop?**
-The `for` example ends after its three costs, the `while` example ends
-when `attempts` reaches three, and the `loop` example reaches `break`
-when `remaining` reaches zero.
-
-## Group related state and name a behavior
-
-So far `stamina` is a standalone number. A game also needs to know whose
-stamina it is. A `struct` names a shape of related fields; `Runner` groups a
-name with a stamina amount. A function names a repeatable behavior. Here
-`dash` is the guarded dash rule and `show_stamina` displays the state:
-
-```rust
-struct Runner {
-    name: String,
-    stamina: u32,
-}
-
-fn show_stamina(runner: &Runner) {
-    println!("{} has {} stamina", runner.name, runner.stamina);
-}
-
-fn dash(runner: &mut Runner, cost: u32) -> bool {
-    if runner.stamina < cost {
-        return false;
-    }
-    runner.stamina = runner.stamina - cost;
-    return true;
-}
-
-fn main() {
-    let mut mira = Runner {
-        name: String::from("Mira"),
-        stamina: 12,
-    };
-
-    show_stamina(&mira);
-    let dashed = dash(&mut mira, 4);
-    println!("Dash succeeded: {dashed}");
-    show_stamina(&mira);
-}
-```
-
-Run it with `cargo run`. You should see:
-
-```text
-Mira has 12 stamina
-Dash succeeded: true
-Mira has 8 stamina
-```
-
-The order of those lines matters. `main` starts, creates this sample
-runner, prints the starting value, asks `dash` to apply the rule, and
-prints the new value.
-The first and last print calls read the **same** runner record, before
-and after one controlled change.
-
-<MemoryStrip
-  cells="Mira.stamina before=12|dash cost=4|Mira.stamina after=8"
-  groups="0-2:dash checks the cost, then changes Mira's stored stamina"
-  caption="The `dash` call changes Mira's record; `show_stamina` only reads it."
-/>
-
-## Who owns the runner, and who may change it?
-
-`let mut mira` creates a **mutable** runner value inside `main`.
-`main` owns that value for this example. The `name` field is a `String`:
-owned text stored in Mira's record. `u32` is a non-negative whole-number
-type, suitable for this simple stamina example.
-
-`show_stamina(&mira)` lends the function a read-only **reference** to Mira.
-The `&Runner` parameter says it may inspect a runner without taking over
-ownership. `dash(&mut mira, 4)` lends a temporary editable reference;
-`&mut Runner` says the function may change that runner. When the call
-returns, `main` can use Mira again. Neither function needs to copy the
-whole record just to read or update its fields.
-
-Think of Mira's record as one notebook. `show_stamina` may read it; `dash`
-needs permission to write in it. The analogy stops at the Rust rule:
-references are checked by the compiler, and Rust will reject conflicting
-access to the same value during an editable borrow. [Lesson
-3.1](/pages/3/01/) develops ownership, borrowing, and error handling
-when we build an external memory tool.
+The same steps, drawn as a loop:
 
 ```mermaid
 flowchart TD
-    Main["main owns Mira"] -->|"&mira: read"| Show["show_stamina"]
-    Main -->|"&mut mira: edit"| Dash["dash"]
-    Dash --> Main
-    Main -->|"&mira: read again"| ShowAgain["show_stamina"]
+    R["visit the next readable region"] --> C["read a bounded chunk"]
+    C --> M["compare each position<br/>with the search value"]
+    M --> K["record the matching addresses"]
+    K --> N{"more regions?"}
+    N -->|"yes"| R
+    N -->|"no"| L["later: re-read only the<br/>recorded candidates and keep<br/>the ones that still match"]
 ```
 
-Remove `mut` from `let mut mira` and run `cargo check`: the
-editable `&mut mira` call is rejected before the program runs.
-Put `mut` back to make the intended change explicit. Compiler messages
-are useful clues about which part of the code's promise does not match.
+An algorithm is not tied to one programming language. Code is one exact way to
+express it, and *exact* matters: the computer does what the steps say, not what
+you meant. If step 3 compares only every fourth byte, a value stored at an odd
+address is never found, and nothing warns you.
 
-## Copy a number, move an owned string
+Most program logic combines three control-flow forms:
 
-Ownership becomes clearer when we compare two assignments. A `u32`
-number is a small `Copy` value: assigning it to another variable copies
-the number, so both names remain usable. A `String` owns growable text;
-assigning it normally **moves ownership** to the new name:
+- **sequence** — do steps in order;
+- **selection** — choose a branch with `if` or `match`;
+- **repetition** — repeat with a loop or iterator.
 
 ```rust
-let stamina = 12_u32;
-let copied_stamina = stamina; // both names can still be used
-
-let name = String::from("Mira");
-let moved_name = name; // moved_name now owns the text
-// println!("{name}"); // rejected: name no longer owns it
-println!("{moved_name} has {copied_stamina} stamina");
+for player in players {
+    if player.health > 0 {
+        println!("{} is alive", player.name);
+    }
+}
 ```
 
-This does not make a second independent copy of the text. If both names
-claimed to own the same growable allocation, each might try to release
-it later. Rust makes the transfer visible to the compiler instead. A
-borrow such as `&mira` is different: it lets a function use the value
-temporarily while Mira remains owned by `main`.
+This code repeats over players and selects only living ones.
 
-<OwnershipScope id="string-move" example="move-string" />
+## A data structure organizes values
 
-The interactive view separates the `String` value's small bookkeeping
-from the text it owns. It previews the stack and heap vocabulary that
-Lesson 1.8 will explain. The important source-level rule here is that
-the old name cannot be used after its owned `String` moves; the new
-owner can use it. A copyable `u32` behaves differently.
+A **data structure** is a chosen arrangement of data. The arrangement affects
+which operations are easy or expensive.
 
-## Punctuation that carries meaning
+| Structure | Good fit |
+|---|---|
+| `Vec<T>` | ordered items scanned by index |
+| `HashMap<K, V>` | values looked up by a key |
+| queue | work handled in arrival order |
+| grid | tiles addressed by row and column |
+| graph | waypoints or objects connected by edges |
 
-Rust's symbols are easier to read when each has a job:
+Ask what the program does most often: search, access, insert, remove, or walk
+relationships. Choose a structure that supports those operations clearly.
+[Lesson 3.5](/pages/3/05/#linked-structures-leave-different-clues) shows what
+lists, trees, and hash tables look like inside a running game.
 
-| In the example | Read it as |
-| --- | --- |
-| `name: String` | a field named `name` whose type is `String` |
-| `-> bool` | this function returns `true` or `false` |
-| `runner.stamina` | the `stamina` field in this runner |
-| `String::from("Mira")` | call `from` associated with the `String` type |
-| `&mira` / `&mut mira` | lend read access / lend editable access |
-| `println!` | a printing macro; the `!` marks macro syntax |
+## A function gives a name to a behavior
 
-The braces in `println!("{} has {} stamina", ...)` mark slots filled by
-the values after the quoted text. The `{dashed}` form uses the local
-variable by name. In a later collection example,
-`use std::collections::{HashMap, VecDeque};` brings two standard-library
-names into scope; `::` walks through their module path.
-
-## Grow one runner into the full two-runner program
-
-To see how one rule serves several records, add Sol to the program. Mira
-starts with 12 stamina and Sol with 7; each has a separate health amount.
-Replace `src/main.rs` with this complete version;
-do not paste a second `main` underneath the first one:
+A **function** accepts inputs, performs work, and may return an output.
 
 ```rust
-struct Runner {
-    name: String,
-    stamina: u32,
-    health: u32,
-    max_health: u32,
-}
-
-fn dash(runner: &mut Runner, cost: u32) -> bool {
-    if runner.stamina < cost {
-        return false;
-    }
-    runner.stamina = runner.stamina - cost;
-    return true;
-}
-
-fn show_runner(runner: &Runner) {
-    println!(
-        "{} has {} stamina and {}/{} health",
-        runner.name, runner.stamina, runner.health, runner.max_health
-    );
-}
-
-fn main() {
-    let mut runners = [
-        Runner {
-            name: String::from("Mira"),
-            stamina: 12,
-            health: 70,
-            max_health: 100,
-        },
-        Runner {
-            name: String::from("Sol"),
-            stamina: 7,
-            health: 45,
-            max_health: 60,
-        },
-    ];
-
-    for runner in &mut runners {
-        dash(runner, 4);
-    }
-    for runner in &runners {
-        show_runner(runner);
-    }
+fn is_valid_health(health: u32, max_health: u32) -> bool {
+    health <= max_health
 }
 ```
 
-The first loop lends each existing runner to `dash` for an edit. That
-loop finishes before the second loop lends each runner to `show_runner`
-for reading. Mira's stamina becomes 8 and Sol's becomes 3; their health
-fields do not change. `cargo run` should print:
+The name describes the question. The parameters describe the required inputs.
+The return type describes the answer.
+
+Small functions make a tool easier to test. A parser, for example, can be
+tested with saved bytes without launching a game.
+
+## Event-driven programs wait, then respond
+
+Most code in this lesson runs from top to bottom: do this, then this, then stop.
+A great deal of real software does not work that way. A game window, a
+debugger, and a server all spend most of their time waiting for something to
+happen, then responding to it.
+
+That style is called **event-driven programming**. An **event** is a record that
+something happened: a key was pressed, a network message arrived, a timer ran
+out, the window was resized. The program is built around an **event loop** that
+waits for the next event and passes it to the code written for that kind of
+event:
 
 ```text
-Mira has 8 stamina and 70/100 health
-Sol has 3 stamina and 45/60 health
+loop forever:
+    event = wait for the next event
+    find the handler for this kind of event
+    call the handler
 ```
 
-The shape of each runner became larger, but the rule did not need a
-special Mira version and a special Sol version. Add a third record with
-2 stamina: the dash fails and that record keeps 2. The function's
-`bool` result could also be used to
-display whether each dash succeeded.
+The handler is usually a **callback**: a function you give to someone else so
+that they can call it later. You never call it yourself. You register it, and
+the loop calls it when a matching event arrives. That is why "callback" appears
+all over this book — a debugger, a Lua host, and a game engine all call code
+that someone else wrote, at moments they choose.
 
-## Put behavior next to a struct with `impl`
+### Every Windows window has one
 
-The complete program uses a separate `dash(runner, 4)` function. Rust
-also lets us attach behavior to the `Runner` type in an `impl` block.
-This alternative method performs the same guarded subtraction:
+Windows makes this concrete. The operating system keeps a queue of messages for
+each window: `WM_KEYDOWN` when a key goes down, `WM_SIZE` when the window is
+resized, `WM_CLOSE` when the close button is clicked. The program takes them out
+one at a time and hands each one to a function it registered for the window,
+called the **window procedure**:
+
+```text
+while GetMessage waits for, and receives, a message:
+    TranslateMessage    turn raw key presses into character messages
+    DispatchMessage     call the window procedure with the message
+```
+
+### Why a game cannot simply wait
+
+`GetMessage` waits. If no message arrives, the thread sits there doing nothing.
+A text editor wants exactly that, because there is nothing to do until you
+type. A game cannot work that way: enemies keep moving and the screen keeps
+redrawing when you touch nothing at all.
+
+So games check the queue with `PeekMessage` instead, which returns at once
+whether or not a message was waiting. The event handling is folded into the
+game loop from Lesson 1.4:
+
+```text
+every frame:
+    while PeekMessage finds a waiting message:
+        handle it              key presses, resizing, closing
+    update the world           runs whether or not anything happened
+    draw the frame
+```
+
+Compare the two loops. A text editor, using `GetMessage`:
+
+```mermaid
+flowchart LR
+    W["wait for a message<br/>the thread sleeps"] --> H["handle it"]
+    H --> W
+```
+
+A game, using `PeekMessage`:
+
+```mermaid
+flowchart LR
+    P["handle every waiting message<br/>returns at once if there are none"] --> U["update the world"]
+    U --> D["draw the frame"]
+    D --> P
+```
+
+A game is therefore both at once: a loop that runs every frame regardless, and
+an event handler that clears out whatever arrived since the last frame.
+
+### A slow handler holds up everything behind it
+
+A handler must finish quickly, because while it runs, no other event is
+handled. If one handler reads a large file or waits for a lock, every event
+queued behind it waits too:
+
+<MemoryStrip
+  cells="being handled=WM_KEYDOWN, reading a big file|waiting=WM_MOUSEMOVE|waiting=WM_PAINT|waiting=WM_CLOSE"
+  marks="0"
+  groups="1-3:none of these runs until the first one returns"
+  caption="One thread's message queue. The window cannot even repaint while the first handler is busy."
+/>
+
+You have probably seen the result. Windows adds "(Not Responding)" to a
+window's title when the thread that owns it has not taken a message from its
+queue for about five seconds. In a game the same mistake shows up sooner, as a
+stutter or a frozen frame. This is why Lesson 4.8 keeps slow work away from the
+code that samples a game, and why Lesson 5.3 warns that a hook sits on the
+game's critical path: a hook is extra code running inside someone else's
+handler.
+
+### Polling is the alternative when nobody will tell you
+
+The opposite of waiting for an event is **polling**: checking a value
+repeatedly on your own schedule to see whether it has changed. An event loop
+does work only when something happens, while polling does work on every check,
+even when nothing has changed.
+
+Polling still has its place, and this book uses it constantly for one reason: a
+game does not send your tool an event when its health changes. An external tool
+reading another program's memory has nothing to wait on, so it has to look.
+Lesson 4.7 shows how to turn repeated looks into events of your own, by
+comparing each snapshot with the one before it and reacting only to the
+difference.
+
+## An abstraction hides details behind a smaller interface
+
+An **abstraction** lets one part of a program use a service without knowing all
+of its internal steps.
 
 ```rust
-impl Runner {
-    fn try_dash(&mut self, cost: u32) -> bool {
-        if self.stamina < cost {
-            return false;
-        }
-        self.stamina = self.stamina - cost;
-        return true;
-    }
+trait MemoryReader {
+    fn read_u32(&self, address: usize) -> anyhow::Result<u32>;
 }
 ```
 
-`self` means the runner receiving the method call. `&mut self` gives
-the method temporary editable access to that runner, like the earlier
-`&mut Runner` parameter. You can add this `impl` block below the
-two-runner program and replace `dash(runner, 4)` in the first loop with
-`runner.try_dash(4)`. The result stays Mira 8 and Sol 3. The method
-organizes the code differently; it does not invent a different dash
-rule. In Rust, a `struct` holds fields and an `impl` gives it methods;
-class inheritance is not required.
+Code that searches for health can call `read_u32`. It does not need to repeat
+the Windows handle, buffer, and error logic for every read.
 
-## Model two possible outcomes with `enum` and `match`
+The abstraction does not make bad addresses safe by magic. It gives validation
+and error handling one clear place to live.
 
-The `bool` from `dash` says whether the dash succeeded, but it does
-not say *why* it failed or how much stamina is left. When an answer can take
-one of a few distinct shapes, Rust uses an `enum`. This separate program
-decides a dash without changing a runner record:
+## APIs and ABIs describe boundaries
+
+An **API** — application programming interface — is the agreement as written in source code: what the function is
+called, what you hand it, what it hands back, and what it promises to do. It is
+the level you are working at when you write `reader.read_u32(address)`.
+
+An **ABI** — application *binary* interface — is that same agreement expressed in machine terms, after the compiler
+has finished: which register or stack slot each argument actually occupies,
+where the return value comes back, and which registers the called function has
+to leave untouched.
+
+```mermaid
+flowchart TD
+    A["one API: read_u32(address)"] --> B["ABI 1: address arrives<br/>in the ecx register"]
+    A --> C["ABI 2: address arrives<br/>on the stack at esp+4"]
+    C -.->|"caller follows ABI 2,<br/>callee expects ABI 1"| X["callee reads ecx and gets<br/>whatever happened to be there"]
+```
+
+The distinction becomes real when the two disagree. Two functions can have
+identical APIs — same name, same parameters, same return type — and still be
+completely incompatible, because one expects its argument in the `ecx` register
+and the other expects it on the stack. Nothing in the source code shows that
+mismatch. The program just reads the wrong place and carries on as if nothing
+happened.
+
+You usually meet the API first:
 
 ```rust
-enum DashOutcome {
-    Dashed { remaining: u32 },
-    TooTired { missing: u32 },
-}
-
-fn decide_dash(stamina: u32, cost: u32) -> DashOutcome {
-    if stamina >= cost {
-        DashOutcome::Dashed { remaining: stamina - cost }
-    } else {
-        DashOutcome::TooTired { missing: cost - stamina }
-    }
-}
-
-fn main() {
-    let decision = decide_dash(2, 4);
-    match decision {
-        DashOutcome::Dashed { remaining } => println!("Left: {remaining}"),
-        DashOutcome::TooTired { missing } => println!("Need {missing} more stamina"),
-    }
-}
+let value = reader.read_u32(address)?;
 ```
 
-This prints `Need 2 more stamina`. The `if` chooses which outcome to construct.
-`match` then selects the arm for that outcome and names its stored value.
-The last expression in each branch has no semicolon, so it becomes the
-function's answer. If you later add a third kind of dash outcome,
-Rust requires the `match` to handle it too. This is how the **logic of
-alternatives** appears in a type, instead of being hidden in a special
-number such as `-1`.
+You meet the ABI when calling Windows functions, reconstructing compiled
+functions, or writing hooks. Chapter 2 explains calling conventions with
+assembly examples.
 
-## Try the growable collections in Rust
+## Encodings and parsers turn bytes into meaning
 
-Different questions call for different collections. A vector keeps a
-growable sequence of samples. A hash map finds a value by a key. A queue
-keeps actions in arrival order. Try their Rust forms in a separate scratch
-run after the two-runner example. The `use` line makes the two standard
-library collection types available by their short names:
+An **encoding** assigns meaning to byte patterns. UTF-8 is a text encoding.
+Little endian is a byte-order rule for multi-byte numbers.
+
+**Serialization** arranges values into bytes for a file or message. A **parser**
+checks those bytes and constructs typed values.
+
+```text
+raw bytes → validate length and tags → typed message → program logic
+```
+
+Never let an untrusted length decide an allocation or index without a limit.
+Picture a message that starts with a four-byte length followed by that many
+bytes of text:
+
+<MemoryStrip
+  cells="=00|=00|=00|=04|=a|=b|=c|=d"
+  groups="0-3:length: 4|4-7:four bytes of text"
+  caption="An honest message: the length matches what follows."
+/>
+
+<MemoryStrip
+  cells="=FF|=FF|=FF|=FF|=a|=b|=c|=d"
+  marks="0-3"
+  groups="0-3:length: 4,294,967,295|4-7:only four bytes arrived"
+  caption="The same shape with a length that lies."
+/>
+
+Nothing about the second message is malformed at the byte level. It is a
+well-formed message whose length field simply lies. Code that believes it will
+try to reserve four gigabytes for a twelve-byte message, or will index far past
+the end of what was actually received. The fix is not to detect the lie; it is
+to refuse to act on any length before checking it against both a configured
+maximum and the number of bytes genuinely present.
+
+Parsing is the boundary where uncertain bytes become trusted program state, so
+errors and bounds belong in the design rather than being bolted on afterward.
+
+Compression is different from encoding or encryption. Compression tries to use
+fewer bytes. Encryption tries to hide content from someone without a key.
+
+## Concurrency means state can change between steps
+
+**Concurrency** means more than one task can make progress during the same
+stretch of time. Two threads may share memory, or a game may keep updating while
+your external tool reads it.
+
+The awkward part is that code you wrote as a list of steps stops behaving like
+one. This looks obviously correct:
+
+```text
+1. check that the enemy pointer is not null
+2. read the enemy's health through that pointer
+```
+
+Between step 1 and step 2, the game is free to delete that enemy. Your check was
+true when you made it and false by the time you used it, and no individual line
+of your code is wrong. The bug lives in the gap between two lines:
+
+```mermaid
+sequenceDiagram
+    participant Tool as Your tool
+    participant Game as The game
+    Tool->>Game: 1. is the enemy pointer non-null?
+    Game-->>Tool: yes
+    Note over Game: the enemy dies and<br/>its memory is freed
+    Tool->>Game: 2. read the enemy's health through the pointer
+    Game-->>Tool: whatever now occupies those bytes
+```
+
+A bug whose result depends on which task happens to run first is called a **race
+condition**. The classic one loses an update. A player has 1,000 gold, and on two
+threads a quest reward adds 500 while a purchase subtracts 300. Both read 1,000.
+One writes 1,500, the other writes 700 last, and the player ends with 700 instead
+of 1,200. Nothing crashes, and most runs happen in a lucky order, which is why
+races pass testing and then fail for someone.
+[Lesson 10.6](/pages/10/06/#a-race-that-loses-an-update) walks through it step
+by step.
+
+Later lessons answer these with snapshots, locks (which make the second update
+wait until the first has written), atomics (single
+operations the hardware guarantees cannot be seen half-finished), bounded
+channels, and explicit lifecycles.
+
+## An invariant is a rule valid state must keep true
+
+An **invariant** is a condition that must remain true whenever the system is in
+a valid state.
 
 ```rust
-use std::collections::{HashMap, VecDeque};
-
-let mut recent_stamina = vec![12, 8];
-recent_stamina.push(6);
-let second_sample = recent_stamina[1];
-println!("Second sample: {second_sample}");
-
-let mut stamina_by_name = HashMap::new();
-stamina_by_name.insert("Mira", 8);
-if let Some(amount) = stamina_by_name.get("Mira") {
-    println!("Mira has {amount} stamina");
-}
-
-let mut pending = VecDeque::new();
-pending.push_back("dash");
-pending.push_back("rest");
-if let Some(action) = pending.pop_front() {
-    println!("Next action: {action}");
+fn valid_player(health: u32, max_health: u32) -> bool {
+    health <= max_health
 }
 ```
 
-`vec!` starts a growable vector with two samples, `push` adds a third,
-and `[1]` selects the second sample because positions start at zero.
-The hash map associates the key `"Mira"` with 8, so `get("Mira")` can
-find the amount without scanning a list of names. The queue adds actions
-at the back and takes the oldest from the front; after the first pop,
-`"rest"` is still waiting.
+Examples include:
 
-### Express a repeated query with an iterator
+- `health <= max_health`;
+- a message length fits inside the received frame;
+- an installed patch still matches the expected game build;
+- a handle is closed exactly once;
+- a collection length does not exceed its capacity.
 
-A loop is useful when you want to show each step. An **iterator** can
-express the same repeated question as a short pipeline. Count how many
-runners have enough stamina for a 4-point dash:
+Invariants help reverse engineering because they tie fields to each other. A
+value of 80 on its own matches many unrelated addresses, but a candidate
+`health` that stays at or below a neighboring `max_health` through every hit
+and every heal is very unlikely to be a coincidence.
 
-```rust
-let stamina_samples = [8_u32, 3, 6];
-let ready = stamina_samples
-    .iter()
-    .copied()
-    .filter(|stamina| *stamina >= 4)
-    .count();
-println!("{ready} runners can dash"); // 2
-```
+## Read unfamiliar code in a fixed order
 
-`.iter()` walks borrowed values from the array, `.copied()` makes cheap
-`u32` copies, `filter` keeps the values that satisfy the condition, and
-`count` counts those kept. `|stamina| *stamina >= 4` is a **closure**: a small
-unnamed function supplied right where it is used. `*stamina` reads the
-number passed to that closure. The longer `for` version says the same
-thing:
+When a code block feels dense, do not stare at the whole block. Ask:
 
-```rust
-let stamina_samples = [8_u32, 3, 6];
-let mut ready = 0;
-for stamina in stamina_samples {
-    if stamina >= 4 {
-        ready += 1;
-    }
-}
-// ready is 2
-```
+1. What enters this function?
+2. What type does each important value have?
+3. Which checks can stop the work?
+4. Which state is read or changed?
+5. What is returned, logged, or displayed?
 
-Use the form that makes the rule clearest. Later labs also use `.map(...)`
-to transform each item and `.collect()` to gather results; the logic is
-still “visit each item, do something, then produce an answer.”
+If one line still cannot be explained in ordinary words, split it into smaller
+expressions or read the called function. Difficulty may mean the code is doing
+too much at once—not that you are supposed to guess.
 
-Both the map lookup and the queue removal may fail to produce an item:
-the name might be absent or the queue empty. Their results therefore
-use `Some(value)` or `None`. The next section shows the same shape with
-the dash rule. A grid and graph need their own operations; [Lesson
-4.6](/pages/4/06/) uses them for map tiles and paths.
+## Checkpoint
 
-## When a result might be missing
+You should now be able to distinguish:
 
-An array's `[1]` asks for a position directly; using an index outside
-its bounds would fail at runtime. Its `.get(1)` method instead gives an
-`Option`: `Some(value)` when that position exists, or `None` when it
-does not. This is the same `Some` used in the hash-map example above:
-
-```rust
-let dash_costs = [4, 10];
-if let Some(cost) = dash_costs.get(1) {
-    println!("Second dash cost: {cost}");
-}
-```
-
-The code prints `Second dash cost: 10`. With `.get(5)`, the answer would be
-`None`, and the print would be skipped. `if let` means “run this block if
-the result has the `Some` shape, and give its inner value the name
-`cost`.”
-
-The same idea can report a dash that cannot be made. A missing
-answer needs a different shape from a valid result of zero:
-
-```rust
-fn remaining_after_dash(stamina: u32, cost: u32) -> Option<u32> {
-    stamina.checked_sub(cost)
-}
-```
-
-`checked_sub` gives `Some(8)` for `(12, 4)`, because the subtraction
-fits in `u32`. It gives `None` for `(2, 4)`, because an unsigned value
-cannot hold the negative answer. For `(4, 4)`, the answer is
-`Some(0)`, not `None`; zero is a valid remaining amount. This differs
-from `dash`, which returned `false` and left the runner's stamina unchanged
-on a failed dash. The return type tells the caller which story
-it will receive. In Rust, the last expression without a semicolon is
-the returned value; here that expression is the `checked_sub` result.
-
-Another common Rust type, `Result`, represents either a success (`Ok`)
-or an error (`Err`) when the reason for failure matters. The
-[official `Option` documentation](https://doc.rust-lang.org/std/option/)
-has more examples when you need them.
-
-## Give a failure a reason with `Result`
-
-`Option` fits “there may be no item.” Sometimes you need to know **why**
-an operation failed. Suppose a small tool reads a dash cost as text.
-`"4"` can become a `u32`; `"tired"` cannot. Rust's `parse` operation
-returns a `Result`: `Ok(cost)` or `Err(error)`.
-
-```rust
-match "4".parse::<u32>() {
-    Ok(cost) => println!("Cost: {cost}"),
-    Err(error) => println!("Invalid cost: {error}"),
-}
-```
-
-The `::<u32>` tells `parse` which number type we want. `match` selects
-one arm by the **shape** of the result and gives the value inside that
-arm a name. For `"4"`, the first arm prints `Cost: 4`. Change the text
-to `"tired"` and the error arm runs instead. Both possibilities are
-written down, so the caller cannot silently treat invalid text as a
-valid zero cost.
-
-| Question | Rust shape | Example |
-| --- | --- | --- |
-| Might there be no value? | `Option<T>`: `Some` or `None` | No item at index 5. |
-| Might an operation fail with a reason? | `Result<T, E>`: `Ok` or `Err` | Text is not a whole number. |
-
-The letters `T` and `E` stand for the success-value type and error type.
-You do not need to invent a custom error type yet. [Lesson
-3.1](/pages/3/01/#errors-are-part-of-the-function) returns useful errors
-from a memory reader and explains where to handle them.
-
-### Stop a sequence early with `?`
-
-Sometimes a function has several steps, and each step can fail. Rust's
-`?` keeps the successful value moving through the sequence and returns
-an error immediately when that step fails:
-
-```rust
-fn read_dash_cost(text: &str) -> Result<u32, std::num::ParseIntError> {
-    let cost = text.parse::<u32>()?;
-    Ok(cost)
-}
-
-fn main() {
-    for text in ["4", "tired"] {
-        match read_dash_cost(text) {
-            Ok(cost) => println!("Cost: {cost}"),
-            Err(error) => println!("Invalid cost: {error}"),
-        }
-    }
-}
-```
-
-For `"4"`, `parse` produces `Ok(4)`, `?` gives `4` to `cost`, and the
-function returns `Ok(4)`. For `"tired"`, `parse` produces `Err`, so
-the function stops before `Ok(cost)` and passes that error to its caller.
-The caller's `match` still decides what to do with it. Read `?` as
-**“continue with the value, or return the error now.”**
-
-The angle brackets in `Result<u32, ParseIntError>` supply concrete types
-to a reusable type: success holds a `u32`, error holds a parse error.
-`Option<u32>`, `Vec<u32>`, and `HashMap<&str, u32>` use the same
-**generic** pattern with different values inside.
-
-## Recognize a few later Rust boundaries
-
-The book's memory tools also introduce syntax whose full rules belong
-beside the tool that needs them. You can still tell what role each plays:
-
-| Later syntax | Programming idea it expresses | Where it becomes concrete |
-| --- | --- | --- |
-| `trait MemoryReader { ... }` | A promise that different readers provide the same behavior. | [Lesson 3.1](/pages/3/01/) |
-| `unsafe { ... }` | A small region where the programmer must uphold rules the compiler cannot verify. | [Lesson 3.1](/pages/3/01/#raw-pointers-and-unsafe) |
-| `extern "system" { ... }` | A call across the Rust–Windows boundary. | [Lesson 7.7](/pages/7/07/) |
-
-You can read a lab function as *inputs → operation → `Result` → caller's
-decision* even before knowing every Windows API name. The later lesson
-defines the new boundary when you reach it.
-
-## Check the rule with a small test
-
-Below the complete two-runner program, add this test. It creates a runner
-with only 2 stamina, requests a 4-point dash, and checks both the answer and the
-unchanged state:
-
-```rust
-#[test]
-fn insufficient_stamina_keeps_state() {
-    let mut runner = Runner {
-        name: String::from("Mira"),
-        stamina: 2,
-        health: 70,
-        max_health: 100,
-    };
-
-    let dashed = dash(&mut runner, 4);
-    assert!(!dashed);
-    assert_eq!(runner.stamina, 2);
-}
-```
-
-`#[test]` marks a function for Cargo's test runner. `assert!` requires
-the answer to be false here; `assert_eq!` requires the stamina to remain 2.
-Run `cargo test`. If you change the `dash` rule so it subtracts without
-checking, this test catches the mistake. The test does not prove every
-possible dash is correct, but it protects one important boundary.
-The successful path can be checked with 12 stamina and cost 4. The [Cargo Book's testing
-guide](https://doc.rust-lang.org/cargo/guide/tests.html) explains how
-tests in a project are discovered and run.
-
-## Change one value and inspect the branch
-
-In the two-runner program, change `dash(runner, 4)` to
-`dash(runner, 20)`. Neither runner has 20 stamina. The function returns
-`false` before subtraction, so the final lines show 12 and 7 stamina.
-The 4-point cost restores the original run.
-
-You can now read the Rust code in the next lessons as a set of explicit
-promises: a value has a type, a reference says what access a function
-gets, and a return value says what came back. [Hacking
-Fundamentals](/pages/1/06/) applies the same programming concepts to a
-different game's observed behavior.
+- data, values, types, and state;
+- algorithms and data structures;
+- functions and abstractions;
+- an event loop that waits for events, a game loop that runs every frame, and
+  polling that checks on its own schedule;
+- APIs and ABIs;
+- encoding, serialization, parsing, compression, and encryption;
+- sequential behavior and concurrent behavior;
+- an ordinary condition and an invariant.
