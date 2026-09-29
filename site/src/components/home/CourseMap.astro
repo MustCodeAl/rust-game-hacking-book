@@ -3,7 +3,7 @@
 // soon as its first lesson exists. Each card says how many lessons the chapter
 // holds and roughly how long it takes to read, in the chapter's colour.
 import { getCollection } from 'astro:content';
-import { CHAPTERS, chapterTone } from '../../data/chapters.mjs';
+import { CHAPTERS, chapterTone, compareLessons } from '../../data/chapters.mjs';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const lessons = await getCollection('docs', (entry) => Boolean(entry.data.chapter));
@@ -17,6 +17,12 @@ for (const entry of lessons) {
 	stats.set(number, current);
 }
 const chapters = CHAPTERS.filter((chapter) => stats.has(chapter.number));
+const firstLesson = new Map(chapters.map((chapter) => [
+	chapter.number,
+	lessons
+		.filter((entry) => entry.data.chapter!.startsWith(`${chapter.number}.`))
+		.sort((a, b) => compareLessons(a.data.chapter, b.data.chapter))[0].id,
+]));
 
 function readingTime(minutes: number) {
 	if (minutes < 60) return `${minutes} min`;
@@ -36,7 +42,7 @@ function readingTime(minutes: number) {
 		chapters.map((chapter) => {
 			const { count, minutes } = stats.get(chapter.number)!;
 			return (
-				<a class="course-card" data-tone={chapterTone(chapter.number)} href={`${base}/pages/${chapter.number}/01/`}>
+				<a class="course-card" data-tone={chapterTone(chapter.number)} href={`${base}/${firstLesson.get(chapter.number)}/`}>
 					<span class="course-card__top">
 						<span class="course-card__emoji" aria-hidden="true">
 							{chapter.emoji}

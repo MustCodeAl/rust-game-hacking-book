@@ -1,25 +1,25 @@
 ---
 title: "In-Game Menus and Text Rendering"
 description: "Understand how a game's text function can draw a small menu and why input edges, frame timing, and string lifetimes matter."
-chapter: "8.8"
+chapter: "7.13"
 minutes: 26
 author: "attilathedud"
 date: "2026-09-08"
 sidebar:
-  order: 8
-  label: "8.8 In-Game Menus and Text Rendering"
+  order: 13
+  label: "7.13 In-Game Menus and Text Rendering"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 ## A third option between a window and an overlay
 
-Lesson 8.6 put the menu in its own window, which is the right default: it
+Lesson 6.6 put the menu in its own window, which is the right default: it
 cannot corrupt the game's graphics state, and you can close the game without
 losing it.
 
 But you have already met a function that draws text *inside* the game. In
-Lesson 3.7 you traced Wesnoth's print function; Lesson 8.3 then used its call
-site for a verified, reversible text hook. In Lesson 5.9 you called
+Lesson 3.7 you traced Wesnoth's print function; Lesson 6.3 then used its call
+site for a verified, reversible text hook. In Lesson 7.9 you called
 AssaultCube's print function at `0x0041_9880` to label players. That function already knows
 the font, the scale, the screen size, and the right moment in the frame to
 draw. Calling it is the cheapest way to put a menu on screen, because the
@@ -45,7 +45,7 @@ flowchart TD
 
 The hook calls the text function, and the text function runs the hook again:
 recursion with no base case, the same failure as a wrapper that forwards to
-itself in [Lesson 5.3](/pages/5/03/#keep-the-original-function). Every nested
+itself in [Lesson 7.3](/pages/5/03/#keep-the-original-function). Every nested
 call adds a stack frame, so the stack overflows while the hook is still trying
 to draw its first menu line.
 
@@ -60,7 +60,7 @@ flowchart LR
     D --> E["Return to the game"]
 ```
 
-Lesson 5.9 already identified such a site in AssaultCube: the final print hook
+Lesson 7.9 already identified such a site in AssaultCube: the final print hook
 at `0x0040_BE7E`, resuming at `0x0040_BE83`. Drawing there puts your lines in
 the same pass as the game's own HUD, so they inherit its ordering and never
 appear underneath the world.
@@ -170,7 +170,7 @@ self.cursor = if self.cursor == 0 { last } else { self.cursor - 1 };
 
 ### `GetAsyncKeyState` reports a level, not a press
 
-Lesson 8.5 made this point about input paths and it decides how a menu feels.
+Lesson 6.5 made this point about input paths and it decides how a menu feels.
 `GetAsyncKeyState` answers "is this key down right now?", which is true on
 every frame of one press. A menu that acts on that answer scrolls the whole
 list in a fraction of a second.
@@ -192,7 +192,7 @@ The render path runs thousands of times per second. Clear and reuse one buffer
 rather than allocating a fresh `Vec` per frame; the lab asserts the buffer's
 capacity is unchanged after a second render.
 
-The menu should also own only its own state. Keep the same split Lesson 8.6
+The menu should also own only its own state. Keep the same split Lesson 6.6
 used: the menu produces settings and commands, and the worker reads them. A
 menu that reaches directly into game memory while the render thread is drawing
 has put a second writer on the same data.
@@ -200,7 +200,7 @@ has put a second writer on the same data.
 ## Restore the site, not just the feature
 
 Closing the menu is a display change. Unloading the tool is a lifetime change,
-and Lesson 8.7's ordering applies without modification: stop the worker, wait
+and Lesson 7.12's ordering applies without modification: stop the worker, wait
 for it to leave the hooked path, restore the displaced bytes, then release the
 DLL. While an in-flight frame is still executing the detour, the hook is
 **draining**: no new calls should enter, but the current call must finish before
@@ -209,8 +209,8 @@ general hook manager.
 
 ## Scope
 
-This is the same offline, version-pinned lab used since Chapter 5, and the same
-menu model as Lesson 8.6 rendered somewhere else. The transferable skill —
+This is the same offline, version-pinned lab used since Chapter 7, and the same
+menu model as Lesson 6.6 rendered somewhere else. The transferable skill —
 calling a function you recovered, with a contract you proved, from a hook that
 runs at a known point in a frame — is what a debug HUD, a benchmarking overlay,
 and an accessibility tool all do.

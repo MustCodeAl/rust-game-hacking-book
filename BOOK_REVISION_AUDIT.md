@@ -1,5 +1,16 @@
 # Full-book teaching audit
 
+**Reading-order update (2026-09-29):** The tables below document the previous
+lesson-by-lesson teaching audit and use its then-current chapter numbers.
+The current course moves executable analysis before hooks, hooks before the
+graphics implementation labs, Lua after game files, and Windows process
+internals before physical-memory boundaries. It also moves the general toy
+control-gap lesson from the old 11.4 position into Advanced Game Hacking.
+Use the chapter and historical-URL map in
+[BOOK_REVISION_PROGRESS.md](BOOK_REVISION_PROGRESS.md), or each page's current
+`chapter` metadata, when following a row below. Every audited lesson remains
+in the course; its historical URL was preserved.
+
 Reviewed the 132 authored lessons in reading order on `codex/book-revision`.
 The source is the authored revision corresponding to the locally verified
 `gh-pages` publication described in [BOOK_REVISION_PLAN.md](BOOK_REVISION_PLAN.md).

@@ -1,13 +1,13 @@
 ---
 title: "3D Space You Can Picture"
 description: "Picture coordinates, vectors, transformations, cameras, and perspective before following any renderer-specific detail."
-chapter: "5.1"
+chapter: "7.1"
 minutes: 27
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 1
-  label: "5.1 3D Space You Can Picture"
+  label: "7.1 3D Space You Can Picture"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
@@ -46,7 +46,13 @@ struct Vec3 {
 }
 ```
 
-A `Vec3` is not special hardware. It is a **vector**: an ordered group of numbers that we choose to treat as one mathematical object. The order matters because each slot has a role. Swapping `x` and `z` changes the meaning even when the three numbers stay the same.
+Each field is an `f32`, a 32-bit floating-point number that can hold fractions as
+well as whole coordinates. `#[derive(...)]` asks Rust to generate conveniences
+such as copying and printing this small record; none of those traits changes the
+geometry. A `Vec3` is not special hardware. It is a **vector**: an ordered group
+of numbers that we choose to treat as one mathematical object. The order matters
+because each slot has a role. Swapping `x` and `z` changes the meaning even
+when the three numbers stay the same.
 
 Vectors are useful because one operation can apply to the whole idea. Adding a movement vector to a position moves the position. Subtracting two positions gives the difference between them.
 
@@ -78,11 +84,24 @@ impl Vec3 {
     }
 }
 
-let direction = enemy_position.subtract(player_position);
-let distance = direction.length();
+fn main() {
+    let player_position = Vec3 { x: 2.0, y: 3.0, z: 0.0 };
+    let enemy_position = Vec3 { x: 5.0, y: 7.0, z: 12.0 };
+    let direction = enemy_position.subtract(player_position); // (3, 4, 12)
+    let distance = direction.length(); // 13
+    println!("direction = {direction:?}, distance = {distance}");
+}
 ```
 
-Subtracting two positions gives the direction from one to the other.
+`Self` inside `impl Vec3` means `Vec3`; `self` is the vector whose method was
+called. The subtraction uses *enemy minus player*, so the result points from
+the player to the enemy. `length()` squares each difference, adds the three
+squares, and takes the square root. These exact coordinates produce the
+`(3, 4, 12)` arrow and distance `13` calculated above. Reversing the operands
+would point the arrow backward while leaving its length unchanged.
+The `:?` in `println!` uses the `Debug` implementation generated for `Vec3`,
+so the program prints all three fields alongside the distance. Put this block
+after the `Vec3` declaration to run the example.
 
 A point and a direction can both be stored as three floats, but the allowed math is
 different:
@@ -117,6 +136,14 @@ fn normalized(value: Vec3) -> Option<Vec3> {
     })
 }
 ```
+
+For `(3, 4, 0)`, `length` is `5`, so the returned vector is
+`Some((0.6, 0.8, 0))`: it points the same way and its length is `1`.
+`Option` expresses the case where no usable direction exists. When the points
+coincide, division by zero cannot produce a meaningful aim direction, so the
+function returns `None` rather than letting invalid numbers spread into later
+camera calculations. `is_finite` also rejects infinity and NaN from a damaged
+or stale snapshot.
 
 The **dot product** measures alignment. For two normalized directions it is near
 `1` when they face the same way, `0` when perpendicular, and `-1` when opposite.
@@ -168,6 +195,12 @@ a × b = (
 Its length is the area of the parallelogram between the vectors. Camera code uses
 it to construct perpendicular `right`, `up`, and `forward` directions. The order
 matters: `a × b = -(b × a)`.
+
+For example, `(1, 0, 0) × (0, 1, 0) = (0, 0, 1)`. Reverse the inputs and the
+result is `(0, 0, -1)`. Both outputs are perpendicular to the inputs, but only
+one points along the intended forward axis. That is why swapping arguments in
+a camera-basis calculation can make a view look mirrored rather than merely
+changing its notation.
 
 ## A coordinate frame is an origin plus directions
 
@@ -347,8 +380,9 @@ Do that once per row and you have the whole output point. For a 4×4 matrix that
 is four multiply-and-add passes. Nothing more mysterious is happening.
 
 Every transform a renderer uses is just a choice of numbers in those rows. Ones
-down the diagonal and zeros elsewhere copy the point unchanged. Twos down the
-diagonal double every coordinate, which scales the model. The `d` entry is added
+down the diagonal and zeros elsewhere copy the point unchanged. Twos in the
+first three diagonal entries, with the final diagonal entry still `1`, double
+the spatial coordinates while keeping `w = 1`; that scales the model. The `d` entry is added
 no matter what the input was, which is exactly what moving something requires —
 and it is why a 3D point is carried as four numbers rather than three. That
 trailing `1` exists to give `d` something to multiply.
@@ -438,8 +472,9 @@ Dividing by `w` is therefore dividing by depth, and dividing by depth is
 precisely what makes distant things small: double the distance and the object
 covers half as much screen.
 
-If `w` is zero, the division is undefined. If `w` is negative, the point is
-behind the camera — and the division still yields a perfectly ordinary-looking
+If `w` is zero, the division is undefined. In the forward-positive projection
+convention used in this example, a negative `w` puts the point behind the camera
+— and the division still yields a perfectly ordinary-looking
 coordinate, with both signs flipped. This is the classic overlay bug: an enemy
 standing directly behind the player gets drawn on screen in front, mirrored to
 the opposite side, with the box sliding the wrong way as they move. Nothing

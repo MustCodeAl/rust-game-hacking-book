@@ -45,7 +45,51 @@ Repeating the same action shows whether the breakpoint is useful. A useful break
 
 This is the difference between a **trace** and an **explanation**. A trace records what executed. An explanation connects that execution to a game rule and survives repeated tests.
 
+## Memory breakpoints
+
+A hardware breakpoint uses CPU debug registers to watch a small address range. It is ideal when you know the gold address but not the instruction that changes it.
+
+<MemoryStrip
+  column
+  cells="DR0=0x0550A034|DR1=unused|DR2=unused|DR3=unused|DR7=which of DR0 to DR3 are on, what each watches, and how many bytes"
+  marks="0"
+  caption="One thread's debug registers with a write watchpoint on four bytes of gold. Four address slots are all there are."
+/>
+
+The debug registers can watch for a write, for a read *or* write, or for an
+execute — x86 has no read-only setting. A debugger that offers a pure read
+breakpoint implements it another way, usually with page protection.
+
+Choose the narrowest event that answers your question:
+
+- **write** when looking for code that changes a value;
+- **read** when looking for code that uses a value;
+- **access** only when you truly need both.
+
+Access breakpoints can fire constantly. More pauses do not automatically mean more understanding.
+
+Hardware watchpoints are limited resources—x86 provides only a small number of
+debug-address registers per thread—and supported widths/alignment are
+restricted. A debugger may emulate larger memory watches with guarded pages,
+which is noisier because unrelated data on the same page can trigger.
+
+Be precise about the event:
+
+- an instruction **reads** when it needs the old bytes;
+- it **writes** when it stores new bytes;
+- a read-modify-write instruction such as `sub [address], eax` does both;
+- **execute** means the watched bytes are being treated as code.
+
+Watching four bytes does not tell the debugger that they are a `u32`. Width is
+about overlapping addresses. Type meaning still comes from the instruction and
+behavior.
+
 ## Code breakpoints
+
+Once a memory breakpoint identifies the instruction that writes gold, a
+code breakpoint can stop at that instruction on later runs. That makes
+it easier to compare its callers and branch conditions without watching
+every write to the field.
 
 On x86, a debugger often implements a software breakpoint by temporarily replacing the first byte of an instruction with `0xCC`, the `int3` instruction.
 
@@ -107,51 +151,12 @@ flowchart TD
 
 The instruction pointer needs rewinding because the CPU has already consumed
 the one-byte `int3`. The one-instruction step lets the real instruction run
-before the breakpoint byte is restored. [Lesson 7.7](/pages/7/07/) models this as explicit
+before the breakpoint byte is restored. [Lesson 5.7](/pages/7/07/) models this as explicit
 `Armed` and `Stepping` states so the byte is never restored at the wrong time.
 
 On x86, single stepping uses the **trap flag** in the thread’s flags register.
 When set, the CPU raises a debug exception after the next instruction. The flag
 belongs to one thread, which is why debugger state records thread IDs.
-
-## Memory breakpoints
-
-A hardware breakpoint uses CPU debug registers to watch a small address range. It is ideal when you know the gold address but not the instruction that changes it.
-
-<MemoryStrip
-  column
-  cells="DR0=0x0550A034|DR1=unused|DR2=unused|DR3=unused|DR7=which of DR0 to DR3 are on, what each watches, and how many bytes"
-  marks="0"
-  caption="One thread's debug registers with a write watchpoint on four bytes of gold. Four address slots are all there are."
-/>
-
-The debug registers can watch for a write, for a read *or* write, or for an
-execute — x86 has no read-only setting. A debugger that offers a pure read
-breakpoint implements it another way, usually with page protection.
-
-Choose the narrowest event that answers your question:
-
-- **write** when looking for code that changes a value;
-- **read** when looking for code that uses a value;
-- **access** only when you truly need both.
-
-Access breakpoints can fire constantly. More pauses do not automatically mean more understanding.
-
-Hardware watchpoints are limited resources—x86 provides only a small number of
-debug-address registers per thread—and supported widths/alignment are
-restricted. A debugger may emulate larger memory watches with guarded pages,
-which is noisier because unrelated data on the same page can trigger.
-
-Be precise about the event:
-
-- an instruction **reads** when it needs the old bytes;
-- it **writes** when it stores new bytes;
-- a read-modify-write instruction such as `sub [address], eax` does both;
-- **execute** means the watched bytes are being treated as code.
-
-Watching four bytes does not tell the debugger that they are a `u32`. Width is
-about overlapping addresses. Type meaning still comes from the instruction and
-behavior.
 
 ## Step, step over, and run to return
 
@@ -184,10 +189,13 @@ functions.
 
 ## `nop`: do nothing once
 
-`nop` means “no operation.” Replacing an instruction with one or more `nop` bytes is a quick, temporary way to test what that instruction does.
+`nop` means “no operation.” Replacing an instruction with one or more
+`nop` bytes is a quick, temporary way to test what that instruction does.
+This is a separate action from setting a breakpoint: it changes what
+the game executes after you resume.
 
 ```nasm
-sub [rcx+30], eax
+sub [ecx+30h], eax
 ```
 
 If this removes gold and you temporarily replace the whole instruction with `nop` bytes, recruiting may stop costing gold. That result supports your theory.
@@ -200,7 +208,7 @@ or machine state.
 
 <MemoryStrip
   cells="=29|=41|=30"
-  groups="0-2:`sub [rcx+30], eax`: three bytes"
+  groups="0-2:`sub [ecx+30h], eax`: three bytes"
   caption="The original instruction."
 />
 
@@ -243,6 +251,11 @@ enum DebugEvent {
 ```
 
 An enum gives each event a clear shape. Pattern matching then forces us to decide how every event should be handled instead of silently ignoring surprises.
+
+The next lesson uses x64dbg's built-in breakpoint controls rather than a
+custom debugger. Start with the gold address, watch a write, and use the
+paused registers and instruction to test the purchase rule. The enum
+becomes useful later when we write our own event-handling code.
 
 <Quiz
   id="breakpoint-evidence"

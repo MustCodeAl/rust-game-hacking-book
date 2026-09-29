@@ -91,7 +91,7 @@ flowchart TD
     S["Sources of an anti-debug signal"] --> A["the loader wrote it down:<br/>PEB.BeingDebugged @ +0x02,<br/>NtGlobalFlag, heap Flags/ForceFlags"]
     S --> B["kernel bookkeeping:<br/>NtQueryInformationProcess —<br/>ProcessDebugPort / ProcessDebugObjectHandle"]
     S --> C["its own code:<br/>a checksum notices a 0xCC byte"]
-    S --> D["its own thread state:<br/>DR0-DR3, DR7 via GetThreadContext"]
+    S --> D["thread context:<br/>DR0-DR3, DR7 in a suspended thread"]
     S --> E["who handles an exception first"]
     S --> F["the surrounding machine:<br/>parent process, window titles, module list"]
 ```
@@ -113,11 +113,13 @@ Again a record, held somewhere else.
 **Its own code.** Lesson 2.3 showed that a software breakpoint replaces a byte
 with `0xCC`. A checksum over its own instructions notices that change.
 
-**Its own thread state.** A hardware breakpoint changes no bytes, so a checksum
+**Thread context.** A hardware breakpoint changes no code bytes, so a checksum
 misses it entirely. It lives in the CPU's debug registers — `DR0` through `DR3`
-holding addresses, `DR7` holding the enable and condition bits — and those
-registers are part of a thread's saved context. A thread can therefore call
-`GetThreadContext` on itself and read them.
+holding addresses, `DR7` holding enable and condition bits — and those
+registers are part of a thread's saved context. A debugger can inspect a
+*suspended target thread* with `GetThreadContext`. Windows explicitly says a
+call on the current running thread can return success with an invalid context;
+the return code alone is not evidence of its live debug-register values.
 
 That pair is worth sitting with. Neither kind of breakpoint is invisible, and
 neither is universally visible; they leave traces in *different places*. A
@@ -169,10 +171,11 @@ a rule that almost nothing will ever trigger, including the condition you meant
 to catch. The distribution of “ordinary but unlucky” overlaps the distribution
 of “actually paused,” so no single number separates them cleanly.
 
-What does separate them is repetition. One sample above the 99th percentile is
-ordinary luck; twenty in a row from the same code path is a changed
-environment. That is exactly why the state machine above asks for another
-sample rather than deciding on the first one.
+Repetition gives stronger evidence than one sample, but does not reveal intent.
+Twenty slow samples from the same code path could reflect a persistent load,
+power policy, or an attached debugger. That is why the state machine above
+asks for another sample and then a diagnosis rather than declaring a game-rule
+violation from a timing number.
 
 Use distributions rather than one magic threshold:
 
@@ -262,3 +265,5 @@ An anti-debug signal is a measurement, not a game-rule decision. The state
 machine gives that signal an assessment and a response; timing distributions
 and ordinary-tool tests expose false positives. Whatever response it chooses,
 the actual game effect still needs its own state validation.
+
+Reference: [Microsoft `GetThreadContext` documentation](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getthreadcontext).

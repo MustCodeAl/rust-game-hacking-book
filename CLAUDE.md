@@ -172,3 +172,14 @@ PR #1 mistakenly merged the authored source into
 build from the authored source and publish the generated output through a
 branch based on `gh-pages`. Keep the original checkout's unrelated local files
 intact.
+
+The 2026-09-29 chapter-flow pass on `codex/book-revision` changes the **display
+order** of later chapters while preserving historical lesson URLs. Read the
+current map in `BOOK_REVISION_PROGRESS.md` before editing lesson references.
+The sidebar and `docs.json` generator now read `chapter`/`sidebar` metadata
+through `site/src/data/lesson-index.mjs`; do not infer reading order from URL
+folders. The broad teaching path is executable analysis → hooks → 3D/rendering
+and tool integration → networks → game files → Lua → Windows processes →
+physical-memory boundaries → Advanced Game Hacking → hardware. Keep Chapter
+13 titled **Advanced Game Hacking**. Publish the full generated build to
+`gh-pages` after source changes are validated.

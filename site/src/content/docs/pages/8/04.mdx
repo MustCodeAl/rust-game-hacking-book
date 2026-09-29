@@ -1,17 +1,17 @@
 ---
 title: "Import Table Hooks"
 description: "See how an imported function pointer can be redirected inside a controlled process and safely restored."
-chapter: "8.4"
+chapter: "6.4"
 minutes: 28
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 4
-  label: "8.4 Import Table Hooks"
+  label: "6.4 Import Table Hooks"
 ---
 ## What the Import Address Table does
 
-The detours in Lesson 8.3 changed instruction bytes at a verified site. Sometimes a program already calls a function through a table of imported addresses. In that case, one verified table entry can change the destination while leaving the call instruction in place.
+The detours in Lesson 6.3 changed instruction bytes at a verified site. Sometimes a program already calls a function through a table of imported addresses. In that case, one verified table entry can change the destination while leaving the call instruction in place.
 
 Your program can call `MessageBoxW` without knowing where `user32.dll` will load. The PE import data says, “I need this named function.” The Windows loader finds its live address and writes that address into the **Import Address Table**, or **IAT**.
 
@@ -115,18 +115,20 @@ entry is*, while the IAT records *where that function currently lives*.
 Searching the IAT by itself gives you addresses with no names attached;
 searching the lookup table by itself gives you names with nothing to patch.
 
-(Some binaries ship with the lookup table absent, in which case the loader has
-only the IAT to work from. The parser should handle that case rather than
-assuming both arrays are always present.)
+(Some binaries ship without the separate lookup table. In a **loaded** image,
+the IAT has already been overwritten with live function addresses, so it
+cannot be treated as a list of name RVAs. This name-based lab refuses that
+case with a clear error. Handling it would require a different, independently
+verified way to identify the desired slot.)
 
 The important matching loop is:
 
 ```rust
-let names = if original_thunk == 0 {
-    first_thunk
-} else {
-    original_thunk
-};
+anyhow::ensure!(
+    original_thunk != 0,
+    "loaded image has no import-name lookup table"
+);
+let names = original_thunk;
 
 for index in 0..2048_usize {
     // 📏 Bound the thunk walk even if a malformed image omits its zero terminator.

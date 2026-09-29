@@ -1,19 +1,22 @@
 ---
 title: "OpenGL Draw Calls and State"
 description: "Understand what indexed OpenGL draws request, how bound state changes their meaning, and why observation must keep the render thread moving."
-chapter: "5.3"
+chapter: "7.3"
 minutes: 30
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 3
-  label: "5.3 OpenGL Draw Calls and State"
+  label: "7.3 OpenGL Draw Calls and State"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 ## A wrapper records and forwards draw calls
 
-OpenGL applications call functions such as `glDrawElements`. First consider a
+Lesson 7.2 showed that a draw submission combines geometry with the graphics
+state already in effect. To learn which submissions correlate with an entity,
+we need to observe calls without changing the frame they produce. OpenGL
+applications call functions such as `glDrawElements`. First consider a
 whole-call wrapper: it sits between the caller and the real function:
 
 ```text
@@ -23,7 +26,10 @@ game calls glDrawElements
 → frame continues
 ```
 
-The wrapper must preserve the exact ABI and forward every normal call.
+If the game makes a draw with `count = 9`, the wrapper records that value and
+then passes the same arguments to OpenGL. The picture should remain identical;
+only the separate observation log changes. The wrapper must preserve the
+exact ABI and forward every normal call.
 The pinned Urban Terror implementation later in this lesson instead detours
 an instruction **inside** `glDrawElements`, so it has a narrower restoration
 opportunity. Keep that difference visible when comparing the two designs.
@@ -150,23 +156,23 @@ static ORIGINAL_DRAW_ELEMENTS: OnceLock<GlDrawElements> = OnceLock::new();
 
 Initialization must resolve and store the real function before the wrapper can forward calls. Avoid resolving it recursively through your own wrapper.
 
-That warning is about **recursion**, a function calling itself. Recursion is a
-normal technique when each call handles a smaller piece of the problem and one
-case, the **base case**, answers without calling again. Finding your row in a
-dark cinema works like that: you ask the person in front which row they are in,
-they ask the person in front of them, and so on until someone in row 1 says
-"row 1"; each answer then travels back with 1 added. Every question still
-waiting for its answer is a **stack frame**, the return address and local values
-that [Lesson 3.3](/pages/3/03/#the-calls-frame-and-the-objects-lifetime)
-showed each call keeping until it returns.
+The failure is **recursion**: a function calls itself. Recursion is useful when
+each call handles a smaller case and a **base case** eventually returns. Here
+there is no smaller case. If `ORIGINAL_DRAW_ELEMENTS` accidentally points to
+`draw_elements_hook`, the call path is:
 
-If the stored "original" pointer actually points at your wrapper, the wrapper
-forwards every call to itself. It is asking itself which row it is in and waiting
-for its own answer, so there is no base case. Each call adds another frame, the
-thread's stack (commonly 1 MiB by default for a Windows executable, but
-configurable) fills after many calls, and Windows raises a stack-overflow
-exception that crashes the game, usually during the very first draw call.
-That is the "Infinite recursion" row in the table at the end of this lesson.
+```text
+game → draw_elements_hook → stored "original" → draw_elements_hook → ...
+```
+
+No call reaches OpenGL, so no call can return. Each nested call keeps a
+**stack frame** for its return address and local values, as
+[Lesson 3.3](/pages/3/03/#the-calls-frame-and-the-objects-lifetime) explained.
+The thread's finite stack (often 1 MiB by default for a Windows executable,
+but configurable) eventually fills and Windows raises a stack-overflow
+exception, usually on the first draw. Resolving the real function before
+installing the wrapper breaks this cycle. The failure table at the end of the
+lesson calls this "Infinite recursion."
 
 ## Forward first
 
@@ -272,9 +278,9 @@ This is a classification problem. A threshold such as `count > 500` separates th
 ## Turn the wrapper into the actual Urban Terror wallhack
 
 The API signature, draw-count interpretation, and sampling design above stand
-on their own. This exact-build detour uses the DLL and patch lifecycle taught
-in [Lesson 8.3](/pages/8/03/); revisit the installation steps after that
-lesson if this is your first pass through the book.
+on their own. The exact-build detour below applies the DLL and patch lifecycle
+from [Lesson 6.3](/pages/8/03/) to one verified OpenGL instruction. Recheck
+the displaced instruction span and restoration path before running it.
 
 In Urban Terror 4.3.4, resolve `glDrawElements` from `opengl32.dll`. The historical build hooks the instruction at **`glDrawElements + 0x16`** and resumes six bytes later. This is not a function-entry wrapper: it is a real code cave in the middle of the OpenGL function. At this point in this 32-bit build, `EBX` holds `count`.
 

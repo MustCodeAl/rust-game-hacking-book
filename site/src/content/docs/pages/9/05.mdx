@@ -13,7 +13,10 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 ## An archive contains names, not trusted paths
 
-The texture and unit mods in Lessons 9.4–9.4 are easy to inspect when they remain small. To share or install many such files, we may put them in an archive. An installer must decide where each archived name will land before copying any bytes into the game folder.
+The texture and unit mods in Lessons 9.4–9.5 are easy to inspect when they
+remain small. To share or install many such files, we may put them in an
+archive. An installer must decide where each archived name will land before
+copying any bytes into the game folder.
 
 A `.zip` can claim that an entry is named:
 
@@ -83,49 +86,86 @@ Failure at any earlier stage discards the staged copy instead of leaving a half-
 
 ## Reject dangerous path components
 
-The `zip` crate exposes `enclosed_name`, which returns only paths that stay relative and enclosed:
+The `zip` crate exposes `enclosed_name`, which rejects names that would escape
+the extraction root. The following stage function demonstrates the order of
+checks on a newly created directory beneath a private parent controlled by
+the installer. It never writes into the working game directory. A caller must
+discard this staging directory on any error and perform the later manifest,
+format, and replacement checks before installation:
 
 ```rust
-use std::{fs, io, path::Path};
+use std::{fs, io::{self, Read}, path::Path};
 use zip::ZipArchive;
 
-fn extract_mod(zip_path: &Path, destination: &Path) -> anyhow::Result<()> {
-    fs::create_dir_all(destination)?;
+const MAX_ENTRY: u64 = 64 * 1024 * 1024; // 64 MiB after decompression
+const MAX_TOTAL: u64 = 256 * 1024 * 1024;
+
+fn stage_mod_entries(zip_path: &Path, staging: &Path) -> anyhow::Result<()> {
+    // The caller supplies a fresh name under its private staging parent.
+    fs::create_dir(staging)?; // refuse an existing path
     let file = fs::File::open(zip_path)?;
     let mut archive = ZipArchive::new(file)?;
+    anyhow::ensure!(archive.len() <= 4096, "too many archive entries");
+    let mut total = 0_u64;
 
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index)?;
+        // ZIP names use `/`. Reject `\` so the same name cannot later be
+        // interpreted as a Windows separator during installation.
+        anyhow::ensure!(!entry.name().contains('\\'), "ambiguous separator");
         let relative = entry.enclosed_name()
-            .ok_or_else(|| anyhow::anyhow!("unsafe archive path {:?}", entry.name()))?;
-        let output = destination.join(relative);
+            .ok_or_else(|| anyhow::anyhow!("unsafe archive path {:?}", entry.name()))?
+            .to_path_buf();
+        if let Some(mode) = entry.unix_mode() {
+            let kind = mode & 0o170000;
+            anyhow::ensure!(
+                kind == 0 || kind == 0o040000 || kind == 0o100000,
+                "archive link or special file is unsupported"
+            );
+        }
+        let output = staging.join(relative);
 
         if entry.is_dir() {
             fs::create_dir_all(&output)?;
             continue;
         }
 
+        let declared = entry.size();
+        anyhow::ensure!(declared <= MAX_ENTRY, "entry is too large");
+        total = total.checked_add(declared)
+            .filter(|sum| *sum <= MAX_TOTAL)
+            .ok_or_else(|| anyhow::anyhow!("archive is too large"))?;
         let parent = output.parent()
             .ok_or_else(|| anyhow::anyhow!("entry has no destination parent"))?;
         fs::create_dir_all(parent)?;
 
-        let mut temporary = output.clone();
-        temporary.set_extension("gha-part");
-        let mut writer = fs::File::create(&temporary)?;
-        io::copy(&mut entry.take(64 * 1024 * 1024), &mut writer)?;
-        fs::rename(temporary, output)?;
+        // `create_new` rejects a duplicate output name or an existing link.
+        let mut writer = fs::OpenOptions::new()
+            .write(true).create_new(true).open(&output)?;
+        // Read one byte past the limit so an oversized entry is detected,
+        // not silently truncated into an apparently valid staged file.
+        let written = io::copy(&mut entry.by_ref().take(MAX_ENTRY + 1), &mut writer)?;
+        anyhow::ensure!(written <= MAX_ENTRY, "entry exceeds actual size limit");
+        anyhow::ensure!(written == declared, "entry size differs from header");
     }
 
     Ok(())
 }
 ```
 
-The size limit, 64 × 1,024 × 1,024 = 67,108,864 bytes (64 MiB), prevents one
-PK3 entry from expanding forever; Urban Terror's `.pk3` asset archives are zip
-files under another extension. A real Urban Terror archive tool should also verify that the copy reached the end of the
-entry; otherwise an oversized file would be silently truncated. Check the
-declared size before copying, then compare it with the number of bytes actually
-written.
+The per-entry limit, 64 × 1,024 × 1,024 = 67,108,864 bytes (64 MiB), bounds
+one decompressed file; Urban Terror's `.pk3` asset archives are ZIP files under
+another extension. `take(MAX_ENTRY + 1)` allows one extra byte solely to
+detect an oversized entry. A simple `take(MAX_ENTRY)` would silently write a
+truncated file and could make the archive appear to have been extracted. The
+declared size is checked before copying and compared with the actual byte
+count afterward. The total cap and entry-count cap address different problems:
+many individually small entries can still exhaust disk space or time.
+
+This stage function demonstrates bounded extraction, not the whole mod
+installer. Before moving its files into the game, resolve case-insensitive
+collisions on the target filesystem, validate asset formats and the manifest,
+show the replacement plan, and retain originals for uninstall.
 
 ## Validate more than the path
 

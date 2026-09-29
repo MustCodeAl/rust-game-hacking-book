@@ -47,16 +47,32 @@ fn proxy_pair(client: TcpStream) -> Result<()> {
     let server = TcpStream::connect_timeout(&loopback(15_000), Duration::from_secs(3))
         .context("start local wesnothd.exe on port 15000 first")?;
     client.set_read_timeout(Some(Duration::from_secs(30)))?;
+    client.set_write_timeout(Some(Duration::from_secs(5)))?;
+    server.set_read_timeout(Some(Duration::from_secs(30)))?;
     server.set_write_timeout(Some(Duration::from_secs(5)))?;
 
+    // Keep control handles so a decoding failure in the upstream worker can
+    // close both directions before we wait for the downstream worker.
+    let client_control = client.try_clone()?;
+    let server_control = server.try_clone()?;
     let upstream_client = client.try_clone()?;
     let downstream_server = server.try_clone()?;
     let up = thread::spawn(move || upstream(upstream_client, server));
     let down = thread::spawn(move || downstream(downstream_server, client));
-    up.join()
-        .map_err(|_| anyhow::anyhow!("upstream thread panicked"))??;
-    down.join()
-        .map_err(|_| anyhow::anyhow!("downstream thread panicked"))??;
+    let upstream_result = up
+        .join()
+        .map_err(|_| anyhow::anyhow!("upstream thread panicked"))
+        .and_then(|result| result);
+    if upstream_result.is_err() {
+        let _ = client_control.shutdown(Shutdown::Both);
+        let _ = server_control.shutdown(Shutdown::Both);
+    }
+    let downstream_result = down
+        .join()
+        .map_err(|_| anyhow::anyhow!("downstream thread panicked"))
+        .and_then(|result| result);
+    upstream_result?;
+    downstream_result?;
     Ok(())
 }
 

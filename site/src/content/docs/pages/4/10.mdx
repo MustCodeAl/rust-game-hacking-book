@@ -16,12 +16,18 @@ import Quiz from '../../../../components/Quiz.astro';
 sensing, deciding, and acting. This lesson opens up what it described in words:
 the arithmetic behind the guard's view cone and line of sight, two other ways
 games choose what an NPC does, and where each of the guard's fields sits in
-memory.
+memory. The earlier lesson is the first-pass behavior model; this is the
+worked explanation you can return to when a real guard's choices or bytes
+need closer inspection. The geometry starts in two dimensions here and
+becomes the basis for the three-dimensional questions in Chapter 7.
 
 ## The three checks in code
 
-In the lab, the guard's three sensing checks live in one method, cheapest
-first:
+In the lab, the guard asks three questions in order: Is the player close
+enough? Are they in front of me? Is a wall between us? The first two
+use `Vec2`, the lab's pair of x and y coordinates. The last uses the
+wall list. This method puts the inexpensive checks first, so it need
+not inspect every wall for a distant or out-of-view player:
 
 ```rust
 fn can_see(&self, target: Vec2, walls: &[Wall]) -> bool {
@@ -38,6 +44,12 @@ fn can_see(&self, target: Vec2, walls: &[Wall]) -> bool {
     line_of_sight(self.position, target, walls)
 }
 ```
+
+The `return false` lines reject a target as soon as a check fails.
+`normalized()` returns an optional direction because a zero-length
+arrow has no direction; the `let Some(direction) ... else` branch
+handles that case. The following sections work through each calculation
+with positions you can draw on a grid.
 
 The first two checks read `offset`, the arrow from the guard to the target: the
 target's position minus the guard's. For a guard at (0, 0) and a player at
@@ -129,7 +141,7 @@ The code never computes an angle. Turning a dot product back into an angle would
 need that inverse cosine, a much slower function. Comparing the dot product with
 a cosine worked out once, when the constant was written, gives the same answer
 with two multiplications and one addition.
-[Lesson 5.1](/pages/5/01/#length-normalization-and-alignment) uses the same
+[Lesson 7.1](/pages/5/01/#length-normalization-and-alignment) uses the same
 comparison in three dimensions, for a camera's field of view.
 
 <Quiz
@@ -341,7 +353,7 @@ that the lab gives every new guard:
 The target field is an id rather than a pointer. Some games store a raw pointer
 to the target object instead, and that pointer goes stale when the target is
 destroyed and its memory reused, the problem that generation-checked handles in
-[Lesson 1.3](/pages/1/03/) solve.
+[Lesson 3.5](/pages/3/05/#raw-pointers-smart-pointers-and-handles) solve.
 
 ### A state value that means nothing
 
@@ -359,3 +371,12 @@ names. In the Rust lab, safe code cannot store 9 in a `GuardState` at all. Rust
 treats an enum holding a value outside its list as **undefined behavior**: the
 language promises nothing about what the program then does, so safe code is
 never allowed to create one.
+
+The guard is now readable from three directions. Its sensing code tells us
+which facts it can observe; a state trace tells us which choice it made on
+each tick; and the layout tells us where the relevant values lived. None
+of those alone proves why a particular guard moved. Together they let us
+check a claim such as “the wall broke line of sight, so Chase became
+Search” against both behavior and state. Before extending the geometry to
+three dimensions in Chapter 7, Chapter 5 shows how the executable stores the
+instructions and data that make such a claim testable.

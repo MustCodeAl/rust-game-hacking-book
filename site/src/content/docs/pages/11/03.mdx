@@ -1,13 +1,13 @@
 ---
 title: "Dynamic Windows API Resolution"
 description: "Runtime export lookup turns an optional Windows API into a checked capability with an explicit ABI and fallback."
-chapter: "11.3"
+chapter: "12.3"
 minutes: 29
 author: "attilathedud"
 date: "2026-08-14"
 sidebar:
   order: 3
-  label: "11.3 Dynamic Windows API Resolution"
+  label: "12.3 Dynamic Windows API Resolution"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -155,13 +155,17 @@ enum ImageNameSource {
 }
 ```
 
-If the full-path API is unavailable, a ToolHelp snapshot can still provide the executable name. That fallback contains less information, so label the source instead of pretending the results are equivalent.
+If the full-path API is unavailable, a ToolHelp module snapshot may supply the
+main module's path through `MODULEENTRY32W.szExePath`. It is a different
+observation: enumeration can fail across architecture or protection boundaries,
+and the module can change after the snapshot. Label the source and its limits
+instead of claiming that every fallback is simply a shorter path.
 
 ```mermaid
 flowchart TD
     A["Need an optional Windows capability"] --> B["Find the documented export<br/>in an already-loaded module"]
     B --> C{"Export present?"}
-    C -- "No" --> F["Use the documented fallback<br/>and label its weaker result"]
+    C -- "No" --> F["Try the documented fallback;<br/>label its source and limits"]
     C -- "Yes" --> D["Convert the address to the<br/>exact documented function type"]
     D --> E{"Call succeeds?"}
     E -- "Yes" --> G["Return the full result<br/>labelled with its source"]
@@ -189,4 +193,7 @@ Never call an unresolved address. Never replace `None` with address zero. Never 
 
 When you inspect a game or tool, dynamic resolution explains a common pattern: a string names an API, `GetProcAddress` returns a pointer, and a later indirect call uses it. Reconstructing that chain turns anonymous control flow into a documented contract.
 
-The responsible end state is boring and clear: one typed resolver, one fallback, visible errors, and no hidden capability. That is what good low-level code should look like.
+The responsible end state is clear: one typed resolver, one fallback, visible
+errors, and no hidden capability. That completes the DLL and API path. The
+next lesson moves across a different boundary: from a game process with
+limited rights to code running in the operating-system kernel.

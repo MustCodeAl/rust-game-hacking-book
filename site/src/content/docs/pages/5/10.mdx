@@ -1,29 +1,29 @@
 ---
 title: "Direct3D Interfaces and Vtables"
 description: "Understand how COM vtables expose Direct3D methods, why export lookup differs from OpenGL, and how a reversible swap-chain hook works."
-chapter: "5.10"
+chapter: "7.10"
 minutes: 34
 author: "attilathedud"
 date: "2026-09-03"
 sidebar:
   order: 10
-  label: "5.10 Direct3D Interfaces and Vtables"
+  label: "7.10 Direct3D Interfaces and Vtables"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 ## The OpenGL method does not transfer
 
-Lesson 5.3 found `glDrawElements` by its exported name, then detoured an
+Lesson 7.3 found `glDrawElements` by its exported name, then detoured an
 instruction inside it. OpenGL is a C API: `opengl32.dll` exports that
-function, so `GetProcAddress` can hand you its entry address. Lesson 8.4
-later teaches a separate import-table technique for named functions.
+function, so `GetProcAddress` can hand you its entry address. Lesson 6.4
+used the import table as a different redirection point for named functions.
 
 An **export** is a function a DLL makes findable by name. Ask
 `GetProcAddress` for `Present` in `d3d11.dll`, or inspect that DLL's export
 list: the method is not there. Neither are `DrawIndexed` and `Draw`. The
 public names are mostly creators such as `D3D11CreateDevice`, not the method
-that runs once per frame. Lesson 7.3 later shows where a PE file stores its
-export list; that file-format detail is not needed to follow this lookup.
+that runs once per frame. Lesson 5.3 showed where a PE file stores its
+export list; this lookup now uses that file-format detail.
 
 This is not obfuscation. Direct3D is built on **COM**, the Component Object
 Model — Microsoft's convention for handing out objects whose methods are reached
@@ -134,14 +134,13 @@ There are now three distinct ways to find code: a named export asks a DLL for a
 public function, a byte pattern searches for an instruction sequence, and this
 temporary COM object supplies the address of its own method. Only the last
 one tells us where this object's `Present` implementation lives. It still
-requires a compatibility check against the actual object and runtime. Lesson
-7.4 expands the byte-pattern case.
+requires a compatibility check against the actual object and runtime. Lesson 5.4 expands the byte-pattern case.
 
 **Do not copy that absolute pointer from a separate helper process into a
 game.** Each process has its own virtual address space, and a graphics runtime
 or driver can expose a different implementation. To study a separate offline
-target, inspect its own swap chain or create the probe inside its process after
-the DLL lifecycle from Chapter 8 is understood. A module-relative address may
+target, inspect its own swap chain or create the probe inside its process using
+the DLL lifecycle from Chapter 6. A module-relative address may
 be translated only after confirming the same module build and method body in
 both processes. [Microsoft's virtual-address documentation](https://learn.microsoft.com/en-us/windows/win32/memory/virtual-address-space)
 explains why identical numbers alone do not identify the same object.
@@ -182,7 +181,7 @@ unsafe {
 Restore the previous protection rather than leaving the page writable. A page
 you widened stays widened for the life of the process. This short code shows
 the two protection changes and the pointer swap; a complete hook guard must
-also roll back if the second protection change fails. Lesson 8.3 applies the
+also roll back if the second protection change fails. Lesson 6.3 applies the
 same verification and rollback reasoning to patched instruction bytes.
 
 ## The replacement must match the ABI exactly
@@ -263,7 +262,7 @@ debuggers such as RenderDoc and PIX.
 
 It tells you nothing about which objects are in that frame. For that you need
 the draw calls and the state bound around them, which is the next lesson. And
-as in Lesson 5.3, submission is not completion: `Present` returning does not
+as in Lesson 7.3, submission is not completion: `Present` returning does not
 mean the GPU has finished, and forcing it to catch up so you can measure
 something will change the thing you are measuring.
 

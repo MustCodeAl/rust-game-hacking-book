@@ -16,6 +16,9 @@ In the previous memory lab, we found the current gold. Now we want to know:
 > Which instruction subtracts the price of a recruited unit?
 
 Use the same offline Wesnoth 1.14.9 target and restore your clean VM snapshot before starting.
+For a concrete run, suppose you start at 100 gold and recruit a unit
+costing 15. The expected result is 85. Use the actual price and gold
+shown in your match when checking the paused instruction.
 
 ## Attach x64dbg
 
@@ -78,7 +81,13 @@ Resume the game and recruit one unit. The debugger should pause close to an inst
 sub dword ptr [reg+offset], eax
 ```
 
-Do not copy the exact register or offset from this page. Read the instruction in your own debugger. Builds and runs can differ.
+Do not copy the exact register or offset from this page. Read the
+instruction in your own debugger. A hardware data breakpoint can report
+an access after the instruction has run, so the highlighted next
+instruction may not be the one that wrote gold. Use the breakpoint's
+access information and nearby disassembly to identify the triggering
+write, then confirm that its calculated destination is your gold
+address. Builds and runs can differ.
 
 ![The instruction that changes player gold](/assets/images/2/4/reversing11.png)
 
@@ -92,7 +101,10 @@ Apply the five questions to the paused instruction:
 4. **Signed or unsigned?** Test nearby comparisons before deciding.
 5. **Where next?** The following instruction unless a branch changes the path.
 
-Now compare the price register with the unit’s price. If they match and the destination is the gold address, this instruction is the one that charges for a recruit.
+Now compare the price register with the unit’s price. In the example
+run, it should be 15 and the destination should be the gold address
+that changed from 100 to 85. Matching both is stronger evidence than
+recognizing `sub` alone.
 
 ## Read an instruction as state transition
 
@@ -163,3 +175,9 @@ Checking the original bytes is crucial. Refusing to patch an unknown version is 
 Remove the breakpoint through x64dbg’s Breakpoints tab and confirm the original instruction is restored.
 
 ![The Breakpoints tab](/assets/images/2/4/reversing15.png)
+
+The scan gave us a candidate *value*; the write breakpoint gave us a
+specific instruction and the register values from one recruitment.
+The reversible patch checked its effect, but the instruction may also
+run for other gold-changing actions. [Lesson 2.5](/pages/2/05/)
+follows the call path to find which rule brought execution here.

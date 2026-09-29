@@ -1,5 +1,4 @@
 // @ts-check
-import { existsSync } from 'node:fs';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import { ExpressiveCodeTheme } from '@astrojs/starlight/expressive-code';
@@ -7,20 +6,21 @@ import { satteri } from '@astrojs/markdown-satteri';
 import { academyCodeTheme } from './src/data/code-theme.mjs';
 import { basePathLinks, lazyImages, mermaidBlocks, scrollableTables, sectionTones } from './src/plugins/satteri-academy.mjs';
 import { CHAPTERS } from './src/data/chapters.mjs';
+import { getLessonIndex } from './src/data/lesson-index.mjs';
 
 const SITE = 'https://mustcodeal.github.io';
 const BASE = '/rust-game-hacking-book';
 
-// One collapsed sidebar group per chapter that has lessons. Starlight opens
-// the group holding the current page, so readers still land expanded. The
-// chapter numbers come from a CSS counter in reader.css.
-const chapterGroups = CHAPTERS.filter((chapter) =>
-	existsSync(new URL(`./src/content/docs/pages/${chapter.number}/`, import.meta.url)),
-).map((chapter) => ({
+// Historical page URLs stay put as lessons move. The displayed chapter and
+// lesson numbers in frontmatter control navigation and pagination instead.
+const lessonIndex = getLessonIndex();
+const chapterGroups = CHAPTERS.map((chapter) => ({
 	label: chapter.title,
 	collapsed: true,
-	items: [{ autogenerate: { directory: `pages/${chapter.number}` } }],
-}));
+	items: lessonIndex
+		.filter((lesson) => lesson.chapter.startsWith(`${chapter.number}.`))
+		.map(({ slug, label }) => ({ slug, label })),
+})).filter((chapter) => chapter.items.length);
 
 export default defineConfig({
 	site: SITE,
@@ -45,7 +45,7 @@ export default defineConfig({
 				{ icon: 'github', label: 'Source on GitHub', href: 'https://github.com/MustCodeAl/rust-game-hacking-book' },
 			],
 			editLink: {
-				baseUrl: 'https://github.com/MustCodeAl/rust-game-hacking-book/edit/rustgamehackingreimagined/site/',
+				baseUrl: 'https://github.com/MustCodeAl/rust-game-hacking-book/edit/codex/book-revision/site/',
 			},
 			lastUpdated: false,
 			pagination: true,

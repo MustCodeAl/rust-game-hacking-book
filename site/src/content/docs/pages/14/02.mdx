@@ -11,13 +11,15 @@ sidebar:
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
-[Lesson 14.1](/pages/14/01/) said that no user program touches hardware.
-Something has to, though. When you press a key, bytes arrive from a keyboard;
+[Lesson 14.1](/pages/14/01/) showed why ordinary user programs go through
+operating-system interfaces to reach devices. Something has to turn a request
+into device work, though. When you press a key, bytes arrive from a keyboard;
 when a game loads a level, a disk controller delivers the file. The code that
-operates each device is its **device driver**: kernel code that owns one kind
-of device, knows that device's registers and rules, and is the only software
-allowed to work it. Windows drivers are `.sys` files in the same PE format as
-programs and DLLs (Chapter 7), loaded into the kernel's half of memory.
+operates the device is its **device driver**: code that knows its registers,
+protocol, and rules. The kernel-mode drivers studied here are `.sys` files in
+the same PE format as programs and DLLs (Chapter 5), loaded into privileged
+memory. Windows also supports some user-mode driver arrangements; this toy
+path follows the kernel-mode kind.
 
 This lesson follows one request from a program down to a device and back,
 looks at how a driver talks to hardware through registers and interrupts,
@@ -34,12 +36,14 @@ the number of the sector it wants; a microsecond later the other overwrites it
 with a different sector; the first program receives the wrong data. Worse, a
 program could point the controller's copying engine at another process's
 memory. Devices hold state that everyone shares, and many can reach memory that
-belongs to anyone ([Lesson 11.6](/pages/11/06/)), so the operating system
+belongs to anyone ([Lesson 12.5](/pages/11/06/)), so the operating system
 cannot let programs work them directly.
 
-Instead, one driver owns each device. The kernel sends it every request for
-that device, each one already checked, and the driver is the only code that
-reads or writes the device's registers.
+Instead, Windows coordinates access through a driver stack. The I/O manager
+checks the caller's handle and sends the request onward; the receiving driver
+must still validate the operation, lengths, and buffers it uses. This division
+matters: an access check on a handle does not prove that the request's contents
+are safe for a device.
 
 Windows represents each device as a **device object**, and several drivers can
 stack on one device:
@@ -194,7 +198,7 @@ flowchart LR
 The address the driver gives the device is not a virtual address, because a
 device has no access to any process's page tables. It is a physical address or,
 on a machine with an **IOMMU**, a device address that the IOMMU translates and
-limits to the buffers the driver approved. [Lesson 11.6](/pages/11/06/)
+limits to the buffers the driver approved. [Lesson 12.5](/pages/11/06/)
 explains that translation and why Windows uses it to stop a malicious device
 from reading all of memory.
 
@@ -235,7 +239,7 @@ keyboard drivers have used since PS/2 keyboards, and the keyboard class driver,
 The **raw input thread**, inside `win32k`, the kernel part of the Windows window
 manager, reads those events. It translates the scan code into a **virtual-key
 code** using the active keyboard layout, updates the key-state table that
-`GetAsyncKeyState` reads ([Lesson 8.5](/pages/8/06/)), and posts the event to
+`GetAsyncKeyState` reads ([Lesson 6.5](/pages/8/06/)), and posts the event to
 the message queue of the thread that owns the foreground window. On a US
 layout, scan code `0x1E` becomes `VK_A`, `0x41`, which is also the ASCII code
 for the letter A: 4 × 16 + 1 = 65. For security, Windows opens keyboards
@@ -274,7 +278,7 @@ list of signed drivers known to be exploitable, which Windows refuses to load.
 Since the Windows 11 2022 update the blocklist is on by default, and it is
 always enforced when memory integrity is on. [Lesson 14.5](/pages/14/03/)
 explains memory integrity, which uses the hypervisor to stop even kernel code
-from creating new executable code. [Lesson 11.5](/pages/11/05/) showed how to
+from creating new executable code. [Lesson 12.4](/pages/11/05/) showed how to
 list the drivers loaded on your own machine and why each new one deserves a
 reason.
 
@@ -305,7 +309,7 @@ machine running it:
 - **Anti-cheat systems look for exactly these drivers**, and the penalties
   usually apply to the whole account, sometimes to the hardware.
 
-The habits from Lesson 11.5 apply directly: know which drivers are installed,
+The habits from Lesson 12.4 apply directly: know which drivers are installed,
 give every new one a reason and a trustworthy source, and never lower a Windows
 protection so that someone else's kernel code can load.
 

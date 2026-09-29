@@ -145,3 +145,49 @@ on `codex/book-revision`. For a later content update, use the
 site, and merge its generated output into `gh-pages` through a branch based on
 that publication branch. Keep the original checkout's unrelated local files
 intact.
+
+## 2026-09-29 chapter-flow revision
+
+The reader identified **chapter flow and order, especially in the later
+chapters**, as the remaining weakness. The source now uses this sequence:
+
+| Display chapter | Teaching role | Historical lesson paths |
+| --- | --- | --- |
+| 5 Executable Files and Runtime Analysis | PE layout, scanning, debugging, traces, then an optional parallel scanner | `pages/7/*`, `pages/8/05` |
+| 6 In-Process Code, Hooks, and Input | DLL loading, reversible detours, import hooks, input, and a separate menu | `pages/8/01–04`, `pages/8/06–07` |
+| 7 3D Space, Rendering, and Tool Design | Geometry and graphics labs, followed by tool architecture and an in-game menu | `pages/5/*`, `pages/8/08–09` |
+| 8 Messages Across Networks and Processes | Framing, parsing, clients, proxies, and local channels | `pages/6/*` |
+| 9 Game Files, Mods, and Trust | File formats, mods, integrity, and encryption | `pages/9/*` |
+| 10 Lua, Host Boundaries, and Virtual Machines | Supported scripting before deeper Windows internals | `pages/12/*` |
+| 11 Windows Process Internals | Build identity, handles, memory, threads, APIs, and dumps | `pages/10/*` |
+| 12 Process Boundaries and Physical Memory | DLL identity and APIs, kernel trust, DMA, page translation, and capture validation | `pages/11/01–03`, `pages/11/05–08` |
+| 13 Advanced Game Hacking | Invariants, integrity, telemetry, hooks, layouts, and control-gap cases | `pages/13/*`, `pages/11/04` |
+
+Chapters 1–4 and 14 remain in their previous chapter positions. The user-facing
+chapter and lesson numbers come from each MDX file's `chapter` and sidebar
+metadata. Historical URLs remain stable. The sidebar, pagination, contents,
+home course map, print edition, quizzes, LLM reading surfaces, and `docs.json`
+use the new numbers and order. Chapter 13 keeps the title **Advanced Game
+Hacking**.
+
+Three agents made scoped editorial passes across Chapters 1–4, 5–9, and
+10–14. The integrated revision clarified the early debugger trace and later
+process/kernel sequence, corrected several technical claims, and repaired
+chapter handoffs. It kept all 132 lessons, 272 Mermaid diagrams, 100 standard
+images, 212 MemoryStrips, and 41 inline quizzes. The optional parallel scan
+now follows sequential scanning; generic control-gap examples follow game
+invariants rather than interrupting the DLL-to-kernel path.
+
+The IAT lab and its lesson now reject name lookup when a loaded image has no
+`OriginalFirstThunk`. The Wesnoth proxy now closes both socket directions if
+message-aware upstream decoding fails, before waiting for the reverse relay;
+its lesson shows the same behavior. The latter remains a local, loopback lab.
+
+Verification for this pass: the complete Astro build produced 138 HTML pages
+and prerendered 272 diagrams; all 132 frontmatter numbers and quiz keys align;
+25,616 generated local links had no missing page or fragment; focused Rust
+formatting checks and a macOS compile check for the two touched Windows-lab
+bins passed. The full workspace formatter still reports an unrelated preexisting
+format difference in `shared_memory_lab.rs`. Windows execution was not tested
+on this Mac. The live preview serves the reordered contents at
+`http://127.0.0.1:4322/rust-game-hacking-book/contents/`.

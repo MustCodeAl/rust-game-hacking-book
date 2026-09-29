@@ -1,13 +1,13 @@
 ---
 title: "What a Windows Executable Contains"
 description: "Use the PE header and section map to understand where a Windows executable keeps code, data, imports, and addresses."
-chapter: "7.1"
+chapter: "5.1"
 minutes: 24
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 1
-  label: "7.1 What a Windows Executable Contains"
+  label: "5.1 What a Windows Executable Contains"
 ---
 import ConceptLab from '../../../../components/ConceptLab.astro';
 import Quiz from '../../../../components/Quiz.astro';
@@ -79,6 +79,8 @@ into the corresponding file bytes.
 For an on-disk file, a byte slice is safer and easier than casting random offsets to Windows structs:
 
 ```rust
+use anyhow::Context;
+
 fn bytes_at(bytes: &[u8], offset: usize, count: usize) -> anyhow::Result<&[u8]> {
     // 📏 Validate both the arithmetic and the slice. Either can fail for a
     // damaged file, and neither failure should become a panic or pointer cast.
@@ -91,6 +93,14 @@ fn bytes_at(bytes: &[u8], offset: usize, count: usize) -> anyhow::Result<&[u8]> 
 fn u32_at(bytes: &[u8], offset: usize) -> anyhow::Result<u32> {
     Ok(u32::from_le_bytes(bytes_at(bytes, offset, 4)?.try_into()?))
 }
+
+fn u16_at(bytes: &[u8], offset: usize) -> anyhow::Result<u16> {
+    Ok(u16::from_le_bytes(bytes_at(bytes, offset, 2)?.try_into()?))
+}
+
+fn u64_at(bytes: &[u8], offset: usize) -> anyhow::Result<u64> {
+    Ok(u64::from_le_bytes(bytes_at(bytes, offset, 8)?.try_into()?))
+}
 ```
 
 Three ideas are hiding in those few lines:
@@ -100,6 +110,11 @@ Three ideas are hiding in those few lines:
 3. `from_le_bytes` states that PE numbers use little-endian byte order.
 
 That is what “safe parsing” means: malformed input becomes an error instead of an invalid memory access.
+The three integer helpers differ only in how many bytes they take and which
+little-endian integer type they construct. In the excerpts that follow,
+`bytes` is the whole EXE file read into a `Vec<u8>`; these helpers check every
+field access against that file. The complete lab handles opening the path and
+reporting errors as well.
 
 ## Find the PE and COFF headers
 

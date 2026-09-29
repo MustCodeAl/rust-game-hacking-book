@@ -145,11 +145,14 @@ mod lab {
                 continue;
             }
 
-            let names = if original_thunk == 0 {
-                first_thunk
-            } else {
-                original_thunk
-            };
+            // In a loaded image FirstThunk holds resolved addresses. Without
+            // OriginalFirstThunk, this name-based lookup has no trustworthy
+            // import-name table, so it cannot identify a slot by name.
+            anyhow::ensure!(
+                original_thunk != 0,
+                "user32.dll has no OriginalFirstThunk; cannot match MessageBoxW by name"
+            );
+            let names = original_thunk;
             for index in 0..2048_usize {
                 let name_cell = names
                     .checked_add(index * 4)

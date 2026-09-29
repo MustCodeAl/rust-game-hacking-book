@@ -2,32 +2,19 @@
 // per chapter, listing that chapter's lessons in order. Paths are relative
 // to the repository root with the extension left off, as docs7.json expects.
 // Run after adding or renaming a lesson: `bun run docs-json`.
-import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { CHAPTERS } from '../src/data/chapters.mjs';
+import { getLessonIndex } from '../src/data/lesson-index.mjs';
 
 const repoRoot = new URL('../../', import.meta.url);
-const docsDir = new URL('../src/content/docs/', import.meta.url);
 const docsPath = 'site/src/content/docs';
 
 const groups = [{ group: 'Start here', pages: [`${docsPath}/index`, `${docsPath}/glossary`, `${docsPath}/ai-assistants`] }];
+const lessonIndex = getLessonIndex();
 for (const chapter of CHAPTERS) {
-	let files;
-	try {
-		files = await readdir(new URL(`pages/${chapter.number}/`, docsDir));
-	} catch {
-		continue;
-	}
-	const lessons = await Promise.all(files.filter((name) => name.endsWith('.mdx')).map(async (name) => {
-		const source = await readFile(new URL(`pages/${chapter.number}/${name}`, docsDir), 'utf8');
-		const lesson = source.match(/^chapter: "(\d+)\.(\d+)"$/m);
-		if (!lesson || Number(lesson[1]) !== chapter.number) {
-			throw new Error(`Missing or mismatched chapter number in ${chapter.number}/${name}`);
-		}
-		return { name, order: Number(lesson[2]) };
-	}));
-	const pages = lessons
-		.sort((a, b) => a.order - b.order)
-		.map(({ name }) => `${docsPath}/pages/${chapter.number}/${name.replace(/\.mdx$/, '')}`);
+	const pages = lessonIndex
+		.filter((lesson) => lesson.chapter.startsWith(`${chapter.number}.`))
+		.map(({ slug }) => `${docsPath}/${slug}`);
 	if (pages.length) groups.push({ group: `${String(chapter.number).padStart(2, '0')} · ${chapter.title}`, pages });
 }
 

@@ -1,19 +1,19 @@
 ---
 title: "Byte Signatures and Pattern Scanning"
 description: "See how byte patterns locate candidate instructions across known builds, and why wildcards and semantic checks matter."
-chapter: "7.4"
+chapter: "5.4"
 minutes: 35
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 4
-  label: "7.4 Byte Signatures and Pattern Scanning"
+  label: "5.4 Byte Signatures and Pattern Scanning"
 ---
 import Quiz from '../../../../components/Quiz.astro';
 
 ## Why patterns help
 
-Lesson 7.2 recovered a live address by adding the current module base to a known RVA. That works for the exact build whose RVA you measured. After a game update, the gold-changing instruction may move *within* the module, so the old RVA can point at different code even when the base calculation is perfect.
+Lesson 5.2 recovered a live address by adding the current module base to a known RVA. That works for the exact build whose RVA you measured. After a game update, the gold-changing instruction may move *within* the module, so the old RVA can point at different code even when the base calculation is perfect.
 
 A **byte pattern** searches the current module for a distinctive instruction sequence. It gives us a candidate location to check in each explicitly supported build; it does not by itself prove that the candidate is still the gold-changing instruction.
 
@@ -213,10 +213,15 @@ fn parse_pattern(text: &str) -> anyhow::Result<Vec<PatternByte>> {
         .collect()
 }
 
-let pattern = parse_pattern("29 83 ? ? ? ? 8B 4D")?;
+let pattern = parse_pattern("29 47 04 E8 ?? ?? ?? ??")?;
 ```
 
 `collect()` is doing extra work here: the iterator produces `Result<PatternByte>` values and combines them into `Result<Vec<PatternByte>>`. The first invalid hex token stops the parse and returns its error. No half-parsed pattern escapes.
+This is the same illustrative two-build pattern we just derived, so the four
+`??` tokens still mean the call's changing relative distance. The runnable
+Wesnoth lab below uses a different, exact three-byte signature from its one
+pinned executable; it does not claim that hypothetical call follows the real
+gold instruction.
 
 ## Scan the correct range
 
@@ -326,7 +331,7 @@ Notice what it does **not** do: it does not scan every allocation, patch the res
 
 ## Run it against Wesnoth
 
-The course binary opens the live 32-bit `wesnoth.exe`, finds its current main-module base, visits its readable executable regions, and searches for the exact gold-subtraction instruction bytes `29 42 04`. It prints every match and refuses to call the result usable unless there is exactly one.
+The course binary opens the live 32-bit `wesnoth.exe`, finds its current main-module base, visits its readable executable regions, and searches for the exact gold-subtraction instruction bytes `29 42 04`. Those are measured bytes from the pinned Wesnoth build, not the illustrative `29 47 04 E8 ...` sequence above. It prints every match and refuses to call the result usable unless there is exactly one.
 
 ```powershell
 .\target\i686-pc-windows-msvc\release\pattern_scanner.exe

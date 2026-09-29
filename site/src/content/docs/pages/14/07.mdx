@@ -59,7 +59,7 @@ follows one trip through it.
 
 Lesson 14.1 said that a page-table entry's **user/supervisor** bit, bit 2,
 decides whether ring 3 may touch the page, and
-[Lesson 11.7](/pages/11/07/) said that the low twelve bits of an entry hold
+[Lesson 12.6](/pages/11/07/) said that the low twelve bits of an entry hold
 flags. Here is the lowest byte of an entry for an ordinary user page:
 
 <MemoryStrip
@@ -84,14 +84,15 @@ A page that holds kernel data looks almost the same:
   caption="The same byte for a kernel page, `0x63`. Only bit 2 differs, so ring 3 is refused."
 />
 
-`0x67` − `0x63` = 4, and 4 = 2², so exactly one bit differs: bit 2. That single
-0 is the whole difference between the game's pages and the kernel's. A kernel
-page can be present, writable, and recently used, and still refuse every access
-from ring 3.
+`0x67` − `0x63` = 4, and 4 = 2², so exactly one bit differs between these two
+*example leaf entries*: bit 2. A kernel page can be present, writable, and
+recently used, and still refuse access from ring 3. In a real page-table walk,
+the processor also considers permissions in the entries at higher levels; a
+single leaf byte is a teaching example, not a complete access decision.
 
 ## The same call, one layer at a time
 
-Take a read like the ones in [Lesson 10.4](/pages/10/03/): a handle to the game
+Take a read like the ones in [Lesson 11.4](/pages/10/03/): a handle to the game
 opened with only query and read rights, and a request for 4 bytes at address
 `0x0050_1000`. Lesson 14.1 drew the whole round trip as one sequence diagram,
 from your tool through `kernel32.dll`, `kernelbase.dll`, and `ntdll.dll` to the
@@ -101,7 +102,7 @@ participant at a time.
 ### Inside your process
 
 `ReadProcessMemory` in `kernel32.dll` forwards to `kernelbase.dll`
-([Lesson 10.8](/pages/10/07/)), which calls `NtReadVirtualMemory` in
+([Lesson 11.8](/pages/10/07/)), which calls `NtReadVirtualMemory` in
 `ntdll.dll` with the same arguments. The `ntdll` function is a **stub**: a few
 instructions whose only job is to make the system call. On 64-bit Windows its
 core is four instructions:
@@ -181,13 +182,13 @@ requirement, so the read is allowed.
 whatever the tool's author intended. The rights were fixed when the handle was
 created, and nothing done with the handle afterward can add to them.
 
-**Only then does it copy.** The game's bytes are visible only through the
-game's page tables, and the tool's buffer only through the tool's. So the
-kernel briefly switches to the game's address space, reads the 4 bytes into
-memory of its own, switches back, and writes them into the tool's buffer. Large
-reads use a temporary kernel mapping of the game's pages instead, with the same
-effect. If a page in the range is missing, the kernel catches the fault, copies
-what it can, and reports a partial result.
+**Only then does it copy.** The source address belongs to the game's address
+space and the destination buffer belongs to the tool's. The kernel must
+interpret each in the correct process context while copying; the exact
+internal mapping and copy strategy is a Windows implementation detail. If a
+page becomes unavailable during the operation, the API may report a failed or
+partial read. The caller must check the returned byte count instead of
+assuming that asking for four bytes means four arrived.
 
 ### Returning
 
@@ -206,12 +207,12 @@ partial copy, and reports success or failure to your tool.
 
 :::note[A 32-bit game takes one extra hop]
 The book's Windows labs are 32-bit programs. A 32-bit process on 64-bit Windows
-has a 32-bit `ntdll.dll`, whose stubs cannot enter the 64-bit kernel directly.
-Each stub hands its call to the **WoW64** layer (“Windows 32-bit on Windows
-64-bit”), which switches the processor into 64-bit mode, widens every 32-bit
-argument to 64 bits, and makes the same system call through the 64-bit
-`ntdll.dll`. The two modes use different code segments, which is why `cs` reads
-`0023` in a 32-bit program and `0033` in a 64-bit one.
+uses **WoW64** (“Windows 32-bit on Windows 64-bit”) to translate the call into
+the native 64-bit service path. That may require converting pointer-sized
+arguments and structures; it is not a blind widening of every number. The
+two modes use different code segments, which is why `cs` reads `0023` in a
+32-bit program and `0033` in a 64-bit one. The four-instruction stub above
+illustrates the native 64-bit path, not every instruction a 32-bit caller runs.
 :::
 
 <Quiz
@@ -224,3 +225,8 @@ argument to 64 bits, and makes the same system call through the 64-bit
 />
 
 References: [process security and access rights](https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights), [using NTSTATUS values](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/using-ntstatus-values), and the [Intel Software Developer Manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html) for `syscall`, privilege levels, and page-table bits.
+
+The process handle in this example authorized a copy between two processes.
+The next kind of request crosses a different boundary: a driver receives an
+operating-system request and turns it into work on a device. The same habit of
+checking authority, arguments, and returned results still applies.

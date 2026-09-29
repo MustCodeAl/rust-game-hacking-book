@@ -1,21 +1,21 @@
 ---
 title: "The Running Game as a Process"
 description: "An executable becomes a process with threads, modules, handles, and Windows-managed state; the PEB and TEB reveal useful structure without being a safe API."
-chapter: "10.1"
+chapter: "11.1"
 minutes: 24
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 1
-  label: "10.1 The Running Game as a Process"
+  label: "11.1 The Running Game as a Process"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 ## A program file is not a running process
 
-Chapter 9 followed files a game loads and saves. One file deserves a closer
-look when it starts running: the executable. Its bytes help create the game,
-but the running game contains more than that file.
+The previous chapters followed executable files, saved data, mods, and scripts.
+All of them meet in a running Windows process. The executable's bytes help
+create that process, but the running game contains more than that file.
 
 `wesnoth.exe` on disk is a **program file**. When Windows starts it, Windows
 creates a **process**: an isolated running instance with its own address space,
@@ -139,7 +139,13 @@ mov eax, dword ptr fs:[0x30]
 mov rax, qword ptr gs:[0x60]
 ```
 
-This is not ordinary game data. `fs:` and `gs:` tell the CPU to use a segment-relative address associated with the current thread. The offset is not simply relabeled between the two builds: most of the TEB fields that come before the PEB pointer are themselves pointers, and a 64-bit pointer takes 8 bytes instead of 4. Doubling the width of nearly every earlier field pushes the PEB pointer roughly twice as far into the structure, which is why `0x30` on x86 becomes `0x60` on x86-64 rather than some unrelated number.
+This is not ordinary game data. `fs:` and `gs:` tell the CPU to use a
+segment-relative address associated with the current thread. `0x30` and
+`0x60` are offsets in *different Windows layouts*, not a universal rule to
+double a structure offset when moving from 32 to 64 bits. Wider pointers and
+alignment help explain why layouts change; the actual offsets come from the
+layout being examined. Treat these internal structures as an observation in
+a particular architecture and Windows build, not as a public API contract.
 
 <MemoryStrip
   cells="+0x00=TEB start|=· · ·|+0x30=PEB pointer"
@@ -213,7 +219,10 @@ The list is stable, but the process is still running. A DLL could unload after t
 
 ## Lab: connect the file map to the live process
 
-Start one offline course game, then run both existing tools:
+Start one offline course game, then run both existing tools. `3CCD91` is the
+sample Wesnoth **RVA** examined in Lessons 5.1–5.2; it is a position relative
+to the module base, not a live address to reuse after a restart. Replace it
+with an RVA you verified for the exact local build if your file differs:
 
 ```powershell
 cd windows-labs
