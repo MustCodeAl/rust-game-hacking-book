@@ -22,6 +22,10 @@ the original editorial contract and source investigation.
   was merged into `gh-pages` through
   [PR #4](https://github.com/MustCodeAl/rust-game-hacking-book/pull/4)
   (merge commit `049245b`).
+  The chapter-flow source commits `52e5a90` and `3462b99` were published to
+  `gh-pages` through
+  [PR #5](https://github.com/MustCodeAl/rust-game-hacking-book/pull/5)
+  (merge commit `9bb188a`).
   [PR #1](https://github.com/MustCodeAl/rust-game-hacking-book/pull/1)
   mistakenly merged the authored source into `rustgamehackingreimagined`;
   [PR #3](https://github.com/MustCodeAl/rust-game-hacking-book/pull/3)

@@ -166,7 +166,8 @@ from their historical URL filenames; use each page's `chapter` and
 `docs.json` generator follows that metadata too.
 The user clarified that `gh-pages` is the final target. The revised authored
 source remains on `codex/book-revision`; its complete static build was merged
-into `gh-pages` through PR #2, and the structural follow-up through PR #4.
+into `gh-pages` through PR #2, the structural follow-up through PR #4, and
+the chapter-flow follow-up through PR #5.
 PR #1 mistakenly merged the authored source into
 `rustgamehackingreimagined`, and PR #3 reverted that merge. For future edits,
 build from the authored source and publish the generated output through a
@@ -181,5 +182,6 @@ through `site/src/data/lesson-index.mjs`; do not infer reading order from URL
 folders. The broad teaching path is executable analysis → hooks → 3D/rendering
 and tool integration → networks → game files → Lua → Windows processes →
 physical-memory boundaries → Advanced Game Hacking → hardware. Keep Chapter
-13 titled **Advanced Game Hacking**. Publish the full generated build to
-`gh-pages` after source changes are validated.
+13 titled **Advanced Game Hacking**. The generated flow revision from source
+`3462b99` is published on `gh-pages` through PR #5. For later source changes,
+publish the full generated build again after validation.
