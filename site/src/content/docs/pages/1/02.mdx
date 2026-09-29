@@ -1,6 +1,6 @@
 ---
 title: "How a Computer Runs a Game"
-description: "Build a game from CPU instructions, a small program, stored values, and the services that make it interactive."
+description: "Follow a game from its file on disk to a running process that reads input, updates memory, and draws frames."
 chapter: "1.2"
 minutes: 16
 author: "attilathedud"
@@ -11,250 +11,232 @@ sidebar:
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
-Suppose a game shows 100 gold. You collect one coin, and the display changes
-to 101. What had to happen inside the computer for that small change to
-appear? We can answer without knowing a programming language yet.
+When you run a game, several parts of the computer work together. You do not
+need to memorize every hardware detail yet. You need to know which part stores
+the game, which part runs instructions, and which part holds the changing game
+state.
 
-## The parts work together
+## The main parts involved
 
-The game's files stay on a **storage drive** when the game is closed. When
-you start it, the computer puts the code and the information needed soon into
-**RAM** (random-access memory). RAM is fast working storage; its contents are
-temporary. The **CPU** (central processing unit) runs the code and changes
-values such as your gold. A keyboard, mouse, or controller supplies input.
-The **GPU** (graphics processing unit) helps turn the game's drawing work
-into the picture you see.
+| Part | What it does while a game runs |
+|---|---|
+| storage drive | keeps the game files when the game is not running |
+| RAM | holds code and data the running game needs soon |
+| CPU (central processing unit) | executes instructions that update the game |
+| GPU (graphics processing unit) | turns drawing commands into pixels on the screen |
+| input devices | send keyboard, mouse, or controller events |
 
-These parts have different jobs in our coin example. The stored game file
-contains the instructions for collecting a coin. While the game runs, RAM
-holds the current gold value. The CPU updates that value from 100 to 101, and
-the game draws the new number on the screen. The parts communicate through
-the computer's hardware; none of them is the whole game by itself.
+The operating system coordinates these parts. On this course that operating
+system is Windows.
 
-```mermaid
-flowchart TD
-    Drive["game files on storage"] --> RAM["code and current values in RAM"]
-    RAM --> CPU["CPU runs instructions"]
-    Input["keyboard or controller input"] --> CPU
-    CPU --> Updated["updated gold in RAM"]
-    Updated --> GPU["GPU helps draw the picture"]
-    GPU --> Screen["screen"]
-```
+## What happens when you start a game
 
-## The CPU follows small instructions
+Suppose you double-click `wesnoth.exe`:
 
-The CPU is sometimes called the computer's **brain**. That is a useful first
-picture of its central job, but the CPU does not understand a game as a person
-does. It executes **instructions**: small, specified operations such as
-copying a number, adding two numbers, comparing them, or going to another
-instruction.
+1. Windows reads the executable file from storage.
+2. Windows creates a **process**, which is one running instance of the game.
+3. The process receives its own virtual address space and operating-system
+   resources.
+4. Windows loads the game's code and required DLLs into memory.
+5. A thread begins executing the game's startup instructions.
+6. The game creates windows, loads assets, and enters its main loop.
 
-The CPU has tiny working places called **registers**. Imagine one register
-currently holds 100. An add-one instruction changes that register's value to
-101. It did one small job; it did not decide what a coin means or draw the
-number. Later, the program can store the result in RAM for continued use.
-
-This is a description of the change, not executable CPU code:
-
-```text
-working value starts at 100
-add 1 to the working value
-working value is now 101
-```
-
-The exact CPU instructions and register names depend on the machine. For
-now, follow the value: 100 went in, one was added, and 101 came out.
-
-## A program combines instructions
-
-A **program** is a collection of instructions arranged to do a larger job.
-Our example becomes a tiny program if we let a number come in and send the
-new number out:
-
-```text
-input: 100
-copy the input into a working value
-add 1 to the working value
-output: 101
-```
-
-The **input** is the value supplied to this calculation. The **output** is
-its result. A running program can also remember values, cause effects, and
-keep working rather than stop after one output. In a game, the gold count is
-part of the game's changing **state**: information describing what is
-happening now. The input might be the event “collect a coin,” and the new
-state has 101 gold.
-
-## A function names work we want to reuse
-
-A larger program may need to add one in many places. We can give that small
-behavior a name: **add_one**. A named piece of program behavior is a
-**function**. Instead of describing its steps every time, another part of
-the program can ask add_one to work on a number.
-
-```text
-function add_one(number):
-    result = number + 1
-    give back result
-
-add_one(100) gives back 101
-```
-
-This is explanatory pseudocode, not code you can run as written. The name
-`number` stands for the input supplied on each use; `result` is the value
-after adding one. A function can also do work without taking an input or
-returning a useful value. Naming behavior lets the program reuse and
-organize it.
-
-## A branch chooses which work to do
-
-What if a game can award a coin **or** charge one? We can name the second
-operation subtract_one. Both operations change the same starting number by
-one. Now the program needs another input: which action occurred?
-
-```text
-starting number: 100
-action "collect": add_one(100) gives back 101
-action "spend": subtract_one(100) gives back 99
-```
-
-For “collect,” the program follows the add path and ends at 101. For
-“spend,” it follows the subtract path and ends at 99. It must **compare**
-the action with the choices and then follow one path. This choice is a
-**branch**. A branch lets the same program respond differently to different
-input. It does not run both outcomes for one action.
+An executable file and a process are not the same thing. The file is stored
+bytes. The process is the running state created from those bytes.
 
 ```mermaid
-flowchart TD
-    Start["starting number: 100"] --> Choice{"which action?"}
-    Choice -->|"collect"| Add["add_one gives 101"]
-    Choice -->|"spend"| Subtract["subtract_one gives 99"]
+flowchart LR
+    File[EXE and game files] --> OS[Windows loads them]
+    OS --> Process[Running process]
+    Input[Keyboard / mouse] --> Process
+    Process --> State[Updated game state in RAM]
+    State --> GPU[Drawing commands]
+    GPU --> Screen[Pixels on screen]
 ```
 
-In a real game, spending may also need a rule such as “do not spend when
-gold is zero.” That is another comparison and branch. Lesson 1.4 will turn
-this small calculation into a program written in Rust.
+## The game loop repeats while you play
 
-## How the numbers are represented
+Most games repeatedly do three broad jobs:
 
-We have treated 100 and 101 as ordinary numbers. To find them in a running
-game, we also need to know how computers represent numbers.
+1. read input and incoming events;
+2. update the game state;
+3. draw or submit the next frame.
 
-In familiar **decimal** notation, each place is worth ten times the place
-to its right. The number 101 means one hundred, zero tens, and one unit:
-1 × 100 + 0 × 10 + 1. **Binary** uses only 0 and 1. Each place is worth
-twice the place to its right. One binary digit, either 0 or 1, is a **bit**.
+Real engines divide those jobs into many systems, and some systems run at
+different rates. The simple loop is still useful because it tells you where to
+ask questions:
 
-Eight bits make one **byte**. The eight places in a byte are worth 128, 64,
-32, 16, 8, 4, 2, and 1. For example:
+- input problem — did the game receive the event?
+- state problem — did the simulation update the value?
+- drawing problem — did the renderer show the current state?
 
-```text
-place value: 128  64  32  16   8   4   2   1
-bits:          0   1   1   0   0   1   0   0
-total:            64 + 32 + 4 = 100
-```
+Changing a value used only for drawing may change what you see without changing
+the simulation. Later lessons will show how to tell those copies apart.
 
-Writing eight bits for every byte gets tiring. **Hexadecimal**, or **hex**,
-uses sixteen digits: 0–9 followed by A–F for values ten through fifteen.
-One hex digit represents four bits, so two hex digits represent one byte.
-The byte above splits into `0110` (six) and `0100` (four), written
-`0x64`. The prefix `0x` tells you it is hex. Its value is still decimal
-100: 6 × 16 + 4. Decimal, binary, and hex are different ways to *write* the
-same number, not three different kinds of gold.
+## The CPU executes instructions
 
-<MemoryStrip
-  cells="high four bits=0110|low four bits=0100"
-  groups="0-0:hex 6|1-1:hex 4"
-  groups2="0-1:0x64 = 6 × 16 + 4 = 100"
-  caption="The same one-byte value, split into two groups of four bits and written in hexadecimal."
-/>
+An **instruction** is one small operation the CPU can execute. An instruction
+might copy a value, add two numbers, compare values, or jump to another part of
+the code.
 
-One byte can represent 0 through 255. Larger values use several bytes. The
-memory lesson just before the first scan will show where those bytes sit and
-how a program reads them together.
-
-## Languages help people write programs
-
-The CPU executes instructions represented by patterns of bits. Writing a
-whole game as bit patterns would be difficult. **Assembly language** gives
-human-readable names to operations such as moving and adding values. A
-**higher-level language** lets us express larger ideas, such as functions
-and branches, without spelling out every CPU operation.
-
-Our add-one function and collect-or-spend branch can be written in a
-language like Rust. A compiler translates source code into machine code
-for a chosen target. The translation is not necessarily one source line to
-one CPU instruction. Here is our same small function in Rust:
+Source code groups many small CPU operations into names humans can understand:
 
 ```rust
-fn add_one(number: u32) -> u32 {
-    return number + 1;
+fn can_buy(gold: u32, cost: u32) -> bool {
+    gold >= cost
 }
 ```
 
-`fn` names a function. `number` is its input; `u32` means a non-negative
-whole number stored in 32 bits. The arrow says the function gives back a
-`u32`, and `return` sends back the sum. Calling `add_one(100)` therefore
-gives back 101, just as the earlier pseudocode did. This is a function
-fragment, not a whole program; Lesson 1.4 builds and runs the complete Rust
-example. Lesson 1.10 follows the later steps that turn source into a program
-file.
+Read it directly:
 
-## The operating system helps programs use the computer
+- `fn can_buy` defines a function named `can_buy`;
+- it receives `gold` and `cost`;
+- both are non-negative 32-bit integers;
+- `-> bool` means the answer is `true` or `false`;
+- `gold >= cost` performs the comparison.
 
-Even our tiny add-one program needs more than arithmetic if a person must
-type a number and see an answer. It needs a way to receive input and display
-output. A game also needs files, sound, windows, and access to devices.
+The compiler translates this function into instructions for the target CPU.
+Chapter 2 teaches how to read those instructions in assembly.
 
-An **operating system** (OS) provides common services for those jobs and
-coordinates programs that use the computer. This book uses Windows for its
-practical examples. A program written for Windows can ask Windows to read
-a file or show a window instead of controlling each device from scratch.
+## RAM holds the changing state
 
-An **application** is a program made for a user to do something. A game is
-an application: it uses the OS's services, runs its own instructions, and
-keeps its own changing state.
+During a match, values such as health, gold, position, and the current map must
+be available quickly. The game keeps active values in RAM.
 
-## From a file to a running game
+RAM is temporary. Its contents do not survive a normal power-off. A save file
+is different: the game deliberately encodes selected state and writes it to
+storage.
 
-The game file on storage contains code and other saved information. Starting
-it creates a **process**: one running instance of that program, with its own
-memory and resources. Windows loads the code and needed data into memory and
-starts a **thread**, a path that executes instructions in the process. A
-process may have more than one thread, but one is enough to picture this
-first example.
+A location in memory has an **address**. The address answers “where?” The bytes
+stored there answer “what pattern is present?” The code that reads those bytes
+decides what that pattern means.
 
-Many games repeat a broad **game loop** while you play:
+For example, the bytes `64 00 00 00` represent the integer 100 when read as a
+32-bit number on an x86 machine, which stores the smallest-valued byte first.
+The next lesson works through that ordering. The same four bytes could be part
+of something entirely different if the program reads them using another type.
+Bytes do not contain labels such as “health” or “gold.” Meaning comes from the
+code that reads them and from the data around them.
 
-1. receive input, such as the event “collect a coin”;
-2. update state, changing gold from 100 to 101;
-3. draw the current state, so the display shows 101;
-4. repeat for the next action.
+## A process contains one or more threads
+
+A **process** owns an address space and resources such as handles and loaded
+modules. A **thread** is an execution path inside that process.
+
+A game may use different threads for rendering, audio, file loading, or network
+work. Threads in the same process share the same memory, which is what makes
+them useful and also what makes them awkward to observe.
+
+This matters the first time you pause a game. When a Windows debugger breaks,
+it normally suspends every thread in that process, so the game really does hold
+still. But “still” has limits. The pause ends the instant you continue, and
+anything outside that process — a game server sending an update, another
+program, a device — was never suspended at all. A value you read while paused
+is a fact about one moment, not a fact that stays true.
+
+```mermaid
+flowchart TB
+    subgraph P["one game process"]
+        direction TB
+        T1["main thread:<br/>runs the game loop"]
+        T2["render thread:<br/>submits drawing"]
+        T3["audio thread:<br/>mixes sound"]
+        M["one shared virtual address space:<br/>code, loaded DLLs, game state"]
+        H["handles: files, windows, events"]
+        T1 --> M
+        T2 --> M
+        T3 --> M
+    end
+```
+
+Every thread reads and writes the same memory. That shared space is what a
+memory tool looks into, and it is also why a value can change between two reads
+even when no single thread looks busy.
+
+You only need this distinction for now:
+
+- process = the running game's resources and memory;
+- thread = one path currently executing the game's instructions.
+
+## Binary and hexadecimal are ways to write numbers
+
+Computers store information as bits. A **bit** is either 0 or 1. Eight bits make
+one **byte**.
+
+Writing long bit patterns is inconvenient, so debuggers commonly show
+**hexadecimal** numbers. Hex uses sixteen digits: `0` through `9`, then `A`
+through `F`.
+
+```text
+decimal 15 = hexadecimal F
+decimal 16 = hexadecimal 10
+decimal 255 = hexadecimal FF
+```
+
+Hexadecimal is not chosen for elegance. It is chosen because sixteen is two
+multiplied by itself four times, so one hex digit stands for exactly four bits
+and two hex digits stand for exactly one byte:
+
+```text
+bits   1111 1111
+hex       F    F     ->  0xFF, one byte
+```
+
+The split works for any byte. Here is the byte that stores 100, which Lesson
+1.3 keeps coming back to:
+
+<MemoryStrip
+  cells="high four bits=0110|low four bits=0100"
+  groups="0-0:6|1-1:4"
+  groups2="0-1:0x64, which is 6 × 16 + 4 = 100"
+  caption="Each group of four bits becomes exactly one hex digit, so a byte is always two digits and the byte boundaries stay visible."
+/>
+
+That fixed relationship is what makes hex readable in a debugger. Written as
+`0xFF` you can see one whole byte at a glance. Written as decimal 255 the byte
+boundary is invisible, and a number like decimal 4096 gives no hint that it is
+a round figure in memory terms, while the same value written `0x1000` obviously
+is.
+
+The prefix `0x` tells you a number is written in hex, so `0xFF` means decimal
+255. Hex does not create a different value; it is another way to write the same
+number.
+
+Do not stop to memorize conversion tables. Learn to recognize `0x`, and use a
+calculator while the notation becomes familiar.
+
+## Software is built in layers
+
+Your code can call a library. The library can call a Windows **API** — an application programming interface, meaning the set of functions Windows offers and the rules for calling them. Windows can
+ask a driver to communicate with hardware. Each layer offers the layer above it
+a simpler set of operations and hides the details of the layer below it.
+
+A single key press passes through several named layers before your code sees an
+answer:
 
 ```mermaid
 flowchart TD
-    Input["input: collect a coin"] --> CPU["CPU follows the game's instructions"]
-    CPU --> State["state in RAM: gold is 101"]
-    State --> Screen["draw 101 on screen"]
-    Screen --> Next["next input"]
+    A["your code asks:<br/>is the F1 key down right now?"] --> B["user32.dll<br/>GetAsyncKeyState"]
+    B --> C["Windows kernel<br/>input handling"]
+    C --> D["keyboard driver"]
+    D --> E["the physical keyboard"]
 ```
 
-Actual games split this work among many systems and sometimes several
-threads. This loop is a first model for asking a useful question: did the
-input arrive, did the stored value change, and did the display show the
-changed value?
+Every arrow in that diagram is a place where the answer can be produced,
+delayed, filtered, or supplied by something other than a real key press.
 
-## The pieces together
+So every result, and every bug, belongs to a particular layer. If a window
+message arrives but the game ignores it, the input reached the window-message
+layer; that does not prove the game's device-input system accepted it. Later
+lessons follow these boundaries directly.
 
-The CPU carries out individual instructions. A program arranges many of
-them into useful behavior: receive a value, apply the add-one operation,
-and produce a changed value. A function names that reusable behavior;
-a branch chooses whether to collect or spend. Storage keeps the game
-file, RAM holds the running program's state, and the operating system
-loads the file as a process the CPU can execute.
+## Checkpoint
 
-The gold value changed while the game was running. The next question is
-what the game's rules do with it and how several players can each have
-their own value. [Game Fundamentals](/pages/1/03/) starts there. We will
-return to bytes and addresses just before the first memory scan in
-[Lesson 1.8](/pages/1/08/).
+You should now be able to explain:
+
+- the difference between a game file and a running process;
+- how storage, RAM, the CPU, and the GPU contribute to a frame;
+- what a CPU instruction is;
+- why an address and the value stored there are different;
+- the difference between a process and a thread;
+- why debuggers use hexadecimal.

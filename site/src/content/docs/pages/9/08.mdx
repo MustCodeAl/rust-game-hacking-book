@@ -13,8 +13,6 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 ## Five tools with different jobs
 
-Lesson 9.7 used a hash to compare exact files and a signature to check a publisher's approval. Suppose instead that a save contains private data and the owner wants to keep its contents unreadable on disk. That calls for encryption and a plan for the key. The related words are easy to mix up, so first give each tool one job.
-
 These words are often mixed together. Their jobs are not interchangeable:
 
 | Tool | Reversible? | Secret required? | Main job |
@@ -30,29 +28,23 @@ AEAD means *authenticated encryption with associated data*. It is usually the ri
 ### One shared key or a key pair
 
 The lab uses **symmetric** encryption: one key both locks and unlocks, so
-whoever encrypts and whoever decrypts must hold the same secret. It is
-efficient for large payloads, but it leaves a problem: the key has
+whoever encrypts and whoever decrypts must hold the same secret. It is fast, and
+XChaCha20 can encrypt gigabytes per second, but it leaves a problem: the key has
 to reach the other side without anyone copying it on the way.
 
-**Public-key** cryptography uses a public/private key pair, as
-[Lesson 9.7](/pages/9/07/#how-a-signature-is-made-and-checked) showed for
-signatures. In a public-key *encryption* scheme, anyone with your public key
-can protect a small message for you, while your private key is needed to open
-it. Picture giving out open padlocks and keeping their key. That picture does
-not explain *key agreement*, where two sides contribute information and
-derive shared secret material without sending the finished secret. Nor does
-the padlock tell you whose public key you received: identity must be checked
-separately.
+**Public-key** encryption, the key-pair idea from
+[Lesson 9.7](/pages/9/07/#how-a-signature-is-made-and-checked), removes that
+problem. You publish a public key that anyone can use to lock a message for you,
+and only your private key opens it, like handing out open padlocks and keeping
+the only key. The price is that public-key operations are far slower and can only
+handle small messages directly.
 
-Network protocols combine these jobs. In a certificate-authenticated TLS 1.3
-connection, a handshake authenticates the server and establishes shared
-secret material; both sides derive symmetric traffic keys from it, and
-authenticated encryption protects the records. The handshake does not simply
-send a browser-generated traffic key inside the server's public-key padlock.
-See the [TLS 1.3 specification](https://www.rfc-editor.org/info/rfc9846/).
-The save lab has no remote recipient to agree with: the owner seals and opens
-the file on the same PC. Its harder question is where to keep the long-lived
-key, not how to transport it across a network.
+So real systems use both. Public-key cryptography carries a fresh random
+symmetric key to the other side, or lets the two sides agree on one, and the
+symmetric key then encrypts the actual data. A browser does exactly this each
+time it opens an HTTPS connection. The lab skips the first half because the
+program that seals a save is the same program that opens it, on the same PC,
+which is why its hard question is where to keep the key, not how to send it.
 
 ## Start with the threat model, not the cipher name
 

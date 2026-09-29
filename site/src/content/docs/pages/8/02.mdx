@@ -11,8 +11,6 @@ sidebar:
 ---
 ## Keep target identity explicit
 
-Lesson 8.1 built a DLL with a tiny `DllMain` and an explicit `gha_start`, but that file is still on disk. To run it inside the course game, the injector must ask the target process to load the exact DLL, wait for loading to finish, and only then call its start function. Every temporary handle and allocation needs an owner along the way.
-
 This injector accepts only the exact target builds used in the book. Put the allowlist in code so a mistyped command cannot select an unrelated process.
 
 ```rust
@@ -141,7 +139,7 @@ process.write_exact(remote_path.address as usize, path_bytes)?;
 
 ## Verify every boundary
 
-The high-level loader has several checked steps. One address-sharing assumption in this course version is called out immediately after the code:
+The high-level loader should look like a checklist:
 
 ```rust
 let kernel32 = unsafe { GetModuleHandleW(w!("kernel32.dll")) }?;
@@ -169,26 +167,22 @@ anyhow::ensure!(module_handle != 0, "LoadLibraryW returned null");
 Two things about that sequence deserve an explanation, because both look wrong
 the first time you read them.
 
-**Why does the sample pass a locally resolved `LoadLibraryW` address to the
-game?** `GetProcAddress` returns an address in the injector's process. DLLs
-often map at the same base in both processes, which makes this common course
-shortcut work, but that is an assumption to check, not a Windows guarantee.
-Microsoft documents that a DLL can load at a different base when its preferred
-one is unavailable, and `CreateRemoteThread` can even succeed with an invalid
-start address before the new thread faults. For a reusable injector, find the
-target process's actual system-DLL base, resolve or verify the export at that
-base, and refuse to start the thread if the address is not established. The
-buildable course injector currently relies on the shared-base assumption in
-this exact lab. Never apply its locally obtained address to arbitrary game DLLs.
-See [DLL memory protection](https://learn.microsoft.com/en-us/windows/win32/memory/memory-protection)
-and [`CreateRemoteThread`](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createremotethread).
+**Why is our own `LoadLibraryW` address valid in the game?** `GetProcAddress`
+runs in the injector and returns an address in the injector's address space —
+which, from the previous chapter, should mean nothing in another process.
+It works here because Windows randomizes the base of a system DLL like
+`kernel32.dll` once per boot, not once per process. Every process in the
+session maps it at the same address, so the number is genuinely the same on
+both sides. This is a property of system DLLs specifically. It is not true of
+the game's own modules, and it is not a rule to generalize.
 
-**Why can `LoadLibraryW` be used as a thread start routine in this 32-bit lab?**
-Both use the Windows system calling convention and take one pointer argument.
-Here the `HMODULE` result fits in the thread's 32-bit `DWORD` exit code. The
-remote allocation holding the wide path is the argument. The code requires a
-nonzero exit code before calculating the DLL-relative `gha_start` address.
-This return-value shortcut does not carry over unchanged to a 64-bit injector.
+**Why can `LoadLibraryW` be used as a thread start routine?** Because the two
+signatures happen to line up. A thread entry point receives one pointer-sized
+argument and returns a pointer-sized value; `LoadLibraryW` takes one pointer (a
+wide string) and returns one (the module handle). So `CreateRemoteThread` can
+call it directly, the remote memory holding the path becomes its argument, and
+the thread's exit code is the returned module handle — which is exactly what
+the `module_handle != 0` check above reads.
 
 The wrapper methods are small `unsafe` boundaries over:
 
@@ -242,14 +236,14 @@ RAII types make this happen during early returns.
 
 1. Build both injector and DLL for `i686-pc-windows-msvc`.
 2. Start one allowed game in the exact version and enter an offline/local match.
-3. Run the injector with the process name and absolute DLL path. The course code uses the locally resolved `LoadLibraryW` address under the shared-base assumption described above.
-4. Require a nonzero `LoadLibraryW` thread result **and** a zero `gha_start` thread result. If either check fails, stop instead of trying another address or retrying blindly.
-5. Inspect the target's module list and confirm that the expected DLL actually loaded. Confirm its log prints the matched target profile and verified original bytes. These independent observations test the result; they do not make the shared-base assumption a general guarantee.
+3. Run the injector with the process name and absolute DLL path.
+4. Wait for `LoadLibraryW` to return a nonzero module handle.
+5. Confirm the DLL’s log prints the matched target profile and every verified original byte.
 6. Trigger the visible result: Wesnoth gold becomes `999`, AssaultCube recoil disappears, or Urban Terror renders the local wallhack.
-7. Toggle the feature off, verify the original bytes are restored, and exit the game normally.
+7. Toggle the feature off, restore the bytes, and exit the game normally.
 
-If the loader thread returns zero, inspect the target PID, both architectures, the canonical DLL path, and the Windows error. If the target exits or faults before a loader result is available, the remote start address may have been invalid; treat that as a failed experiment and do not rerun it unchanged. Do not suggest “run as administrator” until the earlier facts are correct.
+If `LoadLibraryW` returns zero, print the target PID, both architectures, the canonical DLL path, and the Windows error. Do not suggest “run as administrator” until those facts are correct.
 
-The completed tool performs a real injection into the course games with exact target checks, owned handles, bounded waits, and cleanup. Its local-system-DLL address assumption remains a limitation of this version.
+The completed tool performs a real injection into the course games with exact target checks, owned handles, bounded waits, clear errors, and automatic cleanup.
 
 The complete buildable source is [`injector.rs`](/windows-labs/src/bin/injector.rs). It includes the allowlist, architecture check, UTF-16 conversion, allocation, both remote threads, `gha_start` RVA calculation under ASLR, timeout handling, exit-code checks, and cleanup. Its shared process/handle wrappers are in [`process.rs`](/windows-labs/src/windows_impl/process.rs) and [`handle.rs`](/windows-labs/src/windows_impl/handle.rs).

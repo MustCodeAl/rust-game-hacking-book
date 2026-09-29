@@ -13,8 +13,7 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 ## A wrapper records and forwards draw calls
 
-OpenGL applications call functions such as `glDrawElements`. First consider a
-whole-call wrapper: it sits between the caller and the real function:
+OpenGL applications call functions such as `glDrawElements`. A wrapper sits between the caller and the real function:
 
 ```text
 game calls glDrawElements
@@ -24,9 +23,6 @@ game calls glDrawElements
 ```
 
 The wrapper must preserve the exact ABI and forward every normal call.
-The pinned Urban Terror implementation later in this lesson instead detours
-an instruction **inside** `glDrawElements`, so it has a narrower restoration
-opportunity. Keep that difference visible when comparing the two designs.
 
 ## What an indexed draw actually requests
 
@@ -152,16 +148,16 @@ dark cinema works like that: you ask the person in front which row they are in,
 they ask the person in front of them, and so on until someone in row 1 says
 "row 1"; each answer then travels back with 1 added. Every question still
 waiting for its answer is a **stack frame**, the return address and local values
-that [Lesson 3.3](/pages/3/03/#the-calls-frame-and-the-objects-lifetime)
+that [Lesson 1.3](/pages/1/03/#the-stack-automatic-and-tied-to-function-calls)
 showed each call keeping until it returns.
 
 If the stored "original" pointer actually points at your wrapper, the wrapper
 forwards every call to itself. It is asking itself which row it is in and waiting
 for its own answer, so there is no base case. Each call adds another frame, the
-thread's stack (commonly 1 MiB by default for a Windows executable, but
-configurable) fills after many calls, and Windows raises a stack-overflow
-exception that crashes the game, usually during the very first draw call.
-That is the "Infinite recursion" row in the table at the end of this lesson.
+thread's stack (1 MiB by default on Windows) fills after thousands of calls, and
+Windows raises a stack-overflow exception that crashes the game, usually during
+the very first draw call. That is the "Infinite recursion" row in the table at
+the end of this lesson.
 
 ## Forward first
 
@@ -265,11 +261,6 @@ the pipeline still performs equivalent transformations and color calculations.
 This is a classification problem. A threshold such as `count > 500` separates the examples you observed, not necessarily the concept “player.” Test it against weapons, detailed scenery, menus, different models, and different graphics settings. Report false positives (something your rule caught that is not a player) and false negatives (a player your rule missed) instead of quietly turning a correlation into a definition.
 
 ## Turn the wrapper into the actual Urban Terror wallhack
-
-The API signature, draw-count interpretation, and sampling design above stand
-on their own. This exact-build detour uses the DLL and patch lifecycle taught
-in [Lesson 8.3](/pages/8/03/); revisit the installation steps after that
-lesson if this is your first pass through the book.
 
 In Urban Terror 4.3.4, resolve `glDrawElements` from `opengl32.dll`. The historical build hooks the instruction at **`glDrawElements + 0x16`** and resumes six bytes later. This is not a function-entry wrapper: it is a real code cave in the middle of the OpenGL function. At this point in this 32-bit build, `EBX` holds `count`.
 

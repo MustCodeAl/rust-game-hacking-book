@@ -9,13 +9,6 @@ sidebar:
   order: 1
   label: "13.1 Model Game State and Invariants"
 ---
-Lesson 1.3 used the rule `0 <= health <= max_health` to decide whether a
-player record made sense. Now imagine a damage request arrives when health is
-5. The game should produce health 0, not -15, and its displayed health bar
-should eventually agree. This chapter asks where that rule is enforced, which
-copy of health the game trusts, and how to notice when a path around the rule
-still changes the game.
-
 ## Prerequisites
 
 You should already be able to:
@@ -24,6 +17,25 @@ You should already be able to:
 - identify the exact game build a tool is running against;
 - read a small state machine and a timestamped event log;
 - tell a read-only observer apart from code that changes game state.
+
+## What bypass analysis means in this chapter
+
+A **bypass** is a path that reaches an outcome without satisfying the
+**control**, the code that was supposed to guard it. In a game, the mismatch is
+often between a convenient proxy and the real rule:
+
+| Proxy that gets checked | Property that actually matters |
+|---|---|
+| Menu button is enabled | Engine policy permits the state change |
+| One field's checksum matches | The complete object relation is current and valid |
+| One environment signal is absent | The requested command satisfies game rules |
+| An old object still has a plausible address | The identity and generation still match |
+
+The analysis pattern is always the same: state the promised rule, trace the
+branch that claims to enforce it, follow every path to the effect, and look for
+a path where the proxy and the real property disagree. Later lessons apply that
+pattern to integrity checks, anti-debug behavior, encoded values, hooks, and
+object layouts.
 
 ## An invariant is a property that must stay true
 
@@ -66,25 +78,6 @@ flowchart LR
     DET -->|"noisy"| OK["the control can<br/>still be working"]
     DET -->|"quiet"| BAD["the control can<br/>still be incomplete"]
 ```
-
-## What bypass analysis means in this chapter
-
-A **bypass** is a path that reaches an outcome without satisfying the
-**control**, the code that was supposed to guard it. In a game, the mismatch is
-often between a convenient proxy and the real rule:
-
-| Proxy that gets checked | Property that actually matters |
-|---|---|
-| Menu button is enabled | Engine policy permits the state change |
-| One field's checksum matches | The complete object relation is current and valid |
-| One environment signal is absent | The requested command satisfies game rules |
-| An old object still has a plausible address | The identity and generation still match |
-
-The analysis pattern is always the same: state the promised rule, trace the
-branch that claims to enforce it, follow every path to the effect, and look for
-a path where the proxy and the real property disagree. Later lessons apply that
-pattern to integrity checks, anti-debug behavior, encoded values, hooks, and
-object layouts.
 
 ## A control guards one copy of the state
 
@@ -191,24 +184,6 @@ observers that flushed their output at different times. Lesson 13.7 adds
 correlation IDs, which tie together the events of one action even when log
 order misleads.
 
-## Use the same model for a different rule
-
-Health is an easy starting example because its valid range is visible. The
-same questions transfer to a rendering hook, though the fields are different:
-
-| Question | Health update | Hook installation |
-|---|---|---|
-| What is the state? | Health 48, maximum 100 | Original bytes, trampoline, and callback ownership |
-| What transition is requested? | Apply 5 damage | Install a detour |
-| What must stay true? | Health remains between 0 and 100 | A call sees a complete original path or a complete hook path |
-| Where is the control? | The damage routine before changing simulation health | Version check, instruction preparation, and coordinated publication before calls enter the detour |
-| What can a detector report? | A snapshot finds health outside the bound | A byte or lifecycle check finds an incomplete installation |
-
-The analogy has a limit: health is one value, while a hook changes executable
-bytes that other threads may be using. Lesson 13.5 handles that concurrency.
-The transferable method is to name the state, permitted transition, invariant,
-control, and observable failure *before* choosing an implementation.
-
 ## Glossary terms introduced here
 
 - **Invariant:** a property required of every valid state or transition.
@@ -221,7 +196,9 @@ control, and observable failure *before* choosing an implementation.
 - **Trace:** events listed in the order they were logged, each with its time
   and source.
 
-The useful model is state changing through transitions under an invariant. A
-control must guard the authoritative copy when a transition takes effect; a
-detector can report a violation but does not enforce that rule. Lesson 13.2
-uses this distinction to examine what an integrity check actually covers.
+## Checkpoint
+
+You should now be able to describe a game system as state and transitions,
+state the invariants it must keep, find the control that enforces each one and
+the copy of state that control guards, and tell a control apart from a
+detector.

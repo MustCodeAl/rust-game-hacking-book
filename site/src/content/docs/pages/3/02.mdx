@@ -16,28 +16,6 @@ import Quiz from '../../../../components/Quiz.astro';
 
 Our tool runs beside the game, not inside it. Windows must grant a process handle with specific rights before the tool can read or write memory.
 
-An address makes sense only in a process's address space. The number `0x5000`
-can exist in both processes without naming the same bytes. The process matters
-as much as the numeric address:
-
-```mermaid
-flowchart LR
-    subgraph game["Game process"]
-        G["address 0x5000"]
-    end
-    subgraph tool["Your tool"]
-        T["address 0x5000"]
-    end
-    G -->|"the game's address map"| A["physical RAM:<br/>the game's player object"]
-    T -->|"the tool's address map"| B["physical RAM:<br/>the tool's own data"]
-```
-
-Windows maps virtual addresses separately for each process. Reading a local
-pointer with the same number would inspect the tool's own memory. A process
-**handle** names the target and carries the rights granted for this opening;
-the Windows read uses that handle with the target address and a byte count.
-Lesson 10.4 later examines handles in more depth.
-
 For this lab, the program discovers `wesnoth.exe` with the Windows ToolHelp API,
 opens it, resolves the verified pointer chain, and performs the guarded write.
 There is no PID or raw-address placeholder for the reader to fill in.
@@ -59,28 +37,6 @@ flowchart TD
 The returned bytes belong to the observer, but their interpretation is valid
 only for the target build and moment that justified the layout. A write is a
 separate, stronger capability and needs its own expected-value check.
-
-Even two successful reads can describe different moments. Suppose the tool
-follows a player pointer, the game removes that player and reuses the same
-allocation, and the tool then reads health. Both requests can succeed while
-the combined result describes no real player:
-
-```mermaid
-sequenceDiagram
-    participant Tool as Your tool
-    participant Game as The game
-    Tool->>Game: read the pointer at 0x2000
-    Game-->>Tool: 0x5000, which is enemy A
-    Note over Game: removes enemy A and<br/>reuses 0x5000 for enemy B
-    Tool->>Game: read health at 0x5000 + 0x30
-    Game-->>Tool: 87, which is enemy B's health
-    Note over Tool: reports enemy A<br/>with enemy B's health
-```
-
-Check the returned byte count and revalidate the object path after a multi-step
-read. That reduces stale observations; it does not turn several Windows calls
-into one atomic snapshot. [Lesson 4.2](/pages/4/02/) builds a bounded
-double-capture check for that remaining uncertainty.
 
 ## Hands-on target: Wesnoth 1.14.9
 
@@ -314,6 +270,10 @@ impl Process {
 Open the handle with `allow_write: true` only when the user explicitly requests a lab change.
 
 ## Defeat the moving-address problem
+
+Do not read a native `usize` here. The target is 32-bit, so every pointer in
+this chain is exactly four bytes even if someone later builds the external tool
+as 64-bit. The complete resolver makes that choice visible:
 
 Wesnoth 1.14.9 is a 32-bit target, so a 64-bit tool must read its pointers as **four-byte `u32` values**, not as the tool's native `usize`:
 
