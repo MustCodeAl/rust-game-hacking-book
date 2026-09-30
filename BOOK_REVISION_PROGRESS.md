@@ -315,3 +315,12 @@ Validation of the generated book:
 
 Publish this complete generated build to `gh-pages` from the authored
 `codex/book-revision` branch, using the existing publication worktree.
+
+The initial colour publication is source **17047b3**, generated commit
+**2051a6f**, [PR #7](https://github.com/MustCodeAl/rust-game-hacking-book/pull/7),
+and `gh-pages` merge **0ea14f0e56f9c2a22ddad1ced99978c081e7f96d**.
+A final contrast check also covers the dark header and homepage code panel:
+the progress bar keeps the chapter hue with a lighter shade, and the successful
+build status keeps green with a lighter shade. Both use their actual dark
+background for contrast calculations. Publish the follow-up complete build
+before declaring the colour pass finished.
