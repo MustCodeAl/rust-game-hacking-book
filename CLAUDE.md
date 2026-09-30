@@ -232,3 +232,9 @@ and observed-versus-target directions have explicit structural roles. Preserve
 these distinctions when changing reading colours. No decorative multi-colour
 stripes or unlabelled hue cycling. Build and verify all lesson/destination
 assignments, and check text contrast in all five palettes and both modes.
+
+The purposeful-colour build is source **fb6319b** on `codex/book-revision`,
+published into `gh-pages` through **PR #7** and its final dark-panel contrast
+correction **PR #8**. Pages built final merge **d336be2**. Read the validation
+and publication record in BOOK_REVISION_PROGRESS.md. The latest source commit
+may also include a documentation-only receipt; the built content is fb6319b.

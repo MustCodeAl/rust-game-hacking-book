@@ -313,8 +313,8 @@ Validation of the generated book:
   the earlier browser-policy rejection; these are source/output/contrast
   checks, not a claim of browser visual testing.
 
-Publish this complete generated build to `gh-pages` from the authored
-`codex/book-revision` branch, using the existing publication worktree.
+The complete generated build is published to `gh-pages` from the authored
+`codex/book-revision` branch through the existing publication worktree.
 
 The initial colour publication is source **17047b3**, generated commit
 **2051a6f**, [PR #7](https://github.com/MustCodeAl/rust-game-hacking-book/pull/7),
@@ -322,5 +322,12 @@ and `gh-pages` merge **0ea14f0e56f9c2a22ddad1ced99978c081e7f96d**.
 A final contrast check also covers the dark header and homepage code panel:
 the progress bar keeps the chapter hue with a lighter shade, and the successful
 build status keeps green with a lighter shade. Both use their actual dark
-background for contrast calculations. Publish the follow-up complete build
-before declaring the colour pass finished.
+background for contrast calculations. The expanded checks pass all 200
+combinations: progress is at least **4.83:1**, homepage status **5.36:1**.
+
+The final source is **fb6319b07a79022c6617aa07e143d49f7eaed77b**. Its generated
+commit **f45a818efe42e5445035d3ebb2886289d64d0086** is merged through
+[PR #8](https://github.com/MustCodeAl/rust-game-hacking-book/pull/8) into
+`gh-pages` at **d336be213b1a4dafb75c480c9688a9f0c290bf0b**. GitHub Pages reports
+that exact merge as **built**. The preview remains on port 4322. The authored
+branch may additionally contain this documentation-only publication receipt.
