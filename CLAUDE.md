@@ -147,7 +147,8 @@ The user identified `gh-pages` as the target edition. Recheck the plan's source-
 The full-book pass is implemented on `codex/book-revision`. Read
 `BOOK_REVISION_PROGRESS.md` for the branch, current reading order, relocation
 map, and validation. `BOOK_REVISION_AUDIT.md` records the disposition of all
-132 lessons. Lessons 1.3, 1.4, 1.5, and 1.6 are Game Fundamentals, Programming
+132 lessons before redistribution; the current book has 134 lessons after two
+topic splits. Lessons 1.3, 1.4, 1.5, and 1.6 are Game Fundamentals, Programming
 Fundamentals, the Rust Primer, and Hacking Fundamentals. The complete memory
 model is Lesson 1.8, directly before the first memory experiment in 1.9.
 Treat Ada and Bo as local example names, not cross-lesson prerequisites.
@@ -185,3 +186,17 @@ physical-memory boundaries → Advanced Game Hacking → hardware. Keep Chapter
 13 titled **Advanced Game Hacking**. The generated flow revision from source
 `3462b99` is published on `gh-pages` through PR #5. For later source changes,
 publish the full generated build again after validation.
+
+
+The 2026-09-30 balance/readability pass now has **134 lessons**. Use the latest
+reading map in BOOK_REVISION_PROGRESS.md. Chapter 1 ends after its first scan;
+build mechanics are 2.2, engines open Chapter 4, DLL contracts open Chapter 6,
+and computation limits lead into the VM lessons in Chapter 10. General
+architecture precedes live-hook lifetime rules, while camera/render integration
+stays in Chapter 7. Build identity leads into layout migration in Chapter 11,
+then kernel services precede dumps. Chapter 12 teaches drivers before trust
+and DMA. Chapter 14 is Virtual Machines, Hardware, and Consoles. Keep the
+memory-model/scan pair together and Chapter 13 titled Advanced Game Hacking.
+All original visuals and URLs remain. Reader spacing changes are modest and
+screen-only. Publish the full validated build through gh-pages; never merge
+this authored tree into rustgamehackingreimagined.

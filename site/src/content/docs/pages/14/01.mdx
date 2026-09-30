@@ -1,16 +1,16 @@
 ---
 title: "What an Operating System Kernel Does"
 description: "The processor separates user and kernel authority. System calls, scheduling, memory, interrupts, and drivers show what the kernel does for a running game."
-chapter: "14.1"
+chapter: "11.10"
 minutes: 18
 author: "attilathedud"
 date: "2026-09-24"
 sidebar:
-  order: 1
-  label: "14.1 What an Operating System Kernel Does"
+  order: 10
+  label: "11.10 What an Operating System Kernel Does"
 ---
 
-Every tool in this book has asked Windows for something: a handle to a game, a
+The tools so far have asked Windows for something: a handle to a game, a
 copy of four bytes, a list of loaded modules. Each time, something checked
 whether the tool was allowed to ask, did the work, and sometimes said no. The
 **kernel** is the core of the operating system that coordinates those requests
@@ -26,10 +26,12 @@ A four-byte `ReadProcessMemory` request will carry these questions through the
 user/kernel boundary. The next lesson reads the exact bits
 the processor checks and follows the request one layer at a time.
 
-From there, each layer gets both a working model and a closer look at its
-mechanism: drivers turn requests into device work, hypervisors contain whole
-guest machines, console designs restrict what boots, hardware debug ports
-reach the chip, and emulators recreate that hardware in software.
+The API layers in the previous lesson showed the route a request takes. Here
+we examine the authority that makes that route work. After the privilege
+checks, a crash dump will bring threads, modules, and saved registers back
+together into one process snapshot. Chapter 12 then follows requests across
+DLL and device boundaries; Chapter 14 builds on that foundation to explain
+virtual machines and hardware.
 
 ## Two modes, enforced by the processor
 
@@ -53,9 +55,9 @@ processors define four levels, numbered 0 to 3 and usually drawn as nested
 - **user mode**, ring 3, for everything else: games, browsers, debuggers, and
   every tool in this book.
 
-[Lesson 11.8](/pages/10/07/) introduced the two modes as permission levels. The
+[Lesson 11.9](/pages/10/07/) introduced the two modes as permission levels. The
 processor records the current level in two bits of one of its registers, which
-[Lesson 14.2](/pages/14/07/#the-current-level-is-two-bits-of-a-register) reads
+[Lesson 11.11](/pages/14/07/#the-current-level-is-two-bits-of-a-register) reads
 in a debugger. What matters here is what the processor refuses to do while the
 level is 3.
 
@@ -67,8 +69,8 @@ At ring 3 the processor refuses two kinds of thing.
 the machine. `hlt` stops the processor until the next interrupt. `cli` turns
 interrupts off, which would silence the timer the kernel relies on to take the
 processor back. `mov cr3, rax` switches to a different set of page tables,
-which means a different process's whole view of memory
-([Lesson 12.5](/pages/11/06/)). `wrmsr` rewrites the processor's internal
+which selects a process's whole view of memory. The physical-memory lessons
+in Chapter 12 will follow those page tables. `wrmsr` rewrites the processor's internal
 settings. At ring 3, each of these raises a **general-protection fault**
 instead of running, and the kernel turns the fault into an exception that
 normally ends the program.
@@ -82,7 +84,7 @@ blocks the game. With [KVA shadow](https://www.microsoft.com/en-us/msrc/blog/201
 the user-mode page table omits most kernel mappings and keeps only the pages
 needed to enter the kernel; entry code switches to the fuller kernel page
 table. In either arrangement, a game cannot read or write the kernel's
-privileged pages. [Lesson 14.2](/pages/14/07/#one-bit-marks-a-page-as-the-kernels)
+privileged pages. [Lesson 11.11](/pages/14/07/#one-bit-marks-a-page-as-the-kernels)
 compares the flag bits of a user page and a kernel page.
 
 Put the two checks together and user-mode code is boxed in. It cannot run the
@@ -111,7 +113,7 @@ now seen from the processor's side.
 
 ## Follow one call into the kernel and back
 
-Take a read like the ones in [Lesson 11.4](/pages/10/03/): a handle to the game
+Take a read like the ones in [Lesson 11.5](/pages/10/03/): a handle to the game
 opened with only query and read rights, and a request for 4 bytes at address
 `0x0050_1000`. Here is the whole round trip:
 
@@ -136,7 +138,7 @@ sequenceDiagram
 ```
 
 Your tool's call passes through `kernel32.dll` and `kernelbase.dll`, the layers
-that [Lesson 11.8](/pages/10/07/) followed down the stack, to
+that [Lesson 11.9](/pages/10/07/) followed down the stack, to
 `NtReadVirtualMemory` in `ntdll.dll`. That function is only a few instructions
 long: it puts a **service number**, which tells the kernel which of its
 routines to run, into the `eax` register, and executes `syscall`.
@@ -156,7 +158,7 @@ code in `eax`, here `STATUS_SUCCESS`, which is 0, and executes `sysret`, the
 reverse of `syscall`, which drops the level back to 3 and resumes your thread
 after its `syscall`. On a failure, `kernelbase.dll` turns the status into the
 error number that `GetLastError` reports, such as 5 for access denied.
-[Lesson 14.2](/pages/14/07/#the-same-call-one-layer-at-a-time) follows each
+[Lesson 11.11](/pages/14/07/#the-same-call-one-layer-at-a-time) follows each
 step with the values involved, including the arithmetic of the rights check.
 
 <span id="the-kernel-runs-only-when-a-door-opens" />
@@ -191,7 +193,7 @@ descriptor table**, which the kernel fills in at boot. Each entry is chosen by
 a one-byte **vector** number. One byte holds 2⁸ = 256 values, so the table has
 at most 256 entries, numbered 0 to 255. The processor fixes the meaning of
 vectors 0 to 31: vector 3 is the breakpoint exception that the byte `0xCC`,
-`int3`, raises ([Lesson 2.3](/pages/2/03/)), vector 13 is the general-protection
+`int3`, raises ([Lesson 2.4](/pages/2/03/)), vector 13 is the general-protection
 fault, and vector 14 is the page fault. Devices are given vectors from 32 up.
 
 ## What the kernel does with its authority
@@ -199,7 +201,7 @@ fault, and vector 14 is the page fault. Devices are given vectors from 32 up.
 ### It schedules threads
 
 A computer has a handful of processor cores and, at any moment, hundreds or
-thousands of threads ([Lesson 11.7](/pages/10/06/) described ready, running,
+thousands of threads ([Lesson 11.8](/pages/10/06/) described ready, running,
 and waiting threads). The kernel's **scheduler** decides which ready thread
 runs on each core. Timer interrupts are one opportunity to reconsider that
 choice; a thread blocking for input or a lock is another. Timer resolution and
@@ -217,12 +219,13 @@ program never sees the switch. Its registers come back exactly as they were.
 
 Each process has its own page tables, and only the kernel writes them.
 Reserving an address range and committing storage are distinct operations, as
-Lesson 11.6 showed. Even after a page is committed, Windows may assign its
+Lesson 11.7 showed. Even after a page is committed, Windows may assign its
 physical frame only on first access. That access faults, the kernel supplies a
 zeroed page so old data cannot leak between processes, updates the mapping,
 and retries the instruction. The game normally never sees this handled fault.
-[Lesson 11.6](/pages/10/05/) looked at the result from outside, and
-[Lesson 12.5](/pages/11/06/) walked the tables themselves.
+[Lesson 11.7](/pages/10/05/) looked at the result from outside, and
+[Lesson 12.7](/pages/11/06/) will examine how physical memory fits beneath
+that view.
 
 ### It handles interrupts
 
@@ -232,23 +235,23 @@ finishes its current instruction, saves where it was, enters ring 0 if it was
 not there already, and runs the handler for that vector. The interrupted code,
 kernel or user, resumes afterward as if nothing had happened. Handlers must be
 short, because other work on that core waits while they run;
-[Lesson 14.3](/pages/14/02/) shows how drivers split the work.
+[Lesson 12.4](/pages/14/02/) shows how drivers split the work.
 
 ### It owns devices through drivers
 
 Ordinary user programs reach devices through operating-system interfaces
 rather than writing device registers directly. A **driver** knows a device's
 registers and rules, and Windows routes requests through the relevant driver
-stack. Lesson 14.3 follows one request down to the hardware.
+stack. Lesson 12.4 follows one request down to the hardware.
 
 ### It enforces security checks
 
 The processor enforces privileged-instruction and page-permission checks in
 hardware. Windows checks handle rights and validates request ranges in the
 kernel, where the caller cannot simply skip the decision. The kernel also
-enforces the access tokens and integrity levels from Lesson 11.4, the page
-protections from Lesson 11.6, and the signing rules that decide which drivers
-may load at all (Lesson 14.3).
+enforces the access tokens and integrity levels from Lesson 11.5, the page
+protections from Lesson 11.7, and the signing rules that decide which drivers
+may load at all (Lesson 12.4).
 
 ## Why a kernel bug takes the whole machine down
 
@@ -261,7 +264,7 @@ The kernel is the safety net under every user-mode program.
 
 There is no separate part of Windows that can repair arbitrary damage to its
 own kernel state. A hypervisor may isolate a whole guest from the host, as
-Lesson 14.5 will show, but it cannot resume a guest kernel whose internal
+Lesson 14.1 will show, but it cannot resume a guest kernel whose internal
 records are already corrupted. Kernel code does catch faults it expects, such
 as touching a user buffer that another thread may have freed; the copy behind
 `ReadProcessMemory` is written to catch exactly those. But a driver that follows
@@ -287,13 +290,14 @@ flowchart TD
 That deliberate stop is a **bug check**, better known as the blue screen.
 Windows shows a stop code, such as `0x50` PAGE_FAULT_IN_NONPAGED_AREA or `0xD1`
 DRIVER_IRQL_NOT_LESS_OR_EQUAL, writes a crash dump of the whole machine if it
-can ([Lesson 11.9](/pages/10/08/) captured a dump of one process), and
+can ([Lesson 11.12](/pages/10/08/) will capture a dump of one process), and
 restarts.
 
-This is why the book keeps its experiments in user mode
-([Lesson 12.4](/pages/11/05/)) and inside a virtual machine. A crash in a
+This is why the book keeps its labs in user mode and inside a virtual machine.
+The [kernel trust lesson](/pages/11/05/) will make that design choice concrete
+with a read-only driver inventory. A crash in a
 user-mode lab ends one process, and even a bug check inside a virtual machine
-stops only that virtual machine ([Lesson 14.5](/pages/14/03/)).
+stops only that virtual machine ([Lesson 14.1](/pages/14/03/)).
 
 ## Why some anti-cheat runs a kernel component
 
@@ -323,8 +327,8 @@ players' machines, and a vulnerability in it becomes a vulnerability in every
 machine it is installed on. It asks players to trust a game company with ring-0
 code. Kernel placement also creates another boundary to protect: which drivers
 may load and what authority they expose. Windows uses signing rules, vulnerable
-driver block policies, and memory integrity to reduce that risk. The driver
-pair later in this chapter explains what such code actually does and why its
-interface must be narrow.
+driver block policies, and memory integrity to reduce that risk. Chapter 12's
+driver pair explains what such code actually does and why its interface must
+be narrow, then examines the trust placed in a loaded driver.
 
 References: [User mode and kernel mode](https://learn.microsoft.com/en-us/windows-hardware/drivers/gettingstarted/user-mode-and-kernel-mode), [process security and access rights](https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights), [bug check code reference](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2), and [`ObRegisterCallbacks`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-obregistercallbacks).

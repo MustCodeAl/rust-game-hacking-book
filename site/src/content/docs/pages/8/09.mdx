@@ -13,12 +13,12 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 ## A third option between a window and an overlay
 
-Lesson 6.6 put the menu in its own window, which is the right default: it
+Lesson 6.7 put the menu in its own window, which is the right default: it
 cannot corrupt the game's graphics state, and you can close the game without
 losing it.
 
 But you have already met a function that draws text *inside* the game. In
-Lesson 3.7 you traced Wesnoth's print function; Lesson 6.3 then used its call
+Lesson 3.8 you traced Wesnoth's print function; Lesson 6.4 then used its call
 site for a verified, reversible text hook. In Lesson 7.9 you called
 AssaultCube's print function at `0x0041_9880` to label players. That function already knows
 the font, the scale, the screen size, and the right moment in the frame to
@@ -27,7 +27,7 @@ hard graphics work is done and you are only supplying strings.
 
 The trade is that you are now running inside the game's render path, so
 the hook must finish quickly. A file read, sleep, or blocking channel receive
-there delays the game's next frame; Lesson 4.8 measures the same cost in a
+there delays the game's next frame; Lesson 4.10 measures the same cost in a
 per-frame recorder.
 
 ## Hook a per-frame site, then call the text function
@@ -67,7 +67,7 @@ appear underneath the world.
 
 ## Reconstruct the contract before you call it
 
-Calling a function you found is Lesson 3.8's problem, not a new one. Before
+Calling a function you found is Lesson 6.1's problem, not a new one. Before
 the first call, answer its four parts:
 
 - which arguments it takes, and in what order — typically a screen position
@@ -98,7 +98,7 @@ struct MenuText {
 }
 ```
 
-`CString` is the same tool Lesson 3.7 used at the C boundary, and for the same
+`CString` is the same tool Lesson 3.8 used at the C boundary, and for the same
 reason: it guarantees the terminating zero and rejects interior zero bytes
 instead of silently truncating your text.
 
@@ -119,7 +119,7 @@ Two consequences follow, and both matter.
 
 The marker and index are **consumed**, not drawn, so the string's byte length
 is larger than the number of visible characters. That is the same distinction
-Lesson 3.7 drew between bytes, code units, scalars, and what a reader sees; a
+Lesson 3.8 drew between bytes, code units, scalars, and what a reader sees; a
 menu that lines up columns by counting bytes will be crooked.
 
 And the exact marker is a fact about one build. Confirm it by drawing a string
@@ -170,7 +170,7 @@ self.cursor = if self.cursor == 0 { last } else { self.cursor - 1 };
 
 ### `GetAsyncKeyState` reports a level, not a press
 
-Lesson 6.5 made this point about input paths and it decides how a menu feels.
+Lesson 6.6 made this point about input paths and it decides how a menu feels.
 `GetAsyncKeyState` answers "is this key down right now?", which is true on
 every frame of one press. A menu that acts on that answer scrolls the whole
 list in a fraction of a second.
@@ -184,7 +184,7 @@ let pressed = current.down && !previous.down;
 
 The lab test holds the key for ten frames and asserts the cursor moved exactly
 one row. That is the behavior to aim for, and it is the same edge-versus-level
-distinction Lesson 4.7 used for bot events.
+distinction Lesson 4.9 used for bot events.
 
 ### Build the strings without allocating every frame
 
@@ -192,7 +192,7 @@ The render path runs thousands of times per second. Clear and reuse one buffer
 rather than allocating a fresh `Vec` per frame; the lab asserts the buffer's
 capacity is unchanged after a second render.
 
-The menu should also own only its own state. Keep the same split Lesson 6.6
+The menu should also own only its own state. Keep the same split Lesson 6.7
 used: the menu produces settings and commands, and the worker reads them. A
 menu that reaches directly into game memory while the render thread is drawing
 has put a second writer on the same data.
@@ -204,13 +204,13 @@ and Lesson 7.12's ordering applies without modification: stop the worker, wait
 for it to leave the hooked path, restore the displaced bytes, then release the
 DLL. While an in-flight frame is still executing the detour, the hook is
 **draining**: no new calls should enter, but the current call must finish before
-its code is removed. Lesson 13.6 returns to this lifetime problem in a more
-general hook manager.
+its code is removed. Lesson 6.9 established this lifetime rule for a general
+hook manager; the render hook is another application of it.
 
 ## Scope
 
 This is the same offline, version-pinned lab used since Chapter 7, and the same
-menu model as Lesson 6.6 rendered somewhere else. The transferable skill —
+menu model as Lesson 6.7 rendered somewhere else. The transferable skill —
 calling a function you recovered, with a contract you proved, from a hook that
 runs at a known point in a frame — is what a debug HUD, a benchmarking overlay,
 and an accessibility tool all do.

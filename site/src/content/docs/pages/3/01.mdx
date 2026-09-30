@@ -15,10 +15,11 @@ import Quiz from '../../../../components/Quiz.astro';
 
 Chapter 2 found game state and the code that changes it. Now we need to carry
 that knowledge into a tool without mistaking a remote address for our own
-memory. This chapter begins with safe type and ownership boundaries, builds
-an external reader, then interprets objects, collections, encoded values,
-text, and DLL calls. Its final bit-level lesson explains the numeric
-representations those earlier reads relied on.
+memory. This chapter begins with safe type and ownership boundaries, then
+derives how bytes represent numbers and pointers. An external reader turns
+those representations into local values; objects, collections, encoded
+fields, and text show what those values can mean inside a game. DLL call
+contracts return later when our code enters the process itself.
 
 ## Start with one boundary rule
 
@@ -72,8 +73,8 @@ Use `usize` for address calculations, not for game values just because it is con
 The target process does not store the words `u32` or `f32` beside each value.
 For example, `00 00 20 41` reads as 1,092,616,192 with `u32` and 10.0 with
 `f32`; the type tells the reader which interpretation to use. We need the widths now
-to read memory safely. [Lesson 3.9](/pages/3/09/) derives the bit patterns
-behind those interpretations after we have seen them in real layouts.
+to read memory safely. [Lesson 3.2](/pages/3/09/) derives the bit patterns
+behind those interpretations before we build the external reader.
 
 `usize` is large enough to index memory in the current build. It is 32 bits in
 an `i686-pc-windows-msvc` tool and 64 bits in an x86-64 tool. A game’s `u32`
@@ -295,8 +296,9 @@ and `Result` carries either the decoded `u32` or an error. The
 implementation still must verify the target process, readable region,
 requested length, and actual bytes returned. The scanner can then ask
 for a value through `read_u32` while one implementation owns the
-operating-system boundary. This is the useful boundary that the old
-Lesson 1.4 only named before its prerequisites were in place.
+operating-system boundary. Programming Fundamentals called this an
+abstraction: a smaller interface hides the details of a larger operation.
+The reader trait now gives that idea a concrete shape.
 
 ## Give each game helper one obvious import path
 
@@ -530,6 +532,8 @@ The Windows calls may be `unsafe`. Finding a value in a byte slice, filtering ca
 borrowed slice lends access to bytes without transferring ownership.
 `Option` represents an absent value, while `Result` carries success or a
 failure reason. Raw pointers cannot prove their own validity, so every
-dereference needs a safety contract. The external reader in the next lesson
-keeps the necessary `unsafe` Windows calls at one boundary and hands ordinary
-owned, typed values to the rest of the program.
+dereference needs a safety contract. Before building the external reader,
+[How Bytes Become Numbers and Pointers](/pages/3/09/) works through the
+representations we will read. The reader then keeps the necessary `unsafe`
+Windows calls at one boundary and hands ordinary owned, typed values to
+the rest of the program.

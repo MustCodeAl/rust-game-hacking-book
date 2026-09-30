@@ -1,18 +1,18 @@
 ---
 title: "System Calls and Privilege Checks"
 description: "Privilege bits, page permissions, API stubs, handle checks, and NTSTATUS together explain one request's route through the kernel."
-chapter: "14.2"
+chapter: "11.11"
 minutes: 13
 author: "attilathedud"
 date: "2026-09-24"
 sidebar:
-  order: 2
-  label: "14.2 System Calls and Privilege Checks"
+  order: 11
+  label: "11.11 System Calls and Privilege Checks"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
 
-[Lesson 14.1](/pages/14/01/) showed the processor keeping user-mode code away
+[Lesson 11.10](/pages/14/01/) showed the processor keeping user-mode code away
 from the kernel and drew one `ReadProcessMemory` call crossing into the kernel
 and back. This lesson opens both up. It reads the bits the processor actually
 checks, then follows that one call a layer at a time, with every value the
@@ -57,10 +57,13 @@ follows one trip through it.
 
 ## One bit marks a page as the kernel's
 
-Lesson 14.1 said that a page-table entry's **user/supervisor** bit, bit 2,
-decides whether ring 3 may touch the page, and
-[Lesson 12.6](/pages/11/07/) said that the low twelve bits of an entry hold
-flags. Here is the lowest byte of an entry for an ordinary user page:
+Lesson 11.10 said that a page-table entry's **user/supervisor** bit, bit 2,
+decides whether ring 3 may touch the page. An entry combines the address of a
+physical page with flags describing that mapping. For the ordinary 4 KiB
+pages used here, the page address is aligned on a 4,096-byte boundary, leaving
+the low twelve bits available for flags. Chapter 12's
+[address-translation lesson](/pages/11/07/) will follow a complete walk;
+here we need only the permission flags in the lowest byte:
 
 <MemoryStrip
   cells="bit 7=0|bit 6=1|bit 5=1|bit 4=0|bit 3=0|bit 2=1|bit 1=1|bit 0=1"
@@ -92,9 +95,9 @@ single leaf byte is a teaching example, not a complete access decision.
 
 ## The same call, one layer at a time
 
-Take a read like the ones in [Lesson 11.4](/pages/10/03/): a handle to the game
+Take a read like the ones in [Lesson 11.5](/pages/10/03/): a handle to the game
 opened with only query and read rights, and a request for 4 bytes at address
-`0x0050_1000`. Lesson 14.1 drew the whole round trip as one sequence diagram,
+`0x0050_1000`. Lesson 11.10 drew the whole round trip as one sequence diagram,
 from your tool through `kernel32.dll`, `kernelbase.dll`, and `ntdll.dll` to the
 processor and the kernel, and back. This section follows that diagram one
 participant at a time.
@@ -102,7 +105,7 @@ participant at a time.
 ### Inside your process
 
 `ReadProcessMemory` in `kernel32.dll` forwards to `kernelbase.dll`
-([Lesson 11.8](/pages/10/07/)), which calls `NtReadVirtualMemory` in
+([Lesson 11.9](/pages/10/07/)), which calls `NtReadVirtualMemory` in
 `ntdll.dll` with the same arguments. The `ntdll` function is a **stub**: a few
 instructions whose only job is to make the system call. On 64-bit Windows its
 core is four instructions:
@@ -227,6 +230,8 @@ illustrates the native 64-bit path, not every instruction a 32-bit caller runs.
 References: [process security and access rights](https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights), [using NTSTATUS values](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/using-ntstatus-values), and the [Intel Software Developer Manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html) for `syscall`, privilege levels, and page-table bits.
 
 The process handle in this example authorized a copy between two processes.
-The next kind of request crosses a different boundary: a driver receives an
-operating-system request and turns it into work on a device. The same habit of
-checking authority, arguments, and returned results still applies.
+The processor supplied a controlled entrance; Windows checked the request
+inside it. The next lesson returns to the process view and saves a debugging
+snapshot of threads, modules, and registers in a dump. Chapter 12 then follows
+requests across DLL and driver boundaries, where the same checks on authority,
+arguments, and returned results still apply.

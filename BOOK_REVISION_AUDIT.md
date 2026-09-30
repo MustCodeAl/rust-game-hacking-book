@@ -1,5 +1,15 @@
 # Full-book teaching audit
 
+**Redistribution update (2026-09-30):** The current book has 134 lessons.
+Coordinate/vector teaching from the old full 3D introduction is now a separate
+lesson before target selection; camera and projection teaching stays in the
+rendering chapter. General architecture, commands, and cleanup now precede
+live-hook integration, while render snapshots and graphics profiles remain
+with rendering. Build mechanics, engines, computation limits, DLL contracts,
+kernel services, and driver fundamentals also moved to their teaching homes.
+No audited lesson or visual was removed. Use the current map at the end of
+[BOOK_REVISION_PROGRESS.md](BOOK_REVISION_PROGRESS.md) for display numbers.
+
 **Reading-order update (2026-09-29):** The tables below document the previous
 lesson-by-lesson teaching audit and use its then-current chapter numbers.
 The current course moves executable analysis before hooks, hooks before the

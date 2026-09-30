@@ -1,20 +1,20 @@
 ---
 title: "How Source Becomes a Running Process"
 description: "Compare native compilation, bytecode interpretation, REPLs, and type checking; then follow a native program through linking and loading."
-chapter: "1.10"
+chapter: "2.2"
 minutes: 28
 author: "attilathedud"
 date: "2026-09-08"
 sidebar:
-  order: 10
-  label: "1.10 How Source Becomes a Running Process"
+  order: 2
+  label: "2.2 How Source Becomes a Running Process"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
-In one game run, a memory scanner may find an address that holds gold.
-After a restart, that absolute address may move. Yet an instruction's distance from the start
-of its module can remain useful for the same build. The compiler's source
-name for the gold field may be absent from the released executable too.
+The debugger shows instructions and addresses, while the programmer wrote
+functions, fields, and variable names. Why are those two views different?
+And why can an address found by a memory scan move after a restart even
+though the game still applies the same rule?
 
 These differences come from the stages that turn source into a running
 process. First, distinguish several ways a language implementation can
@@ -106,6 +106,11 @@ virtual-machine route returns when we study scripting.
 
 ## Four stages, each deciding something different
 
+A Windows **EXE** is an executable file for a program. A **DLL** (dynamic-link
+library) is compiled code that a running program can load and call. Once
+loaded, either one is a **module** with a starting address and a range of
+code and data in the process.
+
 ```mermaid
 flowchart TD
     A["Source files<br/>names, types, comments"] --> B["Compiler"]
@@ -128,10 +133,15 @@ files by the Microsoft toolchain used for these Windows C++ examples. Two
 of its decisions matter throughout this book.
 
 First, it chooses a compiled layout according to the language's rules.
-For an example player structure, it may insert the padding Lesson 3.3
-describes and put health 48 bytes into the object. The emitted instruction
-can then use `[ecx+0x30]`, the base address plus 48 bytes, without naming
-health.
+For an example player structure, it may leave unused bytes between fields
+so each field starts at an address suited to its type. Those gaps are
+**padding**, explored in the later [object-layout lesson](/pages/3/03/).
+If health begins 48 bytes into the object, an instruction can identify it
+by that distance rather than its name. A debugger may write this as
+`[ecx+0x30]`: read at the address held in the `ecx` register, plus hexadecimal
+`0x30`, which is decimal 48. The assembly lesson explains this notation in
+detail; here it shows why a compiled field can survive without the word
+`health`.
 
 Second, the machine instruction no longer needs the word `health`. The
 name helped the programmer refer to the field; the instruction uses its
@@ -169,9 +179,11 @@ the ones later chapters spend time on.
 
 **Where the module will be.** The linker does not know which address Windows
 will choose, so it records a preferred base and includes a table of every
-location that would need adjusting if a different base is used. That is why
-Lesson 2.6 can promise that offsets within a module stay fixed while the base
-moves: the image is laid out as one block, and the loader relocates the block.
+location that would need adjusting if a different base is used. An offset
+measures a distance from the beginning of that module. The later
+[address-movement lesson](/pages/2/08/) uses the distinction: for the same
+build, that distance can stay fixed while the loader chooses a different
+starting address.
 
 **Where the DLL functions will be.** The linker knows the game calls
 `MessageBoxW` in `user32.dll`, but not the address, which will not exist until
@@ -186,20 +198,22 @@ addresses. That table is the Import Address Table:
   caption="One Import Address Table slot. The game's code calls through the slot, so the call works only once the loader has written the real address there."
 />
 
-Lesson 6.4 hooks a program's own copy of this table — a technique that works
+Lesson 6.5 hooks a program's own copy of this table — a technique that works
 precisely because the linker left the address for someone else to fill in.
 
 ## The loader turns a file into a process
 
 The loader maps the sections into memory with the right permissions, applies
 those relocations if it picked a different base, fills in the import table,
-prepares thread-local storage, and runs the initialisation code. Chapter 12
-follows this in detail, because it is also the sequence that makes `DllMain`
-such a constrained place to work.
+prepares **thread-local storage** (data kept separately for each thread), and
+runs the initialisation code. The later [loader-boundary lessons](/pages/11/02/)
+follow these details. They explain why a DLL's `DllMain` initialisation
+function cannot safely perform every task a normal function can.
 
-Now the two layouts of Lesson 5.1 make sense as what they are: the same content
-arranged for storage on disk and arranged for execution in memory, by two
-different stages with different requirements.
+The [executable-file chapter](/pages/7/01/) will compare the two layouts:
+content arranged for storage on disk and content arranged for execution
+in memory. The loader is the connection between them; file positions do
+not automatically equal positions in the running process.
 
 ### Follow one location across two runs
 
@@ -235,7 +249,7 @@ version.
 | A byte pattern | Verify it in each build | Compilation or linking can change its bytes |
 | "Health is 48 bytes in" | Recheck after a rebuild | A new field earlier in the structure may shift it |
 
-That last row is the one Lesson 13.7 turns into a migration procedure. In
+That last row is the one Lesson 11.4 turns into a migration procedure. In
 this fixed-order example, inserting a field moves the later fields and
 leaves the earlier ones in place. Other layout rules can change more, so
 measure the new build rather than assuming the same shift everywhere:
@@ -277,5 +291,7 @@ insertion can shift later offsets, so old offsets need rechecking.
 Release binaries may omit source names even while import names or
 separate debug information remain.
 
-[Lesson 1.11](/pages/1/11/) now follows the other side of the question:
-whether a game's rule comes from executable code, a data file, or a script.
+We now know why a debugger can show addresses and transformed operations
+instead of the source's original names. [How Assembly Describes a Running
+Game](/pages/2/02/) gives those operations a readable vocabulary and follows
+a small rule through its comparisons, branches, and arithmetic.

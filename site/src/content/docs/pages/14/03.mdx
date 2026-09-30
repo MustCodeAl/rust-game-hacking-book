@@ -1,23 +1,30 @@
 ---
 title: "Hypervisors and Virtual Machines"
 description: "A hypervisor gives guest machines controlled access to processors and memory through VM exits, two-stage translation, and snapshots."
-chapter: "14.5"
+chapter: "14.1"
 minutes: 18
 author: "attilathedud"
 date: "2026-09-24"
 sidebar:
-  order: 5
-  label: "14.5 Hypervisors and Virtual Machines"
+  order: 1
+  label: "14.1 Hypervisors and Virtual Machines"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
+
+The earlier chapters followed authority from a game process through Windows,
+driver requests, and physical-memory mappings. This chapter widens the view
+to the machine itself: virtual machines, console hardware, chip-level debug
+interfaces, and emulators. Each gives software a different view of the hardware
+and a different set of rules for reaching it.
 
 [Lesson 1.7](/pages/1/07/) set up a Windows virtual machine for this book's
 labs and promised that a snapshot could undo a bad experiment. It did not say
 how one computer can pretend to be several, or what a snapshot actually
 stores. A guest network-card write, a RAM address, and a snapshot will make
-those mechanisms visible. The last section follows [Lesson 14.3](/pages/14/02/)
-into Windows' use of the same machinery to protect its own kernel.
+those mechanisms visible. The last section returns to the driver trust
+boundary from Chapter 12 and follows Windows' use of the same machinery to
+protect its own kernel.
 The next lesson translates one address through both stages
 digit by digit and shows how software can tell that it is virtualized.
 
@@ -32,7 +39,7 @@ hardware among them is the **hypervisor**, also called a *virtual machine
 monitor*.
 
 This is a different kind of virtual machine from the one in
-[Lesson 10.7](/pages/12/07/). Lua's virtual machine is a program that carries
+[Lesson 10.8](/pages/12/07/). Lua's virtual machine is a program that carries
 out Lua bytecode, an instruction set that no processor runs in silicon. A
 hypervisor's virtual machine offers the *same* instruction set as the real
 processor, x86-64, so the guest's instructions run directly on the real
@@ -90,7 +97,7 @@ instruction when it faults. For many years that did not work on x86, because a
 few instructions that change the processor's state quietly behave differently
 in ring 3 instead of faulting, so the hypervisor never saw them. Early
 hypervisors worked around the problem with complicated software;
-[Lesson 14.6](/pages/14/09/#why-a-guest-cannot-simply-run-in-user-mode) shows
+[Lesson 14.2](/pages/14/09/#why-a-guest-cannot-simply-run-in-user-mode) shows
 the classic problem instruction and both workarounds.
 
 In 2005 and 2006, Intel and AMD added hardware support, called **Intel VT-x**
@@ -130,7 +137,7 @@ Typical causes of an exit:
 - `cpuid`, the instruction that describes the processor. On Intel it always
   exits, so the hypervisor decides what the guest is told about its processor.
 - Port I/O to a virtual device, such as the `in` and `out` instructions from
-  Lesson 14.3.
+  Lesson 12.4.
 - An access to a guest-physical address that has no usable mapping in the
   second stage of translation, described in the next section. That is how the
   hypervisor catches accesses to a virtual device's memory-mapped registers.
@@ -159,7 +166,7 @@ to thousands of processor cycles, where an ordinary instruction takes about
 one. So hypervisors keep exits rare. The guest's ordinary instructions, its own
 system calls, and its own page faults never leave the guest, and modern guests
 use *paravirtual* devices, virtual devices designed to need few exits. It is
-the idea [Lesson 11.8](/pages/10/07/) called limited direct execution, one
+the idea [Lesson 11.9](/pages/10/07/) called limited direct execution, one
 level further down: run natively, and trap only what must stay under control.
 
 <Quiz
@@ -201,7 +208,7 @@ flowchart LR
 Both stages work a page at a time. The low bits of an address, which pick a
 byte within its page, pass through unchanged, and each stage replaces only the
 page number above them.
-[Lesson 14.6](/pages/14/09/#a-worked-translation) follows one address through
+[Lesson 14.2](/pages/14/09/#a-worked-translation) follows one address through
 both stages digit by digit and counts what the extra stage costs.
 
 Each stage can also refuse. If the guest's own tables have no entry for a
@@ -259,20 +266,20 @@ shared clipboard, and USB passthrough off until they are needed, and why the
 host's hypervisor deserves updates as promptly as Windows does.
 
 That is the case for running this book's Windows labs in a VM. A bug check in
-the guest's kernel or a bad driver in the guest ([Lesson 14.1](/pages/14/01/),
-Lesson 14.3) stops only the guest. Debuggers and memory tools, which need broad
+the guest's kernel or a bad driver in the guest ([Lesson 11.10](/pages/14/01/),
+Lesson 12.4) stops only the guest. Debuggers and memory tools, which need broad
 rights inside the guest, get none outside it. And a restore returns a whole
 machine, not just one program, to a known state.
 
 A guest is not invisible, though. Software inside it can tell that it is
 running in a virtual machine, and some anti-cheat systems refuse to run a
 protected game there;
-[Lesson 14.6](/pages/14/09/#how-a-program-can-tell-it-is-in-a-virtual-machine)
+[Lesson 14.2](/pages/14/09/#how-a-program-can-tell-it-is-in-a-virtual-machine)
 shows how a program finds out.
 
 ## Windows uses the hypervisor to protect itself
 
-Lesson 14.1 ended with an uncomfortable fact: kernel code can do anything, so a
+Lesson 11.10 ended with an uncomfortable fact: kernel code can do anything, so a
 single exploited driver bug hands an attacker the whole kernel.
 **Virtualization-based security** (VBS) answers with the machinery from this
 lesson. At boot, the Windows hypervisor starts first, and Windows runs above it
@@ -313,11 +320,11 @@ page becomes executable in stage 2 only after its code passes those checks, and
 an executable page is never writable.
 
 Suppose an attacker finds a driver bug that lets them write anywhere in kernel
-memory, the worst case from Lesson 14.1. They can still corrupt data. They
+memory, the worst case from Lesson 11.10. They can still corrupt data. They
 cannot write new instructions into a code page, because code pages are not
 writable in stage 2, and they cannot turn a data page into code, because only
 VTL1 grants execute permission and it grants it only to signed code. The
-vulnerable driver blocklist from Lesson 14.3 is enforced whenever memory
+vulnerable driver blocklist from Lesson 12.4 is enforced whenever memory
 integrity is on.
 
 Memory integrity is on by default on clean installs of Windows 11 on compatible
@@ -326,6 +333,6 @@ one more reason to leave virtualization enabled in the firmware settings. On
 such a PC, VirtualBox and VMware run their guests through the Windows
 hypervisor instead of directly on the processor, which can make a lab VM
 somewhat slower. That is not a reason to turn memory integrity off:
-[Lesson 12.4](/pages/11/05/) lists it among the protections worth keeping.
+[Lesson 12.6](/pages/11/05/) lists it among the protections worth keeping.
 
 References: [Hyper-V architecture](https://learn.microsoft.com/en-us/virtualization/hyper-v-on-windows/reference/hyper-v-architecture), [virtualization-based security](https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs), [memory integrity and VBS enablement](https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-hvci-enablement), [isolated user mode processes](https://learn.microsoft.com/en-us/windows/win32/procthread/isolated-user-mode--ium--processes), and the virtual-machine extensions volume of the [Intel Software Developer Manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html).

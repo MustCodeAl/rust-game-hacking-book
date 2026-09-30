@@ -1,17 +1,17 @@
 ---
 title: "How Device Drivers Work"
 description: "Drivers translate operating-system requests into hardware work through I/O packets, registers, interrupts, and DMA, including the path from key press to game input."
-chapter: "14.3"
+chapter: "12.4"
 minutes: 18
 author: "attilathedud"
 date: "2026-09-24"
 sidebar:
-  order: 3
-  label: "14.3 How Device Drivers Work"
+  order: 4
+  label: "12.4 How Device Drivers Work"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
-[Lesson 14.1](/pages/14/01/) showed why ordinary user programs go through
+[Lesson 11.10](/pages/14/01/) showed why ordinary user programs go through
 operating-system interfaces to reach devices. Something has to turn a request
 into device work, though. When you press a key, bytes arrive from a keyboard;
 when a game loads a level, a disk controller delivers the file. The code that
@@ -35,9 +35,10 @@ Suppose two programs could drive the same disk controller directly. One writes
 the number of the sector it wants; a microsecond later the other overwrites it
 with a different sector; the first program receives the wrong data. Worse, a
 program could point the controller's copying engine at another process's
-memory. Devices hold state that everyone shares, and many can reach memory that
-belongs to anyone ([Lesson 12.5](/pages/11/06/)), so the operating system
-cannot let programs work them directly.
+memory. Devices hold state that everyone shares, and many can copy data to or
+from physical RAM, so the operating system coordinates who may operate them
+and which buffers they may reach. The later
+[DMA lesson](/pages/11/06/) examines those memory controls in detail.
 
 Instead, Windows coordinates access through a driver stack. The I/O manager
 checks the caller's handle and sends the request onward; the receiving driver
@@ -67,7 +68,7 @@ handle, and makes requests through two general-purpose calls:
   that is not simply reading or writing, along with an input buffer and an
   output buffer.
 
-Both travel the system-call path from Lesson 14.1, through `kernelbase.dll`,
+Both travel the system-call path from Lesson 11.10, through `kernelbase.dll`,
 `ntdll.dll`, and `syscall`, and arrive at the kernel's **I/O manager**, the
 part of the kernel that runs every device request. The I/O manager checks the
 handle and then describes the request in an **I/O request packet**, or
@@ -76,7 +77,7 @@ names the operation, carries the parameters and buffers, travels down the
 driver stack, and comes back up carrying the result.
 
 Here is a read from this lesson's toy keypad, a simple imaginary device that
-the lab in Lesson 14.4 simulates, made before any key has been pressed:
+the lab in Lesson 12.5 simulates, made before any key has been pressed:
 
 ```mermaid
 sequenceDiagram
@@ -109,7 +110,7 @@ request from a handle without them before the driver ever runs. The IRP also
 records that the request came from user mode, so the driver must treat every
 parameter as untrusted: it compares the whole control code with the ones it
 defines, and it never writes more bytes than the request says the caller's
-buffer can hold. [Lesson 14.4](/pages/14/08/#a-control-code-is-four-fields-in-one-number)
+buffer can hold. [Lesson 12.5](/pages/14/08/#a-control-code-is-four-fields-in-one-number)
 unpacks a control code into its four fields.
 
 ## Registers: how a driver talks to hardware
@@ -151,7 +152,7 @@ because the device changes it. So register accesses are never cached, merged,
 or skipped: the kernel maps device memory as uncacheable, and drivers use
 dedicated read-register and write-register routines that the compiler must
 carry out exactly as written.
-[Lesson 14.4](/pages/14/08/#the-toy-keypads-registers-bit-by-bit) places the
+[Lesson 12.5](/pages/14/08/#the-toy-keypads-registers-bit-by-bit) places the
 four registers at a physical address and decodes every bit in them.
 
 ## Interrupts: how a device gets the driver's attention
@@ -160,7 +161,7 @@ The driver could read STATUS over and over until an event appears. That is
 **polling**, and it wastes a processor core on a device that sits idle almost
 all the time. Instead, the keypad raises an **interrupt**, a hardware signal
 that makes the processor stop between two instructions and run the handler the
-kernel registered for that device's vector ([Lesson 14.1](/pages/14/01/)).
+kernel registered for that device's vector ([Lesson 11.10](/pages/14/01/)).
 
 A driver's interrupt handling comes in two halves:
 
@@ -176,7 +177,7 @@ A driver's interrupt handling comes in two halves:
 For a press and release of A, the DPC collects two events, *A pressed* and *A
 released*, and completes the parked read with those 2 bytes. The I/O manager
 copies them into the program's buffer and wakes its thread, and `ReadFile`
-returns. [Lesson 14.4](/pages/14/08/#the-isr-and-the-dpc-register-by-register)
+returns. [Lesson 12.5](/pages/14/08/#the-isr-and-the-dpc-register-by-register)
 follows both halves register by register.
 
 ## DMA: letting the device copy the data itself
@@ -198,7 +199,7 @@ flowchart LR
 The address the driver gives the device is not a virtual address, because a
 device has no access to any process's page tables. It is a physical address or,
 on a machine with an **IOMMU**, a device address that the IOMMU translates and
-limits to the buffers the driver approved. [Lesson 12.5](/pages/11/06/)
+limits to the buffers the driver approved. [Lesson 12.7](/pages/11/06/)
 explains that translation and why Windows uses it to stop a malicious device
 from reading all of memory.
 
@@ -239,7 +240,7 @@ keyboard drivers have used since PS/2 keyboards, and the keyboard class driver,
 The **raw input thread**, inside `win32k`, the kernel part of the Windows window
 manager, reads those events. It translates the scan code into a **virtual-key
 code** using the active keyboard layout, updates the key-state table that
-`GetAsyncKeyState` reads ([Lesson 6.5](/pages/8/06/)), and posts the event to
+`GetAsyncKeyState` reads ([Lesson 6.6](/pages/8/06/)), and posts the event to
 the message queue of the thread that owns the foreground window. On a US
 layout, scan code `0x1E` becomes `VK_A`, `0x41`, which is also the ASCII code
 for the letter A: 4 × 16 + 1 = 65. For security, Windows opens keyboards
@@ -248,7 +249,7 @@ straight from the keyboard's driver.
 
 The game's message loop then takes the event out with `GetMessage` or
 `PeekMessage`, as a `WM_KEYDOWN` message, or as `WM_INPUT` if the game
-registered for Raw Input. [Lesson 14.4](/pages/14/08/#a-key-press-in-bytes)
+registered for Raw Input. [Lesson 12.5](/pages/14/08/#a-key-press-in-bytes)
 reads the report and the message bit by bit. Synthetic input from `SendInput`
 joins this path at the raw input thread, above every driver in the diagram,
 which is why programs watching input at that level can tell it apart from key
@@ -256,7 +257,7 @@ presses that came through a keyboard.
 
 ## Why Windows insists on signed drivers
 
-Loading a driver puts new code into ring 0, where, as Lesson 14.1 showed,
+Loading a driver puts new code into ring 0, where, as Lesson 11.10 showed,
 nothing sits beneath it to catch its mistakes and nothing can overrule it. So
 Windows checks where a driver came from before loading it. 64-bit Windows
 refuses kernel-mode code without a valid digital signature, the kind of
@@ -276,11 +277,12 @@ look for exactly those drivers, old and legitimately signed, and load one to
 borrow its bug. Microsoft's answer is the **vulnerable driver blocklist**: a
 list of signed drivers known to be exploitable, which Windows refuses to load.
 Since the Windows 11 2022 update the blocklist is on by default, and it is
-always enforced when memory integrity is on. [Lesson 14.5](/pages/14/03/)
+always enforced when memory integrity is on. [Lesson 14.1](/pages/14/03/)
 explains memory integrity, which uses the hypervisor to stop even kernel code
-from creating new executable code. [Lesson 12.4](/pages/11/05/) showed how to
+from creating new executable code. [Lesson 12.6](/pages/11/05/) will show how to
 list the drivers loaded on your own machine and why each new one deserves a
-reason.
+reason. That inventory follows the register lab, once the mechanics of a
+driver request are visible.
 
 Developers testing their own drivers use test-signing modes that deliberately
 relax these checks. Those modes belong on a disposable test machine, and this
@@ -309,7 +311,7 @@ machine running it:
 - **Anti-cheat systems look for exactly these drivers**, and the penalties
   usually apply to the whole account, sometimes to the hardware.
 
-The habits from Lesson 12.4 apply directly: know which drivers are installed,
+The inventory lesson will put these habits into practice: know which drivers are installed,
 give every new one a reason and a trustworthy source, and never lower a Windows
 protection so that someone else's kernel code can load.
 

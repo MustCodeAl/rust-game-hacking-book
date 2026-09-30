@@ -1,9 +1,11 @@
 # Book revision progress
 
-Updated 2026-09-29. The full-book teaching pass is implemented on
+Updated 2026-09-30. The full-book teaching pass is implemented on
 `codex/book-revision`. [BOOK_REVISION_AUDIT.md](BOOK_REVISION_AUDIT.md)
 records a prerequisite, teaching thread, and disposition for **each of the
-132 authored lessons**. [BOOK_REVISION_PLAN.md](BOOK_REVISION_PLAN.md) records
+132 lessons before the latest redistribution**. Two topic splits now make
+**134 lessons**, with every original lesson and URL retained.
+[BOOK_REVISION_PLAN.md](BOOK_REVISION_PLAN.md) records
 the original editorial contract and source investigation.
 
 ## Branch and edition
@@ -36,12 +38,13 @@ the original editorial contract and source investigation.
 ## Reading path
 
 Chapter 1 now goes from computer basics to **Game Fundamentals (1.3)**,
-**Programming Fundamentals (1.4)**, **A Rust Primer for the Game Labs (1.5)**,
+**Programming Fundamentals (1.4)**, **Rust Primer: Logic in Code (1.5)**,
 **Hacking Fundamentals (1.6)**, and the Windows lab (1.7). **How Memory
-Actually Works (1.8)** sits immediately before **Your First Memory
-Experiment (1.9)**. The source-to-running-program,
-engine, and computation lessons follow. The contents, links, and chapter data
-match this order.
+Actually Works (1.8)** sits immediately before **What a Memory Scan Really
+Finds (1.9)**, which closes the foundation chapter. Build mechanics now follow
+the debugger introduction in 2.2, game engines open Chapter 4, and computation
+limits lead into the virtual-machine lesson in Chapter 10. The contents,
+links, and chapter data match this order.
 
 The opening uses changing game values to motivate each concept, while each
 lesson gives its own local scenario and defines the names and values it
@@ -66,7 +69,7 @@ depends on remembering a sample character from another page. Formulaic
 end-of-lesson study prompts were changed into technical summaries while
 practical lab checks remain.
 
-Lesson 1.10 now separates native compilation, interpreted virtual-machine
+Lesson 2.2 now separates native compilation, interpreted virtual-machine
 bytecode, REPL interaction, and static versus dynamic typing. Rust and Lua
 give concrete routes through those ideas before the lesson follows the
 native compiler, linker, and Windows loader in detail.
@@ -195,3 +198,67 @@ bins passed. The full workspace formatter still reports an unrelated preexisting
 format difference in `shared_memory_lab.rs`. Windows execution was not tested
 on this Mac. The live preview serves the reordered contents at
 `http://127.0.0.1:4322/rust-game-hacking-book/contents/`.
+
+## 2026-09-30: content redistribution and reader spacing
+
+The user asked to distribute chapter content more evenly and give lesson pages a little more visual space. Complete topics moved to the chapters that use them; two lessons were split into clearer teaching units. The book has **134 lessons in 14 chapters**. All 132 preceding lessons and their historical URLs remain. Chapter 13 remains **Advanced Game Hacking**.
+
+### Current reading map
+
+The ordered historical paths below define the new display positions from `.1` onward in each chapter. Frontmatter and `getLessonIndex()` are the source of truth; directory names remain stable routes.
+
+- Chapter 1 (9 lessons): `1/01`, `1/02`, `1/03`, `1/04`, `1/05`, `1/06`, `1/07`, `1/08`, `1/09`.
+- Chapter 2 (10 lessons): `2/01`, `1/10`, `2/02`, `2/03`, `2/04`, `2/05`, `2/08`, `2/09`, `2/06`, `2/07`.
+- Chapter 3 (8 lessons): `3/01`, `3/09`, `3/02`, `3/03`, `3/04`, `3/05`, `3/06`, `3/07`.
+- Chapter 4 (12 lessons): `1/11`, `4/01`, `4/02`, `4/03`, `4/04`, `4/11`, `4/05`, `4/06`, `4/07`, `4/08`, `4/09`, `4/10`.
+- Chapter 5 (10 lessons): `7/01`, `7/02`, `7/03`, `7/04`, `7/05`, `7/06`, `7/07`, `7/08`, `7/09`, `8/05`.
+- Chapter 6 (9 lessons): `3/08`, `8/01`, `8/02`, `8/03`, `8/04`, `8/06`, `8/07`, `8/10`, `13/05`.
+- Chapter 7 (13 lessons): `5/01`, `5/02`, `5/03`, `5/04`, `5/05`, `5/06`, `5/07`, `5/08`, `5/09`, `5/10`, `5/11`, `8/08`, `8/09`.
+- Chapter 8 (8 lessons): `6/01`, `6/02`, `6/03`, `6/04`, `6/05`, `6/06`, `6/07`, `6/08`.
+- Chapter 9 (9 lessons): `9/01`, `9/02`, `9/09`, `9/03`, `9/04`, `9/05`, `9/06`, `9/07`, `9/08`.
+- Chapter 10 (10 lessons): `12/01`, `12/02`, `12/03`, `12/04`, `12/05`, `12/06`, `1/12`, `12/07`, `12/08`, `12/09`.
+- Chapter 11 (12 lessons): `10/01`, `10/09`, `10/02`, `13/06`, `10/03`, `10/04`, `10/05`, `10/06`, `10/07`, `14/01`, `14/07`, `10/08`.
+- Chapter 12 (9 lessons): `11/01`, `11/02`, `11/03`, `14/02`, `14/08`, `11/05`, `11/06`, `11/07`, `11/08`.
+- Chapter 13 (8 lessons): `13/01`, `13/07`, `13/02`, `13/03`, `13/04`, `11/04`, `13/08`, `13/09`.
+- Chapter 14 (7 lessons): `14/03`, `14/09`, `14/05`, `14/04`, `14/10`, `14/06`, `14/11`.
+
+### Content balance
+
+Approximate prose word counts exclude fenced code but include source captions and component text. They measure distribution, not time to complete a lab.
+
+| Chapter | Before | After | Lessons |
+| --- | ---: | ---: | ---: |
+| 1 | 23,335 | 17,542 | 9 |
+| 2 | 12,464 | 14,615 | 10 |
+| 3 | 17,345 | 16,234 | 8 |
+| 4 | 15,209 | 17,849 | 12 |
+| 5 | 13,860 | 13,860 | 10 |
+| 6 | 8,167 | 12,644 | 9 |
+| 7 | 22,414 | 21,438 | 13 |
+| 8 | 9,811 | 9,811 | 8 |
+| 9 | 12,061 | 12,061 | 9 |
+| 10 | 9,449 | 11,872 | 10 |
+| 11 | 11,423 | 17,570 | 12 |
+| 12 | 8,547 | 13,918 | 9 |
+| 13 | 13,176 | 10,646 | 8 |
+| 14 | 27,461 | 17,527 | 7 |
+
+Build mechanics now follow the debugger introduction. Game engines open game-state teaching. Numeric interpretation precedes object readers. DLL contracts open the in-process chapter, followed by general architecture and live-hook lifetime rules. Basic vector teaching precedes spatial selection; camera transforms and graphics integration stay in rendering. Computation limits lead into Lua VM internals. Build identity leads into layout migration. Kernel services sit with Windows process internals; drivers precede trust and DMA. The final chapter focuses on virtual machines, consoles, hardware debugging, and emulation.
+
+### Readability and preservation
+
+Screen paragraph spacing rises from 1rem to 1.2rem, section spacing from 3rem to 3.25rem, and major blocks use 1.75rem gaps. Phone increments are smaller. Rules target top-level lesson blocks, keeping widget internals and printed-book spacing compact. Contents estimates now describe reading plus worked exercises.
+
+The source retains **100 images, 212 MemoryStrips, and 41 inline quizzes**. Mermaid diagrams increase **272→273**, fenced blocks **1,115→1,121**, and end-of-lesson checks **132→134**. Transferred vector examples remain byte-for-byte; the camera page also defines its own Vec3 so the page remains self-contained. General and graphics-specific command examples retain separate local scenarios.
+
+### Validation
+
+- The lesson index has 134 unique contiguous display IDs; all 134 end-of-lesson quiz keys match.
+- Numbered lesson links agree with their destination frontmatter.
+- The production build generates 140 HTML pages and prerenders 273 diagrams.
+- A local crawl checked 26,252 links with zero missing files or fragments; all 133 between-lesson next links follow the metadata order.
+- Whitespace checks pass. This editorial/CSS pass does not change runnable lab source.
+- A browser-policy rejection prevented a screenshot check; validation used source inspection, the generated output, and HTTP preview checks.
+- Focused review corrected reject-before-publication hook behavior, the layout example’s two unchanged fields, capture identity checks, and mapped-versus-unmapped kernel-page wording.
+
+Publication uses a new branch based on gh-pages and the full generated build. The authored source remains codex/book-revision. The publication receipt will be recorded after merge.

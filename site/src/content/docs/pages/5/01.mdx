@@ -1,75 +1,45 @@
 ---
-title: "3D Space You Can Picture"
-description: "Picture coordinates, vectors, transformations, cameras, and perspective before following any renderer-specific detail."
+title: "Camera Frames and Projection"
+description: "Follow a world-space point through camera axes, view transforms, homogeneous coordinates, perspective, and screen pixels."
 chapter: "7.1"
-minutes: 27
+minutes: 18
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 1
-  label: "7.1 3D Space You Can Picture"
+  label: "7.1 Camera Frames and Projection"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
 
-## Extend 2D coordinates to three dimensions
+A tool can know a target's position and still draw its marker in the wrong
+place. The target's coordinates describe the world; the screen describes
+the picture seen by one camera. We need to account for where that camera
+sits, which way it faces, and how perspective changes the apparent size
+of distant objects.
 
-A 2D game often describes a position with `x` and `y`.
+[Coordinates, Vectors, and Directions](/pages/4/11/) established the spatial
+operations used here: subtract positions to form a displacement, normalize
+a vector to keep its direction, and use a dot product to compare alignment.
+This lesson follows that geometry through camera frames and projection.
 
-![A 2D game world](/assets/images/5/1/wesnoth1.png)
+<span id="extend-2d-coordinates-to-three-dimensions"></span>
+<span id="position-versus-direction"></span>
+<span id="length-normalization-and-alignment"></span>
 
-Picture a player at `(2, 3)` on that map and an enemy at `(5, 7)`. The enemy
-is 3 units farther along `x` and 4 along `y`. Those differences form an arrow
-from the player to the enemy. Its straight-line length is 5: a right triangle
-with sides 3 and 4 has a long side of `√(3² + 4²) = √25 = 5`.
+For the worked coordinate differences and normalized alignment calculations,
+see [the vector lesson](/pages/4/11/#length-normalization-and-alignment).
 
-A 3D game adds a third axis. If the enemy is also 12 units above the player,
-the arrow becomes `(3, 4, 12)` and its length becomes
-`√(3² + 4² + 12²) = √169 = 13`. The same subtraction and distance idea grew
-by one coordinate; no new kind of measurement was required.
-
-That arrow will recur in different guises across this chapter. It tells an
-aiming system where a target is, helps a radar place a marker, and eventually
-passes through the camera's projection to become a screen position. The
-rendering lessons follow a second question: how does the game turn geometry
-and draw state into the pixels you see? We start with the spatial language
-both questions share.
-
-Rust can store the three numbers together:
+The Rust examples on this page use this small three-coordinate record:
 
 ```rust
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 struct Vec3 {
     x: f32,
     y: f32,
     z: f32,
 }
-```
 
-Each field is an `f32`, a 32-bit floating-point number that can hold fractions as
-well as whole coordinates. `#[derive(...)]` asks Rust to generate conveniences
-such as copying and printing this small record; none of those traits changes the
-geometry. A `Vec3` is not special hardware. It is a **vector**: an ordered group
-of numbers that we choose to treat as one mathematical object. The order matters
-because each slot has a role. Swapping `x` and `z` changes the meaning even
-when the three numbers stay the same.
-
-Vectors are useful because one operation can apply to the whole idea. Adding a movement vector to a position moves the position. Subtracting two positions gives the difference between them.
-
-Games disagree about which axis means “up.” Never assume. Move in one direction at a time and observe which field changes.
-
-:::note
-🧭 **Coordinate check:** change one axis while keeping the others still. The field that follows the movement tells you what that axis means in this game.
-:::
-
-![A 3D game world](/assets/images/5/1/urbanterror.jpg)
-
-
-## Position versus direction
-
-A position answers “where?” A direction answers “which way?” Both can use three numbers, but they mean different things.
-
-```rust
 impl Vec3 {
     fn subtract(self, other: Self) -> Self {
         Self {
@@ -78,109 +48,15 @@ impl Vec3 {
             z: self.z - other.z,
         }
     }
-
-    fn length(self) -> f32 {
-        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
-    }
-}
-
-fn main() {
-    let player_position = Vec3 { x: 2.0, y: 3.0, z: 0.0 };
-    let enemy_position = Vec3 { x: 5.0, y: 7.0, z: 12.0 };
-    let direction = enemy_position.subtract(player_position); // (3, 4, 12)
-    let distance = direction.length(); // 13
-    println!("direction = {direction:?}, distance = {distance}");
 }
 ```
 
-`Self` inside `impl Vec3` means `Vec3`; `self` is the vector whose method was
-called. The subtraction uses *enemy minus player*, so the result points from
-the player to the enemy. `length()` squares each difference, adds the three
-squares, and takes the square root. These exact coordinates produce the
-`(3, 4, 12)` arrow and distance `13` calculated above. Reversing the operands
-would point the arrow backward while leaving its length unchanged.
-The `:?` in `println!` uses the `Debug` implementation generated for `Vec3`,
-so the program prints all three fields alongside the distance. Put this block
-after the `Vec3` declaration to run the example.
+Each field holds one `f32` coordinate. `subtract` computes the component
+differences: calling `target.subtract(camera)` gives the displacement from
+the camera to the target. The method and record are defined here so the
+camera examples can be read without copying a program from another lesson.
 
-A point and a direction can both be stored as three floats, but the allowed math is
-different:
-
-| Expression | Meaning |
-|---|---|
-| point − point | direction and distance between places |
-| point + direction | a new place after moving |
-| direction + direction | combined movement |
-| point + point | usually has no useful geometric meaning |
-
-This is a good example of why a memory layout does not tell the whole story. Three
-adjacent floats could be a position, velocity, color, scale, or Euler angles. Watch
-how the game uses them before assigning a name.
-
-## Length, normalization, and alignment
-
-The length of a direction is its distance. **Normalizing** divides by that length so
-the result keeps only direction and has length one. Check for a near-zero length
-first; there is no meaningful direction from a point to itself.
-
-```rust
-fn normalized(value: Vec3) -> Option<Vec3> {
-    let length = value.length();
-    if !length.is_finite() || length <= f32::EPSILON {
-        return None;
-    }
-    Some(Vec3 {
-        x: value.x / length,
-        y: value.y / length,
-        z: value.z / length,
-    })
-}
-```
-
-For `(3, 4, 0)`, `length` is `5`, so the returned vector is
-`Some((0.6, 0.8, 0))`: it points the same way and its length is `1`.
-`Option` expresses the case where no usable direction exists. When the points
-coincide, division by zero cannot produce a meaningful aim direction, so the
-function returns `None` rather than letting invalid numbers spread into later
-camera calculations. `is_finite` also rejects infinity and NaN from a damaged
-or stale snapshot.
-
-The **dot product** measures alignment. For two normalized directions it is near
-`1` when they face the same way, `0` when perpendicular, and `-1` when opposite.
-A field-of-view test can compare the camera's forward direction with the direction
-to a target. This avoids turning both vectors into angles merely to ask whether they
-point roughly the same way.
-
-For vectors `a = (aₓ, aᵧ, a_z)` and `b = (bₓ, bᵧ, b_z)`:
-
-```text
-a · b = aₓbₓ + aᵧbᵧ + a_zb_z
-
-if a and b have length 1:
-a · b = cos(θ)
-```
-
-That second line is why a dot product can become an angle with
-`acos(clamp(dot, -1, 1))`. Clamp first because floating-point rounding can produce
-`1.0000001`, which is outside the mathematical input range of `acos`.
-
-Worked through, a field-of-view test is three multiplications and two
-additions. Suppose the camera faces straight along positive x, and a target
-sits ahead and a little to the side:
-
-```text
-camera_forward      = (1.0, 0.0, 0.0)     already length 1
-direction_to_target = (0.8, 0.6, 0.0)     already length 1
-
-dot = (1.0 x 0.8) + (0.0 x 0.6) + (0.0 x 0.0) = 0.8
-```
-
-`0.8` is the cosine of roughly 37 degrees, so the target sits about 37 degrees
-off the centre of view. If the rule is “visible within a 45-degree cone,” you
-never need `acos` at all: compare the dot product against `cos(45°)`, which is
-about `0.707`, and anything above that threshold is inside the cone. Comparing
-cosines is cheaper than converting to angles, and it sidesteps the rounding
-trap described above.
+## Construct perpendicular directions
 
 The **cross product** produces a direction perpendicular to two input directions:
 
