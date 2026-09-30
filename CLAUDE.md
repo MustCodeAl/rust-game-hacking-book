@@ -200,3 +200,8 @@ memory-model/scan pair together and Chapter 13 titled Advanced Game Hacking.
 All original visuals and URLs remain. Reader spacing changes are modest and
 screen-only. Publish the full validated build through gh-pages; never merge
 this authored tree into rustgamehackingreimagined.
+
+The completed balance/readability build from source **03d8ba2** is merged into
+`gh-pages` through **PR #6** (merge **0bff86d**). Its publication branch is
+`codex/gh-pages-balanced-reader`. The latest source commit may also include a
+documentation-only publication receipt; the built lesson content is 03d8ba2.

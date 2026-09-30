@@ -1,6 +1,6 @@
 # Beginner-first lesson progression: execution plan for Claude
 
-**Status: the full-book, structural, and chapter-flow passes were published to `gh-pages` through PRs #2, #4, and #5; editable source remains on `codex/book-revision`.**
+**Status: the full-book, structural, chapter-flow, and content-balance/readability passes were published to `gh-pages` through PRs #2, #4, #5, and #6; editable source remains on `codex/book-revision`. The current book has 134 lessons.**
 
 Prepared 2026-09-28. The user subsequently authorized a full-book revision on
 a new branch. Read [BOOK_REVISION_PROGRESS.md](BOOK_REVISION_PROGRESS.md) for

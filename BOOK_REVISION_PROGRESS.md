@@ -261,4 +261,9 @@ The source retains **100 images, 212 MemoryStrips, and 41 inline quizzes**. Merm
 - A browser-policy rejection prevented a screenshot check; validation used source inspection, the generated output, and HTTP preview checks.
 - Focused review corrected reject-before-publication hook behavior, the layout example’s two unchanged fields, capture identity checks, and mapped-versus-unmapped kernel-page wording.
 
-Publication uses a new branch based on gh-pages and the full generated build. The authored source remains codex/book-revision. The publication receipt will be recorded after merge.
+The balance/readability source commit **03d8ba2** was published from
+`codex/gh-pages-balanced-reader`, based on `gh-pages`, through
+[PR #6](https://github.com/MustCodeAl/rust-game-hacking-book/pull/6).
+The generated commit is **580de56** and the `gh-pages` merge is
+**0bff86df74ed23dd3228b35a7abfda36056a1cc7**. Editable source remains
+`codex/book-revision`; the preview uses that source on port 4322.
