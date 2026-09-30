@@ -267,3 +267,51 @@ The balance/readability source commit **03d8ba2** was published from
 The generated commit is **580de56** and the `gh-pages` merge is
 **0bff86df74ed23dd3228b35a7abfda36056a1cc7**. Editable source remains
 `codex/book-revision`; the preview uses that source on port 4322.
+
+## 2026-09-30: colours with a purpose
+
+The user requested a consistent colour system after identifying decorative
+heading cycles and unrelated reader accents. Reading colours now identify
+explicit subject areas: copper for foundations (chapters 1–4), blue for runtime
+analysis (5–7), violet for formats and interfaces (8–10), and cyan for systems
+and trust (11–14). `CHAPTERS.area` assigns the role; adding a chapter without
+a named area fails instead of silently picking a colour. Hue meanings stay
+fixed across all five reader palettes; light/dark mode adjusts brightness.
+The home course map and contents include a labelled colour key.
+
+Current lesson frontmatter sets the accent before first paint. Headers,
+all section headings, the TOC highlight, progress bar, list markers, tables,
+informational notes, diagrams, memory highlights, and widget selection accents
+follow it. Sidebar colours read chapter metadata rather than list position.
+The heading plugin that cycled hues and inferred chapters from old URL folders
+is removed. Previous/next cards read their destination's frontmatter, and each
+full-book article scopes its own chapter accent.
+
+Green remains correct/success/valid, amber caution/unanswered, and red
+incorrect/error/invalid. Incorrect quiz feedback now agrees with the red wrong
+answer indicator. Code colours retain syntax roles. Structural diagram
+start/end markers remain neutral; the direction dial uses a neutral observed
+arm and a chapter-coloured target arm. Borrowed memory has a dashed edge and
+an explicit label. Decorative multi-colour widget/header bands and coloured
+terminal ornaments are removed. The standing rule is recorded in CLAUDE.md.
+
+Validation of the generated book:
+
+- 140 HTML pages, all 134 lessons, and all 1,353 lesson h2 headings have the
+  expected chapter context without heading colour cycling.
+- All 266 cards linking to another lesson have the destination's current
+  chapter and colour; reading order is unchanged. All 134 print articles,
+  14 home cards, and 14 contents sections have the expected colour scope.
+- 273 diagrams are preserved and reuse their existing drawings. No lesson
+  text, screenshots, quiz data, runnable labs, or routes are removed.
+- 26,252 local links have no missing files or fragments.
+- Static colour calculations pass 200 combinations of five palettes, two
+  modes, five background preferences, and four reading areas. The minimum
+  checked text contrast is 4.63:1; sidebar chapter numbers reach 4.83:1.
+- The HTTP live preview serves the current chapter context and destination
+  colours on port 4322. Screenshot inspection remains unavailable because of
+  the earlier browser-policy rejection; these are source/output/contrast
+  checks, not a claim of browser visual testing.
+
+Publish this complete generated build to `gh-pages` from the authored
+`codex/book-revision` branch, using the existing publication worktree.

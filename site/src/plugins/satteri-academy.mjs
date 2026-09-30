@@ -4,7 +4,6 @@
 // Mermaid block has already stopped being a code block by the time Expressive
 // Code looks for `pre > code`.
 import { createHash } from 'node:crypto';
-import { chapterTone } from '../data/chapters.mjs';
 
 /**
  * Turn ```mermaid blocks into <pre class="mermaid">. `data-diagram` is a hash
@@ -34,28 +33,6 @@ export function mermaidBlocks() {
 				};
 			},
 		},
-	};
-}
-
-/**
- * Give each h2 a colour number, 1 to 4 in turn, so a lesson's sections cycle
- * through the palette's four accent colours. The first section takes the
- * chapter's own colour, the one its header wears. The factory runs once per
- * page, so every page counts from its own start.
- */
-export function sectionTones() {
-	return ({ fileURL }) => {
-		const chapter = Number(fileURL?.pathname.match(/\/pages\/(\d+)\//)?.[1] ?? 1);
-		let next = chapterTone(chapter) - 1;
-		return {
-			name: 'academy-section-tones',
-			element: {
-				filter: ['h2'],
-				visit(node, ctx) {
-					ctx.setProperty(node, 'dataTone', String((next++ % 4) + 1));
-				},
-			},
-		};
 	};
 }
 

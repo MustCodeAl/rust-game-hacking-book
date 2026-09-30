@@ -205,3 +205,30 @@ The completed balance/readability build from source **03d8ba2** is merged into
 `gh-pages` through **PR #6** (merge **0bff86d**). Its publication branch is
 `codex/gh-pages-balanced-reader`. The latest source commit may also include a
 documentation-only publication receipt; the built lesson content is 03d8ba2.
+
+### Colour must carry meaning
+
+Every colour must have a documented role. Reading colours identify four
+subject areas in `site/src/data/chapters.mjs`: copper for foundations (1–4),
+blue for runtime analysis (5–7), violet for formats and interfaces (8–10),
+and cyan for systems and trust (11–14). Each chapter's explicit `area` field
+assigns its colour. Keep these hue meanings in every reader theme; adapt their
+brightness for contrast. Do not cycle colours by heading, list position, URL
+folder, or a chapter-number modulo. The home and contents colour key labels
+the areas, so colour is never the only way to identify them.
+
+Lesson frontmatter determines the current chapter. Its header, all section
+headings, list markers, tables, informational notes, default diagrams, memory
+highlights, selected widget controls, TOC highlight, and progress bar follow
+that chapter colour. Previous/next cards take the destination lesson's current
+chapter, including for historical URLs that moved chapters. Scope each article
+on the complete-book page separately. Site-wide actions use the theme's brand
+accent; background swatches show actual reader preferences.
+
+Feedback uses green for correct/success/valid, amber for caution or unanswered,
+and red for incorrect/error/invalid. Keep labels, icons, or patterns alongside
+colour. Code syntax colours describe syntax roles; diagram start/end markers
+and observed-versus-target directions have explicit structural roles. Preserve
+these distinctions when changing reading colours. No decorative multi-colour
+stripes or unlabelled hue cycling. Build and verify all lesson/destination
+assignments, and check text contrast in all five palettes and both modes.

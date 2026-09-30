@@ -4,8 +4,8 @@ import starlight from '@astrojs/starlight';
 import { ExpressiveCodeTheme } from '@astrojs/starlight/expressive-code';
 import { satteri } from '@astrojs/markdown-satteri';
 import { academyCodeTheme } from './src/data/code-theme.mjs';
-import { basePathLinks, lazyImages, mermaidBlocks, scrollableTables, sectionTones } from './src/plugins/satteri-academy.mjs';
-import { CHAPTERS } from './src/data/chapters.mjs';
+import { basePathLinks, lazyImages, mermaidBlocks, scrollableTables } from './src/plugins/satteri-academy.mjs';
+import { CHAPTERS, chapterTone } from './src/data/chapters.mjs';
 import { getLessonIndex } from './src/data/lesson-index.mjs';
 
 const SITE = 'https://mustcodeal.github.io';
@@ -19,7 +19,10 @@ const chapterGroups = CHAPTERS.map((chapter) => ({
 	collapsed: true,
 	items: lessonIndex
 		.filter((lesson) => lesson.chapter.startsWith(`${chapter.number}.`))
-		.map(({ slug, label }) => ({ slug, label })),
+		.map(({ slug, label }) => ({
+			slug, label,
+			attrs: { 'data-chapter': chapter.number, 'data-tone': chapterTone(chapter.number) },
+		})),
 })).filter((chapter) => chapter.items.length);
 
 export default defineConfig({
@@ -31,7 +34,7 @@ export default defineConfig({
 	prefetch: { prefetchAll: true, defaultStrategy: 'hover' },
 	markdown: {
 		processor: satteri({
-			hastPlugins: [mermaidBlocks(), sectionTones(), scrollableTables(), lazyImages(), basePathLinks(BASE)],
+			hastPlugins: [mermaidBlocks(), scrollableTables(), lazyImages(), basePathLinks(BASE)],
 		}),
 	},
 	integrations: [
@@ -65,6 +68,7 @@ export default defineConfig({
 				PageTitle: './src/components/overrides/PageTitle.astro',
 				MarkdownContent: './src/components/overrides/MarkdownContent.astro',
 				ThemeSelect: './src/components/overrides/ThemeSelect.astro',
+				Pagination: './src/components/overrides/Pagination.astro',
 			},
 			head: [
 				// Apply every saved reader-theme choice before first paint, so a dark

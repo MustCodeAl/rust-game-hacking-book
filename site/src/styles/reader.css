@@ -7,28 +7,42 @@
    Colour
    -------------------------------------------------------------------------- */
 
-/* Each palette has four accent colours. Chapters take them in turn, and so do
-   a lesson's sections: the build writes data-tone="1" to "4" on each lesson
-   header, home card, and section heading, and these rules turn that number
-   into --tone. The rules below paint with --tone, so choosing another palette
-   recolours all of them. */
+/* Reading colours have fixed subject roles: copper = foundations, blue =
+   runtime analysis, violet = formats/interfaces, cyan = systems/trust.
+   Brightness adapts to the reader theme; hue never changes its meaning.
+   Green/amber/red remain feedback colours, and syntax uses code-theme.css.
+   The head sets the current chapter accent from frontmatter before paint. */
 :root {
-  --tone-1: var(--rust);
-  --tone-2: var(--accent-2);
-  --tone-3: var(--accent-3);
-  --tone-4: var(--accent-4);
+  --tone-1: #9e421a;
+  --tone-2: #175ba6;
+  --tone-3: #7143ad;
+  --tone-4: #006779;
+  --chapter-accent: var(--rust-dark);
+  --tone: var(--chapter-accent);
+  --chapter-ink: color-mix(in srgb, var(--chapter-accent) 72%, var(--ink));
+  --chapter-tint: color-mix(in srgb, var(--chapter-accent) 12%, transparent);
+  --chapter-on-code: color-mix(in srgb, var(--chapter-accent) 60%, var(--code-text));
 }
 
-/* The high-contrast palette's first accent is a highlighter yellow, too pale
-   for text and thin lines on white, so its link blue stands in. */
-:root[data-academy-theme="contrast"] {
-  --tone-1: var(--rust-dark);
+:root[data-theme="dark"] {
+  --tone-1: #ffb08d;
+  --tone-2: #87baff;
+  --tone-3: #c7a7fb;
+  --tone-4: #70d2df;
 }
 
-[data-tone] { --tone: var(--tone-1); }
-[data-tone="2"] { --tone: var(--tone-2); }
-[data-tone="3"] { --tone: var(--tone-3); }
-[data-tone="4"] { --tone: var(--tone-4); }
+/* Redeclare derived tokens at each scope: print articles and destination
+   cards can have another chapter's accent while the page keeps its own. */
+[data-tone] {
+  --chapter-accent: var(--tone-1);
+  --tone: var(--chapter-accent);
+  --chapter-ink: color-mix(in srgb, var(--chapter-accent) 72%, var(--ink));
+  --chapter-tint: color-mix(in srgb, var(--chapter-accent) 12%, transparent);
+  --chapter-on-code: color-mix(in srgb, var(--chapter-accent) 60%, var(--code-text));
+}
+[data-tone="2"] { --chapter-accent: var(--tone-2); }
+[data-tone="3"] { --chapter-accent: var(--tone-3); }
+[data-tone="4"] { --chapter-accent: var(--tone-4); }
 
 /* --------------------------------------------------------------------------
    Canvas
@@ -75,7 +89,7 @@ body::before {
   display: block;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, var(--rust), var(--accent-2), var(--accent-4));
+  background: var(--chapter-accent);
   transform: scaleX(0);
   transform-origin: left center;
   transition: transform 100ms linear;
@@ -160,18 +174,18 @@ starlight-menu-button button {
   counter-increment: gha-chapter;
 }
 
-/* Chapter n is list item n + 1, after "Start here", and wears the chapter's
-   colour on its number and its open lesson. The sidebar stays dark in light
-   palettes too, so the colour is lifted toward the sidebar's text colour,
-   which keeps the darker light-palette accents readable on it. */
+/* Link metadata identifies the group's subject colour, independent of list
+   position or historical URL. Lift it toward light sidebar text for contrast. */
 #starlight__sidebar ul.top-level > li {
-  --tone: var(--tone-1);
-  --tone-on-night: color-mix(in srgb, var(--tone) 72%, var(--sidebar-text));
+  --chapter-accent: var(--rust);
+  --tone: var(--chapter-accent);
+  --tone-on-night: color-mix(in srgb, var(--tone) 68%, var(--sidebar-text));
 }
 
-#starlight__sidebar ul.top-level > li:nth-child(4n + 3) { --tone: var(--tone-2); }
-#starlight__sidebar ul.top-level > li:nth-child(4n + 4) { --tone: var(--tone-3); }
-#starlight__sidebar ul.top-level > li:nth-child(4n + 5) { --tone: var(--tone-4); }
+#starlight__sidebar ul.top-level > li:has(a[data-tone="1"]) { --chapter-accent: var(--tone-1); }
+#starlight__sidebar ul.top-level > li:has(a[data-tone="2"]) { --chapter-accent: var(--tone-2); }
+#starlight__sidebar ul.top-level > li:has(a[data-tone="3"]) { --chapter-accent: var(--tone-3); }
+#starlight__sidebar ul.top-level > li:has(a[data-tone="4"]) { --chapter-accent: var(--tone-4); }
 
 #starlight__sidebar summary {
   padding-block: 0.5rem;
@@ -253,7 +267,7 @@ starlight-menu-button button {
 .print-pdf-button:hover,
 .print-pdf-button:focus-visible {
   color: var(--sidebar-hover);
-  border-color: var(--accent-2);
+  border-color: var(--rust);
   background: var(--accent-tint);
 }
 
@@ -279,7 +293,7 @@ starlight-menu-button button {
 .panel-toggle:hover,
 .panel-toggle:focus-visible {
   color: var(--sidebar-hover);
-  border-color: var(--accent-2);
+  border-color: var(--rust);
   background: var(--accent-tint);
 }
 
@@ -665,8 +679,8 @@ starlight-menu-button button {
   letter-spacing: -0.045em;
 }
 
-/* The lesson header is a card washed in its chapter's colour, closed by a band
-   of the palette's four colours. Starlight puts the title and the lesson body
+/* The lesson header is a card washed in its chapter's colour, closed by a
+   solid line in that colour. Starlight puts the title and the lesson body
    in separate padded panels, so the Jekyll header's bottom margin and the
    panel divider are not needed. */
 .content-panel .lesson-header {
@@ -687,7 +701,7 @@ starlight-menu-button button {
   left: 0;
   width: auto;
   height: 4px;
-  background: linear-gradient(90deg, var(--tone-1), var(--tone-2), var(--tone-3), var(--tone-4));
+  background: var(--chapter-accent);
 }
 
 .lesson-header .lesson-kicker {
@@ -725,22 +739,25 @@ starlight-menu-button button {
 }
 
 .sl-markdown-content {
+  --diagram-node-border: var(--chapter-accent);
+  --diagram-node-bg: color-mix(in srgb, var(--chapter-accent) 6%, var(--paper));
+  --diagram-cluster-bg: var(--paper);
   counter-reset: lesson-section;
   line-height: 1.76;
   text-rendering: optimizeLegibility;
 }
 
 .sl-markdown-content a:not(:where(.not-content *)) {
-  color: var(--link);
+  color: var(--chapter-ink);
   text-decoration: underline;
-  text-decoration-color: var(--link-decoration);
+  text-decoration-color: color-mix(in srgb, var(--chapter-accent) 45%, transparent);
   text-decoration-thickness: 0.08em;
   text-underline-offset: 0.18em;
 }
 
 .sl-markdown-content a:not(:where(.not-content *)):hover,
 .sl-markdown-content a:not(:where(.not-content *)):focus {
-  color: var(--link-hover);
+  color: var(--ink);
   text-decoration-color: currentColor;
 }
 
@@ -751,11 +768,10 @@ starlight-menu-button button {
   letter-spacing: -0.025em;
 }
 
-/* Numbered sections. Each h2 is a card in its section's colour: a solid
-   spine, the section number in a filled chip, and a tint that fades across
-   the card. The h2 carries the colour number; the card is its wrapper. */
+/* Numbered sections keep the current chapter's colour. Section numbers,
+   rather than a change of hue, distinguish successive sections. */
 .sl-markdown-content > .sl-heading-wrapper.level-h2 {
-  --tone: var(--tone-1);
+  --tone: var(--chapter-accent);
   position: relative;
   counter-increment: lesson-section;
   margin-top: 3rem;
@@ -768,10 +784,6 @@ starlight-menu-button button {
   line-height: 1.22;
   scroll-margin-top: 5rem;
 }
-
-.sl-markdown-content > .sl-heading-wrapper.level-h2:has(> h2[data-tone="2"]) { --tone: var(--tone-2); }
-.sl-markdown-content > .sl-heading-wrapper.level-h2:has(> h2[data-tone="3"]) { --tone: var(--tone-3); }
-.sl-markdown-content > .sl-heading-wrapper.level-h2:has(> h2[data-tone="4"]) { --tone: var(--tone-4); }
 
 /* A lesson that opens straight into its first section needs no gap above it. */
 .sl-markdown-content > .sl-heading-wrapper.level-h2:first-child {
@@ -822,7 +834,7 @@ starlight-menu-button button {
   margin-top: 8px;
   content: "";
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent-2), transparent);
+  background: linear-gradient(90deg, var(--chapter-accent), transparent);
 }
 
 .sl-markdown-content > .sl-heading-wrapper.level-h3 h3 {
@@ -840,7 +852,7 @@ starlight-menu-button button {
 }
 
 .sl-markdown-content li:not(:where(.not-content *))::marker {
-  color: var(--rust);
+  color: var(--chapter-ink);
   font-family: var(--mono);
   font-weight: 700;
 }
@@ -880,7 +892,7 @@ starlight-menu-button button {
 }
 
 .table-scroll:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--rust) 58%, transparent);
+  outline: 3px solid var(--chapter-accent);
   outline-offset: 3px;
 }
 
@@ -903,9 +915,9 @@ starlight-menu-button button {
 }
 
 .sl-markdown-content .table-scroll th {
-  color: color-mix(in srgb, var(--accent-2) 58%, var(--ink));
-  background: color-mix(in srgb, var(--accent-2) 15%, var(--paper));
-  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--accent-2) 50%, transparent);
+  color: var(--chapter-ink);
+  background: color-mix(in srgb, var(--chapter-accent) 12%, var(--paper));
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--chapter-accent) 50%, transparent);
   font-family: var(--mono);
   font-size: 0.72em;
   letter-spacing: 0.06em;
@@ -924,7 +936,7 @@ starlight-menu-button button {
 }
 
 .sl-markdown-content .table-scroll tbody tr:hover {
-  background: color-mix(in srgb, var(--accent-tint) 62%, var(--surface));
+  background: color-mix(in srgb, var(--chapter-tint) 62%, var(--surface));
 }
 
 .sl-markdown-content .table-scroll tr:last-child td {
@@ -944,7 +956,7 @@ starlight-menu-button button {
 .starlight-aside--tip { --sl-color-asides-border: var(--success); background: var(--success-soft); }
 .starlight-aside--caution { --sl-color-asides-border: var(--warning); background: var(--warning-soft); }
 .starlight-aside--danger { --sl-color-asides-border: var(--danger); background: var(--danger-soft); }
-.starlight-aside--note { --sl-color-asides-border: var(--accent-2); background: color-mix(in srgb, var(--accent-2) 11%, var(--paper)); }
+.starlight-aside--note { --sl-color-asides-border: var(--chapter-ink); background: color-mix(in srgb, var(--chapter-accent) 11%, var(--paper)); }
 
 .starlight-aside__title {
   gap: 0.45rem;
@@ -1030,9 +1042,10 @@ starlight-menu-button button {
   }
 }
 
-/* Previous and next lesson cards, each lightly tinted in its own colour. */
+/* The build puts destination metadata on these cards, so both directions
+   follow the target chapter. Non-lesson destinations use a neutral colour. */
 .pagination-links a {
-  --tone: var(--tone-1);
+  --tone: var(--chapter-accent);
   border: 1px solid color-mix(in srgb, var(--tone) 28%, var(--line));
   border-radius: 10px;
   background:
@@ -1041,8 +1054,8 @@ starlight-menu-button button {
   transition: transform 160ms ease, border-color 160ms ease;
 }
 
-.pagination-links a[rel="next"] {
-  --tone: var(--tone-2);
+.pagination-links a:not([data-tone]) {
+  --tone: var(--ink-soft);
 }
 
 .pagination-links a:hover,
@@ -1058,8 +1071,14 @@ starlight-menu-button button {
 
 /* The "On this page" list marks the section being read. */
 starlight-toc a[aria-current="true"] {
-  color: var(--rust);
+  color: var(--chapter-ink);
   font-weight: 700;
+}
+
+/* Each article on the full-book page resolves diagram colours locally. */
+.sl-markdown-content .print-book-lesson {
+  --diagram-node-border: var(--chapter-accent);
+  --diagram-node-bg: color-mix(in srgb, var(--chapter-accent) 6%, var(--paper));
 }
 
 @media (max-width: 50rem) {

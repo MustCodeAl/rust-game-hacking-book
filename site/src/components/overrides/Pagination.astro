@@ -1,0 +1,70 @@
+---
+// Retain Starlight's reading order and translated labels. A card's colour
+// belongs to its destination, including when its historical URL moved chapter.
+import { getCollection } from 'astro:content';
+import { chapterOf, chapterTone } from '../../data/chapters.mjs';
+
+const { dir, pagination } = Astro.locals.starlightRoute;
+const isRtl = dir === 'rtl';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const chapters = new Map((await getCollection('docs')).map((entry) => [entry.id, chapterOf(entry.data.chapter)]));
+
+function destinationChapter(href: string) {
+	const url = new URL(href, Astro.url);
+	if (url.origin !== Astro.url.origin || !url.pathname.startsWith(`${base}/`)) return;
+	const slug = decodeURIComponent(url.pathname.slice(base.length + 1)).replace(/\/$/, '');
+	return chapters.get(slug);
+}
+
+const links = [
+	{ link: pagination.prev, rel: 'prev', label: Astro.locals.t('page.previousLink'), pointsRight: isRtl },
+	{ link: pagination.next, rel: 'next', label: Astro.locals.t('page.nextLink'), pointsRight: !isRtl },
+];
+---
+
+<nav class="pagination-links print:hidden" dir={dir} aria-label="Lesson navigation">
+	{links.map(({ link, rel, label, pointsRight }) => {
+		if (!link) return null;
+		const chapter = destinationChapter(link.href);
+		return (
+			<a href={link.href} rel={rel} data-chapter={chapter?.number} data-tone={chapter && chapterTone(chapter.number)}>
+				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+					<path d={pointsRight ? 'M4 12h16m-6-6 6 6-6 6' : 'M20 12H4m6-6-6 6 6 6'} />
+				</svg>
+				<span>{label}<br /><span class="link-title">{link.label}</span></span>
+			</a>
+		);
+	})}
+</nav>
+
+<style>
+	.pagination-links {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+		gap: 1rem;
+	}
+
+	a {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 1rem;
+		color: var(--ink-soft);
+		text-decoration: none;
+		overflow-wrap: anywhere;
+	}
+
+	[rel='next'] {
+		justify-content: end;
+		text-align: end;
+		flex-direction: row-reverse;
+	}
+
+	.link-title {
+		font-size: var(--sl-text-2xl);
+		line-height: var(--sl-line-height-headings);
+	}
+
+	svg { flex-shrink: 0; }
+</style>
