@@ -331,3 +331,81 @@ commit **f45a818efe42e5445035d3ebb2886289d64d0086** is merged through
 `gh-pages` at **d336be213b1a4dafb75c480c9688a9f0c290bf0b**. GitHub Pages reports
 that exact merge as **built**. The preview remains on port 4322. The authored
 branch may additionally contain this documentation-only publication receipt.
+
+## 2026-09-30: firmware, deeper fundamentals, and working media
+
+The book now has **135 lessons**. The added concept lesson is **14.3 Firmware
+and Bare-Metal Rust**, at the new stable route `pages/14/12`. It teaches device
+software versus drivers, flash/RAM, reset vectors, linker placement versus
+runtime initialization, `no_std`, entry and panic policy, and a complete
+Cortex-M3 firmware image. `firmware-labs/` contains the runnable project,
+locked dependencies, board model's memory map, and explained source. The lesson
+separates QEMU execution from the board-specific rebuild/program/verify/reset
+steps needed for physical hardware. It also explains GPIO polarity, debounce,
+watchdogs, and the timing costs of logging and debugger pauses.
+
+Chapter 14's current order preserves all existing URLs:
+
+| Display | Lesson | Historical route |
+| --- | --- | --- |
+| 14.1 | Hypervisors and Virtual Machines | `pages/14/03` |
+| 14.2 | Guest Execution and Address Translation | `pages/14/09` |
+| 14.3 | Firmware and Bare-Metal Rust | `pages/14/12` |
+| 14.4 | How Game Consoles Are Built | `pages/14/05` |
+| 14.5 | Hardware Debugging with JTAG | `pages/14/04` |
+| 14.6 | JTAG Scan Chains and Debug Access | `pages/14/10` |
+| 14.7 | How Emulators Work | `pages/14/06` |
+| 14.8 | Emulator Timing and State | `pages/14/11` |
+
+Numbered references and end-quiz keys follow this order; existing semantic quiz
+IDs remain stable, preserving their saved attempts. The metadata index drives
+the sidebar, contents, previous/next cards, print book, and regenerated
+`docs.json` (15 groups, 138 navigation entries).
+
+Game Fundamentals now develops entities and components, identity/lifetime,
+assets and instances, input actions, space/time, simulation versus rendering,
+collisions, events and modes, authority, persistence, and model/format/byte
+layers. All original headings, examples, and visuals remain. The reasoning,
+programming, and hacking lessons integrate the user's problem-solving material
+where it supports their subjects: precise goals/questions, evidence and
+assumptions, simplicity as a heuristic, pseudocode, cases, variable roles,
+dependencies, measured bottlenecks, tests, diagnostics, reviews, and clear
+reproducible documentation. Unsupported statistics and universal claims about
+interpreters are not repeated. Encoding/scaling depth remains in later lessons.
+
+The network and file introductions explain data pipelines, asynchronous work,
+stream/batch processing, data models, caches, indexes, and scaling constraints
+with game examples. Fourteen glossary entries make the new vocabulary
+available as a reference. Three ordered diagram walkthroughs have explicit
+play/pause/step controls, keyboard selection, reduced-motion handling, and
+complete static/print fallbacks. They use their chapter's existing colour.
+Nine original silent H.264 clips are restored beside their corresponding
+macro, bot, rendering, chat, tool, and logging explanations with native video
+controls, descriptive captions, and download links.
+
+Validation:
+
+- Production build: **141 HTML pages**, **135 lessons**, **273 Mermaid diagrams**.
+- All original visual counts are preserved: **100 lesson images**; memory
+  figures increase to **213**, inline quizzes to **42**, plus 3 animated flows
+  and 9 video players. No old routes are removed.
+- **26,747 local links** have no missing files or fragments. All **268** lesson
+  navigation cards and **135** print articles keep the correct reading order
+  and semantic colour assignment.
+- The Cortex-M3 image builds with locked dependencies, runs all six expected
+  samples in QEMU, and exits successfully. Two host tests pass for held-button
+  behaviour and fresh state. Formatting and the matching rustup Clippy driver
+  pass. A physical board was not tested.
+- The expanded early write-rule example's three tests and purchase boundary
+  results pass. Source whitespace checks pass.
+- Animation interaction checks cover paused start, independent instances,
+  playback/step/reset/final stop, keyboard selection, reduced motion, visibility,
+  and print. All nine videos fully decode; HTTP serves correct MIME types,
+  original bytes, and beginning/end ranges with status 206.
+- Browser visual/playback inspection remains unavailable following the earlier
+  browser-policy rejection; the media checks use generated output, interaction
+  logic, decoding, and HTTP rather than claiming a browser playback test.
+
+The finished source is committed on `codex/book-revision`. Its complete static
+build is published through a fresh branch based on `gh-pages`; the publication
+receipt follows once the exact merge is deployed.

@@ -17,8 +17,9 @@ Read it online at <https://mustcodeal.github.io/rust-game-hacking-book/>.
 | `site/src/components/` | Memory figures, quizzes, labs, and layout overrides |
 | `rust-labs/` | Portable exercises: byte parsing, scanning, math, toy machines |
 | `windows-labs/` | Windows implementations for the memory, debugger, PE, and IPC lessons |
-| `lua-labs/` | The simulated scripting host used in Chapter 12 |
+| `lua-labs/` | The simulated scripting host used in Chapter 10 |
 | `advanced-memory-labs/` | Toy obfuscation, authenticated encryption, offline page-table translation |
+| `firmware-labs/` | A bare-metal Cortex-M3 controller image, tested in QEMU |
 
 ## Preview the book locally
 
@@ -34,9 +35,11 @@ static site to `site/dist/`.
 
 ## Publishing
 
-Every push to `rustgamehackingreimagined` runs
-`.github/workflows/deploy.yml`, which builds `site/` and deploys it to GitHub
-Pages. The repository's Pages source must be set to **GitHub Actions**.
+The authored book is maintained on `codex/book-revision`. Its complete build
+from `site/dist/` is published through a branch based on `gh-pages` and a pull
+request into `gh-pages`. GitHub Pages serves that branch's root as static files;
+`.nojekyll` preserves Astro's generated assets. Current source, validation, and
+publication receipts are recorded in `BOOK_REVISION_PROGRESS.md`.
 
 ## Labs
 
@@ -52,6 +55,18 @@ cargo test --manifest-path advanced-memory-labs/Cargo.toml
 
 The advanced crate contains no DMA hardware driver, live memory writer,
 anti-cheat bypass, or stealth firmware. Its captures are offline files.
+
+The firmware project has its own CPU target and emulator configuration. Run it
+from its directory so Cargo reads that configuration:
+
+```bash
+cd firmware-labs
+rustup target add thumbv7m-none-eabi
+cargo run --locked --bin lamp-firmware
+```
+
+See `firmware-labs/README.md` for the expected output, host-side logic tests,
+and how the board-specific setup differs from the emulator lab.
 
 ## Earlier versions
 

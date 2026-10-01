@@ -147,8 +147,8 @@ The user identified `gh-pages` as the target edition. Recheck the plan's source-
 The full-book pass is implemented on `codex/book-revision`. Read
 `BOOK_REVISION_PROGRESS.md` for the branch, current reading order, relocation
 map, and validation. `BOOK_REVISION_AUDIT.md` records the disposition of all
-132 lessons before redistribution; the current book has 134 lessons after two
-topic splits. Lessons 1.3, 1.4, 1.5, and 1.6 are Game Fundamentals, Programming
+132 lessons before redistribution; the current book has 135 lessons after two
+topic splits and the firmware lesson. Lessons 1.3, 1.4, 1.5, and 1.6 are Game Fundamentals, Programming
 Fundamentals, the Rust Primer, and Hacking Fundamentals. The complete memory
 model is Lesson 1.8, directly before the first memory experiment in 1.9.
 Treat Ada and Bo as local example names, not cross-lesson prerequisites.
@@ -238,3 +238,21 @@ published into `gh-pages` through **PR #7** and its final dark-panel contrast
 correction **PR #8**. Pages built final merge **d336be2**. Read the validation
 and publication record in BOOK_REVISION_PROGRESS.md. The latest source commit
 may also include a documentation-only receipt; the built content is fb6319b.
+
+### Firmware and fundamentals additions
+
+The current book has **135 lessons**. Firmware and Bare-Metal Rust is **14.3**,
+at `pages/14/12`, before console architecture. Chapter 14's remaining displayed
+numbers advance to 14.4–14.8 while their historical URLs stay stable. Keep
+`firmware-labs/` separate from the host labs: it targets Cortex-M3 and is tested
+in QEMU. Its board layout, semihosting, and exit calls are emulator-specific;
+physical-board programming requires the documented board configuration.
+
+Game Fundamentals and the problem-solving explanations are expanded with local
+examples. Data-model, cache/index, and asynchronous stream/batch explanations
+belong in the network/file introductions where their context is available.
+`AnimatedFlow` teaches an ordered process with explicit playback, accessible
+stepping, reduced motion, and complete static/print explanations. `LessonVideo`
+embeds the retained silent clips with native controls and a download fallback.
+Keep their colours tied to chapter roles and preserve all original visuals.
+The current validation and publication receipt are in BOOK_REVISION_PROGRESS.md.

@@ -1,0 +1,517 @@
+---
+title: "Firmware and Bare-Metal Rust"
+description: "Follow a microcontroller from reset to Rust, build a working firmware image, and understand what changes when you program a physical board."
+chapter: "14.3"
+minutes: 28
+author: "attilathedud"
+date: "2026-09-30"
+sidebar:
+  order: 3
+  label: "14.3 Firmware and Bare-Metal Rust"
+---
+import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import Quiz from '../../../../components/Quiz.astro';
+
+A controller can recognise a button press before your game opens. An SSD can
+manage its stored blocks before a Windows driver asks for one. A console can
+check its boot software before its main operating system starts. In each case,
+some software belongs to the device itself. That software is **firmware**.
+
+Writing your own firmware means taking responsibility for work that a desktop
+application normally delegates: starting the processor correctly, choosing a
+memory layout, configuring hardware, and deciding what happens when something
+fails. We will make those responsibilities concrete with a small button-and-lamp
+controller, build its Rust code into a firmware image, and run that image on an
+emulated microcontroller.
+
+## Firmware is a role, not a file extension
+
+Firmware is software that operates a device, usually stored in nonvolatile
+memory: memory that keeps its contents without power. **Flash** is a common
+example and can be erased and programmed again. The word does not mean that
+the code is permanently unchangeable, nor that it must be written in assembly.
+
+Consider a USB controller plugged into a PC:
+
+| Software | Where it runs | What it does |
+|---|---|---|
+| Game application | The PC's processor | Turns a recognised button action into a game action |
+| Device driver | The PC's processor, as part of its OS | Exchanges requests and reports with the controller |
+| Controller firmware | The controller's own processor | Samples its buttons and prepares the reports |
+
+The driver and firmware cooperate across a device boundary. Updating the game
+does not necessarily update either one. A firmware update replaces code in the
+device; its format and programming procedure belong to that particular device.
+
+Firmware can include a **real-time operating system**, or RTOS, which schedules
+tasks and provides services suited to embedded devices. It can also use no OS
+at all. The latter arrangement is called **bare-metal programming**, and it is
+the arrangement used by this lesson. An embedded Linux application is another
+possibility; being physically inside a device does not make every program
+bare-metal firmware.
+
+## One chip, several kinds of memory
+
+A **microcontroller** combines a processor core, memory, and peripheral devices
+on one chip. Peripherals include timers, serial interfaces, and **GPIO**
+(general-purpose input/output) pins. A GPIO pin can sense a button's electrical
+level or drive an output, with the appropriate circuit and configuration.
+
+Our target is QEMU's model of the **LM3S6965EVB** evaluation board. **QEMU** is an
+emulator: a program that reproduces a machine's behaviour so its software can
+run on another computer. This model has a Cortex-M3 core, 256 KiB of flash, and
+64 KiB of SRAM. A **KiB** is 1,024 bytes; **SRAM** is the chip's working RAM,
+whose contents are not retained without power. These capacities are listed in
+the [QEMU board documentation](https://www.qemu.org/docs/master/system/arm/stellaris.html).
+The address map is shown in the
+[Cortex-M memory-layout walkthrough](https://docs.rust-embedded.org/embedonomicon/memory-layout.html).
+
+| Region in this model | Address range | Purpose |
+|---|---|---|
+| Flash, 256 KiB | `0x00000000`–`0x0003FFFF` | Startup information, instructions, and stored constants |
+| SRAM, 64 KiB | `0x20000000`–`0x2000FFFF` | Writable state and the call stack |
+| Peripheral registers | Device-specific addresses | Configure hardware and exchange input/output |
+
+These are addresses in the emulated device, not addresses in the PC process
+running QEMU. The model can load an image into its flash region, but that does
+not reproduce the electrical procedure for programming a physical flash chip.
+
+For the lamp controller, the instructions survive a power cycle in flash. The
+current lamp state is working state: the program starts it again at each boot.
+Retaining the last setting across power loss would require an explicit storage
+design. Writing flash every time the main loop runs would be a poor substitute:
+flash has erase/program constraints and finite endurance that RAM does not.
+
+## Reset comes before the Rust entry point
+
+On this Cortex-M system, reset does not mean “call whichever function happens
+to be named main.” The core obtains startup values from a **vector table**.
+Its first entry contains the initial stack pointer; its second contains the
+reset-handler address. Later entries describe exception and interrupt handlers.
+The table contains values and addresses, rather than a sequence of application
+instructions. The [Cortex-M memory-layout walkthrough](https://docs.rust-embedded.org/embedonomicon/memory-layout.html)
+shows how these entries fit into an image.
+
+<MemoryStrip
+  cells="0x00000000=initial SP: 0x20010000|0x00000004=reset-handler address|0x00000008=next handler address"
+  caption="The beginning of this image's Cortex-M vector table. The initial stack pointer is just above the 64 KiB RAM region; the stack grows toward lower addresses. The reset address is supplied by the runtime, rather than guessed in application code."
+/>
+
+The **reset handler** runs startup code. Among its jobs is preparing writable
+static data so Rust can safely use it. The linker groups program contents into
+**sections**. Placement in the image happens before execution; reset-time
+initialization then prepares particular writable ranges:
+
+| Section | What belongs there | Who arranges it |
+|---|---|---|
+| `.vector_table` | Initial stack value and handler addresses | The linker places it; the loader or programmer supplies the image |
+| `.text` | Machine instructions | The linker places executable code in flash for this image |
+| `.rodata` | Read-only data, such as message strings | The linker places stored constants in flash |
+| `.data` | Writable statics with stored initial values | The linker describes both ranges; reset startup copies initial contents from flash to RAM |
+| `.bss` | Writable statics initially filled with zero | The linker reserves the range; reset startup fills it with zero |
+
+For example, a writable counter that must start at 7 needs both a working
+location in RAM and an initial value in the image. Startup copies the 7 before
+the application uses the counter. A counter starting at zero needs a reserved
+RAM range, but the image need not carry a long run of zero bytes: startup can
+write the zeros. The linker and runtime agree on where these ranges begin and
+end. Local variables are separate; a compiler can keep them in registers or on
+the stack as the program executes.
+
+The [`cortex-m-rt` runtime](https://docs.rs/cortex-m-rt/latest/cortex_m_rt/)
+provides the Cortex-M startup and vector arrangement used here. Our application
+supplies its memory map and Rust entry function. The runtime prepares static
+data, then calls that function. These responsibilities are why a source file
+containing `fn main()` alone is not a complete firmware image.
+
+<AnimatedFlow
+  title="From reset to the lamp controller"
+  stages={[
+    { label: 'Read the vectors', detail: 'The core obtains the initial stack pointer and the reset-handler address from the image.' },
+    { label: 'Prepare working memory', detail: 'Runtime startup copies initialized static data into RAM and zeroes the .bss range.' },
+    { label: 'Enter Rust', detail: 'The runtime calls the function marked #[entry]. Application logic can now use its initialized state.' },
+    { label: 'Process button samples', detail: 'The controller changes its lamp state only when a released button becomes pressed.' },
+    { label: 'Report the trace', detail: 'Semihosting sends the results to QEMU. This test image then requests an emulator exit.' },
+  ]}
+  caption="Step through the order. Printing results depends on reaching application code; it cannot replace the earlier startup work."
+/>
+
+### A bootloader is an additional stage
+
+A **boot ROM** is startup software stored in read-only memory on a chip. A
+**bootloader** is software whose job is to select, check, or load the application
+that will run next. It may support updates and recovery. A vendor boot ROM can
+start a bootloader; a bootloader can then start an application image.
+
+Those stages are not mandatory in every design. Our simple image starts through
+its Cortex-M reset vectors and runtime without a separate bootloader. A console
+uses a more elaborate chain, including signature checks, as
+[console architecture](/pages/14/05/#secure-boot-a-chain-of-trust) explains next.
+A bootloader's work and the Rust runtime's initialization work remain distinct,
+even if a particular system coordinates them closely.
+
+## Write the control rule separately from the hardware
+
+Our rule is: **a new button press toggles the lamp once**. Keeping the button
+held must not toggle it on every sample. The input is a logical `pressed` value;
+the output is whether the lamp should now be on.
+
+The logical change `false → true` is a **rising edge**. We detect it by
+remembering the previous sample:
+
+```text
+if pressed now AND not pressed previously:
+    toggle the lamp
+remember the current pressed state
+report the lamp state
+```
+
+Here is that complete control rule in Rust. It requires neither an OS nor a
+hardware register address:
+
+```rust
+pub struct LampController {
+    lamp_on: bool,     // Output state that survives between samples.
+    was_pressed: bool, // The previous sample, needed to detect a new press.
+}
+
+impl LampController {
+    pub const fn new() -> Self {
+        Self { lamp_on: false, was_pressed: false }
+    }
+
+    pub fn sample(&mut self, pressed: bool) -> bool {
+        // Holding the button is not a new edge.
+        if pressed && !self.was_pressed {
+            self.lamp_on = !self.lamp_on;
+        }
+        self.was_pressed = pressed;
+        self.lamp_on
+    }
+}
+```
+
+`&mut self` lets the method update this controller's remembered state. `!`
+negates a boolean: it switches `false` to `true` or `true` to `false`.
+The last expression returns the new lamp state. No heap allocation is needed;
+the controller stores just its two boolean fields.
+
+The input deliberately means a recognised, stable press. A physical switch can
+**bounce**, briefly making and breaking contact several times. Rising-edge
+detection alone does not remove that bounce. Physical firmware would first use
+a suitable debounce policy, often based on several stable samples over time,
+then pass the resulting logical state to this controller.
+
+| Sample | Input pressed? | New press? | Lamp after the sample |
+|---|---|---|---|
+| 1 | false | No | Off |
+| 2 | true | Yes | On |
+| 3 | true | No: still held | On |
+| 4 | false | No: released | On |
+| 5 | true | Yes | Off |
+| 6 | false | No | Off |
+
+This separation lets us test the rule on the PC and then reuse it inside a
+firmware image. It also keeps a logic bug distinguishable from a pin-wiring
+or clock-configuration bug.
+
+## Build a complete firmware project
+
+The complete [`firmware-labs` project](/firmware-labs/README.md) contains these
+files. Keep their names and directory arrangement, including the hidden
+`.cargo` directory:
+
+```text
+firmware-labs/
+├── Cargo.toml
+├── Cargo.lock
+├── .cargo/config.toml
+├── memory.x
+├── build.rs
+└── src/
+    ├── lib.rs
+    └── main.rs
+```
+
+[`src/lib.rs`](/firmware-labs/src/lib.rs) contains the controller and its tests.
+[`Cargo.toml`](/firmware-labs/Cargo.toml) declares the project and its runtime
+dependencies; [`Cargo.lock`](/firmware-labs/Cargo.lock) pins the full dependency
+set. [`build.rs`](/firmware-labs/build.rs) is a small helper that makes the memory
+map available to the linker. It runs on your computer during the build, so its
+use of `std` does not require an OS on the microcontroller.
+
+You can obtain the source files from those links and the configuration link
+below, or use the
+[authored project folder](https://github.com/MustCodeAl/rust-game-hacking-book/tree/codex/book-revision/firmware-labs).
+The project uses Rust 2024 and requires Rust 1.85 or later.
+
+### The target and the layout answer different questions
+
+The Rust target is **`thumbv7m-none-eabi`**. It describes the Armv7-M architecture,
+bare-metal environment, and calling convention suitable for this Cortex-M3.
+It does not identify which pins the board wires to an LED or where a different
+chip keeps its flash. The
+[Rust target documentation](https://doc.rust-lang.org/rustc/platform-support/thumbv7m-none-eabi.html)
+describes the CPU requirements.
+
+The [`memory.x`](/firmware-labs/memory.x) linker configuration supplies our
+board model's layout:
+
+```text
+/* K means 1024 bytes in this linker script. */
+MEMORY
+{
+  FLASH : ORIGIN = 0x00000000, LENGTH = 256K
+  RAM   : ORIGIN = 0x20000000, LENGTH = 64K
+}
+```
+
+`ORIGIN` is a region's starting address; `LENGTH` is its capacity. The linker
+places the program into these regions using the runtime's `link.x` script.
+A matching CPU instruction set with the wrong memory map still produces the
+wrong firmware for a board.
+
+The project's [`.cargo/config.toml`](/firmware-labs/.cargo/config.toml) selects
+the target, passes `-Tlink.x` to the linker, and tells Cargo how to run the image:
+
+```toml
+[build]
+target = "thumbv7m-none-eabi"
+
+[target.thumbv7m-none-eabi]
+rustflags = ["-C", "link-arg=-Tlink.x"]
+runner = [
+    "qemu-system-arm",
+    "-cpu", "cortex-m3",
+    "-machine", "lm3s6965evb",
+    "-nographic",
+    "-semihosting-config", "enable=on,target=native",
+    "-kernel",
+]
+```
+
+Cargo appends the built executable's path after `-kernel`. QEMU creates the
+selected machine and loads that image. `-nographic` uses terminal output;
+the semihosting option enables the reporting mechanism described next. This
+configuration follows the
+[Embedded Rust QEMU setup](https://doc.rust-lang.org/stable/embedded-book/start/qemu.html).
+
+### `no_std` keeps Rust without assuming an OS
+
+The binary begins with `#![no_std]` and `#![no_main]`.
+[`no_std`](https://doc.rust-lang.org/stable/embedded-book/intro/no-std.html)
+uses Rust's `core` library without automatically linking the OS-oriented
+standard library. Arithmetic, structs, borrowing, arrays, slices, `Option`, and
+`Result` still work. File access, OS threads, and ordinary terminal printing
+do not appear automatically. Dynamic collections such as `Vec` require
+additional allocation support; our controller does not need them.
+
+`no_main` disables the normal application entry arrangement. The
+`#[entry]` attribute from `cortex-m-rt` marks the function that startup calls.
+Its `-> !` means it never returns: there is no desktop caller waiting for a
+return value.
+
+### Report results through the emulator
+
+**Semihosting** lets target code ask a supporting debugger or emulator to
+perform host-side operations. Here it sends text to QEMU's terminal. That is
+neither an emulated UART nor Windows providing `println!` to a guest process.
+The [`cortex-m-semihosting` interface](https://docs.rs/cortex-m-semihosting/latest/cortex_m_semihosting/)
+provides the output stream used below.
+
+This is the full [`src/main.rs`](/firmware-labs/src/main.rs):
+
+```rust
+#![no_std] // Use core without an OS standard library.
+#![no_main] // The runtime supplies reset/startup.
+
+use core::{fmt, fmt::Write, panic::PanicInfo};
+use cortex_m_rt::entry;
+use cortex_m_semihosting::{debug, hio};
+use gha_firmware_labs::LampController;
+
+fn run_trace() -> Result<(), fmt::Error> {
+    let mut output = hio::hstdout().map_err(|_| fmt::Error)?;
+    let mut lamp = LampController::new();
+
+    // These are logical input samples, not GPIO reads.
+    for (index, pressed) in [false, true, true, false, true, false]
+        .into_iter()
+        .enumerate()
+    {
+        let on = lamp.sample(pressed);
+        writeln!(output, "sample {}: pressed={pressed}, lamp={on}", index + 1)?;
+    }
+    Ok(())
+}
+
+#[entry]
+fn main() -> ! {
+    let status = match run_trace() {
+        Ok(()) => debug::EXIT_SUCCESS,
+        Err(_) => debug::EXIT_FAILURE,
+    };
+    debug::exit(status); // Finish this QEMU test run.
+    loop { core::hint::spin_loop(); } // Never return from firmware entry.
+}
+
+#[panic_handler]
+fn panic(_information: &PanicInfo) -> ! {
+    debug::exit(debug::EXIT_FAILURE); // QEMU reports a failed run.
+    loop { core::hint::spin_loop(); }
+}
+```
+
+`fmt::Write` supplies the writing operation used by `writeln!`.
+Opening the stream or writing can fail, so `run_trace` returns a `Result` and
+`?` propagates an error. The entry function converts that result into an
+emulator success or failure request. Formatting uses the fixed samples and
+controller state; it needs no growing string buffer.
+
+A [`panic_handler`](https://doc.rust-lang.org/nomicon/panic-handler.html)
+defines what this `no_std` application does if it panics. This one makes the
+emulator run fail. Physical firmware needs its own failure policy, such as
+placing outputs into a safe state and halting or restarting. Both exit calls
+in this file are QEMU test instrumentation, not a physical-device shutdown
+procedure.
+
+## Build and run the image
+
+Install stable Rust with rustup and an ARM system build of QEMU. The
+[QEMU downloads page](https://www.qemu.org/download/) provides platform-specific
+installation options. On Windows, make sure the folder containing
+`qemu-system-arm.exe` is on `PATH`.
+
+Open a terminal **inside `firmware-labs/`**, so Cargo reads this project's
+configuration, then run:
+
+```sh
+# Install Rust's libraries for the Cortex-M3 target.
+rustup target add thumbv7m-none-eabi
+
+# Compile and link the image using the supplied dependency versions.
+cargo build --locked --bin lamp-firmware
+
+# Start the same image using the QEMU runner in .cargo/config.toml.
+cargo run --locked --bin lamp-firmware
+```
+
+The image is an **ELF** executable at
+`target/thumbv7m-none-eabi/debug/lamp-firmware`. ELF carries sections, addresses,
+and other information a loader or debugger can use. The file's total size is
+not the flash usage: debug metadata can occupy space in the file without being
+loaded into the microcontroller's flash.
+
+The trace should be:
+
+```text
+sample 1: pressed=false, lamp=false
+sample 2: pressed=true, lamp=true
+sample 3: pressed=true, lamp=true
+sample 4: pressed=false, lamp=true
+sample 5: pressed=true, lamp=false
+sample 6: pressed=false, lamp=false
+```
+
+QEMU then exits successfully. The two consecutive `true` inputs leave the lamp
+on, which is the essential difference from toggling on every held sample.
+Some QEMU versions also print `Timer with period zero, disabling`; that model
+message is separate from the firmware trace.
+
+The computer's OS runs Cargo and QEMU. The **emulated firmware has no guest
+OS**. Its startup, control logic, and output requests all execute as part of
+the loaded image.
+
+## Take the same rule to a physical board
+
+The control rule is reusable; the board configuration is specific. Start with
+the exact development board's documented Rust board-support or **HAL**
+(hardware abstraction layer) example. A HAL presents operations such as
+reading a pin or configuring a timer while handling many register details.
+Underneath it, peripheral-access code ultimately reads and writes hardware
+registers, the mechanism introduced in
+[device registers](/pages/14/08/).
+
+Adapt the project in this order:
+
+1. **Identify the actual chip and board.** Select their CPU target, memory map,
+   pin assignments, and supported programming interface. Two Cortex-M boards
+   can require different targets, flash addresses, clocks, and peripherals.
+2. **Initialize the hardware.** Configure clocks, an input pin with the right
+   pull resistor, and a suitable output. A pull-up or pull-down resistor gives
+   an unpressed input a defined electrical level instead of leaving it floating.
+   Convert high/low into logical pressed/released meaning: **active-low** means
+   a low electrical level represents a press. Its logical `false → true` press
+   can therefore correspond to an electrical high-to-low transition.
+3. **Replace the trace with real observations.** Debounce the input, call
+   `sample`, and apply its result to the output. A timer can set the sampling
+   cadence. A real loop continues working rather than ending after six inputs.
+4. **Replace emulator-only behaviour.** Remove the QEMU runner and both
+   semihosting exit calls. Choose board output and a panic policy that work
+   without QEMU. Logging through a debugger is an optional development aid.
+5. **Rebuild, program, verify, reset, and observe.** Use the board's supported
+   bootloader or a compatible debug probe. A flashing tool erases/programs the
+   required regions; verification checks the written image. Reset tests the
+   startup path, and the real output tests pin configuration and behaviour.
+
+[probe-rs](https://probe.rs/docs/tools/probe-rs/) is one programming and debugging
+tool for supported chips and probes. A board can instead document a vendor
+tool, a USB bootloader, or OpenOCD. Use its exact target configuration; the
+QEMU build above is not an image for arbitrary boards.
+
+Polling checks an input repeatedly; an **interrupt** runs a handler when a
+configured event occurs. Either design can work. If an interrupt and the main
+loop both touch controller state, they need an explicit synchronization policy.
+The simple controller above has one owner and introduces no such shared access.
+A **watchdog** is a timer that can reset a stalled device unless firmware
+services it correctly; its configuration and recovery policy matter on real
+hardware, rather than being a cure for an unexplained bug.
+
+## Debugging changes timing too
+
+Firmware debugging has two places to inspect: the rule and its hardware
+integration. The library tests in the project check that holding a press does
+not toggle repeatedly and that a fresh controller starts with fresh state.
+They do not establish that a physical button is wired correctly. The QEMU run
+tests the compiled ARM image and its startup, but does not test a real board's
+electrical behaviour.
+
+When a real device behaves differently, record the chip, board revision,
+toolchain, image version, and input conditions. Compare the intended state
+transition with the observed one. Then check the boundary responsible for that
+input or output: pin polarity, debounce timing, timer rate, or register setup.
+Changing the control rule to compensate for a wiring mistake hides the cause.
+
+Breakpoints stop the processor, while external devices can keep running;
+timers, incoming messages, and watchdogs may therefore behave differently.
+Printing can also slow a loop. Semihosting is convenient for this short trace
+but unsuitable as a measurement of normal execution speed. Other transports
+have different requirements:
+
+| Logging method | How output leaves the device |
+|---|---|
+| UART (universal asynchronous receiver/transmitter) | A serial peripheral sends bytes through configured pins to a compatible receiver or adapter |
+| RTT (Real Time Transfer) | The target writes a RAM buffer that a supporting debug probe reads |
+| ITM/SWO tracing | A supported Cortex-M Instrumentation Trace Macrocell emits trace events through Serial Wire Output to a compatible probe; [CMSIS documents this debug path](https://arm-software.github.io/CMSIS_6/latest/Core/group__ITM__Debug__gr.html) |
+
+[RTT's buffer policy](https://kb.segger.com/RTT) matters too: a full blocking
+buffer can pause the program, while a nonblocking mode can discard output.
+Buffering or deferring text formatting reduces work on a time-sensitive path
+but does not make it free. Record only the events needed
+to distinguish the competing explanations, and compare behaviour with logging
+disabled when investigating a timing problem.
+
+<Quiz
+  id="firmware-held-button"
+  title="A press is a transition"
+  prompt="The input samples are false, true, true, true. How many times does this lesson's controller toggle the lamp?"
+  options="Once, when false first becomes true||Three times, once for every true sample||Four times, because every sample is an event||Zero times, because firmware needs a guest OS"
+  answer="0"
+  explanation="The controller remembers whether the previous sample was pressed. Only the first true follows a false; the other true samples describe the same held press. This assumes already debounced logical input, not a bouncing physical contact."
+/>
+
+You have now built the software that runs after reset, rather than just a
+program launched by an OS. The next lesson uses these startup responsibilities
+to explain a console's larger boot chain; the hardware debugging lessons show
+how a probe can inspect a core below the application interface.

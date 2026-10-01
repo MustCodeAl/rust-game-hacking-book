@@ -5,7 +5,7 @@ import { cp, rm } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
 const publicDir = new URL('../public/', import.meta.url);
-const labs = ['rust-labs', 'windows-labs', 'lua-labs', 'advanced-memory-labs'];
+const labs = ['rust-labs', 'windows-labs', 'lua-labs', 'advanced-memory-labs', 'firmware-labs'];
 const skip = /[\\/](target|\.git|node_modules)([\\/]|$)/;
 
 for (const lab of labs) {

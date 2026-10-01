@@ -1,8 +1,8 @@
 ---
 title: "Programming Fundamentals"
-description: "Build a small Rust program and use it to understand logic, collections, and ways to organize code."
+description: "Build a small Rust rule and use it to understand variables, logic, test cases, collections, and ways to organize code."
 chapter: "1.4"
-minutes: 35
+minutes: 40
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
@@ -136,6 +136,21 @@ express it. Its three building blocks are already visible here: do steps
 in **sequence**, use `if` to **select** a path, and later use a loop to
 **repeat** work for several players.
 
+You can first write the plan in **pseudocode**, ordinary steps arranged to
+look like code without committing to a language's exact syntax:
+
+```text
+receive the current gold and the item cost
+if the gold is at least the cost:
+    give back gold minus cost
+otherwise:
+    give back the original gold
+```
+
+This is a sketch to discuss and trace, rather than a program Rust can run.
+With 100 and 25, it gives back 75. With 10 and 25, it gives back 10. Naming
+the inputs and both outcomes makes the next function easier to write.
+
 ## A function gives a name to a behavior
 
 A **function** gives a behavior a name so another part of the program
@@ -173,6 +188,54 @@ This simple result does not tell the caller whether a purchase happened
 when the cost is zero. A later lesson introduces types that can
 represent success or failure explicitly. We only need the resulting
 gold amount here.
+
+## A value can have more than one role
+
+Gold and cost are **inputs** to `spend_if_possible`; its returned amount is
+an **output**. The caller can store that output in its mutable `gold`
+variable. `cost` stays fixed during the calculation. Input, output, and
+mutable are therefore overlapping descriptions, not three separate kinds
+of variable. They answer “where does the value flow?” and “may it change?”
+
+Two other descriptions concern where a name is usable and how long its
+storage exists. A **local** name belongs to a scope such as one function.
+People often use **global** for a name available outside a single function,
+although the language's visibility rules still control which code can use
+it. A Rust **static** item has storage for the entire program run. That
+storage duration does not by itself mean its contents can never change;
+Rust has separate rules for access and mutation. See the
+[Rust Reference's static-item explanation](https://doc.rust-lang.org/reference/items/static-items.html)
+when you need those rules. Our purchase calculation needs only its supplied
+inputs, so it does not need a shared global gold value.
+
+## Check the rule at its boundaries
+
+The ordinary 100-gold purchase is a useful **baseline case**, sometimes
+informally called a base case. In recursive algorithms, “base case” has a more
+specific meaning: a case solved directly without another recursive call.
+For this purchase rule, we are checking ordinary and unusual inputs. It is not
+enough to check only that example. An **edge case** exercises an unusual
+end of the allowed range, such as having zero gold. A **boundary case**
+checks where a decision changes: just below, exactly at, and just above
+the price. A **corner case** combines unusual conditions, such as zero
+gold and a zero price. These labels can overlap; the important part is
+writing down the inputs and expected result:
+
+| Case | Gold | Cost | Expected returned gold |
+| --- | ---: | ---: | ---: |
+| Ordinary purchase | 100 | 25 | 75 |
+| No gold | 0 | 25 | 0 |
+| Just below the price | 24 | 25 | 24 |
+| Exactly the price | 25 | 25 | 0 |
+| Just above the price | 26 | 25 | 1 |
+| No gold and a free item | 0 | 0 | 0 |
+
+The exact-price case checks that `>=` allows payment when gold equals cost.
+Changing it to `>` would reject that purchase. The free-item case also
+shows the limitation already mentioned: unchanged gold alone cannot tell
+us whether a purchase happened. The Rust Primer demonstrates an automated
+test for its own game rule; Hacking Fundamentals will test a small rule
+for permitting a memory write.
 
 ## A data structure organizes values
 
@@ -311,6 +374,26 @@ reading unfamiliar logic means finding both **which** steps can run and
 its condition remains true; the `for` loop here has a known collection
 of three prices. Later lessons combine these same forms into scanners,
 parsers, and game bots.
+
+## Name the result you need
+
+Once values are in a collection, the question determines the work. After
+the earlier two-player purchase, Ada has 75 gold and Bo has 15. For a new
+item costing 25, we can ask several different questions:
+
+| Question | Kind of result | Answer for Ada and Bo |
+| --- | --- | --- |
+| Can Bo afford the item? | **Decision:** a yes/no answer | No, because 15 is below 25. |
+| How many players can afford it? | **Count:** the number that meet a condition | One: Ada. |
+| What is the least or greatest gold amount? | **Minimum or maximum:** an extreme value | Minimum 15; maximum 75. |
+
+Counting requires checking each player's gold against the price. Finding
+a maximum requires comparing the gold amounts with one another. Neither
+requires sorting all players first. If there are no players, the count
+is zero, but there is no player's minimum or maximum to return. We will
+use Rust's `Option` in the next lesson to represent a missing answer.
+Clarifying the desired result helps you choose a collection and an
+algorithm, instead of copying a solution to a different question.
 
 ## Choose a collection for the question
 

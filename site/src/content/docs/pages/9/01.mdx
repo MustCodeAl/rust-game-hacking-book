@@ -2,7 +2,7 @@
 title: "Game Files and Live Memory"
 description: "See how saves, configuration, textures, maps, and archives preserve game state outside a running process."
 chapter: "9.1"
-minutes: 14
+minutes: 18
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
@@ -77,13 +77,18 @@ fn make_backup(path: &Path) -> anyhow::Result<()> {
         .and_then(|value| value.to_str())
         .unwrap_or("file");
     let backup = path.with_extension(format!("{extension}.gha-backup"));
+    // Preserve an existing backup rather than overwriting the way back.
     anyhow::ensure!(!backup.exists(), "backup already exists: {}", backup.display());
     fs::copy(path, &backup)?;
     Ok(())
 }
 ```
 
-Keep the original bytes and record a hash.
+This helper takes the path of an existing file. With `avatar.txt`, it writes
+`avatar.txt.gha-backup` and returns success only if the copy succeeds. It uses
+the `anyhow` dependency for an error that includes the failed path; an existing
+backup is an error rather than a reason to overwrite it. Keep the original
+bytes and record a hash.
 
 ## Identify the kind of file
 
@@ -96,11 +101,15 @@ fn first_bytes(path: &Path, count: usize) -> io::Result<Vec<u8>> {
     let mut file = File::open(path)?;
     let mut bytes = vec![0_u8; count];
     let read = file.read(&mut bytes)?;
+    // Report only bytes actually read, not the buffer's unused zeroes.
     bytes.truncate(read);
     Ok(bytes)
 }
 ```
 
+For `first_bytes(path, 16)`, the buffer has room for 16 bytes and the returned
+vector contains the bytes obtained by that read. A read can return fewer;
+this is a quick identification helper, not validation of an entire header.
 Common “magic” bytes include:
 
 ```text
@@ -166,6 +175,54 @@ For text formats, prefer a real parser:
 Blind replacement can alter comments, unrelated fields, encodings, checksums, or lengths.
 
 Parsing creates a **data model** that is intentionally smaller and clearer than the file representation. Preserve fields you do not understand when the format allows round trips, and distinguish “missing,” “present with a default value,” and “present with an unknown value.” Those cases may serialize differently even when the game currently displays the same result.
+
+## The data model shapes the questions you can ask
+
+A **data model** specifies the values, relationships, and constraints that
+matter to a program. A character model might name attributes, inventory entries,
+and item IDs. A file format specifies how a chosen part of that model is
+represented for storage. The raw bytes are another layer below that format.
+
+The Flare line `build=5,1,1,2` illustrates the separation. At the game level,
+the first value is the Physical attribute. At the format level, it is the first
+comma-separated number in a particular named field. At the byte level, the
+digit `5` occupies a position in encoded text. A raw byte search cannot by
+itself recover the attribute's role or prove that an unrelated occurrence of
+the digit is the same field.
+
+Different storage models expose different relationships:
+
+| Model | A possible game use | What the structure makes explicit |
+|---|---|---|
+| Nested document, such as JSON or XML | One save with a character and inventory entries | Containment and named fields |
+| Relational tables | Character rows and item rows linked by owner IDs | Records, keys, and relationships between tables |
+| Graph of nodes and edges | Map locations joined by traversable routes | Connections, and properties of each connection |
+
+These are options, not a claim that every game uses a database or every map
+needs a graph database. Choose a model for the questions and updates it must
+support. The storage implementation then chooses a byte representation and
+access structures. A parser or query interface hides some lower-level details,
+but its constraints still affect the layer above.
+
+### Persistent records, caches, and indexes have different jobs
+
+A durable save or database record is intended to survive a restart. A **cache**
+stores a result that can be obtained again, such as a decoded texture, to avoid
+repeating expensive work. A **search index** is an extra structure that helps
+find records matching a key, keyword, or filter without checking everything
+from the beginning each time.
+
+Suppose a mod changes a texture file. The game may still display its previously
+decoded copy until the asset is reloaded or the cache is invalidated. Editing
+the durable source and changing a cached representation are therefore different
+operations. Conversely, deleting a rebuildable cache is different from deleting
+the player's only save.
+
+Indexes need to remain consistent with the data they describe, and caches need
+a policy for becoming stale. When an edit appears to have no effect, check
+which representation the game currently reads before concluding that the edit
+failed. The running object, its serialized record, and an access structure can
+all describe related information while having different lifetimes.
 
 ## Treat files as untrusted input
 

@@ -14,7 +14,7 @@ export const CHAPTERS = [
 	{ number: 11, area: 'systems', title: 'Windows Process Internals', emoji: '🪟', summary: 'Connect build and object identity to access rights, memory, threads, kernel services, and dumps.' },
 	{ number: 12, area: 'systems', title: 'Process Boundaries and Physical Memory', emoji: '🛡️', summary: 'Trace DLL and driver boundaries before validating offline physical-memory captures.' },
 	{ number: 13, area: 'systems', title: 'Advanced Game Hacking', emoji: '🧩', summary: 'Use invariants and telemetry to explain integrity checks, value transforms, control gaps, and repairs.' },
-	{ number: 14, area: 'systems', title: 'Virtual Machines, Hardware, and Consoles', emoji: '🔌', summary: 'Compare guest execution, console architecture, hardware debugging, and software emulation.' },
+	{ number: 14, area: 'systems', title: 'Virtual Machines, Hardware, and Consoles', emoji: '🔌', summary: 'Connect guest execution and firmware to console architecture, hardware debugging, and software emulation.' },
 ];
 
 // Reading colours identify subject areas, not a chapter's position in a cycle.

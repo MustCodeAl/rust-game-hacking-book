@@ -1,0 +1,58 @@
+---
+// The complete ordered explanation is rendered first. The client adds a
+// controllable walkthrough; without JavaScript, and on paper, every step stays.
+import { randomUUID } from 'node:crypto';
+import { inlineMarkdown } from '../lib/inline-md';
+import '../styles/animated-flow.css';
+
+interface Props {
+	title: string;
+	stages: { label: string; detail: string }[];
+	caption?: string;
+}
+
+const { title, stages, caption } = Astro.props;
+if (!stages?.length) throw new Error('AnimatedFlow needs at least one explained stage.');
+const id = `flow-${randomUUID()}`;
+---
+
+<figure class="animated-flow not-content" data-animated-flow aria-labelledby={`${id}-title`}>
+	<figcaption class="animated-flow__header">
+		<span class="animated-flow__eyebrow">Follow the process</span>
+		<strong id={`${id}-title`}>{title}</strong>
+	</figcaption>
+	<div class="animated-flow__body">
+		<ol class="animated-flow__stages" aria-label="Process steps">
+			{stages.map((stage, index) => (
+				<li class="animated-flow__stage" data-flow-stage>
+					<button type="button" data-flow-select disabled aria-label={`Select step ${index + 1}: ${stage.label}`}>
+						<span class="animated-flow__number" aria-hidden="true">{index + 1}</span>
+						<span data-flow-label>{stage.label}</span>
+						<span class="animated-flow__current" data-flow-current hidden>Current</span>
+					</button>
+					<p class="animated-flow__static-detail" data-flow-detail>{stage.detail}</p>
+				</li>
+			))}
+		</ol>
+		<div class="animated-flow__explanation" data-flow-explanation hidden>
+			<span class="animated-flow__position" data-flow-position></span>
+			<strong class="animated-flow__active-label" data-flow-active-label></strong>
+			<p data-flow-active-detail></p>
+			<p class="animated-flow__state" data-flow-state></p>
+		</div>
+	</div>
+	<div class="animated-flow__controls" data-flow-controls hidden aria-label="Process playback">
+		<button type="button" data-flow-action="previous">Previous</button>
+		<button type="button" data-flow-action="play">Play</button>
+		<button type="button" data-flow-action="next">Next step</button>
+		<button type="button" data-flow-action="reset">Reset</button>
+	</div>
+	<p class="animated-flow__announcement" data-flow-announcement role="status" aria-live="polite" aria-atomic="true"></p>
+	{caption && <p class="animated-flow__caption" set:html={inlineMarkdown(caption)} />}
+</figure>
+
+<script>
+	import { initializeAnimatedFlows } from '../lib/animated-flow.js';
+	initializeAnimatedFlows(document);
+	document.addEventListener('astro:page-load', () => initializeAnimatedFlows(document));
+</script>

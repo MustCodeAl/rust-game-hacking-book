@@ -1,8 +1,8 @@
 ---
 title: "Hacking Fundamentals"
-description: "Turn an observed game behavior into a testable question, narrow possible causes, and make one reversible change with a four-step method."
+description: "Turn observed game behavior into repeatable experiments, test a small tool, and record the evidence needed to reproduce its results."
 chapter: "1.6"
-minutes: 18
+minutes: 27
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
@@ -130,9 +130,9 @@ This self-contained Rust fragment makes the distinction visible:
 
 ```rust
 let mut gold = 100_u32;
-let displayed_gold = gold;
+let displayed_gold = gold; // Copy the amount before the purchase.
 if gold >= 25 {
-    gold -= 25;
+    gold -= 25; // Change the amount the next purchase will read.
 }
 ```
 
@@ -162,6 +162,14 @@ Restore: write the saved original value back when the experiment ends
 
 This contract prevents a small experiment from quietly turning into an
 unbounded tool.
+
+The steps also have **dependencies**: a successful write needs a successful
+read of the intended field in the intended build. A failed read does not mean
+the player has zero gold. Stop at that failed step and preserve its error,
+rather than letting later code act on an invented value. The purchase itself
+depends on the current gold and price; the display depends on an update of its
+copy. Following those relationships tells you which earlier assumption to
+check when a later result is wrong.
 
 A later tool may replace the temporary address with a **module-relative
 pointer path**: a sequence of lookups anchored to one exact game build.
@@ -230,6 +238,22 @@ address. Chapter 2 teaches how to use one. It shows which instruction
 changed the candidate; a restart shows whether the path survives a new
 process.
 
+### Find the step that actually takes time
+
+If a scanner is slow, ask where its time goes. A **bottleneck** is the step
+that limits the overall work. It might be reading another process, comparing
+many values locally, sorting the remaining candidates, or writing a large log.
+Finding a number and accessing its bytes are different operations, and neither
+requires sorting the results unless the tool needs that order.
+
+Measure a repeatable scan before changing its design. Record how many reads it
+made, how many bytes it compared, how many matches it kept, and the time spent
+in the expensive stages. Improving comparisons will do little if most time is
+spent waiting for reads. Keep the first working experiment small enough to
+understand; [Sampling Game State Under Load](/pages/4/08/) later handles repeated
+observations and slow log writes. Larger collections and more workers are
+choices to evaluate against a measured need.
+
 ## 4. Change one thing and measure the result
 
 Make a prediction before the change:
@@ -253,6 +277,32 @@ If only the text changes, you probably found a display copy. If the value snaps
 back, another system owns or recomputes it. If unrelated fields break, your type,
 width, or address may be wrong.
 
+## Choose diagnostics that fit the failure
+
+Compare the **expected** and **observed** result at the first step where they
+diverge. Suppose you expected to read 75 before a write but actually read 74.
+Investigate that mismatch before explaining the later failed purchase.
+
+A **log** records events and values without requiring you to inspect them
+immediately. A useful entry could include the operation, expected amount,
+actual amount, and stage:
+
+```text
+read_gold expected=75 actual=74 stage=before_write
+```
+
+That entry explains why the tool should reject the write. For a failed process
+read, record the reported error and how many bytes were read too. Keep the
+target build and tool version with the run so the entry retains its meaning.
+
+A debugger lets you pause at the suspicious step and inspect its values and
+instructions. Pausing changes timing: other work may wait, or an input or
+timeout may behave differently. Logging also adds work, especially when it
+writes to disk. If a failure disappears when you add diagnostics, that is
+evidence to investigate the timing change; it does not establish that the
+underlying problem is fixed. [What a Debugger Can Reveal](/pages/2/01/) explains
+the pause, while the later sampling lesson shows how to limit recording delays.
+
 ## Use tests and types for quick feedback
 
 Separate code that decides *what should happen* from code that performs a
@@ -264,21 +314,93 @@ launching the game:
 
 ```rust
 fn should_write(current: u32, expected: u32, replacement: u32) -> bool {
+    // Both the expected-value check and the replacement limit must pass.
     current == expected && replacement <= 10_000
 }
 
 #[test]
 fn rejects_an_unexpected_current_value() {
+    // A changed field must not pass the expected-value check.
     assert!(!should_write(74, 75, 100));
+}
+
+#[test]
+fn accepts_a_matching_value_and_permitted_replacement() {
+    assert!(should_write(75, 75, 100));
+}
+
+#[test]
+fn checks_the_replacement_limit() {
+    // The limit is allowed; the next value is not.
+    assert!(should_write(75, 75, 10_000));
+    assert!(!should_write(75, 75, 10_001));
 }
 ```
 
-The test passes because 74 is different from the expected 75, so
-`should_write` returns `false`. The `#[test]` marker tells Rust's
-test runner to call the function, and `assert!` fails the test if the
-answer is not false. The compiler checks types, tests check examples,
-and the debugger checks the running game. Each one catches mistakes
-the other two cannot.
+The first test passes because 74 is different from the expected 75, so
+`should_write` returns `false`. `!` reverses that boolean, making the
+assertion true. The `#[test]` marker tells Rust's test runner to call the
+function, and `assert!` fails when its expression is false. The other tests
+exercise a permitted write and both sides of the 10,000 limit. The
+[Rust test guide](https://doc.rust-lang.org/book/ch11-01-writing-tests.html)
+explains these test features. The compiler checks types, tests check examples,
+and the debugger checks the running game. Each one catches mistakes the other
+two cannot. This function checks the supplied sample; the game may change
+again after that sample was read.
+
+Begin with the smallest implementation that satisfies the contract: identify
+the target, read one value, decide whether the change is allowed, apply one
+allowed change, then restore the original value. Keep the decision separate
+from process access so you can test it with
+ordinary values. Reuse an existing tool or library when it supports your target
+and you can check its behavior, version, error handling, and maintenance.
+Writing every dependency yourself does not make the experiment more reliable.
+
+As repeated code or new use cases appear, give each responsibility a small
+interface. **Refactoring** changes the organization while preserving the
+intended behavior; keep the existing examples and tests working as you do it.
+[Tool Architecture, Commands, and Cleanup](/pages/8/10/) develops this separation
+when several features share observations and must coordinate changes.
+
+Review small changes as you work. A **diff** compares edited source with its
+previous version, making an accidentally changed field width or missing check
+easier to see. A **walkthrough** follows one example through the complete read,
+decision, write, and restoration path, often with another reader. Automated
+checks and these reviews answer different questions: passing a logic test does
+not prove that the live address is the game's gold field.
+
+## Leave a record another reader can repeat
+
+Start documentation with the question, the tool's purpose, and its limits.
+Then show the route through the experiment before detailing each step. A
+reader needs to know which file or command to begin with, what result to
+expect, and what a failure means. Define names consistently: if `gold` means
+the rule's stored amount, call the screen copy `displayed_gold` throughout.
+
+Keep a compact experiment record:
+
+- **Reference environment:** game version and build identity, architecture,
+  operating system, tool versions, and the save or map used.
+- **Reproduction:** starting state, exact actions or commands, expected result,
+  observed result, and how to restore the original state.
+- **Evidence:** candidate values, relevant instructions or logs, failed checks,
+  and which explanations remain possible.
+- **Decisions:** why you chose this candidate, data type, limit, or dependency;
+  include the observation that would make you reconsider it.
+
+For a tool you build, document one complete supported path from a fresh source
+checkout to a runnable artifact, including the compiler, target, dependency
+versions, required options, and tests. Keep that path consistent with the
+instructions you actually verify. Reproducible steps let another person repeat
+the experiment; they do not automatically guarantee an identical executable
+byte for byte. [How Source Becomes a Running Process](/pages/1/10/) explains the
+build stages, and the next lab fixes the environment for this book's first scan.
+
+Read the record from a newcomer's position. If an instruction says “use the
+usual settings,” supply the settings. If a screenshot is the only record of a
+result, write down the important value and condition too. Update the record
+when the tool or target changes so an old address or command is not mistaken
+for a current promise.
 
 ## What a candidate address tells you
 
