@@ -7,7 +7,7 @@ import '../styles/animated-flow.css';
 
 interface Props {
 	title: string;
-	stages: { label: string; detail: string; role?: 'input' | 'state' | 'process' | 'output' }[];
+	stages: { label: string; detail: string; value?: string; role?: 'input' | 'state' | 'process' | 'output' }[];
 	caption?: string;
 }
 
@@ -16,8 +16,24 @@ if (!stages?.length) throw new Error('AnimatedFlow needs at least one explained 
 const id = `flow-${randomUUID()}`;
 const roleLabels = { input: 'Input', state: 'Data / state', process: 'Processing', output: 'Result' };
 const hasRoles = stages.some((stage) => stage.role);
+// A real diagram shares the same stages as the keyboard controls and written
+// explanation. Keep labels on two lines; longer explanations belong in detail.
+function labelLines(text: string): string[] {
+	const lines: string[] = [];
+	for (const word of text.split(/\s+/)) {
+		const last = lines.length - 1;
+		if (last >= 0 && `${lines[last]} ${word}`.length <= 31) lines[last] += ` ${word}`;
+		else lines.push(word);
+	}
+	return lines;
+}
+const rowHeight = 108;
+const nodeHeight = 80;
+const diagramHeight = stages.length * rowHeight - 16;
 for (const stage of stages) {
 	if (stage.role && !(stage.role in roleLabels)) throw new Error(`Unknown diagram role: ${stage.role}`);
+	if (labelLines(stage.label).length > 2) throw new Error(`Shorten the diagram label: ${stage.label}`);
+	if (stage.value && stage.value.length > 35) throw new Error(`Shorten the diagram state value: ${stage.value}`);
 }
 ---
 
@@ -32,6 +48,31 @@ for (const stage of stages) {
 		</span>}
 	</figcaption>
 	<div class="animated-flow__body">
+		<div class="animated-flow__diagram-panel">
+			<svg class="animated-flow__diagram" viewBox={`0 0 380 ${diagramHeight}`} aria-hidden="true" focusable="false">
+				{stages.map((stage, index) => {
+					const y = 12 + index * rowHeight;
+					const lines = labelLines(stage.label);
+					return <>
+						{index < stages.length - 1 && <g class="animated-flow__edge" data-flow-diagram-edge data-flow-role={stage.role || 'process'}>
+							<path class="animated-flow__connector" d={`M190 ${y + nodeHeight} V${y + rowHeight - 4}`} />
+							<path class="animated-flow__arrow" d={`M185 ${y + rowHeight - 10} L190 ${y + rowHeight - 4} L195 ${y + rowHeight - 10}`} />
+							<circle class="animated-flow__signal" cx="190" cy={y + nodeHeight + 2} r="3.5" />
+						</g>}
+						<g class="animated-flow__diagram-node" data-flow-diagram-node data-flow-role={stage.role || 'process'}>
+							<rect class="animated-flow__node-box" x="12" y={y} width="356" height={nodeHeight} rx="8" />
+							<circle class="animated-flow__node-number" cx="36" cy={y + 29} r="13" />
+							<text class="animated-flow__node-index" x="36" y={y + 33} text-anchor="middle">{index + 1}</text>
+							<text class="animated-flow__node-label" x="60" y={y + 32}>
+								{lines.map((line, lineIndex) => <tspan x="60" dy={lineIndex ? 20 : 0}>{line}</tspan>)}
+							</text>
+							{stage.value && <text class="animated-flow__node-value" x="60" y={y + 70}>{stage.value}</text>}
+							<text class="animated-flow__node-role" x="60" y={y + 13}>{roleLabels[stage.role || 'process']}</text>
+							<text class="animated-flow__node-status" x="355" y={y + 13} text-anchor="end" data-flow-diagram-status />
+						</g>
+					</>;
+				})}
+			</svg>
 		<ol class="animated-flow__stages" aria-label="Process steps">
 			{stages.map((stage, index) => (
 				<li class="animated-flow__stage" data-flow-stage data-flow-role={stage.role || 'process'}>
@@ -43,13 +84,16 @@ for (const stage of stages) {
 						</span>
 						<span class="animated-flow__current" data-flow-current hidden>Current</span>
 					</button>
+					{stage.value && <p class="animated-flow__static-value" data-flow-value>{stage.value}</p>}
 					<p class="animated-flow__static-detail" data-flow-detail>{stage.detail}</p>
 				</li>
 			))}
 		</ol>
+		</div>
 		<div class="animated-flow__explanation" data-flow-explanation hidden>
 			<span class="animated-flow__position" data-flow-position></span>
 			<strong class="animated-flow__active-label" data-flow-active-label></strong>
+			<p class="animated-flow__active-value" data-flow-active-value hidden></p>
 			<p data-flow-active-detail></p>
 			<p class="animated-flow__state" data-flow-state></p>
 		</div>

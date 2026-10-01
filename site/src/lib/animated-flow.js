@@ -15,6 +15,9 @@ function initializeFlow(root) {
   const position = root.querySelector('[data-flow-position]');
   const label = root.querySelector('[data-flow-active-label]');
   const detail = root.querySelector('[data-flow-active-detail]');
+  const value = root.querySelector('[data-flow-active-value]');
+  const diagramNodes = Array.from(root.querySelectorAll('[data-flow-diagram-node]'));
+  const diagramEdges = Array.from(root.querySelectorAll('[data-flow-diagram-edge]'));
   const state = root.querySelector('[data-flow-state]');
   const announcement = root.querySelector('[data-flow-announcement]');
   const previous = root.querySelector('[data-flow-action="previous"]');
@@ -42,6 +45,7 @@ function initializeFlow(root) {
     const stage = stages[current];
     const currentLabel = stage.querySelector('[data-flow-label]').textContent;
     const currentDetail = stage.querySelector('[data-flow-detail]').textContent;
+    const currentValue = stage.querySelector('[data-flow-value]')?.textContent || '';
     stages.forEach((item, index) => {
       const selected = index === current;
       item.dataset.active = String(selected);
@@ -49,6 +53,15 @@ function initializeFlow(root) {
       if (selected) selections[index].setAttribute('aria-current', 'step');
       else selections[index].removeAttribute('aria-current');
       item.querySelector('[data-flow-current]').hidden = !selected;
+    });
+    diagramNodes.forEach((node, index) => {
+      node.dataset.diagramState = index === current ? 'current' : index < current ? 'done' : 'next';
+      const status = node.querySelector('[data-flow-diagram-status]');
+      if (status) status.textContent = index === current ? 'Current' : index < current ? 'Done' : 'Next';
+    });
+    diagramEdges.forEach((edge, index) => {
+      edge.dataset.passed = String(index < current);
+      edge.dataset.moving = String(running && index === current);
     });
     root.dataset.running = String(running);
     explanation.dataset.flowRole = stage.dataset.flowRole || 'process';
@@ -59,6 +72,10 @@ function initializeFlow(root) {
     position.textContent = `Step ${current + 1} of ${stages.length}`;
     label.textContent = currentLabel;
     detail.textContent = currentDetail;
+    if (value) {
+      value.textContent = currentValue;
+      value.hidden = !currentValue;
+    }
     previous.disabled = current === 0;
     next.disabled = current === stages.length - 1;
     play.disabled = reducedMotion.matches || stages.length < 2;
@@ -71,7 +88,7 @@ function initializeFlow(root) {
           ? 'Final step. Select an earlier step or play again.'
           : 'Paused. Play the sequence or move one step at a time.';
     // Automatic playback must not repeatedly interrupt a screen reader.
-    if (announce) announcement.textContent = `Step ${current + 1} of ${stages.length}: ${currentLabel}. ${currentDetail}`;
+    if (announce) announcement.textContent = `Step ${current + 1} of ${stages.length}: ${currentLabel}. ${currentValue ? `${currentValue}. ` : ''}${currentDetail}`;
   }
 
   function pause(announce = false) {

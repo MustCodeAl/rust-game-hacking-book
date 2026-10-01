@@ -232,6 +232,12 @@ colour key; do not assign roles by their position. This adds useful colour
 within a chapter without introducing decorative hue cycling. Syntax colours
 inside code blocks retain their more specific language roles.
 
+Each of the five reader palettes has its own light and dark reading-role shades;
+preserve the blue/violet/teal/amber meanings while adjusting those shades to the
+palette. The colour-guide menu always uses that palette's dark-surface variants.
+Check actual saved tokens against every supported page and diagram background,
+including active-node tints and Plain fills, when adjusting these colours.
+
 Reader theme includes saved, independent diagram-background and box-fill
 choices, heading rectangles On/Off, text size, and spacing. All saved choices
 apply before first paint and reset together. Diagram light/dark follows page
@@ -271,6 +277,13 @@ stepping, reduced motion, and complete static/print explanations. `LessonVideo`
 embeds the retained silent clips with native controls and a download fallback.
 Keep framing tied to the chapter and stage colours tied to documented reading
 roles; preserve all original visuals. Walkthroughs never start automatically.
+There are now **28 animated lessons**, two per displayed chapter. The shared
+walkthrough renders a connected SVG with labelled nodes, short state values,
+and a signal that traces the currently playing connection. Keep that diagram,
+the direct step buttons, the written explanation, and the state value in sync.
+Current/Done/Next labels and dashed upcoming nodes make state visible without
+depending on colour. Reduced motion disables timed playback; manual steps and
+the complete static/print explanation remain available.
 The current validation and publication receipt are in BOOK_REVISION_PROGRESS.md.
 
 The complete firmware/fundamentals/media build is source **b54a88b**, published

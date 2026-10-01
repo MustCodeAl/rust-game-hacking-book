@@ -9,6 +9,8 @@ sidebar:
   order: 2
   label: "12.2 DLL Loading and the Loader Lock"
 ---
+import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
+
 ## Loading a DLL is a coordinated operation
 
 When Windows loads a DLL, it does more than copy bytes. The loader maps PE sections, applies relocations when needed, resolves imports, prepares thread-local storage, updates module bookkeeping, and calls initialization entry points.
@@ -142,6 +144,19 @@ sequenceDiagram
     I->>G: call exported gha_start
     G->>G: spawn worker thread, return
 ```
+
+<AnimatedFlow
+  title="Finish loading before starting the worker"
+  stages={[
+    { label: 'Request the DLL load', role: 'input', value: 'LoadLibraryW requested', detail: 'The injector calls LoadLibraryW. It must wait for that loading thread to finish before requesting the separate application startup export.' },
+    { label: 'Prepare the module', role: 'process', value: 'sections mapped; imports resolved', detail: 'Windows maps the DLL, applies required relocations, resolves imports, prepares thread-local storage, and updates loader records. These dependencies must be ready before application work begins.' },
+    { label: 'Complete the loader notification', role: 'process', value: 'DllMain; loader lock held', detail: 'Windows calls DllMain while holding the loader lock. The course callback disables unused thread notifications and returns; it does not start a worker or wait for one.' },
+    { label: 'Finish the loading operation', role: 'state', value: 'LoadLibraryW returned', detail: 'The loader completes its notifications and returns to the injector. The initial loader work has finished, so the injector can now call gha_start rather than running complex work inside DllMain.' },
+    { label: 'Publish startup once', role: 'process', value: 'STARTED set; STOP = false', detail: 'On the first successful startup path, gha_start records STARTED, publishes STOP = false, and spawns the worker. A duplicate call or failed spawn returns its explicit error result instead.' },
+    { label: 'Run outside the loader callback', role: 'output', value: 'worker outside loader lock', detail: 'The worker runs run_lab from ordinary thread execution after the initial loading operation. Startup and later cleanup have an explicit owner, and a loader callback never waits for that worker.' },
+  ]}
+  caption="The moving handoff follows the successful lifecycle in the sequence diagram. Loader completion is a dependency for explicit startup, while stop requests and worker joining remain separate operations."
+/>
 
 The exported function uses the Windows thread-procedure ABI because the course injector calls it as a separate thread entry:
 

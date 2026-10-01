@@ -489,3 +489,55 @@ reports that exact merge as **built**. Public HTTP verifies byte-for-byte
 matches for the Rust Primer, pointer walkthrough, theme script, and appearance
 stylesheet. The live preview on port 4322 serves both menus with all new
 controls. The authored branch may also contain this documentation-only receipt.
+
+## 2026-10-01: animated diagrams across the book and theme-specific reading colours
+
+The book now has **28 animated lessons**, with two distinct lessons in every
+displayed chapter. Nineteen additions cover breakpoint rearming, read races,
+encoding, pathfinding, event edges, RVA mapping, scan boundaries, import hooks,
+radar coordinates, protocol state, save editing, binary parsing, snapshot
+validation, VM execution, thread interleaving, system calls, DLL startup,
+game-state invariants, and reversible value transforms. The original nine
+walkthroughs remain and now include concise values from their local examples.
+
+These are connected SVG process diagrams: labelled boxes show the data at each
+stage, an animated signal traces the active arrow, and Current/Done/Next states
+follow playback and manual selection. The adjacent explanation and value stay
+in sync with the diagram. Direct step buttons, keyboard controls, pause/reset,
+four-second stages, reduced motion, offscreen/hidden-page pausing, and complete
+static/print explanations remain. Motion starts only when requested.
+
+Paper, Purple, Midnight, Forest, and Contrast now each have their own light and
+dark shades for the same reading roles: blue input/data/terms, violet
+processing/code, teal results/tips, and amber cautions. The colour-guide menu
+uses each palette's dark variants against its dark surface. Chapter subject
+colours and status/syntax meanings remain consistent. Diagram background and
+Plain/Tinted preferences also apply to the new SVG nodes.
+
+Validation:
+
+- All **135 original lessons**, their prose, metadata, headings, visuals, and
+  **1,133 code/diagram fences** are preserved. The **1,247 source H2 headings**
+  retain their levels, wording, and placement; `reader.css` is unchanged.
+- Production output has **141 pages** and all **273 original Mermaid diagrams**.
+  **26,747 local links**, **268 destination cards**, and **135 print articles**
+  pass the link, reading-order, and chapter-scoping checks.
+- **1,200 diagram colour combinations** use the actual per-theme CSS tokens,
+  including both modes and all supported surfaces. No text-contrast failures:
+  minimum secondary diagram text **4.61:1**, active role text **4.76:1**,
+  inline notation **4.89:1**, and colour-guide text **6.52:1**.
+- **25 walkthrough checks** cover SVG state/value propagation, moving edges,
+  controls, final stop, independent instances, keyboard access, reduced motion,
+  lifecycle cleanup, optional values, Plain fills, and static/print fallbacks.
+  **13 reader-control checks** also pass, including saved startup, reset,
+  menu synchronization, independent preferences, and blocked storage.
+- New numerical traces were checked against their lesson examples, including
+  the BFS queue/route, encoding round trips, RVA mapping, signature boundary,
+  binary-save bytes/checksum, and thread/invariant observations.
+- Browser layout inspection remains unavailable after the earlier policy
+  rejection. Verification uses source, generated HTML/SVG, token calculations,
+  isolated interaction checks, and HTTP; no browser rendering claim is made.
+
+The live preview on port 4322 serves the new diagrams. Publication will use a
+fresh branch based on `gh-pages` and the complete verified static build; the
+exact deployment receipt follows below.

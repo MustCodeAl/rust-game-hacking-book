@@ -10,6 +10,7 @@ sidebar:
   label: "5.4 Byte Signatures and Pattern Scanning"
 ---
 import Quiz from '../../../../components/Quiz.astro';
+import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
 
 ## Why patterns help
 
@@ -295,6 +296,22 @@ fn finds_match_at_last_possible_offset() {
     assert_eq!(find_all(&bytes, &pattern), vec![1]);
 }
 ```
+
+Follow that boundary test as two candidate windows. All byte values below are
+hexadecimal; offset `1` must be included in the scan:
+
+<AnimatedFlow
+  title="The final legal window can contain the only match"
+  stages={[
+    { label: 'Take the copied byte buffer', detail: 'The test supplies three local bytes: 0x10, 0x20, 0x30. Matching this slice performs no further reads from the game.', role: 'input', value: 'bytes: 10 20 30' },
+    { label: 'Keep the two exact pattern bytes', detail: 'The pattern requires Exact(0x20) followed by Exact(0x30). Both positions must match; this particular test has no wildcards.', role: 'state', value: 'pattern: 20 30' },
+    { label: 'Compute both legal starts', detail: 'Three input bytes minus two pattern bytes gives final start 1. The inclusive range 0..=1 therefore contains two candidate windows.', role: 'process', value: 'start offsets: 0..=1' },
+    { label: 'Reject the first window', detail: 'At offset 0 the candidate bytes are 0x10, 0x20. The first exact byte already disagrees with 0x20, so this window does not match.', role: 'process', value: 'offset 0: 10 20 ≠ 20 30' },
+    { label: 'Accept the final window', detail: 'At offset 1 the candidate bytes are 0x20, 0x30. Both exact comparisons pass. An exclusive upper bound would skip this only match.', role: 'process', value: 'offset 1: 20 30 = 20 30' },
+    { label: 'Return the local match offset', detail: 'find_all collects offset 1, so the test expects vec![1]. This number identifies a match inside the copied buffer; it is not yet a verified game instruction address.', role: 'output', value: 'matches: [1]' },
+  ]}
+  caption="A range boundary is part of correctness. Matching bytes still leaves the separate checks for build identity and instruction meaning."
+/>
 
 Also test empty patterns, all wildcards, a pattern longer than input, no matches, overlapping matches, and multiple matches.
 

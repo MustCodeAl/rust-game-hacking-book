@@ -9,6 +9,8 @@ sidebar:
   order: 7
   label: "3.7 When Game Values Are Encoded"
 ---
+import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
+
 ## Obfuscation changes the representation
 
 A game does not have to store health as the obvious integer `125`. It might XOR the value with a key, rotate the bits, split it across fields, or store both a value and a check value.
@@ -64,6 +66,21 @@ for value in [0, 1, 100, u32::MAX] {
 ```
 
 That last property is the important one: decoding the encoded value must recover the starting value for many inputs, not only one lucky example.
+
+Follow the loop's `100` case with its key `0xA1B2_C3D4`. The changing numbers
+below are all 32-bit values; the final result must return to the starting one:
+
+<AnimatedFlow
+  title="Undo a transformation in the opposite order"
+  stages={[
+    { label: 'Start with the logical value', detail: 'Use value 100 and key 0xA1B2_C3D4, the same key passed to both functions in the test loop.', role: 'input', value: 'value: 100; key: 0xA1B2C3D4' },
+    { label: 'XOR with the key', detail: '100 XOR 0xA1B2_C3D4 gives 0xA1B2_C3B0. This intermediate value is what encode rotates next.', role: 'process', value: 'after XOR: 0xA1B2C3B0' },
+    { label: 'Store the rotated representation', detail: 'Rotate the 32-bit intermediate left by seven positions. The encoded value is 0xD961_D850, which differs from the logical value 100.', role: 'state', value: 'encoded: 0xD961D850' },
+    { label: 'Undo the rotation first', detail: 'decode rotates 0xD961_D850 right by seven positions. That recovers the intermediate 0xA1B2_C3B0 before applying the key.', role: 'process', value: 'after rotate: 0xA1B2C3B0' },
+    { label: 'XOR with the same key again', detail: '0xA1B2_C3B0 XOR 0xA1B2_C3D4 returns 100. The round-trip assertion checks this result against the original input.', role: 'output', value: 'decoded: 100' },
+  ]}
+  caption="Encoding applies XOR then rotation; decoding reverses the order. This reversible toy representation is not a security guarantee."
+/>
 
 ## An integrity value is another clue
 

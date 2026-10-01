@@ -10,6 +10,7 @@ sidebar:
   label: "4.8 Pathfinding on a Game Map"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
 
 Coordinates can tell a bot where an enemy is, but not how to reach it. If a
 wall lies between the player and the target, moving directly toward the target
@@ -293,6 +294,22 @@ fn bfs_walks_around_a_wall() {
     assert!(!route.contains(&blocked));
 }
 ```
+
+Follow that test through the queue. The wall removes the direct move, leaving
+the route through the open second row:
+
+<AnimatedFlow
+  title="A FIFO frontier finds the route around the wall"
+  stages={[
+    { label: 'Use the validated grid', detail: 'The test starts at (0,0), aims for (2,0), and rejects wall (1,0). Only x from 0 to 2 and y from 0 to 1 are walkable candidates.', role: 'input', value: 'start: (0,0); goal: (2,0)' },
+    { label: 'Seed the frontier', detail: 'Put (0,0) into the FIFO queue and record its parent as None. This marks the start as seen before any neighboring tile is added.', role: 'state', value: 'queue: [(0,0)]' },
+    { label: 'Visit the start', detail: 'Pop (0,0). Its right neighbor is the wall, and its left and upper neighbors are outside the grid. Enqueue (0,1) and remember (0,0) as its parent.', role: 'process', value: 'queue: [(0,1)]' },
+    { label: 'Advance along row one', detail: 'Pop (0,1). The only legal unseen neighbor is (1,1); the start is already seen. Enqueue (1,1) with parent (0,1).', role: 'process', value: 'queue: [(1,1)]' },
+    { label: 'Reach the goal from below', detail: 'Popping (1,1) discovers (2,1). Popping (2,1) then discovers (2,0), with each tile retaining the parent that first reached it.', role: 'process', value: 'queue: [(2,0)]' },
+    { label: 'Rebuild the route', detail: 'When (2,0) leaves the queue, follow parents backward and reverse them: (0,0), (0,1), (1,1), (2,1), (2,0). The route takes four equal-cost moves and never enters the wall.', role: 'output', value: '4 moves; 5 tiles; no wall' },
+  ]}
+  caption="The queue controls exploration order; came_from records both visited tiles and the route back to the start."
+/>
 
 Also test:
 
