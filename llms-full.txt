@@ -1007,10 +1007,10 @@ this example only shows how a declared format gives bytes meaning.
 <AnimatedFlow
   title="Follow the meaning into a byte representation"
   stages={[
-    { label: 'World idea', detail: 'A character owns spendable coins.', role: 'input' },
-    { label: 'Game model', detail: 'Player entity 17 has a wallet with 76 gold.', role: 'state' },
-    { label: 'Save or message format', detail: 'This toy format writes player ID, then gold, one byte each.', role: 'process' },
-    { label: 'Bytes', detail: '11 4C in hexadecimal encodes ID 17 and gold 76 under those rules.', role: 'output' },
+    { label: 'World idea', detail: 'A character owns spendable coins.', role: 'input', value: 'spendable coins' },
+    { label: 'Game model', detail: 'Player entity 17 has a wallet with 76 gold.', role: 'state', value: 'player 17: gold = 76' },
+    { label: 'Save or message format', detail: 'This toy format writes player ID, then gold, one byte each.', role: 'process', value: 'ID byte | gold byte' },
+    { label: 'Bytes', detail: '11 4C in hexadecimal encodes ID 17 and gold 76 under those rules.', role: 'output', value: '11 4C' },
   ]}
   caption="Design chooses the model; a format and encoding describe how selected information becomes saved or transmitted bytes."
 />
@@ -3349,10 +3349,10 @@ a number is being read from memory and when it is being used as an address:
 <AnimatedFlow
   title="From pointer storage to the health field"
   stages={[
-    { label: 'Start at the pointer storage', detail: 'At address 0x2000, this example stores the four bytes 00 50 00 00. This is where the pointer lives, not where the player object starts.', role: 'input' },
-    { label: 'Read the stored address', detail: 'Read those bytes as a little-endian u32 to obtain 0x5000. The result names the beginning of the player object for this example.', role: 'process' },
-    { label: 'Locate the field', detail: 'Use the object base 0x5000 and add the verified health offset 0x30. The sum is 0x5030; adding the offset computes an address without reading health.', role: 'process' },
-    { label: 'Read health at the destination', detail: 'Read the health field from 0x5030 using its verified type. The field value comes from the bytes there, not from the pointer value 0x5000 or the offset 0x30.', role: 'output' },
+    { label: 'Start at the pointer storage', detail: 'At address 0x2000, this example stores the four bytes 00 50 00 00. This is where the pointer lives, not where the player object starts.', role: 'input', value: '0x2000: 00 50 00 00' },
+    { label: 'Read the stored address', detail: 'Read those bytes as a little-endian u32 to obtain 0x5000. The result names the beginning of the player object for this example.', role: 'process', value: 'object base = 0x5000' },
+    { label: 'Locate the field', detail: 'Use the object base 0x5000 and add the verified health offset 0x30. The sum is 0x5030; adding the offset computes an address without reading health.', role: 'process', value: '0x5000 + 0x30 = 0x5030' },
+    { label: 'Read health at the destination', detail: 'Read the health field from 0x5030 using its verified type. The field value comes from the bytes there, not from the pointer value 0x5000 or the offset 0x30.', role: 'output', value: 'health = read(0x5030)' },
   ]}
   caption="Two memory reads with an address calculation between them: first obtain the object base, then locate and read its health field."
 />
@@ -4494,11 +4494,11 @@ belongs to the caller's next instruction; it is separate from the address of
 <AnimatedFlow
   title="A function call leaves a route back"
   stages={[
-    { label: 'Reach the call', detail: 'The caller reaches call calculate_damage. Execution must enter calculate_damage and later continue at the instruction immediately after this call.', role: 'input' },
-    { label: 'Save the continuation', detail: 'On the 32-bit x86 path described here, call pushes the address of the next instruction onto the stack. That stored return address records where the caller should resume.', role: 'state' },
-    { label: 'Run the function', detail: 'Execution jumps to calculate_damage. Any temporary pushes must have matching cleanup so that the saved return address is available when the function returns.', role: 'process' },
-    { label: 'Read the return address', detail: 'ret takes the saved address from the stack and places it in eip. An unmatched push could leave an unrelated value where ret expects that address.', role: 'process' },
-    { label: 'Continue in the caller', detail: 'Execution resumes immediately after call calculate_damage, at the line marked by the comment in the assembly fragment.', role: 'output' },
+    { label: 'Reach the call', detail: 'The caller reaches call calculate_damage. Execution must enter calculate_damage and later continue at the instruction immediately after this call.', role: 'input', value: 'call calculate_damage' },
+    { label: 'Save the continuation', detail: 'On the 32-bit x86 path described here, call pushes the address of the next instruction onto the stack. That stored return address records where the caller should resume.', role: 'state', value: 'return address on stack' },
+    { label: 'Run the function', detail: 'Execution jumps to calculate_damage. Any temporary pushes must have matching cleanup so that the saved return address is available when the function returns.', role: 'process', value: 'eip: calculate_damage' },
+    { label: 'Read the return address', detail: 'ret takes the saved address from the stack and places it in eip. An unmatched push could leave an unrelated value where ret expects that address.', role: 'process', value: 'eip: saved continuation' },
+    { label: 'Continue in the caller', detail: 'Execution resumes immediately after call calculate_damage, at the line marked by the comment in the assembly fragment.', role: 'output', value: 'next instruction in caller' },
   ]}
   caption="The function's entry address tells call where to go; the saved continuation tells ret where to come back."
 />
@@ -4875,6 +4875,22 @@ before the breakpoint byte is restored. [Lesson 5.7](/pages/7/07/) models this a
 On x86, single stepping uses the **trap flag** in the thread’s flags register.
 When set, the CPU raises a debug exception after the next instruction. The flag
 belongs to one thread, which is why debugger state records thread IDs.
+
+Follow the subtraction example through both events. The saved `29` byte must
+be executable for one instruction before `CC` can safely be installed again:
+
+<AnimatedFlow
+  title="A breakpoint needs one instruction to get past itself"
+  stages={[
+    { label: 'Keep the breakpoint armed', detail: 'At 0x007CCD91 the first byte is CC instead of the original 29. The debugger retains 29 so it can restore the subtraction instruction.', role: 'state', value: 'code: CC 42 04; saved: 29' },
+    { label: 'Receive the breakpoint event', detail: 'The CPU executes the one-byte int3. Windows reports the breakpoint; the instruction pointer has already advanced past that byte.', role: 'input', value: 'event: breakpoint' },
+    { label: 'Restore and rewind', detail: 'Write the original 29 byte back and move the instruction pointer to 0x007CCD91. The complete subtraction instruction is available again.', role: 'process', value: 'code: 29 42 04; eip: 0x007CCD91' },
+    { label: 'Run one real instruction', detail: 'Enable the trap flag for this thread and continue. The restored subtraction executes before the CPU reports its one-instruction step.', role: 'process', value: 'trap flag: on' },
+    { label: 'Receive the single-step event', detail: 'The original instruction has finished. This second event is the point at which the debugger can put the breakpoint back without trapping on it immediately.', role: 'input', value: 'event: single-step' },
+    { label: 'Rearm for a later visit', detail: 'Restore CC at the breakpoint address and turn stepping off. The debugger can now continue or keep the process paused for the reader.', role: 'output', value: 'code: CC 42 04; trap flag: off' },
+  ]}
+  caption="The breakpoint event restores the instruction; the single-step event restores the breakpoint. Those are different moments."
+/>
 
 ## Step, step over, and run to return
 
@@ -7173,6 +7189,22 @@ sequenceDiagram
     Note over Tool: reports enemy A<br/>with enemy B's health
 ```
 
+Step through that race. Each read can succeed while the pair of observations
+becomes inconsistent:
+
+<AnimatedFlow
+  title="Two successful reads can describe two different objects"
+  stages={[
+    { label: 'Request the player pointer', detail: 'The tool asks Windows to read the pointer stored at 0x2000 in the game process. This request identifies a location, not a permanent object.', role: 'input', value: 'read pointer at 0x2000' },
+    { label: 'Keep the first observation', detail: 'The returned pointer is 0x5000, which names enemy A at this moment. The tool retains that address for its next read.', role: 'state', value: '0x5000 → enemy A' },
+    { label: 'Let the game advance', detail: 'Before the next request, the game removes enemy A and reuses allocation 0x5000 for enemy B. The numeric address has not changed, but its occupant has.', role: 'process', value: '0x5000 → enemy B' },
+    { label: 'Request the health field', detail: 'The tool adds the health offset 0x30 to its retained base 0x5000 and reads at 0x5030. That location now belongs to enemy B.', role: 'input', value: 'read health at 0x5030' },
+    { label: 'Keep the second observation', detail: 'Windows successfully returns health 87. Those bytes describe enemy B, even though the tool associated its first observation with enemy A.', role: 'state', value: 'health: 87, from enemy B' },
+    { label: 'Notice the invalid pairing', detail: 'Combining the two results reports enemy A with health taken from enemy B. Success of each copy does not prove the combined observation describes one object.', role: 'output', value: 'INVALID: A + health from B' },
+  ]}
+  caption="This is an illustrated failure, not a valid snapshot. Copy checks and object-path revalidation help detect uncertainty; they do not make separate reads atomic."
+/>
+
 Check the returned byte count and revalidate the object path after a multi-step
 read. That reduces stale observations; it does not turn several Windows calls
 into one atomic snapshot. [Lesson 4.3](/pages/4/02/) builds a bounded
@@ -8697,6 +8729,21 @@ for value in [0, 1, 100, u32::MAX] {
 ```
 
 That last property is the important one: decoding the encoded value must recover the starting value for many inputs, not only one lucky example.
+
+Follow the loop's `100` case with its key `0xA1B2_C3D4`. The changing numbers
+below are all 32-bit values; the final result must return to the starting one:
+
+<AnimatedFlow
+  title="Undo a transformation in the opposite order"
+  stages={[
+    { label: 'Start with the logical value', detail: 'Use value 100 and key 0xA1B2_C3D4, the same key passed to both functions in the test loop.', role: 'input', value: 'value: 100; key: 0xA1B2C3D4' },
+    { label: 'XOR with the key', detail: '100 XOR 0xA1B2_C3D4 gives 0xA1B2_C3B0. This intermediate value is what encode rotates next.', role: 'process', value: 'after XOR: 0xA1B2C3B0' },
+    { label: 'Store the rotated representation', detail: 'Rotate the 32-bit intermediate left by seven positions. The encoded value is 0xD961_D850, which differs from the logical value 100.', role: 'state', value: 'encoded: 0xD961D850' },
+    { label: 'Undo the rotation first', detail: 'decode rotates 0xD961_D850 right by seven positions. That recovers the intermediate 0xA1B2_C3B0 before applying the key.', role: 'process', value: 'after rotate: 0xA1B2C3B0' },
+    { label: 'XOR with the same key again', detail: '0xA1B2_C3B0 XOR 0xA1B2_C3D4 returns 100. The round-trip assertion checks this result against the original input.', role: 'output', value: 'decoded: 100' },
+  ]}
+  caption="Encoding applies XOR then rotation; decoding reverses the order. This reversible toy representation is not a security guarantee."
+/>
 
 ## An integrity value is another clue
 
@@ -11081,6 +11128,22 @@ fn bfs_walks_around_a_wall() {
 }
 ```
 
+Follow that test through the queue. The wall removes the direct move, leaving
+the route through the open second row:
+
+<AnimatedFlow
+  title="A FIFO frontier finds the route around the wall"
+  stages={[
+    { label: 'Use the validated grid', detail: 'The test starts at (0,0), aims for (2,0), and rejects wall (1,0). Only x from 0 to 2 and y from 0 to 1 are walkable candidates.', role: 'input', value: 'start: (0,0); goal: (2,0)' },
+    { label: 'Seed the frontier', detail: 'Put (0,0) into the FIFO queue and record its parent as None. This marks the start as seen before any neighboring tile is added.', role: 'state', value: 'queue: [(0,0)]' },
+    { label: 'Visit the start', detail: 'Pop (0,0). Its right neighbor is the wall, and its left and upper neighbors are outside the grid. Enqueue (0,1) and remember (0,0) as its parent.', role: 'process', value: 'queue: [(0,1)]' },
+    { label: 'Advance along row one', detail: 'Pop (0,1). The only legal unseen neighbor is (1,1); the start is already seen. Enqueue (1,1) with parent (0,1).', role: 'process', value: 'queue: [(1,1)]' },
+    { label: 'Reach the goal from below', detail: 'Popping (1,1) discovers (2,1). Popping (2,1) then discovers (2,0), with each tile retaining the parent that first reached it.', role: 'process', value: 'queue: [(2,0)]' },
+    { label: 'Rebuild the route', detail: 'When (2,0) leaves the queue, follow parents backward and reverse them: (0,0), (0,1), (1,1), (2,1), (2,0). The route takes four equal-cost moves and never enters the wall.', role: 'output', value: '4 moves; 5 tiles; no wall' },
+  ]}
+  caption="The queue controls exploration order; came_from records both visited tiles and the route back to the start."
+/>
+
 Also test:
 
 - start equals goal;
@@ -11220,6 +11283,22 @@ fn diff(before: &StrategySnapshot, after: &StrategySnapshot) -> Vec<GameEvent> {
 ```
 
 Why use an enum? Each variant defines exactly which data belongs to that event. A typo in a string such as `"turn_chagned"` cannot silently create a new event type.
+
+Follow the two accepted snapshots through `diff`, then compare an unchanged
+poll. The endpoints reveal changes, not the reason gold changed:
+
+<AnimatedFlow
+  title="A changing value becomes an event only at its edge"
+  stages={[
+    { label: 'Keep the accepted baseline', detail: 'The earlier validated snapshot contains 120 gold and menu_open false. Its identity and read checks have passed.', role: 'state', value: 'gold: 120; menu: false' },
+    { label: 'Receive a new accepted snapshot', detail: 'The next validated snapshot contains 145 gold and menu_open true. In this example the other fields have not changed.', role: 'input', value: 'gold: 145; menu: true' },
+    { label: 'Compare the fields', detail: 'diff detects different gold amounts and the false-to-true menu transition. It compares endpoints; it does not establish whether earning, editing, or another rule changed gold.', role: 'process', value: 'gold: +25; menu: false → true' },
+    { label: 'Produce the named changes', detail: 'The result includes GoldChanged { before: 120, after: 145 } and MenuOpened. Their enum variants carry the data the action layer needs.', role: 'output', value: 'GoldChanged + MenuOpened' },
+    { label: 'Use the new accepted baseline', detail: 'For the next comparison, retain the accepted 145-gold, open-menu snapshot as the previous state. The opening edge has already been reported.', role: 'state', value: 'previous: 145; menu: true' },
+    { label: 'Report no event for no change', detail: 'If the next accepted snapshot is identical, diff returns an empty vector. The still-open menu does not become a second MenuOpened event.', role: 'output', value: 'events: []' },
+  ]}
+  caption="Level state remains true across polls; an edge event describes the transition between accepted states."
+/>
 
 ## Debouncing asks for stability
 
@@ -12884,6 +12963,22 @@ flowchart LR
     V3 -.->|"0x880 is past 0x800:<br/>zero-filled, no file byte"| R3
 ```
 
+Follow the `0x2340` branch through the section mapping. Subtraction finds a
+distance inside the section; addition then expresses it in the file's
+coordinate system:
+
+<AnimatedFlow
+  title="Translate one RVA without confusing address spaces"
+  stages={[
+    { label: 'Start with the RVA', detail: 'The requested RVA is 0x2340. It is measured from the mapped image base, not from the beginning of the file on disk.', role: 'input', value: 'RVA: 0x2340' },
+    { label: 'Find its virtual section', detail: 'The example section starts at RVA 0x2000 and extends to 0x2900, exclusive. RVA 0x2340 lies inside that virtual range.', role: 'state', value: 'section: [0x2000, 0x2900)' },
+    { label: 'Find the distance into the section', detail: 'Subtract the section virtual start: 0x2340 minus 0x2000 equals 0x0340. This offset can now be measured from the raw section start too.', role: 'process', value: 'section offset: 0x0340' },
+    { label: 'Check that raw bytes exist', detail: 'SizeOfRawData is 0x0800. Because 0x0340 is below 0x0800, the requested location has a corresponding stored byte.', role: 'process', value: '0x0340 < 0x0800' },
+    { label: 'Express the location on disk', detail: 'Add PointerToRawData 0x0600 to the section offset 0x0340. The resulting file offset is 0x0940.', role: 'output', value: 'file offset: 0x0940' },
+  ]}
+  caption="The other illustrated RVA, 0x2880, fails the raw-byte check: its 0x880 section offset lies in the zero-filled virtual tail."
+/>
+
 A rigorous parser checks every subtraction and addition, validates section
 ranges against the actual file length, and rejects overlapping or impossible
 metadata. PE headers describe a file; they do not deserve blind trust merely
@@ -13723,6 +13818,22 @@ fn finds_match_at_last_possible_offset() {
     assert_eq!(find_all(&bytes, &pattern), vec![1]);
 }
 ```
+
+Follow that boundary test as two candidate windows. All byte values below are
+hexadecimal; offset `1` must be included in the scan:
+
+<AnimatedFlow
+  title="The final legal window can contain the only match"
+  stages={[
+    { label: 'Take the copied byte buffer', detail: 'The test supplies three local bytes: 0x10, 0x20, 0x30. Matching this slice performs no further reads from the game.', role: 'input', value: 'bytes: 10 20 30' },
+    { label: 'Keep the two exact pattern bytes', detail: 'The pattern requires Exact(0x20) followed by Exact(0x30). Both positions must match; this particular test has no wildcards.', role: 'state', value: 'pattern: 20 30' },
+    { label: 'Compute both legal starts', detail: 'Three input bytes minus two pattern bytes gives final start 1. The inclusive range 0..=1 therefore contains two candidate windows.', role: 'process', value: 'start offsets: 0..=1' },
+    { label: 'Reject the first window', detail: 'At offset 0 the candidate bytes are 0x10, 0x20. The first exact byte already disagrees with 0x20, so this window does not match.', role: 'process', value: 'offset 0: 10 20 ≠ 20 30' },
+    { label: 'Accept the final window', detail: 'At offset 1 the candidate bytes are 0x20, 0x30. Both exact comparisons pass. An exclusive upper bound would skip this only match.', role: 'process', value: 'offset 1: 20 30 = 20 30' },
+    { label: 'Return the local match offset', detail: 'find_all collects offset 1, so the test expects vec![1]. This number identifies a match inside the copied buffer; it is not yet a verified game instruction address.', role: 'output', value: 'matches: [1]' },
+  ]}
+  caption="A range boundary is part of correctness. Matching bytes still leaves the separate checks for build identity and instruction meaning."
+/>
 
 Also test empty patterns, all wildcards, a pattern longer than input, no matches, overlapping matches, and multiple matches.
 
@@ -17432,6 +17543,19 @@ partial installation; the returned `Result` alone does not undo it.
 
 ## Run the complete three-message proof
 
+<AnimatedFlow
+  title="Follow one imported call before, during, and after the hook"
+  stages={[
+    { label: 'Identify the import', role: 'input', value: 'user32.dll!MessageBoxW', detail: 'The import name identifies the intended function. The loader has already resolved its address in this PE32 executable.' },
+    { label: 'Find the matching slot', role: 'process', value: 'name index → four-byte IAT slot', detail: 'Walk lookup names and IAT entries together. The matching name selects the slot; bounds checks prove that the four-byte slot belongs to the loaded image.' },
+    { label: 'Keep the original route', role: 'state', value: 'saved pointer → real MessageBoxW', detail: 'Save the slot value before changing it. The replacement uses that callable original, and the patch owner keeps the same value for restoration.' },
+    { label: 'Install the replacement', role: 'process', value: 'IAT slot → hooked_message_box', detail: 'Make the slot writable, write the replacement pointer, and restore the previous page protection. The call instruction remains in place.' },
+    { label: 'Follow the redirected call', role: 'output', value: 'replacement → saved original', detail: 'A normal MessageBoxW call now reaches the replacement. Its matching Windows ABI lets it forward to the saved original with the replacement message text.' },
+    { label: 'Restore the normal route', role: 'output', value: 'IAT slot → real MessageBoxW', detail: 'When cleanup succeeds, IatPatch has written the saved pointer back through the protection-changing helper. The next imported call reaches the original function again.' },
+  ]}
+  caption="The three-message lab observes the normal, redirected, and restored routes. A failed protection change can leave partial installation state, so restoration must remain owned until cleanup succeeds."
+/>
+
 Run this from `windows-labs` in the Windows VM. The three message boxes let
 you observe the original import, the redirected call, and the restored call
 in that order.
@@ -18586,12 +18710,12 @@ stateDiagram-v2
 <AnimatedFlow
   title="Follow a hook through installation and removal"
   stages={[
-    { label: 'Verified target', role: 'input', detail: 'Identify the exact supported module and compare the original instruction bytes. A mismatch stops preparation before the live code changes.' },
-    { label: 'Prepared trampoline', role: 'process', detail: 'Decode whole instructions, relocate address-dependent operands, and validate the return path. Keep the original bytes and callback state with the owner of the allocation.' },
-    { label: 'Publish the detour', role: 'process', detail: 'Use the declared thread rendezvous or framework transaction. Write the complete patch, flush the instruction cache, restore page protections, and verify the result before releasing peers.' },
-    { label: 'Installed', role: 'state', detail: 'Calls can now enter the callback and original path. Keep their state alive, follow the re-entry policy, and capture only bounded work on the calling thread.' },
-    { label: 'Draining', role: 'state', detail: 'Refuse new callback work and wait for existing users to finish. A timeout leaves the still-valid trampoline and callback state alive; it does not permit freeing them.' },
-    { label: 'Original path restored', role: 'output', detail: 'Restore and verify the exact original bytes under the same thread-safety mechanism. Release hook resources only when no execution can still use them.' },
+    { label: 'Verified target', role: 'input', value: 'expected original bytes match', detail: 'Identify the exact supported module and compare the original instruction bytes. A mismatch stops preparation before the live code changes.' },
+    { label: 'Prepared trampoline', role: 'process', value: 'whole relocated instructions', detail: 'Decode whole instructions, relocate address-dependent operands, and validate the return path. Keep the original bytes and callback state with the owner of the allocation.' },
+    { label: 'Publish the detour', role: 'process', value: 'verified jump + cache flush', detail: 'Use the declared thread rendezvous or framework transaction. Write the complete patch, flush the instruction cache, restore page protections, and verify the result before releasing peers.' },
+    { label: 'Installed', role: 'state', value: 'HookPhase::Installed', detail: 'Calls can now enter the callback and original path. Keep their state alive, follow the re-entry policy, and capture only bounded work on the calling thread.' },
+    { label: 'Draining', role: 'state', value: 'active users → 0', detail: 'Refuse new callback work and wait for existing users to finish. A timeout leaves the still-valid trampoline and callback state alive; it does not permit freeing them.' },
+    { label: 'Original path restored', role: 'output', value: 'original bytes restored', detail: 'Restore and verify the exact original bytes under the same thread-safety mechanism. Release hook resources only when no execution can still use them.' },
   ]}
   caption="The transitions are the difficult part: preparation failure leaves the original path intact, and incomplete draining keeps resources alive. Step through the lifecycle to see which guarantee each transition needs."
 />
@@ -21702,6 +21826,19 @@ fn clamp_to_circle(x: f32, y: f32, radius: f32) -> (f32, f32, bool) {
 Clamping x and y independently would clamp to a square, distort direction near
 corners, and make diagonal markers appear farther from the center.
 
+<AnimatedFlow
+  title="Follow one teammate from world coordinates to a radar marker"
+  stages={[
+    { label: 'Copy the observation', role: 'input', value: 'world position, local position, yaw', detail: 'Read the entity and local-player facts needed for this radar update. A copied record gives the filter and geometry the same observed position.' },
+    { label: 'Apply the radar rule', role: 'process', value: 'distinct, active, living teammate', detail: 'Check identity, activity, alive state, team, and usable coordinates. A record that fails this rule stops here instead of becoming a marker.' },
+    { label: 'Center on the local player', role: 'process', value: 'entity.xy − local.xy', detail: 'Subtract the local position from the entity position. The result is a relative displacement, so the radar center represents the local player.' },
+    { label: 'Undo the local heading', role: 'process', value: 'rotate(relative_xy, −yaw)', detail: 'For the heading-up convention used here, rotate by negative yaw. The forward direction becomes radar-up while the displacement length stays unchanged.' },
+    { label: 'Scale and bound the offset', role: 'state', value: 'pixels; circular radius R', detail: 'Multiply by pixels per world unit, then apply the chosen range policy. Circular clamping preserves direction and records when a marker was outside range.' },
+    { label: 'Draw the marker', role: 'output', value: 'radar pixel offset + range flag', detail: 'Use the bounded offset and its range flag to choose the marker position and style. Height remains a separate visual rule rather than changing the team filter.' },
+  ]}
+  caption="This follows an accepted record through the heading-up model. Missing markers can originate in filtering, coordinates, range, or drawing; following the stages keeps those causes separate."
+/>
+
 ## Height needs an explicit visual rule
 
 A top-down radar discards one world axis. That is a projection, not proof that
@@ -21841,12 +21978,12 @@ flowchart LR
 <AnimatedFlow
   title="Follow one label anchor from the world to the screen"
   stages={[
-    { label: 'World point', role: 'input', detail: 'Begin with one entity position and the camera from the same frame. These coordinates describe a place in the game world, not a pixel.' },
-    { label: 'View transform', role: 'process', detail: 'Apply the inverse camera pose. The point is now measured from the camera along its right, up, and forward or back directions.' },
-    { label: 'Projection transform', role: 'process', detail: 'Apply the declared projection matrix to obtain clip x, y, z, and w. Its field of view, aspect ratio, handedness, and depth convention must match the game.' },
-    { label: 'Visibility check', role: 'process', detail: 'Check finite coordinates, usable w, and the clip bounds for this API. A label anchor behind the camera or outside those bounds does not continue to drawing.' },
-    { label: 'Perspective divide', role: 'process', detail: 'For an accepted point, divide x, y, and z by w to obtain normalized device coordinates. This is where perspective makes distant displacements occupy less screen space.' },
-    { label: 'Viewport pixels', role: 'output', detail: 'Map normalized x and y into the current viewport dimensions and its vertical-axis convention. Only this final pixel position belongs to the overlay.' },
+    { label: 'World point', role: 'input', value: 'world (x, y, z, 1)', detail: 'Begin with one entity position and the camera from the same frame. These coordinates describe a place in the game world, not a pixel.' },
+    { label: 'View transform', role: 'process', value: 'camera coordinates', detail: 'Apply the inverse camera pose. The point is now measured from the camera along its right, up, and forward or back directions.' },
+    { label: 'Projection transform', role: 'process', value: 'clip (x, y, z, w)', detail: 'Apply the declared projection matrix to obtain clip x, y, z, and w. Its field of view, aspect ratio, handedness, and depth convention must match the game.' },
+    { label: 'Visibility check', role: 'process', value: 'point inside clip bounds', detail: 'Check finite coordinates, usable w, and the clip bounds for this API. A label anchor behind the camera or outside those bounds does not continue to drawing.' },
+    { label: 'Perspective divide', role: 'process', value: 'NDC (x/w, y/w, z/w)', detail: 'For an accepted point, divide x, y, and z by w to obtain normalized device coordinates. This is where perspective makes distant displacements occupy less screen space.' },
+    { label: 'Viewport pixels', role: 'output', value: 'screen (pixel_x, pixel_y)', detail: 'Map normalized x and y into the current viewport dimensions and its vertical-axis convention. Only this final pixel position belongs to the overlay.' },
   ]}
   caption="Step through one point, then replay the path. A rejected label anchor produces no pixel; clipping a triangle can instead preserve its visible portion."
 />
@@ -23517,10 +23654,10 @@ flowchart TD
 <AnimatedFlow
   title="From received bytes to a game event"
   stages={[
-    { label: 'Collect one frame', role: 'input', detail: 'Keep partial input until the length header and its complete payload are available. Reject a length above the limit.' },
-    { label: 'Decompress the payload', role: 'process', detail: 'For this Wesnoth message, decode the gzip payload. A valid frame is not necessarily valid compressed data.' },
-    { label: 'Parse its fields', role: 'process', detail: 'Interpret the WML tags and fields, then construct a typed message. Reject malformed or invalid fields.' },
-    { label: 'Apply the session rules', role: 'state', detail: 'Check whether this message is permitted now. Only accepted messages can change the session or game state.' },
+    { label: 'Collect one frame', role: 'input', value: 'length + complete payload', detail: 'Keep partial input until the length header and its complete payload are available. Reject a length above the limit.' },
+    { label: 'Decompress the payload', role: 'process', value: 'gzip → WML bytes', detail: 'For this Wesnoth message, decode the gzip payload. A valid frame is not necessarily valid compressed data.' },
+    { label: 'Parse its fields', role: 'process', value: 'typed message', detail: 'Interpret the WML tags and fields, then construct a typed message. Reject malformed or invalid fields.' },
+    { label: 'Apply the session rules', role: 'state', value: 'accepted session transition', detail: 'Check whether this message is permitted now. Only accepted messages can change the session or game state.' },
   ]}
   caption="The next stage depends on the preceding stage succeeding. Receiving bytes is not the same as accepting a game action."
 />
@@ -24346,6 +24483,19 @@ refused by its own arm with `UnsupportedVersion`, and `Goodbye` is accepted in
 every state, including `Closed` itself.
 
 This looks more verbose than a chain of `if` statements. The benefit is coverage: the compiler helps you notice new states and message variants that need rules.
+
+<AnimatedFlow
+  title="Replay the five captured messages through the session states"
+  stages={[
+    { label: 'Start the replay', role: 'input', value: 'state = Connected', detail: 'Begin with the initial session state and the unchanged capture log. Parsing each record produces a message; the transition function decides whether it is legal now.' },
+    { label: 'Accept Greeting version 1', role: 'process', value: 'Connected → Greeted', detail: 'The first frame selects the version-1 greeting arm. Another version is refused, and another greeting after this transition has no legal arrow.' },
+    { label: 'Accept LobbyJoined', role: 'state', value: 'Greeted → InLobby', detail: 'A nonempty room name permits entry to the lobby. A parseable frame alone cannot make this transition from an unrelated session state.' },
+    { label: 'Accept Chat in the lobby', role: 'state', value: 'InLobby → InLobby', detail: 'The chat frame is legal here, but it does not advance the session. An accepted message can preserve the current state.' },
+    { label: 'Accept MatchStarted', role: 'state', value: 'InLobby → InMatch', detail: 'A nonempty scenario name permits the match transition. The same message received before the lobby would be an illegal transition.' },
+    { label: 'Accept Goodbye', role: 'output', value: 'InMatch → Closed', detail: 'The final frame closes this replayed session. Goodbye is accepted from every modeled state, so cleanup does not depend on reaching the happy path first.' },
+  ]}
+  caption="These are the same five frames shown in the log above. The log stays fixed; each accepted message updates the modeled state, and an illegal message stops replay at its recorded frame."
+/>
 
 ## Store captures as direction plus bytes
 
@@ -26348,6 +26498,19 @@ and contents, then ask the user before replacing the only known-good copy.
 
 ## Run the complete save editor
 
+<AnimatedFlow
+  title="Follow the Flare save through a recoverable edit"
+  stages={[
+    { label: 'Read the closed-game save', role: 'input', value: 'build=5,1,1,2', detail: 'Close Flare and read the known avatar.txt save. Keep the original bytes available while preparing the replacement; do not edit the only copy in place.' },
+    { label: 'Validate the target field', role: 'process', value: 'exactly one build= line', detail: 'Require one target field and check the intended complete value. Preserve every other line and the original LF or CRLF newline style.' },
+    { label: 'Construct the replacement', role: 'state', value: 'build=30,30,30,30', detail: 'Build new bytes separately, changing the four named attributes together. At this point the original path still contains the untouched save.' },
+    { label: 'Flush the temporary sibling', role: 'process', value: 'complete temporary file', detail: 'Write all replacement bytes to a sibling temporary file, flush it, and close its handle. Interrupted preparation leaves the original save available.' },
+    { label: 'Replace and keep the backup', role: 'process', value: 'new original + backup', detail: 'The complete Windows lab uses ReplaceFileW to install the new save and preserve the old one at avatar.txt.gha-backup. An existing backup causes refusal.' },
+    { label: 'Verify through the game', role: 'output', value: 'four attributes = 30', detail: 'Reload the disposable character, check the four visible values, and let Flare save normally. Keep the backup until the loader and serializer have accepted the edit.' },
+  ]}
+  caption="This is the successful route through prepare, validate, commit, and recover. The temporary file and backup make interruptions distinguishable; atomic replacement does not make every possible failure durable."
+/>
+
 Close Flare, build the Windows lab workspace, and pass the exact save path and new `build` value:
 
 ```powershell
@@ -26783,6 +26946,19 @@ flowchart TD
     F -->|"no"| X
     F -->|"yes"| G["Decode the fields and load"]
 ```
+
+<AnimatedFlow
+  title="Follow the 19-byte GSAV save through its loader checks"
+  stages={[
+    { label: 'Read the complete file', role: 'input', value: '19 bytes', detail: 'Keep the whole byte sequence available. Offsets describe positions in this file, and no field is trusted merely because its bytes resemble readable text.' },
+    { label: 'Check magic and version', role: 'process', value: 'GSAV; version = 1', detail: 'Require bytes 47 53 41 56 at offsets 0–3 and decode 01 00 as little-endian version 1. Unknown layouts stop before their fields are interpreted.' },
+    { label: 'Bound the variable-length name', role: 'process', value: '12 + 3 + 4 = 19', detail: 'The name-length byte is 03. Twelve fixed bytes, three name bytes, and four checksum bytes must exactly fit the file before those slices can be used.' },
+    { label: 'Compute the checksum', role: 'process', value: 'sum(bytes 0–14) = 842', detail: 'Add every byte before the checksum, including the header, numeric fields, length, and name. For this exact save, the total is 842.' },
+    { label: 'Compare the stored total', role: 'state', value: '4A 03 00 00 → 842', detail: 'Read the final four bytes as a little-endian u32. The stored 842 equals the computed 842; a mismatch refuses the file instead of loading damaged state.' },
+    { label: 'Decode the accepted record', role: 'output', value: 'Nia: level 3, gold 250', detail: 'The checked layout now gives gold 250 at offsets 6–9, level 3 at offset 10, and the three name bytes Nia at offsets 12–14.' },
+  ]}
+  caption="This traces the unchanged sample save. Editing gold also changes the required checksum; a correct offset and byte order cannot bypass a failed integrity check."
+/>
 
 Now type gold over as 9,999 and change nothing else. 9,999 is 39 × 256 + 15,
 and 39 = 2 × 16 + 7 = `0x27` while 15 = `0x0F`, so 9,999 is `0x270F` and its
@@ -29358,6 +29534,19 @@ The script did nothing wrong: entity 7 really was alive in snapshot 41. The
 game moved on while the script was deciding, and `based_on` lets the host see
 that the request describes a moment that has already passed.
 
+<AnimatedFlow
+  title="Follow a valid snapshot into a stale request"
+  stages={[
+    { label: 'Capture entity 7', role: 'input', value: 'sequence 41: entity 7 alive', detail: 'The observer validates the entity at sequence 41 and copies its fields. This is an observation of one moment, not a promise that the entity will remain alive.' },
+    { label: 'Give Lua an owned snapshot', role: 'state', value: 'snapshot.sequence = 41', detail: 'Lua receives named values and the sequence they came from. No raw process address crosses the boundary, so the script reasons about the snapshot contract.' },
+    { label: 'Let the world advance', role: 'state', value: 'sequence 42: entity 7 missing', detail: 'Entity 7 despawns while the script is deciding. The earlier snapshot stays internally valid, but it no longer describes the current game world.' },
+    { label: 'Submit a structured request', role: 'input', value: 'entity_id=7, based_on=41', detail: 'The script requests select_entity for the ID it observed and includes sequence 41. It sends data to the host rather than an executable command string.' },
+    { label: 'Revalidate at action time', role: 'process', value: 'request 41; current sequence 42', detail: 'The host checks the request against current identity, state, permissions, and budgets. Entity 7 no longer exists, so this request cannot reach the action layer.' },
+    { label: 'Return the refusal', role: 'output', value: 'no action: entity 7 is missing', detail: 'Return a useful error and keep the host alive. Refusing this stale request preserves the boundary even though the script used a once-valid observation.' },
+  ]}
+  caption="Snapshot validation and action-time validation protect different moments. A sequence label lets the host connect a request to the observation that produced it."
+/>
+
 ## Requests are data, not commands
 
 Bad interface:
@@ -30380,6 +30569,19 @@ through those five steps shows where the intermediate values live:
 />
 
 `Add` pops the right side first because it was pushed last. This last-in, first-out order is the same basic idea as a call stack, although a real VM may use separate regions or registers for different jobs.
+
+<AnimatedFlow
+  title="Watch the value stack evaluate (5 + 2) > 6"
+  stages={[
+    { label: 'Execute Constant(0)', role: 'input', value: 'ip=1; stack=[5]', detail: 'Constant-pool entry 0 holds 5. Copy it onto the initially empty value stack; the instruction pointer now identifies bytecode 1.' },
+    { label: 'Execute Constant(1)', role: 'input', value: 'ip=2; stack=[5, 2]', detail: 'Constant-pool entry 1 holds 2. Push it above 5, leaving 2 as the next value that a pop will remove.' },
+    { label: 'Execute Add', role: 'process', value: 'ip=3; stack=[7]', detail: 'Pop right operand 2, then left operand 5. Check that both are integers and push their sum, replacing two temporary values with one.' },
+    { label: 'Execute Constant(2)', role: 'input', value: 'ip=4; stack=[7, 6]', detail: 'Constant-pool entry 2 holds 6. Push it above the sum so GreaterThan can compare the left value 7 with the right value 6.' },
+    { label: 'Execute GreaterThan', role: 'process', value: 'ip=5; stack=[true]', detail: 'Pop the two integers and push the Boolean result of 7 > 6. The stack now carries a condition rather than the numeric operands.' },
+    { label: 'Follow the then branch', role: 'output', value: 'output=[1]; halted', detail: 'JumpIfFalse consumes true and keeps the then path. Constant(3) supplies 1, Print consumes it, and Jump(11) skips the else branch to Halt.' },
+  ]}
+  caption="The first five stages match bytecodes 0–4 and the stack table above. The last stage groups the selected branch through Print and Halt; the constant pool and value stack have different jobs."
+/>
 
 ## Keep dynamic types explicit
 
@@ -32573,6 +32775,18 @@ for a purchase, and let the scheduler interleave them:
 | 4 | writes 1,500 | | 1,500 |
 | 5 | | writes 700 | 700 |
 
+<AnimatedFlow
+  title="Two correct calculations, one lost reward"
+  stages={[
+    { label: 'Reward thread reads gold', role: 'input', value: 'gold = 1000', detail: 'The reward thread reads the shared gold field as 1,000. It now has a local copy to which it will add the 500-gold reward; memory still holds 1,000.' },
+    { label: 'Purchase thread reads gold', role: 'input', value: 'purchase reads 1000', detail: 'Before the reward is written back, the purchase thread also reads 1,000. Both threads now calculate from the same old value, even though their changes should accumulate.' },
+    { label: 'Calculate in separate registers', role: 'process', value: 'reward 1500; purchase 700', detail: 'The reward thread computes 1,000 + 500 = 1,500. The purchase thread computes 1,000 − 300 = 700. Neither result has reached the shared field, which still contains 1,000.' },
+    { label: 'Publish the reward result', role: 'state', value: 'gold = 1500', detail: 'The reward thread writes 1,500 to gold. This write completes its work, but it does not update the purchase thread’s local result of 700.' },
+    { label: 'Overwrite with the stale result', role: 'output', value: 'gold = 700; expected 1200', detail: 'The purchase thread writes 700 last. The shared field loses the reward, although both arithmetic operations were correct. The intended combined result was 1,000 + 500 − 300 = 1,200.' },
+  ]}
+  caption="The changing memory value makes this particular interleaving visible. The mutex described below makes the purchase wait, then read 1,500 and write 1,200, preserving both changes."
+/>
+
 The player should have 1,000 + 500 − 300 = 1,200 and has 700. The reward
 vanished, because the purchase thread wrote a result computed from a value that
 was already out of date. Most runs interleave harmlessly, with one thread
@@ -33600,6 +33814,19 @@ two modes use different code segments, which is why `cs` reads `0023` in a
 illustrates the native 64-bit path, not every instruction a 32-bit caller runs.
 :::
 
+<AnimatedFlow
+  title="A four-byte read crosses the privilege boundary"
+  stages={[
+    { label: 'Submit the user-mode request', role: 'input', value: '4 bytes at 0x00501000', detail: 'The tool requests four bytes from game address 0x0050_1000 into its own buffer. Its process handle carries rights 0x1010: limited query plus memory read.' },
+    { label: 'Follow the application wrappers', role: 'process', value: 'ring 3; NtReadVirtualMemory', detail: 'ReadProcessMemory passes through kernel32 and kernelbase to the ntdll stub. This remains user-mode code. The stub preserves the first argument in r10 and selects the current build’s system service number.' },
+    { label: 'Enter the prepared kernel path', role: 'state', value: 'ring 0; kernel dispatch', detail: 'syscall enters the address the kernel prepared. Entry code saves the user context, switches to the thread’s kernel stack, validates the service number, and dispatches the request.' },
+    { label: 'Validate ranges and authority', role: 'process', value: '0x1010 & 0x0010 = 0x0010', detail: 'The kernel checks the source range ending at 0x0050_1004 and the destination buffer, then checks the handle’s read right. Every needed bit survives the AND, so this handle authorizes a read; its missing write bit would still prevent a write.' },
+    { label: 'Copy in the correct address spaces', role: 'process', value: 'game memory → tool buffer', detail: 'The source belongs to the game and the destination to the tool. The kernel interprets both in their proper process context while copying. A page becoming unavailable can still cause a failed or partial read.' },
+    { label: 'Return and check the result', role: 'output', value: 'ring 3; check bytes read', detail: 'sysret resumes the user-mode stub with an NTSTATUS result. kernelbase translates failures into the Win32 interface. The tool checks success and the returned byte count before treating its buffer as four valid bytes.' },
+  ]}
+  caption="This follows the native 64-bit route explained above. A 32-bit caller adds the WoW64 translation stage. Crossing into ring 0 gives Windows the authority to check and copy; it does not add rights to the caller’s handle."
+/>
+
 <Quiz
   id="kernel-handle-rights-and"
   title="Predict the kernel's answer"
@@ -34260,6 +34487,19 @@ sequenceDiagram
     I->>G: call exported gha_start
     G->>G: spawn worker thread, return
 ```
+
+<AnimatedFlow
+  title="Finish loading before starting the worker"
+  stages={[
+    { label: 'Request the DLL load', role: 'input', value: 'LoadLibraryW requested', detail: 'The injector calls LoadLibraryW. It must wait for that loading thread to finish before requesting the separate application startup export.' },
+    { label: 'Prepare the module', role: 'process', value: 'sections mapped; imports resolved', detail: 'Windows maps the DLL, applies required relocations, resolves imports, prepares thread-local storage, and updates loader records. These dependencies must be ready before application work begins.' },
+    { label: 'Complete the loader notification', role: 'process', value: 'DllMain; loader lock held', detail: 'Windows calls DllMain while holding the loader lock. The course callback disables unused thread notifications and returns; it does not start a worker or wait for one.' },
+    { label: 'Finish the loading operation', role: 'state', value: 'LoadLibraryW returned', detail: 'The loader completes its notifications and returns to the injector. The initial loader work has finished, so the injector can now call gha_start rather than running complex work inside DllMain.' },
+    { label: 'Publish startup once', role: 'process', value: 'STARTED set; STOP = false', detail: 'On the first successful startup path, gha_start records STARTED, publishes STOP = false, and spawns the worker. A duplicate call or failed spawn returns its explicit error result instead.' },
+    { label: 'Run outside the loader callback', role: 'output', value: 'worker outside loader lock', detail: 'The worker runs run_lab from ordinary thread execution after the initial loading operation. Startup and later cleanup have an explicit owner, and a loader callback never waits for that worker.' },
+  ]}
+  caption="The moving handoff follows the successful lifecycle in the sequence diagram. Loader completion is a dependency for explicit startup, while stop requests and worker joining remain separate operations."
+/>
 
 The exported function uses the Windows thread-procedure ABI because the course injector calls it as a separate thread entry:
 
@@ -35821,12 +36061,12 @@ With `CR3 = 0x1000`, virtual address `0x0123` should translate to physical `0x51
 <AnimatedFlow
   title="Follow virtual 0x0123 through the synthetic capture"
   stages={[
-    { label: 'Choose the address space', role: 'input', detail: 'CR3 supplies the physical root 0x1000. Virtual address 0x0123 has four zero table indices and a page offset of 0x123. The root and address must describe the same process mapping.' },
-    { label: 'Read PML4 entry 0', role: 'process', detail: 'Read eight bytes at physical 0x1000. Entry 0x2001 has its present bit set; masking the flag bits leaves 0x2000, the physical base of the PDPT.' },
-    { label: 'Read PDPT entry 0', role: 'process', detail: 'At physical 0x2000, entry 0x3001 points to the page directory at 0x3000. Its large-page bit is clear, so the walk continues rather than selecting a 1 GiB page.' },
-    { label: 'Read page-directory entry 0', role: 'process', detail: 'At physical 0x3000, entry 0x4001 points to the page table at 0x4000. Its large-page bit is also clear, so the walk continues to a 4 KiB-page entry.' },
-    { label: 'Select the data page', role: 'state', detail: 'Read page-table entry 0 at physical 0x4000. Entry 0x5001 is present, and masking its flags leaves the data-page base 0x5000. The table walk now has the page, but still needs the byte offset.' },
-    { label: 'Produce the physical address', role: 'output', detail: 'Combine aligned page base 0x5000 with offset 0x123 to obtain physical 0x5123. The capture stores GHA DMA beginning there. A data read must still check that its complete requested range fits in the file.' },
+    { label: 'Choose the address space', role: 'input', value: 'CR3 0x1000; virtual 0x0123', detail: 'CR3 supplies the physical root 0x1000. Virtual address 0x0123 has four zero table indices and a page offset of 0x123. The root and address must describe the same process mapping.' },
+    { label: 'Read PML4 entry 0', role: 'process', value: 'PML4[0] = 0x2001', detail: 'Read eight bytes at physical 0x1000. Entry 0x2001 has its present bit set; masking the flag bits leaves 0x2000, the physical base of the PDPT.' },
+    { label: 'Read PDPT entry 0', role: 'process', value: 'PDPT[0] = 0x3001', detail: 'At physical 0x2000, entry 0x3001 points to the page directory at 0x3000. Its large-page bit is clear, so the walk continues rather than selecting a 1 GiB page.' },
+    { label: 'Read page-directory entry 0', role: 'process', value: 'PD[0] = 0x4001', detail: 'At physical 0x3000, entry 0x4001 points to the page table at 0x4000. Its large-page bit is also clear, so the walk continues to a 4 KiB-page entry.' },
+    { label: 'Select the data page', role: 'state', value: 'PT[0] = 0x5001', detail: 'Read page-table entry 0 at physical 0x4000. Entry 0x5001 is present, and masking its flags leaves the data-page base 0x5000. The table walk now has the page, but still needs the byte offset.' },
+    { label: 'Produce the physical address', role: 'output', value: 'physical = 0x5123', detail: 'Combine aligned page base 0x5000 with offset 0x123 to obtain physical 0x5123. The capture stores GHA DMA beginning there. A data read must still check that its complete requested range fits in the file.' },
   ]}
   caption="Each arrow depends on a valid eight-byte entry read: an out-of-range address or a clear present bit stops the walk at that level. This fixture follows the four-level, 4 KiB-page path; the earlier flowchart also covers the large-page exits."
 />
@@ -36273,6 +36513,18 @@ sequence  tick  source        entity  event
 
 Health reaches 0 at tick 900 and the mode changes in the same tick. The health
 bar, which draws from a copy, shows 0 only at tick 901, one tick later.
+
+<AnimatedFlow
+  title="One entity, three observations over two ticks"
+  stages={[
+    { label: 'Begin with the prior entity state', role: 'input', value: 'entity 7; health 6; Alive', detail: 'The trace identifies entity 7. The recorded before-values show health 6 and mode Alive immediately before the respective changes; the entity ID keeps this sequence separate from other entities.' },
+    { label: 'Record the health write', role: 'process', value: 'seq 41: 6 → 0; tick 900', detail: 'At tick 900, the health observer records HealthWrite with before = 6 and after = 0. The event states exactly which value changed, rather than merely logging that damage happened.' },
+    { label: 'Record the mode transition', role: 'state', value: 'seq 42: Alive → Downed; tick 900', detail: 'The next recorded event for entity 7 changes its mode from Alive to Downed in the same tick. A typed trace can compare this transition with the health write ending at zero.' },
+    { label: 'Observe the display copy', role: 'process', value: 'seq 43: health 0; tick 901', detail: 'The health-bar observer reads zero at tick 901. Its copy catches up one tick after the health and mode observations; reading a matching number alone would have hidden that delay.' },
+    { label: 'Compare the recorded sequence', role: 'output', value: 'health and mode before UI read', detail: 'Grouping by entity ID and comparing event types, sequence numbers, and ticks exposes the recorded ordering and the display delay. It does not by itself prove that one observed event caused another.' },
+  ]}
+  caption="The state display follows the exact three-event trace above. Sequence numbers establish log order; the next paragraph explains why delayed logging or a shared cause can require further evidence."
+/>
 
 Log order is not cause. Event 41 appearing before event 42 fits the damage
 causing the transition, but it also fits both events sharing one cause, or two
@@ -37259,6 +37511,19 @@ its bottom seven bits, `0101101`, back to the top and restores `0x5A3C9685`.
 XOR with the key then cancels it: the top six digits are identical in both
 numbers, and anything XORed with itself is 0, while the last byte gives
 `1000 0101` against `1110 0001` = `0110 0100` = `0x64` = 100.
+
+<AnimatedFlow
+  title="Follow the same 32 bits through encoding and decoding"
+  stages={[
+    { label: 'Start with the plain value', role: 'input', value: '100 / 0x00000064', detail: 'The input is 100, represented as a 32-bit integer. The toy transform uses key 0x5A3C96E1 and a seven-bit rotation; width and rotation count remain the same throughout.' },
+    { label: 'XOR with the key', role: 'process', value: '0x5A3C9685', detail: '0x00000064 XOR 0x5A3C96E1 gives 0x5A3C9685. This changes bit values while keeping their positions; XOR with the same key again can undo this step.' },
+    { label: 'Rotate left by seven', role: 'process', value: '0x1E4B42AD', detail: 'A 32-bit left rotation moves the top seven bits to the bottom and produces 0x1E4B42AD. The operation preserves all 32 bits while changing their positions.' },
+    { label: 'Store in little-endian order', role: 'state', value: 'AD 42 4B 1E', detail: 'x86 memory stores the lowest byte first, so the encoded integer appears as AD 42 4B 1E. Reading those four bytes as a little-endian u32 reconstructs 0x1E4B42AD before decoding.' },
+    { label: 'Undo the rotation first', role: 'process', value: '0x5A3C9685', detail: 'Rotate the reconstructed integer right by seven. The low seven bits return to the top, restoring the intermediate XOR result 0x5A3C9685.' },
+    { label: 'Undo XOR and recover the value', role: 'output', value: '100 / 0x00000064', detail: 'XOR the intermediate result with the same key. The key bits cancel, giving 0x00000064, or 100. Decoding reversed both the operation order and the direction of the rotation.' },
+  ]}
+  caption="The moving data value follows the existing round-trip diagram, bit calculations, and memory strips. It shows a reversible representation; the separate integrity relation must still be checked before a decoded value is used."
+/>
 
 ## Compare encodings of values that differ in one known way
 
@@ -38900,11 +39165,11 @@ containing `fn main()` alone is not a complete firmware image.
 <AnimatedFlow
   title="From reset to the lamp controller"
   stages={[
-    { label: 'Read the vectors', role: 'input', detail: 'The core obtains the initial stack pointer and the reset-handler address from the image.' },
-    { label: 'Prepare working memory', role: 'process', detail: 'Runtime startup copies initialized static data into RAM and zeroes the .bss range.' },
-    { label: 'Enter Rust', role: 'process', detail: 'The runtime calls the function marked #[entry]. Application logic can now use its initialized state.' },
-    { label: 'Process button samples', role: 'state', detail: 'The controller changes its lamp state only when a released button becomes pressed.' },
-    { label: 'Report the trace', role: 'output', detail: 'Semihosting sends the results to QEMU. This test image then requests an emulator exit.' },
+    { label: 'Read the vectors', role: 'input', value: 'initial SP | reset address', detail: 'The core obtains the initial stack pointer and the reset-handler address from the image.' },
+    { label: 'Prepare working memory', role: 'process', value: '.data copied; .bss = 0', detail: 'Runtime startup copies initialized static data into RAM and zeroes the .bss range.' },
+    { label: 'Enter Rust', role: 'process', value: '#[entry] begins', detail: 'The runtime calls the function marked #[entry]. Application logic can now use its initialized state.' },
+    { label: 'Process button samples', role: 'state', value: 'released -> pressed: toggle lamp', detail: 'The controller changes its lamp state only when a released button becomes pressed.' },
+    { label: 'Report the trace', role: 'output', value: 'trace -> QEMU; emulator exit', detail: 'Semihosting sends the results to QEMU. This test image then requests an emulator exit.' },
   ]}
   caption="Step through the order. Printing results depends on reaching application code; it cannot replace the earlier startup work."
 />
@@ -40857,12 +41122,12 @@ emulator that guessed would hide bugs in the guest program and in itself.
 <AnimatedFlow
   title="One LDA instruction: bytes become CPU state"
   stages={[
-    { label: 'Start at step 2 of the trace', role: 'state', detail: 'The earlier LDX has finished: PC = 0x02, A = 0, X = 2, Z = 0, and the cycle count is 2. RAM at 0x80 contains gold = 10. The next instruction bytes are 02 80.' },
-    { label: 'Fetch the opcode', role: 'input', detail: 'fetch reads byte 0x02 at PC = 0x02, then advances PC to 0x03. This byte identifies the operation; it has not loaded the gold value into A.' },
-    { label: 'Decode the operation', role: 'process', detail: 'Opcode::decode maps 0x02 to LDA. The LDA arm requires one address operand followed by a data read. An unrecognized opcode would return IllegalOpcode before this arm runs.' },
-    { label: 'Fetch the address operand', role: 'input', detail: 'The second fetch reads byte 0x80 at PC = 0x03 and advances PC to 0x04. The operand names RAM address 0x80, whose stored byte is the value the instruction will load.' },
-    { label: 'Update A and the zero flag', role: 'state', detail: 'read(0x80) returns 10, so A becomes 10. Because A is nonzero, Z remains 0. X remains 2, and RAM still holds gold = 10 because LDA only reads it.' },
-    { label: 'Finish the instruction', role: 'output', detail: 'The arm returns a cost of 3 cycles: opcode fetch, operand fetch, and data read. The total becomes 2 + 3 = 5. PC = 0x04 now selects ADD #5, matching step 2 of the trace.' },
+    { label: 'Start at step 2 of the trace', role: 'state', value: 'PC=02 A=0 X=2 Z=0 cycles=2', detail: 'The earlier LDX has finished: PC = 0x02, A = 0, X = 2, Z = 0, and the cycle count is 2. RAM at 0x80 contains gold = 10. The next instruction bytes are 02 80.' },
+    { label: 'Fetch the opcode', role: 'input', value: 'opcode=02 PC=03', detail: 'fetch reads byte 0x02 at PC = 0x02, then advances PC to 0x03. This byte identifies the operation; it has not loaded the gold value into A.' },
+    { label: 'Decode the operation', role: 'process', value: '02 -> LDA', detail: 'Opcode::decode maps 0x02 to LDA. The LDA arm requires one address operand followed by a data read. An unrecognized opcode would return IllegalOpcode before this arm runs.' },
+    { label: 'Fetch the address operand', role: 'input', value: 'operand=80 PC=04', detail: 'The second fetch reads byte 0x80 at PC = 0x03 and advances PC to 0x04. The operand names RAM address 0x80, whose stored byte is the value the instruction will load.' },
+    { label: 'Update A and the zero flag', role: 'state', value: 'A=10 Z=0 X=2 RAM[80]=10', detail: 'read(0x80) returns 10, so A becomes 10. Because A is nonzero, Z remains 0. X remains 2, and RAM still holds gold = 10 because LDA only reads it.' },
+    { label: 'Finish the instruction', role: 'output', value: 'PC=04 cycles=2+3=5', detail: 'The arm returns a cost of 3 cycles: opcode fetch, operand fetch, and data read. The total becomes 2 + 3 = 5. PC = 0x04 now selects ADD #5, matching step 2 of the trace.' },
   ]}
   caption="An instruction can use several emulated cycles. The later `ADD` changes A, and `STA` writes that result back to RAM; following those separate changes explains why a saved register and a saved memory byte can disagree."
 />
