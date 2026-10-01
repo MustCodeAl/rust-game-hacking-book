@@ -541,3 +541,16 @@ Validation:
 The live preview on port 4322 serves the new diagrams. Publication will use a
 fresh branch based on `gh-pages` and the complete verified static build; the
 exact deployment receipt follows below.
+
+Publication is complete: source **b86f6c873a9a571e2768de28e97decde49f066e9**
+was generated into **885e7696afbd274a5aa0ee7d6375234b3a651121** on
+`codex/gh-pages-animated-lessons`, merged through
+[PR #11](https://github.com/MustCodeAl/rust-game-hacking-book/pull/11) into
+`gh-pages` at **0b5939d2a9e3d5ed2b5d4f6c67b48518e5c133f2**. GitHub Pages
+reports that exact merge as **built**. Six public lesson pages across the book
+match the verified build byte-for-byte, including their inline animation code;
+both animation/theme stylesheets and the reader-control script also match.
+Generated SVG checks confirm all **156 state values**, **28 lesson diagrams**,
+and **28 print diagrams**, with correct node/connection counts and nodes inside
+their view boxes. The authored branch may additionally contain this
+documentation-only deployment receipt.

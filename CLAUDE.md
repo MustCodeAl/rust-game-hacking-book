@@ -295,3 +295,9 @@ Reader appearance controls and six additional walkthroughs are source
 built that exact merge; public pages, scripts, and styles match the verified
 build. Original heading levels and sizes remain intact. Use Reader theme →
 Diagrams and reading layout → Heading rectangles to switch their decoration.
+
+The 28 animated lessons and five adaptive reading-role palettes are source
+**b86f6c8**, published through **PR #11** into `gh-pages` at **0b5939d**.
+Pages built that exact merge; six public lesson pages, their animation code,
+both related stylesheets, and the reader-control script match the verified
+build. The publication receipt is in BOOK_REVISION_PROGRESS.md.
