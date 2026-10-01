@@ -19,6 +19,15 @@
   var CODE_MODES = ["dark", "light"];
   var SYNTAX_PALETTES = ["academy", "cyber", "aurora", "solar", "ocean", "mono"];
   var BACKGROUND_TONES = ["theme", "warm", "cool", "rose", "neutral"];
+  // These choices change presentation only. Chapter identity, diagram roles,
+  // and code syntax keep their own meanings regardless of the selected surface.
+  var READER_CHOICES = {
+    diagramBackground: { attribute: "academyDiagramBackground", key: "gha-diagram-background", values: BACKGROUND_TONES.concat(["page"]), fallback: "theme", control: "data-diagram-background-choice" },
+    diagramFill: { attribute: "academyDiagramFill", key: "gha-diagram-fill", values: ["tinted", "plain"], fallback: "tinted", control: "data-diagram-fill-choice" },
+    headingStyle: { attribute: "academyHeadingStyle", key: "gha-heading-style", values: ["boxed", "plain"], fallback: "boxed", control: "data-heading-style-choice" },
+    textSize: { attribute: "academyTextSize", key: "gha-text-size", values: ["small", "standard", "large"], fallback: "standard", control: "data-text-size-choice" },
+    spacing: { attribute: "academySpacing", key: "gha-spacing", values: ["compact", "comfortable", "spacious"], fallback: "comfortable", control: "data-spacing-choice" }
+  };
 
   var SEMANTIC_TOKENS = {
     safety: [
@@ -70,7 +79,8 @@
   // ------------------------------------------------------------------
 
   function savedMode() {
-    var mode = storageGet("gha-mode");
+    // Keep a click effective even when private browsing blocks storage.
+    var mode = root.dataset.academyMode || storageGet("gha-mode");
     return mode === "light" || mode === "dark" ? mode : "auto";
   }
 
@@ -96,6 +106,10 @@
     setPressed("data-background-choice", root.dataset.academyBackground || "theme");
     setPressed("data-semantic-choice", root.dataset.academySemantic === "off" ? "off" : "on");
     setPressed("data-ligature-choice", root.dataset.academyLigatures === "on" ? "on" : "off");
+    Object.keys(READER_CHOICES).forEach(function (name) {
+      var choice = READER_CHOICES[name];
+      setPressed(choice.control, root.dataset[choice.attribute] || choice.fallback);
+    });
     syncPanelToggles();
   }
 
@@ -144,6 +158,7 @@
   // written so the two scripts agree on the next page load.
   function applyMode(id) {
     var mode = id === "light" || id === "dark" ? id : "auto";
+    root.dataset.academyMode = mode;
     root.dataset.theme = mode === "auto" ? systemMode() : mode;
     if (mode === "auto") {
       storageRemove("gha-mode");
@@ -174,6 +189,14 @@
     root.dataset.academyBackground = tone;
     storageSet("gha-background-tone", tone);
     storageRemove("gha-background");
+    syncThemeControls();
+  }
+
+  function applyReaderChoice(name, id) {
+    var choice = READER_CHOICES[name];
+    var value = choice.values.indexOf(id) === -1 ? choice.fallback : id;
+    root.dataset[choice.attribute] = value;
+    storageSet(choice.key, value);
     syncThemeControls();
   }
 
@@ -211,6 +234,7 @@
     var target = event.target.closest(
       "[data-theme-choice], [data-mode-choice], [data-code-mode-choice], [data-syntax-palette-choice], " +
       "[data-background-choice], [data-semantic-choice], [data-ligature-choice], [data-theme-reset], " +
+      "[data-diagram-background-choice], [data-diagram-fill-choice], [data-heading-style-choice], [data-text-size-choice], [data-spacing-choice], " +
       "[data-print-book], [data-panel-toggle], .theme-switcher__toggle"
     );
     if (!target) {
@@ -223,6 +247,11 @@
     if ("codeModeChoice" in data) return applyCodeMode(data.codeModeChoice);
     if ("syntaxPaletteChoice" in data) return applySyntaxPalette(data.syntaxPaletteChoice);
     if ("backgroundChoice" in data) return applyBackground(data.backgroundChoice);
+    if ("diagramBackgroundChoice" in data) return applyReaderChoice("diagramBackground", data.diagramBackgroundChoice);
+    if ("diagramFillChoice" in data) return applyReaderChoice("diagramFill", data.diagramFillChoice);
+    if ("headingStyleChoice" in data) return applyReaderChoice("headingStyle", data.headingStyleChoice);
+    if ("textSizeChoice" in data) return applyReaderChoice("textSize", data.textSizeChoice);
+    if ("spacingChoice" in data) return applyReaderChoice("spacing", data.spacingChoice);
     if ("semanticChoice" in data) return applySemanticSetting(data.semanticChoice);
     if ("ligatureChoice" in data) return applyLigatureSetting(data.ligatureChoice);
     if ("panelToggle" in data) return togglePanel(data.panelToggle);
@@ -234,6 +263,9 @@
       applySyntaxPalette("academy");
       applySemanticSetting("on");
       applyLigatureSetting("off");
+      Object.keys(READER_CHOICES).forEach(function (name) {
+        applyReaderChoice(name, READER_CHOICES[name].fallback);
+      });
       applyPanel("sidebar", true);
       applyPanel("toc", true);
       return;

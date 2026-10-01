@@ -1007,10 +1007,10 @@ this example only shows how a declared format gives bytes meaning.
 <AnimatedFlow
   title="Follow the meaning into a byte representation"
   stages={[
-    { label: 'World idea', detail: 'A character owns spendable coins.' },
-    { label: 'Game model', detail: 'Player entity 17 has a wallet with 76 gold.' },
-    { label: 'Save or message format', detail: 'This toy format writes player ID, then gold, one byte each.' },
-    { label: 'Bytes', detail: '11 4C in hexadecimal encodes ID 17 and gold 76 under those rules.' },
+    { label: 'World idea', detail: 'A character owns spendable coins.', role: 'input' },
+    { label: 'Game model', detail: 'Player entity 17 has a wallet with 76 gold.', role: 'state' },
+    { label: 'Save or message format', detail: 'This toy format writes player ID, then gold, one byte each.', role: 'process' },
+    { label: 'Bytes', detail: '11 4C in hexadecimal encodes ID 17 and gold 76 under those rules.', role: 'output' },
   ]}
   caption="Design chooses the model; a format and encoding describe how selected information becomes saved or transmitted bytes."
 />
@@ -3343,6 +3343,20 @@ may land somewhere new every time the game starts, while the health field can
 remain 48 bytes into the same object layout for that build. Verify the offset
 again when the game or layout changes.
 
+Step through the pointer read and the field calculation together. Notice when
+a number is being read from memory and when it is being used as an address:
+
+<AnimatedFlow
+  title="From pointer storage to the health field"
+  stages={[
+    { label: 'Start at the pointer storage', detail: 'At address 0x2000, this example stores the four bytes 00 50 00 00. This is where the pointer lives, not where the player object starts.', role: 'input' },
+    { label: 'Read the stored address', detail: 'Read those bytes as a little-endian u32 to obtain 0x5000. The result names the beginning of the player object for this example.', role: 'process' },
+    { label: 'Locate the field', detail: 'Use the object base 0x5000 and add the verified health offset 0x30. The sum is 0x5030; adding the offset computes an address without reading health.', role: 'process' },
+    { label: 'Read health at the destination', detail: 'Read the health field from 0x5030 using its verified type. The field value comes from the bytes there, not from the pointer value 0x5000 or the offset 0x30.', role: 'output' },
+  ]}
+  caption="Two memory reads with an address calculation between them: first obtain the object base, then locate and read its health field."
+/>
+
 ## Why an address can stop working
 
 The pointer and offset example gives you a way to find a field *now*. It does
@@ -4472,6 +4486,22 @@ jump target
 ```
 
 `ret` roughly pops that saved address into `eip`. If a hook adds an unmatched `push`, `ret` may treat some unrelated value as an address and jump into nonsense.
+
+Follow the `call calculate_damage` above through its return. The saved address
+belongs to the caller's next instruction; it is separate from the address of
+`calculate_damage`:
+
+<AnimatedFlow
+  title="A function call leaves a route back"
+  stages={[
+    { label: 'Reach the call', detail: 'The caller reaches call calculate_damage. Execution must enter calculate_damage and later continue at the instruction immediately after this call.', role: 'input' },
+    { label: 'Save the continuation', detail: 'On the 32-bit x86 path described here, call pushes the address of the next instruction onto the stack. That stored return address records where the caller should resume.', role: 'state' },
+    { label: 'Run the function', detail: 'Execution jumps to calculate_damage. Any temporary pushes must have matching cleanup so that the saved return address is available when the function returns.', role: 'process' },
+    { label: 'Read the return address', detail: 'ret takes the saved address from the stack and places it in eip. An unmatched push could leave an unrelated value where ret expects that address.', role: 'process' },
+    { label: 'Continue in the caller', detail: 'Execution resumes immediately after call calculate_damage, at the line marked by the comment in the assembly fragment.', role: 'output' },
+  ]}
+  caption="The function's entry address tells call where to go; the saved continuation tells ret where to come back."
+/>
 
 ## Calling conventions are agreements between functions
 
@@ -18553,6 +18583,19 @@ stateDiagram-v2
     Ready --> Absent: validation failed
 ```
 
+<AnimatedFlow
+  title="Follow a hook through installation and removal"
+  stages={[
+    { label: 'Verified target', role: 'input', detail: 'Identify the exact supported module and compare the original instruction bytes. A mismatch stops preparation before the live code changes.' },
+    { label: 'Prepared trampoline', role: 'process', detail: 'Decode whole instructions, relocate address-dependent operands, and validate the return path. Keep the original bytes and callback state with the owner of the allocation.' },
+    { label: 'Publish the detour', role: 'process', detail: 'Use the declared thread rendezvous or framework transaction. Write the complete patch, flush the instruction cache, restore page protections, and verify the result before releasing peers.' },
+    { label: 'Installed', role: 'state', detail: 'Calls can now enter the callback and original path. Keep their state alive, follow the re-entry policy, and capture only bounded work on the calling thread.' },
+    { label: 'Draining', role: 'state', detail: 'Refuse new callback work and wait for existing users to finish. A timeout leaves the still-valid trampoline and callback state alive; it does not permit freeing them.' },
+    { label: 'Original path restored', role: 'output', detail: 'Restore and verify the exact original bytes under the same thread-safety mechanism. Release hook resources only when no execution can still use them.' },
+  ]}
+  caption="The transitions are the difficult part: preparation failure leaves the original path intact, and incomplete draining keeps resources alive. Step through the lifecycle to see which guarantee each transition needs."
+/>
+
 There should be no `HalfPatched` state visible to executing threads.
 
 ## Preserve five contracts
@@ -21795,6 +21838,19 @@ flowchart LR
     N -->|viewport| P["Pixels"]
 ```
 
+<AnimatedFlow
+  title="Follow one label anchor from the world to the screen"
+  stages={[
+    { label: 'World point', role: 'input', detail: 'Begin with one entity position and the camera from the same frame. These coordinates describe a place in the game world, not a pixel.' },
+    { label: 'View transform', role: 'process', detail: 'Apply the inverse camera pose. The point is now measured from the camera along its right, up, and forward or back directions.' },
+    { label: 'Projection transform', role: 'process', detail: 'Apply the declared projection matrix to obtain clip x, y, z, and w. Its field of view, aspect ratio, handedness, and depth convention must match the game.' },
+    { label: 'Visibility check', role: 'process', detail: 'Check finite coordinates, usable w, and the clip bounds for this API. A label anchor behind the camera or outside those bounds does not continue to drawing.' },
+    { label: 'Perspective divide', role: 'process', detail: 'For an accepted point, divide x, y, and z by w to obtain normalized device coordinates. This is where perspective makes distant displacements occupy less screen space.' },
+    { label: 'Viewport pixels', role: 'output', detail: 'Map normalized x and y into the current viewport dimensions and its vertical-axis convention. Only this final pixel position belongs to the overlay.' },
+  ]}
+  caption="Step through one point, then replay the path. A rejected label anchor produces no pixel; clipping a triangle can instead preserve its visible portion."
+/>
+
 Naming the stages makes bugs easier to locate. A marker that rotates the wrong
 way usually points to the view transform. A marker that stretches after a
 resolution change points to the viewport or aspect ratio. A point behind the
@@ -23461,10 +23517,10 @@ flowchart TD
 <AnimatedFlow
   title="From received bytes to a game event"
   stages={[
-    { label: 'Collect one frame', detail: 'Keep partial input until the length header and its complete payload are available. Reject a length above the limit.' },
-    { label: 'Decompress the payload', detail: 'For this Wesnoth message, decode the gzip payload. A valid frame is not necessarily valid compressed data.' },
-    { label: 'Parse its fields', detail: 'Interpret the WML tags and fields, then construct a typed message. Reject malformed or invalid fields.' },
-    { label: 'Apply the session rules', detail: 'Check whether this message is permitted now. Only accepted messages can change the session or game state.' },
+    { label: 'Collect one frame', role: 'input', detail: 'Keep partial input until the length header and its complete payload are available. Reject a length above the limit.' },
+    { label: 'Decompress the payload', role: 'process', detail: 'For this Wesnoth message, decode the gzip payload. A valid frame is not necessarily valid compressed data.' },
+    { label: 'Parse its fields', role: 'process', detail: 'Interpret the WML tags and fields, then construct a typed message. Reject malformed or invalid fields.' },
+    { label: 'Apply the session rules', role: 'state', detail: 'Check whether this message is permitted now. Only accepted messages can change the session or game state.' },
   ]}
   caption="The next stage depends on the preceding stage succeeding. Receiving bytes is not the same as accepting a game action."
 />
@@ -35762,6 +35818,19 @@ physical address N, so each page of the file is one physical page:
 
 With `CR3 = 0x1000`, virtual address `0x0123` should translate to physical `0x5123`. Tests also cover a missing present bit and a noncanonical virtual address.
 
+<AnimatedFlow
+  title="Follow virtual 0x0123 through the synthetic capture"
+  stages={[
+    { label: 'Choose the address space', role: 'input', detail: 'CR3 supplies the physical root 0x1000. Virtual address 0x0123 has four zero table indices and a page offset of 0x123. The root and address must describe the same process mapping.' },
+    { label: 'Read PML4 entry 0', role: 'process', detail: 'Read eight bytes at physical 0x1000. Entry 0x2001 has its present bit set; masking the flag bits leaves 0x2000, the physical base of the PDPT.' },
+    { label: 'Read PDPT entry 0', role: 'process', detail: 'At physical 0x2000, entry 0x3001 points to the page directory at 0x3000. Its large-page bit is clear, so the walk continues rather than selecting a 1 GiB page.' },
+    { label: 'Read page-directory entry 0', role: 'process', detail: 'At physical 0x3000, entry 0x4001 points to the page table at 0x4000. Its large-page bit is also clear, so the walk continues to a 4 KiB-page entry.' },
+    { label: 'Select the data page', role: 'state', detail: 'Read page-table entry 0 at physical 0x4000. Entry 0x5001 is present, and masking its flags leaves the data-page base 0x5000. The table walk now has the page, but still needs the byte offset.' },
+    { label: 'Produce the physical address', role: 'output', detail: 'Combine aligned page base 0x5000 with offset 0x123 to obtain physical 0x5123. The capture stores GHA DMA beginning there. A data read must still check that its complete requested range fits in the file.' },
+  ]}
+  caption="Each arrow depends on a valid eight-byte entry read: an out-of-range address or a clear present bit stops the walk at that level. This fixture follows the four-level, 4 KiB-page path; the earlier flowchart also covers the large-page exits."
+/>
+
 Synthetic tests are powerful because every byte is known. A failure means the translator is wrong, not that an unknown capture changed.
 
 ## Run the complete tool
@@ -38831,11 +38900,11 @@ containing `fn main()` alone is not a complete firmware image.
 <AnimatedFlow
   title="From reset to the lamp controller"
   stages={[
-    { label: 'Read the vectors', detail: 'The core obtains the initial stack pointer and the reset-handler address from the image.' },
-    { label: 'Prepare working memory', detail: 'Runtime startup copies initialized static data into RAM and zeroes the .bss range.' },
-    { label: 'Enter Rust', detail: 'The runtime calls the function marked #[entry]. Application logic can now use its initialized state.' },
-    { label: 'Process button samples', detail: 'The controller changes its lamp state only when a released button becomes pressed.' },
-    { label: 'Report the trace', detail: 'Semihosting sends the results to QEMU. This test image then requests an emulator exit.' },
+    { label: 'Read the vectors', role: 'input', detail: 'The core obtains the initial stack pointer and the reset-handler address from the image.' },
+    { label: 'Prepare working memory', role: 'process', detail: 'Runtime startup copies initialized static data into RAM and zeroes the .bss range.' },
+    { label: 'Enter Rust', role: 'process', detail: 'The runtime calls the function marked #[entry]. Application logic can now use its initialized state.' },
+    { label: 'Process button samples', role: 'state', detail: 'The controller changes its lamp state only when a released button becomes pressed.' },
+    { label: 'Report the trace', role: 'output', detail: 'Semihosting sends the results to QEMU. This test image then requests an emulator exit.' },
   ]}
   caption="Step through the order. Printing results depends on reaching application code; it cannot replace the earlier startup work."
 />
@@ -40784,6 +40853,19 @@ for anything that is not an instruction, and the `?` turns that into an
 `IllegalOpcode` error that names the address. A real CPU meeting an unknown
 opcode might raise an exception, as x86 does, or do something undocumented. An
 emulator that guessed would hide bugs in the guest program and in itself.
+
+<AnimatedFlow
+  title="One LDA instruction: bytes become CPU state"
+  stages={[
+    { label: 'Start at step 2 of the trace', role: 'state', detail: 'The earlier LDX has finished: PC = 0x02, A = 0, X = 2, Z = 0, and the cycle count is 2. RAM at 0x80 contains gold = 10. The next instruction bytes are 02 80.' },
+    { label: 'Fetch the opcode', role: 'input', detail: 'fetch reads byte 0x02 at PC = 0x02, then advances PC to 0x03. This byte identifies the operation; it has not loaded the gold value into A.' },
+    { label: 'Decode the operation', role: 'process', detail: 'Opcode::decode maps 0x02 to LDA. The LDA arm requires one address operand followed by a data read. An unrecognized opcode would return IllegalOpcode before this arm runs.' },
+    { label: 'Fetch the address operand', role: 'input', detail: 'The second fetch reads byte 0x80 at PC = 0x03 and advances PC to 0x04. The operand names RAM address 0x80, whose stored byte is the value the instruction will load.' },
+    { label: 'Update A and the zero flag', role: 'state', detail: 'read(0x80) returns 10, so A becomes 10. Because A is nonzero, Z remains 0. X remains 2, and RAM still holds gold = 10 because LDA only reads it.' },
+    { label: 'Finish the instruction', role: 'output', detail: 'The arm returns a cost of 3 cycles: opcode fetch, operand fetch, and data read. The total becomes 2 + 3 = 5. PC = 0x04 now selects ADD #5, matching step 2 of the trace.' },
+  ]}
+  caption="An instruction can use several emulated cycles. The later `ADD` changes A, and `STA` writes that result back to RAM; following those separate changes explains why a saved register and a saved memory byte can disagree."
+/>
 
 Because `step` decodes every instruction each time it runs, the loop body from
 `0x02` to `0x0A` is decoded afresh on both passes. That repetition is what the
