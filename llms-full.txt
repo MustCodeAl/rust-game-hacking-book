@@ -8,8 +8,8 @@ This export contains the source of every numbered lesson and the glossary, inclu
 ## Lesson 1.1 — Reasoning from Evidence
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/01/
 Category: Game Hacking Foundations
-Estimated reading time: 14 minutes
-Summary: Learn a simple way to look up an unfamiliar idea, explain it accurately, correct mistakes, and remember it later.
+Estimated reading time: 20 minutes
+Summary: Ask precise questions, judge evidence, test assumptions, correct mistakes, and build understanding through practice.
 
 You do not need to prove that you already know something before you study it.
 The next lesson starts with the parts of a computer and builds each idea from
@@ -45,6 +45,20 @@ flowchart LR
 That loop gives you fast feedback. It also prevents a common mistake: reading
 the same paragraph several times and confusing recognition with understanding.
 
+## Choose a goal you can recognize
+
+Give a study session a specific goal. “Understand game hacking” does not say
+what you should be able to do afterward. “Explain what I observed after one
+jump, and distinguish that observation from my guess about its cause” does.
+You can finish that goal with a short explanation and a repeatable observation;
+you do not need to understand the entire game first.
+
+Choose a goal that matters to the next task. If you want to follow a gold
+purchase, learning how to distinguish the stored amount from its display is
+useful. Collecting unrelated facts about every game engine can wait. As the
+book introduces code and tools, a goal can become more concrete: run one
+example, explain its inputs and result, or reproduce one error.
+
 ## Ask a question small enough to answer
 
 Broad questions make it hard to tell whether an answer is complete.
@@ -74,6 +88,14 @@ one possibility at a time.
   caption="A checkable question names the action, the change to look for, and a repeatable observation."
 />
 
+Write down what you **know**, what you **do not know**, and what you are
+**assuming**. For the jump question, you know which button you pressed and
+whether the character visibly rose. You do not yet know whether the game
+received the input or which rule allowed the jump. “The character was standing
+on the ground” may be an assumption until you check the starting position.
+These distinctions keep an attractive explanation from silently becoming a
+fact.
+
 ## Read the source before answering an unfamiliar question
 
 If you encounter an unfamiliar idea, read the explanation and its example
@@ -95,6 +117,31 @@ A good answer in your own words could be:
 
 The wording changed, but the meaning stayed accurate. Do not add a claim the
 lesson did not support, such as “state is only what I can see on the screen.”
+
+## Check whether the evidence answers your question
+
+A source can be accurate and still answer a different question. Instructions
+for another game version or another processor architecture may explain the
+general mechanism while giving the wrong steps for your experiment. Check the
+target, version, conditions, and actual claim before using the source.
+
+Prefer evidence you can inspect: the relevant code, the tool's documentation,
+or a controlled observation you can repeat. Each has limits. Documentation
+describes an intended contract; an experiment shows what happened under the
+conditions you recorded. One successful jump does not establish that jumping
+works from every position. Several sites repeating the same original claim
+also do not provide several independent checks.
+
+Consider another explanation before settling on the first one. If a jump
+fails, perhaps the input was missed, or perhaps the character was already
+airborne. Reset to a known position and repeat the press, then vary one
+condition. A useful test produces different predictions for the competing
+explanations.
+
+**Occam's razor** is a useful preference for an explanation that needs fewer
+unsupported assumptions while still accounting for the evidence. It helps you
+choose what to investigate first. Simplicity does not prove an explanation
+true; a more complicated cause may fit a later observation better.
 
 ## Correct mistakes immediately
 
@@ -140,6 +187,21 @@ When you reach a code example, read its explanation before predicting a result.
 If you use an AI completion or copy a line, explain every accepted line. “It
 compiles” is useful feedback, but it is not the same as understanding.
 
+## Make progress when you get stuck
+
+An error is information about this attempt. It does not establish that you
+cannot learn the subject. Keep the exact message or unexpected result, return
+to the last step you can explain, and reduce the task to one small example.
+For the jump problem, check one press from one known position before studying
+the whole movement system.
+
+Change one thing and record what happened. If you keep making the same guess,
+take a short break, explain the problem aloud, or ask another reader to walk
+through the example with you. Practice should include checking and correcting
+the result; repeatedly rehearsing an incorrect explanation preserves the
+mistake. Over time, keep a few worked examples and corrected errors that you
+can return to when the same difficulty appears.
+
 ## Ask for debugging help someone can reproduce
 
 “It does not work” gives another person almost nothing to inspect. A useful help
@@ -153,6 +215,12 @@ request includes:
 - what you already tested.
 
 That information turns a complaint into a question someone can reproduce.
+
+Ask for the missing observation or explanation directly: “I expected the
+character to rise from this position; the input was recorded but the position
+did not change. What should I check next?” When helping someone else, recognize
+what they already tested and ask a useful question about the remaining gap.
+Avoid treating a mistake as a judgment about the person.
 
 ## Use AI as a helper, not as the source of truth
 
@@ -180,7 +248,9 @@ If you want a routine, this one fits in 20–40 minutes:
 Before moving on, you should be able to:
 
 - turn a broad topic into a checkable question;
+- choose a useful goal and separate known facts from assumptions;
 - look up an unfamiliar idea before answering;
+- check that evidence fits the target and consider another explanation;
 - explain it without copying the source;
 - compare, correct, and retry your answer;
 - give a helper enough detail to reproduce your problem.
@@ -450,14 +520,20 @@ return to bytes and addresses just before the first memory scan in
 ## Lesson 1.3 — Game Fundamentals
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/03/
 Category: Game Hacking Foundations
-Estimated reading time: 21 minutes
-Summary: Follow a game's input, rules, changing state, and display; then grow one player's values into records and collections.
+Estimated reading time: 34 minutes
+Summary: Follow actions through a game's entities, rules, space, and time; distinguish live state, display copies, server decisions, saves, and bytes.
 
 Lesson 1.2 followed a game action through the CPU and a simple loop. To
 understand why a displayed number changes, we need a model of the game
 around it: what the player does, which rule runs, what the game remembers,
 and what it shows. The byte-level memory model comes just before our first
 scan in Lesson 1.9.
+
+Our small game has players, coins, and a shop. Call one player Ada. We will
+follow her purchases and movement, then ask what the game must keep while
+she plays and what it must save when she leaves. The examples describe
+chosen rules for this game; another game can model the same activity
+differently.
 
 ## A game turns actions into a changing world
 
@@ -481,11 +557,12 @@ reports what the game decided; it does not decide the purchase itself.
 Later in this lesson we will see why the screen may even hold a separate
 copy of that result.
 
-Games can also update enemies, timers, physics, or music without a fresh
+Games can also update enemies, timers, motion, or music without a fresh
 button press. The important cycle is that rules read the current world,
-change it, and produce something the player can observe. An engine commonly
-supplies the repeating loop, rendering, and asset loading; the game supplies
-particular rules such as the price of an item. Finding the right place to
+change it, and produce something the player can observe. An **engine** is
+reusable software for common game jobs. It commonly supplies the repeating
+loop, drawing, and loading resources such as images and sounds; the game
+supplies particular rules such as the price of an item. Finding the right place to
 change a game starts by asking which side owns the behavior. [Lesson 4.1](/pages/1/11/) develops that boundary.
 
 A game remembers more than one number. It might track one player's gold,
@@ -494,7 +571,7 @@ values together and apply the same rule to many players?
 
 ## One player has related values
 
-Suppose a player starts with 100 gold, 80 health, and a maximum of 100
+Suppose Ada starts with 100 gold, 80 health, and a maximum of 100
 health. These values are part of the changing game state.
 
 ```text
@@ -520,9 +597,70 @@ question to ask: which nearby stored values belong to the same player?
   caption="After the purchase and the hit, three different values still belong to one player record."
 />
 
+## Give things identities and responsibilities
+
+Gold and health describe Ada, but the game also needs to distinguish Ada
+from another player, a coin, or the shop door. A thing the game treats as
+having its own identity is an **entity**. Depending on the game, entities
+can include characters, pickups, projectiles, doors, or even an invisible
+object that controls a round.
+
+The game can assign Ada an **identifier**, such as player ID 17. The ID
+answers “which player?” Her gold and health answer “what is true about that
+player now?” Buying an item changes her gold; it does not turn her into a
+different player. A display name is another field and need not be unique.
+Two players called Ada can still have different IDs.
+
+An entity can also need several kinds of information. Ada has health,
+money, a position, and a picture the game can draw. Games often group
+related information into **components**, each describing one responsibility:
+
+| Part of Ada's model | Information it needs | Work that uses it |
+| --- | --- | --- |
+| Health | Current health and maximum health | Apply damage or healing |
+| Wallet | Gold | Check a purchase |
+| Position | Location in the world | Move Ada and test nearby objects |
+| Appearance | Which image or model to use | Draw Ada |
+
+A component here means a part of the game's model, not necessarily one
+particular programming technique. One game might put all these fields in
+a single player record; another might keep separate component records
+associated with player ID 17. Both can implement the same gameplay. We
+need this distinction because the information visible on one character
+need not occupy one uninterrupted block of memory.
+
+An entity also has a **lifetime**: the interval from its creation to its
+removal. A coin entity stops being available after Ada picks it up. A later
+coin can reuse its storage without being the same coin. Some games reuse
+IDs too, so an ID is meaningful only within the identity rules of that
+game. Later memory lessons develop how to recognize a currently valid
+entity; the first question is already useful: does this information still
+belong to the thing we intended to observe?
+
+## Shared assets create separate instances
+
+The game does not need a different image file for every coin. It can load
+one coin image and use it to draw many coin entities. An **asset** is a
+resource the game uses, such as an image, a three-dimensional model, a
+sound, a map, or a set of starting values. An **instance** is one particular use of a
+definition or resource in the running world.
+
+Suppose two coins use the same image. One coin is beside Ada and one is
+near the shop. Each has its own identity, position, and availability. If Ada
+collects the nearby coin, that instance disappears and her gold rises
+by one. The coin image remains loaded, and the coin near the shop remains
+available. Changing a shared image can change how both coins look;
+removing one coin instance affects that one coin.
+
+The same distinction applies to player setup. A character definition might
+specify a starting maximum health of 100. Ada's current health of 60 is
+state belonging to her running instance. A definition's default and an
+instance's current value can be equal when the instance starts, then
+diverge during play.
+
 ## One record becomes several players
 
-For the table below, call the first player Ada and a second player Bo.
+For the table below, add a second player called Bo.
 Bo has 40 gold and 50 health. Copying the first player's field names
 into `gold2`, `health2`, and so on would work for two
 players, but every new player would demand more special-case code. Instead,
@@ -562,13 +700,14 @@ flowchart TD
 ## The same idea in Rust
 
 Rust gives a record type a name with `struct`. We can describe the three
-numeric fields from our example:
+numeric fields from our example. This fragment declares a shape for
+player values; it does not yet run a purchase or create a player:
 
 ```rust
 struct Player {
-    gold: u32,
-    health: u32,
-    max_health: u32,
+    gold: u32,        // Amount the purchase rule can spend.
+    health: u32,      // Current health after damage or healing.
+    max_health: u32,  // Upper limit for a health update.
 }
 ```
 
@@ -577,6 +716,8 @@ then gives its type after a colon. `u32` means a non-negative whole number
 held in 32 bits, or four of the eight-bit bytes from Lesson 1.2. The comma
 separates fields. This
 declaration describes the shape of a player; it does not create Ada or Bo.
+The text after `//` is a **comment** for the reader. It explains a field's
+purpose and does not add another field or change the program's behavior.
 Lesson 1.4 will create values, change fields, and write a loop in Rust.
 
 A game's actual layout may differ from this source-level sketch. A memory
@@ -594,6 +735,10 @@ maximum of 100 would violate the simple rule
 0 <= health <= max_health
 ```
 
+Here, `<=` means “less than or equal to”: health must be at least zero and
+no greater than the maximum. Our damage and healing rules should keep it
+inside that range.
+
 We do not need a new data structure to explain this rule. It is a
 relationship the game should preserve when it applies damage or healing.
 Lesson 1.4 keeps both fields in its working player record. Later chapters
@@ -605,6 +750,149 @@ player. The game can remove a player and use that memory for someone else.
 For this first pass, remember that an address tells you *where* to look now;
 it does not guarantee an object's identity forever. Lesson 3.6 develops
 ways to recognize identity and lifetime.
+
+## Inputs request actions
+
+We have said “Ada buys an item,” but a computer first receives something
+more mechanical: a mouse click, a key press, or a controller button. The
+game maps that input to an **action**, such as “buy this item” or “move
+right.” Keeping the action separate from its physical input allows the
+same rule to work with several devices and different key bindings.
+
+An action is a request. The purchase rule still checks the price and Ada's
+gold before accepting it. Context matters too: pressing the right arrow
+might move Ada during play but select the next item while a shop menu is
+open. The same physical input can request different actions in different
+parts of the game.
+
+A game also distinguishes a button being **pressed now** from being
+**held down**. In our game, one press of the buy button requests one
+purchase. Holding the movement button requests continued movement. If the
+purchase rule ran on every update while the button was held, one press
+could accidentally buy many items. This makes the input's timing part of
+the behavior we need to understand.
+
+## Movement needs space and time
+
+To move Ada, the game needs a way to describe where she is. In a small
+two-dimensional world, use two numbers: `x` for horizontal position and
+`y` for vertical position. Together, `(x, y)` are **coordinates**. Our
+example chooses positive `x` toward the right, positive `y` upward, and
+one unit as one tile's width. These are conventions chosen for this world,
+not rules every engine shares.
+
+Ada starts at `(2, 3)`. Moving one unit right gives `(3, 3)`: `x` changes
+from 2 to 3 and `y` stays 3. These are **world coordinates**, describing
+Ada's location in the game. Her **screen coordinates** describe where her
+picture appears on the display. If the camera follows Ada, she can move
+through the world while staying near the middle of the screen. Moving the
+camera changes the view without moving Ada in the world. Chapter 7
+develops these coordinate relationships for 3D games.
+
+Movement also takes time. Suppose Ada's speed is 4 world units per second
+and she moves right for one quarter of a second. The distance is
+4 × 0.25 = 1 unit. Starting at `(2, 3)`, she ends at `(3, 3)` if nothing
+blocks her. This explanatory pseudocode shows the calculation; it is not
+a complete program in a particular language:
+
+```text
+# Inputs: x = 2, speed = 4 units/second, elapsed_seconds = 0.25.
+distance = speed * elapsed_seconds
+x = x + distance
+# Result: distance = 1 unit and x = 3; y stays 3.
+```
+
+The `#` lines describe the inputs and result. `*` means multiply, and the
+right side of the `x = x + distance` calculation is evaluated
+before its result replaces `x`. The elapsed time tells the game how much
+movement to apply. Updating ten times does not tell us how far Ada should
+move until we know how much time those updates represent.
+
+## The world updates between pictures
+
+The work that advances movement, health, timers, and other rules is the
+**simulation**. The work that makes an image of the current world is
+**rendering**. One displayed picture is a **frame**. A simulation update
+is often called a **tick**. These names let us distinguish advancing the
+world from drawing it.
+
+Why does the distinction matter? Suppose a game moves Ada one unit each
+time it draws a frame. A computer drawing 120 frames in one second would
+move her twice as far as one drawing 60. Our speed calculation instead
+asks how much game time passed. Sixty updates of 1/60 second each produce
+the same four units of unobstructed movement as 120 updates of 1/120 second
+each: both add up to one second.
+
+A game can use the measured time since the last update, or advance the
+simulation in fixed steps, such as 1/60 second. With fixed steps, it can
+run zero, one, or several simulation updates while preparing the next
+picture. These are two useful scheduling models; real games also decide
+how to handle stalls and paused time. A frame count alone cannot tell us
+how many gameplay updates occurred.
+
+This also explains change without input. Once a projectile has a speed,
+the simulation can move it on later ticks. A timer can count down, and an
+enemy can act. The player does not need to press a new button for each
+change. A pause menu might stop the simulation while still rendering the
+menu, so a visible animation is not proof that every game timer is running.
+
+## Collisions connect movement to rules
+
+Our movement calculation proposes a new position. It has not yet checked
+whether Ada would pass through a wall or touch a coin. The game gives
+objects simplified shapes for detecting contact. The test for whether
+these shapes meet or overlap is **collision detection**.
+
+For a simple worked example, treat Ada as a point starting at `x = 2`
+and place a wall at `x = 3`. She requests movement to `x = 4`, keeping the
+same `y`. Looking only at her destination could miss the wall: the point
+at 4 is past it. Testing the movement from 2 to 4 finds the crossing. Our
+game then stops Ada just before the wall. Actual characters have width,
+but the point example shows why a path and a final position answer
+different questions.
+
+Detecting contact and deciding its consequence are separate jobs. A wall
+blocks movement. A coin allows movement but awards gold and removes its
+own entity. A trap allows movement but applies damage. All three can
+begin with a contact test and then follow different game rules.
+
+A **physics system** can calculate motion using speed, forces, gravity,
+and contact responses. A game can also use simple movement rules without
+a general physics system. The drawn image and the collision shape may
+have different sizes or levels of detail, so touching an image is not
+always the same as touching the shape the rules test.
+
+## Modes and events organize change
+
+The same contact need not have the same outcome in every situation. Our
+game gives Ada three modes: `alive`, `defeated`, and `respawning`. At
+health zero, she changes from alive to defeated and movement requests are
+ignored. After a two-second wait, she enters respawning. Placing her at
+the spawn point and restoring her health makes her alive again.
+
+A change between modes is a **transition**. A set of allowed modes and
+rules for moving between them is a **state machine**. Here, “state” names
+one behavior mode. Earlier, “game state” meant all the information the
+game remembers, including gold, health, position, and this mode. The mode
+is one part of that larger state.
+
+For this example, the game changes Ada's mode while keeping her player
+identity. A different game could remove the old character entity and
+create another. The visible respawn alone does not tell us which lifetime
+rule it uses.
+
+The game can also announce a particular occurrence: “Ada collected coin
+42.” Such an occurrence is an **event**. The coin rule can award one gold,
+then notify the sound system and the display so they can play a pickup
+sound and show the changed amount. Those systems can react to the same
+event without each deciding whether the coin was available.
+
+The distinctions are useful when following a change. An action requests
+something, current state describes what is true, and an event reports
+what happened. “Collect coin 42” is the request; “Ada has 76 gold” is the
+resulting state; “coin 42 was collected” is the event. If the coin was
+already removed, the game can reject a second request instead of awarding
+gold again. Chapter 4 develops decisions and events in more detail.
 
 ## The display can hold a copy
 
@@ -627,18 +915,132 @@ matching number in memory is only the start of an investigation. Later
 lessons compare what changes after a purchase with what the game actually
 uses to decide whether the purchase is allowed.
 
-In multiplayer, a server may also hold the value that decides the shared
-result. Chapter 8 explains that extra boundary after we have followed one
-local game's state.
+## Which copy decides the result?
+
+In our local example, the purchase rule reads Ada's gameplay gold. That
+value is **authoritative** for the purchase: the rule accepts it as the
+amount Ada actually has. The display copy reports the result but does
+not decide it. Authority describes this role, not a special numeric type.
+
+In a multiplayer game, a **client** is the program a player uses to take
+part. A **server** is a program that coordinates the shared game. A common
+design lets the client send “Ada requests this item” while the server
+looks up the item's price and checks its own gold value before accepting
+or rejecting the request.
+Different games divide responsibility differently, so the important
+question is which side has authority over this particular decision.
+
+Suppose the server has 76 gold for Ada and the client's display shows
+999. The server accepts one 25-gold purchase and updates its value to 51.
+It sends the accepted result back to the client, which can then show 51.
+The display's 999 did not give the server more gold. A network delay can
+also leave a client temporarily showing an older result, even when
+neither program has a bug.
+
+Some clients show an expected result before the server replies so an
+action feels responsive. If the server rejects the action, the client
+must correct that expectation. For now, distinguish the player's request,
+the local picture, and the accepted shared result. Chapter 8 follows the
+messages that connect them.
+
+## Save files preserve chosen state
+
+The running game holds **live state**: what it needs for play now. Closing
+the game ends that running instance. To continue later, it writes selected
+information to storage. Keeping information beyond the running process is
+**persistence**; a save file is one way to provide it.
+
+Consider the local version of our game, after Ada reaches 76 gold and
+60 health. A save could keep those values, her maximum health, position,
+and which coins she has collected. It need not keep the current pickup
+sound's playback position or the already prepared text `"Gold: 76"`.
+The game can recreate the display from gold when it loads the save.
+
+Saving selects state at a particular moment. If the file stores 76 gold
+and Ada later spends 25 without saving again, live gold becomes 51 while
+the file still records 76. Loading that file can restore the earlier
+state. A save file and live state can disagree simply because they
+describe different moments.
+
+Loading also creates new running records. A saved player ID can help the
+game reconnect related information, but a past RAM address does not give
+the new process a valid player record. Persistence keeps chosen meaning
+across runs; it does not promise the same memory locations. Chapter 9
+develops save files and other game resources.
+
+## From a world idea to stored bytes
+
+We can now connect the meanings we have used. First, a designer chooses
+an idea from a real or imagined world: a character owns coins and can
+spend them. The game represents the parts its rules need as entities and
+fields, such as player ID 17 with 76 gold. This chosen representation is
+a **game-data model**. Ada's health number likewise models how the game's
+damage rules work; it is not a complete description of a person's body.
+
+To save that information or send it to another program, the game chooses
+a **format**: rules specifying which fields are included and how to write
+and read them. A save might include gold and collected coins. A movement
+message might include only a player ID and the requested direction. They
+serve different purposes, so they need not contain the same information
+or resemble the live record's layout.
+
+An **encoding** assigns byte patterns to the chosen values. Here is a
+small invented format for a player gold record. It accepts IDs and gold
+amounts from 0 to 255, writes the ID first, and uses one byte for each
+field. Given player ID 17 and gold 76, it produces two bytes:
+
+```text
+# Toy format: one byte of player ID, followed by one byte of gold.
+meaning:      player_id = 17    gold = 76
+field order:  player_id         gold
+hex bytes:    11                4C
+```
+
+Lesson 1.2 taught hexadecimal: `0x11` is 1 × 16 + 1 = 17, and `0x4C`
+is 4 × 16 + 12 = 76. The reader of this toy format knows the first byte
+means an ID and the second means gold because the format says so. The
+two bytes alone do not label their own meanings. Writing the text digits
+`"76"` or choosing a four-byte number would require a different encoding.
+Real formats can include additional fields, larger values, and checks;
+this example only shows how a declared format gives bytes meaning.
+
+<AnimatedFlow
+  title="Follow the meaning into a byte representation"
+  stages={[
+    { label: 'World idea', detail: 'A character owns spendable coins.' },
+    { label: 'Game model', detail: 'Player entity 17 has a wallet with 76 gold.' },
+    { label: 'Save or message format', detail: 'This toy format writes player ID, then gold, one byte each.' },
+    { label: 'Bytes', detail: '11 4C in hexadecimal encodes ID 17 and gold 76 under those rules.' },
+  ]}
+  caption="Design chooses the model; a format and encoding describe how selected information becomes saved or transmitted bytes."
+/>
+
+This flow is a way to follow the meaning through design choices. Live
+fields in RAM are already represented by bytes too; a game does not have
+to turn its whole world into a save file on every tick. In memory, code
+uses a known layout and types. In a save or message, code uses that
+format's rules. Lesson 1.8 develops the memory representation in detail.
+
+Keep two questions separate when investigating a value: **how is it
+represented?** and **what role does it have?** A number stored as four
+bytes could be current gameplay gold, a display copy, a saved value, or
+a server result. Its byte representation alone does not establish its
+authority or tell us when it was last updated.
 
 ## How the game pieces fit
 
-Input triggers a rule, the rule updates state, and the display shows a
-result. Gold, health, and maximum health are fields of one player record;
-a collection holds several such records, and a loop can apply one coin
-rule to each. Health of 120 with a maximum of 100 violates the record's
-health rule. The displayed gold text can be another value, so changing
-only that text need not change the gold used by gameplay.
+Ada's input requests an action. Rules check her current state and update
+the relevant fields. Simulation advances that world through time;
+rendering shows a view of it. Identity tells the game which entity a value
+belongs to, components organize its responsibilities, and assets can be
+shared by many separate instances. A collection lets one loop visit
+several player records.
+
+The gameplay amount, displayed text, server's gold value, and saved value can
+all describe Ada's gold while serving different roles. Understanding those
+roles comes before deciding what a matching number in memory means. The
+game model explains the information; its memory layout or save/message
+format explains how code represents it as bytes.
 
 We have described the update in words. [Lesson 1.4](/pages/1/04/) turns the
 same player's values and rules into a small Rust program.
@@ -647,8 +1049,8 @@ same player's values and rules into a small Rust program.
 ## Lesson 1.4 — Programming Fundamentals
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/04/
 Category: Game Hacking Foundations
-Estimated reading time: 35 minutes
-Summary: Build a small Rust program and use it to understand logic, collections, and ways to organize code.
+Estimated reading time: 40 minutes
+Summary: Build a small Rust rule and use it to understand variables, logic, test cases, collections, and ways to organize code.
 
 We have already followed one value through a CPU instruction (Lesson 1.2)
 and grouped it with one player's other values (Lesson 1.3). Now we can write
@@ -775,6 +1177,21 @@ express it. Its three building blocks are already visible here: do steps
 in **sequence**, use `if` to **select** a path, and later use a loop to
 **repeat** work for several players.
 
+You can first write the plan in **pseudocode**, ordinary steps arranged to
+look like code without committing to a language's exact syntax:
+
+```text
+receive the current gold and the item cost
+if the gold is at least the cost:
+    give back gold minus cost
+otherwise:
+    give back the original gold
+```
+
+This is a sketch to discuss and trace, rather than a program Rust can run.
+With 100 and 25, it gives back 75. With 10 and 25, it gives back 10. Naming
+the inputs and both outcomes makes the next function easier to write.
+
 ## A function gives a name to a behavior
 
 A **function** gives a behavior a name so another part of the program
@@ -812,6 +1229,54 @@ This simple result does not tell the caller whether a purchase happened
 when the cost is zero. A later lesson introduces types that can
 represent success or failure explicitly. We only need the resulting
 gold amount here.
+
+## A value can have more than one role
+
+Gold and cost are **inputs** to `spend_if_possible`; its returned amount is
+an **output**. The caller can store that output in its mutable `gold`
+variable. `cost` stays fixed during the calculation. Input, output, and
+mutable are therefore overlapping descriptions, not three separate kinds
+of variable. They answer “where does the value flow?” and “may it change?”
+
+Two other descriptions concern where a name is usable and how long its
+storage exists. A **local** name belongs to a scope such as one function.
+People often use **global** for a name available outside a single function,
+although the language's visibility rules still control which code can use
+it. A Rust **static** item has storage for the entire program run. That
+storage duration does not by itself mean its contents can never change;
+Rust has separate rules for access and mutation. See the
+[Rust Reference's static-item explanation](https://doc.rust-lang.org/reference/items/static-items.html)
+when you need those rules. Our purchase calculation needs only its supplied
+inputs, so it does not need a shared global gold value.
+
+## Check the rule at its boundaries
+
+The ordinary 100-gold purchase is a useful **baseline case**, sometimes
+informally called a base case. In recursive algorithms, “base case” has a more
+specific meaning: a case solved directly without another recursive call.
+For this purchase rule, we are checking ordinary and unusual inputs. It is not
+enough to check only that example. An **edge case** exercises an unusual
+end of the allowed range, such as having zero gold. A **boundary case**
+checks where a decision changes: just below, exactly at, and just above
+the price. A **corner case** combines unusual conditions, such as zero
+gold and a zero price. These labels can overlap; the important part is
+writing down the inputs and expected result:
+
+| Case | Gold | Cost | Expected returned gold |
+| --- | ---: | ---: | ---: |
+| Ordinary purchase | 100 | 25 | 75 |
+| No gold | 0 | 25 | 0 |
+| Just below the price | 24 | 25 | 24 |
+| Exactly the price | 25 | 25 | 0 |
+| Just above the price | 26 | 25 | 1 |
+| No gold and a free item | 0 | 0 | 0 |
+
+The exact-price case checks that `>=` allows payment when gold equals cost.
+Changing it to `>` would reject that purchase. The free-item case also
+shows the limitation already mentioned: unchanged gold alone cannot tell
+us whether a purchase happened. The Rust Primer demonstrates an automated
+test for its own game rule; Hacking Fundamentals will test a small rule
+for permitting a memory write.
 
 ## A data structure organizes values
 
@@ -950,6 +1415,26 @@ reading unfamiliar logic means finding both **which** steps can run and
 its condition remains true; the `for` loop here has a known collection
 of three prices. Later lessons combine these same forms into scanners,
 parsers, and game bots.
+
+## Name the result you need
+
+Once values are in a collection, the question determines the work. After
+the earlier two-player purchase, Ada has 75 gold and Bo has 15. For a new
+item costing 25, we can ask several different questions:
+
+| Question | Kind of result | Answer for Ada and Bo |
+| --- | --- | --- |
+| Can Bo afford the item? | **Decision:** a yes/no answer | No, because 15 is below 25. |
+| How many players can afford it? | **Count:** the number that meet a condition | One: Ada. |
+| What is the least or greatest gold amount? | **Minimum or maximum:** an extreme value | Minimum 15; maximum 75. |
+
+Counting requires checking each player's gold against the price. Finding
+a maximum requires comparing the gold amounts with one another. Neither
+requires sorting all players first. If there are no players, the count
+is zero, but there is no player's minimum or maximum to return. We will
+use Rust's `Option` in the next lesson to represent a missing answer.
+Clarifying the desired result helps you choose a collection and an
+algorithm, instead of copying a solution to a different question.
 
 ## Choose a collection for the question
 
@@ -1817,8 +2302,8 @@ different game's observed behavior.
 ## Lesson 1.6 — Hacking Fundamentals
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/06/
 Category: Game Hacking Foundations
-Estimated reading time: 18 minutes
-Summary: Turn an observed game behavior into a testable question, narrow possible causes, and make one reversible change with a four-step method.
+Estimated reading time: 27 minutes
+Summary: Turn observed game behavior into repeatable experiments, test a small tool, and record the evidence needed to reproduce its results.
 
 Imagine an offline game whose display shows 100 gold. Buying an item for
 25 changes the display to 75. The screen shows the result, but it does
@@ -1939,9 +2424,9 @@ This self-contained Rust fragment makes the distinction visible:
 
 ```rust
 let mut gold = 100_u32;
-let displayed_gold = gold;
+let displayed_gold = gold; // Copy the amount before the purchase.
 if gold >= 25 {
-    gold -= 25;
+    gold -= 25; // Change the amount the next purchase will read.
 }
 ```
 
@@ -1971,6 +2456,14 @@ Restore: write the saved original value back when the experiment ends
 
 This contract prevents a small experiment from quietly turning into an
 unbounded tool.
+
+The steps also have **dependencies**: a successful write needs a successful
+read of the intended field in the intended build. A failed read does not mean
+the player has zero gold. Stop at that failed step and preserve its error,
+rather than letting later code act on an invented value. The purchase itself
+depends on the current gold and price; the display depends on an update of its
+copy. Following those relationships tells you which earlier assumption to
+check when a later result is wrong.
 
 A later tool may replace the temporary address with a **module-relative
 pointer path**: a sequence of lookups anchored to one exact game build.
@@ -2039,6 +2532,22 @@ address. Chapter 2 teaches how to use one. It shows which instruction
 changed the candidate; a restart shows whether the path survives a new
 process.
 
+### Find the step that actually takes time
+
+If a scanner is slow, ask where its time goes. A **bottleneck** is the step
+that limits the overall work. It might be reading another process, comparing
+many values locally, sorting the remaining candidates, or writing a large log.
+Finding a number and accessing its bytes are different operations, and neither
+requires sorting the results unless the tool needs that order.
+
+Measure a repeatable scan before changing its design. Record how many reads it
+made, how many bytes it compared, how many matches it kept, and the time spent
+in the expensive stages. Improving comparisons will do little if most time is
+spent waiting for reads. Keep the first working experiment small enough to
+understand; [Sampling Game State Under Load](/pages/4/08/) later handles repeated
+observations and slow log writes. Larger collections and more workers are
+choices to evaluate against a measured need.
+
 ## 4. Change one thing and measure the result
 
 Make a prediction before the change:
@@ -2062,6 +2571,32 @@ If only the text changes, you probably found a display copy. If the value snaps
 back, another system owns or recomputes it. If unrelated fields break, your type,
 width, or address may be wrong.
 
+## Choose diagnostics that fit the failure
+
+Compare the **expected** and **observed** result at the first step where they
+diverge. Suppose you expected to read 75 before a write but actually read 74.
+Investigate that mismatch before explaining the later failed purchase.
+
+A **log** records events and values without requiring you to inspect them
+immediately. A useful entry could include the operation, expected amount,
+actual amount, and stage:
+
+```text
+read_gold expected=75 actual=74 stage=before_write
+```
+
+That entry explains why the tool should reject the write. For a failed process
+read, record the reported error and how many bytes were read too. Keep the
+target build and tool version with the run so the entry retains its meaning.
+
+A debugger lets you pause at the suspicious step and inspect its values and
+instructions. Pausing changes timing: other work may wait, or an input or
+timeout may behave differently. Logging also adds work, especially when it
+writes to disk. If a failure disappears when you add diagnostics, that is
+evidence to investigate the timing change; it does not establish that the
+underlying problem is fixed. [What a Debugger Can Reveal](/pages/2/01/) explains
+the pause, while the later sampling lesson shows how to limit recording delays.
+
 ## Use tests and types for quick feedback
 
 Separate code that decides *what should happen* from code that performs a
@@ -2073,21 +2608,93 @@ launching the game:
 
 ```rust
 fn should_write(current: u32, expected: u32, replacement: u32) -> bool {
+    // Both the expected-value check and the replacement limit must pass.
     current == expected && replacement <= 10_000
 }
 
 #[test]
 fn rejects_an_unexpected_current_value() {
+    // A changed field must not pass the expected-value check.
     assert!(!should_write(74, 75, 100));
+}
+
+#[test]
+fn accepts_a_matching_value_and_permitted_replacement() {
+    assert!(should_write(75, 75, 100));
+}
+
+#[test]
+fn checks_the_replacement_limit() {
+    // The limit is allowed; the next value is not.
+    assert!(should_write(75, 75, 10_000));
+    assert!(!should_write(75, 75, 10_001));
 }
 ```
 
-The test passes because 74 is different from the expected 75, so
-`should_write` returns `false`. The `#[test]` marker tells Rust's
-test runner to call the function, and `assert!` fails the test if the
-answer is not false. The compiler checks types, tests check examples,
-and the debugger checks the running game. Each one catches mistakes
-the other two cannot.
+The first test passes because 74 is different from the expected 75, so
+`should_write` returns `false`. `!` reverses that boolean, making the
+assertion true. The `#[test]` marker tells Rust's test runner to call the
+function, and `assert!` fails when its expression is false. The other tests
+exercise a permitted write and both sides of the 10,000 limit. The
+[Rust test guide](https://doc.rust-lang.org/book/ch11-01-writing-tests.html)
+explains these test features. The compiler checks types, tests check examples,
+and the debugger checks the running game. Each one catches mistakes the other
+two cannot. This function checks the supplied sample; the game may change
+again after that sample was read.
+
+Begin with the smallest implementation that satisfies the contract: identify
+the target, read one value, decide whether the change is allowed, apply one
+allowed change, then restore the original value. Keep the decision separate
+from process access so you can test it with
+ordinary values. Reuse an existing tool or library when it supports your target
+and you can check its behavior, version, error handling, and maintenance.
+Writing every dependency yourself does not make the experiment more reliable.
+
+As repeated code or new use cases appear, give each responsibility a small
+interface. **Refactoring** changes the organization while preserving the
+intended behavior; keep the existing examples and tests working as you do it.
+[Tool Architecture, Commands, and Cleanup](/pages/8/10/) develops this separation
+when several features share observations and must coordinate changes.
+
+Review small changes as you work. A **diff** compares edited source with its
+previous version, making an accidentally changed field width or missing check
+easier to see. A **walkthrough** follows one example through the complete read,
+decision, write, and restoration path, often with another reader. Automated
+checks and these reviews answer different questions: passing a logic test does
+not prove that the live address is the game's gold field.
+
+## Leave a record another reader can repeat
+
+Start documentation with the question, the tool's purpose, and its limits.
+Then show the route through the experiment before detailing each step. A
+reader needs to know which file or command to begin with, what result to
+expect, and what a failure means. Define names consistently: if `gold` means
+the rule's stored amount, call the screen copy `displayed_gold` throughout.
+
+Keep a compact experiment record:
+
+- **Reference environment:** game version and build identity, architecture,
+  operating system, tool versions, and the save or map used.
+- **Reproduction:** starting state, exact actions or commands, expected result,
+  observed result, and how to restore the original state.
+- **Evidence:** candidate values, relevant instructions or logs, failed checks,
+  and which explanations remain possible.
+- **Decisions:** why you chose this candidate, data type, limit, or dependency;
+  include the observation that would make you reconsider it.
+
+For a tool you build, document one complete supported path from a fresh source
+checkout to a runnable artifact, including the compiler, target, dependency
+versions, required options, and tests. Keep that path consistent with the
+instructions you actually verify. Reproducible steps let another person repeat
+the experiment; they do not automatically guarantee an identical executable
+byte for byte. [How Source Becomes a Running Process](/pages/1/10/) explains the
+build stages, and the next lab fixes the environment for this book's first scan.
+
+Read the record from a newcomer's position. If an instruction says “use the
+usual settings,” supply the settings. If a screenshot is the only record of a
+result, write down the important value and condition too. Update the record
+when the tool or target changes so an old address or command is not mistaken
+for a current promise.
 
 ## What a candidate address tells you
 
@@ -9691,6 +10298,14 @@ Inject `gha_windows_labs.dll` into `wyrmsun.exe`, recruit one worker normally,
 select a structure, and collect more than 3000 gold. Press **End** to stop and
 restore both hooks.
 
+<LessonVideo
+  title="Automatic worker recruitment in Wyrmsun"
+  src="/assets/images/4/3/macro1.mp4"
+  poster="/assets/images/4/3/macro2.png"
+  duration="9 seconds"
+  caption="The original course recording shows workers being recruited as resources become available. Follow the change from enough gold to a new recruitment, then relate it to the observation, guarded action, and waiting states above."
+/>
+
 ## What the state-machine design prevents
 
 The reusable skill is turning that working game hack into:
@@ -10137,6 +10752,14 @@ The worker rejects non-finite coordinates, writes the captured cursor fields,
 sends mouse input only when the active state changes, and always sends the
 final mouse-up before restoring all three calls. Inject into `flare.exe`, hold
 **M** near an enemy, and press **End** to stop.
+
+<LessonVideo
+  title="Following a target in Flare"
+  src="/assets/images/4/4/flare.mp4"
+  poster="/assets/images/4/4/flare12.png"
+  duration="5 seconds"
+  caption="The original farming-bot recording shows the player moving toward an enemy and attacking. The motion is the visible result of repeatedly observing positions, choosing a direction, and sending a bounded input."
+/>
 
 ---
 ## Lesson 4.8 — Pathfinding on a Game Map
@@ -14537,6 +15160,13 @@ The compiled course tool chooses the Wesnoth main module, asks `VirtualQueryEx` 
 Exercise a small Wesnoth path, then press **End**. The tool restores every installed call byte before detaching. The full code is [`call_logger.rs`](/windows-labs/src/bin/call_logger.rs); shared memory and region enumeration are in [`process.rs`](/windows-labs/src/windows_impl/process.rs).
 
 This first complete version writes compact lines directly to the console. The bounded-channel design above is the next performance step when you add file output; it is not required to run or reproduce the actual call logger.
+
+<LessonVideo
+  title="Executed calls appearing in a Wesnoth trace"
+  src="/assets/images/7/6/logger.mp4"
+  duration="15 seconds"
+  caption="The original call-logger recording shows the running game producing trace output. Each observed call requires a breakpoint hit, execution of the saved call, a single-step event, and re-arming; bytes discovered in a static scan have not necessarily executed."
+/>
 
 ## Read the complete source in six passes
 
@@ -19922,6 +20552,14 @@ function, and DLL worker are in
 
 Always send the final mouse-up event when disabling or unloading the feature. Otherwise Windows can keep the button logically held down.
 
+<LessonVideo
+  title="Crosshair-triggered firing in AssaultCube"
+  src="/assets/images/5/5/cube.mp4"
+  poster="/assets/images/5/5/cube1.png"
+  duration="4 seconds"
+  caption="The original trigger demonstration connects a target under the crosshair to firing. Watch when the target enters the crosshair; the implementation above turns changes in that result into mouse-down and mouse-up edges."
+/>
+
 ## Add debounce
 
 A target result may flicker for a frame. Require repeated agreement:
@@ -20490,6 +21128,14 @@ Notice that this exact implementation ranks horizontal world distance, while
 names for the same rule. Replace the score only after deciding which behavior the
 tool should implement.
 
+<LessonVideo
+  title="Aim following a selected AssaultCube target"
+  src="/assets/images/5/6/cube.mp4"
+  poster="/assets/images/5/6/cube20.png"
+  duration="4 seconds"
+  caption="The original aim demonstration shows the camera turning toward a selected player. Compare that visible turn with the position difference, desired yaw and pitch, and live angle update explained above."
+/>
+
 ## Diagnose aim errors geometrically
 
 | Symptom | Likely assumption |
@@ -20774,6 +21420,14 @@ let mut no_recoil = plan.apply(&process)?;
 ```
 
 Fire a single shot before and after enabling it. Ammo and firing animation should still work, but the camera should no longer kick upward. Restore the original three bytes and confirm recoil returns.
+
+<LessonVideo
+  title="Recoil behavior during AssaultCube firing"
+  src="/assets/images/5/7/cube.mp4"
+  poster="/assets/images/5/7/cube6.png"
+  duration="11 seconds"
+  caption="The original no-recoil demonstration shows firing with the camera effect altered. Watch camera motion separately from ammunition and firing animation; changing one recoil store does not establish that every weapon effect has changed."
+/>
 
 ## Recoil is a sum of layers
 
@@ -21564,6 +22218,14 @@ Build and inject the course DLL, enter a local AssaultCube bot match, and press 
 ```
 
 The entire working update loop, projection, internal x86 calling convention, cave, and installer are in [`assaultcube_tools.rs`](/windows-labs/src/windows_impl/assaultcube_tools.rs). The F5 worker logic is in [`dll.rs`](/windows-labs/src/windows_impl/dll.rs).
+
+<LessonVideo
+  title="Player labels following the AssaultCube view"
+  src="/assets/images/5/9/cube.mp4"
+  poster="/assets/images/5/9/cube23.png"
+  duration="10 seconds"
+  caption="The original ESP recording shows labels moving with the view. Follow one label while the camera turns: a stable label requires the player position, camera state, projection, and draw location to agree each frame."
+/>
 
 ## Debug the transform visually
 
@@ -22559,6 +23221,13 @@ DLL. While an in-flight frame is still executing the detour, the hook is
 its code is removed. Lesson 6.9 established this lifetime rule for a general
 hook manager; the render hook is another application of it.
 
+<LessonVideo
+  title="Combined tools running in AssaultCube"
+  src="/assets/images/5/10/cube.mp4"
+  duration="12 seconds"
+  caption="The original multihack recording combines features from the preceding AssaultCube lessons. Compare their visible effects with the independent settings a menu exposes: changing a setting and drawing that setting are separate responsibilities."
+/>
+
 ## Scope
 
 This is the same offline, version-pinned lab used since Chapter 7, and the same
@@ -22571,7 +23240,7 @@ and an accessibility tool all do.
 ## Lesson 8.1 — Messages, Streams, and Multiplayer
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/6/01/
 Category: Messages Across Networks and Processes
-Estimated reading time: 20 minutes
+Estimated reading time: 25 minutes
 Summary: See how a client and server turn a move into framed bytes, and why TCP transport does not define a game's message boundaries.
 
 ## Client and server
@@ -22647,9 +23316,11 @@ use std::io::{self, Read};
 
 fn read_frame(stream: &mut impl Read, max_size: usize) -> io::Result<Vec<u8>> {
     let mut length_bytes = [0_u8; 4];
+    // Wait for the whole header, even if it arrives across several reads.
     stream.read_exact(&mut length_bytes)?;
     let length = u32::from_be_bytes(length_bytes) as usize;
 
+    // Check an untrusted size before allocating its payload buffer.
     if length > max_size {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -22658,12 +23329,19 @@ fn read_frame(stream: &mut impl Read, max_size: usize) -> io::Result<Vec<u8>> {
     }
 
     let mut payload = vec![0_u8; length];
+    // A successful result contains one complete payload, without the header.
     stream.read_exact(&mut payload)?;
     Ok(payload)
 }
 ```
 
-The maximum size prevents a bad length field from requesting absurd amounts of memory.
+`stream` supplies incoming bytes and `max_size` is the caller's permitted payload
+limit. A successful call returns one payload as a `Vec<u8>`; a truncated header
+or payload produces an I/O error through `?`. For a header `00 00 00 02` followed
+by `41 42`, the returned vector contains just `41 42`. The maximum size prevents
+a bad length field from requesting absurd amounts of memory. This blocking
+helper also needs an appropriate timeout on a real socket so a peer cannot
+make it wait indefinitely.
 
 TCP reliability ends at delivering an ordered byte stream to the receiving socket. It does not prove the application parsed a complete message, accepted the request, saved the state, or sent a meaningful reply. Those guarantees belong to the application protocol. Define acknowledgments, request IDs, timeouts, and retry rules at that layer when the behavior needs them.
 
@@ -22742,7 +23420,10 @@ enum Message {
 }
 ```
 
-The bytes are untrusted until parsing succeeds.
+This enum is a declaration fragment, not a network reader. After framing and
+validation, a parser can turn a move's fields into `Message::Move` with a unit
+ID and two coordinates; the game logic receives named values instead of raw
+byte offsets. The bytes are untrusted until parsing succeeds.
 
 ## One message is wrapped in several layers
 
@@ -22777,6 +23458,69 @@ flowchart TD
 
 **Serialization** turns structured values into bytes. **Framing** tells the receiver where one serialized message ends. **Transport** moves bytes between endpoints. Keeping those jobs separate makes both the explanation and the code easier to test.
 
+<AnimatedFlow
+  title="From received bytes to a game event"
+  stages={[
+    { label: 'Collect one frame', detail: 'Keep partial input until the length header and its complete payload are available. Reject a length above the limit.' },
+    { label: 'Decompress the payload', detail: 'For this Wesnoth message, decode the gzip payload. A valid frame is not necessarily valid compressed data.' },
+    { label: 'Parse its fields', detail: 'Interpret the WML tags and fields, then construct a typed message. Reject malformed or invalid fields.' },
+    { label: 'Apply the session rules', detail: 'Check whether this message is permitted now. Only accepted messages can change the session or game state.' },
+  ]}
+  caption="The next stage depends on the preceding stage succeeding. Receiving bytes is not the same as accepting a game action."
+/>
+
+## Messages can feed a data pipeline
+
+A multiplayer service handles more than packets. It may keep durable account
+and inventory records in a **database**, reuse expensive results in a **cache**,
+and build a **search index** for queries such as finding a match by region and
+mode. Those are different access patterns: keep data across restarts, avoid
+repeating work, and find selected records efficiently. They are not three names
+for the authoritative state of a running match.
+
+Processing is **asynchronous** when the sender can continue before the work
+finishes. A request can enter a queue, then a worker handles it later. A queue
+acknowledgment might mean “received”; it does not by itself mean “validated,
+applied, and saved.” The protocol must say which stage each reply confirms.
+
+There are also two common ways to process a sequence of events:
+
+| Processing style | Game-service example | What it must account for |
+|---|---|---|
+| Stream processing | Update a match's statistics as accepted events arrive | Ordering, late events, duplicates, and how quickly the result is needed |
+| Batch processing | Recompute a leaderboard from a collected set of finished-match results | Which results belong to the batch, when it runs, and how to repeat it safely |
+
+“Stream processing” here means processing ongoing events; it does not mean the
+TCP byte stream discussed earlier. A service can obtain events from many
+connections, files, or queues. A batch deliberately waits for a group of data
+and processes that group together. Neither approach implies that a game can
+delay its immediate rules until a leaderboard job finishes.
+
+For example, a match event might carry `match_id`, `event_id`, and a score
+change. If a sender retries it after a lost acknowledgment, the receiver must
+recognise the same event rather than add the score twice. Event identity and
+retry behaviour belong to the model and protocol, not to whether TCP delivered
+the underlying bytes correctly.
+
+### Modularity and scaling follow the dependencies
+
+Keep receiving, parsing, rule validation, and persistence as identifiable jobs.
+Then measure where time is spent. A slow disk write, repeated full-player
+search, and long logging operation need different remedies; adding workers
+does not remove a shared bottleneck automatically.
+
+Several independent matches can often run on separate workers. Within one
+match, operations on shared state still need a defined order. Moving one job
+to another process also adds a message boundary, possible failures, and delay.
+Start with a small correct local service, preserve these contracts, and
+distribute work when measurements and the use case justify it.
+
+Bound queues as well as messages. If input arrives faster than it can be
+processed, an unbounded queue consumes memory and makes results increasingly
+stale. A newer position snapshot may replace an older one under a documented
+policy; a one-time item grant needs different handling. That is a decision
+about message meaning, not a universal “drop old data” rule.
+
 ## UDP is made of datagrams
 
 UDP preserves datagram boundaries but does not guarantee delivery, order, or uniqueness. Fast games often tolerate those tradeoffs for time-sensitive state.
@@ -22787,19 +23531,23 @@ Do not assume a game uses only one protocol. It might use TCP for login/chat and
 
 ## Ports and sockets
 
-A socket connects an address and port to a network endpoint:
+A socket represents a network endpoint. This complete helper opens a TCP
+connection to our local test server, or returns an error:
 
 ```rust
-use std::net::TcpStream;
+use std::{io, net::{SocketAddr, TcpStream}};
 use std::time::Duration;
 
-let stream = TcpStream::connect_timeout(
-    &"127.0.0.1:15000".parse()?,
-    Duration::from_secs(3),
-)?;
+fn connect_local() -> io::Result<TcpStream> {
+    let address = SocketAddr::from(([127, 0, 0, 1], 15000));
+    // This bounds connection establishment, not later read/write operations.
+    TcpStream::connect_timeout(&address, Duration::from_secs(3))
+}
 ```
 
-`127.0.0.1` means the same computer. We use loopback and a local test server for this section.
+`127.0.0.1` means the same computer; `15000` selects the server's listening
+port. We use loopback and a local test server for this section. A successful
+result is a connected stream; framing and protocol checks still remain.
 
 ## Encryption changes what you can see
 
@@ -24105,6 +24853,13 @@ fn main() -> Result<()> {
 
 The reusable gzip/WML framing stays in one tested protocol module; this file owns the session state. That split is intentional: byte framing should not know what `\wave` means, and chat behavior should not reimplement gzip.
 
+<LessonVideo
+  title="An external client answering Wesnoth chat"
+  src="/assets/images/6/4/chat.mp4"
+  duration="11 seconds"
+  caption="The original external-client demonstration shows a chat command receiving a reply. The visible exchange depends on the earlier connection, negotiation, login, frame decoding, and command handling; a valid message alone is not a complete client."
+/>
+
 This bot owns its own server connection. Lesson 8.6 puts a relay between the official client and the same local server, so we can observe an existing conversation before choosing one bounded change.
 
 ---
@@ -25105,7 +25860,7 @@ References: [named-pipe operations](https://learn.microsoft.com/en-us/windows/wi
 ## Lesson 9.1 — Game Files and Live Memory
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/9/01/
 Category: Game Files, Mods, and Trust
-Estimated reading time: 14 minutes
+Estimated reading time: 18 minutes
 Summary: See how saves, configuration, textures, maps, and archives preserve game state outside a running process.
 
 ## State can outlive a running game
@@ -25175,13 +25930,18 @@ fn make_backup(path: &Path) -> anyhow::Result<()> {
         .and_then(|value| value.to_str())
         .unwrap_or("file");
     let backup = path.with_extension(format!("{extension}.gha-backup"));
+    // Preserve an existing backup rather than overwriting the way back.
     anyhow::ensure!(!backup.exists(), "backup already exists: {}", backup.display());
     fs::copy(path, &backup)?;
     Ok(())
 }
 ```
 
-Keep the original bytes and record a hash.
+This helper takes the path of an existing file. With `avatar.txt`, it writes
+`avatar.txt.gha-backup` and returns success only if the copy succeeds. It uses
+the `anyhow` dependency for an error that includes the failed path; an existing
+backup is an error rather than a reason to overwrite it. Keep the original
+bytes and record a hash.
 
 ## Identify the kind of file
 
@@ -25194,11 +25954,15 @@ fn first_bytes(path: &Path, count: usize) -> io::Result<Vec<u8>> {
     let mut file = File::open(path)?;
     let mut bytes = vec![0_u8; count];
     let read = file.read(&mut bytes)?;
+    // Report only bytes actually read, not the buffer's unused zeroes.
     bytes.truncate(read);
     Ok(bytes)
 }
 ```
 
+For `first_bytes(path, 16)`, the buffer has room for 16 bytes and the returned
+vector contains the bytes obtained by that read. A read can return fewer;
+this is a quick identification helper, not validation of an entire header.
 Common “magic” bytes include:
 
 ```text
@@ -25264,6 +26028,54 @@ For text formats, prefer a real parser:
 Blind replacement can alter comments, unrelated fields, encodings, checksums, or lengths.
 
 Parsing creates a **data model** that is intentionally smaller and clearer than the file representation. Preserve fields you do not understand when the format allows round trips, and distinguish “missing,” “present with a default value,” and “present with an unknown value.” Those cases may serialize differently even when the game currently displays the same result.
+
+## The data model shapes the questions you can ask
+
+A **data model** specifies the values, relationships, and constraints that
+matter to a program. A character model might name attributes, inventory entries,
+and item IDs. A file format specifies how a chosen part of that model is
+represented for storage. The raw bytes are another layer below that format.
+
+The Flare line `build=5,1,1,2` illustrates the separation. At the game level,
+the first value is the Physical attribute. At the format level, it is the first
+comma-separated number in a particular named field. At the byte level, the
+digit `5` occupies a position in encoded text. A raw byte search cannot by
+itself recover the attribute's role or prove that an unrelated occurrence of
+the digit is the same field.
+
+Different storage models expose different relationships:
+
+| Model | A possible game use | What the structure makes explicit |
+|---|---|---|
+| Nested document, such as JSON or XML | One save with a character and inventory entries | Containment and named fields |
+| Relational tables | Character rows and item rows linked by owner IDs | Records, keys, and relationships between tables |
+| Graph of nodes and edges | Map locations joined by traversable routes | Connections, and properties of each connection |
+
+These are options, not a claim that every game uses a database or every map
+needs a graph database. Choose a model for the questions and updates it must
+support. The storage implementation then chooses a byte representation and
+access structures. A parser or query interface hides some lower-level details,
+but its constraints still affect the layer above.
+
+### Persistent records, caches, and indexes have different jobs
+
+A durable save or database record is intended to survive a restart. A **cache**
+stores a result that can be obtained again, such as a decoded texture, to avoid
+repeating expensive work. A **search index** is an extra structure that helps
+find records matching a key, keyword, or filter without checking everything
+from the beginning each time.
+
+Suppose a mod changes a texture file. The game may still display its previously
+decoded copy until the asset is reloaded or the cache is invalidated. Editing
+the durable source and changing a cached representation are therefore different
+operations. Conversely, deleting a rebuildable cache is different from deleting
+the player's only save.
+
+Indexes need to remain consistent with the data they describe, and caches need
+a policy for becoming stale. When an edit appears to have no effect, check
+which representation the game currently reads before concluding that the edit
+failed. The running object, its serialized record, and an access structure can
+all describe related information while having different lifetimes.
 
 ## Treat files as untrusted input
 
@@ -26994,7 +27806,7 @@ and factoring, with numbers so large that the trying never finishes.
 
 The same machinery sits behind the padlock icon in a web browser, driver
 signing in [Lesson 12.4](/pages/14/02/), and a console's secure boot in
-[Lesson 14.3](/pages/14/05/#secure-boot-a-chain-of-trust). Its limits are the
+[Lesson 14.4](/pages/14/05/#secure-boot-a-chain-of-trust). Its limits are the
 ones this lesson keeps returning to: a signature says who approved the bytes,
 not that the bytes are safe, and if a publisher's private key is stolen, the
 thief can sign anything until the certificate is revoked.
@@ -29141,7 +29953,7 @@ That has three consequences you will use constantly:
   is new instructions written into memory, and a patch is old ones overwritten
   (Lesson 2.9).
 - **Code can run other code.** Lua's virtual machine in Lesson 10.8 is a program
-  whose data is another program. An emulator, in Lesson 14.6, is a program whose
+  whose data is another program. An emulator, in Lesson 14.7, is a program whose
   data is the software of an entire other computer.
 
 Here is the second point in bytes. A debugger sets a breakpoint on the first
@@ -37898,7 +38710,517 @@ explains why.
 References: [hypervisor feature discovery](https://learn.microsoft.com/en-us/virtualization/hyper-v-on-windows/tlfs/feature-discovery) and the virtual-machine extensions volume of the [Intel Software Developer Manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html).
 
 ---
-## Lesson 14.3 — How Game Consoles Are Built
+## Lesson 14.3 — Firmware and Bare-Metal Rust
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/14/12/
+Category: Virtual Machines, Hardware, and Consoles
+Estimated reading time: 28 minutes
+Summary: Follow a microcontroller from reset to Rust, build a working firmware image, and understand what changes when you program a physical board.
+
+A controller can recognise a button press before your game opens. An SSD can
+manage its stored blocks before a Windows driver asks for one. A console can
+check its boot software before its main operating system starts. In each case,
+some software belongs to the device itself. That software is **firmware**.
+
+Writing your own firmware means taking responsibility for work that a desktop
+application normally delegates: starting the processor correctly, choosing a
+memory layout, configuring hardware, and deciding what happens when something
+fails. We will make those responsibilities concrete with a small button-and-lamp
+controller, build its Rust code into a firmware image, and run that image on an
+emulated microcontroller.
+
+## Firmware is a role, not a file extension
+
+Firmware is software that operates a device, usually stored in nonvolatile
+memory: memory that keeps its contents without power. **Flash** is a common
+example and can be erased and programmed again. The word does not mean that
+the code is permanently unchangeable, nor that it must be written in assembly.
+
+Consider a USB controller plugged into a PC:
+
+| Software | Where it runs | What it does |
+|---|---|---|
+| Game application | The PC's processor | Turns a recognised button action into a game action |
+| Device driver | The PC's processor, as part of its OS | Exchanges requests and reports with the controller |
+| Controller firmware | The controller's own processor | Samples its buttons and prepares the reports |
+
+The driver and firmware cooperate across a device boundary. Updating the game
+does not necessarily update either one. A firmware update replaces code in the
+device; its format and programming procedure belong to that particular device.
+
+Firmware can include a **real-time operating system**, or RTOS, which schedules
+tasks and provides services suited to embedded devices. It can also use no OS
+at all. The latter arrangement is called **bare-metal programming**, and it is
+the arrangement used by this lesson. An embedded Linux application is another
+possibility; being physically inside a device does not make every program
+bare-metal firmware.
+
+## One chip, several kinds of memory
+
+A **microcontroller** combines a processor core, memory, and peripheral devices
+on one chip. Peripherals include timers, serial interfaces, and **GPIO**
+(general-purpose input/output) pins. A GPIO pin can sense a button's electrical
+level or drive an output, with the appropriate circuit and configuration.
+
+Our target is QEMU's model of the **LM3S6965EVB** evaluation board. **QEMU** is an
+emulator: a program that reproduces a machine's behaviour so its software can
+run on another computer. This model has a Cortex-M3 core, 256 KiB of flash, and
+64 KiB of SRAM. A **KiB** is 1,024 bytes; **SRAM** is the chip's working RAM,
+whose contents are not retained without power. These capacities are listed in
+the [QEMU board documentation](https://www.qemu.org/docs/master/system/arm/stellaris.html).
+The address map is shown in the
+[Cortex-M memory-layout walkthrough](https://docs.rust-embedded.org/embedonomicon/memory-layout.html).
+
+| Region in this model | Address range | Purpose |
+|---|---|---|
+| Flash, 256 KiB | `0x00000000`–`0x0003FFFF` | Startup information, instructions, and stored constants |
+| SRAM, 64 KiB | `0x20000000`–`0x2000FFFF` | Writable state and the call stack |
+| Peripheral registers | Device-specific addresses | Configure hardware and exchange input/output |
+
+These are addresses in the emulated device, not addresses in the PC process
+running QEMU. The model can load an image into its flash region, but that does
+not reproduce the electrical procedure for programming a physical flash chip.
+
+For the lamp controller, the instructions survive a power cycle in flash. The
+current lamp state is working state: the program starts it again at each boot.
+Retaining the last setting across power loss would require an explicit storage
+design. Writing flash every time the main loop runs would be a poor substitute:
+flash has erase/program constraints and finite endurance that RAM does not.
+
+## Reset comes before the Rust entry point
+
+On this Cortex-M system, reset does not mean “call whichever function happens
+to be named main.” The core obtains startup values from a **vector table**.
+Its first entry contains the initial stack pointer; its second contains the
+reset-handler address. Later entries describe exception and interrupt handlers.
+The table contains values and addresses, rather than a sequence of application
+instructions. The [Cortex-M memory-layout walkthrough](https://docs.rust-embedded.org/embedonomicon/memory-layout.html)
+shows how these entries fit into an image.
+
+<MemoryStrip
+  cells="0x00000000=initial SP: 0x20010000|0x00000004=reset-handler address|0x00000008=next handler address"
+  caption="The beginning of this image's Cortex-M vector table. The initial stack pointer is just above the 64 KiB RAM region; the stack grows toward lower addresses. The reset address is supplied by the runtime, rather than guessed in application code."
+/>
+
+The **reset handler** runs startup code. Among its jobs is preparing writable
+static data so Rust can safely use it. The linker groups program contents into
+**sections**. Placement in the image happens before execution; reset-time
+initialization then prepares particular writable ranges:
+
+| Section | What belongs there | Who arranges it |
+|---|---|---|
+| `.vector_table` | Initial stack value and handler addresses | The linker places it; the loader or programmer supplies the image |
+| `.text` | Machine instructions | The linker places executable code in flash for this image |
+| `.rodata` | Read-only data, such as message strings | The linker places stored constants in flash |
+| `.data` | Writable statics with stored initial values | The linker describes both ranges; reset startup copies initial contents from flash to RAM |
+| `.bss` | Writable statics initially filled with zero | The linker reserves the range; reset startup fills it with zero |
+
+For example, a writable counter that must start at 7 needs both a working
+location in RAM and an initial value in the image. Startup copies the 7 before
+the application uses the counter. A counter starting at zero needs a reserved
+RAM range, but the image need not carry a long run of zero bytes: startup can
+write the zeros. The linker and runtime agree on where these ranges begin and
+end. Local variables are separate; a compiler can keep them in registers or on
+the stack as the program executes.
+
+The [`cortex-m-rt` runtime](https://docs.rs/cortex-m-rt/latest/cortex_m_rt/)
+provides the Cortex-M startup and vector arrangement used here. Our application
+supplies its memory map and Rust entry function. The runtime prepares static
+data, then calls that function. These responsibilities are why a source file
+containing `fn main()` alone is not a complete firmware image.
+
+<AnimatedFlow
+  title="From reset to the lamp controller"
+  stages={[
+    { label: 'Read the vectors', detail: 'The core obtains the initial stack pointer and the reset-handler address from the image.' },
+    { label: 'Prepare working memory', detail: 'Runtime startup copies initialized static data into RAM and zeroes the .bss range.' },
+    { label: 'Enter Rust', detail: 'The runtime calls the function marked #[entry]. Application logic can now use its initialized state.' },
+    { label: 'Process button samples', detail: 'The controller changes its lamp state only when a released button becomes pressed.' },
+    { label: 'Report the trace', detail: 'Semihosting sends the results to QEMU. This test image then requests an emulator exit.' },
+  ]}
+  caption="Step through the order. Printing results depends on reaching application code; it cannot replace the earlier startup work."
+/>
+
+### A bootloader is an additional stage
+
+A **boot ROM** is startup software stored in read-only memory on a chip. A
+**bootloader** is software whose job is to select, check, or load the application
+that will run next. It may support updates and recovery. A vendor boot ROM can
+start a bootloader; a bootloader can then start an application image.
+
+Those stages are not mandatory in every design. Our simple image starts through
+its Cortex-M reset vectors and runtime without a separate bootloader. A console
+uses a more elaborate chain, including signature checks, as
+[console architecture](/pages/14/05/#secure-boot-a-chain-of-trust) explains next.
+A bootloader's work and the Rust runtime's initialization work remain distinct,
+even if a particular system coordinates them closely.
+
+## Write the control rule separately from the hardware
+
+Our rule is: **a new button press toggles the lamp once**. Keeping the button
+held must not toggle it on every sample. The input is a logical `pressed` value;
+the output is whether the lamp should now be on.
+
+The logical change `false → true` is a **rising edge**. We detect it by
+remembering the previous sample:
+
+```text
+if pressed now AND not pressed previously:
+    toggle the lamp
+remember the current pressed state
+report the lamp state
+```
+
+Here is that complete control rule in Rust. It requires neither an OS nor a
+hardware register address:
+
+```rust
+pub struct LampController {
+    lamp_on: bool,     // Output state that survives between samples.
+    was_pressed: bool, // The previous sample, needed to detect a new press.
+}
+
+impl LampController {
+    pub const fn new() -> Self {
+        Self { lamp_on: false, was_pressed: false }
+    }
+
+    pub fn sample(&mut self, pressed: bool) -> bool {
+        // Holding the button is not a new edge.
+        if pressed && !self.was_pressed {
+            self.lamp_on = !self.lamp_on;
+        }
+        self.was_pressed = pressed;
+        self.lamp_on
+    }
+}
+```
+
+`&mut self` lets the method update this controller's remembered state. `!`
+negates a boolean: it switches `false` to `true` or `true` to `false`.
+The last expression returns the new lamp state. No heap allocation is needed;
+the controller stores just its two boolean fields.
+
+The input deliberately means a recognised, stable press. A physical switch can
+**bounce**, briefly making and breaking contact several times. Rising-edge
+detection alone does not remove that bounce. Physical firmware would first use
+a suitable debounce policy, often based on several stable samples over time,
+then pass the resulting logical state to this controller.
+
+| Sample | Input pressed? | New press? | Lamp after the sample |
+|---|---|---|---|
+| 1 | false | No | Off |
+| 2 | true | Yes | On |
+| 3 | true | No: still held | On |
+| 4 | false | No: released | On |
+| 5 | true | Yes | Off |
+| 6 | false | No | Off |
+
+This separation lets us test the rule on the PC and then reuse it inside a
+firmware image. It also keeps a logic bug distinguishable from a pin-wiring
+or clock-configuration bug.
+
+## Build a complete firmware project
+
+The complete [`firmware-labs` project](/firmware-labs/README.md) contains these
+files. Keep their names and directory arrangement, including the hidden
+`.cargo` directory:
+
+```text
+firmware-labs/
+├── Cargo.toml
+├── Cargo.lock
+├── .cargo/config.toml
+├── memory.x
+├── build.rs
+└── src/
+    ├── lib.rs
+    └── main.rs
+```
+
+[`src/lib.rs`](/firmware-labs/src/lib.rs) contains the controller and its tests.
+[`Cargo.toml`](/firmware-labs/Cargo.toml) declares the project and its runtime
+dependencies; [`Cargo.lock`](/firmware-labs/Cargo.lock) pins the full dependency
+set. [`build.rs`](/firmware-labs/build.rs) is a small helper that makes the memory
+map available to the linker. It runs on your computer during the build, so its
+use of `std` does not require an OS on the microcontroller.
+
+You can obtain the source files from those links and the configuration link
+below, or use the
+[authored project folder](https://github.com/MustCodeAl/rust-game-hacking-book/tree/codex/book-revision/firmware-labs).
+The project uses Rust 2024 and requires Rust 1.85 or later.
+
+### The target and the layout answer different questions
+
+The Rust target is **`thumbv7m-none-eabi`**. It describes the Armv7-M architecture,
+bare-metal environment, and calling convention suitable for this Cortex-M3.
+It does not identify which pins the board wires to an LED or where a different
+chip keeps its flash. The
+[Rust target documentation](https://doc.rust-lang.org/rustc/platform-support/thumbv7m-none-eabi.html)
+describes the CPU requirements.
+
+The [`memory.x`](/firmware-labs/memory.x) linker configuration supplies our
+board model's layout:
+
+```text
+/* K means 1024 bytes in this linker script. */
+MEMORY
+{
+  FLASH : ORIGIN = 0x00000000, LENGTH = 256K
+  RAM   : ORIGIN = 0x20000000, LENGTH = 64K
+}
+```
+
+`ORIGIN` is a region's starting address; `LENGTH` is its capacity. The linker
+places the program into these regions using the runtime's `link.x` script.
+A matching CPU instruction set with the wrong memory map still produces the
+wrong firmware for a board.
+
+The project's [`.cargo/config.toml`](/firmware-labs/.cargo/config.toml) selects
+the target, passes `-Tlink.x` to the linker, and tells Cargo how to run the image:
+
+```toml
+[build]
+target = "thumbv7m-none-eabi"
+
+[target.thumbv7m-none-eabi]
+rustflags = ["-C", "link-arg=-Tlink.x"]
+runner = [
+    "qemu-system-arm",
+    "-cpu", "cortex-m3",
+    "-machine", "lm3s6965evb",
+    "-nographic",
+    "-semihosting-config", "enable=on,target=native",
+    "-kernel",
+]
+```
+
+Cargo appends the built executable's path after `-kernel`. QEMU creates the
+selected machine and loads that image. `-nographic` uses terminal output;
+the semihosting option enables the reporting mechanism described next. This
+configuration follows the
+[Embedded Rust QEMU setup](https://doc.rust-lang.org/stable/embedded-book/start/qemu.html).
+
+### `no_std` keeps Rust without assuming an OS
+
+The binary begins with `#![no_std]` and `#![no_main]`.
+[`no_std`](https://doc.rust-lang.org/stable/embedded-book/intro/no-std.html)
+uses Rust's `core` library without automatically linking the OS-oriented
+standard library. Arithmetic, structs, borrowing, arrays, slices, `Option`, and
+`Result` still work. File access, OS threads, and ordinary terminal printing
+do not appear automatically. Dynamic collections such as `Vec` require
+additional allocation support; our controller does not need them.
+
+`no_main` disables the normal application entry arrangement. The
+`#[entry]` attribute from `cortex-m-rt` marks the function that startup calls.
+Its `-> !` means it never returns: there is no desktop caller waiting for a
+return value.
+
+### Report results through the emulator
+
+**Semihosting** lets target code ask a supporting debugger or emulator to
+perform host-side operations. Here it sends text to QEMU's terminal. That is
+neither an emulated UART nor Windows providing `println!` to a guest process.
+The [`cortex-m-semihosting` interface](https://docs.rs/cortex-m-semihosting/latest/cortex_m_semihosting/)
+provides the output stream used below.
+
+This is the full [`src/main.rs`](/firmware-labs/src/main.rs):
+
+```rust
+#![no_std] // Use core without an OS standard library.
+#![no_main] // The runtime supplies reset/startup.
+
+use core::{fmt, fmt::Write, panic::PanicInfo};
+use cortex_m_rt::entry;
+use cortex_m_semihosting::{debug, hio};
+use gha_firmware_labs::LampController;
+
+fn run_trace() -> Result<(), fmt::Error> {
+    let mut output = hio::hstdout().map_err(|_| fmt::Error)?;
+    let mut lamp = LampController::new();
+
+    // These are logical input samples, not GPIO reads.
+    for (index, pressed) in [false, true, true, false, true, false]
+        .into_iter()
+        .enumerate()
+    {
+        let on = lamp.sample(pressed);
+        writeln!(output, "sample {}: pressed={pressed}, lamp={on}", index + 1)?;
+    }
+    Ok(())
+}
+
+#[entry]
+fn main() -> ! {
+    let status = match run_trace() {
+        Ok(()) => debug::EXIT_SUCCESS,
+        Err(_) => debug::EXIT_FAILURE,
+    };
+    debug::exit(status); // Finish this QEMU test run.
+    loop { core::hint::spin_loop(); } // Never return from firmware entry.
+}
+
+#[panic_handler]
+fn panic(_information: &PanicInfo) -> ! {
+    debug::exit(debug::EXIT_FAILURE); // QEMU reports a failed run.
+    loop { core::hint::spin_loop(); }
+}
+```
+
+`fmt::Write` supplies the writing operation used by `writeln!`.
+Opening the stream or writing can fail, so `run_trace` returns a `Result` and
+`?` propagates an error. The entry function converts that result into an
+emulator success or failure request. Formatting uses the fixed samples and
+controller state; it needs no growing string buffer.
+
+A [`panic_handler`](https://doc.rust-lang.org/nomicon/panic-handler.html)
+defines what this `no_std` application does if it panics. This one makes the
+emulator run fail. Physical firmware needs its own failure policy, such as
+placing outputs into a safe state and halting or restarting. Both exit calls
+in this file are QEMU test instrumentation, not a physical-device shutdown
+procedure.
+
+## Build and run the image
+
+Install stable Rust with rustup and an ARM system build of QEMU. The
+[QEMU downloads page](https://www.qemu.org/download/) provides platform-specific
+installation options. On Windows, make sure the folder containing
+`qemu-system-arm.exe` is on `PATH`.
+
+Open a terminal **inside `firmware-labs/`**, so Cargo reads this project's
+configuration, then run:
+
+```sh
+# Install Rust's libraries for the Cortex-M3 target.
+rustup target add thumbv7m-none-eabi
+
+# Compile and link the image using the supplied dependency versions.
+cargo build --locked --bin lamp-firmware
+
+# Start the same image using the QEMU runner in .cargo/config.toml.
+cargo run --locked --bin lamp-firmware
+```
+
+The image is an **ELF** executable at
+`target/thumbv7m-none-eabi/debug/lamp-firmware`. ELF carries sections, addresses,
+and other information a loader or debugger can use. The file's total size is
+not the flash usage: debug metadata can occupy space in the file without being
+loaded into the microcontroller's flash.
+
+The trace should be:
+
+```text
+sample 1: pressed=false, lamp=false
+sample 2: pressed=true, lamp=true
+sample 3: pressed=true, lamp=true
+sample 4: pressed=false, lamp=true
+sample 5: pressed=true, lamp=false
+sample 6: pressed=false, lamp=false
+```
+
+QEMU then exits successfully. The two consecutive `true` inputs leave the lamp
+on, which is the essential difference from toggling on every held sample.
+Some QEMU versions also print `Timer with period zero, disabling`; that model
+message is separate from the firmware trace.
+
+The computer's OS runs Cargo and QEMU. The **emulated firmware has no guest
+OS**. Its startup, control logic, and output requests all execute as part of
+the loaded image.
+
+## Take the same rule to a physical board
+
+The control rule is reusable; the board configuration is specific. Start with
+the exact development board's documented Rust board-support or **HAL**
+(hardware abstraction layer) example. A HAL presents operations such as
+reading a pin or configuring a timer while handling many register details.
+Underneath it, peripheral-access code ultimately reads and writes hardware
+registers, the mechanism introduced in
+[device registers](/pages/14/08/).
+
+Adapt the project in this order:
+
+1. **Identify the actual chip and board.** Select their CPU target, memory map,
+   pin assignments, and supported programming interface. Two Cortex-M boards
+   can require different targets, flash addresses, clocks, and peripherals.
+2. **Initialize the hardware.** Configure clocks, an input pin with the right
+   pull resistor, and a suitable output. A pull-up or pull-down resistor gives
+   an unpressed input a defined electrical level instead of leaving it floating.
+   Convert high/low into logical pressed/released meaning: **active-low** means
+   a low electrical level represents a press. Its logical `false → true` press
+   can therefore correspond to an electrical high-to-low transition.
+3. **Replace the trace with real observations.** Debounce the input, call
+   `sample`, and apply its result to the output. A timer can set the sampling
+   cadence. A real loop continues working rather than ending after six inputs.
+4. **Replace emulator-only behaviour.** Remove the QEMU runner and both
+   semihosting exit calls. Choose board output and a panic policy that work
+   without QEMU. Logging through a debugger is an optional development aid.
+5. **Rebuild, program, verify, reset, and observe.** Use the board's supported
+   bootloader or a compatible debug probe. A flashing tool erases/programs the
+   required regions; verification checks the written image. Reset tests the
+   startup path, and the real output tests pin configuration and behaviour.
+
+[probe-rs](https://probe.rs/docs/tools/probe-rs/) is one programming and debugging
+tool for supported chips and probes. A board can instead document a vendor
+tool, a USB bootloader, or OpenOCD. Use its exact target configuration; the
+QEMU build above is not an image for arbitrary boards.
+
+Polling checks an input repeatedly; an **interrupt** runs a handler when a
+configured event occurs. Either design can work. If an interrupt and the main
+loop both touch controller state, they need an explicit synchronization policy.
+The simple controller above has one owner and introduces no such shared access.
+A **watchdog** is a timer that can reset a stalled device unless firmware
+services it correctly; its configuration and recovery policy matter on real
+hardware, rather than being a cure for an unexplained bug.
+
+## Debugging changes timing too
+
+Firmware debugging has two places to inspect: the rule and its hardware
+integration. The library tests in the project check that holding a press does
+not toggle repeatedly and that a fresh controller starts with fresh state.
+They do not establish that a physical button is wired correctly. The QEMU run
+tests the compiled ARM image and its startup, but does not test a real board's
+electrical behaviour.
+
+When a real device behaves differently, record the chip, board revision,
+toolchain, image version, and input conditions. Compare the intended state
+transition with the observed one. Then check the boundary responsible for that
+input or output: pin polarity, debounce timing, timer rate, or register setup.
+Changing the control rule to compensate for a wiring mistake hides the cause.
+
+Breakpoints stop the processor, while external devices can keep running;
+timers, incoming messages, and watchdogs may therefore behave differently.
+Printing can also slow a loop. Semihosting is convenient for this short trace
+but unsuitable as a measurement of normal execution speed. Other transports
+have different requirements:
+
+| Logging method | How output leaves the device |
+|---|---|
+| UART (universal asynchronous receiver/transmitter) | A serial peripheral sends bytes through configured pins to a compatible receiver or adapter |
+| RTT (Real Time Transfer) | The target writes a RAM buffer that a supporting debug probe reads |
+| ITM/SWO tracing | A supported Cortex-M Instrumentation Trace Macrocell emits trace events through Serial Wire Output to a compatible probe; [CMSIS documents this debug path](https://arm-software.github.io/CMSIS_6/latest/Core/group__ITM__Debug__gr.html) |
+
+[RTT's buffer policy](https://kb.segger.com/RTT) matters too: a full blocking
+buffer can pause the program, while a nonblocking mode can discard output.
+Buffering or deferring text formatting reduces work on a time-sensitive path
+but does not make it free. Record only the events needed
+to distinguish the competing explanations, and compare behaviour with logging
+disabled when investigating a timing problem.
+
+<Quiz
+  id="firmware-held-button"
+  title="A press is a transition"
+  prompt="The input samples are false, true, true, true. How many times does this lesson's controller toggle the lamp?"
+  options="Once, when false first becomes true||Three times, once for every true sample||Four times, because every sample is an event||Zero times, because firmware needs a guest OS"
+  answer="0"
+  explanation="The controller remembers whether the previous sample was pressed. Only the first true follows a false; the other true samples describe the same held press. This assumes already debounced logical input, not a bouncing physical contact."
+/>
+
+You have now built the software that runs after reset, rather than just a
+program launched by an OS. The next lesson uses these startup responsibilities
+to explain a console's larger boot chain; the hardware debugging lessons show
+how a probe can inspect a core below the application interface.
+
+---
+## Lesson 14.4 — How Game Consoles Are Built
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/14/05/
 Category: Virtual Machines, Hardware, and Consoles
 Estimated reading time: 20 minutes
@@ -37910,6 +39232,10 @@ PlayStation 5 and the Xbox Series X even run the same x86-64 instruction set as
 most PCs. Yet a PC runs whatever its owner installs, while a console runs only
 what its maker has approved. Both facts come from design choices, and this
 lesson follows them from the chip up.
+
+[Firmware and Bare-Metal Rust](/pages/14/12/) established how device code starts
+and uses its memory. A console adds a larger software stack and checks which
+images are allowed to run at each stage.
 
 ## A fixed computer on one chip
 
@@ -37965,7 +39291,7 @@ rendering ([Lesson 4.1](/pages/1/11/)). A measurement on one console holds for
 every console, so developers can spend that budget almost to the last
 millisecond. They can even compile their shaders ahead of time for the one GPU
 and ship the results on the disc, a luxury that emulators lack, as
-[Lesson 14.6](/pages/14/06/#graphics-and-audio) shows.
+[Lesson 14.7](/pages/14/06/#graphics-and-audio) shows.
 
 Sharing the PC's instruction set does not make a console game a PC game,
 though. Its machine code calls the console's own operating system and graphics
@@ -38055,7 +39381,7 @@ which can check signatures but cannot make them
 how). The boot ROM needs that public key to check the first signature, and the
 key must be as unchangeable as the ROM. Chips can keep such values in
 **eFuses**: physical bits set once during manufacturing and then locked against
-ordinary software writes. [Lesson 14.4](/pages/14/04/#why-shipped-devices-lock-the-port)
+ordinary software writes. [Lesson 14.5](/pages/14/04/#why-shipped-devices-lock-the-port)
 returns to how those bits can also lock a hardware debug port. A 2,048-bit RSA
 public key would need 2,048
 of them. Chips store a SHA-256 hash of the key instead, which is 256 bits and so
@@ -38146,7 +39472,7 @@ Signing everything has a consequence for memory. Code that a program writes for
 itself at run time was never signed, so consoles generally do not let ordinary
 games mark memory as both writable and executable, the combination that
 [Lesson 11.7](/pages/10/05/) treats as a place where data can become code. That
-rule returns in [Lesson 14.6](/pages/14/06/#interpreters-and-dynamic-recompilers),
+rule returns in [Lesson 14.7](/pages/14/06/#interpreters-and-dynamic-recompilers),
 because an emulator's fastest technique needs exactly that combination.
 
 ## Why a console is harder to modify than a PC
@@ -38166,7 +39492,7 @@ console's security also defends the platform holder and game publishers against
 the owner: against copying games, against cheating in online play, and against
 running unapproved software. So a console is built so that its owner cannot
 switch the protections off, down to debug ports locked with fuses
-([Lesson 14.4](/pages/14/04/#why-shipped-devices-lock-the-port)).
+([Lesson 14.5](/pages/14/04/#why-shipped-devices-lock-the-port)).
 
 Game developers still need to debug. Licensed studios receive **development
 kits**: consoles with debugging enabled and different keys, which run unsigned
@@ -38245,11 +39571,11 @@ country, the device, and exactly what is done, and this lesson is not legal
 advice.
 
 This book stays out of that territory: none of its labs modify a console.
-[Lesson 14.6](/pages/14/06/) studies console software from the other side, with
+[Lesson 14.7](/pages/14/06/) studies console software from the other side, with
 an emulator running on your own PC and programs you are allowed to run.
 
 ---
-## Lesson 14.4 — Hardware Debugging with JTAG
+## Lesson 14.5 — Hardware Debugging with JTAG
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/14/04/
 Category: Virtual Machines, Hardware, and Consoles
 Estimated reading time: 18 minutes
@@ -38306,7 +39632,7 @@ one-bit cells in which, on every clock tick, each cell takes its neighbour's
 value, so a new bit enters at one end and the bit at the far end falls out. The
 captured levels can therefore leave one at a time through a single wire while a
 new pattern arrives through another. This row is the chip's **boundary-scan
-register**, and [Lesson 14.5](/pages/14/10/#shift-registers-many-bits-through-one-wire)
+register**, and [Lesson 14.6](/pages/14/10/#shift-registers-many-bits-through-one-wire)
 shifts a four-pin chip's register one clock at a time.
 
 Chips on the same board are linked the same way, the output wire of one chip
@@ -38383,11 +39709,11 @@ The standard defines 16 states in all. The path above exists twice: once for a
 **instruction register**, described next. The remaining states choose between
 the two copies, leave the shifting, and let the debugger pause partway through a
 scan and resume without starting over.
-[Lesson 14.5](/pages/14/10/#the-tap-controller-all-16-states) draws all 16
+[Lesson 14.6](/pages/14/10/#the-tap-controller-all-16-states) draws all 16
 states and follows them one clock at a time.
 
 One more property makes the controller impossible to lose: from any state, five
-clocks with TMS at 1 reach Test-Logic-Reset, as Lesson 14.5 checks state by
+clocks with TMS at 1 reach Test-Logic-Reset, as Lesson 14.6 checks state by
 state. A debugger unsure where the controller is sends five 1s on TMS and starts
 again from a known place.
 
@@ -38411,7 +39737,7 @@ Those two small registers let a debugger explore a board it knows nothing
 about. Right after reset, one data scan reads the ID of every chip that has one.
 And with every chip in BYPASS, each chip adds exactly one bit to the chain, so
 timing a single 1 from TDI to TDO counts the chips.
-[Lesson 14.5](/pages/14/10/#worked-example-count-the-chips-on-a-chain) does
+[Lesson 14.6](/pages/14/10/#worked-example-count-the-chips-on-a-chain) does
 both on a two-chip board.
 
 ## From a test port to a debugger
@@ -38457,7 +39783,7 @@ performs bus reads and writes for the debugger. So halting the core takes one
 memory write: a value with its halt bit set, written into a debug control
 register, stops the core before its next instruction, and reading RAM afterwards
 takes one memory read.
-[Lesson 14.5](/pages/14/10/#halting-a-cortex-m-core-with-one-write) builds
+[Lesson 14.6](/pages/14/10/#halting-a-cortex-m-core-with-one-write) builds
 that value bit by bit and follows the write to the core.
 
 ## SWD: the same debugger on two wires
@@ -38483,7 +39809,7 @@ Many chips offer both protocols on shared pins, with SWDIO on the TMS pin and
 SWCLK on the TCK pin, and a special bit sequence switches the port from one to
 the other. Behind either protocol sits the same debug port, so halting,
 stepping, and memory access work the same way.
-[Lesson 14.5](/pages/14/10/#inside-an-swd-request) builds the first request a
+[Lesson 14.6](/pages/14/10/#inside-an-swd-request) builds the first request a
 debugger usually sends, bit by bit.
 
 ## Why shipped devices lock the port
@@ -38493,7 +39819,7 @@ care what software the chip runs. A debugger that can halt the core and read
 memory can read whatever that memory holds, such as encryption keys, a game
 console's decrypted code, or a phone owner's data. It can also write memory,
 so it can change code that secure boot
-([Lesson 14.3](/pages/14/05/#secure-boot-a-chain-of-trust)) checked a moment
+([Lesson 14.4](/pages/14/05/#secure-boot-a-chain-of-trust)) checked a moment
 earlier. The protections of Chapters 11 and 12 — privilege levels, memory
 protection, the kernel boundary — are all enforced by the processor that the
 debugger has just stopped.
@@ -38560,17 +39886,17 @@ document it, because their owners are the developers.
   explanation="Memory protection is enforced by the running processor as it executes code. A halted core executes nothing, and the debug unit performs its own bus reads. That is why production devices lock the port in hardware, with fuses and authentication, instead of relying on software running on the chip."
 />
 
-The JTAG lab is in [Lesson 14.5](/pages/14/10/#simulate-a-tap-controller): a
+The JTAG lab is in [Lesson 14.6](/pages/14/10/#simulate-a-tap-controller): a
 simulated two-chip scan chain that you drive one clock at a time.
 
 ---
-## Lesson 14.5 — JTAG Scan Chains and Debug Access
+## Lesson 14.6 — JTAG Scan Chains and Debug Access
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/14/10/
 Category: Virtual Machines, Hardware, and Consoles
 Estimated reading time: 23 minutes
 Summary: Shift registers, TAP states, IDCODE, and SWD packets show how a hardware debugger discovers and controls a chip.
 
-[Lesson 14.4](/pages/14/04/) explained what JTAG is for and what each of its
+[Lesson 14.5](/pages/14/04/) explained what JTAG is for and what each of its
 parts does. This lesson drives those parts one clock at a time, from a four-bit
 shift register to the packet that opens an SWD session, and ends with a lab that
 simulates a two-chip scan chain.
@@ -38632,11 +39958,11 @@ bits ripple through, the register passes through meaningless in-between values.
 If the pins followed the register directly, they would flicker through every one
 of them. So each cell has a second one-bit store, called a **latch**, that
 actually drives the pin, and the latch copies the shifted value only once the
-whole pattern is in place. That copy is the Update step of Lesson 14.4.
+whole pattern is in place. That copy is the Update step of Lesson 14.5.
 
 ## The TAP controller: all 16 states
 
-Lesson 14.4 followed the main path through the TAP controller: Capture, Shift,
+Lesson 14.5 followed the main path through the TAP controller: Capture, Shift,
 and Update. Here is the whole machine. At every rising edge of TCK it moves to
 one of two next states, chosen by whether TMS is 0 or 1. The diagram writes the
 16 state names without hyphens; the standard spells them Test-Logic-Reset,
@@ -38723,7 +40049,7 @@ clocks:
   explanation="Every clock spent in Shift-DR shifts one bit, including the clock that raises TMS to leave for Exit1-DR, because each state does its work on the rising edge that leaves it. Seven clocks with TMS at 0 shift bits 1 to 7 and stay in Shift-DR; the eighth, with TMS at 1, shifts bit 8 and leaves. A ninth clock would shift one bit too many."
 />
 
-Lesson 14.4 said that five clocks with TMS at 1 reach Test-Logic-Reset from any
+Lesson 14.5 said that five clocks with TMS at 1 reach Test-Logic-Reset from any
 state. To check it, hold TMS at 1 and work outward from Test-Logic-Reset,
 following the arrows labelled TMS 1:
 
@@ -38838,7 +40164,7 @@ fields plus the fixed 1:
 
 ## Halting a Cortex-M core with one write
 
-Lesson 14.4 showed that a Cortex-M debugger halts the core with an ordinary
+Lesson 14.5 showed that a Cortex-M debugger halts the core with an ordinary
 memory write through the debug port. The register it writes is DHCSR, the Debug
 Halting Control and Status Register, at address `0xE000EDF0`, described in
 Arm's public architecture manual. Its low three bits are:
@@ -38861,7 +40187,7 @@ values to it:
 - step one instruction while halted: `0xA05F0000` + 4 + 1 = `0xA05F0005`;
 - resume: `0xA05F0000` + 1 = `0xA05F0001`.
 
-The write travels through the memory access port of Lesson 14.4. The port has an
+The write travels through the memory access port of Lesson 14.5. The port has an
 address register and a data register, called TAR and DRW in Arm's
 documentation: write an address to the first, then read or write the second, and
 the port performs that bus access.
@@ -38888,7 +40214,7 @@ registers, one to choose a register by number and one to carry its value.
 
 ## Inside an SWD request
 
-Lesson 14.4 showed the shape of an SWD read: an 8-bit request, a turnaround, a
+Lesson 14.5 showed the shape of an SWD read: an 8-bit request, a turnaround, a
 3-bit acknowledgement, 32 data bits, and a parity bit. The request's eight bits,
 in the order they are sent, are:
 
@@ -38968,7 +40294,7 @@ Then add a third chip to `board()`. Before you run it, predict what
 `count_chips` reports and how many bits the IDCODE scan in `main` now needs.
 
 ---
-## Lesson 14.6 — How Emulators Work
+## Lesson 14.7 — How Emulators Work
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/14/06/
 Category: Virtual Machines, Hardware, and Consoles
 Estimated reading time: 18 minutes
@@ -39016,7 +40342,7 @@ it.
 ## One instruction through the loop
 
 To watch the loop work, take a made-up 8-bit console, the one
-[Lesson 14.7](/pages/14/11/) emulates in full. Like the processors in 1980s
+[Lesson 14.8](/pages/14/11/) emulates in full. Like the processors in 1980s
 consoles, its CPU has a program counter and a few small registers, and it does
 its arithmetic in one called A, the **accumulator**. Each instruction is one or
 two bytes long. The first byte, the **opcode**, says which instruction it is;
@@ -39050,7 +40376,7 @@ One pass of the loop does four things:
 Nothing in memory marks where one instruction ends and the next begins. The CPU
 knows each instruction's length from its opcode, and fetching the bytes moves PC
 past them, so PC lands on the next instruction without any extra work.
-[Lesson 14.7](/pages/14/11/#a-toy-8-bit-cpu) lists all seven instructions of
+[Lesson 14.8](/pages/14/11/#a-toy-8-bit-cpu) lists all seven instructions of
 this CPU, loads a 14-byte program, and follows it instruction by instruction.
 
 ## Interpreters and dynamic recompilers
@@ -39090,7 +40416,7 @@ The speed has two costs:
   throw those translations away.
 - **Writable, then executable memory.** A recompiler writes host machine code
   into memory and then runs it.
-  [Lesson 14.3](/pages/14/05/#code-signing-and-encrypted-game-packages) showed
+  [Lesson 14.4](/pages/14/05/#code-signing-and-encrypted-game-packages) showed
   that consoles, and some phone platforms, refuse ordinary programs exactly that
   combination. Emulators on those platforms have to interpret.
 
@@ -39134,7 +40460,7 @@ flowchart LR
 
 Real consoles have far bigger maps, with more RAM, a picture chip, a sound chip,
 and controller ports, but an emulator handles them the same way.
-[Lesson 14.7](/pages/14/11/#the-memory-map-as-code) writes the toy console's
+[Lesson 14.8](/pages/14/11/#the-memory-map-as-code) writes the toy console's
 map as code and looks at part of the NES's.
 
 ## Timing and cycle counting
@@ -39156,7 +40482,7 @@ could run it thousands of times faster.
 
 An instruction cannot stop halfway, so a frame can end slightly past its budget.
 The emulator then takes the extra cycles off the next frame, which keeps the
-average exact. [Lesson 14.7](/pages/14/11/#frame-budgets-and-overshoot) ends a
+average exact. [Lesson 14.8](/pages/14/11/#frame-budgets-and-overshoot) ends a
 frame partway through a program and works out the numbers.
 
 ## Graphics and audio
@@ -39176,7 +40502,7 @@ effect appears, which is why emulated games can stutter the first time they show
 something new, and why emulators keep a cache of translated shaders. The
 original console never had this problem, because its games shipped shaders
 already compiled for its one GPU
-([Lesson 14.3](/pages/14/05/#a-fixed-computer-on-one-chip)).
+([Lesson 14.4](/pages/14/05/#a-fixed-computer-on-one-chip)).
 
 Sound works the same way in a different currency. The guest's sound chip
 produces a stream of **samples**, numbers that describe the sound wave, and a
@@ -39203,7 +40529,7 @@ is parsing input from outside the program, so emulators check its length and
 fields the way Lesson 9.2 checks a save file. Real emulators also store a
 version number, because the layout changes as the emulator does, and a state
 saved by one version may not load in another.
-[Lesson 14.7](/pages/14/11/#a-save-state-byte-by-byte) catches the toy console
+[Lesson 14.8](/pages/14/11/#a-save-state-byte-by-byte) catches the toy console
 at exactly such a moment and writes its state out byte by byte.
 
 ## Why emulated games are easy to inspect
@@ -39238,7 +40564,7 @@ cheat code of that second kind is just an address and a value.
 Such a code can lose a race with the game. If the game has already copied the
 value into a register, it later stores its own number back over the cheat's,
 and a game that recomputes the value from other data overwrites it the same way.
-[Lesson 14.7](/pages/14/11/#a-cheat-code-racing-a-register) shows the race
+[Lesson 14.8](/pages/14/11/#a-cheat-code-racing-a-register) shows the race
 cycle by cycle, ending with RAM holding the cheat's 99 while the screen shows
 20.
 
@@ -39270,18 +40596,18 @@ That leaves plenty to run legitimately:
 - dumps you make yourself of games you own, where your country's law allows
   making them.
 
-The toy console of [Lesson 14.7](/pages/14/11/) sidesteps the question
+The toy console of [Lesson 14.8](/pages/14/11/) sidesteps the question
 entirely: it emulates a machine that does not exist, running a program written
 for this book.
 
 ---
-## Lesson 14.7 — Emulator Timing and State
+## Lesson 14.8 — Emulator Timing and State
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/14/11/
 Category: Virtual Machines, Hardware, and Consoles
 Estimated reading time: 20 minutes
 Summary: A toy console makes instruction costs, frame timing, save states, and register races concrete inside a Rust emulator.
 
-[Lesson 14.6](/pages/14/06/) explained how an emulator works and ran one
+[Lesson 14.7](/pages/14/06/) explained how an emulator works and ran one
 instruction of a made-up 8-bit console through the fetch–decode–execute loop.
 This lesson builds the whole console, follows a complete program through it
 cycle by cycle, and ends with a lab that runs it.
@@ -39462,7 +40788,7 @@ emulator that guessed would hide bugs in the guest program and in itself.
 Because `step` decodes every instruction each time it runs, the loop body from
 `0x02` to `0x0A` is decoded afresh on both passes. That repetition is what the
 dynamic recompilers of
-[Lesson 14.6](/pages/14/06/#interpreters-and-dynamic-recompilers) remove.
+[Lesson 14.7](/pages/14/06/#interpreters-and-dynamic-recompilers) remove.
 
 ## The memory map as code
 
@@ -39508,7 +40834,7 @@ bigger version of the one above.
 
 ## Frame budgets and overshoot
 
-A real frame's budget, like the one in Lesson 14.6, runs to thousands of
+A real frame's budget, like the one in Lesson 14.7, runs to thousands of
 cycles, while the whole traced program takes only 29. So the lab uses a tiny
 budget of 18 cycles, which ends a frame partway through the program. Its `run`
 loop steps whole instructions until the budget is used or the CPU halts:
@@ -39711,6 +41037,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>An interpretation made from one or more signals. Keep the measured signal separate from the assessment so a later test can challenge the interpretation without rewriting the observation.</dd>
       <dt id="term-assembly"><dfn>Assembly language</dfn></dt>
       <dd>A human-readable notation for machine instructions. It exposes registers, memory operands, branches, and calls more directly than a high-level language, but each line still needs architectural and calling-convention context.</dd>
+      <dt id="term-asset"><dfn>Asset</dfn></dt>
+      <dd>A reusable game resource such as an image, model, sound, or character definition. Several running instances can share an asset while keeping different identities and changing state. See <a href="../pages/1/03/#shared-assets-create-separate-instances">Game Fundamentals</a>.</dd>
       <dt id="term-attack-surface"><dfn>Attack surface</dfn></dt>
       <dd>The set of inputs, interfaces, privileges, and trust transitions through which a system can be influenced. Reducing unnecessary parsers, handles, loaders, and exposed commands reduces the surface.</dd>
       <dt id="term-authenticode"><dfn>Authenticode</dfn></dt>
@@ -39725,8 +41053,12 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
   <section class="glossary-group" aria-labelledby="glossary-b">
     <div class="glossary-group__letter"><h2 id="glossary-b">B</h2><a href="#glossary-top">Top</a></div>
     <dl class="glossary-list">
+      <dt id="term-bare-metal"><dfn>Bare-metal programming</dfn></dt>
+      <dd>Programming that runs without an operating system providing application services. The image needs a suitable startup arrangement, memory layout, and hardware interfaces; Rust's <code>no_std</code> alone does not supply them.</dd>
       <dt id="term-base-address"><dfn>Base address</dfn></dt>
       <dd>The starting virtual address of a mapped image or region. A live image address is commonly <code>module base + RVA</code>.</dd>
+      <dt id="term-batch-processing"><dfn>Batch processing</dfn></dt>
+      <dd>Processing a collected group of data together, such as recalculating a leaderboard from finished-match results. Stream processing instead handles an ongoing sequence of events as they arrive.</dd>
       <dt id="term-behavior-tree"><dfn>Behavior tree</dfn></dt>
       <dd>A tree of conditions and actions that an NPC evaluates from the root every tick. A selector node tries its children until one succeeds; a sequence node runs its children until one fails.</dd>
       <dt id="term-bfs"><dfn>BFS</dfn> <span class="glossary-alias">Breadth-first search</span></dt>
@@ -39735,6 +41067,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>Either base-two notation or a compiled file made of bytes. Context decides which meaning is intended.</dd>
       <dt id="term-bit"><dfn>Bit</dfn></dt>
       <dd>One binary digit, <code>0</code> or <code>1</code>. Flags often pack several yes/no facts into the bits of one integer.</dd>
+      <dt id="term-bootloader"><dfn>Bootloader</dfn></dt>
+      <dd>Software that selects, checks, or loads another program to run next. It can support updates or recovery; the application's runtime startup still has its own initialization responsibilities.</dd>
       <dt id="term-boot-rom"><dfn>Boot ROM</dfn></dt>
       <dd>The first code a chip runs at power-on, written into the chip when it is made and unchangeable afterwards. In secure boot it checks the first stage that can be updated.</dd>
       <dt id="term-border"><dfn>Border</dfn></dt>
@@ -39835,6 +41169,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
     <dl class="glossary-list">
       <dt id="term-dacl"><dfn>DACL</dfn> <span class="glossary-alias">Discretionary Access Control List</span></dt>
       <dd>The Windows rules that allow or deny requested access to a securable object. The object’s DACL, the caller’s token, and the requested access mask participate in the access check.</dd>
+      <dt id="term-data-model"><dfn>Data model</dfn></dt>
+      <dd>The values, relationships, and constraints chosen to describe a problem. A character model names attributes and owned items; a save or message format describes how selected model data is represented. See <a href="../pages/9/01/#the-data-model-shapes-the-questions-you-can-ask">storage models</a>.</dd>
       <dt id="term-data-structure"><dfn>Data structure</dfn></dt>
       <dd>A layout and set of rules for organizing values so operations such as lookup, insertion, traversal, or deletion have useful costs.</dd>
       <dt id="term-debouncing"><dfn>Debouncing</dfn></dt>
@@ -39945,6 +41281,10 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A byte distance from the beginning of a file. A PE section table is needed to translate between file offsets and RVAs; adding the module base to a file offset is usually wrong.</dd>
       <dt id="term-finite-state-machine"><dfn>Finite-state machine</dfn></dt>
       <dd>A model with a finite set of states and explicit transitions caused by inputs or events. It makes automation behavior reviewable instead of scattering related booleans through the program.</dd>
+      <dt id="term-firmware"><dfn>Firmware</dfn></dt>
+      <dd>Software that operates a device, commonly stored in nonvolatile memory. Firmware can include a real-time operating system or run bare-metal; it is distinct from the device driver running on a host computer. <a href="../pages/14/12/">Firmware and Bare-Metal Rust</a> builds an example.</dd>
+      <dt id="term-flash"><dfn>Flash memory</dfn></dt>
+      <dd>Nonvolatile memory that retains contents without power and can be erased and programmed again. Firmware instructions commonly live in flash, while ordinary changing state uses RAM; flash has different update constraints and finite endurance.</dd>
       <dt id="term-floating-point"><dfn>Floating point</dfn> <span class="glossary-alias">f32 / f64</span></dt>
       <dd>A way to store numbers with a fractional part as a sign, an exponent, and a fraction, like scientific notation in binary. An <code>f32</code> uses 1 + 8 + 23 bits; an <code>f64</code> uses 1 + 11 + 52. Most values are stored as the nearest representable number, not exactly.</dd>
       <dt id="term-fog-of-war"><dfn>Fog of war</dfn></dt>
@@ -39979,6 +41319,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>The processor exception, vector 13, raised when code breaks a protection rule, such as running a privileged instruction like <code>hlt</code> or <code>wrmsr</code> in ring 3.</dd>
       <dt id="term-generation"><dfn>Generation</dfn></dt>
       <dd>A counter or version paired with an identity so reuse of the same slot or address can be distinguished from the older object that occupied it.</dd>
+      <dt id="term-gpio"><dfn>GPIO</dfn> <span class="glossary-alias">General-purpose input/output</span></dt>
+      <dd>A configurable hardware pin used to sense an electrical input or drive an output. A pin's high/low level must be interpreted using the circuit's meaning; an active-low button is pressed when the input is low.</dd>
       <dt id="term-graph"><dfn>Graph</dfn></dt>
       <dd>A set of nodes connected by edges. Tile paths, call relationships, pointer relationships, and dependency networks can all be modeled as graphs.</dd>
       <dt id="term-guard-check"><dfn>Guard check</dfn> <span class="glossary-alias">validation check</span></dt>
@@ -39997,6 +41339,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
   <section class="glossary-group" aria-labelledby="glossary-h">
     <div class="glossary-group__letter"><h2 id="glossary-h">H</h2><a href="#glossary-top">Top</a></div>
     <dl class="glossary-list">
+      <dt id="term-hal"><dfn>HAL</dfn> <span class="glossary-alias">Hardware abstraction layer</span></dt>
+      <dd>An interface for hardware operations such as configuring a timer or reading a pin. It handles many register details but still depends on the selected chip, board wiring, and clock configuration.</dd>
       <dt id="term-halting-problem"><dfn>Halting problem</dfn></dt>
       <dd>The question of whether a program will eventually stop. No program can answer it correctly for every program and input, which is why analysis tools approximate and why a script host enforces a step budget instead of predicting.</dd>
       <dt id="term-handle"><dfn>Handle</dfn></dt>
@@ -40155,6 +41499,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>Reaching a device through addresses: loads and stores to those addresses go to the device’s registers instead of RAM. The kernel maps such ranges as uncacheable, and an emulator’s bus function imitates the same routing in software.</dd>
       <dt id="term-metatable"><dfn>Metatable</dfn></dt>
       <dd>A Lua table that defines how another value responds to operations such as indexing, arithmetic, or calls. It changes behavior through named metamethods; it is not inheritance by itself.</dd>
+      <dt id="term-microcontroller"><dfn>Microcontroller</dfn></dt>
+      <dd>A chip combining a processor core, memory, and peripherals such as timers and I/O pins. A CPU architecture alone does not identify a microcontroller's memory map or a board's wiring.</dd>
       <dt id="term-module"><dfn>Module</dfn></dt>
       <dd>One loaded EXE or DLL, as it exists in memory: the address Windows placed it at, its sections, and the functions it imports and exports. Beware that the same word also means a source-code unit in most languages; context separates the two.</dd>
       <dt id="term-mutex"><dfn>Mutex</dfn></dt>
@@ -40353,6 +41699,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>Keeping a debug port locked until the debugger returns a signature, made with a key only the maker holds, over a fresh nonce and the chip's unique ID. Authorised engineers can debug a returned unit without that answer opening any other device.</dd>
       <dt id="term-security-processor"><dfn>Security processor</dfn></dt>
       <dd>A small separate processor on a console or PC chip that starts before the main cores, holds the device's keys, and performs boot checks and decryption. The main cores and their software never see the keys.</dd>
+      <dt id="term-semihosting"><dfn>Semihosting</dfn></dt>
+      <dd>A mechanism for target code to request host operations from a supporting debugger or emulator. The firmware lab uses it for terminal output and QEMU termination; it is neither a UART nor a guest OS service.</dd>
       <dt id="term-serialization"><dfn>Serialization</dfn></dt>
       <dd>Turning structured values into bytes or text that can be stored or transmitted. Deserialization reverses the representation and must validate untrusted lengths and values.</dd>
       <dt id="term-server-authority"><dfn>Server authority</dfn> <span class="glossary-alias">Authoritative server</span></dt>
@@ -40383,6 +41731,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>Each expression has a type checked before the program runs. Rust may infer a type without an explicit annotation, but a later assignment still has to fit the variable's established type.</dd>
       <dt id="term-stored-program-computer"><dfn>Stored-program computer</dfn></dt>
       <dd>A computer that represents program instructions in addressable storage alongside data. In the x86 labs, this lets a disassembler read code bytes and a software breakpoint replace an instruction byte; page protections govern which memory may execute.</dd>
+      <dt id="term-stream-processing"><dfn>Stream processing</dfn></dt>
+      <dd>Processing an ongoing sequence of events, such as accepted match actions, as they become available. This describes a data-processing strategy, rather than TCP's byte-stream transport; event order, duplicates, and lateness still need rules.</dd>
       <dt id="term-string"><dfn>String</dfn></dt>
       <dd>A sequence representing text under an encoding. In memory it may be length-prefixed, zero-terminated, inline, heap-backed, UTF-8, UTF-16, or something engine-specific.</dd>
       <dt id="term-struct"><dfn>Structure</dfn> <span class="glossary-alias">struct</span></dt>
@@ -40485,6 +41835,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>An address interpreted through one process’s current virtual-memory mappings. A live module VA is often its base plus an RVA.</dd>
       <dt id="term-vector"><dfn>Vector</dfn></dt>
       <dd>In math, an ordered set of components representing a direction, displacement, or point under a convention. In programming, “vector” can instead mean a growable contiguous sequence.</dd>
+      <dt id="term-vector-table"><dfn>Vector table</dfn></dt>
+      <dd>A target-specific table of startup values and handler addresses. On the Cortex-M system in the firmware lesson, its first entry gives the initial stack pointer and its second the reset-handler address; it is not the first sequence of application instructions.</dd>
       <dt id="term-vertex"><dfn>Vertex</dfn></dt>
       <dd>One input point of a graphics primitive together with attributes such as position, normal, color, and texture coordinates.</dd>
       <dt id="term-view-cone"><dfn>View cone</dfn></dt>
@@ -40517,6 +41869,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
   <section class="glossary-group" aria-labelledby="glossary-w">
     <div class="glossary-group__letter"><h2 id="glossary-w">W</h2><a href="#glossary-top">Top</a></div>
     <dl class="glossary-list">
+      <dt id="term-watchdog"><dfn>Watchdog</dfn></dt>
+      <dd>A hardware timer that can reset a stalled device unless software services it as required. Its timeout and recovery policy must fit the device; logging or debugger pauses can affect its behaviour.</dd>
       <dt id="term-watchpoint"><dfn>Watchpoint</dfn></dt>
       <dd>A debugger stop condition triggered when an address is read, written, or executed. Hardware supports only a small number and has size/alignment limits.</dd>
       <dt id="term-wildcard"><dfn>Wildcard</dfn></dt>
