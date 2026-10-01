@@ -409,3 +409,15 @@ Validation:
 The finished source is committed on `codex/book-revision`. Its complete static
 build is published through a fresh branch based on `gh-pages`; the publication
 receipt follows once the exact merge is deployed.
+
+Publication is complete: source **b54a88b** was generated into commit
+**01b7b683c2f62d4d71308c5d7de70a1523ac3fe3** on
+`codex/gh-pages-firmware-fundamentals`, merged through
+[PR #9](https://github.com/MustCodeAl/rust-game-hacking-book/pull/9) into
+`gh-pages` at **ae19df116d7f05d354c1ed9c39170074c79502bc**. GitHub Pages reports
+that exact merge as **built**. Public HTTP checks confirm the expanded Game
+Fundamentals, new firmware lesson, and contents, plus the downloadable firmware
+configuration (200, `application/toml`) and an original MP4 range (206,
+`video/mp4`, exact bytes). The preview on port 4322 was refreshed and verified
+against all four revised entry points. The authored branch may additionally
+contain this documentation-only receipt.

@@ -256,3 +256,7 @@ stepping, reduced motion, and complete static/print explanations. `LessonVideo`
 embeds the retained silent clips with native controls and a download fallback.
 Keep their colours tied to chapter roles and preserve all original visuals.
 The current validation and publication receipt are in BOOK_REVISION_PROGRESS.md.
+
+The complete firmware/fundamentals/media build is source **b54a88b**, published
+through **PR #9** into `gh-pages` at **ae19df1**. Pages built that exact merge,
+and public content, firmware downloads, and video range delivery were verified.
