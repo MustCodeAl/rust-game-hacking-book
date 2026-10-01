@@ -21,6 +21,8 @@ function initializeFlow(root) {
   const play = root.querySelector('[data-flow-action="play"]');
   const next = root.querySelector('[data-flow-action="next"]');
   const reset = root.querySelector('[data-flow-action="reset"]');
+  const progressTrack = root.querySelector('[data-flow-progress-track]');
+  const progress = root.querySelector('[data-flow-progress]');
   if (!stages.length || !controls || !explanation || !position || !label || !detail || !state || !announcement || !previous || !play || !next || !reset || selections.some((button) => !button)) return;
   initialized.add(root);
 
@@ -49,6 +51,11 @@ function initializeFlow(root) {
       item.querySelector('[data-flow-current]').hidden = !selected;
     });
     root.dataset.running = String(running);
+    explanation.dataset.flowRole = stage.dataset.flowRole || 'process';
+    if (progress) {
+      progress.dataset.flowRole = stage.dataset.flowRole || 'process';
+      progress.style.width = `${((current + 1) / stages.length) * 100}%`;
+    }
     position.textContent = `Step ${current + 1} of ${stages.length}`;
     label.textContent = currentLabel;
     detail.textContent = currentDetail;
@@ -146,6 +153,7 @@ function initializeFlow(root) {
 
   controls.hidden = false;
   explanation.hidden = false;
+  if (progressTrack && progress) progressTrack.hidden = false;
   root.classList.add('is-ready');
   render();
 }

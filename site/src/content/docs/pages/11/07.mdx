@@ -10,6 +10,7 @@ sidebar:
   label: "12.8 Virtual-to-Physical Address Translation"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
 
 Lesson 12.7 left us with a concrete mismatch: a debugger reports a game's
 **virtual** address, while an offline RAM capture is indexed by **physical**
@@ -259,6 +260,19 @@ physical address N, so each page of the file is one physical page:
 />
 
 With `CR3 = 0x1000`, virtual address `0x0123` should translate to physical `0x5123`. Tests also cover a missing present bit and a noncanonical virtual address.
+
+<AnimatedFlow
+  title="Follow virtual 0x0123 through the synthetic capture"
+  stages={[
+    { label: 'Choose the address space', role: 'input', detail: 'CR3 supplies the physical root 0x1000. Virtual address 0x0123 has four zero table indices and a page offset of 0x123. The root and address must describe the same process mapping.' },
+    { label: 'Read PML4 entry 0', role: 'process', detail: 'Read eight bytes at physical 0x1000. Entry 0x2001 has its present bit set; masking the flag bits leaves 0x2000, the physical base of the PDPT.' },
+    { label: 'Read PDPT entry 0', role: 'process', detail: 'At physical 0x2000, entry 0x3001 points to the page directory at 0x3000. Its large-page bit is clear, so the walk continues rather than selecting a 1 GiB page.' },
+    { label: 'Read page-directory entry 0', role: 'process', detail: 'At physical 0x3000, entry 0x4001 points to the page table at 0x4000. Its large-page bit is also clear, so the walk continues to a 4 KiB-page entry.' },
+    { label: 'Select the data page', role: 'state', detail: 'Read page-table entry 0 at physical 0x4000. Entry 0x5001 is present, and masking its flags leaves the data-page base 0x5000. The table walk now has the page, but still needs the byte offset.' },
+    { label: 'Produce the physical address', role: 'output', detail: 'Combine aligned page base 0x5000 with offset 0x123 to obtain physical 0x5123. The capture stores GHA DMA beginning there. A data read must still check that its complete requested range fits in the file.' },
+  ]}
+  caption="Each arrow depends on a valid eight-byte entry read: an out-of-range address or a clear present bit stops the walk at that level. This fixture follows the four-level, 4 KiB-page path; the earlier flowchart also covers the large-page exits."
+/>
 
 Synthetic tests are powerful because every byte is known. A failure means the translator is wrong, not that an unknown capture changed.
 

@@ -217,13 +217,28 @@ brightness for contrast. Do not cycle colours by heading, list position, URL
 folder, or a chapter-number modulo. The home and contents colour key labels
 the areas, so colour is never the only way to identify them.
 
-Lesson frontmatter determines the current chapter. Its header, all section
-headings, list markers, tables, informational notes, default diagrams, memory
-highlights, selected widget controls, TOC highlight, and progress bar follow
-that chapter colour. Previous/next cards take the destination lesson's current
+Lesson frontmatter determines the current chapter. Its header, section
+headings, list markers, tables, widget framing, TOC highlight, and progress bar
+follow that chapter colour. Previous/next cards take the destination lesson's current
 chapter, including for historical URLs that moved chapters. Scope each article
 on the complete-book page separately. Site-wide actions use the theme's brand
 accent; background swatches show actual reader preferences.
+
+The page also uses stable reading roles, defined in `reader-appearance.css`:
+blue for reference terms and input/data, violet for code/notation and processing,
+and teal for results, tips, and selected memory values. Informational notes use
+blue; tips use teal. Diagram stages state their role in words and include a
+colour key; do not assign roles by their position. This adds useful colour
+within a chapter without introducing decorative hue cycling. Syntax colours
+inside code blocks retain their more specific language roles.
+
+Reader theme includes saved, independent diagram-background and box-fill
+choices, heading rectangles On/Off, text size, and spacing. All saved choices
+apply before first paint and reset together. Diagram light/dark follows page
+brightness; screenshots are not recoloured. Heading rectangles change H1/H2
+decoration only: preserve the original heading levels, sizes, and anchors.
+H3 and lower stay unboxed. Reader preferences do not change the printed book's
+text size or spacing.
 
 Feedback uses green for correct/success/valid, amber for caution or unanswered,
 and red for incorrect/error/invalid. Keep labels, icons, or patterns alongside
@@ -254,7 +269,8 @@ belong in the network/file introductions where their context is available.
 `AnimatedFlow` teaches an ordered process with explicit playback, accessible
 stepping, reduced motion, and complete static/print explanations. `LessonVideo`
 embeds the retained silent clips with native controls and a download fallback.
-Keep their colours tied to chapter roles and preserve all original visuals.
+Keep framing tied to the chapter and stage colours tied to documented reading
+roles; preserve all original visuals. Walkthroughs never start automatically.
 The current validation and publication receipt are in BOOK_REVISION_PROGRESS.md.
 
 The complete firmware/fundamentals/media build is source **b54a88b**, published

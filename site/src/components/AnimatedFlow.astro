@@ -7,27 +7,40 @@ import '../styles/animated-flow.css';
 
 interface Props {
 	title: string;
-	stages: { label: string; detail: string }[];
+	stages: { label: string; detail: string; role?: 'input' | 'state' | 'process' | 'output' }[];
 	caption?: string;
 }
 
 const { title, stages, caption } = Astro.props;
 if (!stages?.length) throw new Error('AnimatedFlow needs at least one explained stage.');
 const id = `flow-${randomUUID()}`;
+const roleLabels = { input: 'Input', state: 'Data / state', process: 'Processing', output: 'Result' };
+const hasRoles = stages.some((stage) => stage.role);
+for (const stage of stages) {
+	if (stage.role && !(stage.role in roleLabels)) throw new Error(`Unknown diagram role: ${stage.role}`);
+}
 ---
 
 <figure class="animated-flow not-content" data-animated-flow aria-labelledby={`${id}-title`}>
 	<figcaption class="animated-flow__header">
 		<span class="animated-flow__eyebrow">Follow the process</span>
 		<strong id={`${id}-title`}>{title}</strong>
+		{hasRoles && <span class="animated-flow__legend" aria-label="Diagram colour meanings">
+			<span data-flow-role="input">Input / data</span>
+			<span data-flow-role="process">Processing</span>
+			<span data-flow-role="output">Result</span>
+		</span>}
 	</figcaption>
 	<div class="animated-flow__body">
 		<ol class="animated-flow__stages" aria-label="Process steps">
 			{stages.map((stage, index) => (
-				<li class="animated-flow__stage" data-flow-stage>
+				<li class="animated-flow__stage" data-flow-stage data-flow-role={stage.role || 'process'}>
 					<button type="button" data-flow-select disabled aria-label={`Select step ${index + 1}: ${stage.label}`}>
 						<span class="animated-flow__number" aria-hidden="true">{index + 1}</span>
-						<span data-flow-label>{stage.label}</span>
+						<span class="animated-flow__stage-text">
+							<span data-flow-label>{stage.label}</span>
+							{stage.role && <small class="animated-flow__role-label">{roleLabels[stage.role]}</small>}
+						</span>
 						<span class="animated-flow__current" data-flow-current hidden>Current</span>
 					</button>
 					<p class="animated-flow__static-detail" data-flow-detail>{stage.detail}</p>
@@ -41,6 +54,7 @@ const id = `flow-${randomUUID()}`;
 			<p class="animated-flow__state" data-flow-state></p>
 		</div>
 	</div>
+	<div class="animated-flow__progress" aria-hidden="true" hidden data-flow-progress-track><span data-flow-progress /></div>
 	<div class="animated-flow__controls" data-flow-controls hidden aria-label="Process playback">
 		<button type="button" data-flow-action="previous">Previous</button>
 		<button type="button" data-flow-action="play">Play</button>

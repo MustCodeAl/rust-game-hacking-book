@@ -11,6 +11,7 @@ sidebar:
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
+import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
 
 [Lesson 14.7](/pages/14/06/) explained how an emulator works and ran one
 instruction of a made-up 8-bit console through the fetch–decode–execute loop.
@@ -189,6 +190,19 @@ for anything that is not an instruction, and the `?` turns that into an
 `IllegalOpcode` error that names the address. A real CPU meeting an unknown
 opcode might raise an exception, as x86 does, or do something undocumented. An
 emulator that guessed would hide bugs in the guest program and in itself.
+
+<AnimatedFlow
+  title="One LDA instruction: bytes become CPU state"
+  stages={[
+    { label: 'Start at step 2 of the trace', role: 'state', detail: 'The earlier LDX has finished: PC = 0x02, A = 0, X = 2, Z = 0, and the cycle count is 2. RAM at 0x80 contains gold = 10. The next instruction bytes are 02 80.' },
+    { label: 'Fetch the opcode', role: 'input', detail: 'fetch reads byte 0x02 at PC = 0x02, then advances PC to 0x03. This byte identifies the operation; it has not loaded the gold value into A.' },
+    { label: 'Decode the operation', role: 'process', detail: 'Opcode::decode maps 0x02 to LDA. The LDA arm requires one address operand followed by a data read. An unrecognized opcode would return IllegalOpcode before this arm runs.' },
+    { label: 'Fetch the address operand', role: 'input', detail: 'The second fetch reads byte 0x80 at PC = 0x03 and advances PC to 0x04. The operand names RAM address 0x80, whose stored byte is the value the instruction will load.' },
+    { label: 'Update A and the zero flag', role: 'state', detail: 'read(0x80) returns 10, so A becomes 10. Because A is nonzero, Z remains 0. X remains 2, and RAM still holds gold = 10 because LDA only reads it.' },
+    { label: 'Finish the instruction', role: 'output', detail: 'The arm returns a cost of 3 cycles: opcode fetch, operand fetch, and data read. The total becomes 2 + 3 = 5. PC = 0x04 now selects ADD #5, matching step 2 of the trace.' },
+  ]}
+  caption="An instruction can use several emulated cycles. The later `ADD` changes A, and `STA` writes that result back to RAM; following those separate changes explains why a saved register and a saved memory byte can disagree."
+/>
 
 Because `step` decodes every instruction each time it runs, the loop body from
 `0x02` to `0x0A` is decoded afresh on both passes. That repetition is what the

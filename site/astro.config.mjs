@@ -60,6 +60,7 @@ export default defineConfig({
 				'./src/styles/learning-widgets.css',
 				'./src/styles/code-theme.css',
 				'./src/styles/reader.css',
+				'./src/styles/reader-appearance.css',
 				'./src/styles/mermaid.css',
 				'./src/styles/home.css',
 			],
@@ -77,7 +78,7 @@ export default defineConfig({
 				{
 					tag: 'script',
 					content:
-						"(function(){var r=document.documentElement;function g(k){try{return localStorage.getItem(k)}catch(e){return null}}function p(v,l,d){return l.indexOf(v)>=0?v:d}r.dataset.academyTheme=p(g('gha-theme'),['paper','purple','midnight','forest','contrast'],'paper');var m=g('gha-mode');if(m==='light'||m==='dark')r.dataset.theme=m;r.dataset.academyCodeMode=p(g('gha-code-mode'),['dark','light'],'dark');r.dataset.academySyntax=p(g('gha-syntax-palette'),['academy','cyber','aurora','solar','ocean','mono'],'academy');r.dataset.academyBackground=p(g('gha-background-tone')||g('gha-background'),['theme','warm','cool','rose','neutral'],'theme');r.dataset.academySemantic=g('gha-semantic-highlighting')==='off'?'off':'on';r.dataset.academyLigatures=g('gha-code-ligatures')==='on'?'on':'off';r.dataset.academySidebar=g('gha-sidebar')==='hidden'?'hidden':'shown';r.dataset.academyToc=g('gha-toc')==='hidden'?'hidden':'shown'})()",
+						"(function(){var r=document.documentElement;function g(k){try{return localStorage.getItem(k)}catch(e){return null}}function p(v,l,d){return l.indexOf(v)>=0?v:d}r.dataset.academyTheme=p(g('gha-theme'),['paper','purple','midnight','forest','contrast'],'paper');var m=g('gha-mode');if(m==='light'||m==='dark')r.dataset.theme=m;r.dataset.academyCodeMode=p(g('gha-code-mode'),['dark','light'],'dark');r.dataset.academySyntax=p(g('gha-syntax-palette'),['academy','cyber','aurora','solar','ocean','mono'],'academy');r.dataset.academyBackground=p(g('gha-background-tone')||g('gha-background'),['theme','warm','cool','rose','neutral'],'theme');r.dataset.academyDiagramBackground=p(g('gha-diagram-background'),['theme','page','warm','cool','rose','neutral'],'theme');r.dataset.academyDiagramFill=p(g('gha-diagram-fill'),['tinted','plain'],'tinted');r.dataset.academyHeadingStyle=p(g('gha-heading-style'),['boxed','plain'],'boxed');r.dataset.academyTextSize=p(g('gha-text-size'),['small','standard','large'],'standard');r.dataset.academySpacing=p(g('gha-spacing'),['compact','comfortable','spacious'],'comfortable');r.dataset.academySemantic=g('gha-semantic-highlighting')==='off'?'off':'on';r.dataset.academyLigatures=g('gha-code-ligatures')==='on'?'on':'off';r.dataset.academySidebar=g('gha-sidebar')==='hidden'?'hidden':'shown';r.dataset.academyToc=g('gha-toc')==='hidden'?'hidden':'shown'})()",
 				},
 				{ tag: 'link', attrs: { rel: 'glossary', href: `${BASE}/glossary/` } },
 				{ tag: 'link', attrs: { rel: 'glossary-index', type: 'application/json', href: `${BASE}/assets/glossary-index.json` } },

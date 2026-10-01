@@ -421,3 +421,64 @@ configuration (200, `application/toml`) and an original MP4 range (206,
 `video/mp4`, exact bytes). The preview on port 4322 was refreshed and verified
 against all four revised entry points. The authored branch may additionally
 contain this documentation-only receipt.
+
+## 2026-10-01: reader controls and purposeful diagram colour
+
+The original heading levels and sizes are preserved across all **135 lessons**.
+The temporary hierarchy pass was restored after the user chose a reader
+preference instead. `reader.css` is unchanged: all **1,247 source H2 headings**
+retain their original wording, level, and position. Reader theme → Diagrams
+and reading layout now offers **Heading rectangles: On / Off**; this changes
+H1/H2 decoration without changing their type size or anchors. Lower headings
+remain unboxed.
+
+The same panel adds independent diagram backgrounds (Theme, Page, Warm, Cool,
+Rose, Neutral), Tinted/Plain diagram boxes, lesson text size, and lesson spacing.
+Preferences apply before first paint, sync across desktop/mobile controls,
+survive navigation, and reset together. Diagram brightness follows page
+brightness. Mermaid, memory figures, native interactive diagrams, walkthroughs,
+and individual full-book articles resolve the selected surfaces; screenshots
+retain their own colours. Plain fills retain outlines and explicit state cues.
+
+More colour now has reading roles: blue for reference terms and input/data,
+violet for code/notation and processing, and teal for results, tips, and selected
+memory values. Chapter hue continues to identify the lesson and navigation;
+warning, error, success, and syntax colours retain their documented roles. The
+Appearance panel explains this key, and walkthrough stages include role words
+and a colour legend.
+
+Six added walkthroughs bring the book to **nine**: pointer storage and field
+reads (`1/08`), calls and returns (`2/02`), world-to-screen projection (`5/09`),
+hook installation/removal (`13/05`), address translation (`11/07`), and emulator
+instruction execution (`14/11`). All original diagrams remain. Play, pause,
+step, keyboard selection, and an animated progress indicator show the process;
+motion starts only on request. All steps remain readable without JavaScript
+and in print. The existing three walkthroughs now state their stage roles too.
+
+Validation:
+
+- All original prose, headings, metadata, examples, and **1,133 code/diagram
+  fences** remain intact after excluding the six walkthrough additions and
+  their introductory sentences. The existing three walkthrough explanations
+  also remain unchanged.
+- Production output contains **141 pages**, **135 lessons**, and **273 original
+  Mermaid diagrams**. The local link and reading-order check passes for
+  **26,747 links**, **268 destination cards**, and **135 print articles**.
+- **1,200 diagram colour combinations** across all five palettes, both modes,
+  page backgrounds, diagram backgrounds, and four chapter hues pass static
+  text-contrast checks. The lowest diagram secondary-text ratio is **4.61:1**;
+  active stage labels are at least **4.83:1**.
+- **13 reader-control checks** cover choices, invalid values, saved startup,
+  independence, reset, both menu copies, blocked storage, and system brightness
+  changes. Explicit brightness now remains effective even when storage is
+  unavailable.
+- **22 walkthrough checks** cover controls, progress/role propagation,
+  playback/final stop, independent instances, reduced motion, visibility,
+  teardown, and static/print fallbacks. A separate source review verified
+  Plain fills and chapter scoping on the full-book page.
+- Browser layout inspection remains unavailable following the earlier policy
+  rejection; these checks use source, generated output, token calculations,
+  and isolated interaction logic without claiming a browser rendering test.
+
+The complete generated build will be published into `gh-pages`; its exact
+source, publication, and deployment commits are recorded below when deployed.
