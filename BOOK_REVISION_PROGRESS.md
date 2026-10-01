@@ -480,5 +480,12 @@ Validation:
   rejection; these checks use source, generated output, token calculations,
   and isolated interaction logic without claiming a browser rendering test.
 
-The complete generated build will be published into `gh-pages`; its exact
-source, publication, and deployment commits are recorded below when deployed.
+Publication is complete: source **5f43f14f5cb3ac462820d85be8d95bb99e33e7fb**
+was generated into **f34b869d3adda209b19f9d37eaa8708b24d2ed11** on
+`codex/gh-pages-reader-appearance`, merged through
+[PR #10](https://github.com/MustCodeAl/rust-game-hacking-book/pull/10) into
+`gh-pages` at **e9d9bc86da691c87b7293a0bca9de1e266051d33**. GitHub Pages
+reports that exact merge as **built**. Public HTTP verifies byte-for-byte
+matches for the Rust Primer, pointer walkthrough, theme script, and appearance
+stylesheet. The live preview on port 4322 serves both menus with all new
+controls. The authored branch may also contain this documentation-only receipt.

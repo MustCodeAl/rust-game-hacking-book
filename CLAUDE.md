@@ -276,3 +276,9 @@ The current validation and publication receipt are in BOOK_REVISION_PROGRESS.md.
 The complete firmware/fundamentals/media build is source **b54a88b**, published
 through **PR #9** into `gh-pages` at **ae19df1**. Pages built that exact merge,
 and public content, firmware downloads, and video range delivery were verified.
+
+Reader appearance controls and six additional walkthroughs are source
+**5f43f14**, published through **PR #10** into `gh-pages` at **e9d9bc8**. Pages
+built that exact merge; public pages, scripts, and styles match the verified
+build. Original heading levels and sizes remain intact. Use Reader theme →
+Diagrams and reading layout → Heading rectangles to switch their decoration.
