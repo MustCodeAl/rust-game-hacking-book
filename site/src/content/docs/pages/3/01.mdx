@@ -10,6 +10,7 @@ sidebar:
   label: "3.1 Safe Boundaries for Game Memory"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
 import OwnershipScope from '../../../../components/OwnershipScope.astro';
 import Quiz from '../../../../components/Quiz.astro';
 
@@ -46,12 +47,24 @@ reference such as `&Player` from a remote address.
 
 Instead, use a clear boundary:
 
+<AnimatedFlow
+  nativeDiagram
+  title="Carry remote bytes across a safe boundary"
+  stages={[
+    { label: 'Name a remote range', detail: 'An address and size refer to bytes in the game process.', role: 'input', value: 'address + length', nodes: ['A'] },
+    { label: 'Ask Windows to copy', detail: 'The read is checked and may fail or return fewer bytes.', role: 'process', value: 'checked read', nodes: ['B'] },
+    { label: 'Own the local copy', detail: 'The returned buffer belongs to our process.', role: 'state', value: 'owned bytes', nodes: ['C'] },
+    { label: 'Interpret locally', detail: 'Parsing and searching operate on the bounded local buffer.', role: 'output', value: 'validated meaning', nodes: ['D'] },
+  ]}
+  caption="A remote address is never treated as a local pointer; Windows copies bytes before safe parsing begins."
+>
 ```mermaid
 flowchart LR
     A["remote address<br/>+ requested size"] --> B["checked Windows read"]
     B --> C["owned byte buffer<br/>in our process"]
     C --> D["safe parsing<br/>and searching"]
 ```
+</AnimatedFlow>
 
 After the copy succeeds, ordinary ownership rules protect the local buffer. Before
 the copy, the address is untrusted input that needs checked arithmetic, region

@@ -1,0 +1,60 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { getCollection, render } from 'astro:content';
+import { CHAPTERS, chapterTone, compareLessons } from '../../../data/chapters.mjs';
+import '../../../styles/print.css';
+
+export function getStaticPaths() {
+	return CHAPTERS.map(({ number }) => ({ params: { chapter: String(number) } }));
+}
+
+const number = Number(Astro.params.chapter);
+const chapter = CHAPTERS.find((item) => item.number === number);
+if (!chapter) throw new Error(`Unknown print chapter ${Astro.params.chapter}`);
+
+const lessons = (await getCollection('docs', (entry) => entry.data.chapter?.startsWith(`${number}.`) ?? false))
+	.sort((a, b) => compareLessons(a.data.chapter, b.data.chapter));
+const rendered = await Promise.all(lessons.map(async (entry) => ({ entry, Content: (await render(entry)).Content })));
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<StarlightPage
+	frontmatter={{
+		title: `${chapter.number}. ${chapter.title} — print chapter`,
+		description: `All ${rendered.length} lessons of ${chapter.title}, ready to print or save as a PDF.`,
+		tableOfContents: false,
+		pagefind: false,
+	}}
+>
+	<div class="print-book print-book--chapter" data-print-chapter-page data-print-base={basePath} data-print-chapter={chapter.number}>
+		<div class="print-book-intro print-screen-only">
+			<p>This page contains only Chapter {chapter.number}. The browser’s Print dialog lets you save it as a PDF.</p>
+			<div class="print-book-actions">
+				<button type="button" data-print-current-chapter>Print this chapter or save as PDF</button>
+				<a href={`${basePath}/print/`}>Other print options</a>
+			</div>
+			<p data-print-status role="status" aria-live="polite"></p>
+		</div>
+
+		<nav class="print-book-contents" aria-label={`Chapter ${chapter.number} contents`}>
+			<h2>Chapter {chapter.number} contents</h2>
+			<ol>
+				{rendered.map(({ entry }) => (
+					<li><a href={`#lesson-${entry.data.chapter!.replace('.', '-')}`}>{entry.data.chapter} — {entry.data.title}</a></li>
+				))}
+			</ol>
+		</nav>
+
+		<section class="print-book-chapter-content" data-print-chapter-content data-print-chapter-number={chapter.number}>
+			{rendered.map(({ entry, Content }) => (
+				<article class="print-book-lesson" data-tone={chapterTone(chapter.number)} id={`lesson-${entry.data.chapter!.replace('.', '-')}`}>
+					<p class="print-book-kicker">Lesson {entry.data.chapter}</p>
+					<h2 class="print-book-title">{entry.data.title}</h2>
+					<Content />
+				</article>
+			))}
+		</section>
+	</div>
+</StarlightPage>
+
+<script is:inline src={`${basePath}/scripts/print-book.js`} defer></script>

@@ -7,6 +7,7 @@ import { academyCodeTheme } from './src/data/code-theme.mjs';
 import { basePathLinks, lazyImages, mermaidBlocks, scrollableTables } from './src/plugins/satteri-academy.mjs';
 import { CHAPTERS, chapterTone } from './src/data/chapters.mjs';
 import { getLessonIndex } from './src/data/lesson-index.mjs';
+import { readerSettingsScript } from './src/data/reader-settings.mjs';
 
 const SITE = 'https://mustcodeal.github.io';
 const BASE = '/rust-game-hacking-book';
@@ -63,6 +64,7 @@ export default defineConfig({
 				'./src/styles/reader-appearance.css',
 				'./src/styles/mermaid.css',
 				'./src/styles/home.css',
+				'./src/styles/print.css',
 			],
 			components: {
 				Head: './src/components/overrides/Head.astro',
@@ -77,12 +79,12 @@ export default defineConfig({
 				// match the Jekyll edition, so returning readers keep their settings.
 				{
 					tag: 'script',
-					content:
-						"(function(){var r=document.documentElement;function g(k){try{return localStorage.getItem(k)}catch(e){return null}}function p(v,l,d){return l.indexOf(v)>=0?v:d}r.dataset.academyTheme=p(g('gha-theme'),['paper','purple','midnight','forest','contrast'],'paper');var m=g('gha-mode');if(m==='light'||m==='dark')r.dataset.theme=m;r.dataset.academyCodeMode=p(g('gha-code-mode'),['dark','light'],'dark');r.dataset.academySyntax=p(g('gha-syntax-palette'),['academy','cyber','aurora','solar','ocean','mono'],'academy');r.dataset.academyBackground=p(g('gha-background-tone')||g('gha-background'),['theme','warm','cool','rose','neutral'],'theme');r.dataset.academyDiagramBackground=p(g('gha-diagram-background'),['theme','page','warm','cool','rose','neutral'],'theme');r.dataset.academyDiagramFill=p(g('gha-diagram-fill'),['tinted','plain'],'tinted');r.dataset.academyHeadingStyle=p(g('gha-heading-style'),['boxed','plain'],'boxed');r.dataset.academyTextSize=p(g('gha-text-size'),['small','standard','large'],'standard');r.dataset.academySpacing=p(g('gha-spacing'),['compact','comfortable','spacious'],'comfortable');r.dataset.academySemantic=g('gha-semantic-highlighting')==='off'?'off':'on';r.dataset.academyLigatures=g('gha-code-ligatures')==='on'?'on':'off';r.dataset.academySidebar=g('gha-sidebar')==='hidden'?'hidden':'shown';r.dataset.academyToc=g('gha-toc')==='hidden'?'hidden':'shown'})()",
+					content: readerSettingsScript,
 				},
 				{ tag: 'link', attrs: { rel: 'glossary', href: `${BASE}/glossary/` } },
 				{ tag: 'link', attrs: { rel: 'glossary-index', type: 'application/json', href: `${BASE}/assets/glossary-index.json` } },
 				{ tag: 'link', attrs: { rel: 'alternate', type: 'text/plain', title: 'LLM-friendly summary', href: `${BASE}/llms.txt` } },
+				{ tag: 'script', attrs: { src: `${BASE}/scripts/print-book.js`, defer: true } },
 				{ tag: 'script', attrs: { src: `${BASE}/scripts/academy.js`, defer: true } },
 				{ tag: 'script', attrs: { src: `${BASE}/scripts/learning-widgets.js`, defer: true } },
 				{ tag: 'script', attrs: { src: `${BASE}/scripts/mermaid-loader.js`, type: 'module' } },

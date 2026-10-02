@@ -280,13 +280,17 @@ stepping, reduced motion, and complete static/print explanations. `LessonVideo`
 embeds the retained silent clips with native controls and a download fallback.
 Keep framing tied to the chapter and stage colours tied to documented reading
 roles; preserve all original visuals. Walkthroughs never start automatically.
-There are now **28 animated lessons**, two per displayed chapter. The shared
+There are now **42 animated lessons**, three per displayed chapter. The shared
 walkthrough renders a connected SVG with labelled nodes, short state values,
 and a signal that traces the currently playing connection. Keep that diagram,
 the direct step buttons, the written explanation, and the state value in sync.
 Current/Done/Next labels and dashed upcoming nodes make state visible without
-depending on colour. Reduced motion disables timed playback; manual steps and
-the complete static/print explanation remain available.
+depending on colour. Fourteen tours animate the original Mermaid graph using
+authored source node IDs and an explicit path. Preserve those graphs and paths.
+System reduced motion suppresses moving effects while Play still advances
+steps. On Play permits effects on explicit request; Off keeps manual steps.
+Playback speed is a saved choice of two, four, or six seconds per step. The
+complete static/print explanation remains available.
 The current validation and publication receipt are in BOOK_REVISION_PROGRESS.md.
 
 The complete firmware/fundamentals/media build is source **b54a88b**, published
@@ -310,3 +314,28 @@ The reading-role palette correction is source **1af5101**, published through
 accents, and the key uses semantic labels with swatches. Pages built that exact
 merge; three public lesson pages, the role stylesheet, and the switching script
 match the verified build. See BOOK_REVISION_PROGRESS.md for the complete record.
+
+The current reader update adds one padded, rounded SVG backing per Mermaid
+edge label; do not restore backgrounds on every nested HTML span or paragraph.
+Saved controls now include label backgrounds, frame strength, diagram size,
+the page grid, gradients, motion, and playback speed. Data tables and diagram
+explanations use the information role; code-panel framing uses processing.
+Decorative gradients can become solid without removing diagram axes or grids.
+
+Every lesson has a `/read/<historical-folder>/<historical-file>/` listening
+edition. The build draws diagrams first, then `write-reader-editions.mjs`
+publishes a static adapted article and TXT file, using the same text module as
+browser speech and exports. Narration uses authored code comments, explicit
+walkthrough steps, labelled memory cells, graph connections, table headers,
+image descriptions, and existing video captions. It expands common notation
+and abbreviations; it does not infer technical behaviour from raw code. Raw
+code is optional. Original lessons and visuals remain at their existing URLs.
+Reader editions stay out of search to avoid duplicating normal lessons. Chrome
+Reading mode and ElevenReader URL/text/file import are user-controlled; no
+provider API credentials or automatic content submission are used.
+
+The toolbar prints its current lesson when visuals are ready. `/print/` is a
+lightweight scope chooser; `/print/chapter/N/` contains one complete chapter.
+Only Prepare complete book loads all fourteen chapters, with progress and
+cancellation. Preserve all 135 lessons and their visuals in that assembled
+document. See BOOK_REVISION_PROGRESS.md for verification and publication.

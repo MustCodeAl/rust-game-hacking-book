@@ -7,11 +7,12 @@ import '../styles/animated-flow.css';
 
 interface Props {
 	title: string;
-	stages: { label: string; detail: string; value?: string; role?: 'input' | 'state' | 'process' | 'output' }[];
+	stages: { label: string; detail: string; value?: string; role?: 'input' | 'state' | 'process' | 'output'; nodes?: string[] }[];
 	caption?: string;
+	nativeDiagram?: boolean;
 }
 
-const { title, stages, caption } = Astro.props;
+const { title, stages, caption, nativeDiagram = false } = Astro.props;
 if (!stages?.length) throw new Error('AnimatedFlow needs at least one explained stage.');
 const id = `flow-${randomUUID()}`;
 const roleLabels = { input: 'Input', state: 'Data / state', process: 'Processing', output: 'Result' };
@@ -34,10 +35,11 @@ for (const stage of stages) {
 	if (stage.role && !(stage.role in roleLabels)) throw new Error(`Unknown diagram role: ${stage.role}`);
 	if (labelLines(stage.label).length > 2) throw new Error(`Shorten the diagram label: ${stage.label}`);
 	if (stage.value && stage.value.length > 35) throw new Error(`Shorten the diagram state value: ${stage.value}`);
+	if (nativeDiagram && (!stage.nodes?.length || stage.nodes.some((node) => !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(node)))) throw new Error(`Name the Mermaid nodes for stage: ${stage.label}`);
 }
 ---
 
-<figure class="animated-flow not-content" data-animated-flow aria-labelledby={`${id}-title`}>
+<figure class:list={['animated-flow', 'not-content', { 'animated-flow--native': nativeDiagram }]} data-animated-flow data-flow-native={nativeDiagram ? 'true' : undefined} aria-labelledby={`${id}-title`}>
 	<figcaption class="animated-flow__header">
 		<span class="animated-flow__eyebrow">Follow the process</span>
 		<strong id={`${id}-title`}>{title}</strong>
@@ -49,7 +51,7 @@ for (const stage of stages) {
 	</figcaption>
 	<div class="animated-flow__body">
 		<div class="animated-flow__diagram-panel">
-			<svg class="animated-flow__diagram" viewBox={`0 0 380 ${diagramHeight}`} aria-hidden="true" focusable="false">
+			{nativeDiagram ? <div class="animated-flow__scene" data-flow-scene><slot /></div> : <svg class="animated-flow__diagram" viewBox={`0 0 380 ${diagramHeight}`} aria-hidden="true" focusable="false">
 				{stages.map((stage, index) => {
 					const y = 12 + index * rowHeight;
 					const lines = labelLines(stage.label);
@@ -72,10 +74,10 @@ for (const stage of stages) {
 						</g>
 					</>;
 				})}
-			</svg>
+			</svg>}
 		<ol class="animated-flow__stages" aria-label="Process steps">
 			{stages.map((stage, index) => (
-				<li class="animated-flow__stage" data-flow-stage data-flow-role={stage.role || 'process'}>
+				<li class="animated-flow__stage" data-flow-stage data-flow-role={stage.role || 'process'} data-flow-nodes={stage.nodes?.join('|')}>
 					<button type="button" data-flow-select disabled aria-label={`Select step ${index + 1}: ${stage.label}`}>
 						<span class="animated-flow__number" aria-hidden="true">{index + 1}</span>
 						<span class="animated-flow__stage-text">

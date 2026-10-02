@@ -1,0 +1,95 @@
+---
+import { getCollection, render, type CollectionEntry } from 'astro:content';
+import ReaderTools from '../../../components/ReaderTools.astro';
+import { chapterTone, compareLessons } from '../../../data/chapters.mjs';
+import { readerSettingsScript } from '../../../data/reader-settings.mjs';
+import '../../../styles/legacy-tokens.css';
+import '../../../styles/legacy-components.css';
+import '../../../styles/learning-widgets.css';
+import '../../../styles/code-theme.css';
+import '../../../styles/reader-appearance.css';
+import '../../../styles/mermaid.css';
+import '../../../styles/lesson-reader.css';
+
+interface Props {
+	entry: CollectionEntry<'docs'>;
+	previous?: CollectionEntry<'docs'>;
+	next?: CollectionEntry<'docs'>;
+}
+
+export async function getStaticPaths() {
+	const entries = (await getCollection('docs', (entry) => Boolean(entry.data.chapter))).sort((a, b) =>
+		compareLessons(a.data.chapter, b.data.chapter),
+	);
+	return entries.map((entry, index) => {
+		const match = /^pages\/(\d+)\/(\d+)$/.exec(entry.id);
+		if (!match) throw new Error(`Unexpected lesson ID: ${entry.id}`);
+		return {
+			params: { chapter: match[1], lesson: match[2] },
+			props: { entry, previous: entries[index - 1], next: entries[index + 1] },
+		};
+	});
+}
+
+const { entry, previous, next } = Astro.props;
+const { Content } = await render(entry);
+const [, folder, file] = /^pages\/(\d+)\/(\d+)$/.exec(entry.id)!;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const sourceHref = `${base}/${entry.id}/`;
+const readerHref = `${base}/read/${folder}/${file}/`;
+const sourceUrl = new URL(sourceHref, Astro.site).href;
+const publicUrl = new URL(readerHref, Astro.site).href;
+const readerPath = (item: CollectionEntry<'docs'>) => `${base}/read/${item.id.slice('pages/'.length)}/`;
+const tone = chapterTone(Number(entry.data.chapter?.split('.')[0]));
+---
+
+<!doctype html>
+<html lang="en" data-academy-theme="paper" data-theme="light" data-pagefind-ignore="all">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="robots" content="noindex, follow" />
+		<meta name="description" content={entry.data.description || `A clean reading view for lesson ${entry.data.chapter} of Game Hacking Academy.`} />
+		<title>{entry.data.title} · Read or listen · Game Hacking Academy</title>
+		<link rel="canonical" href={sourceUrl} />
+		<script is:inline set:html={readerSettingsScript} />
+		<script src={`${base}/scripts/learning-widgets.js`} defer></script>
+		<script src={`${base}/scripts/mermaid-loader.js`} type="module"></script>
+	</head>
+	<body data-tone={tone}>
+		<a class="reader-skip" href="#reader-article">Skip to lesson</a>
+		<header class="reader-topbar">
+			<a class="reader-brand" href={`${base}/contents/`} aria-label="Game Hacking Academy contents">
+				<span aria-hidden="true">GHA</span>
+				<strong>Game Hacking Academy</strong>
+			</a>
+			<nav aria-label="Reader links">
+				<a href={sourceHref}>Full lesson</a>
+				<a href={`${base}/contents/`}>Contents</a>
+			</nav>
+		</header>
+		<main class="reader-shell">
+			<ReaderTools
+				articleId="reader-article"
+				lessonNumber={entry.data.chapter!}
+				title={entry.data.title}
+				publicUrl={publicUrl}
+				sourceUrl={sourceUrl}
+				filename={`game-hacking-academy-${entry.data.chapter!.replace('.', '-')}.txt`}
+			/>
+			<article id="reader-article" class="reader-article" aria-labelledby="reader-title">
+				<header class="reader-article__header">
+					<p class="reader-article__eyebrow" data-reader-skip>Lesson {entry.data.chapter} <span aria-hidden="true">/</span> Listening edition</p>
+					<h1 id="reader-title">{entry.data.title}</h1>
+					{entry.data.description && <p class="reader-article__description" data-reader-skip>{entry.data.description}</p>}
+					{entry.data.minutes && <p class="reader-article__minutes" data-reader-skip>About {entry.data.minutes} minutes</p>}
+				</header>
+				<div class="reader-article__body sl-markdown-content"><Content /></div>
+			</article>
+			<nav class="reader-neighbors" aria-label="More lessons">
+				{previous ? <a rel="prev" href={readerPath(previous)}><span>Previous lesson</span><strong>{previous.data.chapter} · {previous.data.title}</strong></a> : <span></span>}
+				{next ? <a rel="next" href={readerPath(next)}><span>Next lesson</span><strong>{next.data.chapter} · {next.data.title}</strong></a> : <span></span>}
+			</nav>
+		</main>
+	</body>
+</html>

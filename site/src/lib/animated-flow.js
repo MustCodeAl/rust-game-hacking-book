@@ -1,6 +1,6 @@
 // Each diagram owns its position and timer. Motion starts only after Play.
 const initialized = new WeakSet();
-const STEP_TIME = 4000;
+const STEP_TIMES = { slow: 6000, normal: 4000, fast: 2000 };
 
 export function initializeAnimatedFlows(scope) {
   scope.querySelectorAll('[data-animated-flow]').forEach(initializeFlow);
@@ -18,6 +18,8 @@ function initializeFlow(root) {
   const value = root.querySelector('[data-flow-active-value]');
   const diagramNodes = Array.from(root.querySelectorAll('[data-flow-diagram-node]'));
   const diagramEdges = Array.from(root.querySelectorAll('[data-flow-diagram-edge]'));
+  const native = root.dataset.flowNative === 'true';
+  const nodeGroups = stages.map((stage) => (stage.dataset.flowNodes || '').split('|').filter(Boolean));
   const state = root.querySelector('[data-flow-state]');
   const announcement = root.querySelector('[data-flow-announcement]');
   const previous = root.querySelector('[data-flow-action="previous"]');
@@ -35,6 +37,34 @@ function initializeFlow(root) {
   let current = 0;
   let running = false;
   let timer;
+
+  function motionChoice() { return doc.documentElement.dataset.academyMotion || 'system'; }
+  function stepTime() { return STEP_TIMES[doc.documentElement.dataset.academyAnimationSpeed] || STEP_TIMES.normal; }
+  function motionAllowed() { return motionChoice() !== 'off' && (motionChoice() === 'onrequest' || !reducedMotion.matches); }
+
+  function renderNative() {
+    const scene = root.querySelector('[data-flow-scene]');
+    if (!scene) return;
+    const keys = nodeGroups[current];
+    const upcoming = nodeGroups[current + 1] || [];
+    const completed = nodeGroups.slice(0, current).flat();
+    scene.querySelectorAll('[data-diagram-node-key]').forEach((node) => {
+      const key = node.dataset.diagramNodeKey;
+      const stageIndex = nodeGroups.findIndex((group) => group.includes(key));
+      if (stageIndex < 0) return;
+      node.dataset.flowRole = stages[stageIndex].dataset.flowRole || 'process';
+      node.dataset.diagramState = keys.includes(key) ? 'current' : completed.includes(key) ? 'done' : 'next';
+    });
+    scene.querySelectorAll('[data-diagram-from][data-diagram-to]').forEach((edge) => {
+      const { diagramFrom: from, diagramTo: to } = edge.dataset;
+      const fromIndex = nodeGroups.findIndex((group) => group.includes(from));
+      const toIndex = nodeGroups.findIndex((group) => group.includes(to));
+      const route = fromIndex >= 0 && toIndex >= 0 && (toIndex === fromIndex || toIndex === fromIndex + 1);
+      edge.dataset.flowRole = fromIndex >= 0 ? stages[fromIndex].dataset.flowRole || 'process' : 'process';
+      edge.dataset.passed = String(route && fromIndex < current && toIndex <= current);
+      edge.dataset.moving = String(route && running && keys.includes(from) && (keys.includes(to) || upcoming.includes(to)));
+    });
+  }
 
   function stopTimer() {
     if (timer !== undefined) view.clearTimeout(timer);
@@ -63,7 +93,10 @@ function initializeFlow(root) {
       edge.dataset.passed = String(index < current);
       edge.dataset.moving = String(running && index === current);
     });
+    if (native) renderNative();
     root.dataset.running = String(running);
+    root.dataset.flowMotion = String(motionAllowed());
+    root.style.setProperty('--diagram-step-duration', `${stepTime()}ms`);
     explanation.dataset.flowRole = stage.dataset.flowRole || 'process';
     if (progress) {
       progress.dataset.flowRole = stage.dataset.flowRole || 'process';
@@ -78,15 +111,15 @@ function initializeFlow(root) {
     }
     previous.disabled = current === 0;
     next.disabled = current === stages.length - 1;
-    play.disabled = reducedMotion.matches || stages.length < 2;
+    play.disabled = motionChoice() === 'off' || stages.length < 2;
     play.textContent = running ? 'Pause' : current === stages.length - 1 ? 'Play again' : 'Play';
-    state.textContent = reducedMotion.matches
-      ? 'Reduced motion is on. Use Next step or select a step to follow the process.'
+    state.textContent = motionChoice() === 'off'
+      ? 'Playback is off in Reader theme. Use Next step or select a step.'
       : running
-        ? 'Playing. Each step lasts four seconds; pause to read at your own pace.'
+        ? `Playing${motionAllowed() ? '' : ' without moving effects'}. Each step lasts ${stepTime() / 1000} seconds; pause to read at your own pace.`
         : current === stages.length - 1
           ? 'Final step. Select an earlier step or play again.'
-          : 'Paused. Play the sequence or move one step at a time.';
+          : `Paused. Play the sequence or move one step at a time.${!motionAllowed() ? ' Moving effects follow your device’s reduced-motion setting.' : ''}`;
     // Automatic playback must not repeatedly interrupt a screen reader.
     if (announce) announcement.textContent = `Step ${current + 1} of ${stages.length}: ${currentLabel}. ${currentValue ? `${currentValue}. ` : ''}${currentDetail}`;
   }
@@ -107,7 +140,7 @@ function initializeFlow(root) {
     stopTimer();
     timer = view.setTimeout(() => {
       timer = undefined;
-      if (!root.isConnected || doc.hidden || reducedMotion.matches) {
+      if (!root.isConnected || doc.hidden || motionChoice() === 'off') {
         pause();
         return;
       }
@@ -115,14 +148,14 @@ function initializeFlow(root) {
       if (current === stages.length - 1) running = false;
       render();
       if (running) schedule();
-    }, STEP_TIME);
+    }, stepTime());
   }
 
   previous.addEventListener('click', () => select(current - 1));
   next.addEventListener('click', () => select(current + 1));
   reset.addEventListener('click', () => select(0));
   play.addEventListener('click', () => {
-    if (reducedMotion.matches || stages.length < 2) return;
+    if (motionChoice() === 'off' || stages.length < 2) return;
     if (running) {
       pause(true);
       return;
@@ -151,11 +184,21 @@ function initializeFlow(root) {
   });
 
   const onVisibility = () => { if (doc.hidden) pause(); };
-  const onMotion = () => pause();
+  const onMotion = () => render();
+  const onPreference = () => {
+    if (motionChoice() === 'off') pause();
+    else {
+      render();
+      if (running) schedule();
+    }
+  };
+  const onDiagram = () => renderNative();
   const onPrint = () => pause();
   doc.addEventListener('visibilitychange', onVisibility);
   view.addEventListener('beforeprint', onPrint);
   reducedMotion.addEventListener('change', onMotion);
+  doc.addEventListener('academy:reader-preference', onPreference);
+  root.addEventListener('academy:diagram-ready', onDiagram);
   const observer = view.IntersectionObserver && new view.IntersectionObserver((entries) => {
     if (entries.some((entry) => !entry.isIntersecting)) pause();
   });
@@ -166,6 +209,8 @@ function initializeFlow(root) {
     doc.removeEventListener('visibilitychange', onVisibility);
     view.removeEventListener('beforeprint', onPrint);
     reducedMotion.removeEventListener('change', onMotion);
+    doc.removeEventListener('academy:reader-preference', onPreference);
+    root.removeEventListener('academy:diagram-ready', onDiagram);
   }, { once: true });
 
   controls.hidden = false;

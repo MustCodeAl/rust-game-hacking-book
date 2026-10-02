@@ -593,3 +593,55 @@ and swatches. Public Game Fundamentals, Memory, and Firmware pages, the new
 appearance stylesheet, and the reader-switching script exactly match the
 verified build. The preview on port 4322 was restored and serves both updated
 menus. The authored branch may also include this documentation-only receipt.
+
+## Diagram clarity, listening, and scoped printing — 2026-10-02
+
+Mermaid edge annotations now get one padded, rounded SVG backing instead of
+separate backgrounds on their nested lines. All **495** nonempty edge labels
+have a backing large enough for their measured content. Labels, diagram frames,
+full-size viewing, the page grid, gradients, motion, and playback speed have
+saved controls. Data-table headers and diagram explanations use the information
+role; code-panel framing uses processing. The theme's role colours retain their
+meanings. Gradients Off uses solid decorative surfaces and preserves axes,
+grid lines, and palette previews. Heading levels and sizes remain unchanged.
+
+Fourteen existing Mermaid flowcharts have authored, connected walkthroughs,
+one more lesson per displayed chapter. The book now has **42 animated lessons**,
+three per chapter. Their graph sources remain byte-for-byte unchanged. Playback
+binds nodes by source ID, handles diagrams arriving after page load, animates
+only the stated path, and uses the selected speed. System reduced motion now
+keeps Play usable while suppressing moving effects; explicit Off keeps manual
+navigation. Nothing starts automatically.
+
+All **135** lessons have a listening edition and downloadable TXT file.
+Static listening articles convert tables, labelled memory, graph connections,
+and guided diagrams into narration; **523** explained visuals and **10,493**
+passages retain authored facts and descriptions. Code comments and surrounding
+prose explain code by default; raw code is optional. Common abbreviations,
+hexadecimal notation, comparisons, units, and mathematical symbols receive
+speech-friendly wording. Expanded authored explanations are included. The same
+text feeds the page, browser speech, copy/export, and public links for Chrome
+Reading mode or ElevenReader import. Original lessons retain their visuals and
+code. Reader routes are excluded from duplicate search indexing.
+
+Printing a ready lesson calls the dialog directly, without fetching chapters or
+waiting for Mermaid. The lightweight `/print/` chooser offers fourteen static
+chapter documents. Complete-book preparation loads chapters explicitly, shows
+progress, supports cancellation, handles asset failures, and waits for a final
+print click. Its assembled document retains all **135** lessons, **273** Mermaid
+diagrams, **213** memory visuals, and **42** walkthroughs.
+
+Verification: complete build succeeds with **290 HTML pages**, all **273**
+Mermaid diagrams already drawn, and **135** static listening/TXT editions.
+Source reconstruction preserves every original lesson passage, **1,247 H2
+headings**, and **1,133 code/diagram fences**; original typography is unchanged.
+All **29,991 local links**, chapter/lesson order, and **268** navigation cards
+pass. Focused checks cover **26** animation behaviours, **13** saved-preference
+behaviours, **7** narration transformations, **8** speech-control behaviours,
+and **7** scoped-print behaviours. The 1,200 theme/diagram combinations retain
+passing role-text contrast (minimum active-label ratio 5.07:1).
+
+Verification uses source, generated HTML/SVG, isolated DOM interactions, and
+HTTP. Native browser layout, audible voice output, and third-party account
+playback were not inspected. The live preview remains on port 4322. The exact
+publication receipt follows after deployment.

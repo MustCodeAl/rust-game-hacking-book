@@ -9,6 +9,8 @@ sidebar:
   order: 8
   label: "13.8 Failure Modes at Trust Boundaries"
 ---
+import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
+
 The first three control gaps were a client flag trusted as
 permission, a checksum that covered only part of what it protected, and an
 environment signal standing in for validation. Eight more failures show how
@@ -66,12 +68,24 @@ Nothing overflowed *visibly*. In a release build there is no panic, no warning,
 and the comparison is perfectly true. The read then starts at an address near
 the top of the address space.
 
+<AnimatedFlow
+  nativeDiagram
+  title="See a bound check fooled by overflow"
+  stages={[
+    { label: 'Start near the limit', detail: 'The requested offset is only three below usize::MAX.', role: 'input', value: 'MAX − 3', nodes: ['A'] },
+    { label: 'Add the length', detail: 'Unchecked addition wraps the end of the range to 12.', role: 'process', value: 'end becomes 12', nodes: ['B'] },
+    { label: 'Compare the wrong end', detail: 'The bound check sees only the wrapped small number.', role: 'state', value: '12 ≤ region size?', nodes: ['C'] },
+    { label: 'Allow a bad read', detail: 'This tour follows the yes branch despite the invalid start.', role: 'output', value: 'false acceptance', nodes: ['D'] },
+  ]}
+  caption="The yes branch is the failure: a wrapped end looks small enough, although the requested range began near the address-space limit."
+>
 ```mermaid
 flowchart LR
     A["offset = usize::MAX - 3"] --> B["offset + length<br/>wraps to 12"]
     B --> C{"12 <= region_size?"}
     C -->|"yes"| D["read allowed — starting near<br/>the top of the address space"]
 ```
+</AnimatedFlow>
 
 **The repair** is not a bigger integer. It is refusing to answer a question that
 has no answer:

@@ -1,87 +1,85 @@
 ---
-// Every lesson on one page, for the browser's Print → Save as PDF.
+// Keep /print/ as the book's print entry point. The full document is assembled
+// only when the reader asks for it; ordinary lesson pages never load 135 lessons.
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
 import { CHAPTERS, chapterTone, compareLessons } from '../data/chapters.mjs';
+import '../styles/print.css';
 
-const lessons = (await getCollection('docs', (entry) => Boolean(entry.data.chapter))).sort((a, b) =>
-	compareLessons(a.data.chapter, b.data.chapter),
-);
-const rendered = await Promise.all(lessons.map(async (entry) => ({ entry, Content: (await render(entry)).Content })));
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const chapterUrl = (number: number) => `${basePath}/print/chapter/${number}/`;
+const lessonIndex = (await getCollection('docs', (entry) => Boolean(entry.data.chapter)))
+	.sort((a, b) => compareLessons(a.data.chapter, b.data.chapter))
+	.map(({ data }) => ({ chapter: data.chapter!, label: `${data.chapter} ${data.title}` }));
 const chapters = CHAPTERS.map((chapter) => ({
 	chapter,
-	items: rendered.filter(({ entry }) => entry.data.chapter!.startsWith(`${chapter.number}.`)),
+	items: lessonIndex.filter((lesson) => lesson.chapter.startsWith(`${chapter.number}.`)),
 })).filter(({ items }) => items.length > 0);
+const lessonCount = chapters.reduce((total, { items }) => total + items.length, 0);
 ---
 
 <StarlightPage
 	frontmatter={{
-		title: 'The complete book',
-		description: 'Every lesson of Game Hacking Academy on one page, ready to print or save as a PDF.',
+		title: 'Print or save the book',
+		description: 'Print one lesson, one chapter, or prepare the complete Game Hacking Academy book for PDF.',
 		tableOfContents: false,
 		pagefind: false,
 	}}
 >
-	<p class="print-book-intro">
-		Use your browser's Print command and choose “Save as PDF” to keep a copy. Interactive checks are left out of the printed pages.
-	</p>
-	<nav class="print-book-contents" aria-label="Contents">
-		{
-			chapters.map(({ chapter, items }) => (
+	<div class="print-book" data-print-hub data-print-base={basePath} data-print-chapter-count={chapters.length} data-print-ready="false">
+		<p class="print-book-intro print-screen-only">
+			Choose a size before opening the browser’s Print dialog. Save as PDF is an option in that dialog.
+			The complete book includes every lesson, diagram, code sample, and image; preparing it takes longer than a single lesson.
+		</p>
+
+		<div class="print-book-options print-screen-only">
+			<section class="print-book-option" aria-labelledby="print-lesson-heading">
+				<h2 id="print-lesson-heading">One lesson</h2>
+				<p>On any lesson page, use <strong>Print this lesson</strong> in the reader toolbar. The current page is already loaded, so its print dialog can open immediately when its visuals are ready.</p>
+				<a href={`${basePath}/contents/`}>Find a lesson</a>
+			</section>
+			<section class="print-book-option" aria-labelledby="print-chapter-heading">
+				<h2 id="print-chapter-heading">One chapter</h2>
+				<p>Open only the chapter you need. Its print page includes all of that chapter’s lessons, in reading order.</p>
+				<ol class="print-book-chapter-links">
+					{chapters.map(({ chapter, items }) => (
+						<li data-tone={chapterTone(chapter.number)} id={`chapter-${chapter.number}`}>
+							<a href={chapterUrl(chapter.number)} data-print-chapter-route={chapter.number} data-print-expected-lessons={items.length}>{chapter.number}. {chapter.title}</a>
+							<span>{items.length} lessons</span>
+						</li>
+					))}
+				</ol>
+			</section>
+			<section class="print-book-option" aria-labelledby="print-full-heading">
+				<h2 id="print-full-heading">Complete book</h2>
+				<p>Prepare all {lessonCount} lessons, then print or save them together. Chapters load one at a time, so you can see progress or cancel before opening the print dialog.</p>
+				<div class="print-book-actions">
+					<button type="button" data-print-prepare-full>Prepare complete book</button>
+					<button type="button" data-print-cancel hidden>Cancel preparation</button>
+					<button type="button" data-print-full-now hidden>Print complete book or save as PDF</button>
+				</div>
+				<p data-print-status role="status" aria-live="polite">The complete book has not been loaded.</p>
+				<progress data-print-progress max={chapters.length} value="0" hidden aria-label="Chapters prepared"></progress>
+			</section>
+		</div>
+
+		<nav class="print-book-contents" aria-label="Complete book contents">
+			<h2>Contents</h2>
+			{chapters.map(({ chapter, items }) => (
 				<section data-tone={chapterTone(chapter.number)}>
-					<h2>
-						{chapter.number}. {chapter.title}
-					</h2>
+					<h3><a href={chapterUrl(chapter.number)}>{chapter.number}. {chapter.title}</a></h3>
 					<ol>
-						{items.map(({ entry }) => (
-							<li>
-								<a href={`#lesson-${entry.data.chapter!.replace('.', '-')}`}>
-									{entry.data.chapter} — {entry.data.title}
-								</a>
-							</li>
+						{items.map(({ chapter: lesson, label }) => (
+							<li><a data-print-lesson-link href={`${chapterUrl(chapter.number)}#lesson-${lesson.replace('.', '-')}`}>{label}</a></li>
 						))}
 					</ol>
 				</section>
-			))
-		}
-	</nav>
-	{
-		chapters.map(({ chapter, items }) =>
-			items.map(({ entry, Content }) => (
-				<article class="print-book-lesson" data-tone={chapterTone(chapter.number)} id={`lesson-${entry.data.chapter!.replace('.', '-')}`}>
-					<p class="print-book-kicker">Lesson {entry.data.chapter}</p>
-					<h2 class="print-book-title">{entry.data.title}</h2>
-					<Content />
-				</article>
-			)),
-		)
-	}
+			))}
+		</nav>
+
+		<p class="print-only print-book-unprepared">The complete book has not been prepared. Open this page on screen and choose “Prepare complete book” before printing.</p>
+		<div class="print-book-output" data-print-output hidden aria-label="Prepared complete book"></div>
+	</div>
 </StarlightPage>
 
-<style>
-	.print-book-lesson {
-		margin-top: 3rem;
-		padding-top: 2rem;
-		border-top: 2px solid var(--chapter-accent);
-	}
-
-	.print-book-kicker {
-		color: var(--chapter-ink);
-		font-family: var(--mono);
-		font-size: var(--sl-text-xs);
-		text-transform: uppercase;
-	}
-
-	@media print {
-		.print-book-lesson {
-			break-before: page;
-		}
-
-		:global(.academy-quiz),
-		:global(.concept-lab),
-		:global(.ownership-scope),
-		:global(.projection-lab) {
-			display: none;
-		}
-	}
-</style>
+<script is:inline src={`${basePath}/scripts/print-book.js`} defer></script>
