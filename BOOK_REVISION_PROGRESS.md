@@ -645,3 +645,16 @@ Verification uses source, generated HTML/SVG, isolated DOM interactions, and
 HTTP. Native browser layout, audible voice output, and third-party account
 playback were not inspected. The live preview remains on port 4322. The exact
 publication receipt follows after deployment.
+
+Publication is complete: authored source
+**19873fe80768d7b46104896a9edecfa1f21e1bfb** was generated into
+**34813423b632ea9d28061d6493b4cec96361237c** on
+`codex/gh-pages-reader-diagrams-print`, merged through
+[PR #13](https://github.com/MustCodeAl/rust-game-hacking-book/pull/13) into
+`gh-pages` at **e7263497828373c3873461e7239470db6ac4af78**. GitHub Pages
+reports that exact merge as **built**. All **24** checked public files match
+the verified build byte-for-byte: lesson, listening, TXT, and print pages,
+their component styles/scripts, and the three public control/render scripts.
+The live preview returns HTTP 200 with the new controls, graph tour, and
+listening link. The authored branch may also include this documentation-only
+publication receipt.

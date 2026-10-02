@@ -339,3 +339,9 @@ lightweight scope chooser; `/print/chapter/N/` contains one complete chapter.
 Only Prepare complete book loads all fourteen chapters, with progress and
 cancellation. Preserve all 135 lessons and their visuals in that assembled
 document. See BOOK_REVISION_PROGRESS.md for verification and publication.
+
+The listening/diagram/print update is source **19873fe**, published through
+**PR #13** into `gh-pages` at **e726349**. Pages built that exact merge; all
+24 checked public pages, TXT files, scripts, and styles match the verified
+build. All 135 original lessons and visuals remain. The preview on port 4322
+is still available. See BOOK_REVISION_PROGRESS.md for the full receipt.
