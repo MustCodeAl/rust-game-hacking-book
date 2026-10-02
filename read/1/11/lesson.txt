@@ -1,0 +1,117 @@
+Game Engines: Where the Rules Live
+
+The previous chapters followed values into instructions and turned remote bytes into typed objects and collections. The next question is larger: which system owns those objects, applies the rules, and updates the world? A rule could come from native code, a script, or loaded game data. To choose where to observe or change it, first separate the game’s particular rules from the machinery that runs them.
+
+The game loop reads input, applies rules, changes state, and draws the result. Games need other machinery too: something loads the level, stores objects, and calls the renderer. A game engine supplies much of this reusable machinery. Knowing where it stops and the game begins tells you which technique in this book will work on a given problem.
+
+Section: An engine is reusable game machinery.
+
+Many games need the same kinds of machinery, even when their rules and art are different:
+
+a game loop that reads input, updates the world, and draws a frame, over and over (Lesson 1.3);
+
+a renderer that turns the world into pixels;
+
+a way to load art, sound, levels, and settings from disk;
+
+a model of the world: what objects exist, where they are, what they hold;
+
+collision, when objects can meet walls or one another;
+
+sound, input, menus, and sometimes networking and scripting.
+
+Not every game needs every item: a text adventure may have no renderer or collision system. For games that do need these pieces, reusing them can save substantial work. A game about tanks and a game about farming can share the machinery while supplying different rules and content.
+
+A game engine is that reusable machinery: the software that runs the loop, draws the frames, loads the files, and manages the objects, on which a particular game’s content and rules are built.
+
+A spreadsheet program is a useful comparison, because it holds up when you push on it. The program supplies the grid, the formulas, and the recalculation; each spreadsheet file supplies its own numbers and formulas. A bug in how the program recalculates breaks every spreadsheet you open. A wrong formula in one file breaks only that file. And two files made in the same program share the same structure, so once you understand one, the next is easier to read. All three statements hold for engines and games too, which is exactly what makes the split worth learning.
+
+Section: Who calls whom.
+
+Games also use libraries. A useful first distinction is who controls the main loop and calls whose code.
+
+Your code calls a library. SDL, for example, is a library that Wesnoth’s engine uses to open a window, read the keyboard, and play sound. It has no idea what a unit or a map is; it waits to be asked.
+
+An engine often calls your code. It may own the loop and call the game’s update and draw functions at the moments it chooses. The game is a guest in a loop the engine runs. Those update and draw functions are callbacks: the game hands them to the engine, and the engine decides when to run them.
+
+This is a way to reason about control flow, not a rigid test for what a project may call an engine. Engine code can call libraries, and game code can call engine functions too.
+
+Outside games, software that works this way is called a framework. A web framework owns the loop that waits for requests and calls the handler you registered for each address, so the same question — who calls whom — sorts those tools too.
+
+Diagram. From Engine owns the loop to Game update code. The connection is labelled: every frame, calls. From Engine owns the loop to Game draw code. The connection is labelled: every frame, calls. From Game update code to Libraries: window, input, audio. The connection is labelled: calls when needed. From Game draw code to Libraries: window, input, audio. The connection is labelled: calls when needed.
+
+This matters later in a practical way. A repeated call near frame presentation can be a useful meeting point when you verify that the game actually reaches it. That is why Lesson 7.10 hooks Present: this game’s rendering path calls it to show finished frames, making it a good place to observe them.
+
+Section: The five course games, sorted by engine.
+
+The games in this book cover most of the ways a game can relate to its engine:
+
+Table columns: Game; Engine; Where most of its rules live.
+
+Game: Wesnoth 1.14.9; Engine: its own engine, written for this game; Where most of its rules live: C++ engine code, WML data files, Lua scripts.
+
+Game: AssaultCube 1.2.0.2; Engine: Cube, an open-source engine; Where most of its rules live: C++ engine code.
+
+Game: Urban Terror 4.3.4; Engine: ioquake3, the continuation of the open-sourced Quake III engine; Where most of its rules live: C++ engine code.
+
+Game: Flare 1.12; Engine: Flare, an engine built to run content packages; Where most of its rules live: text data files.
+
+Game: Wyrmsun 5.0.1; Engine: Wyrmgus, a fork of the Stratagus strategy engine; Where most of its rules live: Lua scripts and data.
+
+Flare shows the split most clearly. Flare is the engine; a campaign such as the Empyrean Campaign from Lesson 9.2 is a content package the engine loads. Swap the content package and the same executable runs a different game.
+
+Section: Where a rule lives decides how you change it.
+
+Here is the most useful thing to take from this lesson. Every rule in a game lives in one of a few places, and the place decides which part of this book applies — and how long your change lasts.
+
+Wesnoth shows two of them side by side:
+
+Gold during a match is a number in memory, updated by native engine code. Change it with the scan from Lesson 1.9 and it changes for this match. Start a new match and it begins from the scenario’s starting gold again.
+
+A unit’s hit points come from a unit definition in a WML data file. Change one unit’s hit points in memory and that single unit changes. Recruit another of the same type and it arrives with the file’s value, because every new unit is built from the definition on disk. Change the file instead, and every unit of that type created afterwards has the new value.
+
+Diagram. From your file edit to unit type in a WML file:defines its hit points. The connection is labelled: changes every unitcreated afterwards. From unit type in a WML file:defines its hit points to unit in memory. The connection is labelled: each recruit isbuilt from it. From unit type in a WML file:defines its hit points to unit in memory. From unit type in a WML file:defines its hit points to the next recruit. From your memory edit to unit in memory. The connection is labelled: changes only this unit.
+
+Neither change is wrong. They answer different questions, and knowing which one you are making saves an afternoon of wondering why a change “didn’t stick.”
+
+Table columns: Where the rule lives; What you change; Where this book covers it.
+
+Where the rule lives: a data file; What you change: the file, before the game loads it; Where this book covers it: Chapter 9.
+
+Where the rule lives: a script; What you change: the script, or what the host lets it do; Where this book covers it: Chapter 10.
+
+Where the rule lives: native engine code; What you change: values in memory, or the instructions themselves; Where this book covers it: Chapters 2, 3, 5, and 6.
+
+Where the rule lives: managed code, such as C# in Unity; What you change: often readable by decompiling it; Where this book covers it: Lesson 11.2.
+
+The data-file row deserves special attention. When a game exposes a file for customization, editing it may be the simplest route. Keep a copy of the original: a game update can still replace a file or change its format. Chapter 9 opens with this decision.
+
+Section: Engines leave their own tools in the game.
+
+Engines are built by developers who need to debug them, and many ship with those debugging tools still inside.
+
+The rendering lessons will use some of these tools. Lesson 7.2 uses Urban Terror’s console variables — named settings the engine exposes — to switch entity drawing on and off. Lessons 7.5 and 7.6 open AssaultCube’s console with ~ and use commands such as idlebots 1, dbgpos 1, and showstats 1 to freeze the bots and print positions on screen.
+
+Those tools are gifts. A console variable that toggles a feature gives you a clean experiment: flip it, and whatever changes in memory is connected to that feature. A debug command that prints your position tells you what value to scan for. Check what the engine already offers before reaching for a debugger.
+
+Section: Recognizing an engine outside this book.
+
+Most commercial games are built on a small number of large engines. Three you will meet often:
+
+Unity — game logic is usually written in C#, which changes how you find data, as Lesson 11.2 explains;
+
+Unreal — C++ engine code, with a visual scripting system called Blueprints;
+
+Godot — an open-source engine whose games are scripted in its own GDScript language or in C#.
+
+Games built on the same engine may share code, naming patterns, and file formats. Object layouts also depend on the game’s code and engine version, so use a familiar pattern as a clue and verify it in the next game.
+
+Lesson 11.2 shows how to tell which engine a game uses from the files beside its executable. Do that first. It takes a minute, and it tells you which of the rows in the table above you are dealing with.
+
+Section: Where the change belongs.
+
+An engine supplies reusable machinery; the game adds its particular rules and content. A library responds when your code calls it, while an engine also calls game code at the points it controls. The course games use different engines, so a rule may live in data, a script, native code, or managed code. A memory edit lasts for a running process; a data-file edit can persist when the file is loaded again. Engine consoles and debug commands expose named state that can help identify the right layer before changing it.
+
+To describe a match, a tool needs more than one verified field: it needs the players and values that belong together at one moment. From One Player to a Game-State Snapshot builds that view while keeping the engine’s changing state separate from the tool’s local copy.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/11/

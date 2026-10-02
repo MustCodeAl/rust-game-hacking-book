@@ -1,0 +1,117 @@
+Handle Ownership and Lifetimes
+
+Section: A handle is not a pointer.
+
+The previous lesson opened a process with a specific set of rights. Now ask who is responsible for releasing that permission-bearing reference. A tool that handles denial correctly can still leak resources or close a handle twice if ownership is vague.
+
+Windows keeps kernel-managed objects for processes, threads, files, events, snapshots, and many other resources. A user-mode program normally refers to one of those objects through a handle.
+
+The numeric handle value is an index-like token meaningful to Windows in the current process. It is not the object’s memory address, and reading memory at that number does not reveal the object.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A handle entry also carries granted access rights. Two handles referring to the same process can permit different operations.
+
+Section: Handles have lifetimes.
+
+Many APIs return a new handle that the caller owns. When the program is finished with it, the owner calls CloseHandle. Forgetting causes a handle leak. Repeated leaks can exhaust resources or keep files and processes alive longer than expected.
+
+Closing the same handle twice is also wrong. Windows may have already reused that number for a different object, turning a cleanup mistake into a difficult intermittent bug.
+
+That sequence is worth spelling out, because it explains why this class of bug surfaces so far away from its cause:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+As a timeline of calls between your code and Windows, the same five steps look like this:
+
+Diagram labels, in drawing order: Windows; Your code; correct — slot hexadecimal 1 2 C is now free; the log file closes instead,; and nothing reports an error; OpenProcess(...); handle hexadecimal 1 2 C (the process); CloseHandle(hexadecimal 1 2 C); CreateFile(log file); handle hexadecimal 1 2 C (the log file); CloseHandle(hexadecimal 1 2 C) again.
+
+Step 4 does not report an error. It closes something perfectly real — just not the object you meant. The failure appears later, in unrelated code, at a moment that depends on the exact order in which the program happened to allocate handles. That timing dependence is precisely why double-close bugs are so hard to reproduce and so easy to blame on the wrong component.
+
+The ownership rule should be simple:
+
+One owner closes one owned handle exactly once. Borrowers may use it temporarily but never close it.
+
+The word owned matters because not every handle-shaped value follows the same cleanup rule. Some APIs return pseudo-handles or borrowed handles that must not be passed to CloseHandle; other APIs use specialized cleanup functions. The wrapper constructor should document which API, application programming interface, created the value and which function releases it.
+
+Model those categories with different types instead of one universal HANDLE wrapper. A type that always closes is safe only for resources whose contract says the caller owns a closable handle.
+
+Section: RAII ties cleanup to scope.
+
+RAII means Resource Acquisition Is Initialization. A value owns the resource, and its Drop implementation releases the resource when the value leaves scope.
+
+The ownership path is deliberately one-way:
+
+Diagram. From Windows API succeeds to Raw owned handle. From Raw owned handle to OwnedHandle. From OwnedHandle to Borrow for API calls. From OwnedHandle to Scope ends. From Scope ends to Drop calls CloseHandle.
+
+Borrowing permits temporary use; only the owner reaches the cleanup path.
+
+The course wrapper is intentionally small:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+OwnedHandle does not implement Copy or Clone. Moving it transfers ownership, so the old variable cannot be used afterward. Borrowing &OwnedHandle lets another function call Windows without taking responsibility for cleanup.
+
+RAII connects resource lifetime to lexical scope, including early returns and ? errors. It does not decide whether the original ownership contract was correct. Wrapping a borrowed handle as owned merely turns the eventual double-close into an automatic bug.
+
+Section: Why Drop ignores the close result.
+
+Drop::drop cannot return Result. Cleanup often happens while another error is already unwinding the stack. The course therefore performs a best-effort CloseHandle and keeps the original error.
+
+A close failure normally means the ownership invariant was already broken, such as an invalid or previously closed handle. The fix is to correct ownership, not to retry closing an unknown numeric value.
+
+Section: Prove cleanup with a count.
+
+The lab records the current process’s handle count, creates 128 unnamed event objects, wraps every returned handle, then drops the vector:
+
+Diagram. From handle_count(): before to create 128 events,each wrapped in OwnedHandle. From create 128 events,each wrapped in OwnedHandle to handle_count(): while_owned. From handle_count(): while_owned to drop(events). From drop(events) to handle_count(): after_drop.
+
+Additional detail: Complete lab source: handle_raii.rs.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The iterator returns Result<OwnedHandle> for every event. collect::<Result<Vec<_>, _>>() stops on the first failure. Any handles already collected live in the partially built vector, so they are dropped while the error returns.
+
+That is the important improvement over manual cleanup:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Section: Why this version?.
+
+Every error path receives the same cleanup behavior. Adding a new ? does not silently create a leak.
+
+Section: Run the proof.
+
+Run the self-contained handle lab in the Windows VM, virtual machine,. It prints a count before creating events, a higher count while they are owned, and another count after their owners leave scope. The change across those three moments is the proof.
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The middle count should rise by at least 128. The final count should fall again. Small background differences are possible because process instrumentation may briefly create its own handles, so the program checks the meaningful direction instead of demanding identical before/after numbers.
+
+Section: Not every handle should be closed.
+
+Some APIs return a pseudo-handle, such as GetCurrentProcess. It is a special constant interpreted as the current process and should not be wrapped as a newly owned handle.
+
+Other APIs return borrowed handles whose documentation says another component owns them. Ownership comes from the API contract, not from the fact that a program can store the number.
+
+Diagram. From a HANDLE value to does the API's contract sayyou now own a new handle?. From does the API's contract sayyou now own a new handle? to wrap as OwnedHandle:Drop calls CloseHandle. The connection is labelled: yes, e.g. OpenProcess,CreateEventW. From does the API's contract sayyou now own a new handle? to never pass it to CloseHandle. The connection is labelled: no — pseudo-handleor borrowed handle.
+
+Before wrapping a handle, answer:
+
+Does success return a new owned handle?
+
+Which function releases it?
+
+Which values mean failure?
+
+May the handle be shared across threads?
+
+Does an event or callback transfer ownership?
+
+The complete wrapper is handle.rs, and the proof program is handle_raii.rs.
+
+References: CloseHandle, GetProcessHandleCount, and kernel objects.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/10/04/

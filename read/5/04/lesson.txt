@@ -1,0 +1,153 @@
+Render Categories and Color Probes
+
+Section: Color is a debugging label.
+
+A solid temporary color can answer a classification question:
+
+Do these draw calls all belong to player models, or did our filter catch unrelated geometry?
+
+This technique is often called chams. In this course it is a visual debugger for an offline target.
+
+Image description: An original player texture
+
+Section: A pixel’s color has several contributors.
+
+“Set the color to red” sounds simple, but the final framebuffer value may combine:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Multiplication is only one common model; a shader can compute anything. In the fixed-function path used here, disabling selected arrays and textures reduces the number of active contributors so the diagnostic color is easier to interpret.
+
+Alpha does not automatically mean transparency. Blending must be enabled with a specific source/destination rule, and draw order still matters. Likewise, RGB values may be interpreted as linear light or sRGB-encoded display values. A debug color only needs to be distinctive, but exact color comparison requires knowing the framebuffer’s color-space conversion.
+
+Section: Separate classification from styling.
+
+Before changing a draw’s color, turn what we observed into an explicit category. In this course build, the first trial labels a draw with more than 500 indices as OtherPlayer; all other draws remain Unknown. The rule will be judged by the colored results, not assumed true because it compiled:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+For this exact Urban Terror build, count greater than 500 is the original course filter. It is intentionally simple so the color result can help you test what the filter catches.
+
+Keep the classifier pure. It should not call OpenGL or change memory, which makes it easy to test with recorded samples.
+
+Purity also makes uncertainty visible. Return Unknown when the sample does not match any category. A confident-looking wrong label is harder to diagnose than an explicit unknown.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Section: Measure classification errors.
+
+A colored result gives immediate feedback, but “some players turned red” is not enough. Count four outcomes across a small labeled capture:
+
+Table columns: Outcome; Name.
+
+Outcome: player colored; Name: true positive.
+
+Outcome: non-player colored; Name: false positive.
+
+Outcome: player left unchanged; Name: false negative.
+
+Outcome: non-player left unchanged; Name: true negative.
+
+Changing a threshold usually trades false positives against false negatives. Add independent features only when experiments show they help: call site, texture, model transform, or another stable render property. Avoid piling on conditions that merely memorize one map and graphics setting.
+
+For a labeled set, calculate:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Precision asks “when the classifier says player, how often is it right?” Recall asks “of all player draws, how many did it find?” If a denominator is zero, report the metric as undefined instead of inventing a perfect score.
+
+Keep the recorded samples separate from the classifier implementation. Then a new rule can be scored against the same samples, so a change in precision or recall comes from the rule and not from a different capture.
+
+Section: Apply color for one draw.
+
+The rendering layer can choose a debug style:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+At the hook boundary:
+
+capture the current texture/color/depth state;
+
+apply the debug state;
+
+forward exactly one draw;
+
+restore every captured value.
+
+The state must cover both server-side values such as enable flags and client array state such as color or texture-coordinate arrays. Capturing only the visible color is insufficient if the original draw obtains its color from a bound array.
+
+Image description: A color-coded model in the offline lab
+
+Section: Understand the build-specific Urban Terror fallback.
+
+The pure classifier and whole-draw restoration rule above are the general lesson. The following fallback is an optional exact-build in-process case. It applies the hook lifecycle from Lesson 6.4 at a less convenient point inside the draw function.
+
+The clean design above wraps one whole draw: capture, change, draw, restore. The course’s Urban Terror 4.3.4 cave is different. It runs in the middle of glDrawElements, so it cannot surround the call and restore a snapshot after that same draw. Instead, it applies a debug state to player-sized draws and puts assumed engine defaults back on the next ordinary draw.
+
+The fallback uses these functions and constants:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+For comparison, a whole-call wrapper can make the color transition explicit around one call:
+
+Code example. The code’s comments explain: SAFETY: every pointer was resolved from the current opengl32.dll and this// hook runs on the thread with the current OpenGL context.unsafe { gl_disable_client_state(GL_TEXTURE_COORD_ARRAY); gl_disable_client_state(GL_COLOR_ARRAY); gl_enable(GL_COLOR_MATERIAL); gl_color4f(1.0, 0.6, 0.6, 1.0);
+
+The pinned Urban Terror cave runs inside glDrawElements, so it cannot literally use that whole-call wrapper. For player-sized draws, its companion depth calls use depth_range(0.0, 0.0) and depth_func(GL_ALWAYS) so the highlighted geometry passes the depth test. On the next ordinary draw, the fallback sets depth_range(0.0, 1.0) and depth_func(GL_LEQUAL) along with the color defaults shown above. Player-sized models should appear through walls in bright red. If the HUD, world, or later effects stay tinted, those assumed defaults did not match the state owned by that render pass.
+
+This is an exact-build, best-effort fallback—not general OpenGL state restoration. It assumes texture and color arrays are normally enabled, GL_COLOR_MATERIAL is normally disabled, the current color is white, the depth range is 0..1, and the depth function is GL_LEQUAL. A renderer may legally use different values. For a reusable tool, hook at a boundary that encloses one whole draw and query or track the exact prior state in a typed guard before changing anything.
+
+Try count less than or equal to 500, count greater than 500, and no filter while logging samples. The visual differences let you prove which calls your classifier actually catches instead of treating the threshold as magic.
+
+The compiled DLL, dynamic link library, uses a naked x86 cave inside Urban Terror’s glDrawElements path. It resolves all seven required OpenGL exports, switches to OPENGL_CHAMS, and applies this documented fallback from the render thread. Inject it and press F3 to toggle chams; press End to restore normal rendering and the original instruction:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Read the full implementation in opengl_hooks.rs, especially apply_urban_terror_gl_state and urban_terror_opengl_cave. Nothing is hidden behind a placeholder.
+
+Section: Avoid global state leaks.
+
+OpenGL is a state machine. A color or depth change remains active until another call changes it. If the menu turns orange, the wrapper did not restore something.
+
+Keep state changes in the narrowest possible scope and test:
+
+normal models before the target draw;
+
+the target model;
+
+normal models after it;
+
+menus and text;
+
+level reloads.
+
+Also test early returns and errors. Scope guards help with CPU, central processing unit, state, but graphics APIs may require restoration on the render thread while the correct context is current. A guard dropped on another thread is not equivalent cleanup.
+
+Section: Distinguish a category from a render pass.
+
+The same player may appear in several passes: shadow, depth prepass, main color, outline, reflection, or HUD portrait. A filter that recognizes one of those draws does not automatically recognize the object everywhere. Conversely, a call site may draw many categories through a shared material pass.
+
+When color appears twice, through a mirror, or only in a shadow, add the current framebuffer, shader/program, and pass position to the draw sample before changing the category rule.
+
+Section: Identify a category with more than one number.
+
+A vertex count can be a quick first filter, not a durable identifier. Combine independent draw properties and return Unknown when they disagree.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Version the profile and refuse to activate on an unrecognized build.
+
+Section: Verify the color test.
+
+The exact-build result has four observable checks:
+
+the normal frame is unchanged with classification disabled;
+
+only the intended offline model category changes color;
+
+the exact-build fallback leaves no visible state leak across the tested frame, while a reusable whole-draw wrapper restores captured state after every call;
+
+unknown samples remain unknown instead of being forced into a category.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/5/04/

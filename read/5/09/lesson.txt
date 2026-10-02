@@ -1,0 +1,267 @@
+World-to-Screen Projection and Overlays
+
+Section: World-to-screen uses the view-projection transform.
+
+An ESP-style observer needs to answer:
+
+Where would this 3D point appear on the 2D screen?
+
+The reliable answer uses the game’s view-projection matrix. Hand-tuned angle formulas can teach geometry, but a matrix handles camera rotation, field of view, aspect ratio, and perspective together.
+
+Image description: A simple viewport diagram
+
+The matrix is not magic screen-coordinate data. It is a compact composition of specific coordinate changes. If its convention, snapshot time, or viewport does not match the rendered frame, the resulting pixels can be precise arithmetic and still describe the wrong image.
+
+Section: Name every coordinate space.
+
+“World to screen” is not one mysterious jump. It is a pipeline of smaller changes, and every stage answers a different question:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Diagram. From Local vertex(x,y,z,1) to World. The connection is labelled: model. From World to Camera. The connection is labelled: view. From Camera to Clip(x,y,z,w). The connection is labelled: projection. From Clip(x,y,z,w) to NDC. The connection is labelled: clip, then divide by w. From NDC to Pixels. The connection is labelled: viewport.
+
+Diagram walkthrough: Follow one label anchor from the world to the screen. Step 1: World point. State: world (x, y, z, 1). Begin with one entity position and the camera from the same frame. These coordinates describe a place in the game world, not a pixel. Step 2: View transform. State: camera coordinates. Apply the inverse camera pose. The point is now measured from the camera along its right, up, and forward or back directions. Step 3: Projection transform. State: clip (x, y, z, w). Apply the declared projection matrix to obtain clip x, y, z, and w. Its field of view, aspect ratio, handedness, and depth convention must match the game. Step 4: Visibility check. State: point inside clip bounds. Check finite coordinates, usable w, and the clip bounds for this API, application programming interface,. A label anchor behind the camera or outside those bounds does not continue to drawing. Step 5: Perspective divide. State: NDC (x/w, y/w, z/w). For an accepted point, divide x, y, and z by w to obtain normalized device coordinates. This is where perspective makes distant displacements occupy less screen space. Step 6: Viewport pixels. State: screen (pixel_x, pixel_y). Map normalized x and y into the current viewport dimensions and its vertical-axis convention. Only this final pixel position belongs to the overlay. Step through one point, then replay the path. A rejected label anchor produces no pixel; clipping a triangle can instead preserve its visible portion.
+
+Naming the stages makes bugs easier to locate. A marker that rotates the wrong way usually points to the view transform. A marker that stretches after a resolution change points to the viewport or aspect ratio. A point behind the camera that appears mirrored points to the perspective divide or clipping.
+
+The w value is not another world direction. It carries information needed for perspective: after division, distant points become closer together on screen. Reject unusable w values before dividing, then reject points outside the target API’s depth interval. OpenGL commonly uses -1..=1 after projection; Direct3D commonly uses 0..=1. The matrix and convention must come from the same game pipeline.
+
+Section: The view matrix is the inverse camera pose.
+
+A camera pose says where the camera exists in world space. Rendering needs the opposite question: where does the world appear relative to the camera? Therefore the view matrix is the inverse of the camera’s world transform.
+
+For an orthonormal camera basis, inverse rotation is its transpose. The translation is not simply -camera_position; it is the negative position expressed along the camera basis. In dot-product form:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+If positions track correctly until the camera rotates, the translation may be right while the basis order, handedness, or inverse operation is wrong.
+
+Section: One concrete perspective matrix.
+
+Conventions must be attached to formulas. Under these assumptions:
+
+column vectors;
+
+right-handed camera space looking down -Z ;
+
+vertical field of view fov_y ;
+
+aspect ratio width / height ;
+
+OpenGL NDC depth -1..1 ;
+
+positive near and far distances with 0 less than near less than far ;
+
+define f equals 1 / tan(fov_y / 2). One projection matrix is:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Multiplying a view-space point gives clip_w equals -view_z, so points in front have positive w. This exact matrix is not portable to a left-handed or Direct3D depth convention. Its purpose is to show where assumptions live.
+
+fov_y must be in radians for ordinary trigonometric functions. The half-angle appears because the camera center splits the vertical frustum symmetrically.
+
+Section: Clipping happens before perspective division.
+
+In homogeneous clip space, the standard OpenGL visible volume satisfies:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+For a Direct3D-style depth range, z is commonly constrained by 0 less than or equal to z less than or equal to w while x and y use the same bounds. A triangle crossing a plane is clipped into a smaller polygon; it is not discarded merely because one vertex is outside.
+
+Point labels are simpler: if their single anchor lies outside, reject or clamp the label according to the UI rule. Do not use a point-label rejection rule to reason about whether an entire triangle should render.
+
+The playground below uses one declared convention so every sign and axis has a meaning. It deliberately treats forward as positive +Z, unlike the -Z projection example above; this makes the depth control read naturally and shows why formulas cannot be separated from their coordinate convention. Move the point sideways, vertically, and through depth; then change the vertical field of view. Watch how camera-space coordinates become NDC and finally pixels. Moving a point farther away reduces its NDC displacement because the perspective divide divides by a value proportional to depth.
+
+Section: Represent the matrix.
+
+The projection routine needs three separate pieces of data: sixteen matrix values, a screen position for successful projections, and the renderer’s accepted depth range. Naming them here keeps a Direct3D depth convention from accidentally being applied to an OpenGL matrix:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+First determine whether the target stores matrices row-major or column-major. Test with a known point while the camera is stationary.
+
+There are three independent questions:
+
+are consecutive values a row or a column ( storage layout )?
+
+does the math use row or column vectors ( multiplication convention )?
+
+is the candidate already view times projection , projection times view , or one component only ( composition )?
+
+Those three interact in a way that actively hides mistakes. Transposing a matrix swaps its rows and columns, and switching between row-vector and column-vector multiplication has precisely the same effect on the arithmetic. Two wrong answers therefore cancel, and the transform appears to work — for the wrong reasons:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+What makes this hard to catch is that the easiest test cannot detect it. The identity matrix is symmetric, so transposing it changes nothing and it passes under every combination of the three choices. A camera sitting still is nearly as forgiving. A translation matrix and a 90-degree rotation matrix are not symmetric, so under a cancelled pair of mistakes they are the first things to break.
+
+Validate identity, translation, and a known 90-degree rotation together rather than repeatedly transposing until one screenshot looks plausible.
+
+Section: Transform a point.
+
+One row-major form looks like:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The positive-w rule belongs to the projection convention described above. Some pipelines use a different sign. Determine the front-facing half-space with a point known to be directly ahead. The small epsilon avoids enormous coordinates near the camera plane, but it is a policy threshold in clip-space units, not a universal constant.
+
+The midpoint calls implement:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The y flip assumes an upper-left pixel origin. OpenGL’s traditional viewport origin is lower-left, and UI/window systems commonly use upper-left. Confirm which layer the overlay draws into.
+
+Section: Depth after projection is not world distance.
+
+ndc_z is produced by the projection and perspective divide. For a perspective camera it is nonlinear with view-space distance. Two points separated by one metre near the camera can have a much larger depth-buffer difference than two points one metre apart near the far plane.
+
+Use Euclidean or view-space distance for range labels. Use projected depth to test the clip range or compare against a compatible depth buffer. Do not display ndc_z as metres.
+
+If all markers move incorrectly, the likely problem is matrix layout or coordinate conventions—not a random “scale constant.”
+
+Section: Find the matrix by behavior.
+
+A view matrix changes when the camera moves or rotates. A projection matrix changes with field of view, aspect ratio, or resolution.
+
+Search for a group of 16 floats and compare:
+
+camera still versus rotating;
+
+same camera at two resolutions;
+
+one known world point projected through a candidate.
+
+A pattern scanner may later locate the code or global pointer that produces the matrix.
+
+Candidate-matrix invariants help reject false positives:
+
+all 16 values are finite;
+
+the camera-dependent portion changes smoothly with camera movement;
+
+the projection scale changes predictably with field of view/aspect ratio;
+
+a point directly ahead projects near the center;
+
+farther points with the same direction approach the same screen coordinate;
+
+multiplying by an identity test matrix leaves a test point unchanged.
+
+Section: Read a coherent snapshot.
+
+Camera, matrix, players, and viewport size should come from roughly the same frame. If the game updates them while an external tool is reading, markers may jitter.
+
+Use one bounded read pass:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Validate every float and cap player count.
+
+“Roughly the same frame” is measurable. Attach a sequence number before and after the read when the target exposes one, and retry if it changed. Without a sequence, read the matrix twice around the entity batch and reject the sample if it changed materially. This does not create atomicity, but it detects many torn snapshots.
+
+Section: Draw only visible, valid points.
+
+A correct projection may still return None for a point behind the camera or outside the view. Build labels only from valid player snapshots whose positions survive world_to_screen; the result is a list of text and screen points that the overlay can draw without touching game memory again:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Use sanitized copied text for names. Never follow a remote string pointer indefinitely; set a byte limit and require valid encoding.
+
+Section: Use a separate window.
+
+An external transparent overlay is usually easier to reason about than calling an internal text function:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The overlay should ignore mouse input, match the target’s client area, and stop when the target closes.
+
+Match the client area, not the outer window rectangle. Borders and title bars shift the origin. DPI scaling can make logical UI units differ from physical pixels, and borderless/fullscreen modes may change which coordinate system the compositor uses. Recalculate when the window moves, resizes, changes monitor, or changes DPI.
+
+Image description: A basic offline overlay experiment
+
+Section: Reproduce the original in-game AssaultCube ESP.
+
+The world-to-screen function and separate overlay already let you test the geometry. This exact-build in-game implementation applies the detours and DLL, dynamic link library, lifecycle from Lesson 6.4 to the game’s own print path.
+
+The original 1.2.0.2 lab uses the same globals and player layout as the aimbot, plus these confirmed facts:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+For this specific virtual viewport, the experimentally calibrated projection is:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Iterate players 1..count, calculate each desired angle, and publish the projected position and name pointer into fixed atomic slots. The render hook reads those slots and calls hexadecimal 0 0 4 1 9 8 8 0 with the confirmed x, y, and text arguments. The player object owns the fixed 16-byte name field for the frame; the code never scans past that verified field while calculating its address.
+
+The overwritten bytes at hexadecimal 0 0 4 0 B E 7 E are themselves a five-byte near call to hexadecimal 0 0 4 1 9 8 8 0. The installer calculates those expected bytes, refuses an unknown build, and replaces the call with a near jump to this compiled cave:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Start with the literal text Enemy at (hexadecimal 1 0 0, hexadecimal 1 0 0) to prove the print call. Then use one bot, calibrate left/center/right, add pitch, add its name, and finally loop through all players. The finished result is the named ESP shown below.
+
+Image description: AssaultCube ESP with player name
+
+The matrix-based overlay earlier in this lesson is the more general technique. This target-specific section keeps the exact reverse-engineered internal print route so readers can reproduce the original game hack.
+
+Build and inject the course DLL, enter a local AssaultCube bot match, and press F5. Press F5 again or End to drop LocalPatch and restore the exact original call:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The entire working update loop, projection, internal x86 calling convention, cave, and installer are in assaultcube_tools.rs. The F5 worker logic is in dll.rs.
+
+Silent video demonstration: Player labels following the AssaultCube view. The original ESP recording shows labels moving with the view. Follow one label while the camera turns: a stable label requires the player position, camera state, projection, and draw location to agree each frame.
+
+Section: Debug the transform visually.
+
+Test in this order:
+
+one stationary point directly ahead;
+
+move the camera left and right;
+
+move closer and farther;
+
+test a point behind the camera;
+
+resize or change resolution;
+
+move a point across the near and far clip planes;
+
+add several entities.
+
+If a point behind the camera appears mirrored, the w rejection is missing or wrong.
+
+Section: Projecting a 3D box is not just two points.
+
+To draw a 2D rectangle around a 3D bounds, transform all eight corners of an axis-aligned box and take the min/max of the surviving screen coordinates. Two opposite corners are insufficient after rotation. If the box crosses the near plane, some corners have unusable w; a rigorous result clips its edges against the near plane before taking bounds. Simply dropping those corners can make the box collapse or jump.
+
+An oriented bounding box requires its local corners to pass through the object’s world transform first. A skeletal model may need pose-derived bounds because its rest-pose box no longer tightly encloses the animation.
+
+Section: Diagnose world-to-screen failures.
+
+Table columns: Symptom; First check.
+
+Symptom: every point mirrored horizontally; First check: x basis/handedness.
+
+Symptom: markers rotate opposite the camera; First check: view transform/inverse.
+
+Symptom: correct in center, wrong near edges; First check: projection FOV or aspect ratio.
+
+Symptom: correct at one resolution only; First check: viewport dimensions or stale aspect ratio.
+
+Symptom: fixed offset from every object; First check: client-area origin/DPI/window border.
+
+Symptom: jitter while camera or entities move; First check: incoherent snapshots.
+
+Symptom: behind-camera labels flip onto screen; First check: w sign/rejection.
+
+Symptom: labels vanish too early in depth; First check: wrong OpenGL/Direct3D depth convention.
+
+Symptom: box jumps near the camera; First check: no near-plane edge clipping.
+
+Section: Scope.
+
+Keep the observer in an offline match with bots. The transferable skill is the 3D-to-2D transformation pipeline used in editors, accessibility tools, debug HUDs, and visualization software.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/5/09/

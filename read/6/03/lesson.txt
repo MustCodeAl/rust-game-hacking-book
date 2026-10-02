@@ -1,0 +1,167 @@
+Message Parsing and Serialization
+
+Section: Parse the real Wesnoth frame.
+
+The controlled captures from Wesnoth 1.14.9 reveal this frame:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The first four bytes do not include themselves in the length. If the header ends in 4E, the following gzip member is 78 bytes and the complete TCP, transmission control protocol, payload is 82 bytes.
+
+This four-byte prefix solves a problem TCP does not solve for us: message boundaries. A TCP read might return two header bytes now and the rest later, or it might return several complete frames together. The receiver therefore accumulates bytes until it has four, interprets the advertised length, then accumulates exactly that many payload bytes.
+
+Big-endian means the most significant byte comes first. A length of 78 is hexadecimal hexadecimal 0 0 0 0 0 0 4 E, so the wire contains 00 00 00 4E. u32::from_be_bytes documents that agreement directly; shifting bytes by hand would be harder to review.
+
+The header is a claim from the sender, not permission to allocate whatever it asks for. Compare two headers followed by four bytes currently available:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Labelled memory diagram. cell 1: 00; cell 2: 00; cell 3: 00; cell 4: 04; cell 5: a; cell 6: b; cell 7: c; cell 8: d. Groups: claimed length: 4; four payload bytes. An acceptable four-byte payload: the header and available payload agree.
+
+Labelled memory diagram. cell 1: FF, highlighted; cell 2: FF, highlighted; cell 3: FF, highlighted; cell 4: FF, highlighted; cell 5: a; cell 6: b; cell 7: c; cell 8: d. Groups: claimed length: 4,294,967,295; four payload bytes seen so far. The header is structurally valid but exceeds the configured size limit. More TCP bytes could arrive; waiting for this advertised size is still unacceptable.
+
+The second header is four valid bytes, but its advertised size is not an acceptable frame for this parser. Code that allocates from that claim could request nearly four gigabytes. First reject any length above the configured maximum; only then wait for the advertised number of payload bytes, with a bounded buffer and a way to stop a stalled connection. Having only four payload bytes so far does not by itself prove a network frame is false, because TCP may deliver the rest later. After a complete frame is assembled, the parser checks its exact length before decoding it. This separates byte validation from the later question of whether the decoded chat message makes sense.
+
+Section: Keep five layers separate.
+
+A protocol message has several nested layers, and each layer has its own rule:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Each layer answers a different question. TCP delivers ordered bytes, not chat messages. Framing finds one complete compressed unit. Gzip recovers plain bytes. UTF-8 and WML give those bytes text structure. Only the game-level schema says that sender, room, and message form a chat event.
+
+This separation is a debugging tool. If the first four bytes advertise an impossible size, inspect framing. If decompression fails, inspect the wrapper and payload. If WML is malformed, inspect serialization. If valid WML is ignored by the game, inspect the expected message fields and connection state. Calling every failure a “packet problem” hides the layer that actually broke.
+
+Image description: Several controlled chat messages
+
+Section: Read with a cursor.
+
+The four-byte length at the front of the captured frame must be read before the compressed body, and every read must stop at the captured buffer’s end. A cursor pairs the borrowed bytes with the next unread position. If a read fails, the position stays where it was, so an error cannot leave a parser halfway through a claimed field:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This cursor replaces direct indexing and hopeful conversion:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Network input is allowed to be short, oversized, or malformed. Indexing panics when a boundary is wrong, and unwrap() erases the difference between bad input and a programmer bug. The cursor makes failure a normal Result, advances only after a successful bounded read, and lets the caller reject hidden trailing data after one complete frame.
+
+The lifetime 'a says every slice returned by the cursor borrows from the original input. The cursor owns only a position number; it does not copy payloads or create references that outlive the frame.
+
+take is the one place that advances parsing state. It first calculates the end with checked_add, asks the slice for a bounded range with get, and advances only after both checks succeed. This gives later field readers a simple promise: success consumes exactly the requested bytes; failure consumes nothing useful and returns an error.
+
+try_into() converts a four-byte slice into [u8; 4], the fixed-size array required by from_be_bytes. The conversion can only succeed after take(4), but keeping the error path explicit makes the invariant visible instead of using unwrap().
+
+Every read checks its boundary. Now decompress only the advertised bytes and cap the output:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+There are two separate size limits here:
+
+compressed_len limits how many bytes the parser accepts from the frame;
+
+the take(MAX_FRAME + 1) wrapper limits how many bytes decompression may produce.
+
+Both matter because a small compressed input can expand into a very large output. Reading one byte beyond the limit lets the parser distinguish “exactly at the limit” from “too large” without allocating an unbounded vector.
+
+There is a third limit outside this pure function: the connection’s accumulated input buffer. A peer could advertise a legal one-megabyte frame and then send one byte every few seconds. The stream reader needs a maximum buffered size, read timeouts or cancellation, and a policy for a connection that never finishes its frame. Parsing bounds protect completed inputs; transport bounds protect the time and memory spent waiting for them.
+
+The trailing-byte check makes this function parse one complete frame. Without it, a valid prefix could hide extra bytes that the caller mistakenly ignores. A streaming connection reader should split the stream into exact frame slices first and call this parser once per slice.
+
+Decompressing a captured chat frame reveals readable Simple WML:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+That is the actual structure we will rebuild.
+
+Simple WML is a tree-shaped text format. Bracketed tags open and close nodes; quoted assignments store fields. This lesson handles the one chat-message shape needed by our local Wesnoth proxy. If you extend the tool to inspect maps, units, or arbitrary add-on messages, use a real tokenizer that handles escaping, nested nodes, repeated fields, and comments instead of adding more substring searches.
+
+The receiver also has an expected schema, even when no formal schema file exists. That schema includes field names, allowed repetitions, value types, and which fields are required. The sender writes one version of that agreement; the receiver reads according to the version it understands.
+
+When a game update adds a field, ask two different compatibility questions:
+
+Can the new reader still understand old messages?
+
+Can the old reader safely ignore or default the new field?
+
+Those questions are not the same. A tolerant tree format may ignore an unknown optional field, but renaming a required field can break both directions. For a versioned research tool, keep captured fixtures from every supported game build and record which message shape each fixture uses instead of guessing that one parser is universal.
+
+Section: Compress and frame a real chat message.
+
+Use flate2:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+With the gzip encoder available, the next function accepts a chat field as text and rejects quotes or line breaks that would change the simple WML structure. Only validated fields go into the message before compression and length framing:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Encoding runs the decoding pipeline in reverse:
+
+validate values before placing them inside quoted WML fields;
+
+serialize the typed message into UTF-8 text;
+
+finish the gzip stream so its footer is present;
+
+convert the compressed size to u32 without truncation;
+
+reserve one vector for header plus payload;
+
+append the big-endian length and compressed bytes.
+
+Vec::with_capacity is an optimization, not a safety requirement. It avoids reallocating as the two pieces are appended. u32::try_from is a correctness requirement because as u32 could silently discard high bits for an oversized buffer.
+
+GzEncoder produces the correct gzip wrapper; a plain zlib stream is not interchangeable here. The first two compressed bytes should be 1F 8B.
+
+Gzip and zlib can both use the DEFLATE compression algorithm but wrap it in different headers and checksums. “Same compression algorithm” does not mean “same wire format.” Matching the observed wrapper is part of implementing the protocol.
+
+Section: Round-trip tests.
+
+Feed the serializer one sender and one message, then give its frame to the decoder. If the resulting WML still contains both values, the length, compression wrapper, UTF-8 text, and field quoting agree between these two functions for this case:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Also test an empty input, a truncated gzip member, an oversized length, invalid UTF-8 after decompression, extra trailing bytes, and rejected quote/newline characters.
+
+A round trip proves that the encoder produces something this decoder accepts. It does not prove compatibility by itself, because two functions could share the same mistake. Keep at least one captured fixture from the real local session and verify that the decoder accepts it. Then send an encoded message to the controlled server and confirm that another capture has the expected four-byte prefix and gzip header.
+
+Use a small failure matrix:
+
+Table columns: Test input; Expected failure.
+
+Test input: Fewer than four bytes; Expected failure: Truncated while reading the length.
+
+Test input: Length larger than remaining bytes; Expected failure: Truncated while taking the payload.
+
+Test input: Length above the cap; Expected failure: TooLarge before decompression.
+
+Test input: Valid frame plus one extra byte; Expected failure: TrailingBytes.
+
+Test input: Broken gzip checksum; Expected failure: InvalidGzip.
+
+Test input: Decompressed non-UTF-8 bytes; Expected failure: InvalidUtf8.
+
+Test input: Quote inside a simple field; Expected failure: Rejected before serialization.
+
+Image description: Comparing one changed message field
+
+The goal is not merely to make one capture parse. It is to define exactly which byte strings are accepted and how malformed data fails.
+
+The buildable protocol module is wesnoth_protocol.rs. It contains bounded frame reads, gzip encode/decode, output-size caps, strict trailing-byte checks, WML field sanitation, send_wml, encode_chat, and round-trip/error tests. Both the real chatbot and proxy import this same implementation instead of copying a shortened lesson version.
+
+Section: Read the module by responsibility.
+
+Start with the pure functions that accept and return byte vectors; they are easiest to test. Next read the exact stream functions that repeatedly call read_exact for a header and payload. Finally read send_wml, which owns the complete serialization-and-write transaction.
+
+This order keeps three kinds of failure distinct:
+
+transport failure: the socket closed or timed out;
+
+framing failure: the advertised message length was impossible;
+
+content failure: gzip, UTF-8, or WML data was invalid.
+
+Preserving those categories in error messages is part of the explanation. If everything becomes “chat failed,” a learner cannot tell whether to inspect Wireshark, the frame cursor, or the message serializer.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/6/03/

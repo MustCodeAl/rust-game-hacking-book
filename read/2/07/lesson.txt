@@ -1,0 +1,123 @@
+What a Working Detour Must Preserve
+
+This lesson follows the Terrain Description menu in offline, 32-bit Wesnoth 1.14.9. A six-byte instruction span in that path will become a temporary detour. Use x64dbg to trace every hop before automating its lifecycle in Lesson 6.4.
+
+Section: Detour vocabulary before touching bytes.
+
+A hook site is the address where normal execution is redirected. A detour is that redirection. A code cave is executable storage holding the added instructions. A return address is the first untouched instruction where normal execution resumes.
+
+Some tools use the word trampoline for a small block that replays displaced instructions and jumps back. Names vary, but every working detour must answer the same questions:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The CPU, central processing unit, has no concept of “our patch.” It only follows the instruction pointer. A single wrong length or destination sends that pointer into unrelated bytes.
+
+Section: Choose a harmless trigger.
+
+Right-click a tile and open Terrain Description to trigger this path. It gives us an easy local-menu event without changing competitive or networked behavior.
+
+Image description: The terrain-description function
+
+Pause the game and choose a hook site with enough complete instructions for a jump. Building the detour takes five facts about that site. For the exact course build they are:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The byte count comes from instruction decoding, not subtraction by guesswork. 8B 01 is the two-byte mov eax,[ecx], and 8D 74 26 00 is a four-byte lea that changes nothing and exists only as alignment padding, so the two instructions cover 2 + 4 equals 6 bytes. The return address is the first byte after them: hexadecimal 0 0 C C A F 8 A + 6 equals hexadecimal 0 0 C C A F 9 0, because hexadecimal 8 A is 8 times 16 + 10 equals 138, and 138 + 6 equals 144 equals 9 times 16 equals hexadecimal 9 0.
+
+Do not continue until the return address points to the first untouched instruction.
+
+x86 instructions have different lengths. A five-byte jump cannot safely replace the first five bytes of a six-byte instruction. The overwrite must end exactly on an instruction boundary, even when that means replacing six, eight, or more bytes and filling unused space with nop.
+
+Section: Find a suitable cave.
+
+For this historical debugger exercise, locate executable padding inside the controlled module.
+
+Image description: An empty-looking area near the end of the module
+
+“Looks empty” is enough for this one debugger experiment, not for a repeatable hook installer. A detour installed whenever the game starts should allocate its own cave, request the needed page protection, verify the hook bytes, and release or restore everything during shutdown. Here we use existing padding so you can see the control-flow idea before building that machinery in chapter 6.
+
+Section: Build the smallest detour.
+
+Start with no extra behavior:
+
+Code example. The code’s comments explain: cave; replay the complete instructions removed from the hookjmp return_address
+
+At the hook site, write a jump to the cave and fill any remaining whole bytes with nop.
+
+Image description: A jump from the hook into the cave
+
+Set breakpoints at:
+
+the hook;
+
+the first cave instruction;
+
+the return address.
+
+Trigger the menu once. You should see the breakpoints in that order. This proves the path before new logic complicates it.
+
+Section: Preserve the interrupted calculation.
+
+The hook interrupts a function in the middle of its work. Registers, flags, and stack entries may already carry values needed by later instructions.
+
+The cave must normally:
+
+save any register or flag it will change but the original code expects;
+
+run the added behavior;
+
+restore that machine state;
+
+replay the complete displaced instructions exactly once;
+
+jump to the first untouched instruction.
+
+Replaying an instruction twice is just as wrong as skipping it. Changing the stack pointer without undoing the change can make a later ret jump to garbage. These delayed failures are why a hook may appear to work once and crash later.
+
+Image description: The cave breakpoint firing
+
+Section: Add one observable change.
+
+Only after the round trip works, add a tiny change such as writing a known value to the already-identified gold field.
+
+Image description: A cave containing the test change
+
+Trigger once, observe once, and stop. If the wrong action triggers it, your hook is too broad or your model is wrong.
+
+Section: Diagnose by symptom.
+
+Table columns: Symptom; Likely place to check.
+
+Symptom: Crash before cave; Likely place to check: Hook bytes or jump destination.
+
+Symptom: Cave never runs; Likely place to check: Wrong trigger or hook not reached.
+
+Symptom: Crash after cave; Likely place to check: Saved instruction or return address.
+
+Symptom: Game acts oddly later; Likely place to check: Register, flag, or stack state was changed.
+
+Symptom: Runs more than once; Likely place to check: Trigger path or re-entry assumption.
+
+Change one variable per retry.
+
+Section: Restore the target.
+
+Before closing the debugger:
+
+pause the game;
+
+restore the hook’s original bytes;
+
+remove breakpoints;
+
+verify the original behavior;
+
+restore the VM, virtual machine, snapshot if anything is uncertain.
+
+The lasting result is your map of the detour, not the temporary patch.
+
+After this debugger-only round trip, Lesson 6.4 implements the same map in a DLL, dynamic link library,. It verifies the six bytes, replaces them with E9 rel32 90, runs a naked x86 cave, sets Wesnoth gold to 888, replays the removed behavior, jumps to hexadecimal 0 0 C C A F 9 0, and restores the bytes when disabled. The complete source is also in game_hooks.rs.
+
+Chapter 3 uses the verified addresses and types from this chapter to build an external memory tool. The DLL hook remains a later application of this same control-flow model.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/2/07/

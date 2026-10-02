@@ -1,0 +1,161 @@
+Object Layouts Across Game Updates
+
+The build manifest identifies which executable is present. It does not tell us whether an old player layout still describes that executable. That second question needs evidence from the running objects and the code that uses them.
+
+An old field offset can still point into mapped memory after an update, which makes a broken tool look plausible. To recover the layout, compare C++ object shape, vtables, container headers, pointer chains, and x86-64 field accesses against the fingerprint of the exact build. Independent clues matter more than one address that happens to return a reasonable number.
+
+Section: An offset belongs to one exact build.
+
+If one build reads health from [rcx+hexadecimal 1 3 8], the number hexadecimal 1 3 8 is true only for that build. The complete statement is:
+
+In this exact build, a method receiving the player object in rcx reads a four-byte health value at offset hexadecimal 1 3 8.
+
+An update can recompile the class with a field added, removed, or reordered, and the same offset then lands on something else. An offset therefore belongs to one exact build, and it has to be checked again after every update before it is used.
+
+The target invariant is:
+
+A layout is used only on the build and the object it was recovered from, and every field read is bounded and checked for a sensible value.
+
+Unpacked, that is four separate demands. Use an offset only on the exact build you proved it on. Use it only on an object you have confirmed is the one you meant. Never read past the end of that object. And check that the value coming back makes sense before believing it — a four-byte read that succeeds is not the same thing as a four-byte read that returned health.
+
+Section: Recover a layout from several independent checks.
+
+Diagram. From Identify exact build to Find candidate object roots. From Find candidate object roots to Collect member access instructions. From Collect member access instructions to Cluster offsets by function and width. From Cluster offsets by function and width to Apply value and relationship invariants. From Apply value and relationship invariants to Compare controlled state changes. From Compare controlled state changes to Score competing layouts. From Score competing layouts to Generate versioned reader. From Generate versioned reader to Replay regression captures.
+
+One memory scan cannot settle a structure: a four-byte 100 at some offset fits health, ammunition, or a coincidence equally well. Static access patterns, runtime value transitions, object identity, and relationships among fields each rule out different wrong answers, so a layout is accepted only where they agree.
+
+Section: Build an offset table.
+
+Suppose several methods access one candidate object:
+
+Table columns: Offset; Width; Access pattern; Runtime observation; Candidate meaning.
+
+Offset: hexadecimal 0 8; Width: 8; Access pattern: indirect call through loaded pointer; Runtime observation: points into read-only module data whose entries point into executable code; Candidate meaning: vtable pointer.
+
+Offset: hexadecimal 3 0; Width: 12; Access pattern: three adjacent float loads; Runtime observation: changes with movement; Candidate meaning: position vector.
+
+Offset: hexadecimal 4 8; Width: 4; Access pattern: float compare against zero; Runtime observation: changes with view rotation; Candidate meaning: yaw or pitch candidate.
+
+Offset: hexadecimal 1 3 8; Width: 4; Access pattern: subtract, clamp, store; Runtime observation: follows damage and healing; Candidate meaning: health candidate.
+
+Offset: hexadecimal 1 3 C; Width: 4; Access pattern: upper bound for previous field; Runtime observation: stable per entity class; Candidate meaning: max-health candidate.
+
+The relationship 0 less than or equal to health less than or equal to max_health is stronger than “both numbers look reasonable.” The clamp that stores health at hexadecimal 1 3 8 reads its upper bound from hexadecimal 1 3 C, so one instruction sequence ties the two candidates together and each supports the other.
+
+Section: Distinguish identity from shape.
+
+Two objects can have similar bytes but different roles. Validate identity with several signals:
+
+vtable pointer falls inside the module’s expected read-only data section, and several entries reached through it fall inside executable code;
+
+entity ID matches the manager entry used to reach the object;
+
+generation changes when the slot is reused;
+
+position is finite and within broad world bounds;
+
+health relationships hold;
+
+repeated methods use the same object pointer.
+
+A shape check says bytes resemble a player. An identity check says this is the player object reached through the expected ownership path in this snapshot.
+
+Section: Represent uncertainty in the recovered type.
+
+LayoutV42 is metadata in the analysis tool, not a struct read directly from the game. Its usize fields are candidate byte offsets for one exact build. The separate Confidence value records how much independent evidence supports each candidate.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Generated metadata stores the confidence level beside each numeric offset, together with the accesses and value transitions that earned it, so a Candidate never becomes a trusted field just because it has a convenient name.
+
+Section: Migrate after an update by matching behavior.
+
+When a new build moves fields:
+
+fingerprint the new executable and symbols that remain available;
+
+locate the same behavioral function through call relationships or a carefully versioned pattern;
+
+collect member accesses again instead of adding a constant to every offset;
+
+replay the same controlled game transitions;
+
+rebuild the offset table;
+
+compare field relationships, not just individual values;
+
+create a new layout record and keep the old record immutable;
+
+run captured-snapshot regression tests for both builds.
+
+As a flow:
+
+Diagram. From fingerprint the new build to find the same behavioralfunction again. From find the same behavioralfunction again to collect member accesses again(not: add a constant offset). From collect member accesses again(not: add a constant offset) to replay the same controlledgame transitions. From replay the same controlledgame transitions to rebuild the offset table. From rebuild the offset table to compare field relationships. From compare field relationships to new immutable layout record. From new immutable layout record to regression test both builds.
+
+Step 3 deserves emphasis, because the tempting shortcut is to diff two known offsets and add that difference to all the others. Layouts do not move like that. A field inserted in the middle shifts everything after it and nothing before it, and alignment can absorb part of the shift:
+
+Labelled memory diagram. hexadecimal 3 0: position; hexadecimal 4 8: yaw; hexadecimal 1 3 8: health; hexadecimal 1 3 C: max_health; hexadecimal 1 5 0: entity_id. Build 41: five fields at their original offsets.
+
+Labelled memory diagram. hexadecimal 3 0: position; hexadecimal 4 8: yaw; hexadecimal 5 0: team (new), highlighted; hexadecimal 1 4 0: health, highlighted; hexadecimal 1 4 4: max_health, highlighted; hexadecimal 1 5 8: entity_id, highlighted. Build 42: inserting team at hexadecimal 5 0 pushes every later field down by 8 bytes. position and yaw, both before the insertion, do not move at all.
+
+Nothing here moved by one constant. Two fields did not move at all, one appeared, and the rest shifted by the size of the insertion. A tool that added +8 everywhere would read position eight bytes into the wrong place and report numbers that still look like perfectly plausible coordinates.
+
+Compiler optimization can split, inline, reorder, or eliminate accesses. A missing old pattern does not prove the underlying concept disappeared.
+
+Section: Reject partial reads and impossible layouts.
+
+A reader should validate the whole requested field range before interpreting bytes. Use checked addition for base + offset, enforce maximum object size, and reject unreadable page crossings. Decode into local values; do not create a reference whose lifetime pretends remote bytes belong to the current process.
+
+Validation should reject:
+
+non-finite vectors;
+
+health greater than max_health when the game model forbids it;
+
+a vtable pointer outside expected read-only module data, or initial entries that do not point into an expected executable code section;
+
+duplicate live entity IDs in one snapshot;
+
+generation changes during a multi-field read;
+
+an unsupported build rather than falling back to the nearest known layout.
+
+Section: Score candidates without hiding the reasons.
+
+A score helps rank candidates but does not replace the underlying facts:
+
+Table columns: Check; Example weight.
+
+Check: Controlled health transition matched; Example weight: +4.
+
+Check: Damage function stores at offset; Example weight: +3.
+
+Check: Range relation with max health holds; Example weight: +2.
+
+Check: Offset merely contains a plausible number; Example weight: +1.
+
+Check: Generation changed during read; Example weight: reject.
+
+Check: Build identity unknown; Example weight: reject.
+
+The score is stored with the list of checks that produced it, so a high score can be audited.
+
+Section: Glossary terms introduced here.
+
+Layout: the byte positions and interpretation of fields in an object.
+
+Shape check: validation that bytes have a plausible structure.
+
+Identity check: validation that the object is the intended instance.
+
+Generation: a counter distinguishing reuse of the same storage slot.
+
+Cross-validation: confirming a field with independent checks, such as an access pattern, a value transition, and a range relation, that all agree.
+
+Build fingerprint: stable data used to identify one exact binary version.
+
+An old offset is a hypothesis about a new build, not a migrated layout. Recover the new object’s fields from its access patterns and relationships, check its shape and identity, and keep the evidence beside each confidence score. That record shows which uncertainty remains when the build changes again.
+
+Build identity and a recovered layout tell us what a read would mean. They do not grant permission to perform it. The next lesson follows the access rights on the Windows handle that lets a tool reach another process.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/13/06/

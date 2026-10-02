@@ -1,0 +1,135 @@
+Call Frames, Closures, and Upvalues
+
+Section: A VM, virtual machine, call needs bookkeeping.
+
+When one Lua function calls another, the interpreter must remember where the caller continues, where its local values live, which function is running, and where results should go. That record is a call frame.
+
+This is the virtual machine’s version of the call-stack idea from the assembly chapter. The CPU, central processing unit, still has a real native stack underneath, but Lua call frames describe Lua execution.
+
+Section: One value stack can hold many frames.
+
+A VM can keep values in one vector and let each frame own a range:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Labelled memory diagram. index 0: caller's local 0; index 1: caller's local 1; base 2 to : callee's local 0, highlighted; index 3: callee's local 1 (top), highlighted. Groups: caller's frame, base equals 0; callee's frame, base equals 2. For example, one shared value stack holding two frames. base marks where each frame's locals start, so a bytecode operand like local slot 1 means base + 1 in this one vector, never a raw index into another frame.
+
+base says where this function’s local area begins. Bytecode operands can refer to base + local_index rather than carrying raw pointers into the vector.
+
+Lua allows multiple return values, so a caller may request an exact number or accept all produced results. Missing results become nil; unwanted extras can be discarded.
+
+Section: A closure is code plus captured surroundings.
+
+Consider:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The returned function keeps using count after make_counter has returned. count is an upvalue: a captured variable from an enclosing scope.
+
+While the outer frame is active, an upvalue may refer to its live stack slot. Before that frame disappears, the interpreter must move or “close” the value into storage owned by the closure. Otherwise the closure would keep an invalid stack location.
+
+Section: Open and closed upvalues.
+
+An implementation can model the two states explicitly:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Several closures may capture the same local, so they must share one upvalue cell. If each closure copies the number independently, updates will disagree and the Lua behavior will be wrong.
+
+Follow make_counter through with slot numbers and it stops being abstract. Say its frame gets base equals 3, so its single local count lives in stack slot 3:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+“Open” and “closed” are just those two rows: while the frame lives the upvalue is a slot number, and afterwards it is a value in a cell. The identity never changes — it is the same count throughout — only where it is stored.
+
+That distinction predicts a specific bug. Hand the same count to two closures, then close it by copying the value into each one rather than sharing one cell. Call the first closure twice and the second once, and you get 1, 2, and then 1 again, because the second closure incremented its own private copy. Sharing the cell is what makes the third call return 3, which is the behaviour Lua actually promises.
+
+The captured value changes location without changing its identity:
+
+Diagram. From make_counter() frame, base equals 3 to stack slot 3 equals 0 (count). From stack slot 3 equals 0 (count) to upvalue equals Open { stack_index: 3 }. From upvalue equals Open { stack_index: 3 } to make_counter() returns. From make_counter() returns to upvalue equals Closed(0)(count now lives in its own cell). From upvalue equals Closed(0)(count now lives in its own cell) to Closure A reads/writes the cell. From upvalue equals Closed(0)(count now lives in its own cell) to Closure B reads/writes the same cell.
+
+Both closures keep referring to one shared cell after the original stack frame is gone.
+
+This is a useful ownership lesson: the local starts inside one frame, escapes, becomes shared state, and outlives its original scope.
+
+Section: Host callbacks look like VM functions at the boundary.
+
+When mlua registers game.log, it builds a callable Lua value backed by a host closure. The boundary must:
+
+check the Lua argument count and types;
+
+convert them to host values;
+
+call the host function;
+
+convert success values back to Lua;
+
+turn host errors into Lua errors with context;
+
+avoid letting a panic cross the language boundary.
+
+The callback should be short and bounded. A Lua instruction budget cannot interrupt arbitrary blocking work performed inside native host code.
+
+The Lua C API, application programming interface, makes this boundary concrete with an indexed value stack. A native callback reads arguments from stack slots, validates them, pushes return values, and reports how many it returned. mlua wraps much of that protocol, but stack balance and error conversion still exist underneath:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Treat a host callback like a small parser. Specify accepted types and ranges, reject invalid input before side effects, and return an error in the form the runtime expects. A panic or native exception must not cross a C ABI, application binary interface, boundary uncontrolled.
+
+Section: Re-entrancy adds nested host and VM call frames.
+
+A host callback may call Lua again, which may call another host function. This is re-entrancy. The host needs a clear policy for locks and mutable game state.
+
+Diagram labels, in drawing order: Host callback B; Lua (frame 2); Host callback A; Lua (frame 1); calls a host function; calls back into Lua; calls another host function; returns.
+
+Avoid holding a mutable engine lock while executing unknown script code. Give Lua a copied snapshot, collect typed requests, return to the host, and then validate and apply them. That architecture from earlier lessons also prevents complicated nested borrows.
+
+Section: Debug a function call in layers.
+
+When a script call behaves incorrectly, record:
+
+bytecode instruction and VM instruction pointer;
+
+active function and call-frame base;
+
+argument slots and their value tags;
+
+requested result count;
+
+open upvalues and the stack slots they reference;
+
+host callback name and converted arguments;
+
+final Lua error chain.
+
+Do not print secrets or entire game snapshots by default. A debugger can be useful without becoming a data leak.
+
+Section: Build understanding in stages.
+
+The original mini_vm lab intentionally stops before functions. Extend a copy in this order:
+
+add named local slots;
+
+add Call and Return instructions;
+
+introduce a CallFrame stack;
+
+support an exact result count;
+
+add function constants;
+
+capture one read-only upvalue;
+
+close it when the outer frame returns;
+
+share one mutable upvalue between two closures;
+
+add recursion and enforce a maximum frame depth.
+
+Each stage should have a failing test before it gets more features. A small verified interpreter teaches more than a large VM whose stack rules are guesses.
+
+The detailed implementation path in Build a Lua Interpreter in Rust is useful further reading for functions and closure escape. Keep your own code original, compare observable behavior with the official Lua manual, and treat the reference implementation as a guide to questions—not a source to paste from.
+
+The VM explains how a script keeps state and reaches a host callback. It does not decide whether that callback’s requested game action is valid. A copied snapshot can grow stale while Lua runs; another script or input path may reach the same effect. Chapter 11 returns to the Windows process that hosts both the game and its scripts, identifying its build, modules, memory regions, and thread state before later chapters inspect deeper trust boundaries.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/12/09/

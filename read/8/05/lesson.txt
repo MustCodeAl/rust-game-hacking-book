@@ -1,0 +1,193 @@
+Parallel Scanning and Stable Snapshots
+
+This is an optional performance study after the chapter’s pattern scanner, memory scanner, and debugger. None of them requires multiple workers. Lesson 5.4 searched one copied code range at a time; here we keep its matching rule and change only how several stable ranges are searched. That separates the concurrency question from whether a byte pattern really identifies the intended instruction.
+
+Section: Divide the scan into independent ranges.
+
+The simple pattern scanner is intentionally single-threaded. Its next advanced step is not “put every Windows call on a thread.” The safe boundary is:
+
+Diagram. From Windows process to Immutable local snapshots. The connection is labelled: one bounded copy per region. From Immutable local snapshots to Worker 1. From Immutable local snapshots to Worker 2. From Immutable local snapshots to Worker N. From Worker 1 to Merge. From Worker 2 to Merge. From Worker N to Merge. From Merge to Sort, deduplicate, require one.
+
+Only the capture phase touches the running Wesnoth process. Workers scan ordinary Vec<u8> buffers owned by the scanner.
+
+That separation improves more than speed:
+
+a page cannot disappear halfway through a worker comparison;
+
+workers do not share a process handle;
+
+the matching algorithm uses checked local slices;
+
+captured bytes can be saved and replayed in tests;
+
+concurrency begins after the unstable operating-system boundary.
+
+Section: Check both safety and progress.
+
+Concurrent code needs two different kinds of promises:
+
+safety asks, “What bad result must never happen?”
+
+progress asks, “What useful ending must eventually happen?”
+
+For this scanner:
+
+Table columns: Promise; Concrete game-tool rule.
+
+Promise: safety; Concrete game-tool rule: no worker reads changing remote memory.
+
+Promise: safety; Concrete game-tool rule: the global result cap is never exceeded.
+
+Promise: safety; Concrete game-tool rule: a found address stays inside its copied region.
+
+Promise: progress; Concrete game-tool rule: every worker eventually sees cancellation or an empty work queue.
+
+Promise: progress; Concrete game-tool rule: the main thread joins every worker before publishing results.
+
+Promise: progress; Concrete game-tool rule: one worker panic becomes an error instead of an endless wait.
+
+“Uses atomics” is not a complete concurrency argument. Name which safety fact each atomic protects and which condition lets each loop finish.
+
+Section: Copy only the intended code.
+
+The capture stage clips every Windows memory run to the live wesnoth.exe module and keeps only readable executable pages:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The real tool also caps all copied executable bytes at 128 MiB. Memory safety prevents corruption, but it does not prevent a logically unbounded allocation from exhausting the machine.
+
+If a page changes between VirtualQueryEx and ReadProcessMemory, that one region is skipped with a diagnostic. A partial buffer never reaches a worker.
+
+Section: Use an atomic index as a tiny work queue.
+
+Each worker asks for the next region number:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+No region is handed out twice. When the index passes the slice, the worker finishes.
+
+Diagram labels, in drawing order: next_region (AtomicUsize); Worker 2; Worker 1; Each index is handed out exactly once,; to whichever worker asks first.; fetch_add(1); 0; 1; 2.
+
+Fetching the next index when a worker becomes free is dynamic scheduling. It is better than permanently giving worker 1 the first quarter of regions and worker 2 the second quarter: a worker that receives several tiny regions can continue helping while another scans a large one.
+
+Region sizes can still be badly uneven. If measurement later justifies splitting one large snapshot into fixed-size chunks, adjacent chunks must overlap by pattern.len() - 1 bytes or a pattern crossing the boundary can disappear. The merge step must then remove duplicate addresses from the overlap. Faster scheduling is not correct if it creates blind spots.
+
+Why not create one thread per region? A module can contain many runs, and thread creation itself costs memory and scheduling time. The tool uses at most available_parallelism() workers and never more workers than snapshots.
+
+Section: Bound results across every worker.
+
+A weak pattern can match thousands of locations. A per-thread limit is not enough: eight workers with a 4,096-item limit could still produce 32,768 items.
+
+With a toy global cap of three, suppose worker 1 has recorded two matches and worker 2 finds two more. Both cannot simply read “2 of 3 used” and then append: that would publish four. Each must reserve one slot through the shared counter; only one of worker 2’s two matches can obtain the remaining slot. This is the safety promise in the table above. Cancellation is the separate progress promise: workers stop scanning once no more slots can be reserved.
+
+The scanner reserves each result through one atomic counter:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+fetch_update performs “check below cap and increment” as one atomic operation. When the cap is full, the worker sets a shared cancellation flag. Other workers notice and stop.
+
+Diagram. From worker finds a match to reserve_match:counter less than MAX_MATCHES?. From reserve_match:counter less than MAX_MATCHES? to record the address. The connection is labelled: yes, fetch_update succeeds. From reserve_match:counter less than MAX_MATCHES? to cancelled.store(true, Release). The connection is labelled: no, cap already reached. From cancelled.store(true, Release) to every worker checkscancelled.load(Acquire)and stops.
+
+The memory ordering communicates two small state transitions:
+
+Release publishes cancellation;
+
+Acquire makes another worker observe that published state.
+
+The bytes themselves need no mutex or atomic because they are immutable.
+
+Section: Restore deterministic output.
+
+Thread completion order changes from run to run. Addresses should not:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Sorting after the merge makes logs, tests, and human review repeatable. Deduplication is defensive; clipped memory regions should not overlap, but downstream correctness should not depend on that hope.
+
+The same design works for an offline archive or asset scanner: first collect bounded, immutable input chunks, let workers inspect separate chunks, then apply one global output limit and sort results. The game-specific part here is the capture boundary, where bytes come from a changing process.
+
+This distinction matters:
+
+parallel execution order may vary;
+
+published result order should be stable.
+
+Section: Complete buildable tool.
+
+Additional detail: Complete lab source: parallel_pattern_scanner.rs.
+
+Code example. The code’s comments explain: 🔀 Remote memory is copied before parallel work begins. Workers receive // immutable local slices, so no process handle or changing page is shared. let mut matches equals thread::scope(|scope| to anyhow::Result<Vec<usize>> { let mut workers equals Vec::new(); for _ in 0..worker_count { let snapshots equals &snapshots; let next_region equals &next_region; let match_count equals &match_count; let cancelled equals &cancelled; workers.push(scope.spawn(move || to anyhow::Result<Vec<usize>> { let mut local equals Vec::new(); loop { if cancelled.load(Ordering::Acquire) { break; } let index equals next_region.fetch_add(1, Ordering::AcqRel); let Some(region) equals snapshots.get(index) else { break; };
+
+The source is also available as parallel_pattern_scanner.rs.
+
+Section: Build and run it.
+
+Start the exact 32-bit Wesnoth 1.14.9 course build in a local match:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The tool searches for the verified gold-subtraction bytes:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A supported build should produce one address. Zero means the build, capture, or signature assumption is wrong. More than one means the signature is ambiguous. Parallelism does not change what those counts mean.
+
+Section: Measure before claiming a speedup.
+
+Parallel scanning has fixed costs:
+
+copying the process is still sequential;
+
+creating workers costs time;
+
+a three-byte pattern is cheap to compare;
+
+merging and sorting remain;
+
+small modules may fit in cache and finish faster on one thread.
+
+Measure the capture and scan phases separately with Instant. If capture dominates, adding workers cannot solve that bottleneck. This is Amdahl’s law: total speedup is capped by the fraction of the work that stays serial, no matter how many workers you add to the rest. Concretely, if capture takes 80 percent of the run and scanning the other 20 percent, parallelizing the scan perfectly still only shrinks that 20 percent. Ten workers cannot beat roughly a 1.25x overall speedup, because the 80 percent you didn’t parallelize is still there.
+
+For course-sized modules, the architecture lesson is more important than the benchmark number.
+
+Section: Failure cases to test.
+
+Create local byte buffers and verify:
+
+a match at the first and last legal offsets;
+
+no match;
+
+overlapping matches;
+
+more matches than the global cap;
+
+one empty snapshot list;
+
+a base address whose base + offset would overflow;
+
+worker panic reporting;
+
+sorted output across repeated runs.
+
+Do these tests without a game process. Only the small capture layer requires Windows and Wesnoth.
+
+Section: What makes the parallel result trustworthy.
+
+The finished scanner relies on five linked properties:
+
+copying process bytes first gives workers stable local input;
+
+one global match cap bounds the total result, regardless of worker count;
+
+cancellation stops unnecessary work after the cap is reached;
+
+sorting makes the returned address order reproducible;
+
+one unique match still needs semantic verification before use, however fast the scan ran.
+
+Chapter 6 starts from that verified site and asks how a small DLL, dynamic link library, can enter a supported process, redirect one call, and restore the original path.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/8/05/

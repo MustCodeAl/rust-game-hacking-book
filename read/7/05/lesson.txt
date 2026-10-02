@@ -1,0 +1,231 @@
+Memory Regions and Value Scanning
+
+Section: The scanner pipeline.
+
+The pattern scanner in Lesson 5.4 searched executable bytes for a known instruction shape. The first gold scan from Chapter 1 asked a different question: “Which readable data locations currently hold the visible value 100?” A memory scanner answers that question by collecting candidates, then checking which of those same addresses follow the gold as it changes to 85 and 92.
+
+That difference determines the pipeline. We describe readable memory, copy bounded chunks, interpret four bytes as a value, and retain only candidates that follow the controlled change:
+
+Diagram. From Enumerate regions to Keep readable data. From Keep readable data to Copy bounded chunks. From Copy bounded chunks to Decode typed values. From Decode typed values to Store candidate addresses. From Store candidate addresses to Filter with the next scan.
+
+The Windows calls are only the outer shell. Candidate filtering uses checked local slices.
+
+🔎 A filter pass re-reads only the addresses already on the candidate list, so it can remove candidates but never add them. If the list grows, the program rescanned memory instead of filtering; if it stops shrinking, check the value type, the range, and the filtering rule.
+
+Section: What the scanner is searching.
+
+A process does not own one giant, equally readable byte array. Windows divides its virtual address space into pages and reports neighboring pages with similar state as regions.
+
+Table columns: Region fact; Question it answers.
+
+Region fact: State; Question it answers: Is this address range committed, reserved, or free?.
+
+Region fact: Protection; Question it answers: Can the target read, write, or execute it? Is it guarded?.
+
+Region fact: Base address; Question it answers: Where does the region begin?.
+
+Region fact: Region size; Question it answers: Where must the region walk advance next?.
+
+VirtualQueryEx describes these facts; it does not copy the target bytes. ReadProcessMemory performs the copy later. Keeping “describe” and “read” as separate steps makes failures easier to explain.
+
+A number such as 100 is also not self-identifying. The bytes 64 00 00 00 represent 100 only when interpreted as a little-endian u32. The same four bytes can be part of a pointer, an instruction, a larger number, or unrelated data. That is why the first scan returns candidates rather than an answer.
+
+Section: Repeated scans are set intersection.
+
+Imagine the first scan finds 40,000 addresses containing 100. You spend 15 gold and scan for 85. Most unrelated addresses do not make that exact transition, so perhaps 18 survive. Earn 7 gold and scan for 92; perhaps one remains.
+
+Diagram. From all readable addresses to 40,000 candidates. The connection is labelled: scan: value equals 100. From 40,000 candidates to about 18 candidates. The connection is labelled: value became 85. From about 18 candidates to 1 candidate. The connection is labelled: value became 92.
+
+Each scan keeps only the addresses that already survived every earlier one — the candidate set only shrinks.
+
+The scanner never rescans the whole process after the first pass. It re-reads only the surviving addresses. This makes later passes faster and preserves the history needed for filters such as increased, decreased, changed, and unchanged.
+
+Section: How the work grows.
+
+How much faster is worth working out, because the same reasoning decides whether any tool feature is usable. Suppose the game has 400 MiB of readable memory and each candidate is a 4-byte value:
+
+Table columns: Pass; What it reads; Bytes read.
+
+Pass: first scan; What it reads: every readable byte: 400 times 1,048,576; Bytes read: 419,430,400.
+
+Pass: second scan; What it reads: 40,000 candidates times 4 bytes; Bytes read: 160,000.
+
+Pass: third scan; What it reads: 18 candidates times 4 bytes; Bytes read: 72.
+
+The second pass reads about 2,600 times less than the first (419,430,400 divided by 160,000 approximately 2,621), and it no longer depends on how big the game is at all, only on how many candidates survived.
+
+The first scan’s cost grows in step with its input: give the game twice the memory and the scan reads twice the bytes. Programmers write that as O(n), read “order n”, where n is the size of the input. Some costs do not grow at all: finding one candidate’s previous value in a hash table keyed by address takes about the same time with 40 candidates or 40,000, as Lesson 3.6 explains. That is O(1) on average: hashing one address chooses a bucket instead of reading the entire candidate list. Collisions and a badly overloaded table can make individual lookups slower, so this is not a promise of identical timing. And a loop inside a loop multiplies. Comparing every one of the 40,000 candidates with every other takes 40,000 times 40,000 equals 1,600,000,000 comparisons, 40,000 times the work of reading the list once, and doubling the candidates makes it four times worse. That is O(n²). Before adding a scan feature, ask what happens to the work when the memory or the candidate list doubles.
+
+Section: Describe readable regions.
+
+VirtualQueryEx describes ranges of a target process, but the scanner needs only a few facts from each Windows structure. This local record holds the range and the permission decisions without pretending that its bytes are already available to read:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This struct is a local description, not a view into the remote process. base and size are integers because a normal local reference cannot borrow memory owned by another process. The Boolean fields are decisions already derived from Windows protection flags, so the scanning loop does not need to repeat bit-mask logic.
+
+Use VirtualQueryEx to walk the target’s virtual address space. Keep only committed regions with readable protection, and skip guard or no-access pages.
+
+Advance with checked math:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The progress check prevents an infinite loop if Windows or a wrapper ever reports a zero-sized region. checked_add treats address overflow as an error instead of wrapping from the top of the address space back to zero.
+
+Section: Scan copied chunks.
+
+Suppose the visible gold value is 1,000. The number becomes four little-endian bytes, E8 03 00 00, and the scan compares that byte pattern with each four-byte window in a copied chunk. Its base argument is the target address where that copied chunk began, so a match at local offset 12 becomes target address base + 12:
+
+Code example. The code’s comments explain: 🔍 Overlapping windows allow unaligned values; enumerate supplies the // local offset that is translated back to a remote virtual address. bytes.windows(needle.len()) .enumerate() .filter_map(|(offset, window)| { (window equals needle) .then(|| base.checked_add(offset)) .flatten() }) .collect()}
+
+For an aligned-only scan, step by four. For a general scan, windows(4) checks every byte offset.
+
+wanted.to_le_bytes() creates the exact four-byte representation used by the 32-bit Windows course games. .windows(4) yields overlapping four-byte slices, so a value may start at any byte. When a match appears, base + offset translates the local slice position back into the target’s virtual address.
+
+The complete program reads 1 MiB chunks. Adjacent chunks overlap by three bytes because a four-byte value can begin in the final three positions of the earlier chunk. Without that overlap, a value split across the boundary would never exist in either local buffer as a complete four-byte window.
+
+Labelled memory diagram. A[end minus 3]: E8, highlighted; A[end minus 2]: 03, highlighted; A[end minus 1]: 00, highlighted; B[0]: 00, highlighted. Groups: the u32 value 1,000 (bytes E8 03 00 00), split across the boundary. For example: if the value 1,000 begins three bytes before the end of chunk A, three of its bytes are the last bytes read into chunk A's buffer and the fourth is the first byte of chunk B's buffer. The 3-byte overlap gives the scanner one buffer where a complete u32 window still exists.
+
+Section: Keep candidate values.
+
+After the first pass, the important fact is no longer only where a value was found. The next pass must compare a new read with the previous read at that same address. Store both together, then make the possible comparisons named choices:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Filter by re-reading each candidate:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The enum replaces a stringly typed filter:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A misspelled string silently behaves like an unknown filter. An enum can contain only supported states, and an exhaustive match makes the compiler point out every place that needs updating when a new filter is added. Passing &Filter borrows the rule because the comparison does not need to consume or copy it.
+
+Update previous for candidates that survive.
+
+The Filter enum makes every supported relationship explicit. A string such as "decreased" could be misspelled and discovered only at runtime; an enum lets the compiler force every match to handle each case. previous belongs beside the address because “changed” always compares two reads of the same candidate.
+
+Section: Expect regions to disappear.
+
+The target can free or change a region between enumeration and reading. Treat an unreadable candidate as removed, not as a reason to crash the scan.
+
+This is a normal race, not necessarily a bug. Between the region query and the read, the game can free an allocation, change its protection, or exit. The scanner’s snapshot is always slightly behind the running process. A robust tool reports skipped work and continues with the candidates it can still read.
+
+Return a scan report:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Section: Bound the work.
+
+Set limits for:
+
+maximum region size per read;
+
+chunk size, such as 1 MiB;
+
+total candidates;
+
+total scan time;
+
+supported value types.
+
+A scan for a common value such as zero can produce millions of matches. Refuse or require a narrower range rather than exhausting memory.
+
+Limits are correctness rules:
+
+a chunk limit bounds each allocation and Windows copy;
+
+a region limit avoids one suspicious mapping monopolizing the scan;
+
+a candidate limit bounds local memory and later re-read time;
+
+an output limit keeps the terminal usable;
+
+a time or cancellation limit gives control back to the learner.
+
+Without these limits, perfectly memory-safe code can still make an unusable program.
+
+Section: Guard writes.
+
+Finding one candidate is still an observation, not permission to replace it. The game may have changed the value since the last scan. This final write checks the exact address and previous value immediately before changing four bytes; a mismatch returns an error and leaves memory alone:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Diagram. From read current valueat candidate.address to current equals candidate.previous?. From current equals candidate.previous? to write replacement. The connection is labelled: yes. From current equals candidate.previous? to refuse:value changed since the last scan. The connection is labelled: no.
+
+The UI should show the old and new value and require an explicit action.
+
+The second read closes a time-of-check/time-of-use gap. The candidate matched during the last filter, but the game kept running afterward. If the current value no longer equals candidate.previous, the address may be stale or the rule may have changed; the write must stop rather than overwrite newer state.
+
+Image description: A simple memory-scanner interface
+
+Section: Separate types.
+
+Use a trait or enum for u8, u16, u32, i32, and f32 rather than casting everything to one type. Float searches need special handling for NaN and approximate comparisons.
+
+Start with one type and make it correct. A small scanner with clear errors is a stronger project than a giant clone with undefined behavior.
+
+For floating-point scans, exact byte equality is sometimes useful and sometimes misleading. NaN does not equal itself, -0.0 and 0.0 compare equal despite different bit patterns, and visible decimal text may round the stored value. A future ValueKind should state whether it compares bits, exact numeric values, or values within a tolerance.
+
+Section: Run the complete scanner.
+
+Start one supported course game with a value you can change visibly—for example, gold in Wesnoth—and run:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Change the value in the game, press Enter, and type the new value. The scanner re-reads only surviving addresses. If one remains, it offers one guarded replacement and first confirms the value has not changed again.
+
+The full program is memory_scanner.rs. It uses VirtualQueryEx, skips unreadable or oversized regions, reads at most 1 MiB per chunk, adds a three-byte overlap so a u32 cannot hide across a chunk boundary, caps candidates at 250,000, handles disappearing regions, and prints at most 25 results.
+
+Diagram. From for region in process.regions(...) to region.readable andregion.size within MAX_REGION_SIZE?. From region.readable andregion.size within MAX_REGION_SIZE? to for region in process.regions(...). The connection is labelled: no. From region.readable andregion.size within MAX_REGION_SIZE? to read_bytes in CHUNK_SIZE windows,+3 byte overlap. The connection is labelled: yes. From read_bytes in CHUNK_SIZE windows,+3 byte overlap to bytes.windows(4) equals initial.to_le_bytes()?. From bytes.windows(4) equals initial.to_le_bytes()? to candidates.push(address). The connection is labelled: match. From bytes.windows(4) equals initial.to_le_bytes()? to read_bytes in CHUNK_SIZE windows,+3 byte overlap. The connection is labelled: no match. From candidates.push(address) to print candidates.len()after the first scan. From print candidates.len()after the first scan to wait for the new value,then candidates.retain(...). From wait for the new value,then candidates.retain(...) to candidates.len() equals 1?. From candidates.len() equals 1? to guarded write:re-check, then write_u32. The connection is labelled: yes. From candidates.len() equals 1? to ask to narrow further. The connection is labelled: no.
+
+Additional detail: Complete lab source: memory_scanner.rs.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Read the source as two different jobs. The first half discovers possible addresses in bounded chunks. The second half re-reads only those addresses after you change the game value. Keeping those jobs separate is what turns millions of raw bytes into a short, testable list.
+
+Section: Walk through one run.
+
+Suppose Wesnoth displays 100 gold:
+
+The program parses wesnoth.exe and 100 before opening anything.
+
+Process::open_by_name(..., true) requests the additional write right only because this lab may offer a final guarded write.
+
+The region loop skips unreadable, empty, and oversized ranges.
+
+Each chunk is copied. Failed reads abandon only that changing region.
+
+Matching local windows become target addresses until the candidate cap is reached.
+
+You change gold normally and enter the new visible value.
+
+retain removes every address that cannot be read or no longer matches.
+
+Only one survivor unlocks the optional replacement prompt.
+
+The program re-reads that survivor immediately before writing.
+
+This ordering explains why the program is more than a ReadProcessMemory loop. Its real job is maintaining trustworthy candidate state while the target keeps changing.
+
+Section: Diagnose by phase.
+
+Table columns: Symptom; Phase to inspect.
+
+Symptom: Zero first-pass candidates; Phase to inspect: Value type, endianness, range permissions, or target build.
+
+Symptom: Candidate cap reached; Phase to inspect: Initial value is too common; start from a less common value.
+
+Symptom: Good first pass, zero second pass; Phase to inspect: Entered value, timing, or a value stored in another representation.
+
+Symptom: Read failures grow rapidly; Phase to inspect: Target exited or memory layout changed during the scan.
+
+Symptom: One address survives but write is refused; Phase to inspect: The value changed after filtering; scan again.
+
+The refusal cases are successful safety behavior. They stop the program from writing to an address whose last read is out of date.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/7/05/

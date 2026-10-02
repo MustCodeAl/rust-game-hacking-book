@@ -1,0 +1,107 @@
+Named Pipes and Local Message Framing
+
+Section: A named pipe is a local client/server channel.
+
+Shared memory in Lesson 8.7 gave two programs views of the same bytes, but a concurrent writer needed an additional timing agreement. For one request followed by one reply, a named pipe gives us a connection with an explicit read/write order.
+
+A named pipe server creates a known pipe name and waits. A client opens that name. After they connect, both sides can exchange bytes through ordinary Windows read and write calls.
+
+This resembles a tiny network service, but the lab keeps both programs on the same Windows machine:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Named pipes are useful when a supported game plug-in, launcher, capture helper, or your own engine build needs to talk to a separate tool without sharing raw pointers.
+
+One bounded exchange has a clear beginning, two validated messages, and a clear end:
+
+Diagram. From Server creates local pipe to Client opens the pipe. From Client opens the pipe to Connection completes. From Connection completes to Client sends framed request. From Client sends framed request to Server validates request. From Server validates request to Server sends framed reply. From Server sends framed reply to Both sides close handles.
+
+The pipe transports bytes; the frame format supplies the length and validation rules that make those bytes meaningful to both programs.
+
+🔌 IPC idea: define a small message format instead of sharing addresses. Each process keeps ownership of its own memory and exchanges bounded copies.
+
+Section: Message mode preserves write boundaries.
+
+Windows pipes can operate in byte mode or message mode.
+
+Byte mode is a stream. One read can receive part of a write or data from several writes.
+
+Message mode preserves message boundaries. A read receives one message, provided the buffer is large enough.
+
+The lab selects PIPE_TYPE_MESSAGE when creating the server and PIPE_READMODE_MESSAGE for both ends.
+
+It still adds a four-byte length header. Why use both? Message mode keeps transport boundaries, while the length header validates the application protocol. The receiver can reject a damaged or unexpected frame instead of trusting every byte Windows delivered.
+
+Labelled memory diagram. byte 0-3: `u32` length, little-endian; byte 4..: UTF-8 text, up to 1024 bytes. The pipe frame read_frame validates below. FRAME_BYTES (1028) reserves room for the header plus the maximum payload.
+
+Section: Treat IPC data like untrusted input.
+
+“Local” does not mean “automatically trustworthy.” Another program in the same account or session might know or guess the pipe name.
+
+The receiver checks all of these facts before making a String:
+
+At least four header bytes arrived.
+
+The declared text length is no more than 1024 bytes.
+
+The received frame size equals 4 + declared length .
+
+The text bytes are valid UTF-8.
+
+Diagram. From bytes_read greater than or equal to 4? to reject: no header. The connection is labelled: no. From bytes_read greater than or equal to 4? to declared less than or equal to MAX_TEXT_BYTES?. The connection is labelled: yes. From declared less than or equal to MAX_TEXT_BYTES? to reject: header too large. The connection is labelled: no. From declared less than or equal to MAX_TEXT_BYTES? to bytes_read equals declared + 4?. The connection is labelled: yes. From bytes_read equals declared + 4? to reject: length mismatch. The connection is labelled: no. From bytes_read equals declared + 4? to valid UTF-8?. The connection is labelled: yes. From valid UTF-8? to reject: bad UTF-8. The connection is labelled: no. From valid UTF-8? to return the text. The connection is labelled: yes.
+
+The server accepts one client, handles one request, sends one fixed reply, and exits. Small limits make the behavior easy to reason about.
+
+Section: Keep the pipe local and never impersonate.
+
+Named pipes can support remote clients. This lab includes PIPE_REJECT_REMOTE_CLIENTS, so Windows rejects them automatically.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The program does not call ImpersonateNamedPipeClient, duplicate tokens, start a process as another identity, or change privileges. Those operations solve different identity and access-control problems; they are not part of this message channel.
+
+Section: Build both modes in one program.
+
+Additional detail: Complete lab source: named_pipe_lab.rs.
+
+Code example. The code’s comments explain: ⚠️ A client can connect between CreateNamedPipeW and ConnectNamedPipe. // In that harmless race, Windows reports ERROR_PIPE_CONNECTED. // 🛡️ SAFETY: pipe owns a valid server-pipe handle and this synchronous // call deliberately supplies no OVERLAPPED structure. match unsafe { ConnectNamedPipe(pipe.raw(), None) } { Ok(()) leads to {} Err(error) if error.code() equals ERROR_PIPE_CONNECTED.to_hresult() leads to {} Err(error) leads to return Err(error.into()), }
+
+Section: Understand the connection race.
+
+A client can open the pipe after CreateNamedPipeW creates it but just before the server calls ConnectNamedPipe. Windows then returns ERROR_PIPE_CONNECTED. That does not mean the connection failed—it means the client already won the race.
+
+The match arm accepts only that documented condition and returns every other error:
+
+Diagram labels, in drawing order: Client; Server; the client connects here,; before ConnectNamedPipe runs; CreateNamedPipeW; CreateFileW opens the pipe; ConnectNamedPipe; returns ERROR_PIPE_CONNECTED.
+
+The client may connect in the narrow interval before the server calls ConnectNamedPipe. In that case Windows reports ERROR_PIPE_CONNECTED, which means the connection already exists rather than that it failed. The match below accepts both successful outcomes and propagates other errors:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Section: Run the request and reply.
+
+In window one:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+In window two:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The client prints the acknowledgement and both programs exit. Start the server again for another message.
+
+Section: How to grow this design safely.
+
+A larger tool could add a version number and an enum of allowed messages such as TurnStarted, MapLoaded, or PlayerPositionFromSupportedMod. It should authenticate sensitive clients, set an explicit security descriptor, rate-limit messages, keep bounded queues, and separate parsing from actions.
+
+Do not accept a command string and pass it to PowerShell or cmd.exe. Define a small message enum and reject unknown variants. Data should select one defined action, not become code.
+
+The buildable source is named_pipe_lab.rs.
+
+References: named-pipe operations, CreateNamedPipeW, ConnectNamedPipe, and SetNamedPipeHandleState.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/6/08/

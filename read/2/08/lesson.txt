@@ -1,0 +1,121 @@
+Why Addresses Move
+
+Section: The disappearing-address problem.
+
+You find gold at hexadecimal 1 2 3 4 5 6 7 8, restart the game, and the address is different. Nothing is broken. The address was never a permanent identity.
+
+Two common reasons are:
+
+dynamic allocation — the game asks for memory while it runs;
+
+ASLR, address space layout randomization, , short for Address Space Layout Randomization — Windows loads modules at different base addresses between runs.
+
+Virtual addresses belong to one process. The same numeric address in two different processes can name completely different physical memory, and a freed address can later be reused for another allocation in the same process.
+
+Every address involves three separate things, location, identity, and lifetime:
+
+a location is the virtual address used for this access;
+
+an identity is the game object or field that lives there;
+
+a lifetime is the interval during which that mapping remains valid.
+
+An address gives only the first item. The code that uses it, the objects that point to it, and repeated access patterns show the identity. Allocation and game events determine the lifetime. A reusable tool must rediscover or validate the location instead of treating yesterday’s address as permanent identity.
+
+Section: Relative locations.
+
+ASLR can load a module at a different base address on another run. Within one exact executable build, a global’s relative virtual address (RVA) in the image is fixed even when the module base changes. The loader maps sections at their defined relative locations and applies relocations where needed. Thus a tool can rediscover the base and add the verified RVA; it must not assume ASLR picks a new base on every launch or that a rebuilt game keeps the same RVA:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+If wesnoth.exe loads at hexadecimal 1 4 0 0 0 0 0 0 and a global pointer is at offset hexadecimal 0 1 A 2 B 3 C 0, the current address is:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+usize is the integer type normally used for an address-sized number:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+checked_add returns None if the addition overflows instead of silently wrapping.
+
+Section: Pointer chains.
+
+A stable module location may hold a pointer to an object, which holds a pointer to another object, which contains gold:
+
+Diagram. From module + offset to player manager. The connection is labelled: read pointer. From player manager to current player. The connection is labelled: + hexadecimal 1 8, read pointer. From current player to gold. The connection is labelled: + hexadecimal 3 0.
+
+Each arrow that says “read pointer” means:
+
+calculate an address;
+
+read a pointer-sized value from it;
+
+treat the result as the next address.
+
+The last step may be a field address rather than another pointer.
+
+Pointer size follows the target architecture. A 32-bit process stores a pointer in four bytes; a 64-bit process normally uses eight. Reading eight bytes from a 32-bit pointer field consumes neighboring data, while reading four from a 64-bit pointer truncates the address. The reader must use the target’s bitness, not the host’s.
+
+At every link, distinguish three different numbers:
+
+the address where a pointer is stored;
+
+the pointer value read from that address;
+
+the field offset added to that pointer value.
+
+Writing the chain as numbered equations makes accidental double-dereferences visible.
+
+Walked with real numbers, the chain in the diagram above looks like this:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Notice the rhythm: add, read, add, read — and then at the last step, add and stop. That final + hexadecimal 3 0 produces the address of gold, not a pointer to somewhere else. Reading a pointer there instead would take the number 250, treat it as an address, and try to read memory at hexadecimal 0 0 0 0 0 0 F A.
+
+That is the “one dereference too many” mistake, and it has a recognizable signature: the error names a very small address. Ordinary game values — health, gold, ammunition — are small numbers, so when one is mistakenly used as an address it points at the very bottom of the address space, where nothing is mapped. An error mentioning an address below a few thousand almost always means you dereferenced a value instead of a pointer.
+
+Section: Pointer scan results need checking.
+
+Cheat Engine can search for pointer paths automatically:
+
+Image description: Cheat Engine’s pointer scan feature
+
+A result is not automatically correct. Validate it across several clean restarts. Prefer paths that:
+
+begin inside a known module;
+
+use a short chain;
+
+work on the exact documented game version;
+
+end at the expected value;
+
+fail safely when a pointer is null or unreadable.
+
+A pointer scan finds numeric relationships that existed in its snapshots. It does not prove ownership. Large offsets, very long chains, and links through short-lived allocations are more likely to be coincidences. Normal gameplay tests—opening menus, changing maps, loading a save—exercise those ownership assumptions.
+
+Section: Give addresses a checked type.
+
+Do not scatter raw address math around a program. Give it a type:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This wrapper does not prove that an address is readable. It does stop us from accidentally mixing an address with an ordinary game value, and it gives one place for overflow checks.
+
+The operating-system call that reads another process still belongs behind a carefully reviewed unsafe boundary. The rest of the pointer-chain algorithm can remain safe, ordinary code.
+
+Section: Walk a chain without losing the meaning.
+
+Use a function whose name says whether the final offset is dereferenced:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The final field address is returned without reading another pointer. Keeping that distinction in the function signature and variable names prevents the common “one dereference too many” mistake.
+
+The change from loose arithmetic to a deliberate chain is easier to see as a diff:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Offsets describe different jobs. root_offset locates the first pointer, link offsets locate the next pointer, and field_offset locates data inside the final object. Naming those stages prevents addition from being mistaken for dereferencing. It also places an error at the exact link that failed instead of returning one mysterious “bad address” message.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/2/08/

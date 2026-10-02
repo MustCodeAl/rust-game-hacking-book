@@ -1,0 +1,181 @@
+Automation as a Feedback Loop
+
+In a Wyrmsun local match, a bot that presses Recruit whenever gold is high could queue several workers before the first purchase appears on screen. A useful macro needs to know whether it has requested an action, whether the game accepted it, and when to stop trying.
+
+Section: A macro is not “press keys forever”.
+
+A reliable macro knows what state it is in, which condition allows the next step, and when to stop.
+
+For Wyrmsun 5.0.1 in a local match, use this loop:
+
+Diagram labels, in drawing order: match and player available; enough resources; action confirmed; action failed; timer elapsed; state is valid again; stop requested; Waiting; Ready; Acting; Cooldown; Recovering; Stopped.
+
+Every arrow has a reason. That is much easier to debug than nested if statements and sleeps.
+
+Section: Find the action, then find what it requires.
+
+The offline Wyrmsun 5.0.1 debugger trace reaches a unit-creation call:
+
+Image description: A recruit-unit function in the debugger
+
+Do not call an internal function based on one breakpoint. Several normal calls, watched in the debugger, show its:
+
+required thread;
+
+argument meaning;
+
+object lifetimes;
+
+return or error signal;
+
+resource checks;
+
+cooldown or event requirements.
+
+An action that works once under the debugger may fail when called at the wrong time.
+
+Section: Automation is a closed feedback loop.
+
+An open-loop macro sends inputs and assumes they worked. A reliable test bot closes the loop by observing the result:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+These stages have different jobs:
+
+Table columns: Stage; Question.
+
+Stage: Sense; Question: What does the current snapshot report?.
+
+Stage: Validate; Question: Is it complete, current, and plausible?.
+
+Stage: Decide; Question: Which single action is allowed by the policy?.
+
+Stage: Act; Question: How is that one request sent through the validated adapter?.
+
+Stage: Confirm; Question: Did game state change in the expected way?.
+
+Stage: Correct; Question: Should the bot retry, choose another state, or stop?.
+
+The sleep between ticks only limits the rate. It does not prove success. Menus, animation locks, pauses, missed input, and object replacement can all make an action request produce no outcome. Keep “requested recruit” separate from “worker count increased,” and never treat the first as proof of the second.
+
+For testing, record snapshots and feed them through the decision function. The same sequence should produce the same decisions without launching the game.
+
+Section: Model states with an enum.
+
+The bot needs a state for each distinct obligation. Acting remembers that a recruitment was requested, Cooldown stores how long to wait after a confirmed action, and Recovering carries a reason for a failed one. A single enum value means the bot occupies only one of these states at a time.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Impossible combinations disappear. We cannot accidentally be both Acting and Cooldown.
+
+Section: Keep observations separate.
+
+The game snapshot below is a copy of facts the bot has validated, not the bot’s intention. next_state receives that copy, the current macro state, and a stop request. It chooses one next state without pressing a key or writing to the game. For example, Ready with at least 100 resources becomes Acting; it does not become Cooldown until a later snapshot confirms the action.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This transition function is safe, deterministic, and easy to test without a game.
+
+Section: Test the decision logic.
+
+Feed the transition function a ready, active snapshot with enough resources, then set stop to true. The expected result is Stopped, because a user stop must outrank a possible recruit action. The test pins that priority without launching Wyrmsun.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The low-level observation and action layers may be version-specific. The state machine should not be.
+
+Section: A reliable loop answers four questions.
+
+Before writing loop or while, state these four facts:
+
+Start: which state exists before the first tick?
+
+Continue: what must remain true for another tick to run?
+
+Progress: what changes so the loop does not repeat the same work forever?
+
+Stop: which event ends it, even if the game is paused or closes?
+
+For this macro, the start is Waiting, each snapshot allows one transition, cooldown ticks count toward zero, and the shared stop request moves the machine to Stopped. A fixed sleep controls how often observations occur; it is not the thing that makes the logic correct.
+
+Trace a few ticks before connecting the action adapter:
+
+Table columns: Current state; Snapshot fact; Next state; Side effect.
+
+Current state: Waiting; Snapshot fact: match and player ready; Next state: Ready; Side effect: none.
+
+Current state: Ready; Snapshot fact: resources are 120; Next state: Acting { attempt: 1 }; Side effect: request one action.
+
+Current state: Acting; Snapshot fact: action confirmed; Next state: Cooldown { ticks_left: 5 }; Side effect: none.
+
+Current state: any active state; Snapshot fact: stop requested; Next state: Stopped; Side effect: begin cleanup.
+
+If a row has two unrelated actions, the state probably owns too much work. If a row has no path to Stopped, the design is not safe to run yet.
+
+Section: Rate limits and stop behavior.
+
+Use a bounded tick rate, not a busy loop:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Before unloading an in-process library, set the stop flag, wait for the worker to exit, and restore any temporary state.
+
+Section: Wire it to Wyrmsun 5.0.1 after the DLL, dynamic link library, lessons.
+
+You can complete the state-machine and recorded-snapshot tests above before loading code into a game. The pinned Wyrmsun port below is a deeper application to revisit after Lesson 6.4 teaches verified detours and Lesson 6.6 teaches the input worker. Its concrete addresses and hooks are retained here so the bot design can be compared with the original course’s running implementation.
+
+This is the original course’s macro bot, rebuilt as an explicit state machine.
+
+The original lab found these module-relative facts:
+
+Table columns: Purpose; wyrmsun.exe offset.
+
+Purpose: recruit-unit call target; wyrmsun.exe offset: hexadecimal 2 C F 7.
+
+Purpose: recruit-unit hook; wyrmsun.exe offset: hexadecimal 2 2 3 4 7 1.
+
+Purpose: main-loop hook; wyrmsun.exe offset: hexadecimal 3 8 5 D 3 4.
+
+Purpose: main-loop call target; wyrmsun.exe offset: hexadecimal D B C A.
+
+Purpose: gold-chain root; wyrmsun.exe offset: hexadecimal 6 1 A 5 0 4.
+
+Wyrmsun relocates its module, so calculate module_base + offset every run. For one observed base of hexadecimal 0 0 F 4 0 0 0 0, the recruit target became hexadecimal 0 0 F 4 2 C F 7 and the hook became hexadecimal 0 1 1 6 3 4 7 1.
+
+The Cheat Engine gold path was:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Capture one legitimate worker record at the recruit hook (ecx points to the outer pointer) into a local hexadecimal 1 1 0-byte buffer. When gold is over 3000, copy that captured record back, put the expected pointer in ecx, and call the verified recruit function from the game-loop hook. The original three overwritten recruit instructions were push ecx, mov ecx, esi, and the call; replay all eight bytes before returning.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Build the DLL for the game’s 32-bit architecture, inject it into your offline match, recruit one worker normally to fill the buffer, then gather more than 3000 gold. Workers should begin recruiting automatically from the selected structure. If they do not, log the calculated module addresses and verify each original byte before allowing the hooks to install.
+
+Section: How the two Wyrmsun caves complete the action.
+
+The complete implementation is in strategy_hooks.rs. It finds the relocated module, verifies both original call sequences, installs two detours, captures the legitimate hexadecimal 1 1 0-byte record, resolves the entire gold chain, calls the real recruit function with x86 thiscall, replays the removed game-loop call, and restores both hooks.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Inject gha_windows_labs.dll into wyrmsun.exe, recruit one worker normally, select a structure, and collect more than 3000 gold. Press End to stop and restore both hooks.
+
+Silent video demonstration: Automatic worker recruitment in Wyrmsun. The original course recording shows workers being recruited as resources become available. Follow the change from enough gold to a new recruitment, then relate it to the observation, guarded action, and waiting states above.
+
+Section: What the state-machine design prevents.
+
+The reusable skill is turning that working game hack into:
+
+observable inputs;
+
+named states;
+
+guarded transitions;
+
+a bounded action;
+
+a reliable stop path.
+
+That pattern applies to test bots, accessibility helpers, replay tools, and ordinary game AI, artificial intelligence,.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/4/04/

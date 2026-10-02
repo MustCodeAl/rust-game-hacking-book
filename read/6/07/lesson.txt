@@ -1,0 +1,103 @@
+Shared Memory Between Processes
+
+Section: Processes normally have separate address spaces.
+
+The proxy copied messages between sockets. A supported game add-on and a separate visualizer could instead agree on a local shared byte region. The message still needs a layout and a lifetime; only the transport changes.
+
+Two running programs can both use the address hexadecimal 0 0 4 0 0 0 0 0, yet those numbers can refer to completely different physical storage. Each process has its own virtual address space.
+
+That separation is a safety feature. A map helper should not need to patch a game process merely to receive a supported event from a mod. Windows provides interprocess communication, or IPC, for programs that intentionally cooperate.
+
+Named shared memory is one IPC option:
+
+Diagram. From writer's view(its own address) to one file-mapping object. From reader's view(its own address) to one file-mapping object. From one file-mapping object to the same shared bytes.
+
+The two views do not need the same virtual address. Windows connects both views to the same file-mapping object.
+
+The programs share bytes through one kernel-managed object, not pointers to each other’s private address spaces:
+
+Diagram. From Writer value to Encode length and UTF-8. From Encode length and UTF-8 to Writer view. From Writer view to Shared mapping object. From Shared mapping object to Reader view. From Reader view to Validate length and UTF-8. From Validate length and UTF-8 to Reader value.
+
+The views may have different addresses, but they expose the same mapped bytes. The small protocol is what turns those bytes back into a trustworthy value.
+
+Section: A mapping object is not the view.
+
+These terms describe different resources:
+
+A file-mapping object tells Windows what storage is shared, how large it is, and which protections are allowed.
+
+A view maps some or all of that object into one process’s virtual address space.
+
+A handle names the mapping object.
+
+A pointer from MapViewOfFile names the beginning of one process’s view.
+
+Closing the handle and unmapping the view are separate cleanup operations. The lab uses OwnedHandle for the first and a small MappedView type with Drop for the second.
+
+Section: Paging-file-backed means no ordinary file is required.
+
+CreateFileMappingW normally accepts a file handle. Passing INVALID_HANDLE_VALUE asks Windows for storage backed by the system paging file instead. We must provide a nonzero maximum size—in this lab, 4096 bytes.
+
+The name starts with Local\, so it lives in the current logon session’s local namespace. We do not use Global\, which can require extra privilege and makes the scope wider than this lab needs.
+
+Section: Bytes need a tiny protocol.
+
+Memory has no built-in String type. Both programs must agree on a layout:
+
+Labelled memory diagram. 0..4: little-endian `u32` text length; 4..4+len: UTF-8 text; 4+len..: zeroed. The shared-memory wire format. HEADER_BYTES is 4; everything from 4 + len onward is left as zero padding.
+
+The four-byte length makes embedded zero bytes unambiguous and lets the reader reject impossible sizes before creating a string slice.
+
+This is the beginning of serialization: turning structured information into an agreed byte representation.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+One hazard is worth naming here, even though this one-shot lab sidesteps it by writing only once. Shared memory gives two processes access to the same bytes. It gives them no agreement about when. Nothing prevents a reader from arriving in the middle of a write:
+
+Diagram labels, in drawing order: Reader; Shared bytes; Writer; payload bytes are still; the previous message; store length equals 11; read length (11) and the payload; copy the new text into the payload.
+
+The reader’s length check passes, the UTF-8 decode very likely succeeds, and the text returned is simply wrong — or is half of the previous message. Writing the payload before the length narrows that window without closing it, since the CPU, central processing unit, and the compiler may reorder the two stores anyway. Closing it takes a sequence number the reader checks before and after copying, or a real synchronization object.
+
+For a small concrete case, suppose the old payload is READY (five bytes) and the writer announces a new seven-byte payload RUNNING before copying it. The reader can observe length 7 alongside READY and two old padding bytes. Seven bytes fit inside the mapping, and zero bytes are valid UTF-8, so both checks in read_text can succeed while the message is not the one the writer meant to publish. The sequence diagram shows that exact gap between publishing the length and finishing the payload. A shared map is like a notice board both programs can see; visibility does not give either program an agreed moment to read a completed notice.
+
+Section: Build the writer and reader.
+
+Additional detail: Complete lab source: shared_memory_lab.rs.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Section: Why is this unsafe code contained?.
+
+MapViewOfFile returns a raw pointer. The compiler cannot prove how many bytes it covers, whether the view is writable, or when Windows unmaps it. MappedView establishes those facts once, then ordinary methods return bounded slices.
+
+The writer receives &mut [u8]; the reader receives &[u8]. That is semantic highlighting at the type-system level: mutability shows which side is allowed to change data.
+
+Section: Run two copies.
+
+In PowerShell window one:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Leave it waiting. In window two:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Return to window one and press Enter. The mapping object disappears after the last handle closes, so another reader should then receive a clear “open the writer first” error.
+
+Section: Where shared memory fits.
+
+A Wesnoth add-on or game build could publish a tiny turn/event record. A separate visualizer could read it. The producer defines the shared-memory contract, so both sides agree on its layout and lifetime.
+
+The one-shot lab avoids concurrent writes. A real design needs synchronization—perhaps a named mutex or events—plus a version field, sequence number, and rules for partial updates. Never put passwords or secret tokens in a mapping protected only by a convenient name.
+
+The buildable source is shared_memory_lab.rs.
+
+References: sharing files and memory, creating named shared memory, CreateFileMappingW, and MapViewOfFile.
+
+Lesson 8.8 uses a named pipe when the producer and consumer would rather exchange one request and one reply than coordinate reads of a shared region.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/6/07/

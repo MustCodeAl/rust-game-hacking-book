@@ -1,0 +1,59 @@
+Guest Execution and Address Translation
+
+Lesson 14.1 described what a hypervisor does: it runs a guest’s instructions natively, takes control back through VM, virtual machine, exits, and translates every guest address a second time. This lesson looks underneath. It shows why x86 needed new hardware before a guest’s kernel could run unmodified, follows one address through both stages of translation digit by digit, counts what the second stage costs, and ends with the ways software inside a guest can tell that it is there.
+
+Section: Why a guest cannot simply run in user mode.
+
+The obvious way to build a hypervisor is to run the guest’s kernel in ring 3, where every privileged instruction it tries causes a fault, and have the hypervisor catch each fault and do to the virtual machine what the instruction would have done to a real one. This is called trap and emulate: the guest’s ordinary instructions run at full speed, and only the sensitive ones cost extra.
+
+In 1974 Gerald Popek and Robert Goldberg stated the condition for trap and emulate to work: every instruction that reads or changes the machine’s control state must fault when it runs outside the most privileged level. For many years x86 did not meet it. The classic example is popf, which loads the flags register, including the interrupt flag that switches interrupts on and off. In ring 0, popf changes the interrupt flag. In ring 3 it silently leaves the flag alone and raises no fault. A guest kernel running in ring 3 that used popf to switch interrupts back on would carry on believing they were on, and the hypervisor would never find out, because nothing trapped.
+
+Early x86 hypervisors worked around the problem. VMware, from 1999, examined the guest kernel’s code as it ran and rewrote the problem instructions into safe sequences, a technique called binary translation. Xen, from 2003, modified the guest kernel’s source code so that it asked the hypervisor directly instead of running those instructions, which is called paravirtualization. Both worked, and both were complicated. The hardware support from Lesson 14.1, VT-x and AMD-V, made both workarounds unnecessary for running an unmodified kernel: it gives the guest its own ring 0, where popf behaves exactly as the guest kernel expects.
+
+Section: A worked translation.
+
+Lesson 14.1 split a guest’s address translation into two stages. The guest’s own page tables turn a guest virtual address into a guest physical address, and the hypervisor’s tables turn that into a host physical address, the real location in RAM, random access memory,. Here is one address going through both:
+
+Diagram. From guest virtualhexadecimal 0 0 4 0 3 A 2 C to guest physicalhexadecimal 0 0 1 F 7 A 2 C. The connection is labelled: stage 1, the guest's tablespage hexadecimal 4 0 3 to frame hexadecimal 1 F 7. From guest physicalhexadecimal 0 0 1 F 7 A 2 C to host physicalhexadecimal 0 5 2 E 3 A 2 C. The connection is labelled: stage 2, the hypervisor's tablesframe hexadecimal 1 F 7 to frame hexadecimal 5 2 E 3.
+
+Pages are 4 KiB, which is 4 times 1,024 equals 4,096 bytes. Since 2 to the power of 12 equals 4,096, the lowest 12 bits of an address choose a byte within its page, the offset, and all the bits above them name the page. Each hex digit stands for 4 bits, so the 12 offset bits are exactly the last three hex digits; Lesson 11.7 made the same split. Take the guest virtual address hexadecimal 0 0 4 0 3 A 2 C:
+
+Labelled memory diagram. cell 1: 0; cell 2: 0; cell 3: 4; cell 4: 0; cell 5: 3; cell 6: A; cell 7: 2; cell 8: C. Groups: guest virtual page hexadecimal 0 0 4 0 3; offset hexadecimal A 2 C. The guest virtual address hexadecimal 0 0 4 0 3 A 2 C, split before its last three hex digits.
+
+The offset is hexadecimal A 2 C equals 10 times 256 + 2 times 16 + 12 equals 2,560 + 32 + 12 equals 2,604, safely less than 4,096. The page number is hexadecimal 4 0 3 equals 4 times 256 + 3 equals 1,027. As a check, page 1,027 starts at byte 1,027 times 4,096 equals 4,206,592, and 4,206,592 + 2,604 equals 4,209,196, which is hexadecimal 0 0 4 0 3 A 2 C written in decimal.
+
+Stage 1. The guest kernel’s page tables map guest virtual page hexadecimal 4 0 3 to guest physical frame hexadecimal 1 F 7. A frame is a page-sized block of physical memory. Translation replaces the page number with the frame number and keeps the offset:
+
+Labelled memory diagram. cell 1: 0; cell 2: 0; cell 3: 1; cell 4: F; cell 5: 7; cell 6: A; cell 7: 2; cell 8: C. Groups: guest physical frame hexadecimal 0 0 1 F 7; offset hexadecimal A 2 C, unchanged. The guest physical address hexadecimal 0 0 1 F 7 A 2 C equals hexadecimal 1 F 7 times hexadecimal 1 0 0 0 + hexadecimal A 2 C.
+
+Multiplying by hexadecimal 1 0 0 0, which is 4,096, shifts a number left by three hex digits, so hexadecimal 1 F 7 times hexadecimal 1 0 0 0 equals hexadecimal 1 F 7 0 0 0, and adding the offset gives hexadecimal 1 F 7 A 2 C. On a real machine the translation would end here, with a RAM address. In a guest, hexadecimal 0 0 1 F 7 A 2 C is only the guest’s idea of one.
+
+Stage 2. The hypervisor’s tables map guest physical frame hexadecimal 1 F 7 to host physical frame hexadecimal 5 2 E 3:
+
+Labelled memory diagram. cell 1: 0; cell 2: 5; cell 3: 2; cell 4: E; cell 5: 3; cell 6: A; cell 7: 2; cell 8: C. Groups: host physical frame hexadecimal 0 5 2 E 3; offset hexadecimal A 2 C, unchanged. The host physical address hexadecimal 0 5 2 E 3 A 2 C: where the byte really is in RAM.
+
+hexadecimal 5 2 E 3 times hexadecimal 1 0 0 0 equals hexadecimal 5 2 E 3 0 0 0, and adding hexadecimal A 2 C gives hexadecimal 0 5 2 E 3 A 2 C. The offset rode through both stages untouched; each stage only swapped the number above it.
+
+Section: What two stages cost.
+
+Real translation is not one table lookup per stage but a four-level walk (Lesson 12.7), and with two stages the walks multiply. The guest’s page tables live in guest physical memory, so each of the four entries the processor reads during the guest’s walk sits at a guest physical address that must first go through a four-level stage-2 walk. Each guest level therefore costs 4 reads to find its table plus 1 read of the entry itself, 4 + 1 equals 5 reads, and 4 times 5 equals 20 reads for the whole stage-1 walk. The guest physical address that comes out needs one more four-level stage-2 walk: 20 + 4 equals 24 memory reads to translate one address, where a machine without virtualization needs 4.
+
+The processor avoids paying that on every access with its translation lookaside buffer (TLB), a small cache of recent translations. The TLB keeps the final guest-virtual-to-host-physical answer, so a program that touches the same pages again, as programs mostly do, pays for the walk once.
+
+Section: How a program can tell it is in a virtual machine.
+
+A guest runs real instructions on a real processor, so most of what it does looks identical inside and outside a VM. A program that wants to know can still find out, in a few ways:
+
+The processor says so. Hypervisors announce themselves on purpose. When a program runs cpuid with input 1, bit 31 of the result in ecx is the hypervisor present bit: 0 on bare hardware, set by a hypervisor. Bit 31 is worth 2 to the power of 31 equals 2,147,483,648, which is hexadecimal 8 0 0 0 0 0 0 0 , because the top hex digit 8 is binary 1000 . A second input, hexadecimal 4 0 0 0 0 0 0 0 , returns the hypervisor’s name as twelve ASCII characters, such as Microsoft Hv . This is a feature, not a leak: guests use it to find out which faster, hypervisor-aware drivers they can load.
+
+The hardware looks virtual. Virtual disks, graphics adapters, and network cards report model names from the hypervisor’s vendor, and virtual network cards get addresses from ranges assigned to those vendors.
+
+Some instructions are slow. Anything that causes a VM exit takes far longer than it would on bare hardware, and careful timing can notice.
+
+Guest tools ask so they can install the right drivers. Licensing software asks. Malware asks so it can behave innocently inside the sandboxes that analysts use to study it. Some anti-cheat systems ask, and refuse to run a protected game in a VM, because a hypervisor can see and change everything a guest does. That is one more reason this book’s targets are offline, single-player builds running in your own VM.
+
+The first check is weaker than it looks. On a Windows 11 PC with memory integrity on, Windows itself runs on the Windows hypervisor, so the hypervisor-present bit is set on an ordinary desktop too. Lesson 14.1 explains why.
+
+References: hypervisor feature discovery and the virtual-machine extensions volume of the Intel Software Developer Manuals.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/14/09/

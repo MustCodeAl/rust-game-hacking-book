@@ -1,0 +1,141 @@
+Protocol Capture and Message Framing
+
+Section: Separate network layers before capturing.
+
+Lesson 8.1 showed that one game message can arrive across two TCP, transmission control protocol, reads. A packet capture lets us inspect the bytes on the way, but its packet rows are not automatically game-message rows. We will send one distinctive lobby message, then follow its bytes in both directions.
+
+An application message is not the same thing as an IP packet or TCP segment. Each layer has a different job:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+TCP may split one game message across several segments or combine bytes from several messages in one segment. Retransmissions can repeat packet data. The receiving application sees an ordered stream, so protocol parsing needs its own framing rule such as a length prefix or delimiter.
+
+A socket is an operating-system object representing one endpoint. A TCP connection is identified by source address, source port, destination address, and destination port—the four-tuple used below.
+
+Section: Capture answers “what crossed,” not “why”.
+
+A network trace records bytes and timing at one capture point. It does not contain the sender’s variable names, the receiver’s interpretation, or any record of which UI action caused which packet. That link comes from changing one thing at a time:
+
+capture a quiet baseline;
+
+perform exactly one distinctive local action;
+
+repeat the action with one changed input;
+
+compare both directions and several repetitions;
+
+confirm the candidate fields in the open-source client or server.
+
+Section: Build a controlled capture.
+
+Use the course’s local Wesnoth server setup or your own toy client and server. Keep both endpoints inside the lab VM, virtual machine,.
+
+Image description: A local multiplayer lobby
+
+Start Wireshark, choose the loopback adapter when client and server share the machine, and begin capture before connecting.
+
+Capturing on the wrong interface produces an empty-looking experiment. Traffic to 127.0.0.1 stays on the loopback path rather than crossing the physical Wi-Fi or Ethernet adapter.
+
+Image description: The Wireshark interface
+
+Section: Reduce noise.
+
+Filter by the known local port:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+For the Wesnoth 1.14.9 lab, keep 15000: that is wesnothd’s default listening port. Launch wesnothd.exe, choose Connect to Server in the game, and enter localhost:15000.
+
+Perform the actions at known times, so each burst of packets can be matched to the action just before it:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A distinctive message such as hello-17 is easier to find than “hi.”
+
+Section: Direction matters.
+
+One connection has one four-tuple, and each direction reads it the other way round:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The client port is often temporary. The server port is the stable listening port.
+
+The server first owns a listening socket on port 15000. Accepting a client creates a separate connected socket while the listener remains available for other clients. The client normally receives an ephemeral local port selected by Windows.
+
+Section: Follow the stream.
+
+Wireshark’s “Follow TCP Stream” view reassembles TCP bytes for easier inspection.
+
+Image description: Following a TCP stream
+
+Remember: this is still a stream, not necessarily a list of messages. Look for:
+
+fixed-size headers;
+
+length fields;
+
+magic bytes;
+
+repeated separators;
+
+readable text;
+
+compressed-looking regions;
+
+request/response pairs.
+
+“Follow TCP Stream” performs reassembly for inspection. Your client still has to handle partial reads: read() may return fewer bytes than requested even when more bytes will arrive later. read_exact is appropriate only after a validated frame length tells you exactly how many bytes belong to the next piece.
+
+Reassembly also chooses an order from sequence numbers and removes retransmitted overlap. Preserve the original packet capture alongside any exported stream fixture so later questions about direction, timing, or retransmission can still be answered.
+
+Section: Export a tiny fixture.
+
+Save only the bytes for one clearly labeled action. A small binary fixture is excellent for parser tests.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Do not store secrets, account tokens, or other people’s traffic in fixtures.
+
+Section: Compare two captures.
+
+Repeat the same action with exactly one changed input:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Compare lengths and differing byte ranges. If only one region changes, it may contain the text. If the whole payload changes, compression or encryption may be involved.
+
+Image description: A server message identified in the stream
+
+Section: Identify the real Wesnoth handshake.
+
+Add this display filter so Wireshark shows client/server data rather than every TCP acknowledgement:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The first client payload in a Wesnoth 1.14.9 connection is exactly four zero bytes:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Replay only those four bytes from a tiny TCP client. The local server responds with 41 bytes across the observed replies, proving that the zeros begin protocol negotiation. The next client frame identifies version 1.14.9; the following frame logs in with the chosen username.
+
+After the four-byte frame length, both of those later frames begin with gzip magic bytes 1F 8B. For example, a captured version frame begins:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Do the same controlled capture with usernames IEUser and FFFAAAKKKEEE. The second name makes repeated-character compression easier to notice. Put together, the Wesnoth 1.14.9 connection works like this:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Section: Capture facts the parser needs.
+
+A useful frame fixture records:
+
+the start of one frame;
+
+the field that gives its size, or another reliable delimiter;
+
+its direction;
+
+one input and the bytes that changed because of it.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/6/02/

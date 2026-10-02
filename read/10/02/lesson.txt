@@ -1,0 +1,159 @@
+Build Identity and Versioned Evidence
+
+Section: A version label is not enough.
+
+Two files can both call themselves “Wesnoth 1.14.9” and still contain different bytes. A distribution may rebuild the executable, a mod may replace data, or a repair tool may update one DLL, dynamic link library, without changing the folder name.
+
+That matters because much of what this course builds depends on exact bytes:
+
+an RVA, relative virtual address, belongs to one module layout;
+
+a byte pattern belongs to one compiled instruction sequence;
+
+an original-byte check belongs to one supported patch site;
+
+a PK3 edit belongs to one archive and path layout.
+
+A cryptographic hash turns all file bytes into a fixed-size fingerprint. This lab uses SHA-256. Change one byte and the resulting digest should change dramatically.
+
+Several different facts identify a build, and each one answers a separate question:
+
+Table columns: Fact; Question it answers; Important limit.
+
+Fact: Version label; Question it answers: What release does the program claim?; Important limit: Different builds can share it..
+
+Fact: Live module path; Question it answers: Which file did this process map?; Important limit: A path does not identify its bytes..
+
+Fact: Architecture and PE, portable executable, fields; Question it answers: What layout family is this file?; Important limit: Many builds share those fields..
+
+Fact: SHA-256 digest; Question it answers: Do all bytes match the baseline?; Important limit: The baseline must already be trusted..
+
+Fact: Trusted manifest or signature; Question it answers: Who supplied the expected identity?; Important limit: It does not prove the live file matches..
+
+For a reproducible lesson, confirm the live path and architecture, then compare its SHA-256 digest with a trusted record. No single friendly version string does all of those jobs.
+
+Section: What a hash proves—and what it does not.
+
+If today’s digest equals a trusted earlier digest, the file bytes match that earlier file. The hash does not prove who created the file or whether the original was safe.
+
+The word trusted matters. If an attacker can replace both a file and its manifest, a perfect hash comparison proves only that the two replacements agree. Keep the baseline somewhere the experiment does not rewrite, such as a read-only lab snapshot or version-controlled record.
+
+Section: A manifest records more than one fingerprint.
+
+The course format stores one file per line:
+
+Code example. The code’s comments explain: GHA SHA-256 manifest v1digest<TAB>byte-count<TAB>absolute-path
+
+The byte count is not a substitute for SHA-256. It is extra context that makes a mismatch easier to explain.
+
+The tool rejects tabs and newlines in paths because those characters would make the small text format ambiguous. If this game-file manifest grows to store mod IDs, signatures, several hashes, or nested package information, move to a defined format such as JSON, CBOR, or a signed catalog. The lab stays text-only so you can see every parsing rule.
+
+Section: Hash in chunks, not one giant allocation.
+
+The loop reads a fixed-size buffer at a time instead of the whole file, and only the bytes actually filled go into the hash:
+
+Diagram. From File::open(path) to file.read(&mut buffer). From file.read(&mut buffer) to count equals 0?. From count equals 0? to hasher.finalize(). The connection is labelled: yes: end of file. From count equals 0? to hasher.update(&buffer[..count])total += count. The connection is labelled: no. From hasher.update(&buffer[..count])total += count to file.read(&mut buffer).
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+read returns the number of buffer bytes filled. A return value of zero means end of file. Only &buffer[..count] goes into the hash; hashing the unused remainder would produce the wrong answer.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Section: Why this version?.
+
+Streaming keeps memory use roughly constant. A 4 GB game archive does not require a 4 GB Vec just to calculate its fingerprint.
+
+Section: Create without silently replacing trust.
+
+The important file option is create_new(true):
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+If the manifest already exists, creation fails. Updating a trusted baseline should be a conscious review step, not something the verifier performs automatically after detecting a change.
+
+Section: Verify every recorded field.
+
+For each non-comment line, the verifier:
+
+parses the wanted SHA-256 digest;
+
+parses the wanted byte count;
+
+opens the recorded path;
+
+streams the current bytes through SHA-256;
+
+compares size and digest;
+
+reports OK or CHANGED ;
+
+returns a failing exit status if anything changed.
+
+As a flow, one manifest line becomes one pass/fail decision:
+
+Diagram. From manifest line:digest, byte-count, path to open the recorded path. From open the recorded path to stream its bytesthrough SHA-256. From stream its bytesthrough SHA-256 to size and digestboth match?. From size and digestboth match? to print OK. The connection is labelled: yes. From size and digestboth match? to print CHANGED,exit status 1. The connection is labelled: no.
+
+That final failure is useful in scripts. A colored message is for a person; a non-zero exit status is for another program.
+
+Section: Run the complete tool.
+
+The complete implementation—including creation, parsing, verification, checked size arithmetic, and non-overwriting output—is integrity_manifest.rs.
+
+Build it:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Create a baseline for the exact executable and important DLLs:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Verify it before using an RVA or installing a patch:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Create separate manifests for the exact course builds of AssaultCube and Urban Terror. Do not add save files, logs, or configuration files that are expected to change every run.
+
+Section: Make mods explicit instead of invisible.
+
+A supported mod changes files on purpose. Treat it as a separate known state:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Do not update clean-install.manifest until a changed file looks clean again. Keep the original baseline, and create a second, reviewed manifest after the intended change, so each known state has its own list of digests.
+
+In the Urban Terror texture lab from Lesson 9.4, a tool replaces a texture inside the zUrT43_001.pk3 archive. Before the tool runs, the archive’s digest belongs to the clean state. The tool keeps the untouched original as zUrT43_001.pk3.gha-backup, so that backup must hash to the same clean digest; if it does not, the original was not preserved. The rebuilt zUrT43_001.pk3 has a new digest, which belongs to the modded state.
+
+Section: Watch for time-of-check/time-of-use.
+
+The program hashes a file and later another tool may open it. The file could change between those actions. This is called a time-of-check/time-of-use race.
+
+Diagram labels, in drawing order: another tool; the game file; Verifier; file changes here; the file that was used is not; the file that was checked; read bytes, compute SHA-256 (the check); digest matches the manifest; open and use the file (the use).
+
+For this lab, close the game and mod tools while verifying. A launcher that must verify a versioned mod immediately before starting the game needs a stronger design: it can keep the checked file handle open, require a signed package, or let one trusted updater own both verification and launch.
+
+Section: Hashes complement runtime checks.
+
+An on-disk hash confirms the file. A live patcher should still check:
+
+the live module name and range;
+
+the supported architecture;
+
+a version-specific RVA or unique pattern;
+
+the exact original bytes at the final address.
+
+Each check covers a gap the others leave. The on-disk hash cannot tell which copy of the file the process actually mapped, or whether anything changed the bytes in memory after loading; the original-byte check at the final address can. A patch should go ahead only when every check passes.
+
+The manifest has identified the file and build. Before reading through an old offset table, we still need to establish that the new build uses the same object layout. The next lesson recovers that layout from several independent clues; process access rights then determine which operations Windows permits.
+
+Reference: Microsoft PE format and NIST Secure Hash Standard.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/10/02/

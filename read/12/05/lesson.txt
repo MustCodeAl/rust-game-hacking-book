@@ -1,0 +1,103 @@
+State Machines for Lua Automation
+
+Imagine a helper script that selects the next living unit in a local game. It can observe a snapshot, request one selection, and wait for confirmation. If it repeats the request as fast as the interpreter can run, it may never observe the result or respond to a stop signal. Named states give each step a place and a condition for moving on.
+
+Section: Define the bot’s states and transitions first.
+
+This loop is short and dangerous to reason about:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A state machine gives each phase a name and defines why the script may move to another phase.
+
+Diagram labels, in drawing order: snapshot stored; living candidate found; no candidate; request sent,wait_ticks equals 20; not yet confirmed,wait_ticks -= 1; selection confirmed; wait_ticks reaches 0; Observe; Choose; Request; Stop; Wait.
+
+Formally, one update uses the current state plus one input to produce a next state and, sometimes, an output:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+That model separates policy from mechanism. The state machine chooses whether a request is appropriate. The host decides how to deliver it, whether the current target still permits it, and how to report success or failure.
+
+Do not put every game fact into the state name. WAITING_FOR_SELECTION describes the bot’s control phase; the selected entity ID, request sequence, and remaining timeout are data owned by that phase.
+
+Section: Represent states as strings carefully.
+
+The five names below are control phases, not game facts. The bot record holds the current phase and the data needed while waiting: a chosen entity, the sequence number of the request, and a timeout counter.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Lua has no built-in enum. A table of constants reduces spelling mistakes and gives one place to see all states.
+
+Section: One update performs bounded work.
+
+Each host call supplies a current snapshot and runs at most one branch. This sketch uses the State table above, the host’s game.request, and the choose_nearest_living helper defined below. The result is false only when the bot has stopped; otherwise the changed bot record says which phase comes next.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The host calls update at a controlled rate. The script does not own an infinite loop and cannot flood actions between frames.
+
+OBSERVE stores one snapshot. CHOOSE reads that same version, and REQUEST tags its proposed action with the stored sequence number; the host checks the request against current game state before acting. Later WAIT calls use the latest snapshot to see whether selection was confirmed. Keeping those two snapshots distinct is why a stale choice cannot silently become authority.
+
+Bounded work makes scheduling visible. One call performs at most one transition and proposes at most one action. The host can measure it, stop between calls, and prevent a fast script loop from starving rendering or input processing.
+
+Diagram labels, in drawing order: Game; update(bot, snapshot); Host; call 1 (state equals Observe); store snapshot, state equals Choose; call 2 (state equals Choose); choose_nearest_living(), state equals Request; call 3 (state equals Request); game.request(select_entity); wait_ticks equals 20, state equals Wait; call 4.. (state equals Wait); not confirmed yet, wait_ticks -= 1; call N (state equals Wait); snapshot.selected_id matches,; state equals Observe.
+
+Section: Separate choosing from acting.
+
+choose_nearest_living should be a pure function:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+It reads input and returns a choice. It does not log, request, sleep, or mutate the snapshot. That makes it easy to test with fixed tables.
+
+Section: Give stop the highest priority.
+
+Before every update, the host can check:
+
+user pressed the stop hotkey;
+
+game process exited;
+
+profile no longer matches;
+
+script exceeded an error limit;
+
+action request was rejected;
+
+snapshot has been invalid for too long.
+
+Any of these moves the host to stopped even if Lua wants to continue. The script is a guest, not the authority over shutdown.
+
+Section: Test transitions as a table.
+
+Table columns: Starting state; Input; Expected next state.
+
+Starting state: Observe; Input: valid snapshot; Expected next state: Choose.
+
+Starting state: Choose; Input: living candidate; Expected next state: Request.
+
+Starting state: Choose; Input: no candidate; Expected next state: Stop.
+
+Starting state: Request; Input: accepted request; Expected next state: Wait.
+
+Starting state: Wait; Input: selection confirmed; Expected next state: Observe.
+
+Starting state: Wait; Input: timeout reaches zero; Expected next state: Stop.
+
+Starting state: Any; Input: user cancellation; Expected next state: Stop.
+
+Create a test snapshot for every row. Also pass an unknown state and confirm the error contains its name.
+
+Section: The lab’s small example.
+
+Run:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The included script performs a tiny observe to mark to stop path against simulated data. Extend it one transition at a time, keeping every request bounded and visible in the host’s final output.
+
+State machines do not make automation intelligent by themselves. They make its assumptions, wait conditions, and failures readable—which is more important first.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/12/05/

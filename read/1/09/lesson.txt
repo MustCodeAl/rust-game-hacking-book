@@ -1,0 +1,129 @@
+What a Memory Scan Really Finds
+
+An address names a location, while a type tells a program what its bytes mean. We will use a memory scanner on Wesnoth: observe a gold value, search for matching bytes, make one in-game change, and filter the results.
+
+The goal is not merely to reach a final address. The goal is to understand why each scan removes some candidates and why one test still does not prove that a candidate is the main game-play value.
+
+Section: Prepare the target.
+
+Use the course build of Wesnoth 1.14.9 in the Windows VM, virtual machine,. Start a local match and pause before recruiting a unit.
+
+Image description: A Wesnoth match showing the gold value
+
+Suppose the screen shows 100 gold and the unit you plan to recruit costs 15. After recruiting, the visible value should become 100 minus 15 equals 85.
+
+Section: Attach Cheat Engine to the game process.
+
+Open Cheat Engine, choose the process button, and select the running Wesnoth process.
+
+Image description: Choosing the Wesnoth process
+
+Attaching tells Cheat Engine which process address space to read. It does not yet tell the scanner where gold is or how it is stored.
+
+Section: Perform the first value scan.
+
+Enter the visible gold amount. Use:
+
+Value Type: 4 Bytes;
+
+Scan Type: Exact Value;
+
+Value: the current gold amount.
+
+Start the first scan.
+
+Image description: The first scan for gold
+
+The scan will probably find many addresses. That is expected. The number 100 can appear in timers, object fields, capacities, interface data, and unrelated allocations.
+
+At this point, each result proves only this:
+
+These four bytes were readable as the integer 100 when the scanner checked them.
+
+It does not prove that the address controls gold.
+
+Section: Change the game once.
+
+Return to Wesnoth and perform the planned action. Recruit the unit and read the new gold value off the screen.
+
+Image description: Gold after recruiting a unit
+
+If the value changed from 100 to 85, return to Cheat Engine, enter 85, and choose Next Scan.
+
+The scanner does not search the whole process from the beginning. It checks the previous candidate addresses and keeps only those that now contain 85. In set notation:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+You do not need the symbol memorized. It means “keep items that are in both groups.”
+
+Section: Repeat with a different change.
+
+Make another controlled change with a different result. For example, recruit a unit with another cost or end a turn if the scenario changes gold in a known way. Enter the new gold value and perform another Next Scan.
+
+Image description: A narrowed list of candidate addresses
+
+Using different values is important. If you repeat only 100 to 85 to 100, an unrelated value that happens to follow the same pattern can remain in the list.
+
+Continue until you have a small number of candidates. Do not assume the first remaining address is correct.
+
+Section: Test one candidate reversibly.
+
+Add one candidate to the address list. Before changing it:
+
+copy its current value so you can put it back;
+
+confirm the game still shows the expected gold;
+
+choose a small replacement value;
+
+write the replacement once;
+
+observe the screen and one real purchase;
+
+restore the original value.
+
+Image description: The edited gold value in Wesnoth
+
+Different results support different explanations:
+
+Table columns: What happens; Likely meaning.
+
+What happens: the number and purchase rules change; Likely meaning: strong candidate for game-play state.
+
+What happens: only the text changes; Likely meaning: likely a display copy.
+
+What happens: the value changes back on the next update; Likely meaning: another system recomputes or owns it.
+
+What happens: nothing visible changes; Likely meaning: unrelated value or a copy used elsewhere.
+
+What happens: nearby behavior breaks; Likely meaning: wrong address, type, or field width may have been changed.
+
+A single run can mislead, because an unrelated value might change at the same moment by coincidence. Getting the same result again from the same starting state makes that explanation less likely.
+
+Section: Why several copies may all be related.
+
+The game can legitimately keep more than one gold-related value:
+
+the current simulation value;
+
+a previous value used by an animation;
+
+text prepared for the interface;
+
+a value in a replay, event, or network message;
+
+a temporary calculation.
+
+That is why value scanning is usually the start of reverse engineering. A write breakpoint later shows which instruction changes the strongest candidate. The surrounding instructions can reveal the object base and other fields.
+
+Section: Treat the address as temporary.
+
+The address you found belongs to this run of the game. After a restart, gold may live somewhere else, because the process layout and the heap can change between runs. A later lesson on building and loading a program explains why some distances stay fixed within one build even when absolute addresses move. First, a debugger lets us follow the candidate value to the instruction that changes it.
+
+Section: What the scan established.
+
+The first scan returned readable candidates that matched while it ran; it did not identify “the gold address.” Each controlled game change filtered that candidate set. Changing one survivor and then making a real purchase showed whether it affected gameplay, only the display, or neither. Restoring the original value leaves the game in a known state for another run.
+
+The candidate address tells us where to look, but not why the value changes. When a purchase subtracts gold, which instruction performs the subtraction, and what decides whether the player can afford it? What a Debugger Can Reveal begins Chapter 2 with that question. We will pause the program at the change, then learn how source code becomes the instructions the debugger shows.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/09/

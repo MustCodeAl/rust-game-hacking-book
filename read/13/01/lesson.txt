@@ -1,0 +1,123 @@
+Game State and Invariants
+
+A Lua script, a controller input, and a network message can all ask a game to change health. Lesson 1.3 used the rule 0 less than or equal to health less than or equal to max_health to decide whether a player record made sense. Now imagine one of those requests arrives when health is 5 and asks for 20 damage. The game should produce health 0, not -15, and its displayed health bar should eventually agree. This chapter asks where that rule is enforced, which copy of health the game trusts, and how to notice when one route around the rule still changes the game.
+
+The earlier chapters established how to recover an object layout and keep a live hook valid. Advanced game hacking now asks what the observed behavior means: record the decision and effect, then inspect integrity and environment checks and encoded values. The final control cases ask whether each check protects the authoritative state it claims to protect.
+
+Four pieces of evidence keep this question answerable: the value and the address temporarily holding it, the exact game build, a timestamped sequence of state changes, and whether the tool observed state or changed it. The following model connects those pieces before looking for a control gap.
+
+Section: An invariant is a property that must stay true.
+
+An invariant is a statement that must be true whenever the system is in a valid state. Examples include:
+
+ammunition never becomes negative;
+
+an entity ID refers to at most one live entity in a snapshot;
+
+a patch is applied only to the exact build and bytes it was made for;
+
+a rendering hook is either fully installed or fully removed;
+
+a read-only observer never changes the game state.
+
+An invariant does not live at one address. The health bound 0 less than or equal to health less than or equal to max_health can be enforced by a clamp instruction, depend on a max_health field, and be reported by a log line, all at the same time. Each of those is a place where the rule is kept or reported, and a bug in one of them leaves the rule itself unchanged: a state with health equals 120 and max_health equals 100 is invalid whichever of the three failed to catch it.
+
+Section: State, transitions, controls, and detectors.
+
+Table columns: Term; Precise meaning; Example in a toy game.
+
+Term: State; Precise meaning: Values needed to describe the system at one moment; Example in a toy game: health equals 48, mode equals Alive.
+
+Term: Transition; Precise meaning: An event and rule that move state to another valid state; Example in a toy game: 5 damage changes health from 48 to 43.
+
+Term: Invariant; Precise meaning: A property required of every valid state or transition; Example in a toy game: 0 less than or equal to health less than or equal to max_health.
+
+A control keeps an invariant true, usually by refusing or limiting a transition before it takes effect. A damage routine that stops health at 0 instead of letting it go negative is a control. A detector reports that an invariant may already have failed, such as a scan that logs any entity whose health exceeds its maximum. The two are separate pieces of code, so they fail separately: a detector can be noisy while the control still works, or quiet while the control is incomplete.
+
+Diagram. From Invariant to Control:tries to preserve it. From Invariant to Detector:reports possible failure. From Detector:reports possible failure to the control canstill be working. The connection is labelled: noisy. From Detector:reports possible failure to the control canstill be incomplete. The connection is labelled: quiet.
+
+Section: What bypass analysis means in this chapter.
+
+A bypass is a path that reaches an outcome without satisfying the control, the code that was supposed to guard it. In a game, the mismatch is often between a convenient proxy and the real rule:
+
+Table columns: Proxy that gets checked; Property that actually matters.
+
+Proxy that gets checked: Menu button is enabled; Property that actually matters: Engine policy permits the state change.
+
+Proxy that gets checked: One field’s checksum matches; Property that actually matters: The complete object relation is current and valid.
+
+Proxy that gets checked: One environment signal is absent; Property that actually matters: The requested command satisfies game rules.
+
+Proxy that gets checked: An old object still has a plausible address; Property that actually matters: The identity and generation still match.
+
+The analysis pattern is always the same: state the promised rule, trace the branch that claims to enforce it, follow every path to the effect, and look for a path where the proxy and the real property disagree. Later lessons apply that pattern to integrity checks, anti-debug behavior, encoded values, and requests that cross game or system boundaries. The hook and layout contracts remain the foundation that makes those observations trustworthy.
+
+Section: A control guards one copy of the state.
+
+A game keeps several copies of the same fact. The simulation’s entity object holds health, the health bar keeps its own copy for drawing, a script receives one in a snapshot, and in a networked game the server keeps a record while each client keeps a prediction of it. Exactly one copy is authoritative: the one whose value decides what happens next. In a single-player game that is usually the simulation object. In a multiplayer game with an authoritative server it is the server’s record, and each client’s copy is a prediction that the server can overwrite.
+
+Diagram. From Damage or heal request to Control:keep health between0 and max_health. From Control:keep health between0 and max_health to Authoritative copy:simulation entity,or the server's record. From Authoritative copy:simulation entity,or the server's record to Health-bar cache. The connection is labelled: copied each frame. From Authoritative copy:simulation entity,or the server's record to Script snapshot. The connection is labelled: copied on request. From Authoritative copy:simulation entity,or the server's record to Client prediction. The connection is labelled: sent over the network.
+
+A control protects only the copy it runs against. Code that validates the health bar’s copy and then applies damage to the simulation object has checked one copy and changed another; Lesson 13.3 calls this the wrong source of truth. Server authority is the same rule at network scale: the server validates every client request against its own record, because anything a client computed can be altered on the client’s machine before it is sent.
+
+The copies hold the same number most of the time, so reading a matching value does not say which copy was read. Timing does. The authoritative copy changes first and decides the next transition; every other copy catches up afterward, on its own schedule.
+
+Section: Draw the state machine.
+
+Suppose an entity can be alive, downed, or removed. A state diagram lists every allowed transition:
+
+Diagram labels, in drawing order: spawn; damage, health remains above 0; health reaches 0; revive; timeout; despawn; Alive; Downed; Removed.
+
+The diagram raises a question that one memory sample cannot answer: does the stored health field change before or after the Alive to Downed transition? A sample shows one moment. A trace of timestamped events shows the order.
+
+Section: Trace state changes as typed events.
+
+A trace is a list of events in the order they were logged, each saying what changed, when, and which observer saw it. Typed fields let a program check the trace:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+sequence gives log order. tick connects the event to the game clock. source names the observer that produced the event. Because an event carries typed fields rather than a sentence, a test can ask directly whether a HealthWrite ending at 0 comes before the ModeChanged to Downed for the same entity. A short trace for entity 7:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Health reaches 0 at tick 900 and the mode changes in the same tick. The health bar, which draws from a copy, shows 0 only at tick 901, one tick later.
+
+Diagram walkthrough: One entity, three observations over two ticks. Step 1: Begin with the prior entity state. State: entity 7; health 6; Alive. The trace identifies entity 7. The recorded before-values show health 6 and mode Alive immediately before the respective changes; the entity ID keeps this sequence separate from other entities. Step 2: Record the health write. State: seq 41: 6 to 0; tick 900. At tick 900, the health observer records HealthWrite with before equals 6 and after equals 0. The event states exactly which value changed, rather than merely logging that damage happened. Step 3: Record the mode transition. State: seq 42: Alive to Downed; tick 900. The next recorded event for entity 7 changes its mode from Alive to Downed in the same tick. A typed trace can compare this transition with the health write ending at zero. Step 4: Observe the display copy. State: seq 43: health 0; tick 901. The health-bar observer reads zero at tick 901. Its copy catches up one tick after the health and mode observations; reading a matching number alone would have hidden that delay. Step 5: Compare the recorded sequence. State: health and mode before UI read. Grouping by entity ID and comparing event types, sequence numbers, and ticks exposes the recorded ordering and the display delay. It does not by itself prove that one observed event caused another. The state display follows the exact three-event trace above. Sequence numbers establish log order; the next paragraph explains why delayed logging or a shared cause can require further evidence.
+
+Log order is not cause. Event 41 appearing before event 42 fits the damage causing the transition, but it also fits both events sharing one cause, or two observers that flushed their output at different times. Lesson 13.2 adds correlation IDs, which tie together the events of one action even when log order misleads.
+
+Section: Use the same model for a different rule.
+
+Health is an easy starting example because its valid range is visible. The same questions transfer to a rendering hook, though the fields are different:
+
+Table columns: Question; Health update; Hook installation.
+
+Question: What is the state?; Health update: Health 48, maximum 100; Hook installation: Original bytes, trampoline, and callback ownership.
+
+Question: What transition is requested?; Health update: Apply 5 damage; Hook installation: Install a detour.
+
+Question: What must stay true?; Health update: Health remains between 0 and 100; Hook installation: A call sees a complete original path or a complete hook path.
+
+Question: Where is the control?; Health update: The damage routine before changing simulation health; Hook installation: Version check, instruction preparation, and coordinated publication before calls enter the detour.
+
+Question: What can a detector report?; Health update: A snapshot finds health outside the bound; Hook installation: A byte or lifecycle check finds an incomplete installation.
+
+The analogy has a limit: health is one value, while a hook changes executable bytes that other threads may be using. Lesson 6.9 handles that concurrency. The transferable method is to name the state, permitted transition, invariant, control, and observable failure before choosing an implementation.
+
+Section: Glossary terms introduced here.
+
+Invariant: a property required of every valid state or transition.
+
+Control: logic intended to preserve an invariant.
+
+Detector: logic that reports a possible invariant failure.
+
+Authoritative state: the one copy of a value whose contents decide what happens next.
+
+Server authority: a design in which the server’s record is authoritative and every client request is validated against it.
+
+Trace: events listed in the order they were logged, each with its time and source.
+
+The useful model is state changing through transitions under an invariant. A control must guard the authoritative copy when a transition takes effect; a detector can report a violation but does not enforce that rule. Lesson 13.3 uses this distinction to examine what an integrity check actually covers.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/13/01/

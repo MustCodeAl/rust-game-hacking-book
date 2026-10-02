@@ -1,0 +1,179 @@
+Protocol State Machines and Replay
+
+Section: A packet parser is only the first layer.
+
+Parsing one message tells you what its bytes mean. A protocol also defines when that message is legal.
+
+A local Wesnoth test client might move through:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A chat message before the greeting may be invalid even when its length and UTF-8 text parse perfectly. That makes protocol reversing a state-machine problem as well as a byte-parsing problem.
+
+Replay processes the saved frames in order. A record changes the modeled session only after both its bytes and its transition have passed validation:
+
+Diagram. From Immutable capture log to Read the next record. From Read the next record to Decode its frame. From Decode its frame to Validate the message. From Validate the message to Check the legal transition. From Check the legal transition to Update modeled state. From Update modeled state to Compare with expectations.
+
+If any stage fails, the record and old state remain available for diagnosis; the replay never needs to invent a replacement state.
+
+Section: A message log and a session state are different things.
+
+The capture is an ordered log of the frames that crossed the connection. The session state is a model produced by applying their messages in order:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+For a five-frame capture of one short session, starting from Connected:
+
+Labelled memory diagram. frame 0: Greeting v1; frame 1: LobbyJoined; frame 2: Chat; frame 3: MatchStarted; frame 4: Goodbye. Groups: to Greeted; to InLobby; stays InLobby; to InMatch; to Closed. The boxes are the log; the labels under them are the state after each frame is applied. The log never stores a state, so a corrected rule can rebuild every state from the same five frames.
+
+Keep the raw log immutable and rebuild the model from it. If a parser or transition rule changes, you can replay the same log and see exactly which frame now produces a different result. Editing the stored “current state” by hand loses that history.
+
+Not every message is an event that happened exactly once. A snapshot can repeat a whole state, while an acknowledgment refers to an earlier request. A retransmitted request may appear twice. Store direction, sequence identifiers, and timing with each frame; without them, duplicate bytes cannot be told apart from duplicate actions. The real-time section below works through those identifiers in detail.
+
+Section: Model states and messages separately.
+
+Receiving a well-formed Chat message is different from being ready to accept it. A connection begins in Connected, reaches a lobby only after greeting and room messages, and can then accept chat. These enums keep the connection state and the parsed message as separate facts:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The parser creates Message values. The session machine decides whether each value makes sense now.
+
+Section: Make transitions explicit.
+
+Now pair the current state with one parsed message. A version-1 greeting moves Connected to Greeted; an unsupported version returns a precise error; a chat message in the lobby leaves the state unchanged. The match below makes every accepted transition visible in one place:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Drawn as a diagram, apply is this state machine:
+
+Diagram labels, in drawing order: Greeting version 1; LobbyJoined with a room name; MatchStarted with a scenario; Chat; Goodbye; Connected; Greeted; InLobby; InMatch; Closed.
+
+Each arrow is one arm of the match. A message with no arrow out of the current state, such as Chat while Greeted, falls through to the last arm and returns IllegalTransition. A Greeting with any version other than 1 is refused by its own arm with UnsupportedVersion, and Goodbye is accepted in every state, including Closed itself.
+
+This looks more verbose than a chain of if statements. The benefit is coverage: the compiler helps you notice new states and message variants that need rules.
+
+Diagram walkthrough: Replay the five captured messages through the session states. Step 1: Start the replay. State: state equals Connected. Begin with the initial session state and the unchanged capture log. Parsing each record produces a message; the transition function decides whether it is legal now. Step 2: Accept Greeting version 1. State: Connected to Greeted. The first frame selects the version-1 greeting arm. Another version is refused, and another greeting after this transition has no legal arrow. Step 3: Accept LobbyJoined. State: Greeted to InLobby. A nonempty room name permits entry to the lobby. A parseable frame alone cannot make this transition from an unrelated session state. Step 4: Accept Chat in the lobby. State: InLobby to InLobby. The chat frame is legal here, but it does not advance the session. An accepted message can preserve the current state. Step 5: Accept MatchStarted. State: InLobby to InMatch. A nonempty scenario name permits the match transition. The same message received before the lobby would be an illegal transition. Step 6: Accept Goodbye. State: InMatch to Closed. The final frame closes this replayed session. Goodbye is accepted from every modeled state, so cleanup does not depend on reaching the happy path first. These are the same five frames shown in the log above. The log stays fixed; each accepted message updates the modeled state, and an illegal message stops replay at its recorded frame.
+
+Section: Store captures as direction plus bytes.
+
+Do not save only the decoded text. A replay fixture should preserve:
+
+client-to-server or server-to-client direction;
+
+time relative to the previous frame;
+
+exact frame bytes;
+
+the game and protocol version;
+
+the experiment that produced the capture.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Redact account names or chat content before committing fixtures. A local test capture should contain only invented data.
+
+Section: Replay without a network.
+
+Replay takes recorded frames and the parser used for this protocol version. It starts from Connected, validates each frame’s size and delay, parses its bytes, and applies the resulting message to the session state. The returned state is what that exact log means under the current rules; the error names the frame where interpretation stopped:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The test does not sleep for after_ms. It validates timing metadata deterministically. A separate integration test can use a virtual clock to exercise timeouts.
+
+Deterministic replay requires controlling every input that affects a transition: message order, clock readings, random choices, configuration, and initial state. If the same fixture sometimes reaches different states, one of those inputs is still hidden. Pass it into the model instead of reading a real clock or global setting from inside apply.
+
+For example, imagine a lobby rule that closes a connection if no greeting arrives within five seconds. The same captured Greeting should be accepted at 4,900 milliseconds and rejected at 5,100 milliseconds when a test supplies those times to a virtual clock. Reading the wall clock inside apply would make the result depend on how fast the test machine runs. The small replay function above only checks that after_ms is plausible; a timeout test needs a clock-aware version of the model. The same rule applies when testing cooldowns or turn timers in another game.
+
+Section: Mutate one fact at a time.
+
+Useful negative replays include:
+
+truncate one length prefix;
+
+make a length larger than the available payload;
+
+send chat before greeting;
+
+repeat a one-time greeting;
+
+remove the final frame;
+
+insert an unknown message type;
+
+exceed the maximum accepted text length.
+
+The expected outcome is a precise error at a precise frame, never an out-of-bounds read or an infinite wait. Replaying Greeting twice, for example, stops at frame 1 with an IllegalTransition error for state Greeted, because the state machine has no Greeting arrow out of Greeted.
+
+A length larger than the available payload has to fail before any message is decoded:
+
+Labelled memory diagram. 0: 00; 1: 00; 2: 00; 3: 09; 4: 43; 5: 44; 6: 45; 7: ??, highlighted; 8: ??, highlighted; 9: ??, highlighted; 10: ??, highlighted; 11: ??, highlighted; 12: ??, highlighted. Groups: length field: 9; 3 payload bytes present; 6 bytes the frame claims but does not have. The big-endian length 00 00 00 09 promises 9 payload bytes, but only 3 follow, so 9 minus 3 equals 6 are missing. A parser that trusted the length would read 6 bytes past the end of the frame; a checked slice turns that into an error for this frame instead.
+
+For messages that may be retried, test idempotence explicitly. Applying the same acknowledgment twice should either preserve the same state or return a clear duplicate error; it should not create a second match, grant a reward twice, or move backward in the session.
+
+Think of a toy server processing a request claim reward #42. If the reply is lost, the client may send the same request again. The server can remember request #42 and return the earlier result, or reject it as a duplicate; adding five gold again would be a bug. The identifier is what makes “same request” testable. A repeated Chat with identical text could instead be a new message, so matching bytes alone is not a safe duplicate rule.
+
+Section: Why replay beats manual clicking.
+
+A capture preserves one session. A replay turns it into a repeatable test: when you change the parser, framing code, or session rules, the same frames run through them again in milliseconds.
+
+Keep live-network code at the edge. Feed the bytes it receives into the same parser and state machine tested by replay. That design keeps transport separate from parsing and makes the protocol model reproducible. 🌐
+
+Section: From session replay to real-time state.
+
+The Wesnoth lobby replay above checked whether each message was legal in one conversation. A fast action game adds a second question: which version of the world should the client draw while messages are still travelling? The same capture, framing, and state-machine discipline applies, but ticks and sequence numbers become part of the state.
+
+Section: Real-time games replicate a simulation, not just variables.
+
+Most action games advance the world in discrete ticks. If a server runs at 60 ticks per second, one simulation step is approximately:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The client samples input, labels it, and sends a command. The server processes commands during its own ticks and periodically sends a snapshot or delta. The client then draws frames between confirmed server states:
+
+Diagram labels, in drawing order: Renderer; Server simulation; Client simulation; Input sampler; command 418: move right; predict command 418; command 418; validate and simulate tick 9021; tick 9021, ack 418, state delta; reconcile prediction; interpolate a display state.
+
+A field’s meaning depends on the kind of message carrying it. Imagine a player at (10, 15) requesting a move north to (10, 14). The request is an intent; the coordinate is a desired destination. An acknowledgment confirms that a command arrived or was applied. A snapshot reports enough state to stand alone, while a delta reports only changes from an identified earlier state. If the server replies with (10, 14), that coordinate is an accepted position. Equal-looking bytes can have different authority.
+
+Several similar-looking states can therefore coexist:
+
+Table columns: State; Purpose; Important label.
+
+State: Last confirmed state; Purpose: What the server has accepted; Important label: Server tick or snapshot ID.
+
+State: Predicted state; Purpose: Immediate response to local input; Important label: Last locally simulated command.
+
+State: Interpolated state; Purpose: Smooth display of remote objects; Important label: Render timestamp between snapshots.
+
+State: Historical state; Purpose: Rewind or lag-compensation query; Important label: Past server tick or time.
+
+This explains why a coordinate found in memory can be correct yet appear to “snap back.” You may have found the predicted or rendered copy while a later server snapshot replaced it. Three facts tell the copies apart: which thread writes the field, whether its updates follow input or incoming packets, and which tick or sequence number travels beside it.
+
+Section: Ordering has to be carried in the message.
+
+Packet arrival order is not automatically simulation order. UDP, user datagram protocol, packets can arrive late or twice; even over TCP, transmission control protocol,, one stream can contain application events whose own timestamps refer to different moments. Protocols commonly carry:
+
+a monotonically increasing sequence number;
+
+a server tick or timestamp;
+
+an acknowledgment of the newest processed command;
+
+a bit mask acknowledging several earlier packets;
+
+a baseline ID telling which snapshot a delta modifies.
+
+Sequence numbers often wrap. For an unsigned N-bit counter, comparisons must use modular arithmetic and accept only a bounded forward window, not a plain incoming greater than current test.
+
+Work through one 16-bit wraparound. The last accepted sequence number is 65534, and the next two packets carry 65535 and then 0:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The naive test gets the first packet right and the second one wrong. 0 really is one step newer than 65535, but as a plain integer it is smaller, so the packet is thrown away. It gets worse from there: current never advances past 65535, so every sequence number after the wrap looks old in the same way, and the connection appears to stop receiving updates entirely.
+
+The modular test asks a different question — how far forward is incoming from current, counting the wrap? (0 - 65535) mod 65536 is 1, a single step ahead, so the packet is accepted and current moves on. Accept only while that distance stays inside an agreed window such as 1..=32767. A distance of 32768 is exactly halfway around a 16-bit counter and cannot be classified as newer or older from the sequence number alone, so this rule refuses it. A genuinely old packet computes a distance near 65536, which also falls outside the window. The exact window is part of the protocol contract and deserves boundary tests; RFC 1982’s serial-number arithmetic explains the half-range limit.
+
+A snapshot contains enough state to stand alone. A delta contains changes relative to a named baseline. Applying a delta to the wrong baseline may parse perfectly and still create nonsense. Robust tooling keeps the baseline ID with the bytes, refuses missing dependencies, and bounds how long incomplete state may wait.
+
+The live bot in Lesson 8.5 returns to the simpler Wesnoth lobby conversation. It uses the same separation between framed bytes, decoded messages, and legal session actions that replay made visible.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/6/04/

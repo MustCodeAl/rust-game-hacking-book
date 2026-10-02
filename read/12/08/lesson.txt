@@ -1,0 +1,101 @@
+Values, Tables, Strings, and Garbage Collection
+
+Section: Dynamic values still need a representation.
+
+The host often knows a value’s type at compile time. Lua decides many operations at run time. An interpreter therefore carries a tag with each value:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The IDs here are handles into VM, virtual machine,-owned storage. That keeps interpreter objects under one memory manager instead of handing scripts raw native pointers.
+
+Three stack slots show the idea. Each value carries its tag beside its payload, and an operation reads the tags before it touches any payload:
+
+Labelled memory diagram. tag: Integer; payload: 42; tag: Table; payload: id 3; tag: Nil; payload: unused. Groups: Value::Integer(42); Value::Table(TableId(3)); Value::Nil. + checks both tags first. Two Integer tags let it add the payloads; an Integer beside a Table fails the check, and this VM raises a type error instead of adding a number to a handle (real Lua first looks for an __add metamethod). The Table payload is not a pointer: id 3 is looked up in storage the VM owns.
+
+Section: A Lua table combines array-like and map-like storage.
+
+Lua uses tables for sequences, records, dictionaries, objects, and module namespaces. An implementation can optimize common integer keys with an array part while keeping other keys in a hash-map part:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Labelled memory diagram. 1: red; 2: green; 3: blue; name: palette; selected: 2. Groups: array part: keys 1 to 3, found by position; hash part: found by hashing the key. One table, two conceptual storage areas in Lua 5.4. The three dense integer keys fit the array-like part; named keys use the hash-like part. Exact allocated capacities are implementation details. palette[2] can use an array position; palette.name hashes the name to begin its lookup.
+
+This is an implementation strategy, not two separate Lua values. The language still presents one table. It also explains why pairs promises no meaningful order: it walks the array part first and then the hash nodes in node order, and node order follows the keys’ hash values rather than the order they were written.
+
+When the host converts a Vec to Lua, it writes keys 1, 2, and 3. When it converts a record, it writes named keys such as health and position. The script can use both forms, but the host should document which shape it promises.
+
+Section: Strings need ownership too.
+
+Repeated source names and table keys can create many duplicate strings. An interpreter may intern strings: store one canonical copy and let values carry a small ID or shared reference.
+
+Diagram. From key in table AString(0) to string table, slot 0health. From key in table BString(0) to string table, slot 0health. From constant in a compiled functionString(0) to string table, slot 0health.
+
+Checking whether two interned strings are equal is then one integer comparison, 0 equals 0, however long the text is. Interning makes equality fast, but it adds lifetime work. The interpreter must know when no live value, table key, closure, or compiled function still needs the string.
+
+Section: Reference counting handles sharing, not every cycle.
+
+Rc<T> counts strong owners. It frees the value when the count reaches zero. That works for many interpreter objects, but tables can form cycles:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+If each table strongly owns the other, both counts stay above zero even after the script drops a and b. Follow the arithmetic:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Both counts settle at one, each held up solely by the other. Nothing in the running program can reach either table any more, yet neither will ever be freed. That is the shape of every reference-counting leak: the objects have become unreachable without becoming unreferenced, and counting alone cannot tell those two conditions apart.
+
+A tracing garbage collector can start from roots—globals, active stacks, and live closures—mark reachable objects, then reclaim unmarked cycles.
+
+Do not assume Rc by itself is a complete Lua garbage collector. A small non-cyclic interpreter can use it while learning, but a general implementation needs a cycle strategy.
+
+Section: Roots answer “what is still reachable?”.
+
+Typical roots include:
+
+the global environment;
+
+each active function frame;
+
+values on VM stacks or registers;
+
+open upvalues captured by closures;
+
+host references intentionally kept alive.
+
+Diagram. From Rootsglobals, active frames, host references to Reachable table. From Reachable table to Reachable string. From Reachable table to Reachable closure. From Unreachable table A to Unreachable table B. From Unreachable table B to Unreachable table A. From Mark from every root to Rootsglobals, active frames, host references. From Mark from every root to Sweep objects that were not reached. From Sweep objects that were not reached to Unreachable table A. The connection is labelled: reclaims. From Sweep objects that were not reached to Unreachable table B. The connection is labelled: reclaims.
+
+The cycle between the two unreachable tables keeps both reference counts above zero, but neither table can be reached from a root. A tracing collector can tell the difference because it asks about reachability, not just owner counts.
+
+A host API, application programming interface, that retains a Lua table may accidentally keep a large graph alive. Resource limits should measure actual interpreter memory, not merely the size of the source file.
+
+Section: Tables are capability containers.
+
+In our embedded host, the game table contains only selected callbacks. This is more than neat organization:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+If game.open_process, game.read_any_address, or os.execute never enters the environment, ordinary scripts cannot call it. Table construction becomes part of the security boundary.
+
+Section: Questions to ask while reversing an embedded VM.
+
+In a debug build, look for:
+
+a tagged-value dispatch that checks type before an operation;
+
+one central table lookup routine;
+
+a VM instruction pointer separate from the CPU, central processing unit, instruction pointer;
+
+arrays of constants or bytecodes owned by compiled functions;
+
+root enumeration during garbage collection;
+
+native host callbacks registered under readable names.
+
+Use these structures to explain tagged values, object reachability, table lookup, and callback dispatch in the scripting system.
+
+Section: Further reading.
+
+The Lua 5.4 reference manual is the source of truth for language behavior. Build a Lua Interpreter in Rust provides an extended implementation path through strings, tables, expressions, control structures, functions, and closures. Use both to understand the model, then write and test your own representation for the subset you intend to support.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/12/08/

@@ -1,0 +1,147 @@
+Control Gaps in Game Logic
+
+The next three examples each fit in one small state model. For each, identify the invariant and canonical state, then compare a checksum or environment signal with the decision telemetry and the effect. A paired regression test should show both the control gap and the legitimate behavior a repair must retain.
+
+Section: What all three examples have in common.
+
+Every control in this lesson makes a promise, and all three break it the same way: each one checks something near the thing it cares about instead of the thing itself.
+
+A greyed-out button stands in for “this player is allowed to do that.” A checksum over one field stands in for “this record is intact.” A debugger flag stands in for “this request is honest.” Every stand-in is easier to check than the real property, which is precisely why someone reached for it — and every one of them can be true while the real property is false.
+
+Once you see that shape, the repair stops being a guess. It is never “add more stand-ins.” It is to move the check to the place where the effect actually happens, and demote the stand-in to a clue that helps explain what went wrong.
+
+Section: Use one rigorous analysis recipe every time.
+
+Each experiment follows the same sequence:
+
+Diagram. From State the promised invariant to Locate the enforcing branch. From Locate the enforcing branch to Name its unchecked assumption. From Name its unchecked assumption to Reproduce one contradiction. From Reproduce one contradiction to Capture decision and effect. From Capture decision and effect to Move validation to the effect boundary. From Move validation to the effect boundary to Retest failure and valid behavior.
+
+Section: Recipe 1: a client-visible flag guards an engine effect.
+
+Section: Minimal control and promised invariant.
+
+The UI has an “award bonus” button. A weak implementation treats the button’s ui_button_unlocked flag as permission to change the score:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The promised invariant is: bonus changes only when the engine policy permits an award and the result stays within the configured maximum.
+
+Section: Why it fails.
+
+Presentation state answers “should the button look available?” It does not answer “may the simulation perform this effect?” Multiple inputs, scripts, and restored UI state can reach the same engine operation. The weak control places authority in a copy used for presentation.
+
+Diagram. From ui_button_unlocked(presentation state) to weak_award checksonly this flag. From engine policy(the real permission) to weak_award checksonly this flag. The connection is labelled: never read byweak_award. From weak_award checksonly this flag to bonus changes.
+
+Section: Minimal reproduction.
+
+The example changes only the presentation flag before calling the weak path:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The contradiction is the evidence: allowed equals true and bonus equals 25 while the engine-owned policy is false.
+
+Section: Repair and telemetry.
+
+The repaired method ignores presentation state at the effect boundary. It checks the engine policy, uses checked addition, enforces the maximum, and emits one of EnginePolicyDenied, ValueOutOfRange, or Allowed.
+
+The regression test keeps the UI flag true and proves the repaired method denies the operation without changing bonus. A second test proves a valid engine policy still permits a bounded award.
+
+Section: Recipe 2: a checksum covers only the convenient field.
+
+Section: Minimal control and promised invariant.
+
+StatsRecord contains player ID, health, maximum health, generation, and a checksum. The weak checksum covers only health:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The promised invariant is: the identity and generation match the same record, the health range is valid, and every field used by that relation is covered.
+
+Section: Why it fails.
+
+The checksum answers only, “Did the health field change?” Changing maximum_health can make the relation impossible while the stored weak checksum still matches.
+
+Labelled memory diagram. player_id: 7; health: 80, highlighted; max_health: 100; generation: 3; checksum: weak_checksum(80). The weak checksum reads only health. Changing max_health from 100 to 60 breaks health less than or equal to max_health, but the stored checksum still matches — it never looked at max_health.
+
+Section: Minimal reproduction.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This is a coverage bypass inside the small record: the mutation falls outside the measured bytes but changes the meaning of the protected state.
+
+Section: Repair and telemetry.
+
+The repaired relation covers player ID, health, maximum health, and generation, then separately checks health less than or equal to maximum_health. Emit a specific failure such as ChecksumMismatch or OutOfRange; do not compress every failure into one boolean in production code.
+
+The regression suite mutates every covered field individually and asserts that the complete relation fails. It also keeps a valid record to prove verification is not permanently closed.
+
+This checksum detects example-data corruption; it is not authentication. If the system needs to defend against a party who can recompute an unkeyed checksum, the design needs an authenticated owner and key lifecycle, not a more obscure formula.
+
+Section: Recipe 3: one environment signal substitutes for command validation.
+
+Section: Minimal control and promised invariant.
+
+The weak game refuses set_health only when one observer flag is present. When the signal is absent, it accepts any number:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The promised invariant is health less than or equal to maximum_health after every accepted command.
+
+Section: Why it fails.
+
+The flag describes the environment, not the command. Even a perfectly measured observer signal cannot prove that an unrelated health value is in range. The weak rule therefore has a large ordinary path where invalid data is accepted.
+
+Section: Minimal reproduction.
+
+Begin with health 80 and a maximum of 100. The weak function sees an ordinary environment signal, accepts a request for 500, and leaves the game in an invalid state. Both assertions should pass even though the invariant fails.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+No signal is hidden or modified. The example simply demonstrates that absence of one signal says nothing about the validity of the requested state.
+
+Section: Repair and telemetry.
+
+The repaired method creates two independent events:
+
+an environment-observation event records whether the flag was present;
+
+a command-decision event validates value less than or equal to maximum_health .
+
+An observer flag can still help diagnose a run, but it neither grants nor removes the health invariant. Tests cover all four combinations of ordinary or flagged environment with valid or invalid values.
+
+Section: Compare the three failures.
+
+Table columns: Recipe; Weak proxy; Real invariant; Correct boundary; Detection evidence.
+
+Recipe: UI flag; Weak proxy: Presentation state; Real invariant: Engine policy and bounded bonus; Correct boundary: Award effect; Detection evidence: Allowed event while policy is false.
+
+Recipe: Partial checksum; Weak proxy: One field; Real invariant: Whole identity/range relation; Correct boundary: Record verification and consumer; Detection evidence: Weak valid, complete invalid.
+
+Recipe: Environment flag; Weak proxy: One observer signal; Real invariant: Health range; Correct boundary: Health command; Detection evidence: Allowed event followed by out-of-range state.
+
+All three mistakes confuse a proxy with the property that actually matters. The repair is not “add more proxy checks.” It is to enforce the invariant where the effect becomes real, then use proxy signals as supporting telemetry.
+
+Section: Write a complete regression pair.
+
+Every repair needs two sides:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Also assert that a denial event is emitted. A silent refusal can preserve state while leaving diagnosis and coverage testing blind.
+
+Section: Glossary terms introduced here.
+
+Proxy: an observable value used as indirect evidence for another property.
+
+Coverage bypass: a meaningful change outside the data examined by a control.
+
+Effect boundary: the shared point where a requested state change becomes canonical.
+
+Negative regression test: proves the previously failing case is refused.
+
+Positive regression test: proves valid behavior still works after repair.
+
+Contradiction: evidence that a control decision and resulting state cannot both satisfy the promised invariant.
+
+The three toy failures differ in their proxies, but each lets an effect happen without checking the promised invariant at the shared boundary. Each repair keeps both sides of the evidence: the formerly accepted invalid case is rejected, and valid behavior still works. Lesson 13.8 applies the same rule to eight more failure modes.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/13/08/

@@ -1,0 +1,145 @@
+Why Snapshots Need Guarded Actions
+
+The observer in the previous lesson copied player state for display. A tool that changes state faces a harder problem: gold can change after the read but before the write. If income arrives in that gap, a blind write may overwrite it. We need a pipeline that treats every observation as temporary evidence.
+
+Section: One long function hides where it can fail.
+
+A beginner tool often grows as one long function:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+That can work once, but every step depends on facts collected earlier. The game may restart, change maps, end a turn, replace an object, or update the value while the tool is still running.
+
+A more reliable tool separates six phases:
+
+Diagram walkthrough: Guard a state change with fresh evidence. Step 1: Capture twice. State: two reads. Read the pointer chain twice before trusting the observed value. Step 2: Build a snapshot. State: player + gold. Keep identity, side, address, and gold together. Step 3: Compare captures. State: same snapshot?. Reject a changing target before proposing an action. Step 4: Choose an action. State: Some(v). This tour follows Some(v), the requested write path. Step 5: Recheck and write. State: fresh then write. Capture once more before writing the proposed value. Step 6: Read back. State: equal?. Compare the result with the requested value. This follows the write branch when snapshots agree; None remains observation-only and a changed snapshot stops the write.
+
+The important idea is not extra code. It is that data crosses a gate before the tool acts on it. A raw address read once may already be out of date. A Snapshot captured twice with equal results was consistent at that moment. A write happens only if a fresh capture, taken immediately before it, still equals the snapshot.
+
+Section: Store one snapshot in one typed value.
+
+This lesson records the entire Wesnoth pointer path, not only the final gold number:
+
+Labelled memory diagram. cell 1: player: usize; cell 2: side: usize; cell 3: gold_address: usize; cell 4: gold: u32. The whole Snapshot. Comparing all four fields catches a changed pointer link, not only a changed gold number.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Why keep all four fields?
+
+player changing means the root now reaches another object.
+
+side changing can mean the active faction or match state changed.
+
+gold_address is the exact destination a later action would touch.
+
+gold is the value the learner actually observed.
+
+Equality now asks a useful question: “Did the whole chain and its value remain the same?” It is stronger than comparing only the final address.
+
+Section: Two equal reads are useful, not magical.
+
+The tool captures twice and accepts the result only when both snapshots agree:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This is a small optimistic consistency check. The tool does not stop the game. It assumes a short read will usually see a quiet moment, then checks that assumption.
+
+⚠️ Two equal reads are not a mathematical proof that no intermediate state existed. They are a practical gate for a tiny offline lab. A debugger pause, a game-provided snapshot API, application programming interface,, or a version counter is stronger when a larger structure must be perfectly atomic.
+
+The retry cap matters too. A loop that waits forever for stability can make a broken tool look frozen.
+
+Section: Capabilities follow the chosen action.
+
+The command has two modes:
+
+Terminal window
+
+Code example. The code’s comments explain: Observation only: requests query + read accesssnapshot_pipeline.exe Explicit local-lab change: also requests operation + write accesssnapshot_pipeline.exe --set 888
+
+The program decides whether it needs write rights before opening the process:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This is capability-oriented design in plain English: if the user asked only to look, the handle should be unable to write.
+
+Section: Validate, write, verify, and recover.
+
+The write path has three gates:
+
+re-capture and require the same snapshot;
+
+write exactly four little-endian bytes to the verified gold field;
+
+read the field back and require the requested result.
+
+Diagram. From stable_snapshot() again to equals observedsnapshot?. From equals observedsnapshot? to stop: nothing written. The connection is labelled: no. From equals observedsnapshot? to write_u32(gold_address,replacement). The connection is labelled: yes. From write_u32(gold_address,replacement) to read_u32(gold_address). From read_u32(gold_address) to equals replacement?. From equals replacement? to report failure. The connection is labelled: no. From equals replacement? to success. The connection is labelled: yes.
+
+In the code below, observed is the snapshot the caller approved. A fresh snapshot must match it before any write; afterward, a read-back must equal replacement. Each added line enforces one arrow in the diagram.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This is not a database transaction: Windows cannot automatically roll back the game. It is a guarded action with a checked precondition and postcondition. That pattern also fits toggles, patches, save editors, configuration tools, and mod installers.
+
+Section: Complete buildable tool.
+
+The code below is the complete binary used by the lesson.
+
+Additional detail: Complete lab source: snapshot_pipeline.rs.
+
+Code example. The code’s comments explain: 🔒 Read-only mode never requests VM_WRITE or VM_OPERATION rights. let process equals Process::open_by_name("wesnoth.exe", replacement.is_some())?; anyhow::ensure!( process.is_32_bit()?, "this profile requires 32-bit Wesnoth 1.14.9" ); let observed equals stable_snapshot(&process)?; ✅ Read back the postcondition instead of assuming the write succeeded. let written equals process.read_u32(observed.gold_address)?; anyhow::ensure!( written equals value, "read-back value was {written}, expected {value}" ); println!("Changed gold from {} to {written}.", observed.gold); } else { println!("Observation only. Run with `--set GOLD` for the guarded local-lab write."); } Ok(())}
+
+The same source is available as snapshot_pipeline.rs.
+
+Section: Build and run against Wesnoth.
+
+Use the exact 32-bit Wesnoth 1.14.9 course build, start a disposable local match, and build the Windows binary:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Confirm that the printed address and value match Cheat Engine or x64dbg. Then perform one explicit change:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The visible gold should become 888. End the match and run it again: the tool should report a null or unstable object instead of writing to address zero.
+
+Section: Read failures as information.
+
+Table columns: Failure; What it means; Correct response.
+
+Failure: Player root is null; What it means: No supported local match is ready; Correct response: Start the match; do not invent an address.
+
+Failure: Snapshot keeps changing; What it means: The pointer path changes between captures; Correct response: Stop after the retry cap.
+
+Failure: Architecture is not 32-bit; What it means: This profile does not describe the target; Correct response: Refuse the run.
+
+Failure: State differs before write; What it means: The earlier snapshot is out of date; Correct response: Write nothing and capture again.
+
+Failure: Read-back differs; What it means: The requested postcondition was not reached; Correct response: Report failure; do not print success.
+
+A trustworthy tool has more useful stop paths than force paths. 🛡️
+
+Section: Extend the architecture.
+
+Once this pipeline is clear, try these controlled upgrades:
+
+add a target-profile name and executable hash to the snapshot;
+
+attach a timestamp and module base to each capture;
+
+replace two reads with a game-owned frame counter when one is known;
+
+make Action::Observe and Action::SetGold(u32) an enum;
+
+unit-test decision logic with fake snapshots, without opening a process.
+
+Keep remote I/O at the edge. The middle of the program should compare ordinary typed values.
+
+Section: What the write gate establishes.
+
+The snapshot carries player and side identity along with gold and its address, so a changed object path invalidates a proposed action. Two equal captures are a bounded consistency check, not a lock on the running game. Observation mode therefore keeps a read-only handle. When an action is requested, a fresh precondition check guards the only write, and a read-back checks its postcondition before the tool reports success.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/4/02/

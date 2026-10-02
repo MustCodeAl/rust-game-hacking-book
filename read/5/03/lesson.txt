@@ -1,0 +1,217 @@
+OpenGL Draw Calls and State
+
+Section: A wrapper records and forwards draw calls.
+
+Lesson 7.2 showed that a draw submission combines geometry with the graphics state already in effect. To learn which submissions correlate with an entity, we need to observe calls without changing the frame they produce. OpenGL applications call functions such as glDrawElements. First consider a whole-call wrapper: it sits between the caller and the real function:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+If the game makes a draw with count equals 9, the wrapper records that value and then passes the same arguments to OpenGL. The picture should remain identical; only the separate observation log changes. The wrapper must preserve the exact ABI, application binary interface, and forward every normal call. The pinned Urban Terror implementation later in this lesson instead detours an instruction inside glDrawElements, so it has a narrower restoration opportunity. Keep that difference visible when comparing the two designs.
+
+Section: What an indexed draw actually requests.
+
+glDrawElements(mode, count, element_type, indices) asks OpenGL to consume an ordered sequence of vertex indices:
+
+Table columns: Argument; Meaning.
+
+Argument: mode; Meaning: how index results form primitives, such as triangles or lines.
+
+Argument: count; Meaning: number of indices to read.
+
+Argument: element_type; Meaning: width/format of each index, such as 16- or 32-bit unsigned.
+
+Argument: indices; Meaning: byte offset into a bound index buffer, or an address in old client-memory mode.
+
+The call does not directly identify a model. OpenGL combines those indices with the currently bound vertex attributes, textures, transforms, and other state. One character may require several draws—body, head, weapon, shadow—and one draw may contain many instances or a batch of unrelated objects.
+
+With GL_TRIANGLES, every complete group of three indices describes one submitted triangle. The indices may repeat vertices, and some triangles may be degenerate, clipped, back-face culled, or hidden by depth. Therefore:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+For example, this index buffer holds nine indices, so a call with count equals 9 submits 9 divided by 3 equals 3 triangles:
+
+Labelled memory diagram. 0: 0; 1: 1; 2: 2; 3: 2; 4: 1; 5: 3; 6: 2; 7: 3; 8: 4. Groups: triangle 0; triangle 1; triangle 2; nine indices, but only five different vertices: 0, 1, 2, 3, 4. Each box holds one index, and the label above it is its position in the buffer. Triangles 0 and 1 share the edge from vertex 1 to vertex 2, and triangles 1 and 2 share the edge from vertex 2 to vertex 3, so count (9) is not the number of vertices (5).
+
+The indices parameter is especially easy to misread. If an element-array buffer is bound, a small value such as hexadecimal 1 2 0 is an offset into GPU, graphics processing unit,-managed buffer state, not a process pointer that should be dereferenced.
+
+Section: CPU, central processing unit, submission and GPU execution overlap.
+
+The CPU usually records commands faster than the GPU completes them. A draw call returning does not mean its pixels are finished. Reads that force the GPU to catch up can stall both processors. The hook sees submitted work: it runs when the CPU queues a draw, not when the GPU finishes its pixels.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This overlap explains why a debugger pause or synchronous query can create a much larger performance change than its own instruction count suggests.
+
+Section: A hook sits on the program’s critical path.
+
+The render thread has a deadline: finish enough work for the next frame. A hook adds work to a path that may execute thousands of times per second. Even memory-safe code can cause stutter if it allocates, waits for a lock, formats strings, or writes files there.
+
+Split the design into two rates:
+
+the capture path copies a tiny fixed-size sample and returns immediately;
+
+the analysis path runs later on a worker and may aggregate, label, or save bounded results.
+
+Diagram labels, in drawing order: Worker thread; Bounded channel; Render thread, inside the hook; If the channel is full, the sample is dropped and a counter goes up. The hook never waits.; copy mode, count, and type into a DrawSample; try_send the sample; call the real glDrawElements and return; the worker takes samples whenever it runs; aggregate, label, and save.
+
+The render thread’s work ends at try_send; everything slow happens on the worker’s schedule. Measure both dropped samples and time spent in the hook. A dropped sample leaves a gap in the log, while blocking slows the very frames you are trying to measure.
+
+Image description: Locating glDrawElements in the debugger
+
+Section: Write the function type.
+
+For a 32-bit Windows OpenGL 1.x target, the calling convention is significant:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The exact signature comes from the OpenGL API, application programming interface,, not from guessing registers.
+
+In an older fixed-function renderer, transforms and arrays may be ordinary OpenGL state. In a modern renderer, shader programs and buffer objects carry the same roles. Hooking the draw call still works, but the state needed to explain a draw changes with the API version and engine.
+
+Section: Keep the original function.
+
+The wrapper needs a way to reach the real OpenGL function after it has intercepted a call. Store the resolved function pointer once during setup; every draw can then forward through that saved pointer without another lookup on the render thread:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Initialization must resolve and store the real function before the wrapper can forward calls. Avoid resolving it recursively through your own wrapper.
+
+The failure is recursion: a function calls itself. Recursion is useful when each call handles a smaller case and a base case eventually returns. Here there is no smaller case. If ORIGINAL_DRAW_ELEMENTS accidentally points to draw_elements_hook, the call path is:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+No call reaches OpenGL, so no call can return. Each nested call keeps a stack frame for its return address and local values, as Lesson 3.4 explained. The thread’s finite stack (often 1 MiB by default for a Windows executable, but configurable) eventually fills and Windows raises a stack-overflow exception, usually on the first draw. Resolving the real function before installing the wrapper breaks this cycle. The failure table at the end of the lesson calls this “Infinite recursion.”
+
+Section: Forward first.
+
+Begin with a transparent wrapper:
+
+Code example. The code’s comments explain: 🔁 SAFETY: the wrapper preserves the API signature and forwards the exact // arguments supplied by the original caller. unsafe { original(mode, count, element_type, indices) };}
+
+Run the game and verify that rendering is unchanged. Only then add the code that copies samples.
+
+Section: Do not log every call to disk.
+
+Draw calls can occur thousands of times per frame. Synchronous file output inside the hook will destroy performance and can cause re-entry problems.
+
+Use a bounded channel and allow drops:
+
+Code example. The code’s comments explain: 🎯 In the hook, observe the state immediately before forwarding the call:let _ equals sender.try_send(DrawSample { mode, count, element_type });
+
+A worker thread can aggregate samples later. If the channel is full, losing a sample is better than blocking the render thread.
+
+Section: Classify with experiments.
+
+The count argument may correlate with a model in one exact build:
+
+Image description: Filtering draw calls by count
+
+But count alone is fragile. Different objects can share a vertex count, and model updates can change it.
+
+Collect features such as:
+
+draw mode;
+
+element count;
+
+bound texture;
+
+shader or fixed-function state;
+
+model/view transform;
+
+call site.
+
+Then change one visible object and compare the samples.
+
+Capture the smallest feature vector that can answer the current question:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+call_site distinguishes engine submission paths, but compiler inlining and updates can change it. texture can identify a material in one scene, but skins, quality settings, and atlases can change it. A feature can be trusted to identify a category only after changing one thing at a time — the model, the map, a graphics setting — leaves it pointing at the same objects.
+
+Section: Shaders turn vertex records into pixels.
+
+A shader is a small GPU program invoked many times in parallel. Two stages are central here:
+
+a vertex shader reads one vertex (and often matrices) and produces clip-space position plus values to interpolate;
+
+a fragment shader runs for candidate covered samples and produces a color, depth, or another render-target output.
+
+Values such as texture coordinates and normals are interpolated across a triangle. The fragment shader usually does not receive the original vertex value. This is why a draw’s texture, program, uniforms, and vertex layout are part of its identity.
+
+Older fixed-function OpenGL calls hide these programs behind predefined state, but the pipeline still performs equivalent transformations and color calculations.
+
+This is a classification problem. A threshold such as count greater than 500 separates the examples you observed, not necessarily the concept “player.” Test it against weapons, detailed scenery, menus, different models, and different graphics settings. Report false positives (something your rule caught that is not a player) and false negatives (a player your rule missed) instead of quietly turning a correlation into a definition.
+
+Section: Turn the wrapper into the actual Urban Terror wallhack.
+
+The API signature, draw-count interpretation, and sampling design above stand on their own. The exact-build detour below applies the DLL, dynamic link library, and patch lifecycle from Lesson 6.4 to one verified OpenGL instruction. Recheck the displaced instruction span and restoration path before running it.
+
+In Urban Terror 4.3.4, resolve glDrawElements from opengl32.dll. The historical build hooks the instruction at glDrawElements + hexadecimal 1 6 and resumes six bytes later. This is not a function-entry wrapper: it is a real code cave in the middle of the OpenGL function. At this point in this 32-bit build, EBX holds count.
+
+Resolve these two OpenGL functions with GetProcAddress:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+glDepthRange(near, far) controls where a fragment’s depth lands in the depth buffer after projection, by remapping the normalized -1..1 range onto whatever window-space interval you pass in. The default call is glDepthRange(0.0, 1.0): keep every fragment’s real depth. Calling glDepthRange(0.0, 0.0) instead collapses that mapping to a single point — every fragment’s stored depth becomes 0.0, the value reserved for the nearest possible surface, no matter how far away the vertex actually was. On its own that would not help, because the depth test would still reject a highlighted fragment sitting behind whatever was already drawn there. Switching glDepthFunc from GL_LEQUAL to GL_ALWAYS removes that objection: the test now passes unconditionally, so the fragment collapsed to depth zero is drawn regardless of what is already in the buffer. It is the combination — flatten the depth, then stop testing it — that pushes highlighted geometry through walls; neither call does it alone.
+
+The six bytes we replace are one whole x86 instruction:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Before and after the patch, the six bytes at glDrawElements + hexadecimal 1 6 look like this:
+
+Labelled memory diagram. +hexadecimal 1 6: 8B; +hexadecimal 1 7: B6; +hexadecimal 1 8: 18; +hexadecimal 1 9: 0A; +hexadecimal 1 A: 00; +hexadecimal 1 B: 00. Groups: mov into esi from [esi + displacement]; displacement hexadecimal A 1 8, lowest byte first. Before: one whole instruction. Read lowest byte first, 18 0A 00 00 is hexadecimal 1 8 + hexadecimal 0 A times 256 equals 24 + 2,560 equals 2,584, which is hexadecimal A 1 8.
+
+Labelled memory diagram. +hexadecimal 1 6: E9, highlighted; +hexadecimal 1 7: ??, highlighted; +hexadecimal 1 8: ??, highlighted; +hexadecimal 1 9: ??, highlighted; +hexadecimal 1 A: ??, highlighted; +hexadecimal 1 B: 90. Groups: jmp to the cave: E9 plus a 4-byte distance; nop. After: the four ?? bytes hold the distance from +hexadecimal 1 B, the byte right after the jump (hexadecimal 1 6 + 5 equals hexadecimal 1 B), to the cave, so they depend on where the DLL loaded. The cave returns to +hexadecimal 1 C (hexadecimal 1 6 + 6 equals 22 + 6 equals 28 equals hexadecimal 1 C), so the nop never runs; it only fills the sixth byte so no fragment of the old instruction is left behind.
+
+The installer refuses to patch if those bytes do not match. It writes a five-byte near jump plus one NOP, and LocalPatch owns the saved bytes so dropping the patch restores them:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The cave saves the CPU flags and all general-purpose registers, passes the live EBX value to an ordinary helper, replays the displaced instruction, and returns to the byte immediately after it:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Why save everything? The original OpenGL function expects its registers and flags to have particular values when it resumes. The compiler is free to use registers while apply_urban_terror_gl_state runs. Saving and restoring them makes the helper almost invisible to the interrupted function.
+
+The helper changes the live OpenGL state. A later non-highlighted draw restores normal depth state:
+
+Code example. The code’s comments explain: 🛡️ SAFETY: these pointers were resolved from this process's opengl32.dll, // and the game reached the cave on its OpenGL render thread. unsafe { if highlighted { depth_range(0.0, 0.0); depth_func(GL_ALWAYS); } else { depth_range(0.0, 1.0); depth_func(GL_LEQUAL); } }}
+
+Build the DLL for 32-bit Windows, inject it into Quake3-UrT.exe, enter a local match, and press F2. Geometry with count greater than 500 is forced to the near plane and uses GL_ALWAYS, producing the player/weapon-through-wall result shown below. Press F2 again or End to restore normal state and the original six code bytes.
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The complete compiled implementation—including export lookup, the naked cave, exact-byte verification, both graphics modes, and restoration—is in opengl_hooks.rs. The hotkey worker is in dll.rs.
+
+Image description: Urban Terror wallhack after count filtering
+
+The threshold is a confirmed property of this lesson build, not a universal player detector. Log counts while toggling third-person and adding/removing bots so you can see exactly which models it includes.
+
+Section: Restore graphics state.
+
+OpenGL is a state machine: a call changes settings that remain active until another call changes them. This middle-of-function cave cannot surround one typed glDrawElements call, so it restores the normal state when the next non-highlighted draw arrives and when the feature is disabled. Pressing End also disables the mode before removing the code patch. That ordering prevents the game from being left with GL_ALWAYS active.
+
+State restoration must match what was changed. A robust typed wrapper queries or tracks the previous depth function, depth range, enabled client arrays, color, and bindings. Restoring guessed “defaults” works only until another legitimate render pass enters with different state. A middle-of-function cave has fewer safe options, which is a real limitation of that interception point rather than an implementation detail to ignore.
+
+Section: Diagnose common failures.
+
+Table columns: Result; Check.
+
+Result: Immediate crash; Check: Signature, calling convention, or original pointer.
+
+Result: Infinite recursion; Check: Original resolved to wrapper.
+
+Result: Missing geometry; Check: Parameters were not forwarded exactly.
+
+Result: Broken later draws; Check: Graphics state not restored.
+
+Result: Huge slowdown; Check: Blocking or allocation inside the hook.
+
+The first success is not a visual effect. It is a transparent wrapper that produces a bounded stream of samples while the game draws normally.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/5/03/

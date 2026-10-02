@@ -1,0 +1,151 @@
+Snapshots as a Script Interface
+
+Section: Do not turn Lua into an untyped memory API, application programming interface,.
+
+After building a memory reader, it is tempting to expose this:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+That design gives a typo the power of the process handle. It also couples scripts to exact offsets and makes every mod responsible for pointer validation.
+
+Expose domain meaning instead:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Section: The host owns collection and validation.
+
+The Windows layer should:
+
+open the target with the least required rights;
+
+verify game build and architecture;
+
+resolve versioned roots and pointer paths;
+
+copy fields with bounds and plausibility checks;
+
+create ordinary owned records;
+
+close or retain handles according to one clear owner.
+
+Only step 5 crosses into Lua.
+
+The boundary turns unstable bytes into stable meaning, then turns script intent back into checked data:
+
+Diagram. From Game memory to Memory reader. From Memory reader to Validated snapshot. From Validated snapshot to Lua policy. From Lua policy to Typed request. From Typed request to Host revalidates. From Host revalidates to Bounded local action.
+
+Addresses stop at the memory reader; Lua receives fields with names, units, and a snapshot version.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+There are no process addresses in this type. A script cannot keep a stale pointer because it never receives one.
+
+Why avoid raw pointers here? Lua can represent native objects through userdata. Full userdata has Lua-managed storage and a host-defined metatable; light userdata is essentially an unowned pointer value. If a native entity dies while a script retains its raw address, the same address may later belong to a different entity. A copied snapshot avoids that lifetime problem for observation. When a request needs persistent identity, use a validated handle rather than a remembered address.
+
+A handle can pair a numbered slot with a generation counter. Every time a slot is reused for a new entity, its generation changes. Suppose Lua remembers slot 3, generation 6. If that entity dies and slot 3 is reused at generation 7, the host rejects the stale pair rather than acting on the new occupant:
+
+Diagram. From Lua holds slot 3,generation 6 to slot 3 reused,generation now 6 + 1 equals 7. From slot 3 reused,generation now 6 + 1 equals 7 to 6 does not match 7:the host refuses. From Lua holds address hexadecimal 2 A 4 0 to native object freed,memory reused. From native object freed,memory reused to the pointer now reacheswhatever lives there.
+
+Lesson 3.6 developed the same identity rule for a game collection. Here it protects the boundary between a script’s request and a changing game world.
+
+Here is one entity as a hypothetical build lays it out in game memory, and the same entity after the observer has copied it into a snapshot and the host has turned that into a Lua table:
+
+Labelled memory diagram. +hexadecimal 1 0: 7; +hexadecimal 3 0: 4.0; +hexadecimal 3 4: 9.0; +hexadecimal 3 8: 2.0; +hexadecimal 3 C: 1; +hexadecimal 4 0: hexadecimal 1 F 2 A 8 C 4 0. Groups: id, u32; position, three f32; alive byte; name pointer. Game memory, labelled by offset from the start of the object; only the fields the snapshot needs are shown. Each f32 is 4 bytes wide, so x, y, and z sit at hexadecimal 3 0, hexadecimal 3 0 + 4 equals hexadecimal 3 4, and hexadecimal 3 4 + 4 equals hexadecimal 3 8. The one-byte alive flag at hexadecimal 3 C is followed by 3 unused bytes, because an 8-byte pointer starts on a multiple of 8 and hexadecimal 4 0 (64 equals 8 times 8) is the next one. The name itself is not stored here: the object holds the address of text kept elsewhere, which the observer follows and copies with a length limit.
+
+Labelled memory diagram. id: 7; name: archer; position.x: 4.0; position.y: 9.0; position.z: 2.0; alive: true. The Lua table the script receives. Every value arrives under a name, the alive byte 1 has become the boolean true, and no offset or pointer survives the copy.
+
+Section: A snapshot has a time and version.
+
+Real snapshots should carry metadata:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Section: Put an abstraction barrier between bytes and game meaning.
+
+An abstraction barrier is a rule about who may know a representation. The observer below the barrier knows that one build stores an entity position at a particular pointer path. Lua above the barrier knows only that an entity has an id, name, position, and alive state.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+If a later build moves the position field, only the observer and its target profile should change. Every script should not learn a new offset.
+
+Make the source of snapshots replaceable too:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A live Windows observer and a replay-file reader can both implement SnapshotSource. The same Lua state machine can then run against recorded data in a test and against the verified game in the lab. That is not just reuse: it lets you test automation without giving the test a process handle.
+
+When Lua requests an action, include the sequence it observed:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The host can reject a request based on a snapshot that is too old. This is safer than pretending copied data is live.
+
+Diagram labels, in drawing order: Lua script; Host; Game; state at sequence 41; snapshot 41, entity 7 alive; entity 7 despawns at sequence 42; request select_entity 7, based_on 41; check entity 7 against sequence 42; refused, entity 7 no longer exists.
+
+The script did nothing wrong: entity 7 really was alive in snapshot 41. The game moved on while the script was deciding, and based_on lets the host see that the request describes a moment that has already passed.
+
+Diagram walkthrough: Follow a valid snapshot into a stale request. Step 1: Capture entity 7. State: sequence 41: entity 7 alive. The observer validates the entity at sequence 41 and copies its fields. This is an observation of one moment, not a promise that the entity will remain alive. Step 2: Give Lua an owned snapshot. State: snapshot.sequence equals 41. Lua receives named values and the sequence they came from. No raw process address crosses the boundary, so the script reasons about the snapshot contract. Step 3: Let the world advance. State: sequence 42: entity 7 missing. Entity 7 despawns while the script is deciding. The earlier snapshot stays internally valid, but it no longer describes the current game world. Step 4: Submit a structured request. State: entity_id=7, based_on=41. The script requests select_entity for the ID it observed and includes sequence 41. It sends data to the host rather than an executable command string. Step 5: Revalidate at action time. State: request 41; current sequence 42. The host checks the request against current identity, state, permissions, and budgets. Entity 7 no longer exists, so this request cannot reach the action layer. Step 6: Return the refusal. State: no action: entity 7 is missing. Return a useful error and keep the host alive. Refusing this stale request preserves the boundary even though the script used a once-valid observation. Snapshot validation and action-time validation protect different moments. A sequence label lets the host connect a request to the observation that produced it.
+
+Section: Requests are data, not commands.
+
+Bad interface:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Better interface:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The host matches an explicit enum:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Unknown kind values fail. No string becomes PowerShell, a console command, or arbitrary game code.
+
+Section: Validate again at action time.
+
+Between snapshot and request processing, an entity may disappear. Check:
+
+the sequence is recent;
+
+the entity still exists;
+
+its current state permits the action;
+
+all numbers are finite;
+
+coordinates remain within known map bounds;
+
+the per-script action budget is not exhausted.
+
+This is a time-of-check/time-of-use issue. Validation during snapshot creation does not guarantee future state.
+
+Section: Keep read and write capabilities separate.
+
+Most analysis scripts need only snapshots and logs. Give them an observer API with no request function at all.
+
+When an offline automation lab needs actions, load it with a different capability set:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Do not decide permissions from a script-provided name. The host chooses the API before executing the script.
+
+Section: Test the boundary without a game.
+
+The lua-labs host uses a simulated snapshot. Add tests where Lua requests:
+
+a missing entity ID;
+
+0/0 or infinity as a coordinate;
+
+an unknown action;
+
+too many actions;
+
+an action from an expired sequence.
+
+The host should reject each request with a useful error and remain alive.
+
+This architecture also makes the script portable. The same Lua logic can consume a recorded replay, a simulated world, or a live observer because it depends on the snapshot contract rather than Windows memory details.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/12/04/

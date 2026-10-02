@@ -1,0 +1,399 @@
+How Assembly Describes a Running Game
+
+Section: What assembly actually is.
+
+A CPU, central processing unit, does not run source code or even the words mov and sub. It runs machine code: bytes whose bit patterns mean operations for one CPU architecture. Continue the 100-to-75 gold purchase from Lesson 2.1: this first instruction loads its price, 25, into a register. Later instructions will compare and subtract it.
+
+Assembly language is a human-readable spelling of those operations. For 32-bit x86, these five bytes:
+
+Labelled memory diagram. cell 1: B8; cell 2: 19; cell 3: 00; cell 4: 00; cell 5: 00. Groups: opcode; the number 25, little endian. B8 means “put the 32-bit number that follows into eax.” The four bytes after it are that number.
+
+can be shown as:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The byte B8 selects one form of mov. The next four bytes hold 25 as a little-endian 32-bit number. The readable instruction and the bytes describe the same CPU action at different levels.
+
+🔍 Reading tip: each instruction changes only a few things, usually one register or one memory location, and sometimes the flags. Taken one instruction at a time, a function becomes ordinary bookkeeping.
+
+Diagram. From source code to machine-code bytesin the EXE. The connection is labelled: compiler. From machine-code bytesin the EXE to the CPU executes them. The connection is labelled: Windows maps theminto memory. From machine-code bytesin the EXE to assembly textfor a human. The connection is labelled: disassembler. From assembly textfor a human to machine-code bytesin the EXE. The connection is labelled: assembler.
+
+An assembler travels from assembly text to machine code. A disassembler travels from machine code to assembly text. A debugger includes a disassembler and also shows the live register and memory values while the instructions execute.
+
+Assembly preserves machine effects, not the author’s original explanation. A release build usually does not retain friendly variable names, comments, source loops, or the exact class boundaries that produced it. Optimization may inline two functions into one, remove a variable completely, or replace multiplication with a different but equivalent instruction sequence.
+
+Therefore, disassembly shows what the machine does; it is not recovered source code. A decompiler can suggest source-like structure, but you still verify its types, signs, widths, branches, and calling convention against the actual instructions.
+
+Section: Assembly depends on the CPU architecture.
+
+This book’s historical game builds are 32-bit x86 programs. Their main registers are named eax, ebx, ecx, edx, esi, edi, esp, ebp, and eip.
+
+A 64-bit x86 program uses wider names such as rax and rip. ARM uses a different instruction set and different register names. Assembly is not one universal language; it is the readable face of a particular processor architecture.
+
+The examples use Intel syntax, where the destination normally appears before the source:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Other tools may display AT&T syntax with a different order and punctuation. Pick one syntax while learning so the notation does not hide the idea.
+
+Section: Read the whole disassembly row.
+
+A debugger may show:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Labelled memory diagram. address: 007CCD91; bytes: 29 42 04; mnemonic: sub; destination: dword ptr [edx+4]; source: eax.
+
+Read it from left to right:
+
+Table columns: Part; Meaning.
+
+Part: 007CCD91; Meaning: address of the first instruction byte in this run.
+
+Part: 29 42 04; Meaning: the three machine-code bytes.
+
+Part: sub; Meaning: mnemonic: the short human name for the operation.
+
+Part: dword ptr [edx+4]; Meaning: destination: a four-byte value in memory.
+
+Part: eax; Meaning: source: the four-byte value to subtract.
+
+In plain English: “Take the 32-bit number stored four bytes after the address in edx, subtract eax, and store the answer back in that same memory location.”
+
+This one sentence is far more useful than memorizing that opcode 29 means a form of subtraction.
+
+Section: The CPU repeats a tiny cycle.
+
+At a simplified level, one thread repeatedly:
+
+uses eip to find the next instruction;
+
+fetches its bytes from executable memory;
+
+decodes what the bytes mean;
+
+reads the required registers or memory;
+
+performs the operation;
+
+writes the result;
+
+advances eip or jumps somewhere else.
+
+Diagram. From fetch the bytesat eip to decode them. From decode them to read registersor memory. From read registersor memory to do the operation. From do the operation to write the result. From write the result to advance eip,or jump. From advance eip,or jump to fetch the bytesat eip.
+
+eip is the instruction pointer. It is not a normal game variable. It tells the CPU where this thread is executing. A jump, call, return, exception, or debugger action can change it.
+
+Section: Registers hold the CPU’s current working values.
+
+Registers are tiny, very fast storage locations built into the CPU. On 32-bit x86, each general-purpose register below holds 32 bits:
+
+Table columns: Register; Common historical role; Important warning.
+
+Register: eax; Common historical role: return value and arithmetic; Important warning: a function may use it for anything temporary.
+
+Register: ebx; Common historical role: preserved general value; Important warning: “preserved” depends on the calling convention.
+
+Register: ecx; Common historical role: counter or this pointer; Important warning: not every use is a counter or object.
+
+Register: edx; Common historical role: arithmetic or extra argument; Important warning: meaning comes from surrounding instructions.
+
+Register: esi / edi; Common historical role: source/destination pointers; Important warning: compilers also use them as ordinary storage.
+
+Register: esp; Common historical role: top of the current thread’s stack; Important warning: unbalanced changes usually crash on return.
+
+Register: ebp; Common historical role: stack-frame reference in some builds; Important warning: optimized code may use it as a normal register.
+
+Register: eip; Common historical role: address of the next instruction; Important warning: controlled by branches, calls, and returns.
+
+The role column is a clue, not a promise. Ask what the current function actually reads and writes.
+
+Section: Bits do not carry their own meaning.
+
+The register value hexadecimal F F F F F F F F is only 32 one-bits. An instruction may interpret those bits as:
+
+unsigned integer 4,294,967,295 ;
+
+signed integer -1 ;
+
+four bytes;
+
+part of a pointer;
+
+a bit mask where every switch is on.
+
+Labelled memory diagram. cell 1: FF; cell 2: FF; cell 3: FF; cell 4: FF. Groups: as a u32: 4,294,967,295; as an i32: minus 1. The bits are identical. Only the instruction that uses them chooses the reading.
+
+Source-level types give those bits a declared meaning. In disassembly, only the instruction that uses the bits, and the code around it, tells you which meaning applies.
+
+You do not need to memorize the whole x86 instruction set. Start with a handful of verbs, but always connect each verb to the CPU, registers, memory, and control flow described above.
+
+Section: The debugger changes the view, not the bytes.
+
+The same four bytes can be displayed as hexadecimal, a signed integer, an unsigned integer, a float, four characters, or an instruction. Changing the debugger’s display format does not convert the target’s memory. It changes only the question you ask about those bits.
+
+Use the program’s operations to choose the view:
+
+a floating-point instruction supports a float interpretation;
+
+sign extension or a signed conditional jump supports a signed integer;
+
+a memory dereference supports an address interpretation;
+
+repeated one-byte reads ending at zero support a C-string interpretation;
+
+bytes that decode into valid-looking instructions are code only if control flow actually reaches them.
+
+This last point matters because a code section can contain alignment bytes, constants, and jump tables. A disassembler can produce a plausible instruction from almost any byte sequence. What makes bytes code is that execution reaches them: a jump, call, or fall-through from other code leads there, or a debugger sees the CPU run them.
+
+Section: Moving data.
+
+mov destination, source copies data:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Square brackets mean “use the memory at this address”:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Without brackets, rcx is a number. With brackets, that number is treated as an address.
+
+For the 32-bit course games, the same examples usually use ecx instead of rcx:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Labelled memory diagram. hexadecimal 5 0 0 0: 64; hexadecimal 5 0 0 1: 00; hexadecimal 5 0 0 2: 00; hexadecimal 5 0 0 3: 00. Groups: mov eax, [ecx] copies these four bytes: eax equals 100. Suppose ecx holds hexadecimal 5 0 0 0. mov eax, ecx copies the number hexadecimal 5 0 0 0 itself. The brackets in mov eax, [ecx] go to that address and copy what is stored there.
+
+The instruction decides the size. byte ptr means one byte, word ptr means two, dword ptr means four, and qword ptr means eight.
+
+Section: Little endian explains “backward” bytes.
+
+x86 stores a multi-byte integer with its least-significant byte first. The value hexadecimal 1 2 3 4 5 6 7 8 appears in memory as:
+
+Labelled memory diagram. +0: 78; +1: 56; +2: 34; +3: 12. Groups: the value hexadecimal 1 2 3 4 5 6 7 8.
+
+The number is not reversed when the CPU uses it. This is only the byte order in memory. The conversion helpers u32::from_le_bytes and to_le_bytes make the chosen byte order explicit.
+
+Section: Doing math.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The source-level equivalent is easier to read:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Starting at 25, those four operations leave value at 32: add 10, subtract 3, add 1, subtract 1. The assembly operations would do the same arithmetic if eax started at 25. The debugger lets us check the actual register value before and after each instruction instead of assuming that starting point.
+
+Section: Comparing and branching.
+
+cmp performs a comparison and updates flags. A jump reads those flags:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+je means “jump if equal.” Common jumps include:
+
+Table columns: Instruction; Meaning after cmp left, right.
+
+Instruction: je / jz; Meaning after cmp left, right: equal / zero.
+
+Instruction: jne / jnz; Meaning after cmp left, right: not equal / not zero.
+
+Instruction: jg; Meaning after cmp left, right: greater, signed.
+
+Instruction: jl; Meaning after cmp left, right: less, signed.
+
+Instruction: ja; Meaning after cmp left, right: above, unsigned.
+
+Instruction: jb; Meaning after cmp left, right: below, unsigned.
+
+Instruction: jmp; Meaning after cmp left, right: always jump.
+
+Signed and unsigned matter because the same bits can be read in different ways. hexadecimal F F F F F F F F is 4,294,967,295 as a u32, but -1 as an i32.
+
+That choice decides which branch actually runs. Imagine a price of hexadecimal F F F F F F F F arriving at a gold check while the player holds 100 gold:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Identical bits, identical cmp, opposite outcomes. When you are reading a check that guards something valuable, the signedness of the jump is not a footnote — it is very often the entire bug.
+
+The type makes that choice visible:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The assertion passes because -1_i32 and u32::MAX have the same four-byte pattern on this target. A signed jump treats that pattern as minus 1; an unsigned jump treats it as 4,294,967,295. The branch instruction determines which meaning controls the next step.
+
+Section: Flags are one-bit answers from the last operation.
+
+eflags is a register containing many one-bit results. Common ones include:
+
+Table columns: Flag; Plain-English question it helps answer.
+
+Flag: ZF, zero flag; Plain-English question it helps answer: Was the result zero?.
+
+Flag: CF, carry flag; Plain-English question it helps answer: Did unsigned arithmetic carry or borrow?.
+
+Flag: SF, sign flag; Plain-English question it helps answer: Is the result’s top bit set?.
+
+Flag: OF, overflow flag; Plain-English question it helps answer: Did signed arithmetic overflow its range?.
+
+cmp eax, ebx behaves like a subtraction that throws away the numeric answer but keeps the flags. je, jg, ja, and the other conditional jumps interpret those flags in different combinations.
+
+This is why signed and unsigned jumps differ even though the register bits are identical.
+
+Here are the flags after the two comparisons in the gold check at the end of this lesson:
+
+Labelled memory diagram. ZF: 0; CF: 0; SF: 0; OF: 0. Gold 100 compared with price 25: 100 minus 25 equals 75. The result is not zero and nothing was borrowed, so je and jb both fall through.
+
+Labelled memory diagram. ZF: 0; CF: 1, highlighted; SF: 1, highlighted; OF: 0. Gold 20 compared with price 25: 20 minus 25 needs a borrow. CF equals 1 makes jb jump. SF differs from OF, which makes jl jump as well.
+
+Section: Calls, returns, and the stack.
+
+call jumps into a function and remembers where to return. ret goes back.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The stack is a last-in, first-out area used for return addresses, saved registers, and some local values:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+On 32-bit x86, the stack grows toward lower addresses. push eax subtracts four from esp and stores eax there. pop eax loads four bytes and adds four back to esp.
+
+Labelled memory diagram. hexadecimal 0 0 1 9 F F 3 0: older data, where esp pointed before; hexadecimal 0 0 1 9 F F 2 C: 25, the value in eax, highlighted. Groups: esp after push eax. push eax with eax equals 25. The stack pointer moves down four bytes and the value lands there. pop eax reads it back and moves esp up again.
+
+call target is roughly:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+ret roughly pops that saved address into eip. If a hook adds an unmatched push, ret may treat some unrelated value as an address and jump into nonsense.
+
+Follow the call calculate_damage above through its return. The saved address belongs to the caller’s next instruction; it is separate from the address of calculate_damage:
+
+Diagram walkthrough: A function call leaves a route back. Step 1: Reach the call. State: call calculate_damage. The caller reaches call calculate_damage. Execution must enter calculate_damage and later continue at the instruction immediately after this call. Step 2: Save the continuation. State: return address on stack. On the 32-bit x86 path described here, call pushes the address of the next instruction onto the stack. That stored return address records where the caller should resume. Step 3: Run the function. State: eip: calculate_damage. Execution jumps to calculate_damage. Any temporary pushes must have matching cleanup so that the saved return address is available when the function returns. Step 4: Read the return address. State: eip: saved continuation. ret takes the saved address from the stack and places it in eip. An unmatched push could leave an unrelated value where ret expects that address. Step 5: Continue in the caller. State: next instruction in caller. Execution resumes immediately after call calculate_damage, at the line marked by the comment in the assembly fragment. The function's entry address tells call where to go; the saved continuation tells ret where to come back.
+
+Section: Calling conventions are agreements between functions.
+
+A calling convention answers questions such as:
+
+Where are arguments placed: stack or registers?
+
+Which registers must the called function preserve?
+
+Who removes stack arguments?
+
+Where is the return value placed?
+
+The course’s 32-bit games commonly expose cdecl, stdcall, and thiscall boundaries. The three differ mainly in who removes the arguments from the stack after the call. cdecl leaves that job to the caller, which is also what lets a cdecl function such as printf accept a varying number of arguments—only the caller knows how many it pushed. stdcall makes the callee remove its own arguments before returning. In a typical 32-bit thiscall, ecx carries the object pointer—the value an object method treats as self or this—while other arguments use the stack, and the callee cleans up like stdcall.
+
+Do not identify a calling convention from one register alone. Inspect how the caller prepares arguments and how the callee returns. A wrong convention can leave esp incorrect even when the function address is right.
+
+On 64-bit Windows, ordinary integer and pointer arguments start in rcx, rdx, r8, and r9; floating-point arguments use the matching XMM argument registers. The caller also reserves stack space for the register arguments and keeps the stack correctly aligned. There is one main Windows x64 convention, so do not carry the old 32-bit cdecl versus stdcall cleanup distinction into 64-bit code.
+
+A calling convention is more than an argument list. It is the complete border contract between caller and callee:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Read both sides of a call. Code before call explains what the caller offers; the callee’s first uses explain what it expects; code after the return shows what the caller believes survived.
+
+Section: Address calculations.
+
+This pattern appears constantly:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Read it as: “Start at the address in rcx, move forward hexadecimal 3 0 bytes, then read a 32-bit value.” If rcx points to a player object, offset hexadecimal 3 0 might be a field such as health.
+
+A typed struct expresses the idea by name:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+#[repr(C)] asks the compiler for a predictable C-compatible field layout. We only rely on a layout after confirming its offsets; guessing a struct from one screenshot is not enough.
+
+Section: lea does math, not a read.
+
+lea stands for “load effective address.” It works out the address the brackets describe and stores that number, instead of reading whatever lives there. It is the one common instruction where brackets do not mean a memory access:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The mov reads into eax because the elements are four bytes wide. Reading into the eight-byte rax would take the next element along with it.
+
+The *4 is a strong hint that this is array indexing: rcx holds the start of an array, rdx holds an index, and each step of the index moves four bytes because each element is four bytes wide. So this lea computes “the address of element number rdx,” which is exactly what code does just before handing one element to another function.
+
+Labelled memory diagram. rcx+0: 10; rcx+4: 20; rcx+8: 30, highlighted; rcx+12: 40. Groups: element 2. An array of four-byte numbers, with rdx equals 2. lea rax, [rcx+rdx*4] puts the address rcx+8 in rax. mov eax, [rcx+rdx*4] reads the number stored there, 30.
+
+Compilers also use lea as a quick way to do plain arithmetic, since it can multiply and add in one instruction without disturbing the flags. Do not assume every lea result is a pointer.
+
+Section: A five-question reading method.
+
+For each instruction, ask:
+
+What is read?
+
+What is written?
+
+How many bytes are involved?
+
+Is a number signed or unsigned?
+
+Where can execution go next?
+
+Answer those five questions one instruction at a time. A long function becomes a trail of small facts.
+
+Section: Trace both data flow and control flow.
+
+Reading only downward through the listing works for a tiny straight-line function. Larger functions need two connected maps.
+
+Data flow asks where a value came from and where it goes next. If eax is compared, trace backward to the instruction that last wrote eax. If [ecx+hexadecimal 3 0] is changed, trace how ecx obtained the suspected player address and who later reads that field.
+
+Control flow asks which instruction can run next. A straight sequence with one entry and one exit is often called a basic block. Conditional jumps connect blocks into a graph:
+
+Diagram. From read gold to compare with price. From compare with price to enough?. From enough? to subtract. The connection is labelled: yes. From subtract to success. From enough? to failure. The connection is labelled: no.
+
+The graph explains the decision even when the compiler has rearranged the blocks. Source-level if, match, loops, early returns, and error paths all become control-flow edges of this kind.
+
+Use both maps together. A branch tells you when a write occurs; data flow tells you what it changes. Guessing from only one of them is how a nearby animation counter gets mislabeled as health or a failure path gets mistaken for the normal path.
+
+Section: Trace a complete tiny function.
+
+Suppose ecx points to a player and gold is the four-byte field at offset 4:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The same listing as a control-flow graph. Each box is a basic block, and the only decision is the jb:
+
+Diagram. From mov eax, [esp+4]cmp dword ptr [ecx+4], eaxjb cannot_afford to sub dword ptr [ecx+4], eaxmov eax, 1ret 4. The connection is labelled: gold is not below the price. From mov eax, [esp+4]cmp dword ptr [ecx+4], eaxjb cannot_afford to cannot_afford:xor eax, eaxret 4. The connection is labelled: gold is below the price, unsigned.
+
+Three details in that listing puzzle almost everyone the first time.
+
+Why [esp+4] and not [esp]? The call that reached this function pushed a return address onto the stack, so that address is now sitting at [esp]. The argument the caller pushed just before the call is one slot further in, at [esp+4]. Whenever you see a function collecting its arguments from +4, +8, +12, the saved return address is what those offsets are stepping over.
+
+Labelled memory diagram. hexadecimal 0 0 1 9 F F 3 4: the caller's own data; hexadecimal 0 0 1 9 F F 3 0: the price argument, 25; hexadecimal 0 0 1 9 F F 2 C: the return address, pushed by call, highlighted. Groups: [esp+4]; [esp]. The stack as the function begins. esp points at the return address, so the argument the caller pushed just before the call is one slot further in.
+
+Why xor eax, eax instead of mov eax, 0? Both leave zero in eax. Any value exclusive-ORed with itself is zero, and the xor form assembles to fewer bytes, so compilers emit it constantly. Read xor register, register as “set this register to zero” and keep going.
+
+Why does ret have a number after it? ret 4 returns and discards four bytes of arguments from the stack, so the function cleans up after itself. A plain ret leaves that job to the caller. Which form a function uses is fixed by its calling convention, and getting it wrong corrupts esp: execution returns to the correct place, and from that point on the caller’s stack is off by four bytes.
+
+Trace it with gold equals 100 and price equals 25:
+
+Table columns: Step; Important state.
+
+Step: enter; Important state: ecx equals player, [ecx+4] equals 100, [esp+4] equals 25.
+
+Step: mov; Important state: eax equals 25.
+
+Step: cmp; Important state: flags describe 100 - 25; unsigned-below is false.
+
+Step: jb; Important state: branch is not taken.
+
+Step: sub; Important state: [ecx+4] equals 75.
+
+Step: mov; Important state: eax equals 1 return value.
+
+Step: ret 4; Important state: caller resumes and the argument is removed.
+
+Now trace gold equals 20. The jb branch skips the subtraction and returns zero. That is assembly comprehension: follow state changes and rebuild the higher-level decision.
+
+Section: What the debugger is showing.
+
+Assembly text is a readable rendering of machine bytes for one CPU architecture; x86 and ARM bytes need different decoders. In the x86 trace, eip locates the next instruction, esp marks the stack top, and eflags holds one-bit results that branches can use. Brackets such as [edx+4] mean read or write memory at the calculated address; edx+4 without brackets is only an address calculation. A call saves a return address on the stack, and ret uses it to resume the caller. The calling convention completes that contract by fixing where arguments and results go and who removes arguments from the stack. Breakpoints in the next lesson let you inspect those facts while a real instruction is paused.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/2/02/

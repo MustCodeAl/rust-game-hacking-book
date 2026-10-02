@@ -1,0 +1,113 @@
+When Game Values Are Encoded
+
+Section: Obfuscation changes the representation.
+
+A game does not have to store health as the obvious integer 125. It might XOR the value with a key, rotate the bits, split it across fields, or store both a value and a check value.
+
+This is obfuscation: it makes a value less obvious. If the running program can decode it, an analyst can usually trace that decoding logic too. Obfuscation is not the same as encryption, and neither one automatically makes a program fair or secure.
+
+We use the book’s own toy type. Do not use this lesson to defeat protection in a third-party competitive game.
+
+Section: Start at where meaning appears.
+
+Searching memory for the number 125 may fail because that representation never exists for long. A better question is:
+
+Which instruction produces the value that the health bar or damage rule uses?
+
+In a debug build, place a breakpoint near the rendering or gameplay function, then step backward through the data flow. A small decode might compile into operations like:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Follow edx too. A transform without its key is only half the formula.
+
+Section: Write the formula in both directions.
+
+The lab uses:
+
+Diagram. From value to value XOR key. The connection is labelled: XOR key. From value XOR key to encoded. The connection is labelled: rotate_left(7). From encoded to value XOR key. The connection is labelled: rotate_right(7). From value XOR key to value. The connection is labelled: XOR key.
+
+The inverse relationship is easy to test:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+That last property is the important one: decoding the encoded value must recover the starting value for many inputs, not only one lucky example.
+
+Follow the loop’s 100 case with its key hexadecimal A 1 B 2 C 3 D 4. The changing numbers below are all 32-bit values; the final result must return to the starting one:
+
+Diagram walkthrough: Undo a transformation in the opposite order. Step 1: Start with the logical value. State: value: 100; key: hexadecimal A 1 B 2 C 3 D 4. Use value 100 and key hexadecimal A 1 B 2 C 3 D 4, the same key passed to both functions in the test loop. Step 2: XOR with the key. State: after XOR: hexadecimal A 1 B 2 C 3 B 0. 100 XOR hexadecimal A 1 B 2 C 3 D 4 gives hexadecimal A 1 B 2 C 3 B 0. This intermediate value is what encode rotates next. Step 3: Store the rotated representation. State: encoded: hexadecimal D 9 6 1 D 8 5 0. Rotate the 32-bit intermediate left by seven positions. The encoded value is hexadecimal D 9 6 1 D 8 5 0, which differs from the logical value 100. Step 4: Undo the rotation first. State: after rotate: hexadecimal A 1 B 2 C 3 B 0. decode rotates hexadecimal D 9 6 1 D 8 5 0 right by seven positions. That recovers the intermediate hexadecimal A 1 B 2 C 3 B 0 before applying the key. Step 5: XOR with the same key again. State: decoded: 100. hexadecimal A 1 B 2 C 3 B 0 XOR hexadecimal A 1 B 2 C 3 D 4 returns 100. The round-trip assertion checks this result against the original input. Encoding applies XOR then rotation; decoding reverses the order. This reversible toy representation is not a security guarantee.
+
+Section: An integrity value is another clue.
+
+The lab also stores a toy tag calculated from the encoded value and key. When one bit changes, the tag no longer agrees:
+
+Diagram. From encoded value + key to make_tag(encoded, key). From make_tag(encoded, key) to equals thestored tag?. From equals thestored tag? to Err(IntegrityError). The connection is labelled: no. From equals thestored tag? to decode(encoded, key). The connection is labelled: yes.
+
+The code makes the two exits explicit. It recomputes the tag from the stored encoded value and the supplied key; a mismatch returns IntegrityError without decoding. A match permits the inverse transformation and returns the logical value in Ok.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This tag is educational, not cryptographically secure. An attacker who understands make_tag can calculate a matching tag. The useful lesson is structural: if a changed value is immediately rejected, look for another field or function that validates it.
+
+Section: Dynamic keys change over time.
+
+Some programs change a key when a level loads, an object is created, or a value is written. Reading the same field at several moments shows which events change the key:
+
+Table columns: Moment; Logical value; Encoded bytes; Suspected key source.
+
+Moment: spawn; Logical value: 125; Encoded bytes: E9 88 …; Suspected key source: constructor argument.
+
+Moment: damage; Logical value: 100; Encoded bytes: 75 84 …; Suspected key source: same object field.
+
+Moment: reload; Logical value: 125; Encoded bytes: different; Suspected key source: new session state.
+
+Do not assume a value has “random encryption” merely because its bytes change. The cause may be an ordinary per-object key, a pointer-relative cookie, a checksum, or unrelated neighboring data.
+
+Section: Run the complete lab.
+
+The full implementation lives in advanced-memory-labs/src/obfuscation.rs, with a small executable in src/bin/obfuscation_lab.rs:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The demo prints a transformed value, decodes it, flips one bit, and shows the integrity failure. Its tests prove both the round trip and the failure case.
+
+Section: The analysis, step by step.
+
+Start from the exact build and one object address.
+
+Trigger one controlled change in your own target.
+
+Capture the encoded field before and after.
+
+Find the code that reads the field for a meaningful decision.
+
+Trace every operand feeding the decoded result.
+
+Express the operations as a small pure function.
+
+Test the inverse over many inputs.
+
+Look for validation or duplicate fields.
+
+Section: What not to conclude.
+
+❌ “XOR means this is secure encryption.”
+
+✅ XOR can be one reversible step; security depends on a complete, reviewed construction and key handling.
+
+❌ “The value changed, so my offset is wrong.”
+
+✅ The representation or key may have changed.
+
+❌ “One successful decode proves the formula.”
+
+✅ Test several values, sessions, and objects.
+
+❌ “An integrity field is impossible to reproduce.”
+
+✅ First determine whether it is a checksum, a keyed MAC (message authentication code, which needs a secret key), or an authenticated-encryption tag.
+
+The next lesson returns to game text and its byte encoding. For the deeper distinction between checksums, signatures, encryption, and authenticated formats, continue to Chapter 9’s integrity and protection lessons.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/3/06/
