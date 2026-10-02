@@ -1,0 +1,177 @@
+Encryption and Key Lifecycles
+
+Section: Five tools with different jobs.
+
+Lesson 9.8 used a hash to compare exact files and a signature to check a publisher’s approval. Suppose instead that a save contains private data and the owner wants to keep its contents unreadable on disk. That calls for encryption and a plan for the key. The related words are easy to mix up, so first give each tool one job.
+
+These words are often mixed together. Their jobs are not interchangeable:
+
+Table columns: Tool; Reversible?; Secret required?; Main job.
+
+Tool: Encoding; Reversible?: Yes; Secret required?: No; Main job: Represent data, such as Base64 or UTF-8.
+
+Tool: Hash; Reversible?: No; Secret required?: No; Main job: Produce a fixed-size fingerprint.
+
+Tool: MAC; Reversible?: No; Secret required?: Yes; Main job: Detect changes made without the secret key.
+
+Tool: Encryption; Reversible?: Yes, with key; Secret required?: Yes; Main job: Hide the plaintext.
+
+Tool: AEAD; Reversible?: Yes, with key; Secret required?: Yes; Main job: Hide plaintext and authenticate it and its context.
+
+AEAD means authenticated encryption with associated data. It is usually the right starting point for a new encrypted file or message because confidentiality without tamper detection is incomplete.
+
+Section: One shared key or a key pair.
+
+The lab uses symmetric encryption: one key both locks and unlocks, so whoever encrypts and whoever decrypts must hold the same secret. It is efficient for large payloads, but it leaves a problem: the key has to reach the other side without anyone copying it on the way.
+
+Public-key cryptography uses a public/private key pair, as Lesson 9.8 showed for signatures. In a public-key encryption scheme, anyone with your public key can protect a small message for you, while your private key is needed to open it. Picture giving out open padlocks and keeping their key. That picture does not explain key agreement, where two sides contribute information and derive shared secret material without sending the finished secret. Nor does the padlock tell you whose public key you received: identity must be checked separately.
+
+Network protocols combine these jobs. In a certificate-authenticated TLS 1.3 connection, a handshake authenticates the server and establishes shared secret material; both sides derive symmetric traffic keys from it, and authenticated encryption protects the records. The handshake does not simply send a browser-generated traffic key inside the server’s public-key padlock. See the TLS 1.3 specification. The save lab has no remote recipient to agree with: the owner seals and opens the file on the same PC. Its harder question is where to keep the long-lived key, not how to transport it across a network.
+
+Section: Start with the threat model, not the cipher name.
+
+Before choosing an algorithm, write four plain-English statements:
+
+Asset: what information or game state needs protection?
+
+Adversary: what can the person you are defending against read, change, or execute?
+
+Property: do you need confidentiality, integrity, authenticity, availability, or some combination?
+
+Trust boundary: which program, account, or server is allowed to hold the key and make the final decision?
+
+For an offline single-player save, the player controls the same PC that must decrypt the save. Encryption can protect the file from casual disclosure or accidental editing, but it cannot create a server-like secret boundary by itself. If the game ships a key and must use it locally, a determined owner can observe that use. For a server-authoritative multiplayer profile, the server can keep the authoritative key and state outside the client’s control.
+
+This does not make local encryption useless. It makes its promise precise. Security engineering starts by choosing a realistic promise, then checks whether the mechanism actually enforces it.
+
+Section: The parts of an encrypted envelope.
+
+The lab uses XChaCha20-Poly1305 from the RustCrypto chacha20poly1305 crate. One envelope contains:
+
+Labelled memory diagram. +hexadecimal 0 0: nonce, 24 bytes; +hexadecimal 1 8: ciphertext, same length as the plaintext; end minus hexadecimal 1 0: 16-byte Poly1305 tag. One sealed envelope, in the order seal writes it. split_at_checked(24) in the decryption code is what separates the nonce from everything after it.
+
+The nonce is not a password and does not need to be hidden. It must be unique for messages protected by the same key. XChaCha20’s larger nonce makes random generation practical, but the program still stores it with the ciphertext so decryption can use the same value.
+
+Section: Associated data protects context.
+
+Some information should remain readable but must not be silently swapped. The lab authenticates this context:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+If someone moves the ciphertext to slot four or claims it uses another format, opening it fails.
+
+Diagram. From seal with contextsave-slot:3, format:1 to envelope stored on disk. From envelope stored on disk to open with contextsave-slot:4. From open with contextsave-slot:4 to decryption fails. The connection is labelled: context does not matchwhat was authenticated.
+
+The associated data is not encrypted; it is included in the authentication calculation.
+
+Section: Complete sealing code.
+
+Here the inputs are a 32-byte key, the save bytes, and context such as save slot and format version. seal generates a fresh nonce, encrypts and authenticates the save plus its context, then stores the nonce before the ciphertext so the opener can use the same nonce later. The key stays outside the returned envelope:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The complete lab returns descriptive errors and includes tests. Its dependency is pinned by Cargo.lock:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This uses the current 0.11 API, application programming interface, documented by RustCrypto.
+
+Section: Opening must fail closed.
+
+Decryption splits the nonce from the envelope, then authenticates both ciphertext and context:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Do not return partly decrypted data after an authentication error. Do not explain whether the key, nonce, tag, context, or ciphertext was wrong to an untrusted caller; one generic failure avoids turning error messages into an oracle.
+
+Section: The key is the hard part.
+
+Perfect encryption code with a key committed to Git is still broken. A save editor or local game tool that protects player data needs answers to:
+
+Where is the key created?
+
+Is it unique per user, device, or save?
+
+Where is it stored?
+
+Which process may request it?
+
+How is it rotated?
+
+What happens to old saves?
+
+How is it erased from temporary buffers?
+
+For a Windows game tool, protected operating-system storage may be more appropriate than a constant in the executable. A server-authoritative game may keep important secrets on the server instead of trusting every client. The correct choice depends on what game data the key protects and who must be able to open it.
+
+The demo uses a visible repeated key only to make one local round trip repeatable. A real save or profile tool must load protected key material instead of compiling the key into the executable.
+
+Section: Why nobody guesses the key.
+
+Taking the key is the realistic attack, because guessing it is hopeless. Trying every possible key, a brute-force attack, always works in the end; the question is when the end arrives. Work it out for a 128-bit key.
+
+Each extra bit doubles the number of keys, so 128 bits give 2 to the power of 128 keys. To size that, use 2 to the power of 10 equals 1,024, which is a little more than 1,000: every 10 bits multiply the count by about 1,000. 128 bits is twelve groups of 10 bits plus 8 more, so 2 to the power of 128 is roughly 1,000 to the power of 12 times 2 to the power of 8 equals 256 times 10 to the power of 36. Each 1,024 is slightly more than 1,000, which lifts the exact value to about 3.4 times 10 to the power of 38.
+
+Now be generous to the attacker: a billion computers, each testing a trillion keys every second, is 10 to the power of 9 times 10 to the power of 12 equals 10 to the power of 21 keys per second. A year has 60 times 60 times 24 times 365 equals 31,536,000 seconds, about 3.2 times 10 to the power of 7, so that is about 3.2 times 10 to the power of 28 keys a year. Dividing gives
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+about 11 billion years to try them all, close to the 13.8-billion-year age of the universe. The lab’s key is 256 bits, and 2 to the power of 256 is 2 to the power of 128 multiplied by itself, so its count is that enormous number squared.
+
+Brute force stops being hopeless when the secret is small. A six-letter lowercase password has 26 to the power of 6 possibilities: 26 times 26 times 26 equals 17,576, and 17,576 times 17,576 equals 308,915,776. At a billion guesses per second, that is all of them in about a third of a second. That is why encryption keys are random 128- or 256-bit values rather than passwords, and why a password that must protect a key is first run through a deliberately slow key-derivation function, so each guess costs the attacker real time.
+
+Think of a key as having a lifecycle rather than merely a location:
+
+Diagram labels, in drawing order: cryptographically secure RNG; access-controlled storage; load for one operation; erase from memorywhen the operation ends; rotation policy; old envelopes stillreadable or migrated; retirement policy; old backups handled; key lost; recovery path; Generated; Stored; Loaded; Rotated; Retired; Recovered.
+
+Generation needs a cryptographically secure random source. Storage needs an access boundary. Use should keep the plaintext and key alive for no longer than necessary. Rotation needs a way to distinguish old envelopes and either read or migrate them. Retirement needs a policy for old backups. Recovery needs an answer for a lost key; otherwise “secure” may simply mean “the player’s save is gone forever.”
+
+Availability is part of the design. An authenticated file that correctly rejects one flipped bit still needs backups, version metadata, and a recovery path. Integrity without recovery can detect damage while leaving the player unable to continue.
+
+Section: Run and test the lab.
+
+From the repository root, the first command runs the small encryption demo; the second checks that valid data opens and changed data is rejected.
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The tests verify:
+
+a valid envelope opens to the original bytes;
+
+flipping one ciphertext bit fails authentication;
+
+changing associated data fails authentication.
+
+That third test is easy to forget and is exactly why tests should describe the security contract.
+
+Section: Analysis does not magically reveal plaintext.
+
+During the course fixture’s execution, you may see plaintext where the program uses it, the key where the crypto API receives it, and ciphertext where the file is written. That does not mean encryption “does nothing.” Encryption protects data outside the trusted processing moment, such as at rest or in transit.
+
+Use breakpoints and data-flow tracing to follow the fixture’s complete key lifecycle: creation, use, storage, rotation, and destruction. A partial trace can make a correct design look broken.
+
+Also keep a checksum separate from a cryptographic authenticator. A checksum is excellent for detecting accidental corruption and can help a game explain that a save was damaged. Anyone who can edit the file can usually recompute an unkeyed checksum, so it does not prove who created the contents. A MAC or AEAD tag makes a different promise because producing a valid tag requires the secret key.
+
+Section: Practical rules.
+
+✅ Use a reviewed AEAD implementation.
+
+✅ Generate a fresh nonce as required by the algorithm.
+
+✅ Authenticate file version, slot, identity, or message type as associated data.
+
+✅ Treat authentication failure as a hard stop.
+
+❌ Do not invent a cipher from XOR, rotation, and a checksum.
+
+❌ Do not hardcode real save/profile keys in source code.
+
+❌ Do not reuse a nonce with the same key.
+
+❌ Do not log keys or decrypted secrets.
+
+The file lessons have now taken a saved value from readable text to binary fields, mod assets, archives, integrity checks, and encrypted payloads. Each format has its own rules, but the shared habit is to identify the bytes, parse them within bounds, verify the expected form, and keep a way back. Chapter 10 follows a different kind of game mod: a Lua script that the game deliberately loads and runs through a limited host interface.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/9/08/

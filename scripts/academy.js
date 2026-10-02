@@ -24,6 +24,13 @@
   var READER_CHOICES = {
     diagramBackground: { attribute: "academyDiagramBackground", key: "gha-diagram-background", values: BACKGROUND_TONES.concat(["page"]), fallback: "theme", control: "data-diagram-background-choice" },
     diagramFill: { attribute: "academyDiagramFill", key: "gha-diagram-fill", values: ["tinted", "plain"], fallback: "tinted", control: "data-diagram-fill-choice" },
+    diagramLabels: { attribute: "academyDiagramLabels", key: "gha-diagram-labels", values: ["soft", "outlined", "none"], fallback: "soft", control: "data-diagram-labels-choice" },
+    diagramBorders: { attribute: "academyDiagramBorders", key: "gha-diagram-borders", values: ["soft", "strong", "none"], fallback: "soft", control: "data-diagram-borders-choice" },
+    diagramSize: { attribute: "academyDiagramSize", key: "gha-diagram-size", values: ["fit", "actual"], fallback: "fit", control: "data-diagram-size-choice" },
+    grid: { attribute: "academyGrid", key: "gha-grid", values: ["on", "off"], fallback: "on", control: "data-grid-choice" },
+    gradients: { attribute: "academyGradients", key: "gha-gradients", values: ["on", "off"], fallback: "on", control: "data-gradients-choice" },
+    motion: { attribute: "academyMotion", key: "gha-motion", values: ["system", "onrequest", "off"], fallback: "system", control: "data-motion-choice" },
+    animationSpeed: { attribute: "academyAnimationSpeed", key: "gha-animation-speed", values: ["slow", "normal", "fast"], fallback: "normal", control: "data-animation-speed-choice" },
     headingStyle: { attribute: "academyHeadingStyle", key: "gha-heading-style", values: ["boxed", "plain"], fallback: "boxed", control: "data-heading-style-choice" },
     textSize: { attribute: "academyTextSize", key: "gha-text-size", values: ["small", "standard", "large"], fallback: "standard", control: "data-text-size-choice" },
     spacing: { attribute: "academySpacing", key: "gha-spacing", values: ["compact", "comfortable", "spacious"], fallback: "comfortable", control: "data-spacing-choice" }
@@ -198,6 +205,7 @@
     root.dataset[choice.attribute] = value;
     storageSet(choice.key, value);
     syncThemeControls();
+    if (typeof window.CustomEvent === "function") document.dispatchEvent(new window.CustomEvent("academy:reader-preference", { detail: { name: name, value: value } }));
   }
 
   function applySemanticSetting(id) {
@@ -235,6 +243,7 @@
       "[data-theme-choice], [data-mode-choice], [data-code-mode-choice], [data-syntax-palette-choice], " +
       "[data-background-choice], [data-semantic-choice], [data-ligature-choice], [data-theme-reset], " +
       "[data-diagram-background-choice], [data-diagram-fill-choice], [data-heading-style-choice], [data-text-size-choice], [data-spacing-choice], " +
+      "[data-diagram-labels-choice], [data-diagram-borders-choice], [data-diagram-size-choice], [data-grid-choice], [data-gradients-choice], [data-motion-choice], [data-animation-speed-choice], " +
       "[data-print-book], [data-panel-toggle], .theme-switcher__toggle"
     );
     if (!target) {
@@ -249,6 +258,13 @@
     if ("backgroundChoice" in data) return applyBackground(data.backgroundChoice);
     if ("diagramBackgroundChoice" in data) return applyReaderChoice("diagramBackground", data.diagramBackgroundChoice);
     if ("diagramFillChoice" in data) return applyReaderChoice("diagramFill", data.diagramFillChoice);
+    if ("diagramLabelsChoice" in data) return applyReaderChoice("diagramLabels", data.diagramLabelsChoice);
+    if ("diagramBordersChoice" in data) return applyReaderChoice("diagramBorders", data.diagramBordersChoice);
+    if ("diagramSizeChoice" in data) return applyReaderChoice("diagramSize", data.diagramSizeChoice);
+    if ("gridChoice" in data) return applyReaderChoice("grid", data.gridChoice);
+    if ("gradientsChoice" in data) return applyReaderChoice("gradients", data.gradientsChoice);
+    if ("motionChoice" in data) return applyReaderChoice("motion", data.motionChoice);
+    if ("animationSpeedChoice" in data) return applyReaderChoice("animationSpeed", data.animationSpeedChoice);
     if ("headingStyleChoice" in data) return applyReaderChoice("headingStyle", data.headingStyleChoice);
     if ("textSizeChoice" in data) return applyReaderChoice("textSize", data.textSizeChoice);
     if ("spacingChoice" in data) return applyReaderChoice("spacing", data.spacingChoice);
@@ -272,12 +288,7 @@
     }
     if ("printBook" in data) {
       closeThemeMenus();
-      // Diagrams are drawn as they scroll into view; draw the rest first so the
-      // printout has every one.
-      var diagramsReady = window.academyRenderAllDiagrams ? window.academyRenderAllDiagrams() : Promise.resolve();
-      diagramsReady.then(function () {
-        requestAnimationFrame(function () { window.print(); });
-      });
+      if (window.AcademyPrint) window.AcademyPrint.open();
       return;
     }
     var switcher = target.closest("[data-theme-switcher]");

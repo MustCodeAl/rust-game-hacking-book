@@ -1,0 +1,129 @@
+How Text Becomes Bytes in a Game
+
+Section: Text is bytes plus an agreement.
+
+The screen may show “Ford,” but memory stores bytes. An encoding explains how bytes represent characters.
+
+Common forms include:
+
+UTF-8—used by String and str ;
+
+UTF-16—many Windows “wide” APIs;
+
+older single-byte encodings;
+
+null-terminated C strings.
+
+Keep four layers separate:
+
+a character is the human idea, such as é ;
+
+a code point is the Unicode number assigned to that character idea;
+
+a code unit is one storage unit used by an encoding, such as u8 for UTF-8 or u16 for UTF-16;
+
+the bytes are the actual memory representation, with byte order relevant for multi-byte code units.
+
+One visible character can use several code units. That is why byte count, UTF-16 unit count, Unicode scalar count, and what a reader sees on screen are not interchangeable lengths. Four short examples show every column coming apart:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The last row is e followed by a combining acute accent, which displays as a single é but is two separate scalars. The practical consequence: a buffer sized from “the name is at most 16 characters” can be far too small, and code that truncates a string at a fixed byte count can cut a character in half and produce bytes that no longer decode. Always say which of these four lengths a number refers to.
+
+Image description: A terrain description containing searchable text
+
+Section: Locate a known string.
+
+In the offline Wesnoth target, open a terrain description and search memory for one distinctive phrase using the appropriate text encoding.
+
+Image description: Searching for text in memory
+
+Change the selected tile and repeat. A static label may stay at one address, while a formatted output buffer changes.
+
+Set a read breakpoint on the first byte of a promising string, trigger the description, and inspect the code that consumes its address.
+
+Image description: A breakpoint on a text byte
+
+Follow the pointer in the dump and identify:
+
+where the string begins;
+
+where it ends;
+
+whether a zero terminator follows it;
+
+which encoding makes the bytes readable;
+
+whether the memory is static or temporary.
+
+Section: Endianness is not encoding.
+
+Endianness controls byte order inside multi-byte numbers. Encoding controls how bytes represent text. They are different ideas.
+
+For UTF-16 little-endian, the letter A is code unit hexadecimal 0 0 4 1, stored as:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Decode a copied UTF-16 buffer only after locating its terminator:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+For copied bytes 41 00 00 00, the caller first finds the two-byte zero terminator and passes the preceding 41 00 slice. The function rebuilds hexadecimal 0 0 4 1 as one UTF-16 unit and returns Ok("A"). Passing an odd number of bytes returns an error instead of silently dropping the last byte.
+
+Section: Use CString for C boundaries.
+
+Many C-style functions expect a zero byte at the end:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+CString adds the terminator and rejects an interior \0, which would make a C function think the string ended early.
+
+Keep the CString alive for as long as the foreign function may use pointer. Returning as_ptr() from a function after the CString is dropped creates a dangling pointer.
+
+Also determine whether the foreign function copies the text during the call or stores the pointer for later. “The call returned” ends the borrow only in the first case. Ownership and lifetime are part of the string contract just as much as encoding and termination.
+
+Section: Observe a print function.
+
+The debugger may reveal a call that receives a string pointer and screen or layout information. Calling it yourself requires knowing its:
+
+calling convention;
+
+parameter order and types;
+
+ownership of the string;
+
+required thread;
+
+lifetime of any returned or stored pointer.
+
+Image description: Following the string through the dump
+
+Do not guess a signature from one register. Collect several calls with different strings and compare them.
+
+Section: Trace a real text call before changing it.
+
+On the Den of Onis map in offline Wesnoth 1.14.9, right-click a Ford tile and open Terrain Description. Search for a distinctive part of its text, then set a read breakpoint on a confirmed byte and open the description again. In the book’s run, the live string began at hexadecimal 1 0 C E 9 9 6 B. Stepping out reached the print path at hexadecimal 0 0 5 E D 1 1 4: edx led to the text object and the call at hexadecimal 0 0 5 E D 1 2 9 printed it.
+
+At this point, answer the text questions: which bytes were read, where does the string end, who owns its buffer, and does the print call keep the pointer? The breakpoint and the changing description provide the evidence. They do not require an injected DLL, dynamic link library,.
+
+Once you have copied a bounded byte range into your own tool, a read-only check can separate the terminator from the text. This example assumes you already verified UTF-8; another encoding needs its own decoder:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The zero ends this C-style string; bytes after it do not belong to the displayed text. In a live process, cap the copy length before searching for the zero so a missing terminator cannot make the tool read indefinitely.
+
+Lesson 6.4 returns to this exact call after teaching patch ownership and DLL lifecycle. There, the debugger cave changes one letter, and the complete F2 hook displays the second player’s gold. The original call, verified five-byte patch, near_call/near_jump code, naked cave, and restoration are preserved with that worked implementation.
+
+Section: Prefer an overlay for new UI.
+
+Calling an undocumented internal print routine can be fragile. For new tool UI, a separate overlay or console is often easier to version, test, and remove.
+
+Use an internal function only when the lesson is specifically about understanding that function and the target profile is exact.
+
+Section: Keep the text contract together.
+
+The bytes of a string need an encoding before they become text. UTF-16LE often has a zero high byte for an ASCII-range letter; that byte alone does not end the string. A C-style terminator marks the end of the encoded sequence, and CString owns a terminated buffer while rejecting interior zeros. The pointer passed to a print function is useful only while that buffer remains alive, so tracing a text call means checking both its bytes and its lifetime. That is one part of a larger function contract: the caller and callee must also agree on argument positions, return values, and ownership. What a DLL Function Promises Its Caller reconstructs those promises later, before the in-process DLL labs.
+
+We can now interpret a game’s primitive values, objects, collections, and text without confusing their representation with their meaning. The next chapter asks how those pieces form a changing world. Game Engines: Where the Rules Live starts by separating the engine’s reusable machinery from the rules and content of one game.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/3/07/

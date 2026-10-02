@@ -1,0 +1,187 @@
+Radar Coordinates and Visibility Rules
+
+Section: A radar is a small rendering pipeline.
+
+A radar normally does not own the authoritative player state. It reads a list of entities, rejects entries it should not show, transforms surviving world positions into radar coordinates, and asks a drawing system to render markers.
+
+That creates several separate questions:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Diagram. From Enumerate to Validate. From Validate to Filter by radar rules. From Filter by radar rules to World to local-relative. From World to local-relative to Rotate into radar basis. From Rotate into radar basis to Scale + clip. From Scale + clip to Draw marker.
+
+If an opponent is absent, do not immediately assume its position is missing. The radar loop may read the opponent correctly and skip it at the filtering step. A breakpoint on the team field helps locate that decision.
+
+Section: Track coordinate spaces explicitly.
+
+“Position” is incomplete without a coordinate space. A radar marker commonly passes through these spaces:
+
+world space: both players have coordinates in the map;
+
+local-relative space: subtract the local player’s position;
+
+view-aligned space: rotate so the local facing direction becomes radar-up;
+
+radar space: scale into pixels or normalized marker units;
+
+clipped space: clamp or reject markers outside the radar shape.
+
+Put the space and unit into variable and field names: world_metres, relative_xy, or radar_pixels. A sign error can look like a wrong pointer, and a degrees-versus-radians error can look like corrupt data. Test known directions first: directly north, east, south, and west of the local player.
+
+There are two common display conventions:
+
+north-up: world north remains at the top; the local-player arrow rotates;
+
+heading-up: the local player’s forward direction remains at the top; the world and other markers rotate by the negative heading.
+
+The code later in this lesson implements heading-up. Applying -yaw is an inverse rotation: it undoes the local orientation so coordinates are expressed in the player’s basis.
+
+Section: Start with two contrasting entities.
+
+In an offline AssaultCube match with bots, compare:
+
+a teammate that appears on radar;
+
+an opponent that does not.
+
+The radar loop probably visits both and applies a condition before drawing.
+
+Use two contrasting entities because one example cannot reveal a rule. A teammate and opponent that are both alive, active, and nearby differ mainly by team, which makes the experiment more specific.
+
+Image description: The normal radar display
+
+Section: Trace the team field.
+
+Find the local player’s team value, then compare nearby player records. Validate it by switching teams in a local setup if the target supports that.
+
+Set a read breakpoint on a confirmed remote player’s team field while the radar is visible.
+
+Image description: A radar-related branch
+
+The logic may resemble:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The list order, object layout, and exact checks are target-specific. Repeatedly inspect the same two records and note which branch chooses different paths.
+
+Section: Write the rule before changing it.
+
+Two records with different team IDs can reach the same drawing function, so first state the filter we think the radar uses. The function below receives one copied entity plus the local player’s ID and team. It returns true only for a distinct, active, living teammate with a usable position:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This plain function helps verify your reconstructed rule against several recorded entities.
+
+Keep “allowed to appear” separate from “has a drawable marker.” An entity can pass team and alive filters but still fail coordinate validation, be outside range, or have no icon. One boolean that merges all stages is difficult to reverse because a missing marker no longer tells you which rule rejected it.
+
+Section: Convert world position to radar position.
+
+A radar usually translates the entity relative to the local player, rotates by the camera yaw, scales, then clamps to the radar bounds.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Axis order and yaw sign must be confirmed for the target.
+
+The subtraction must happen before rotation because the radar is centered on the local player. Rotation and uniform scaling can be exchanged mathematically, but clipping usually happens after both because it is defined in radar coordinates. Writing the stages separately makes those assumptions visible.
+
+The 2D rotation is the matrix:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Its columns are the rotated basis directions. Rotation preserves length because the basis remains orthonormal: x'² + y'² equals x² + y² apart from floating-point rounding. If marker distance changes while only yaw changes, the transform or units are wrong.
+
+Section: Map scale and range are one contract.
+
+If pixels_per_world_unit equals s, then a relative displacement (x, y) becomes (sx, sy). A radar with radius R pixels displays an unclamped world radius of R / s. Doubling s zooms in and halves the visible world range.
+
+Choose one out-of-range policy:
+
+reject the marker;
+
+clamp it to the edge and mark it as out-of-range;
+
+switch to a directional arrow.
+
+For a circular radar, clamp a pixel offset p to radius R:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Clamping x and y independently would clamp to a square, distort direction near corners, and make diagonal markers appear farther from the center.
+
+Diagram walkthrough: Follow one teammate from world coordinates to a radar marker. Step 1: Copy the observation. State: world position, local position, yaw. Read the entity and local-player facts needed for this radar update. A copied record gives the filter and geometry the same observed position. Step 2: Apply the radar rule. State: distinct, active, living teammate. Check identity, activity, alive state, team, and usable coordinates. A record that fails this rule stops here instead of becoming a marker. Step 3: Center on the local player. State: entity.xy minus local.xy. Subtract the local position from the entity position. The result is a relative displacement, so the radar center represents the local player. Step 4: Undo the local heading. State: rotate(relative_xy, minus yaw). For the heading-up convention used here, rotate by negative yaw. The forward direction becomes radar-up while the displacement length stays unchanged. Step 5: Scale and bound the offset. State: pixels; circular radius R. Multiply by pixels per world unit, then apply the chosen range policy. Circular clamping preserves direction and records when a marker was outside range. Step 6: Draw the marker. State: radar pixel offset + range flag. Use the bounded offset and its range flag to choose the marker position and style. Height remains a separate visual rule rather than changing the team filter. This follows an accepted record through the heading-up model. Missing markers can originate in filtering, coordinates, range, or drawing; following the stages keeps those causes separate.
+
+Section: Height needs an explicit visual rule.
+
+A top-down radar discards one world axis. That is a projection, not proof that height is irrelevant. Floors above and below may share the same 2D position. Common encodings use an up/down arrow, brightness, marker shape, or a height limit. Keep the height policy as a separate setting from the team/visibility filter, so changing how height is drawn cannot change which markers appear.
+
+Section: Prefer a separate lab display.
+
+Instead of patching the game’s team condition, use your copied snapshots to print or draw a separate local observer. That keeps the original rules intact and makes your model easy to compare.
+
+Image description: A radar-filter experiment
+
+Section: Patch the actual AssaultCube radar branch.
+
+The radar pipeline and pure team rule above explain what the branch controls. The following automated branch patch applies the verified patch ownership from Lesson 6.4 to one pinned build.
+
+This is the exercise the original course called the radar hack.
+
+In AssaultCube 1.2.0.2, breaking on the team field while the radar draws leads through hexadecimal 0 0 4 1 5 3 2 2 and eventually to the six-byte team comparison at hexadecimal 0 0 4 0 9 F B 3. NOPing that comparison lets the existing radar draw path handle every player:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+0F 85 is the opcode for a six-byte near jne. Its remaining four bytes hold a signed relative destination. The masked verifier checks the opcode and captures all six live bytes, so restoration returns the exact original branch destination instead of guessing it.
+
+jne means “jump when the previous comparison was not equal.” Replacing the whole branch with NOPs forces execution to fall through to the next instruction. It does not change the entity list or team field; it changes only this decision in the radar path. That difference is why instruction-level explanations must name both the data and the control flow.
+
+Join a local team game with bots. Before the patch, the radar shows teammates. After the patch, it should also show the opposing team. Restore the original bytes and verify the team filter returns.
+
+Section: What to verify.
+
+dead and inactive players disappear;
+
+the local player is not duplicated;
+
+rotation follows camera yaw;
+
+markers remain bounded;
+
+invalid coordinates stop the update;
+
+team changes update the classification.
+
+Also verify invariants that expose coordinate errors:
+
+rotating in place preserves every marker’s radial distance;
+
+translating the local player and entity equally leaves the relative marker fixed;
+
+doubling world distance doubles unclamped pixel distance;
+
+directly forward maps to the documented radar-up direction;
+
+a marker crossing the edge follows one consistent reject/clamp policy;
+
+entities on different floors use the documented height cue.
+
+Section: Diagnose radar failures.
+
+Table columns: Symptom; Check first.
+
+Symptom: all markers orbit the wrong way; Check first: yaw sign/inverse rotation.
+
+Symptom: marker distance changes when turning; Check first: rotation formula or degree/radian mix.
+
+Symptom: diagonal markers stick to corners; Check first: square clamp used for circular radar.
+
+Symptom: marker drifts as both players move together; Check first: subtraction order or mixed snapshots.
+
+Symptom: upstairs and downstairs overlap; Check first: missing height policy.
+
+Symptom: marker flickers at maximum range; Check first: noisy distance and no hysteresis.
+
+As with fog of war, the concrete patch is tied to AssaultCube’s offline local state. A server-owned visibility model would require a different explanation of where the authoritative state lives.
+
+The compiled implementation is enable_assaultcube_show_all_radar. After injection, F3 toggles it.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/5/08/

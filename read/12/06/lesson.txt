@@ -1,0 +1,191 @@
+Script Budgets, Errors, and Recovery
+
+Suppose that helper script encounters a missing unit halfway through a turn. The game still needs to draw the next frame and let the player regain control. The script host therefore needs a clear error report, a bound on work, and a safe way to disable the failing script.
+
+Section: A script can fail without being malicious.
+
+Common mistakes include:
+
+an infinite loop;
+
+a table that grows every update;
+
+calling a missing function;
+
+assuming an entity always exists;
+
+dividing by zero and producing a non-finite value;
+
+repeatedly requesting an action the host rejects.
+
+An embedded interpreter must treat failure as a normal result. One script error should not crash the game, leak resources, or leave input stuck.
+
+Before setting limits, locate where the failure occurred. A syntax error means the source never became a runnable function. A runtime type error means execution reached unsuitable values. A host-API, application programming interface, error means the script called the engine but violated that function’s contract. A gameplay error may raise no exception at all: every layer ran, but the requested action was wrong.
+
+Diagram. From Source text to Syntax check. From Syntax check to Syntax error:no runnable function. The connection is labelled: stops here. From Syntax check to Lua runtime executes. From Lua runtime executes to Runtime type error:unsuitable values. The connection is labelled: stops here. From Lua runtime executes to Host function. From Host function to Host-API error:contract violated. The connection is labelled: stops here. From Host function to Game state changes. From Game state changes to Gameplay error:nothing is raised. The connection is labelled: wrong result.
+
+The first three can produce diagnostic errors; the fourth needs an assertion about expected behavior. Keep that distinction when choosing what to log and what to test.
+
+Section: Budgets describe several resources.
+
+“The script is small” does not imply that it is cheap to run. Bound the dimensions separately:
+
+source and bytecode size;
+
+Lua-managed memory;
+
+VM, virtual machine, instructions per update;
+
+call-frame depth;
+
+host-callback calls and returned data;
+
+wall-clock deadline for work outside instruction counting;
+
+queued actions and log output.
+
+Choose whether a budget resets per callback, per frame, or per whole script session. A limit with no time window is ambiguous. Record which budget stopped execution so a learner can distinguish an infinite loop from memory growth or excessive host calls.
+
+Table columns: Resource; Guard; Reset window.
+
+Resource: Source and bytecode; Guard: Maximum input bytes; Reset window: Script load.
+
+Resource: Lua-managed memory; Guard: Allocator limit; Reset window: Script session.
+
+Resource: VM instructions; Guard: Hook counter; Reset window: One update.
+
+Resource: Call frames; Guard: Maximum depth; Reset window: One call chain.
+
+Resource: Host callbacks; Guard: Call and returned-byte caps; Reset window: One update.
+
+Resource: Wall-clock work; Guard: Host deadline or cancellation; Reset window: One update.
+
+Resource: Actions and logs; Guard: Queue and output-byte caps; Reset window: One update.
+
+When a limit is crossed, stop that update, discard its uncommitted actions, and report the exact budget. Do not quietly continue with half-produced output.
+
+Section: Limit memory.
+
+The lab host applies a four-mebibyte Lua allocation limit. The multiplication converts four mebibytes to bytes before the host sets the limit:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Choose a limit after measuring realistic scripts. Too low prevents normal work; unlimited growth lets one bug consume the process.
+
+The limit covers Lua-managed allocations, not every resource a host callback might allocate. Host functions need their own bounds.
+
+Section: Limit instructions.
+
+mlua can call a host hook after a chosen number of VM instructions. The hook may run while Lua is executing, so its counter has to be shared safely with the Rust closure: Arc shares ownership of the counter, and Mutex protects one update to it at a time. The clone shares the same counter; it does not reset the budget.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Diagram. From VM executes 1,000 instructions to host hook fires. From host hook fires to calls += 1. From calls += 1 to calls greater than 100?. From calls greater than 100? to VmState::Continue. The connection is labelled: no. From VmState::Continue to VM executes 1,000 instructions. From calls greater than 100? to RuntimeError:instruction budget exceeded. The connection is labelled: yes.
+
+Since the hook fires every 1,000 instructions and allows at most 100 calls, a script gets roughly 100,000 VM instructions per update before this particular budget stops it.
+
+The hook is not a stopwatch. Different instructions cost different amounts of real time, and host callbacks can do work between hooks. It is one defense against runaway Lua bytecode.
+
+Reset the instruction allowance at a controlled host boundary, not from inside the script. If the hook counter is shared across updates, document that as a session budget; if each update gets a fresh allowance, also cap how often updates can be requested.
+
+Section: See the budget fail on purpose.
+
+scripts/budget_failure.lua contains:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Run it:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Expected result: the host returns a contextual error naming the script and the exceeded budget. If the terminal hangs forever, the limit is not working.
+
+Section: Protect every host callback.
+
+A function exposed to Lua should validate:
+
+argument types and string lengths;
+
+sequence lengths;
+
+numeric finiteness and range;
+
+referenced IDs;
+
+permissions for the current script;
+
+rate and action budgets.
+
+Never hold a poisoned mutex or important engine lock while running arbitrary script code. Copy inputs first, execute, then validate collected outputs.
+
+Section: Make errors useful but not secret-leaking.
+
+Development builds should report:
+
+script path or stable identifier;
+
+line and traceback when available;
+
+host API function involved;
+
+which validation rule failed;
+
+whether the script was disabled or may retry.
+
+Do not dump process memory, account tokens, full private chat logs, or arbitrary host paths into a public error report.
+
+Section: Use a failure policy.
+
+One practical policy is:
+
+Diagram. From first error to stop this update,report it. From stop this update,report it to reset script state;retry only on user request. The connection is labelled: second error. From reset script state;retry only on user request to disable the scriptfor the session. The connection is labelled: repeated error. From host invariant failure to stop all scriptedactions immediately.
+
+Do not catch an error and continue from half-mutated host state. Lua requests should be queued and committed only after the script returns successfully.
+
+Section: Test more than the happy path.
+
+Create scripts that:
+
+request an unknown action;
+
+omit a required field;
+
+pass a string where an ID is expected;
+
+allocate an ever-growing table;
+
+loop forever;
+
+throw an error inside a helper function;
+
+return normally with zero actions;
+
+submit the maximum allowed valid action list.
+
+For each test, assert the result, action count, error category, and whether the script remains enabled.
+
+Section: Sandboxing is a design, not one switch.
+
+No single setting makes arbitrary scripts safe. The useful layers are:
+
+a limited standard library;
+
+no arbitrary native module loading;
+
+a narrow host API;
+
+copied snapshots;
+
+structured action requests;
+
+memory, instruction, time, and rate limits;
+
+least-privilege Windows handles behind the host boundary;
+
+clear cancellation and recovery.
+
+Lua is most valuable when it makes small policies easy to change while the host keeps powerful capabilities narrow and testable. 🔒
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/12/06/

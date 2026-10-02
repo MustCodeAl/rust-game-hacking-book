@@ -2321,6 +2321,18 @@ the purchase rule. Other explanations are possible. The game may keep a
 display copy, recalculate gold from other data, or let a server decide
 the result. A matching number is therefore a candidate, not a conclusion.
 
+<AnimatedFlow
+  nativeDiagram
+  title="Follow one controlled game experiment"
+  stages={[
+    { label: 'Act', detail: 'Buy one item whose cost is known.', role: 'input', value: 'cost = 25', nodes: ['A'] },
+    { label: 'Observe', detail: 'The displayed amount falls from 100 to 75.', role: 'state', value: '100 → 75', nodes: ['O'] },
+    { label: 'Hypothesize', detail: 'A stored value may govern the purchase.', role: 'process', value: 'which value?', nodes: ['H'] },
+    { label: 'Test one candidate', detail: 'Change one candidate and repeat the purchase.', role: 'process', value: 'one controlled change', nodes: ['T'] },
+    { label: 'Judge the evidence', detail: 'Check whether the rule, the display, or neither changed.', role: 'output', value: 'rule / text / neither', nodes: ['E'] },
+  ]}
+  caption="The visible change motivates a hypothesis; the second purchase tests whether the candidate affects game state or only its display."
+>
 ```mermaid
 flowchart TD
     A["action: buy an item for 25"] --> O["observation: screen shows 100 → 75"]
@@ -2328,6 +2340,7 @@ flowchart TD
     H --> T["test: change one candidate, then try a purchase"]
     T --> E["evidence: did the rule change, only the text, or neither?"]
 ```
+</AnimatedFlow>
 
 The fastest way to get completely lost is to open a memory scanner and
 start searching before deciding what you are asking. You can end up with
@@ -3943,6 +3956,19 @@ library) is compiled code that a running program can load and call. Once
 loaded, either one is a **module** with a starting address and a range of
 code and data in the process.
 
+<AnimatedFlow
+  nativeDiagram
+  title="Trace source code into a running process"
+  stages={[
+    { label: 'Source files', detail: 'Names, types, and comments describe the program for its author.', role: 'input', value: 'source text', nodes: ['A'] },
+    { label: 'Compile', detail: 'The compiler turns source into object files and chooses layouts.', role: 'process', value: 'object files', nodes: ['B', 'C'] },
+    { label: 'Link', detail: 'The linker resolves names and lays out the executable image.', role: 'process', value: 'linked image', nodes: ['D'] },
+    { label: 'File on disk', detail: 'The EXE or DLL records imports and a preferred base.', role: 'state', value: 'EXE or DLL', nodes: ['E'] },
+    { label: 'Load', detail: 'Windows chooses a live base, applies relocations, and resolves imports.', role: 'process', value: 'mapped image', nodes: ['F'] },
+    { label: 'Run', detail: 'Threads execute instructions from the mapped process image.', role: 'output', value: 'running process', nodes: ['G'] },
+  ]}
+  caption="Follow one compiled route: source becomes object files, a linked image, and finally a process whose live addresses the loader chose."
+>
 ```mermaid
 flowchart TD
     A["Source files<br/>names, types, comments"] --> B["Compiler"]
@@ -3952,6 +3978,7 @@ flowchart TD
     E --> F["Windows loader"]
     F -->|"picks the base, applies relocations,<br/>writes real addresses into the import slots"| G["Running process"]
 ```
+</AnimatedFlow>
 
 Each stage keeps what the next stage needs. A release build may omit
 information that helped the programmer but is unnecessary for execution.
@@ -6126,12 +6153,24 @@ reference such as `&Player` from a remote address.
 
 Instead, use a clear boundary:
 
+<AnimatedFlow
+  nativeDiagram
+  title="Carry remote bytes across a safe boundary"
+  stages={[
+    { label: 'Name a remote range', detail: 'An address and size refer to bytes in the game process.', role: 'input', value: 'address + length', nodes: ['A'] },
+    { label: 'Ask Windows to copy', detail: 'The read is checked and may fail or return fewer bytes.', role: 'process', value: 'checked read', nodes: ['B'] },
+    { label: 'Own the local copy', detail: 'The returned buffer belongs to our process.', role: 'state', value: 'owned bytes', nodes: ['C'] },
+    { label: 'Interpret locally', detail: 'Parsing and searching operate on the bounded local buffer.', role: 'output', value: 'validated meaning', nodes: ['D'] },
+  ]}
+  caption="A remote address is never treated as a local pointer; Windows copies bytes before safe parsing begins."
+>
 ```mermaid
 flowchart LR
     A["remote address<br/>+ requested size"] --> B["checked Windows read"]
     B --> C["owned byte buffer<br/>in our process"]
     C --> D["safe parsing<br/>and searching"]
 ```
+</AnimatedFlow>
 
 After the copy succeeds, ordinary ownership rules protect the local buffer. Before
 the copy, the address is untrusted input that needs checked arithmetic, region
@@ -9518,6 +9557,19 @@ That can work once, but every step depends on facts collected earlier. The game 
 
 A more reliable tool separates six phases:
 
+<AnimatedFlow
+  nativeDiagram
+  title="Guard a state change with fresh evidence"
+  stages={[
+    { label: 'Capture twice', detail: 'Read the pointer chain twice before trusting the observed value.', role: 'input', value: 'two reads', nodes: ['A'] },
+    { label: 'Build a snapshot', detail: 'Keep identity, side, address, and gold together.', role: 'state', value: 'player + gold', nodes: ['B'] },
+    { label: 'Compare captures', detail: 'Reject a changing target before proposing an action.', role: 'process', value: 'same snapshot?', nodes: ['C'] },
+    { label: 'Choose an action', detail: 'This tour follows Some(v), the requested write path.', role: 'process', value: 'Some(v)', nodes: ['D'] },
+    { label: 'Recheck and write', detail: 'Capture once more before writing the proposed value.', role: 'process', value: 'fresh then write', nodes: ['E'] },
+    { label: 'Read back', detail: 'Compare the result with the requested value.', role: 'output', value: 'equal?', nodes: ['F'] },
+  ]}
+  caption="This follows the write branch when snapshots agree; `None` remains observation-only and a changed snapshot stops the write."
+>
 ```mermaid
 flowchart LR
     A["capture() twice:<br/>read the pointer chain"] --> B["Snapshot { player, side,<br/>gold_address, gold }"]
@@ -9526,6 +9578,7 @@ flowchart LR
     D --> E["stable_snapshot() again,<br/>then write_u32"]
     E --> F["read_u32 back and compare<br/>to the requested value"]
 ```
+</AnimatedFlow>
 
 The important idea is not extra code. It is that **data crosses a gate before the tool acts on it**. A raw address read once may already be out of date. A `Snapshot` captured twice with equal results was consistent at that moment. A write happens only if a fresh capture, taken immediately before it, still equals the snapshot.
 
@@ -12679,6 +12732,20 @@ the numbers are related but not interchangeable.
 A parser follows the file's own chain of verified offsets. Each header tells it
 where the next structure begins or how large that structure is:
 
+<AnimatedFlow
+  nativeDiagram
+  title="Read a PE file in dependency order"
+  stages={[
+    { label: 'Confirm the DOS header', detail: 'MZ marks the first header of the file.', role: 'input', value: 'MZ', nodes: ['A'] },
+    { label: 'Find the PE header', detail: 'e_lfanew gives its file offset.', role: 'process', value: 'e_lfanew', nodes: ['B'] },
+    { label: 'Confirm PE identity', detail: 'Check the signature before interpreting the following bytes.', role: 'state', value: 'PE signature', nodes: ['C'] },
+    { label: 'Read machine details', detail: 'The COFF header identifies architecture and section count.', role: 'process', value: 'COFF', nodes: ['D'] },
+    { label: 'Read image details', detail: 'The optional header describes how Windows maps the image.', role: 'process', value: 'image layout', nodes: ['E'] },
+    { label: 'Read sections', detail: 'Section records connect stored bytes to mapped regions.', role: 'process', value: 'section table', nodes: ['F'] },
+    { label: 'Resolve an address', detail: 'Use the headers to relate a file offset and an RVA.', role: 'output', value: 'offset ↔ RVA', nodes: ['G'] },
+  ]}
+  caption="Each PE field tells the reader where or how to interpret the next field; the section table finally connects disk positions to image-relative addresses."
+>
 ```mermaid
 flowchart TD
     A["DOS header and MZ"] --> B["Read e_lfanew"]
@@ -12688,6 +12755,7 @@ flowchart TD
     E --> F["Section table"]
     F --> G["Map file offsets and RVAs"]
 ```
+</AnimatedFlow>
 
 Never skip directly to a later box using a guessed offset. A damaged or wrong
 header should stop the parse before its numbers are trusted.
@@ -16268,6 +16336,20 @@ Resolve short-lived pointers near the point of use. Copy the few fields you need
 
 The safe path has distinct stages instead of one giant startup function:
 
+<AnimatedFlow
+  nativeDiagram
+  title="Follow an in-process tool's lifetime"
+  stages={[
+    { label: 'Load the library', detail: 'Windows maps the DLL into the target process.', role: 'input', value: 'DLL loaded', nodes: ['A'] },
+    { label: 'Keep DllMain small', detail: 'The loader callback does only safe, minimal work.', role: 'process', value: 'tiny callback', nodes: ['B'] },
+    { label: 'Start explicitly', detail: 'A separate export begins work after loading finishes.', role: 'process', value: 'gha_start', nodes: ['C'] },
+    { label: 'Verify the build', detail: 'Refuse a target whose bytes or layout are unsupported.', role: 'state', value: 'supported build?', nodes: ['D'] },
+    { label: 'Own worker state', detail: 'The worker holds the lab resources it will later release.', role: 'process', value: 'worker active', nodes: ['E'] },
+    { label: 'Request shutdown', detail: 'Stop new work before removing any owned feature.', role: 'process', value: 'stop requested', nodes: ['F'] },
+    { label: 'Restore and unload', detail: 'Return changed state and release ownership in order.', role: 'output', value: 'clean exit', nodes: ['G'] },
+  ]}
+  caption="Loading, starting, verifying, working, and stopping are separate phases; cleanup follows the ownership established during startup."
+>
 ```mermaid
 flowchart TD
     A["Windows loads DLL"] --> B["Tiny DllMain"]
@@ -16277,6 +16359,7 @@ flowchart TD
     E --> F["Request stop"]
     F --> G["Restore and unload"]
 ```
+</AnimatedFlow>
 
 Each stage earns the capabilities used by the next one, and shutdown releases them in a controlled order.
 
@@ -19108,6 +19191,19 @@ climb.
 
 A 3D point cannot be drawn directly on a 2D monitor. The renderer transforms it through several spaces:
 
+<AnimatedFlow
+  nativeDiagram
+  title="Follow a vertex from model to screen"
+  stages={[
+    { label: 'Model space', detail: 'The point starts in local object coordinates.', role: 'input', value: 'local point', nodes: ['A'] },
+    { label: 'World space', detail: 'Object placement gives the point a world position.', role: 'state', value: 'world point', nodes: ['B'] },
+    { label: 'Camera space', detail: 'Express the point relative to the viewer.', role: 'process', value: 'view position', nodes: ['C'] },
+    { label: 'Clip space', detail: 'Projection prepares the point for visibility testing.', role: 'process', value: 'clip coordinates', nodes: ['D'] },
+    { label: 'Normalized space', detail: 'Divide and map into the canonical view range.', role: 'process', value: 'normalized point', nodes: ['E'] },
+    { label: 'Screen pixels', detail: 'The viewport turns the projected position into pixels.', role: 'output', value: 'pixel position', nodes: ['F'] },
+  ]}
+  caption="Each coordinate space answers a different question: where the point is in the object, world, camera, projected view, and finally the screen."
+>
 ```mermaid
 flowchart TD
     A["Model space"] --> B["World space"]
@@ -19116,6 +19212,7 @@ flowchart TD
     D --> E["Normalized device space"]
     E --> F["Screen pixels"]
 ```
+</AnimatedFlow>
 
 A **coordinate space** is one specific choice of where the origin sits and which way each axis points. The same physical spot in the level gets different numbers in each space, so a coordinate is meaningless until you say which space it belongs to.
 
@@ -24719,6 +24816,20 @@ sequenceDiagram
 Keep transport, decoding, session meaning, and behavior as separate layers. One
 incoming message should travel through the pipeline before any reply is built:
 
+<AnimatedFlow
+  nativeDiagram
+  title="Trace one chat message through the client"
+  stages={[
+    { label: 'Receive bytes', detail: 'TCP supplies bytes without message boundaries.', role: 'input', value: 'byte stream', nodes: ['A'] },
+    { label: 'Recover a frame', detail: 'The decoder waits for one complete bounded message.', role: 'process', value: 'complete frame', nodes: ['B'] },
+    { label: 'Parse WML', detail: 'Structure turns the payload into named fields.', role: 'process', value: 'parsed message', nodes: ['C'] },
+    { label: 'Update the session', detail: 'The client records the state needed to interpret the event.', role: 'state', value: 'session state', nodes: ['D'] },
+    { label: 'Create a domain event', detail: 'A game-level event separates protocol syntax from behavior.', role: 'process', value: 'chat event', nodes: ['E'] },
+    { label: 'Handle the command', detail: 'The bot decides whether the chat text requests a reply.', role: 'process', value: 'reply decision', nodes: ['F'] },
+    { label: 'Send a frame', detail: 'The response is encoded and framed for the stream.', role: 'output', value: 'outbound message', nodes: ['G'] },
+  ]}
+  caption="This follows one chat command from unframed TCP bytes to a framed reply; each layer gives the next one a narrower meaning."
+>
 ```mermaid
 flowchart TD
     A["TCP byte stream"] --> B["Bounded frame decoder"]
@@ -24728,6 +24839,7 @@ flowchart TD
     E --> F["Chat command handler"]
     F --> G["Framed outbound message"]
 ```
+</AnimatedFlow>
 
 This separation lets a malformed frame fail before it reaches chat behavior,
 and it lets the command handler work with events instead of raw network bytes.
@@ -27806,6 +27918,20 @@ Do not store absolute paths inside a portable manifest. Keep a trusted game root
 Treat installation as a reversible state transition with a durable journal, not
 as an unrecorded sequence of file copies:
 
+<AnimatedFlow
+  nativeDiagram
+  title="Make a mod install reversible"
+  stages={[
+    { label: 'Plan the change', detail: 'Name the destination and the exact file that should replace it.', role: 'input', value: 'intended file', nodes: ['A'] },
+    { label: 'Verify the original', detail: 'Check the current hash before changing anything.', role: 'process', value: 'known starting state', nodes: ['B'] },
+    { label: 'Preserve the old state', detail: 'Back up the file or record that it did not exist.', role: 'state', value: 'backup or absence', nodes: ['C'] },
+    { label: 'Install the mod', detail: 'Write the intended replacement only after preservation.', role: 'process', value: 'modded file', nodes: ['D'] },
+    { label: 'Record the result', detail: 'Commit manifest status so the change can be checked later.', role: 'state', value: 'manifest entry', nodes: ['E'] },
+    { label: 'Check before removal', detail: 'Verify the installed file has not changed since the manifest.', role: 'process', value: 'still our file?', nodes: ['F'] },
+    { label: 'Undo safely', detail: 'Restore the backup or remove only the file the mod added.', role: 'output', value: 'original state', nodes: ['G'] },
+  ]}
+  caption="The same receipt supports installation and removal: every write has a verified starting state and a recorded way back."
+>
 ```mermaid
 flowchart TD
     A["Plan the intended change"] --> B["Verify the current hash"]
@@ -27815,6 +27941,7 @@ flowchart TD
     E --> F["Verify before uninstall"]
     F --> G["Restore or remove safely"]
 ```
+</AnimatedFlow>
 
 The manifest records which state was reached. After a crash, that record tells
 the recovery code whether an original file still needs restoring.
@@ -28603,6 +28730,18 @@ Lua is a small programming language commonly **embedded** inside a larger progra
 
 Use the host-boundary model:
 
+<AnimatedFlow
+  nativeDiagram
+  title="See what the Lua script can reach"
+  stages={[
+    { label: 'Platform', detail: 'Windows and hardware run the compiled game.', role: 'input', value: 'Windows + hardware', nodes: ['A'] },
+    { label: 'Engine', detail: 'Native engine code owns the game and its rules.', role: 'state', value: 'compiled engine', nodes: ['B'] },
+    { label: 'Lua runtime', detail: 'The engine creates and controls the interpreter.', role: 'process', value: 'hosted Lua VM', nodes: ['C'] },
+    { label: 'Host API', detail: 'Only chosen values and functions cross this boundary.', role: 'process', value: 'limited functions', nodes: ['D'] },
+    { label: 'Script', detail: 'The mod uses the exposed API rather than raw engine authority.', role: 'output', value: 'script capability', nodes: ['E'] },
+  ]}
+  caption="This follows the authority the host deliberately exposes to a script; the arrows do not grant the script unrestricted access to Windows or game memory."
+>
 ```mermaid
 flowchart TD
     A["Windows and hardware"] --> B["Compiled game engine"]
@@ -28610,6 +28749,7 @@ flowchart TD
     C --> D["Narrow host API"]
     D --> E["Lua script or mod"]
 ```
+</AnimatedFlow>
 
 The engine owns the runtime and decides which values and functions cross the API
 boundary. A script cannot automatically do everything the engine can do; it sees
@@ -31168,6 +31308,18 @@ Walking internal loader pointers is useful when you are learning in a debugger. 
 
 The shared wrapper keeps that unsafe boundary in one reviewed function. Here is the order of Windows calls it makes before it ever returns a module base and size:
 
+<AnimatedFlow
+  nativeDiagram
+  title="Find one loaded module by snapshot"
+  stages={[
+    { label: 'Take the snapshot', detail: 'Ask Windows for the target process module list.', role: 'input', value: 'module snapshot', nodes: ['A'] },
+    { label: 'Own the handle', detail: 'Wrap the snapshot so it closes at scope exit.', role: 'process', value: 'OwnedHandle', nodes: ['B'] },
+    { label: 'Read an entry', detail: 'Windows fills a correctly sized MODULEENTRY32W.', role: 'state', value: 'module record', nodes: ['C'] },
+    { label: 'Compare its name', detail: 'Check the record against the requested module.', role: 'process', value: 'name matches?', nodes: ['D'] },
+    { label: 'Return its range', detail: 'This tour follows the yes branch to base and size.', role: 'output', value: 'base + size', nodes: ['E'] },
+  ]}
+  caption="This follows a successful first-match lookup; a miss advances with Module32NextW, while end-of-list and other errors take the branches also shown in the graph."
+>
 ```mermaid
 flowchart TD
     A["CreateToolhelp32Snapshot"] --> B["OwnedHandle::from_raw<br/>(closes itself when dropped)"]
@@ -31179,6 +31331,7 @@ flowchart TD
     F -->|"no more files"| G["anyhow::bail!<br/>module not found"]
     F -->|"other error"| H["return Err"]
 ```
+</AnimatedFlow>
 
 ```rust
 pub fn module(&self, wanted_name: &str) -> anyhow::Result<(usize, usize)> {
@@ -34993,6 +35146,19 @@ passes through is a device, a driver, or a queue from this lesson.
 game uses through Windows. Here are the steps inside that path, for a USB
 keyboard on a modern PC:
 
+<AnimatedFlow
+  nativeDiagram
+  title="Follow one key press into a game"
+  stages={[
+    { label: 'Keyboard and controller', detail: 'The keyboard reports a key; the host controller moves the report into RAM.', role: 'input', value: '8-byte USB report', nodes: ['K', 'HC'] },
+    { label: 'USB and HID drivers', detail: 'The driver stack interprets the transport and HID report.', role: 'process', value: 'HID usage 0x04', nodes: ['U', 'H'] },
+    { label: 'Translate the key', detail: 'KBDHID maps the usage to a scan code.', role: 'process', value: 'scan code 0x1E', nodes: ['KH'] },
+    { label: 'Queue key-down', detail: 'KBDCLASS reports a keyboard event.', role: 'state', value: 'key-down', nodes: ['KC'] },
+    { label: 'Make a virtual key', detail: 'The raw input thread maps the scan code to VK_A.', role: 'process', value: 'VK_A = 0x41', nodes: ['RIT'] },
+    { label: 'Deliver to the game', detail: 'A queue entry reaches the game message loop.', role: 'output', value: 'WM_KEYDOWN / WM_INPUT', nodes: ['Q', 'G'] },
+  ]}
+  caption="This follows the A key along the diagram's directed path: hardware report, driver translation, Windows input queue, and the game's message loop."
+>
 ```mermaid
 flowchart TD
     K["USB keyboard<br/>answers each poll with an 8-byte report"] --> HC["USB host controller<br/>DMA into RAM, then an interrupt"]
@@ -35004,6 +35170,7 @@ flowchart TD
     RIT --> Q["foreground thread's message queue<br/>WM_KEYDOWN, or WM_INPUT for Raw Input"]
     Q --> G["the game's message loop<br/>GetMessage or PeekMessage"]
 ```
+</AnimatedFlow>
 
 A USB device never speaks first. The host controller asks each device for news
 on a fixed schedule, and a keyboard asked 125 times a second is asked every
@@ -38260,12 +38427,24 @@ Nothing overflowed *visibly*. In a release build there is no panic, no warning,
 and the comparison is perfectly true. The read then starts at an address near
 the top of the address space.
 
+<AnimatedFlow
+  nativeDiagram
+  title="See a bound check fooled by overflow"
+  stages={[
+    { label: 'Start near the limit', detail: 'The requested offset is only three below usize::MAX.', role: 'input', value: 'MAX − 3', nodes: ['A'] },
+    { label: 'Add the length', detail: 'Unchecked addition wraps the end of the range to 12.', role: 'process', value: 'end becomes 12', nodes: ['B'] },
+    { label: 'Compare the wrong end', detail: 'The bound check sees only the wrapped small number.', role: 'state', value: '12 ≤ region size?', nodes: ['C'] },
+    { label: 'Allow a bad read', detail: 'This tour follows the yes branch despite the invalid start.', role: 'output', value: 'false acceptance', nodes: ['D'] },
+  ]}
+  caption="The yes branch is the failure: a wrapped end looks small enough, although the requested range began near the address-space limit."
+>
 ```mermaid
 flowchart LR
     A["offset = usize::MAX - 3"] --> B["offset + length<br/>wraps to 12"]
     B --> C{"12 <= region_size?"}
     C -->|"yes"| D["read allowed — starting near<br/>the top of the address space"]
 ```
+</AnimatedFlow>
 
 **The repair** is not a bigger integer. It is refusing to answer a question that
 has no answer:
@@ -39688,6 +39867,19 @@ When a console powers on, which code runs first, and why should anyone trust it?
 signature ([Lesson 9.8](/pages/9/07/)) of the next stage before running it, and
 refuses if the check fails.
 
+<AnimatedFlow
+  nativeDiagram
+  title="Follow a successful console boot"
+  stages={[
+    { label: 'Power on', detail: 'The console begins from hardware-controlled startup.', role: 'input', value: 'power on', nodes: ['P'] },
+    { label: 'Boot ROM', detail: 'Factory-written code checks the next boot stage.', role: 'process', value: 'root of trust', nodes: ['R'] },
+    { label: 'Bootloader', detail: 'A verified loader checks the privileged software it starts.', role: 'process', value: 'signed loader', nodes: ['B'] },
+    { label: 'Privileged software', detail: 'The hypervisor and kernels verify the components they load.', role: 'state', value: 'verified kernels', nodes: ['H'] },
+    { label: 'System software', detail: 'The home screen and services check the game package.', role: 'process', value: 'system services', nodes: ['S'] },
+    { label: 'Start the game', detail: 'A valid signature and licence allow the package to run.', role: 'output', value: 'game starts', nodes: ['G'] },
+  ]}
+  caption="This follows the successful chain of trust. A failed check at any verifying stage takes the graph's refusal branch instead of starting the game."
+>
 ```mermaid
 flowchart TD
     P["power on"] --> R["boot ROM in the security processor:<br/>written at the factory, cannot change"]
@@ -39700,6 +39892,7 @@ flowchart TD
     H -.-> X
     S -.-> X
 ```
+</AnimatedFlow>
 
 The first link is the **boot ROM**, a small program written into the chip when
 it is manufactured, which no software, update, or owner can change. It is the

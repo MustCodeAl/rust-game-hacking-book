@@ -1,0 +1,99 @@
+Direct3D Draw Calls and Bound State
+
+Section: A draw call is still a request, not an object.
+
+Lesson 7.3 made this point for OpenGL and it holds here: a draw call asks the GPU, graphics processing unit, to consume indices using whatever is currently bound. It does not say “draw the player.” One character can take several draws — body, weapon, shadow — and one draw can cover many unrelated objects batched together.
+
+What changes between the two APIs is not that idea. It is how much of the surrounding state you can see from inside the call.
+
+Section: Read the arguments precisely.
+
+The Direct3D 11 indexed draw looks compact because buffers, shaders, and topology are already bound to the context. Its function type has the hidden COM object pointer first, followed by a count and two offsets. Those three numbers choose geometry within the bound buffers; they do not identify a game object by themselves:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Table columns: Argument; Meaning.
+
+Argument: index_count; Meaning: how many indices to read from the bound index buffer.
+
+Argument: start_index_location; Meaning: where in that buffer to begin.
+
+Argument: base_vertex_location; Meaning: a value added to every index after it is read.
+
+Imagine two DrawIndexed(6, 0, 0) calls in one frame. Before the first, the context has a character texture and depth testing bound. Before the second, the program binds a UI texture and a state that ignores world depth. The same three draw arguments can now produce different images. If the character’s triangles are hidden behind a wall, the first call may produce no visible pixels at all. The draw arguments tell you which indices were submitted; the bound buffers, topology, shaders, textures, and depth state explain how those indices are used. This is the state-bound idea from OpenGL again, with Direct3D’s own way of storing and querying the state.
+
+Note that base_vertex_location is signed. That is not a quirk; it exists so several meshes can share one vertex buffer, with each mesh addressed by a positive or negative shift from a common origin. If you log it as u32 a perfectly ordinary negative offset appears as a number near four billion, and you will be tempted to treat a normal draw as corrupt.
+
+Labelled memory diagram. cell 1: FF; cell 2: FF; cell 3: FF; cell 4: FF. Groups: as i32: minus 1, an ordinary negative vertex shift; misread as u32: 4,294,967,295. For example, base_vertex_location equals minus 1. The bits never change; only the reading does.
+
+The same arithmetic from Lesson 7.3 applies to the counts:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Submitted triangles can still be degenerate, back-face culled, clipped, or covered by something nearer. Depth testing happens long after this call returns.
+
+The Direct3D 9 equivalent carries more:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Two differences matter when you port a note from one to the other. primitive_count counts primitives, where Direct3D 11’s index_count counts indices — for a triangle list they differ by a factor of three, and mixing them up is the most common reason a ported filter matches nothing. primitive_type is an argument in Direct3D 9; in Direct3D 11 the topology is bound state set earlier by IASetPrimitiveTopology, so the draw call does not mention it at all.
+
+Section: Where the state lives is the real difference.
+
+Diagram. From Direct3D 9 to Device holds render stateQuery it during the draw. From Direct3D 11 to State objects bound to a contextAsk the context what is bound.
+
+Direct3D 9 keeps render state on the device as a large set of individually settable values. Inside a DrawIndexedPrimitive hook you can ask the device what is currently set — GetRenderState, GetTexture, GetTransform — and get an answer immediately.
+
+Direct3D 11 replaces most of that with immutable state objects created up front and bound as a unit: a blend state, a depth-stencil state, a rasterizer state. From a DrawIndexed hook you retrieve what is bound with the context’s Get calls — OMGetBlendState, OMGetDepthStencilState, PSGetShader, IAGetVertexBuffers — and then read the description back off the object.
+
+Two practical consequences follow, and they catch people out:
+
+Those Get calls hand you a reference. COM Get* methods call AddRef on what they return, increasing the object’s reference count by one. Each successful query therefore creates one matching Release obligation. On a path that runs thousands of times per second, forgetting even one release causes a steady leak. Put the returned pointer in a Rust wrapper whose Drop calls Release; then an early return cannot skip cleanup. Lesson 11.6 later applies the same ownership idea to Windows handles.
+
+Diagram. From Get call, e.g. OMGetBlendState to COM AddRef runsinside the call. From COM AddRef runsinside the call to Release called onevery path, even early returns?. From Release called onevery path, even early returns? to reference countreturns to normal. The connection is labelled: yes. From Release called onevery path, even early returns? to steady reference leak. The connection is labelled: no.
+
+Querying costs more than logging. Retrieving several state objects per draw, on a thread with a frame deadline, is real work. Sample rather than record everything — one draw in a hundred, or only draws whose index count falls in a range you care about.
+
+Section: Label geometry by the state bound around it.
+
+You cannot ask a draw call what it is drawing. You can group draws by properties that tend to correlate with what they are, then test whether the grouping holds:
+
+Table columns: Observable; What it often distinguishes.
+
+Observable: bound pixel shader; What it often distinguishes: material family: skin, foliage, UI, particles.
+
+Observable: bound texture; What it often distinguishes: a specific asset.
+
+Observable: index count; What it often distinguishes: large static geometry versus small dynamic meshes.
+
+Observable: depth-stencil state; What it often distinguishes: world geometry versus UI drawn without depth.
+
+Observable: blend state; What it often distinguishes: opaque geometry versus transparent effects.
+
+Observable: draw order within a frame; What it often distinguishes: rendering passes: depth, opaque, transparent, UI.
+
+Every one of these is a proxy: an observable clue that may correlate with the category we care about, without being the category itself. A shader shared by characters and crates does not distinguish them. Lesson 13.7 later returns to the risks of treating a proxy as proof. Test a grouping by changing something you control — move, equip a different weapon, walk into another room — and check that the group changes the way the label says it should. A label that matched in one frame can be an accident of what that frame happened to draw.
+
+Section: Draw a frame boundary around your samples.
+
+DrawIndexed fires many times per frame; Present fires once. Recording draws without frame boundaries produces a stream you cannot reason about, because you cannot tell where one frame’s ordering ends.
+
+Number the frames in the Present hook from Lesson 7.10, and tag each draw sample with the current frame number. The draw index within a frame is then meaningful, which is what makes “the UI is the last eleven draws” a statement you can check rather than an impression.
+
+Labelled memory diagram. draw 0..38: depth pre-pass, no pixel shader; draw 39..174: opaque world geometry; draw 175..190: transparent effects, blending enabled; draw 191..201: UI, depth test disabled. Frame 412's draws, grouped by what the bound state implies. The boundaries come from watching blend and depth-stencil state change, not from asking the draw call what it drew.
+
+Bound both the samples per frame and the frames retained, exactly as in Lesson 4.10. An unbounded recorder attached to a render loop will consume memory faster than you expect and will change the frame times you were trying to measure.
+
+Section: Direct3D 12 moves the work earlier.
+
+Direct3D 12 does not submit draws through a context. Commands are recorded into command lists ahead of time and handed to a queue with ExecuteCommandLists, often built on several threads at once.
+
+Hooking the submission point therefore tells you that a batch of pre-recorded work was queued, not what is in it. Present still works as a frame boundary because the swap chain interface is unchanged, but per-draw observation means dealing with recorded command lists rather than intercepting individual calls. The vtable reasoning from Lesson 7.10 transfers directly; the assumption that one hook sees one draw does not.
+
+Section: Scope.
+
+Use your own Direct3D program or an offline single-player session on a pinned version, and keep the analysis window separate as in Lesson 7.9. The transferable skill — reading submitted GPU work and correlating it with bound state — is what graphics debuggers, frame profilers, and capture tools do, and it is the practical way to understand what a renderer is actually asking the GPU to do.
+
+Lesson 7.12 uses these graphics observations alongside memory snapshots, feature toggles, and cleanup rules to assemble one reliable local tool.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/5/11/

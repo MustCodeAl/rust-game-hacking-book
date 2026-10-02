@@ -1,0 +1,141 @@
+How External Tools Read Game Memory
+
+Section: External means “a separate process”.
+
+Our tool runs beside the game, not inside it. Windows must grant a process handle with specific rights before the tool can read or write memory.
+
+An address makes sense only in a process’s address space. The number hexadecimal 5 0 0 0 can exist in both processes without naming the same bytes. The process matters as much as the numeric address:
+
+Diagram. From address hexadecimal 5 0 0 0 to physical RAM, random access memory,:the game's player object. The connection is labelled: the game's address map. From address hexadecimal 5 0 0 0 to physical RAM:the tool's own data. The connection is labelled: the tool's address map.
+
+Windows maps virtual addresses separately for each process. Reading a local pointer with the same number would inspect the tool’s own memory. A process handle names the target and carries the rights granted for this opening; the Windows read uses that handle with the target address and a byte count. Lesson 11.6 later examines handles in more depth.
+
+For this lab, the program discovers wesnoth.exe with the Windows ToolHelp API, application programming interface,, opens it, resolves the verified pointer chain, and performs the guarded write. There is no PID, process identifier, or raw-address placeholder for the reader to fill in.
+
+An external tool cannot dereference a target-process pointer directly. Windows mediates the boundary, and the handle represents the particular access the observer was granted:
+
+Diagram. From Observer address space to Process handlea capability. From Process handlea capability to Windows checks rightsand address range. From Windows checks rightsand address range to Target address space. From Target address space to Copied bytes. From Copied bytes to Decode with a proven layout. From Decode with a proven layout to Owned typed snapshot.
+
+The returned bytes belong to the observer, but their interpretation is valid only for the target build and moment that justified the layout. A write is a separate, stronger capability and needs its own expected-value check.
+
+Even two successful reads can describe different moments. Suppose the tool follows a player pointer, the game removes that player and reuses the same allocation, and the tool then reads health. Both requests can succeed while the combined result describes no real player:
+
+Diagram labels, in drawing order: The game; Your tool; removes enemy A and; reuses hexadecimal 5 0 0 0 for enemy B; reports enemy A; with enemy B's health; read the pointer at hexadecimal 2 0 0 0; hexadecimal 5 0 0 0, which is enemy A; read health at hexadecimal 5 0 0 0 + hexadecimal 3 0; 87, which is enemy B's health.
+
+Step through that race. Each read can succeed while the pair of observations becomes inconsistent:
+
+Diagram walkthrough: Two successful reads can describe two different objects. Step 1: Request the player pointer. State: read pointer at hexadecimal 2 0 0 0. The tool asks Windows to read the pointer stored at hexadecimal 2 0 0 0 in the game process. This request identifies a location, not a permanent object. Step 2: Keep the first observation. State: hexadecimal 5 0 0 0 to enemy A. The returned pointer is hexadecimal 5 0 0 0, which names enemy A at this moment. The tool retains that address for its next read. Step 3: Let the game advance. State: hexadecimal 5 0 0 0 to enemy B. Before the next request, the game removes enemy A and reuses allocation hexadecimal 5 0 0 0 for enemy B. The numeric address has not changed, but its occupant has. Step 4: Request the health field. State: read health at hexadecimal 5 0 3 0. The tool adds the health offset hexadecimal 3 0 to its retained base hexadecimal 5 0 0 0 and reads at hexadecimal 5 0 3 0. That location now belongs to enemy B. Step 5: Keep the second observation. State: health: 87, from enemy B. Windows successfully returns health 87. Those bytes describe enemy B, even though the tool associated its first observation with enemy A. Step 6: Notice the invalid pairing. State: INVALID: A + health from B. Combining the two results reports enemy A with health taken from enemy B. Success of each copy does not prove the combined observation describes one object. This is an illustrated failure, not a valid snapshot. Copy checks and object-path revalidation help detect uncertainty; they do not make separate reads atomic.
+
+Check the returned byte count and revalidate the object path after a multi-step read. That reduces stale observations; it does not turn several Windows calls into one atomic snapshot. Lesson 4.3 builds a bounded double-capture check for that remaining uncertainty.
+
+Section: Hands-on target: Wesnoth 1.14.9.
+
+For the exact 32-bit Windows build used by this book, the verified gold path is:
+
+Diagram. From read u32 at hexadecimal 0 1 7 E E D 1 8 to read u32 at that address. The connection is labelled: + hexadecimal A 9 0. From read u32 at that address to player one's gold. The connection is labelled: + hexadecimal 4.
+
+This is the practical result from Lesson 2.8. Confirm it in Cheat Engine before running the tool: add a pointer manually, use hexadecimal 0 1 7 E E D 1 8 as the base, then add offsets hexadecimal A 9 0 and hexadecimal 4. Start three fresh local matches and verify that it resolves to the gold shown in the game each time.
+
+These constants belong to Wesnoth 1.14.9, 32-bit Windows. They are intentionally concrete so you can reproduce the hack. On any other build these addresses can point somewhere else, so stop before reading or writing.
+
+Section: Own the handle with a type.
+
+A Windows handle is an opaque ticket stored in one process’s handle table. It is not the process, file, event, or section itself, and it is not an address you should dereference. Windows uses the ticket to find the kernel-managed object and to remember which access rights this particular opening received. Two handles can therefore name the same object while granting different permissions.
+
+That gives a handle four rules:
+
+Scope: a handle value is normally meaningful only in the process whose handle table contains it. DuplicateHandle can deliberately create another.
+
+Rights: OpenProcess(PROCESS_VM_READ, ...) asks for a capability. The returned handle carries only the rights Windows granted for that opening.
+
+Lifetime: the handle stays valid until its owner closes it. Closing the last handle to many kernel objects lets Windows destroy that object.
+
+Correct closer: many kernel-object handles use CloseHandle , but not every Windows value does. SOCKET , HKEY , HMODULE , and HWND follow their own APIs and ownership rules. Never call CloseHandle merely because a type’s name begins with H .
+
+The HANDLE type is intentionally opaque. The Drop trait gives an owned handle an automatic cleanup path:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The wrapper itself is not magic. Its constructor must accept only a valid, owned handle; it must not wrap pseudo-handles such as GetCurrentProcess() as though they need closing; and its raw value should be borrowed briefly instead of copied into long-lived state. In larger tools, std::os::windows::io types such as OwnedHandle and BorrowedHandle can express the same ownership split for compatible handle families.
+
+The ownership improvement is small in code and large in behavior:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Every use of ? can return early. Manual cleanup at the bottom is skipped by those early returns, while Drop runs when the owning value leaves scope. Keeping OwnedHandle private also prevents callers from copying the raw handle and closing it twice. The wrapper does not hide Windows errors; it only makes the cleanup rule automatic.
+
+The Process type stores this OwnedHandle. The rest of the program cannot forget to close it. Its complete ToolHelp implementation is in process.rs; the important discovery step is:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Process::list creates a TH32CS_SNAPPROCESS snapshot, initializes PROCESSENTRY32W.dwSize, and repeatedly calls Process32FirstW and Process32NextW. That code is shown in full in the linked source rather than being replaced by “enumerate processes here.”
+
+Section: Read into a byte buffer.
+
+Put ReadProcessMemory behind a method:
+
+Code example. The code’s comments explain: 🛡️ SAFETY: // - `buffer` is valid for exactly `buffer.len()` writable bytes. // - Windows validates the remote address against the target process. // - `self.handle` remains open for this call. unsafe { ReadProcessMemory( self.handle, address as *const c_void, buffer.as_mut_ptr().cast(), buffer.len(), Some(&mut bytes_read), )?; } ✅ A successful API call may still report a short copy. Callers asked // for an exact value, so returning partly old buffer data would be a bug. if bytes_read not equal to buffer.len() { return Err(windows::core::Error::from_win32()); } Ok(()) }
+
+The public method returns a normal u32. Raw pointers never escape the wrapper.
+
+Section: Read the verified gold.
+
+The wrapper now returns ordinary values, so the caller can follow the previously verified pointer path without touching raw pointers. In this example, wesnoth_gold_address resolves the current run’s gold field; read_u32 copies its four bytes into the tool. A successful run prints the address and the current gold value. A missing process, invalid path, or failed read returns an error through ? instead of printing a made-up result.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Run the tool from an ordinary terminal in the VM, virtual machine,. If Windows denies access, report the error; do not automatically demand more privileges.
+
+Section: Add a guarded write.
+
+Writing should be opt-in and should verify the expected old value first:
+
+Diagram. From read the current value to equals expected?. From equals expected? to return false;write nothing. The connection is labelled: no. From equals expected? to WriteProcessMemorythe new bytes. The connection is labelled: yes. From WriteProcessMemorythe new bytes to bytes written equals bytes.len()?. From bytes written equals bytes.len()? to return false. The connection is labelled: no. From bytes written equals bytes.len()? to return true. The connection is labelled: yes.
+
+The method below turns the diagram into a checked write. Given an address, the value we expect there, and a replacement, it returns Ok(false) without writing if the value has changed. A matching value permits one four-byte write, and the result is true only when Windows reports all four bytes written. Another game thread can still race this check, so the caller must treat the result as evidence for this attempt, not a permanent guarantee.
+
+Code example. The code’s comments explain: 🛡️ SAFETY: `bytes` is a live readable buffer; Windows validates the // destination; the handle was opened with write and operation rights. unsafe { WriteProcessMemory( self.handle, address as *const c_void, bytes.as_ptr().cast(), bytes.len(), Some(&mut written), )?; } ✅ Do not claim success when Windows copied only part of the value. Ok(written equals bytes.len()) }}
+
+Open the handle with allow_write: true only when the user explicitly requests a lab change.
+
+Section: Defeat the moving-address problem.
+
+Wesnoth 1.14.9 is a 32-bit target, so a 64-bit tool must read its pointers as four-byte u32 values, not as the tool’s native usize:
+
+Labelled memory diagram. cell 1: b0, highlighted; cell 2: b1, highlighted; cell 3: b2, highlighted; cell 4: b3, highlighted; cell 5: b4; cell 6: b5; cell 7: b6; cell 8: b7. Groups: the actual 32-bit pointer: read_u32 takes exactly these 4 bytes; a native 64-bit usize read would consume all 8 bytes here. For example: reading a native usize on a 64-bit tool silently absorbs the next field's 4 bytes into the pointer value.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Now perform the actual hack:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Return to Wesnoth and recruit a unit or end the turn to refresh the display. The gold should show 999 and behave as real spendable gold. Close and reopen the game to prove that the program resolves the dynamic address again.
+
+You can build and run the finished program directly:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The complete entry point is wesnoth_gold.rs.
+
+Section: Make failure useful.
+
+Test these cases:
+
+wrong PID;
+
+target closed;
+
+malformed hex address;
+
+unreadable address;
+
+expected value does not match;
+
+pointer in the chain is zero.
+
+A good low-level tool is not the one that never sees errors. It is the one that sees errors clearly and stops before making a bad write.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/3/02/

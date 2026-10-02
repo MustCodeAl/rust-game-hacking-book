@@ -1,0 +1,175 @@
+Telemetry as Evidence of Game Behavior
+
+An invariant names what a game must keep true. To know whether a control actually enforced it, we need evidence of the input, decision, and effect in the same run. A useful trace follows that path without recording more state than the question requires.
+
+Suppose the game rejects an action just before a health value changes. Those two events are close in time, but proximity does not prove the rejection caused the change. Structured events, a monotonic clock, thread IDs, and a bounded queue let us reconstruct the state-machine path without confusing correlation with causation.
+
+Section: Telemetry should explain a decision path.
+
+Most logs turn out to be useless at exactly the moment you need them. They record that something happened without recording why it was allowed or refused, so you end up staring at a line that says write failed and guessing.
+
+Useful telemetry lets you follow one game action the whole way through: what came in, what the code decided, why it decided that, and what actually changed as a result.
+
+The rule to design against:
+
+Every guarded operation leaves behind enough evidence to reconstruct four things — which target it touched, what it decided, why, and what happened — without dumping secrets or unbounded blobs into the log.
+
+Those four are worth naming separately, because a log missing any one of them cannot answer the question you will eventually put to it:
+
+Table columns: What it records; The question it answers later.
+
+What it records: identity; The question it answers later: which process, build, and object was this?.
+
+What it records: decision; The question it answers later: was it allowed or denied?.
+
+What it records: reason; The question it answers later: which specific check produced that answer?.
+
+What it records: outcome; The question it answers later: did the effect actually happen?.
+
+Drop the reason and you can see that something was refused but never why. Drop the outcome and you cannot tell an allowed operation from a completed one.
+
+Design events around the decision pipeline:
+
+Diagram labels, in drawing order: Game effect; Validator; Snapshot builder; Observer; alt; [allowed]; [denied]; input event + correlation ID; versioned snapshot; allow/deny + reason; validated command; postcondition + generation; refusal recorded.
+
+The same correlation ID connects the stages without pretending they happened on one thread.
+
+That field earns its place the moment two actions overlap, which on a render thread is most of the time. Here are four events from one run, in the order they reached the log:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Read that stream the obvious way — pair each effect with the decision just before it — and everything looks correct. The effect at sequence 43 sits right after an allowed decision, so nothing stands out, and the log appears to show two successful operations.
+
+Now pair by correlation ID instead. The effect at 43 belongs to action 7, and action 7 was denied. Something changed state after a refusal, which is the exact contradiction this lesson exists to catch, and the naive reading walked straight past it.
+
+Diagram. From Decision seq 41, corr 7:denied, ValueOutOfRange to EffectFinished seq 43, corr 7:changed equals true. The connection is labelled: same corr_id. From Decision seq 42, corr 8:allowed to EffectFinished seq 44, corr 8:changed equals true. The connection is labelled: same corr_id.
+
+Nothing was missing from the log. The evidence was complete, and ordering alone was still enough to reach the wrong conclusion, because two actions interleaved and the reader assumed they had not. This is why the join in a detection rule is written on the correlation ID rather than on adjacency.
+
+Section: Give each event a stable schema.
+
+Diagram. From GameEvent to schema_version. From GameEvent to sequence. From GameEvent to monotonic_micros. From GameEvent to correlation_id. From GameEvent to build_id. From GameEvent to entity_id (optional u32). From GameEvent to kind: EventKind. From kind: EventKind to SnapshotBuilt { generation }. From kind: EventKind to Decision { allowed, reason }. From kind: EventKind to EffectFinished { changed, generation }. From kind: EventKind to EventsDropped { count }.
+
+The diagram becomes two Rust types below. GameEvent stores the fields common to every observation; EventKind carries the data specific to a snapshot, decision, effect, or dropped-event report. A consumer can order events by sequence and join one request’s path by correlation_id.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Use a monotonic clock for duration and ordering inside one run. Wall-clock time is useful for humans but can jump. sequence detects missing or reordered events. A schema version allows the reader to reject fields it cannot interpret.
+
+Section: Record decisions on every branch.
+
+Logging only successful operations creates a blind spot. At minimum, record:
+
+Table columns: Field; Why it matters.
+
+Field: Operation category; Why it matters: Which boundary made the decision.
+
+Field: Target identity; Why it matters: Which build and entity were involved.
+
+Field: Snapshot generation; Why it matters: Whether evidence was fresh.
+
+Field: Allow/deny result; Why it matters: The decision itself.
+
+Field: Bounded reason code; Why it matters: Why the branch was taken.
+
+Field: Postcondition; Why it matters: Whether the intended effect occurred.
+
+Field: Drop counter; Why it matters: Whether evidence was lost.
+
+Avoid raw pointers as durable identity: allocations move and addresses can be reused. Prefer build ID plus entity ID and generation.
+
+Section: Derive detections from invariants.
+
+A useful detection is a query over explicit events, not a mysterious score. Examples for a toy game:
+
+an effect reports changed equals true after a denied decision with the same correlation ID;
+
+one entity’s generation decreases;
+
+health greater than max_health appears in a validated snapshot;
+
+an installation enters Installed without a preceding verified Ready ;
+
+events are dropped during the exact interval being analyzed.
+
+The first rule can be expressed as a join:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This does not infer intent. It identifies a concrete contradiction between a control decision and an observed effect.
+
+Section: Compare traces by structure.
+
+When two runs differ, line-by-line text comparison is often noisy. Normalize unstable values such as addresses and timestamps, then compare:
+
+state-transition sequence;
+
+event kinds and reason codes;
+
+entity/generation relationships;
+
+call or hook identity;
+
+relative durations and outliers;
+
+final postconditions.
+
+Keep raw evidence available for inspection, but use normalized summaries to find the first meaningful divergence.
+
+Section: Measure detector quality.
+
+Build a labeled fixture table:
+
+Table columns: Fixture; Invariant actually fails?; Rule fires?; Classification.
+
+Fixture: Valid command; Invariant actually fails?: No; Rule fires?: No; Classification: True negative.
+
+Fixture: Denied command, no effect; Invariant actually fails?: No; Rule fires?: No; Classification: True negative.
+
+Fixture: Denied command, effect changes; Invariant actually fails?: Yes; Rule fires?: Yes; Classification: True positive.
+
+Fixture: Allowed command, delayed event; Invariant actually fails?: No; Rule fires?: Yes; Classification: False positive.
+
+Fixture: Effect changes but decision event was dropped; Invariant actually fails?: Yes; Rule fires?: No; Classification: False negative / insufficient evidence.
+
+Report counts and the exact fixture set. “Detected 100 percent” is meaningless without knowing what was tested.
+
+Section: Design overload behavior deliberately.
+
+A render hook cannot block forever to preserve logs. Use a bounded queue and choose a policy:
+
+drop newest and increment a counter;
+
+drop oldest and retain the recent window;
+
+sample low-priority events while preserving decisions and failures;
+
+write a compact overflow marker once per interval.
+
+Never hide loss. An analysis interval containing dropped decision events has lower evidentiary confidence.
+
+Section: Turn a finding into a regression trace.
+
+Save the smallest event fixture that demonstrates the failure:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The repair test passes only when the effect remains unchanged after the denied decision. Keep a separate test confirming that a valid command still changes state; a repair that disables everything is not correct.
+
+Section: Glossary terms introduced here.
+
+Telemetry: structured observations emitted by a running system.
+
+Correlation ID: an identifier connecting events from one logical action.
+
+Reason code: a stable bounded explanation for a decision.
+
+Normalization: replacing unstable details so trace structure can be compared.
+
+Detection rule: a precise query identifying evidence of an invariant failure.
+
+Regression trace: a saved minimal event sequence used to test a repair.
+
+Versioned events and correlation IDs connect a decision to its eventual effect. Contradictory pairs reveal a broken invariant; false-positive and false-negative counts show whether the rule works in ordinary use. The smallest failing trace becomes a regression test, while valid behavior must continue to pass.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/13/07/

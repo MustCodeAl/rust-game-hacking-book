@@ -1,0 +1,183 @@
+Hooks as Live Control-Flow Changes
+
+The tool now has an owner for its commands, features, and cleanup. A hook adds a harder lifetime problem: it changes a path that the game itself can enter while the tool is starting or stopping.
+
+A detour is installed into code that other threads may already be executing. Its correctness depends on whole x86-64 instructions, the calling convention, executable-page protections, a valid trampoline, and ownership that can undo the change. We will treat those as one live contract.
+
+Section: A hook changes a live control-flow graph.
+
+Lesson 2.9 replaced a verified span of instructions with a jump to a code cave, then resumed the original path. Writing that jump is the easy part.
+
+The hard part is that you are editing a program while it runs. Another thread may be executing the very bytes you are half-way through rewriting. A call may already be inside your replacement at the moment you decide to remove it. The game may throw away the object you hooked and build a fresh one.
+
+In the vocabulary of Chapter 2, a detour replaces one edge in the game’s control-flow graph — it changes where a single instruction leads. Every difficulty in this lesson comes from doing that to a graph other threads are walking at the same time.
+
+So the rule to hold on to is:
+
+The hook is either completely absent or completely working. There is never a moment when a call can find half of it.
+
+“Completely working” means four things are true at once, for every call: the instructions it lands on are whole, the registers and stack are as the caller expects, everything the hook touches is still alive, and there is a correct way back.
+
+Model installation and removal explicitly:
+
+Diagram labels, in drawing order: verify build and decode bytes; allocate and validate trampoline; publish detour; block new callback work; active callbacks reach zero; restore exact bytes and release resources; preparation failed; validation failed; Absent; Preparing; Ready; Installed; Draining; ReadyToRemove.
+
+Diagram walkthrough: Follow a hook through installation and removal. Step 1: Verified target. State: expected original bytes match. Identify the exact supported module and compare the original instruction bytes. A mismatch stops preparation before the live code changes. Step 2: Prepared trampoline. State: whole relocated instructions. Decode whole instructions, relocate address-dependent operands, and validate the return path. Keep the original bytes and callback state with the owner of the allocation. Step 3: Publish the detour. State: verified jump + cache flush. Use the declared thread rendezvous or framework transaction. Write the complete patch, flush the instruction cache, restore page protections, and verify the result before releasing peers. Step 4: Installed. State: HookPhase::Installed. Calls can now enter the callback and original path. Keep their state alive, follow the re-entry policy, and capture only bounded work on the calling thread. Step 5: Draining. State: active users to 0. Refuse new callback work and wait for existing users to finish. A timeout leaves the still-valid trampoline and callback state alive; it does not permit freeing them. Step 6: Original path restored. State: original bytes restored. Restore and verify the exact original bytes under the same thread-safety mechanism. Release hook resources only when no execution can still use them. The transitions are the difficult part: preparation failure leaves the original path intact, and incomplete draining keeps resources alive. Step through the lifecycle to see which guarantee each transition needs.
+
+There should be no HalfPatched state visible to executing threads.
+
+Section: Preserve five contracts.
+
+Table columns: Contract; What must remain true; Typical failure.
+
+Contract: Instruction; What must remain true: Whole instructions are displaced and relocated correctly; Typical failure: Return lands inside an instruction.
+
+Contract: ABI, application binary interface,; What must remain true: Required registers, stack alignment, unwind expectations, and return values survive; Typical failure: Caller receives corrupted state.
+
+Contract: Identity; What must remain true: Expected module build and original bytes match; Typical failure: Patch targets a different function version.
+
+Contract: Concurrency; What must remain true: No thread executes a partly written or already freed path; Typical failure: Intermittent crash during install/remove.
+
+Contract: Lifetime; What must remain true: Callback state and trampoline outlive every user; Typical failure: Removal frees memory while a callback runs.
+
+A successful single-threaded test proves almost none of these under load.
+
+Section: Decode before deciding patch length.
+
+x86-64 instructions have variable length. Decode complete instructions until their total size can hold the chosen branch encoding. Every displaced instruction has to be kept, because the trampoline runs it later, and any operand that depends on the instruction’s own address has to be identified:
+
+RIP-relative memory operands;
+
+relative calls and jumps;
+
+conditional branches;
+
+instructions whose behavior depends on the original address.
+
+Copying such bytes to a trampoline without relocation changes their target.
+
+You can watch it happen with a RIP-relative load. At the original site, the instruction means “read the global sitting hexadecimal 2 F 1 A bytes past the end of this instruction”:
+
+Diagram. From bytes at hexadecimal 1 4 0 0 0 1 0 0 0:48 8B 05 1A 2F 00 00 to rip after instruction= hexadecimal 1 4 0 0 0 1 0 0 7. From rip after instruction= hexadecimal 1 4 0 0 0 1 0 0 7 to + hexadecimal 2 F 1 A equals hexadecimal 1 4 0 0 0 3 F 2 1(the global).
+
+Copy those seven bytes into a trampoline at a different address. The displacement is unchanged, but the address it is measured from is not:
+
+Diagram. From same bytes at hexadecimal 7 F F 9 0 0 A 0 0 0 0:48 8B 05 1A 2F 00 00 to rip after instruction= hexadecimal 7 F F 9 0 0 A 0 0 0 7. From rip after instruction= hexadecimal 7 F F 9 0 0 A 0 0 0 7 to + hexadecimal 2 F 1 A equals hexadecimal 7 F F 9 0 0 A 2 F 2 1(unrelated!).
+
+The bytes are byte-for-byte identical and the instruction is entirely valid. It just reads somewhere else now. Relative calls and conditional branches fail in exactly the same way, and the symptom is rarely a crash at the hook — it is a wrong value, or a jump into unrelated code, surfacing much later. The trampoline builder must either rewrite the operand correctly or reject the site. “Unsupported instruction” is a valid, reliable outcome.
+
+Section: Make installation a transaction.
+
+Prepare everything before publishing the detour:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+ExecutableBlock stands for the owning wrapper around the trampoline’s executable allocation; its implementation depends on the allocation strategy used by the detour tool. This sketch describes the state that must stay alive, rather than supplying another complete hook library. The saved original bytes belong to the same owner, so restoration cannot outlive its evidence.
+
+The preparation stage can verify:
+
+exact target build and module identity;
+
+current bytes equal expected ;
+
+all displaced instructions decode completely;
+
+relative operands can be relocated;
+
+trampoline and return address are reachable;
+
+callback ABI matches the target function;
+
+a dry-run decode of the final patch succeeds.
+
+If a precondition fails, publish nothing: release unused prepared resources and report the failed check. Only a verified preparation may reach the owner that publishes the change. If verification fails after that owner has changed the bytes, roll back its change under the same thread-safety mechanism used for installation. As a flow:
+
+Diagram. From PreparedHook { target, expected,original, patch, trampoline } to verify all 7 preconditions. From verify all 7 preconditions to write nothing;release unused preparation;report failed precondition. The connection is labelled: any fails. From verify all 7 preconditions to one owner publishesthrough the chosen transaction. The connection is labelled: all pass. From one owner publishesthrough the chosen transaction to live patch and pageprotections verified?. From live patch and pageprotections verified? to HookPhase::Installed. The connection is labelled: yes. From live patch and pageprotections verified? to roll back this transaction's change;report failed postcondition. The connection is labelled: no, after bytes changed.
+
+Section: Publication must have a real thread-safety mechanism.
+
+A multi-byte detour is not magically atomic. Another thread must not fetch the first half of the new jump while the second half still contains old bytes. Pick one publication mechanism and name it in the design:
+
+Table columns: Mechanism; What makes the patch indivisible to observers; Important limit.
+
+Mechanism: cooperative safe point; What makes the patch indivisible to observers: game-owned worker threads park at a known boundary before publication; Important limit: only works when you control or can instrument those workers.
+
+Mechanism: thread rendezvous; What makes the patch indivisible to observers: peer threads are paused, their instruction pointers are checked or moved away from the patch span, and they resume only after verification; Important limit: naïve suspension can deadlock when a stopped thread owns a lock the installer needs.
+
+Mechanism: framework-managed transaction; What makes the patch indivisible to observers: a mature detour library relocates affected instruction pointers and publishes through its documented transaction API, application programming interface,; Important limit: the library’s guarantees still need to match the target architecture and process.
+
+With peer threads unable to execute the patch span, the publisher changes the page protection, writes the complete detour, calls Windows FlushInstructionCache for the modified range, restores the original page protection, rereads the bytes, and only then releases the rendezvous. The same sequence applies in reverse during removal. VirtualProtect only changes page permissions; it does not make a five-byte jump atomic or synchronize other cores.
+
+Do not claim that an ordinary byte copy is atomic. A single aligned store is a valid shortcut only when the architecture and exact patch encoding explicitly guarantee atomicity for that width. If those facts are not proven, use a real rendezvous or a transaction-capable hook library.
+
+Section: Re-entry is part of the contract.
+
+A callback can indirectly call the hooked function again. That is re-entry. Choose and document a policy:
+
+Table columns: Policy; Behavior; Suitable use.
+
+Policy: Allow; Behavior: Nested calls execute callback again; Suitable use: Callback is pure and recursion is expected.
+
+Policy: Bypass nested; Behavior: Nested call uses original path; Suitable use: Logging or observation that may call related code.
+
+Policy: Reject; Behavior: Nested entry returns a defined error; Suitable use: Fixture where recursion is invalid.
+
+A thread-local depth counter can implement “bypass nested” in a local fixture. It is not a substitute for process-wide lifetime tracking during removal.
+
+Section: Keep callback work bounded.
+
+The hooked thread may be the render thread or simulation thread. A callback should capture a small owned event and return. Do not perform blocking I/O, wait for another thread that may need the current thread, hold a global lock through the original function, or let a panic cross the callback boundary.
+
+A bounded queue makes overload visible. Count dropped events rather than silently allocating without limit.
+
+Section: Drain before removing.
+
+Removal needs two counters or states:
+
+whether new callback work is accepted;
+
+how many callbacks are currently active.
+
+Set the state to Draining, stop publishing new work, wait for the active count to reach zero using a bounded policy, restore the exact original bytes, verify them, then release trampoline and callback state. If draining times out, keep the still-valid resources and report the incomplete shutdown; freeing them is not recovery.
+
+Section: Test more than the happy path.
+
+Use a local fixture function and cover:
+
+expected bytes match and installation succeeds;
+
+one expected byte differs and nothing is written;
+
+a displaced RIP-relative instruction is relocated or cleanly rejected;
+
+nested callback entry follows the documented policy;
+
+16 or more threads call the fixture while events are captured;
+
+the event queue fills and reports drops;
+
+removal begins while callbacks are active;
+
+install/remove repeated hundreds of times leaves original bytes intact;
+
+a callback failure returns a defined result without unwinding across the ABI.
+
+Section: Glossary terms introduced here.
+
+Detour: a deliberate replacement of one control-flow edge.
+
+Trampoline: relocated displaced instructions followed by a return edge.
+
+Relocation: adjusting address-dependent instructions for a new location.
+
+Re-entry: the hooked path is entered again before an earlier call returns.
+
+Draining: refusing new work while existing users finish.
+
+Publish: make prepared state visible to other threads.
+
+A hook works only while its instruction, ABI, identity, concurrency, and lifetime contracts all hold. Installation prepares and validates before publication; removal drains active calls before freeing anything. Rollback and the stress cases above test the transitions where those contracts are easiest to break.
+
+With the hook’s lifetime established, we can use it to observe rendering. The next chapter connects the game’s coordinate frames to the draw calls and pixels that a rendering tool works with.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/13/05/

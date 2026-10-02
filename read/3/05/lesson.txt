@@ -1,0 +1,221 @@
+How Collections Live and Die in Memory
+
+Section: A field layout is only half a model.
+
+Imagine that offset hexadecimal 4 0 points to a weapon. Knowing that does not answer the dangerous questions:
+
+Does the player own the weapon?
+
+Can several players share it?
+
+Can it disappear while another system still remembers it?
+
+Is the value a pointer, an index, or a generation-checked handle?
+
+These are lifetime questions. A reliable memory tool needs them because an address that was correct one frame ago may now belong to a different allocation.
+
+The heap is memory handed out by an allocator for objects whose lifetime does not simply end when the creating function returns. A spawned enemy, a resized list, or a text buffer can live across many calls; the game later releases or reuses its allocation. Unlike a call’s stack frame, cleanup is controlled by an owner or a game event. An individually allocated object commonly stays at one address while that allocation lives, but containers can move their elements when they grow and an allocator can reuse a freed address.
+
+Follow one address through two different owners:
+
+Labelled memory diagram. hexadecimal 5 0 0 0: enemy A dot health 100; hexadecimal 5 0 8 0: free; hexadecimal 5 1 0 0: chat text. Before: enemy A lives at hexadecimal 5 0 0 0.
+
+Labelled memory diagram. hexadecimal 5 0 0 0: enemy B dot health 87, highlighted; hexadecimal 5 0 8 0: free; hexadecimal 5 1 0 0: chat text. After A is freed, the allocator reuses hexadecimal 5 0 0 0 for B. The address is readable but no longer identifies A.
+
+A pointer being non-null and readable therefore does not prove object identity. Check its owner, generation or other identity fields, and the event that ends its lifetime. This is the deeper version of the brief address warning in Lesson 1.8.
+
+Section: Recognize behavior before naming a container.
+
+Compiler libraries have implementation details that can change. Instead of memorizing one screenshot of std::vector, recognize its behavior.
+
+A vector-like container commonly needs three logical facts:
+
+Table columns: Fact; Meaning.
+
+Fact: begin; Meaning: address of the first element.
+
+Fact: end; Meaning: one element past the last live element.
+
+Fact: capacity end; Meaning: one element past the allocated storage.
+
+The element count is (end - begin) / element_size. Before using that formula, verify all of these:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Worked through with real numbers, a vector of 32-byte entities might look like this:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Labelled memory diagram. hexadecimal 0 4 5 3 1 0 0 0: 0, highlighted; cell 2: 1, highlighted; cell 3: 2, highlighted; cell 4: dot dot dot , highlighted; cell 5: 9, highlighted; hexadecimal 0 4 5 3 1 1 4 0: 10; cell 7: dot dot dot ; cell 8: 31. Groups: live: hexadecimal 1 4 0 divided by 32 equals 10 elements; allocated, never constructed: 22. The element storage behind begin, end, and capacity_end. Boxes are elements, not bytes.
+
+The gap between end and capacity_end is the container’s spare room. That is exactly why the count has to come from end rather than from the size of the allocation — using the allocation would report 32 entities, 22 of which were never constructed.
+
+Notice how much rests on element_size being correct. Guess 16 bytes instead of 32 and the same three pointers report 320 / 16 equals 20 elements, half of them the second halves of real entities. Every address is readable and the count looks entirely reasonable. The divisibility check rejects many wrong guesses, but not one that happens to divide evenly like this, so the element size has to come from somewhere else: the stride the code actually uses when it walks from one element to the next.
+
+Those checks describe meaning. They remain useful even if a compiler changes field order.
+
+Section: One collection can arrange the same fields in different ways.
+
+Lesson 1.3 grouped one player’s ID, health, position, and team into a record. With several players, one implementation can put complete records side by side. Player 1 is highlighted here:
+
+Labelled memory diagram. cell 1: id 0; cell 2: hp 0; cell 3: pos 0; cell 4: team 0; cell 5: id 1, highlighted; cell 6: hp 1, highlighted; cell 7: pos 1, highlighted; cell 8: team 1, highlighted. Groups: player 0; player 1. Array of structures: fields for one player sit together.
+
+Another implementation can keep a separate collection for each kind of field. Player 1’s information is now spread among the collections:
+
+Labelled memory diagram. cell 1: id 0; cell 2: id 1, highlighted; cell 3: hp 0; cell 4: hp 1, highlighted; cell 5: pos 0; cell 6: pos 1, highlighted; cell 7: team 0; cell 8: team 1, highlighted. Groups: IDs; health; positions; teams. Structure of arrays: one field type sits together, while one player's fields are spread out.
+
+The diagrams show logical order, not exact byte sizes. Both layouts represent the same players. The first can be convenient when code handles one complete player at a time. The second can reduce unrelated data read into the CPU, central processing unit, cache when code sweeps across only positions or only health. Neither is automatically faster for every workload. Watch the addresses a repeating instruction visits: a fixed stride through records suggests the first arrangement; separate dense runs of one field suggest the second. An entity-component system can take the separation further by putting components in distinct pools, as shown later in this lesson.
+
+Section: Fixed offsets and scaled offsets answer different questions.
+
+Machine code often exposes an address formula. Read the formula before naming the container:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Labelled memory diagram. +hexadecimal 0 0: record 0; +hexadecimal 0 8: field, highlighted; +hexadecimal 3 0: record 1; +hexadecimal 3 8: field, highlighted; +hexadecimal 6 0: record 2; +hexadecimal 6 8: field, highlighted. Groups: hexadecimal 3 0 bytes; hexadecimal 3 0 bytes; hexadecimal 3 0 bytes. base + index times hexadecimal 3 0 + hexadecimal 0 8 lands on the highlighted field of each record. Not to scale.
+
+For example, base + index * hexadecimal 3 0 + hexadecimal 0 8 suggests records that are hexadecimal 3 0 bytes apart and a candidate field eight bytes into each record. Test several indexes and compare the same behavior at each calculated address.
+
+The formula shows how the code computes an address, not the declared type. A compiler can unroll a small loop into three fixed-offset stores, making an array look like a structure. Conversely, a table-driven system can compute what is logically a field offset, making a structure look indexed. Access patterns over time settle it:
+
+repeated neighboring strides support an array-of-records model;
+
+many unrelated functions reusing the same constants support named fields;
+
+allocation size gives an upper bound, not a complete layout;
+
+instruction width constrains a field’s size, not necessarily its full type;
+
+one readable value never distinguishes a pointer, handle, counter, or bit set.
+
+Section: Strings can store short text inside themselves.
+
+Many C++ string implementations use a small-string optimization. Short names may live directly inside the string object, while longer names use a heap buffer. This explains a confusing sight: one player name looks like text at offset hexadecimal 2 0, but a longer name makes the same bytes look like a pointer.
+
+Here is one real implementation’s layout, the 32-bit Microsoft C++ library’s std::string, holding the three-character example name Ivy and then a longer one. The name is only sample text; its length is what matters:
+
+Labelled memory diagram. +hexadecimal 0 0: Ivy, then a zero byte; +hexadecimal 1 0: size 3; +hexadecimal 1 4: capacity 15. Groups: 16 bytes: the text itself. Short: up to 15 characters live inside the object.
+
+Labelled memory diagram. +hexadecimal 0 0: pointer to heap text, highlighted; +hexadecimal 1 0: size 40; +hexadecimal 1 4: capacity greater than or equal to 40. Groups: the same 16 bytes now start with a pointer. Long: the first four bytes point to a heap buffer, and the capacity tells you which mode you are in.
+
+Do not read an assumed pointer until you identify the mode flag or length behavior. Compare the same object with names on both sides of the suspected short-string limit. 🔬
+
+Section: Linked structures leave different clues.
+
+A vector keeps its elements side by side, so code finds element n with arithmetic. Three other common containers give up that arithmetic in exchange for something else, and each exchange leaves a recognisable pattern in the code that walks it.
+
+Section: A linked list: every element points to the next.
+
+A linked list stores each element in its own heap block, called a node, together with the address of the next node, and often the previous one too. It exists to make inserting and removing cheap. Taking the first of 10,000 elements out of a vector means sliding the other 9,999 down one place; taking it out of a doubly linked list means rewriting two pointers in its neighbours.
+
+Diagram. From node Aprev dot payload dot next to node Bprev dot payload dot next. The connection is labelled: next. From node Bprev dot payload dot next to node Aprev dot payload dot next. The connection is labelled: prev. From node Bprev dot payload dot next to node Cprev dot payload dot next. The connection is labelled: next. From node Cprev dot payload dot next to node Bprev dot payload dot next. The connection is labelled: prev.
+
+The price is that a list has no arithmetic shortcut. Reaching the 1,000th node takes 1,000 reads, each one loading the next pointer out of the node just reached. That repeated load from a fixed offset inside the current node, such as mov eax, [eax+4] in a loop, is the list’s clue. The nodes are wherever the allocator put them, not in one block.
+
+Section: A search tree: each comparison discards half.
+
+A binary search tree node holds a key and two child pointers: smaller keys go to the left, larger ones to the right. Finding a key means comparing and stepping left or right. In a balanced tree, each step discards roughly half the remaining possibilities, so a tree of 1,000,000 entries needs about 20 steps: 2 to the power of 20 equals 1,048,576. std::map typically maintains such a balanced tree. Its clue is a loop that compares a key and then loads one of two pointers depending on the result. Its failure is lopsidedness: keys inserted in sorted order all go the same way and turn the tree into a slow list, which is why real implementations rebalance themselves.
+
+Section: A hash table: arithmetic picks the bucket.
+
+A hash table turns the key into a number, its hash, and uses that number to pick one slot, or bucket, in an array of buckets. Only the entries in that bucket are checked. With a suitable hash and enough buckets for the entries, lookup is usually close to constant time as the table grows; collisions or a full table can make it slower. With 16 buckets, a hash of hexadecimal 5 A 3 selects bucket hexadecimal 5 A 3 & hexadecimal F equals 3, because the mask hexadecimal F keeps only the last hex digit. The clue is arithmetic on the key (multiplies, shifts, XORs), then that mask or a remainder, then a short walk through one bucket. Two keys can land in the same bucket, a collision, which is why each bucket may hold a short list. Lesson 10.2 shows the same idea inside Lua’s tables.
+
+Validate structural invariants:
+
+a doubly linked node’s next.prev should return to the node;
+
+tree children should eventually end at a sentinel or null;
+
+bucket indices must stay below the bucket count;
+
+traversal needs a maximum-node limit and a visited-address set.
+
+The visited set is important. Corrupted data could form a cycle and otherwise trap a scanner forever.
+
+Before choosing a container model, ask what the game actually does with the data: does it need an ordered list, lookup by key, first-in-first-out work, a tile grid, or links between waypoints? Then ask whether items can be inserted or removed while you read them. Those questions connect the shape you observe to the operation it supports; a readable address alone cannot identify a container.
+
+Section: Raw pointers, smart pointers, and handles.
+
+Section: Unique ownership.
+
+If one owner’s destructor directly destroys the pointed object, and moves clear the old pointer, unique ownership is likely. That resembles C++ unique_ptr, but use a neutral label until symbols confirm it.
+
+Section: Shared ownership.
+
+Shared objects often have a separate control block with strong and weak reference counts. Copies increment a count; releases decrement it; a transition to zero calls a destructor. The object pointer and control-block pointer may travel together.
+
+Diagram. From owner 1object pointer, control pointer to the object. From owner 2object pointer, control pointer to the object. From owner 1object pointer, control pointer to control blockstrong count 2, weak count 1. From owner 2object pointer, control pointer to control blockstrong count 2, weak count 1. From a weak observer to control blockstrong count 2, weak count 1.
+
+Never edit a suspected count. The calls around it show whether its updates are atomic, as a thread-safe reference count’s must be; a plain integer that happens to rise and fall is not enough to call something a reference count.
+
+Section: Handles.
+
+Games often avoid long-lived raw pointers by storing a small handle:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The index chooses a slot. The generation proves that the slot still represents the same logical object. If a deleted entity’s slot is reused, its generation changes and old handles stop resolving. ✅
+
+For example, a saved handle for slot 12 with generation 3 resolves only while slot 12 still reports generation 3. If that enemy dies and a new enemy occupies slot 12 with generation 4, the old handle is rejected. The slot may hold a real living object at a valid address; the generation mismatch is what reveals that it is the wrong object.
+
+Section: Follow destruction as carefully as construction.
+
+Constructors show default values and vptr writes. Destructors show ownership:
+
+Which child objects are destroyed?
+
+Which pointers are merely cleared?
+
+Which reference counts are released?
+
+Which collections remove the object?
+
+Is memory freed immediately or returned to a pool?
+
+Set a breakpoint on an owned toy object’s destructor and delete it through the normal game action. The call chain and the fields the destructor touches answer those five questions. Repeat the experiment, because one run may include unrelated cleanup.
+
+Section: Component pools store fields in separate collections.
+
+In an entity-component system, an entity handle may resolve into several pools:
+
+Diagram. From entity 42 to transform pool, slot 7. From entity 42 to health pool, slot 19. From entity 42 to inventory pool: absent.
+
+A sparse set often combines a sparse index array with a dense component array. Deletion may swap the final dense element into the removed slot, so a component’s address can move even while the entity remains valid.
+
+Labelled memory diagram. slot 0: A; slot 1: B, highlighted; slot 2: C; slot 3: D. A dense component array. Entity B's component is about to be removed.
+
+Labelled memory diagram. slot 0: A; slot 1: D, highlighted; slot 2: C. Swap-remove: the last element, D, moves into the hole. D's entity did not change, but its component now lives at a different address.
+
+That is why a stable entity ID is often more meaningful than a cached component pointer.
+
+Section: Make the model honest.
+
+Do not immediately use #[repr(C)] struct Player for a layout that is only partly known. A staged representation shows which parts are still unknown:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+An Option says the field has not been confirmed. Unknown prevents a guess from silently becoming a fact. Once source, symbols, and repeated behavior agree, the model can become more precise.
+
+#[derive(Debug, Clone, Copy)] asks Rust to generate convenient formatting and copying for this small description of a layout. It does not make an unconfirmed game-memory layout safe to read.
+
+Section: Checks a recovered layout should pass.
+
+object size agrees with allocation and construction;
+
+every field offset is seen at multiple call sites;
+
+container count and capacity pass arithmetic checks;
+
+traversal has bounds and cycle detection;
+
+ownership claims agree with destruction behavior;
+
+cached addresses are invalidated when the game changes scenes;
+
+the layout is stored with the build it belongs to;
+
+disagreements remain visible instead of being “fixed” by guessing.
+
+Those checks assume we know what each field’s stored bytes represent. If the game’s visible health is 125 but no candidate field contains 125, the next question is whether the game stores a transformed value. Lesson 3.7 follows that question without throwing away the object and lifetime checks we just built.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/3/05/

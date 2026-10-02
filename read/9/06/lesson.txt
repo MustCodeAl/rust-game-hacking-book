@@ -1,0 +1,105 @@
+Reversible Mods and Manifests
+
+Section: “Copy these files” is not an uninstall plan.
+
+A responsible mod installer knows exactly what it changed. A manifest is a machine-readable receipt containing:
+
+mod identifier and version;
+
+supported game build;
+
+relative destination path;
+
+original file hash, if a file existed;
+
+installed file hash;
+
+backup location;
+
+operation time and status.
+
+Do not store absolute paths inside a portable manifest. Keep a trusted game root separately and resolve enclosed relative paths beneath it.
+
+Treat installation as a reversible state transition with a durable journal, not as an unrecorded sequence of file copies:
+
+Diagram walkthrough: Make a mod install reversible. Step 1: Plan the change. State: intended file. Name the destination and the exact file that should replace it. Step 2: Verify the original. State: known starting state. Check the current hash before changing anything. Step 3: Preserve the old state. State: backup or absence. Back up the file or record that it did not exist. Step 4: Install the mod. State: modded file. Write the intended replacement only after preservation. Step 5: Record the result. State: manifest entry. Commit manifest status so the change can be checked later. Step 6: Check before removal. State: still our file?. Verify the installed file has not changed since the manifest. Step 7: Undo safely. State: original state. Restore the backup or remove only the file the mod added. The same receipt supports installation and removal: every write has a verified starting state and a recorded way back.
+
+The manifest records which state was reached. After a crash, that record tells the recovery code whether an original file still needs restoring.
+
+Section: Model operations before touching disk.
+
+Installing a new file and replacing an existing one need different undo actions. A new file can later be removed; a replaced file needs its backup restored. Record that distinction, the expected hashes, and the stage each operation has reached before writing anything:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The distinction between Create and Replace prevents an uninstaller from deleting a file that existed before the mod.
+
+Section: Verify before replacement.
+
+An install plan may be correct when created and stale five minutes later after a game update. Compare the file’s current hash with the hash recorded when the plan was made. If they differ, this replacement must stop instead of overwriting someone else’s change:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This is an optimistic concurrency check. If the player updates the game or installs another mod between planning and installation, stop instead of overwriting an unexpected file.
+
+Section: Write status durably.
+
+An installer can crash after making a backup but before copying the replacement. The installer’s manifest stores the transaction in recoverable stages:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Write the updated manifest to a temporary file, flush it, validate that it parses, then replace the old manifest. The receipt is part of the modification, not optional documentation.
+
+Section: Uninstall by comparing hashes.
+
+For a created file:
+
+hash the current file;
+
+delete it only if it still matches the mod’s installed hash;
+
+otherwise report that someone changed it and leave it alone.
+
+For a replaced file:
+
+verify the current file still matches the installed hash;
+
+verify the backup matches the recorded original hash;
+
+restore through a temporary file;
+
+hash the restored output;
+
+mark the operation Restored .
+
+That policy avoids erasing a user’s later work.
+
+Section: Plan conflicts between mods.
+
+Two mods that replace the same path conflict even when both work alone. Build an index from normalized relative path to owning mod:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A conflict means the installer cannot choose a winner automatically. Show it before installation.
+
+Section: The recovery test.
+
+Use a copy of an open-source game’s data folder:
+
+install a texture mod;
+
+interrupt the installer after backup;
+
+run recovery and confirm the original survives;
+
+install completely;
+
+edit one installed file manually;
+
+uninstall and confirm the edited file is preserved with a warning;
+
+restore the clean test folder and repeat.
+
+A reversible mod is easier to learn from because every experiment has a defined way home. ✅
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/9/06/

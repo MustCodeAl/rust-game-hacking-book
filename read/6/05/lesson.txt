@@ -1,0 +1,101 @@
+Clients, Handshakes, and Chat Automation
+
+Section: What we are building.
+
+Run wesnothd.exe on your own computer, connect a client named ChatBot, and make it answer \wave with Hello! in the lobby.
+
+This is not a toy protocol. It uses the exact flow we reversed from Wesnoth 1.14.9:
+
+Diagram labels, in drawing order: wesnothd; ChatBot; loop; [lobby]; connect 127.0.0.1:15000; four zero bytes; negotiation reply; gzip-framed [version]; version reply; gzip-framed [login]; login reply; gzip-framed WML.
+
+Keep transport, decoding, session meaning, and behavior as separate layers. One incoming message should travel through the pipeline before any reply is built:
+
+Diagram walkthrough: Trace one chat message through the client. Step 1: Receive bytes. State: byte stream. TCP, transmission control protocol, supplies bytes without message boundaries. Step 2: Recover a frame. State: complete frame. The decoder waits for one complete bounded message. Step 3: Parse WML. State: parsed message. Structure turns the payload into named fields. Step 4: Update the session. State: session state. The client records the state needed to interpret the event. Step 5: Create a domain event. State: chat event. A game-level event separates protocol syntax from behavior. Step 6: Handle the command. State: reply decision. The bot decides whether the chat text requests a reply. Step 7: Send a frame. State: outbound message. The response is encoded and framed for the stream. This follows one chat command from unframed TCP bytes to a framed reply; each layer gives the next one a narrower meaning.
+
+This separation lets a malformed frame fail before it reaches chat behavior, and it lets the command handler work with events instead of raw network bytes.
+
+Section: Connect with timeouts.
+
+Before reading protocol bytes, the client needs a connection that cannot silently drift to another host or wait forever for a stalled local server. connect_local accepts one socket address, checks that it is the course loopback endpoint, then sets finite connect, read, and write waits:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The timeout prevents a broken server or parser from hanging the bot forever.
+
+Section: Read and write exact frames.
+
+Lesson 8.3’s encode_wesnoth_frame performs the gzip compression and adds the four-byte big-endian length. write_all matters because one write may send only part of a buffer.
+
+Labelled memory diagram. byte 0-3: `u32` length, big-endian; byte 4..: gzip-compressed WML, that many bytes. The frame read_frame parses below. It trusts only the four-byte header at first, then reads exactly length more bytes before decompressing.
+
+The two helpers implement the strip in opposite directions. send_wml frames text and writes all bytes; read_frame reads the four-byte length, checks the cap, then reads that many payload bytes before a decoder sees them. A short TCP read is normal, so both paths use the exact-read/write operations:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+read_exact handles TCP fragmentation. It does not assume one receive call equals one Wesnoth message.
+
+Section: Handle early server replies.
+
+The opening negotiation is special, so collect its replies until a short quiet period. The historical capture received 41 bytes.
+
+Diagram. From stream.read(&mut chunk) to result?. From result? to connection closed: stop. The connection is labelled: Ok(0). From result? to append to collected. The connection is labelled: Ok(count) greater than 0. From append to collected to stream.read(&mut chunk). From result? to quiet period: stop. The connection is labelled: WouldBlock or TimedOut. From result? to return the error. The connection is labelled: other error.
+
+This quiet-period reader is only for the unframed negotiation reply. It collects successive TCP reads until the server closes or pauses briefly, while the size cap prevents an unexpected reply from growing forever. After login, read_frame uses the protocol’s length field instead:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Keep this helper for negotiation only. Once the session is in the lobby, use the frame reader.
+
+Section: Perform the Wesnoth 1.14.9 login.
+
+The parser and frame writer now have a concrete job. The course server first expects four zero negotiation bytes, then a version message and a login message in compressed WML frames. log_in sends them in that order and reads each reply before advancing; a nickname is validated before it enters WML:
+
+Code example. The code’s comments explain: The first message is not compressed or length-prefixed. stream.write_all(&[0, 0, 0, 0])?; let reply equals read_server_batch(stream)?; anyhow::ensure!(!reply.is_empty(), "server did not negotiate");
+
+If the server rejects the version, compare the decompressed frame with the one produced by the official 1.14.9 client. Do not randomly change compressed bytes; fix the WML and recompress it.
+
+Section: Answer \wave.
+
+Once the login succeeds, the client announces itself and loops over framed server messages. A decoded \wave event will produce the reply described above; ordinary messages leave the connection running:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Section: Prove the bot works.
+
+Start wesnothd.exe .
+
+Run the client with address 127.0.0.1:15000 and nickname ChatBot .
+
+Join localhost:15000 from the normal Wesnoth client.
+
+Type \wave in the lobby.
+
+Confirm Hello! appears from ChatBot.
+
+That visible lobby response proves the real negotiation, version, login, gzip framing, Simple WML, receive loop, and command logic all work together.
+
+Section: Keep it well behaved.
+
+Limit message length, respond at most once per command frame, add a short send rate limit, and exit cleanly when the local server closes. A parser error should print the frame size and stop; it should not enter an automatic reconnect storm.
+
+Section: Run the complete bot.
+
+After building the workspace, start the course wesnothd.exe on port 15000 and run:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The full client is wesnoth_chatbot.rs. The framing/parser it imports is wesnoth_protocol.rs. Together they implement the real loopback connection, timeouts, four-zero negotiation, version frame, login frame, lobby receive loop, \wave recognition, and Hello! reply.
+
+Additional detail: Complete lab source: wesnoth_chatbot.rs.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The reusable gzip/WML framing stays in one tested protocol module; this file owns the session state. That split is intentional: byte framing should not know what \wave means, and chat behavior should not reimplement gzip.
+
+Silent video demonstration: An external client answering Wesnoth chat. The original external-client demonstration shows a chat command receiving a reply. The visible exchange depends on the earlier connection, negotiation, login, frame decoding, and command handling; a valid message alone is not a complete client.
+
+This bot owns its own server connection. Lesson 8.6 puts a relay between the official client and the same local server, so we can observe an existing conversation before choosing one bounded change.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/6/05/

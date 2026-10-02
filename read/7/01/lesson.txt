@@ -1,0 +1,101 @@
+What a Windows Executable Contains
+
+Section: Why an EXE needs a map.
+
+A Windows .exe is not one solid blob of CPU, central processing unit, instructions. It is a Portable Executable, usually shortened to PE, portable executable,. Its headers tell Windows where the code, read-only data, writable data, imports, resources, and relocation information live.
+
+First we will learn the file’s map and use it to translate positions on disk into live addresses. Then we will ask two different runtime questions: where are candidate bytes or values, and which instructions actually execute? Scanners, a disassembler, a debugger, and ETW, Event Tracing for Windows, each answer a different part. Knowing the map keeps their addresses anchored to a real build.
+
+The same section occupies a place in the file and a place in memory, and those two places are numbered differently. A position in the file is a file offset. A position in the loaded image is an RVA, relative virtual address,, a relative virtual address, meaning a distance from wherever Windows put the module. Use two layouts connected by the section table:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The layouts differ because sections have separate file and virtual alignments, zero-initialized data may occupy memory without taking equal file space, and Windows may apply relocations and resolve imports after mapping. A section row is the rule for converting a location in one layout to the corresponding location in the other; the numbers are related but not interchangeable.
+
+A parser follows the file’s own chain of verified offsets. Each header tells it where the next structure begins or how large that structure is:
+
+Diagram walkthrough: Read a PE file in dependency order. Step 1: Confirm the DOS header. State: MZ. MZ marks the first header of the file. Step 2: Find the PE header. State: e_lfanew. e_lfanew gives its file offset. Step 3: Confirm PE identity. State: PE signature. Check the signature before interpreting the following bytes. Step 4: Read machine details. State: COFF. The COFF header identifies architecture and section count. Step 5: Read image details. State: image layout. The optional header describes how Windows maps the image. Step 6: Read sections. State: section table. Section records connect stored bytes to mapped regions. Step 7: Resolve an address. State: offset ↔ RVA. Use the headers to relate a file offset and an RVA. Each PE field tells the reader where or how to interpret the next field; the section table finally connects disk positions to image-relative addresses.
+
+Never skip directly to a later box using a guessed offset. A damaged or wrong header should stop the parse before its numbers are trusted.
+
+Section: The path through the headers.
+
+The diagram above is a parser’s route, not six unrelated names. Each structure either confirms that this is a PE image or tells us where the next structure begins. Read this indentation as a chain of dependencies: we cannot trust a section row until the headers that locate its table have passed their checks.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The “optional” header is not optional for an executable image. That old name survives because object files can omit it. The parser’s useful result is a bounded section table; the next lesson uses its rows to translate an RVA into the corresponding file bytes.
+
+Section: Read numbers without pointer casts.
+
+For an on-disk file, a byte slice is safer and easier than casting random offsets to Windows structs:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Three ideas are hiding in those few lines:
+
+checked_add refuses an integer wraparound.
+
+get refuses an out-of-file slice.
+
+from_le_bytes states that PE numbers use little-endian byte order.
+
+That is what “safe parsing” means: malformed input becomes an error instead of an invalid memory access. The three integer helpers differ only in how many bytes they take and which little-endian integer type they construct. In the excerpts that follow, bytes is the whole EXE file read into a Vec<u8>; these helpers check every field access against that file. The complete lab handles opening the path and reporting errors as well.
+
+Section: Find the PE and COFF headers.
+
+The COFF header, named for the older Common Object File Format it comes from, is the small fixed block right after the four-byte PE\0\0 signature. It gives the basics a parser needs before anything else: which CPU the machine code targets, how many section rows follow, and how large the next header is.
+
+Code example. The code’s comments explain: 📏 Skip the four-byte PE signature only after it has been verified above.let coff equals pe_offset.checked_add(4).context("COFF offset overflowed")?;let machine equals u16_at(&bytes, coff)?;let section_count equals usize::from(u16_at(&bytes, coff + 2)?);let optional_size equals usize::from(u16_at(&bytes, coff + 16)?);anyhow::ensure!(section_count less than or equal to 96, "unreasonable section count");
+
+The cap of 96 is deliberately boring. Real course targets do not need thousands of sections, so a wild count means the offset is wrong or the file is damaged.
+
+Section: Tell PE32 from PE32+.
+
+The optional-header magic is hexadecimal 1 0 B for PE32 and hexadecimal 2 0 B for PE32+. Because their fields have different sizes, the image-base offset changes:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The games used by the memory-patching chapters are the specified 32-bit course builds, so their magic should be hexadecimal 1 0 B. The parser supports both formats because a tool should explain what it found instead of guessing.
+
+Section: Walk the 40-byte section rows.
+
+The section table begins immediately after the optional header. Each row is 40 bytes:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+.text is normally readable and executable. .rdata is normally readable. .data is normally readable and writable. Names are only conventions; the characteristic flags are what the loader actually uses to set each section’s page protection.
+
+Section: Run the real lab.
+
+Build the tool, then inspect one exact course executable:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+For this build, the output shows:
+
+PE32 or PE32+;
+
+preferred image base;
+
+entry-point RVA;
+
+.text RVA and size;
+
+whether .text is marked executable.
+
+Then inspect ac_client.exe and Quake3-UrT.exe. The layout changes, but the map-reading process does not.
+
+The complete buildable parser is pe_inspector.rs. It performs checked offset math for every field and never uses unsafe.
+
+Section: What the PE map tells us.
+
+For the same instruction, a PE section can give a location within the mapped image without saying where its bytes sit in the file:
+
+“The instruction is at RVA hexadecimal 0 0 3 C C D 9 1 inside .text, not at file offset hexadecimal 0 0 3 C C D 9 1, and Windows will add the live module base before the CPU can execute it.”
+
+Reference: Microsoft’s PE/COFF format specification.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/7/01/

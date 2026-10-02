@@ -1,0 +1,167 @@
+Game Files and Live Memory
+
+Section: State can outlive a running game.
+
+A live memory edit affects the current game session. What if a change should still be there after the game closes and reopens? The game must save some state to storage and load it again later. For the Flare character used in the next lesson, the visible Physical attribute starts at 5; its save includes build=5,1,1,2. That line gives us a specific question: which file stores the value, and can the game still load it after a controlled edit?
+
+The chapter starts with readable saves, then opens a binary save byte by byte. The same care with formats carries into textures, unit definitions, and mod archives. Manifests, signatures, and encryption answer later questions: which files changed, who approved them, and who can read them?
+
+Diagram. From Character state in RAMPhysical equals 5 to avatar.txt on storagebuild=5,1,1,2. The connection is labelled: Save & Exit. From avatar.txt on storagebuild=5,1,1,2 to New running gamePhysical equals 5. The connection is labelled: Load character. From avatar.txt on storagebuild=5,1,1,2 to Test a changed valueand verify the result. The connection is labelled: Edit a copy, then load.
+
+The file is a durable representation of part of the running state. It is not the same bytes at the same memory address: the game writes a format it knows how to read later. We will locate and copy the real file before changing its contents.
+
+Saves are only one kind of game file. Games also load:
+
+settings and configuration;
+
+saves and profiles;
+
+maps and level scripts;
+
+textures, models, and sounds;
+
+localization text;
+
+unit or item definitions;
+
+archives that bundle many files.
+
+If a supported mod file can express your idea, use it. File-based changes are easier to inspect, share, version, and undo than live memory patches.
+
+🗂️ Parser rule: copy the original, parse into named fields, validate every boundary, then write a new file. Keep the untouched source as your way back.
+
+Image description: A game world built from many resources
+
+Section: Observe file access.
+
+We know the Flare attribute is saved, but a folder may contain several saves, backups, and shared stashes. Use Process Monitor inside the VM, virtual machine, to see which paths the game opens when you:
+
+start the game;
+
+load a save;
+
+enter one map;
+
+change one setting;
+
+close the game.
+
+Filter by the target process and operations such as CreateFile, ReadFile, and WriteFile.
+
+For this experiment, create a disposable character and choose Save & Exit once. A write to avatar.txt near that action is a candidate; Lesson 9.2 confirms the path and the build= field before changing it.
+
+Section: Copy before parsing.
+
+The candidate file is evidence as well as game data. Never experiment on the only copy:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This helper takes the path of an existing file. With avatar.txt, it writes avatar.txt.gha-backup and returns success only if the copy succeeds. It uses the anyhow dependency for an error that includes the failed path; an existing backup is an error rather than a reason to overwrite it. Keep the original bytes and record a hash.
+
+Section: Identify the kind of file.
+
+The extension is only a hint. Inspect the first bytes:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+For first_bytes(path, 16), the buffer has room for 16 bytes and the returned vector contains the bytes obtained by that read. A read can return fewer; this is a quick identification helper, not validation of an entire header. Common “magic” bytes include:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A file with no readable text may be compressed, encrypted, or simply binary.
+
+Section: A file format is a rule for slicing bytes.
+
+A file is only a numbered sequence of bytes. A format is the fixed rule that says where one field ends and the next begins, and how to read the bytes in between — as text, as a count, as an offset into the same file, and so on. Two parsers that apply the same rule to the same bytes must agree on every field, or one of them has the format wrong.
+
+The Flare line build=5,1,1,2 is a small text-format example. A parser finds the line’s =, treats build as the field name, splits the right side at commas, and checks that it got four numbers. Only then can it say the first number represents Physical. Finding the digit 5 anywhere in the file would not establish that: another field could contain the same character. Lesson 9.2 checks the actual save structure before changing that value.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+That sketch describes one possible binary layout, not the layout of Flare’s text save. A PNG begins with the fixed bytes shown above; a different binary format might begin with a count telling its parser how many records follow. For either format, the boundary rule has to come from the format, not from a guess based on the file extension.
+
+Text formats use character encodings and visible separators. Binary formats use fixed fields, lengths, offsets, and flags. Neither kind is automatically safer or simpler; both need a parser that rejects impossible sizes and missing fields.
+
+Compression and archives are also different ideas. Compression tries to represent data in fewer bytes. An archive gives many named entries one container. ZIP normally does both, but a ZIP entry can also be stored without compression.
+
+A checksum is a compact value calculated from other bytes to detect accidental changes. A cryptographic signature additionally uses a key to prove who produced the data. Renaming or recompressing a file does not recreate a valid signature.
+
+Section: Parse in two stages.
+
+First prove the bytes are structurally safe to read. Then decide whether the decoded values make sense for the game.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A file can pass one stage and fail the other. A well-formed save might refer to an unknown unit type, while a familiar unit name can appear inside a truncated file. Keeping the stages separate produces precise errors and stops friendly-looking text from bypassing boundary checks.
+
+Use a cursor or checked slice ranges rather than repeatedly calculating raw indexes. Every parser step should either consume a proven range or return an error without changing the input file.
+
+Section: Parse, do not search-and-replace blindly.
+
+For text formats, prefer a real parser:
+
+serde_json for JSON;
+
+toml for TOML;
+
+quick-xml for XML;
+
+a format-specific library when available.
+
+Blind replacement can alter comments, unrelated fields, encodings, checksums, or lengths.
+
+Parsing creates a data model that is intentionally smaller and clearer than the file representation. Preserve fields you do not understand when the format allows round trips, and distinguish “missing,” “present with a default value,” and “present with an unknown value.” Those cases may serialize differently even when the game currently displays the same result.
+
+Section: The data model shapes the questions you can ask.
+
+A data model specifies the values, relationships, and constraints that matter to a program. A character model might name attributes, inventory entries, and item IDs. A file format specifies how a chosen part of that model is represented for storage. The raw bytes are another layer below that format.
+
+The Flare line build=5,1,1,2 illustrates the separation. At the game level, the first value is the Physical attribute. At the format level, it is the first comma-separated number in a particular named field. At the byte level, the digit 5 occupies a position in encoded text. A raw byte search cannot by itself recover the attribute’s role or prove that an unrelated occurrence of the digit is the same field.
+
+Different storage models expose different relationships:
+
+Table columns: Model; A possible game use; What the structure makes explicit.
+
+Model: Nested document, such as JSON or XML; A possible game use: One save with a character and inventory entries; What the structure makes explicit: Containment and named fields.
+
+Model: Relational tables; A possible game use: Character rows and item rows linked by owner IDs; What the structure makes explicit: Records, keys, and relationships between tables.
+
+Model: Graph of nodes and edges; A possible game use: Map locations joined by traversable routes; What the structure makes explicit: Connections, and properties of each connection.
+
+These are options, not a claim that every game uses a database or every map needs a graph database. Choose a model for the questions and updates it must support. The storage implementation then chooses a byte representation and access structures. A parser or query interface hides some lower-level details, but its constraints still affect the layer above.
+
+Section: Persistent records, caches, and indexes have different jobs.
+
+A durable save or database record is intended to survive a restart. A cache stores a result that can be obtained again, such as a decoded texture, to avoid repeating expensive work. A search index is an extra structure that helps find records matching a key, keyword, or filter without checking everything from the beginning each time.
+
+Suppose a mod changes a texture file. The game may still display its previously decoded copy until the asset is reloaded or the cache is invalidated. Editing the durable source and changing a cached representation are therefore different operations. Conversely, deleting a rebuildable cache is different from deleting the player’s only save.
+
+Indexes need to remain consistent with the data they describe, and caches need a policy for becoming stale. When an edit appears to have no effect, check which representation the game currently reads before concluding that the edit failed. The running object, its serialized record, and an access structure can all describe related information while having different lifetimes.
+
+Section: Treat files as untrusted input.
+
+Even a local save can be malformed. A parser should enforce:
+
+file-size limits;
+
+collection-count limits;
+
+string-length limits;
+
+checked offsets and sizes;
+
+valid encoding;
+
+no path traversal when extracting archives.
+
+Never join an archive entry such as ../../important.txt directly to an output folder.
+
+Section: A reversible file workflow.
+
+The preceding rules become easier to remember as one file journey. The starting hash identifies the untouched original; the diff shows exactly what the serializer changed; the disposable profile tells us whether the game accepts the new representation:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Change one field at a time, as with memory patches: when a single change breaks the load, the diff names the field that caused it.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/9/01/

@@ -1,0 +1,129 @@
+Pathfinding on a Game Map
+
+Coordinates can tell a bot where an enemy is, but not how to reach it. If a wall lies between the player and the target, moving directly toward the target gets stuck. A route must follow legal neighboring tiles, which turns the map into a graph-search problem.
+
+Section: Represent walkable tiles as a graph.
+
+A strategy game may store terrain as a flat row-major array. Pathfinding becomes easier to understand when you rename the pieces:
+
+each walkable tile is a node ;
+
+a legal move between neighboring tiles is an edge ;
+
+a route is a sequence of connected nodes;
+
+a wall simply means no edge crosses that tile.
+
+For a map with width w, tile (x, y) is stored at y * w + x. Always bounds-check before performing that multiplication.
+
+BFS and A-Star use the same search loop. The important difference is how the frontier chooses which tile comes out next:
+
+Diagram. From Validated tile grid to Put start in frontier. From Put start in frontier to Choose the next tile. From Choose the next tile to Goal reached?. From Goal reached? to Add legal unseen neighbors. The connection is labelled: No. From Add legal unseen neighbors to Choose the next tile. From Goal reached? to Rebuild route from parents. The connection is labelled: Yes.
+
+BFS chooses in first-in-first-out order; A-Star chooses the tile with the best known cost plus its estimate. Both must reject invalid tiles before searching.
+
+Section: Breadth-first search first.
+
+Breadth-first search (BFS) explores every tile one step away, then two steps away, and so on. On a grid where every move costs the same, the first route it finds is shortest in number of steps.
+
+The queue is what makes that guarantee work. Because tiles leave the queue in the order they entered it, every tile one step from the start is examined before any tile two steps away, and so on outward. So the first time BFS reaches a tile, it must have arrived by the fewest possible steps: a shorter route would have come out of the queue earlier and got there first.
+
+Notice what that guarantee rests on — every move costing the same. As soon as some tiles cost more to enter, such as deep water, rough ground, or a slope, “fewest steps” and “cheapest route” stop being the same question, and BFS confidently answers the wrong one. Closing that gap is what A-Star is for.
+
+Here is the smallest case where the two questions disagree. S is the start, G is the goal, and entering M costs 9 instead of the ground cost of 1:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+BFS finds the direct route in two moves: S to M to G. Its travel cost is 9 + 1 equals 10. Going around the top takes four moves but costs 1 + 1 + 1 + 1 equals 4. A weighted search should choose the longer route because it answers the cost question. This is a limit of BFS’s guarantee, not a flaw in its queue.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+came_from does two jobs: it marks visited tiles and remembers how to reconstruct the route. If the goal is absent, ? returns None instead of inventing a path.
+
+Section: Turn coordinates into an array index safely.
+
+A Vec<T> stores its elements in one contiguous row of memory. A game can use that row to represent a two-dimensional map by placing row 1 after row 0, row 2 after row 1, and so on. That is why (x, y) becomes y * width + x.
+
+Do not perform that formula until negative and out-of-range coordinates have been rejected. Also use checked arithmetic, because a corrupted width from a bad reverse-engineered layout must not wrap into a believable index:
+
+Labelled memory diagram. (0,0): 0; (1,0): 1; (2,0): 2; (0,1): 3; (1,1): 4; (2,1): 5. Groups: row y=0; row y=1. For example, a 3-wide grid: (x, y) maps to index y * width + x. Row 1 starts right where row 0 ends, at index width.
+
+Code example. The code’s comments explain: 🧮 Checked math refuses impossible dimensions instead of wrapping. let index equals y.checked_mul(self.width)?.checked_add(x)?; self.cells.get(index) }}
+
+cells.get(index) performs one final length check. That catches an incomplete snapshot whose header claims a 100 times 100 map but whose copied array contains fewer than 10,000 tiles.
+
+Keep facts about one tile in one record such as TileInfo. Three separate vectors named terrain, visible, and movement_cost can drift out of sync so index 42 describes three different tiles. One vector of records makes that mistake harder to express.
+
+Section: A-Star adds a useful guess.
+
+A-Star uses the known route cost plus a heuristic, an estimate of the remaining cost. On a four-direction grid where every legal move costs at least 1, Manhattan distance counts the minimum number of horizontal and vertical moves and cannot overestimate that cost:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The heuristic must not overestimate if you want the cheapest-path guarantee. For movement costs with a different verified minimum, multiply Manhattan distance by that minimum. If a legal move can cost zero, the safe estimate from this rule is zero. The search priority is:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+For the muddy grid above, the direct route has cost 10 and the top route has cost 4. The estimate guides which tile A-Star explores next; the accumulated cost still decides whether a newly found route improves an old one. If the game permits diagonal moves, Manhattan distance can overestimate: (0,0) to (1,1) might be one diagonal move while Manhattan counts two. Choose an estimate that matches the actual movement rules.
+
+Do not include hidden enemy positions in the heuristic. A legitimate observer should plan from information the local game state actually reveals.
+
+Keep the search’s bookkeeping names precise:
+
+the frontier contains discovered tiles that still deserve exploration;
+
+cost_so_far[tile] is the cheapest route to that tile found so far;
+
+came_from[tile] records the parent of that cheapest known route;
+
+the heuristic estimates only the cost that remains.
+
+A tile entering the frontier does not mean its best path is final. If a cheaper route reaches it later, update its cost and parent. This distinction is why an implementation that merely marks every discovered tile “done” can return the wrong route on weighted terrain.
+
+Setting the heuristic to zero turns A-Star into Dijkstra’s algorithm. That is a useful debugging switch: if the zero-heuristic version works but the normal one does not, inspect the heuristic and movement-cost assumptions before blaming the recovered map.
+
+Section: Keep three layers separate.
+
+Diagram. From observer snapshot to validated grid. From validated grid to search algorithm. From search algorithm to proposed route. From proposed route to input adapter.
+
+The search function should never call ReadProcessMemory or press keys. It accepts an ordinary copied grid and returns ordinary coordinates. This makes it testable on any computer.
+
+The input adapter is the only part allowed to translate one confirmed route step into a supported action in your offline lab.
+
+Section: Tests that catch real mistakes.
+
+For example, here is the exact 3 times 2 grid this test builds, with the wall forcing a detour through row 1:
+
+Diagram. From (0,0) start to (0,1). The connection is labelled: 1. From (0,1) to (1,1). The connection is labelled: 2. From (1,1) to (2,1). The connection is labelled: 3. From (2,1) to (2,0) goal. The connection is labelled: 4.
+
+The test below gives BFS the start and goal from the diagram and rejects the wall tile (1, 0). A valid result begins at (0, 0), ends at (2, 0), and never includes the wall. The intermediate route follows the open second row.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Follow that test through the queue. The wall removes the direct move, leaving the route through the open second row:
+
+Diagram walkthrough: A FIFO frontier finds the route around the wall. Step 1: Use the validated grid. State: start: (0,0); goal: (2,0). The test starts at (0,0), aims for (2,0), and rejects wall (1,0). Only x from 0 to 2 and y from 0 to 1 are walkable candidates. Step 2: Seed the frontier. State: queue: [(0,0)]. Put (0,0) into the FIFO queue and record its parent as None. This marks the start as seen before any neighboring tile is added. Step 3: Visit the start. State: queue: [(0,1)]. Pop (0,0). Its right neighbor is the wall, and its left and upper neighbors are outside the grid. Enqueue (0,1) and remember (0,0) as its parent. Step 4: Advance along row one. State: queue: [(1,1)]. Pop (0,1). The only legal unseen neighbor is (1,1); the start is already seen. Enqueue (1,1) with parent (0,1). Step 5: Reach the goal from below. State: queue: [(2,0)]. Popping (1,1) discovers (2,1). Popping (2,1) then discovers (2,0), with each tile retaining the parent that first reached it. Step 6: Rebuild the route. State: 4 moves; 5 tiles; no wall. When (2,0) leaves the queue, follow parents backward and reverse them: (0,0), (0,1), (1,1), (2,1), (2,0). The route takes four equal-cost moves and never enters the wall. The queue controls exploration order; came_from records both visited tiles and the route back to the start.
+
+Also test:
+
+start equals goal;
+
+goal is completely enclosed;
+
+coordinates lie outside the map;
+
+a one-tile corridor;
+
+terrain cost changes the preferred route;
+
+the observed grid changes after planning.
+
+That final case matters. A route is based on one snapshot. Before performing the next step, confirm that the current tile and the next tile are still valid. If not, stop and plan again. 🔁
+
+Section: BFS or A-Star?.
+
+Use BFS when the grid is small, every step costs the same, or you are still verifying the map. Use A-Star when the map is large and a meaningful heuristic can avoid exploring most irrelevant tiles.
+
+Both algorithms are only as correct as the recovered grid. A brilliant route through a tile you misclassified as walkable is still wrong. Pathfinding does not replace reverse engineering; it consumes the grid that reverse engineering produced.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/4/06/

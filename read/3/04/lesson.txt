@@ -1,0 +1,161 @@
+Object-Oriented Clues in Machine Code
+
+Section: Source patterns do not survive as labels.
+
+A C++ programmer may write a class named EnemyFactory, a State interface, and an Observer list. The processor never sees those friendly names. After compilation it sees addresses, loads, stores, comparisons, and calls.
+
+That sounds discouraging, but design patterns still leave shapes in memory and code. A vtable is a row of function pointers. A factory allocates an object and initializes it. An observer loop walks a collection and calls similar functions. One shape alone is common in unrelated code, but several that fit together usually point to one pattern. 🧩
+
+When debug symbols exist for a build, they give the real names and layouts, so they can check a layout recovered from the version-pinned executable.
+
+Section: A pattern name communicates intent.
+
+Design patterns are shared names for recurring design decisions. They do not all exist merely to “remove dependencies,” and two patterns can produce similar-looking machine code. Their important difference is often intent: why the pieces are separated and what kind of change the design expects.
+
+For example, both State and Strategy may delegate through a function table. State usually represents behavior that changes as an object moves through a lifecycle. Strategy usually selects one replaceable rule. Observed transitions and call sites matter more than the table shape.
+
+In your own tool, use a pattern after repeated change exposes a real problem: duplicated lifecycle code, tangled ownership, or features that cannot be tested separately. Do not add a factory, observer, or trait hierarchy only because the name sounds professional. A smaller function or enum is often the clearer design.
+
+In a compiled game, a pattern name describes a likely role. It does not recreate the original source or prove what the programmer intended.
+
+Section: Start from what the code does, not class names.
+
+Suppose three heap objects all begin with the same pointer. That pointer leads into a read-only section containing executable addresses. Several call sites do this:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Diagram. From object A+hexadecimal 0 0: table pointer to one read-only tableof function addresses. From object B+hexadecimal 0 0: table pointer to one read-only tableof function addresses. From object C+hexadecimal 0 0: table pointer to one read-only tableof function addresses. From one read-only tableof function addresses to the function called,with the object in rcx. The connection is labelled: slot 4, at +hexadecimal 2 0.
+
+What this code shows is small:
+
+Objects at these addresses share a function table, and slot four receives the object address.
+
+Slot four is at +hexadecimal 2 0 because each slot holds one 8-byte function address on 64-bit Windows, and hexadecimal 2 0 is 2 times 16 equals 32 bytes, which is 32 divided by 8 equals 4 slots past slot zero.
+
+The code does not show the source class name, the inheritance tree, or the method name. Two facts can be checked directly: offset hexadecimal 0 0 points into read-only module memory, and the entries of that table point to executable module pages. Together they match how C++ compilers implement a vptr, so offset hexadecimal 0 0 is very likely one. A name such as Actor is a label chosen from the object’s behavior; nothing in the binary says what the original class was called.
+
+Section: Five patterns and the clues they leave.
+
+Section: Singleton or global manager.
+
+A singleton is one shared object. Look for many functions loading the same global pointer before accessing fields:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Diagram. From recruit code to one global pointer. From save code to one global pointer. From interface code to one global pointer. From one global pointer to the one manager object.
+
+One global pointer alone does not make a singleton; it might be a cache or the current scene. A singleton is allocated once during initialization, reused by many unrelated call sites, and released at shutdown.
+
+Section: Factory.
+
+A factory chooses which concrete object to create. A common compiled shape is:
+
+inspect a type ID;
+
+choose an allocation size;
+
+call an allocator;
+
+call one of several constructors;
+
+return a common base pointer.
+
+Diagram. From type ID to switch. From switch to allocate, then callthe first constructor. The connection is labelled: 1. From switch to allocate a different size,call the second constructor. The connection is labelled: 2. From switch to allocate, then callthe third constructor. The connection is labelled: 3. From allocate, then callthe first constructor to return a pointerto the common base. From allocate a different size,call the second constructor to return a pointerto the common base. From allocate, then callthe third constructor to return a pointerto the common base.
+
+A switch followed by several constructor calls is more useful than the word “factory.” Follow each constructor and compare its first vptr write and field initialization.
+
+Section: State or strategy.
+
+State and strategy patterns both replace one behavior with another. Memory may contain a pointer to a small behavior object or a function table. The owner delegates work to it each update.
+
+Diagram labels, in drawing order: sees the player; in range; target moves away; loses the player; Idle; Chase; Attack.
+
+Each arrow is a moment when the owner’s behavior pointer changes. If it changes when an enemy moves from idle to chase to attack, “state” is a useful name. If it changes when a weapon changes its aiming rule, “strategy” may fit better. The bytes do not care which textbook word you choose; behavior over time is the deciding clue.
+
+Section: Observer.
+
+An observer system keeps a collection of listeners and calls them when an event occurs. Look for one loop that:
+
+walks a vector, list, or handle table;
+
+passes the same event record to each element;
+
+makes a direct or virtual call;
+
+tolerates an empty collection.
+
+Diagram. From event: a unit died to notify loop:same event record for each. From notify loop:same event record for each to score panel. From notify loop:same event record for each to sound system. From notify loop:same event record for each to achievement tracker.
+
+Do not confuse this with an ordinary entity update loop. An observer loop usually starts from an event or notification function and passes similar event data to many unlike objects.
+
+Section: Component or entity-component system.
+
+Composition stores behavior in separate components rather than one deep inheritance tree. Useful clues include:
+
+an entity ID used to index several pools;
+
+type IDs mapped to separate arrays;
+
+bit masks describing which components an entity owns;
+
+tightly packed arrays of positions or health values;
+
+systems that loop over one component type at a time.
+
+Labelled memory diagram. cell 1: pos 0; cell 2: pos 1; cell 3: pos 2; cell 4: pos 3; cell 5: pos 4. Groups: one component type, packed together. A movement system walks this array and touches nothing else.
+
+If position records are contiguous while unrelated entity fields live elsewhere, do not force them into one giant Player structure. The game may be data-oriented.
+
+Section: Constructors are layout witnesses.
+
+A constructor often writes the vptr and then initializes fields:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Labelled memory diagram. +hexadecimal 0 0: vptr; +hexadecimal 0 4: vptr; +hexadecimal 0 8: 100; +hexadecimal 0 C: ?, highlighted; +hexadecimal 1 0: 0; +hexadecimal 1 4: 0. Groups: mov [rcx], rax: 8 bytes; dword 100; not written; qword 0. Each box is four bytes. The three stores reach +hexadecimal 1 8; the bytes at +hexadecimal 0 C are never written, so they stay unknown.
+
+The last store starts at +hexadecimal 1 0 and writes a qword—eight bytes—so it touches offsets +hexadecimal 1 0 through +hexadecimal 1 7; +hexadecimal 1 8 is the first byte after the store. That gives a minimum object size of at least hexadecimal 1 8 bytes, but alignment may make the allocation larger. Compare the allocator’s requested size, constructor stores, destructor reads, and ordinary methods. No single function tells the whole story.
+
+Section: A repeatable reconstruction method.
+
+Collect several live object addresses from the exact local build.
+
+Group objects by their first pointer and validate that it leads to executable function entries.
+
+Find code that writes that first pointer; it may be a constructor.
+
+Find code that allocates the object and read the requested size.
+
+Label every repeated field access as field_08 , field_10 , and so on.
+
+Watch which actions change each field.
+
+Find virtual call slots and trace their arguments and side effects.
+
+Name a pattern only when several of these shapes agree.
+
+Compare with source or debug symbols as a final answer key.
+
+The goal is not to make the class diagram look impressive. The goal is to build a model that correctly predicts what the program will do next.
+
+Section: Common mistakes.
+
+❌ Naming a class from one interesting string.
+
+✅ Naming fields provisionally, such as field_08 , until their behavior is clear.
+
+❌ Treating every first pointer as a vptr.
+
+✅ Checking page permissions and several table entries.
+
+❌ Assuming inheritance because two objects share fields.
+
+✅ Checking vtables, constructors, conversions, and call behavior.
+
+❌ Forcing an entity-component design into one C-style struct.
+
+✅ Letting access patterns reveal where each component really lives.
+
+Next, we will add ownership and lifetime clues so the recovered model explains not just what an object is, but who keeps it alive.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/3/04/

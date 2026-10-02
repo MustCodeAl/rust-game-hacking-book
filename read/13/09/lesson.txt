@@ -1,0 +1,203 @@
+Failure Modes at Trust Boundaries
+
+The first three control gaps were a client flag trusted as permission, a checksum that covered only part of what it protected, and an environment signal standing in for validation. Eight more failures show how the same mismatch appears in arithmetic, paths, errors, timing, and batches.
+
+Every example lives in bypass_patterns_lab.rs, which uses no Windows APIs, no processes, no filesystem, and no network. The “attacker” is a test function calling an intentionally bad policy. That keeps the computer-science shape of each failure visible while keeping the code useless as a recipe aimed at someone else’s machine.
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Section: The shape every one of these shares.
+
+Diagram. From A control promises something to It checks a proxy for that thing. From It checks a proxy for that thing to The proxy and the thing come apart. From The proxy and the thing come apart to The effect happens anyway. From The effect happens anyway to Move the check to the effect.
+
+The interesting question is never “what was the trick?” It is always “what did the control measure, and how did that stop matching what it promised?” Each section below names the promise first, because a control with no stated promise cannot be bypassed — only surprised.
+
+Section: Pattern 4: arithmetic that wraps inside the bound check.
+
+Promise: a read never leaves the mapped region.
+
+The check looks exhaustive:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+On a 64-bit machine that sum is computed modulo 2^64. Choose an offset near the top of the range and the addition wraps past zero into a small number:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Nothing overflowed visibly. In a release build there is no panic, no warning, and the comparison is perfectly true. The read then starts at an address near the top of the address space.
+
+Diagram walkthrough: See a bound check fooled by overflow. Step 1: Start near the limit. State: MAX minus 3. The requested offset is only three below usize::MAX. Step 2: Add the length. State: end becomes 12. Unchecked addition wraps the end of the range to 12. Step 3: Compare the wrong end. State: 12 less than or equal to region size?. The bound check sees only the wrapped small number. Step 4: Allow a bad read. State: false acceptance. This tour follows the yes branch despite the invalid start. The yes branch is the failure: a wrapped end looks small enough, although the requested range began near the address-space limit.
+
+The repair is not a bigger integer. It is refusing to answer a question that has no answer:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Better still, hand the question to the slice, which cannot be argued out of its own length — region.get(offset..end) returns None for every range it does not own. Prefer asking a value that knows the answer over recomputing the answer yourself.
+
+Section: Pattern 5: a prefix compared before the path is resolved.
+
+Promise: a mod can only open files under assets/.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The check reads the text the caller supplied, not the location that text names:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This is the same mistake as the archive extraction in Lesson 9.6, and it is worth seeing twice, because the two look nothing alike in code and are identical in structure. Both compare a string against a rule that only the resolved path can satisfy.
+
+The repair is to resolve first and compare second. The lab’s resolve walks the segments, pops on .., and returns None the moment the path climbs above its own root — because “this path escapes” is an answer the caller needs, not an error to paper over.
+
+Section: Pattern 6: an error treated as permission.
+
+Promise: an asset loads only when its hash matches the manifest.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+verify returns Result<bool, VerifyError>, so there are three outcomes, not two: matched, did not match, and could not tell. unwrap_or(true) folds the third into the first.
+
+Look at what that does to an attacker’s job. Forging a file that hashes to the expected value is hard. Making the manifest unreadable — deleting it, locking it, truncating it — is trivial, and now produces the same result.
+
+The repair is to fail closed and to keep the third outcome distinct:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Those two denials need different responses from a human. One means the file changed. The other means your verification is broken, which is a bigger problem, and collapsing them into one boolean throws that distinction away.
+
+Section: Pattern 7: a second route to the same effect.
+
+Promise: no byte changes while writes are disabled.
+
+apply_patch checks the policy and then writes. Months later somebody adds a batch helper, because calling apply_patch in a loop felt wasteful:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The guard was never removed or weakened. It was simply routed around. Worse, the batch path records no decisions at all, so the audit log shows nothing happened while the bytes changed.
+
+Diagram. From apply_patch(...) to policy check. From policy check to self.write(...). From weak_apply_batch(...) to self.write(...). The connection is labelled: skips the guard.
+
+The repair is structural rather than additional. Do not add a second copy of the check to the batch helper; make the batch helper call the guarded entry point. One way in means one place to be correct:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Diagram. From apply_patch(...) to policy check. From policy check to self.write(...). From apply_batch(...) to apply_patch(...).
+
+When you review a control, count the routes to the effect before reading the check. A guard on three of four paths is not a guard.
+
+Section: Pattern 8: a valid command accepted twice.
+
+Promise: each award is applied once.
+
+The integrity tag verifies. The amount is within bounds. The command is genuinely well-formed — and submitting it four times pays out four times:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A tag proves the bytes were not edited. It says nothing about whether they were already used. Freshness and integrity are separate properties, and a check for one is silently assumed to cover the other far too often.
+
+The repair binds each command to a position in a sequence and refuses any position at or behind the last one applied:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Note what this costs: the receiver now has to remember something. Every anti-replay design pays that price somewhere — a counter, a window of recent identifiers, a timestamp with a bounded skew. A design that claims to stop replay while remaining completely stateless has not stopped replay.
+
+Section: Pattern 9: a decision cached past the state it described.
+
+Promise: turning writes off stops the tool from writing.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The first call stores the answer; every later call reuses it. Turn writes off afterwards and the tool keeps writing, because it is still answering a question asked at start-up.
+
+This is a cousin of the check/use gap from Lesson 13.6, with one instructive difference: nothing raced. There is no unlucky timing to reproduce and no second thread involved. The answer simply outlived the input it was computed from. Single-threaded code can have this bug, which is why “we are single-threaded” is not a reason to skip the review.
+
+The repair is to re-read the setting where the write happens. A cache is only safe when something invalidates it, and nothing here does.
+
+Section: Pattern 10: a per-tick tolerance that accumulates.
+
+Promise: a player cannot move faster than the movement rule allows.
+
+Every movement check needs slack for jitter and rounding, so the rule allows a few centimetres over the maximum per tick. Each tick is judged alone, and each tick is genuinely fine:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Thirty metres, and no individual check was ever wrong. This is the pattern that most resembles real anti-cheat tuning, because the tolerance is not a mistake — remove it and honest players trip the rule constantly.
+
+The repair keeps the per-tick tolerance and adds a budget across a window:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Now jitter that averages out costs nothing, because a step under the maximum spends zero budget. A steady lean in one direction runs out after twelve ticks. The lab test asserts both halves of that claim, which is the point: a tolerance rule needs a test proving it still accepts ordinary play, or the next person will quietly widen it until it does.
+
+Section: Pattern 11: a batch that fails halfway and keeps what it did.
+
+Promise: a rejected mod list changes nothing.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The refusal is honest. The state is still wrong:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Slot 0 was written before slot 9 was rejected. A caller that reads “denied” and assumes nothing happened is now working from a state nobody intended, and the half-applied change is exactly the sort of thing that survives a restart.
+
+The repair is two phases: validate every item, then apply every item. Nothing is written until the whole request is known to be acceptable, so a denial genuinely means no change. When the effect cannot be made atomic, the alternative is an explicit rollback path — never a comment saying callers should re-check.
+
+Section: Compare all eight.
+
+Table columns: Pattern; What was checked; What actually mattered; Where the repair belongs.
+
+Pattern: Wrapping bound; What was checked: a sum that wrapped; What actually mattered: whether the range exists; Where the repair belongs: the slice that owns the bytes.
+
+Pattern: Path prefix; What was checked: the requested text; What actually mattered: the resolved location; Where the repair belongs: after resolution.
+
+Pattern: Fail-open; What was checked: two outcomes; What actually mattered: three outcomes; Where the repair belongs: the error branch.
+
+Pattern: Second route; What was checked: one entry point; What actually mattered: every route to the effect; Where the repair belongs: the single choke point.
+
+Pattern: Replay; What was checked: integrity; What actually mattered: integrity and freshness; Where the repair belongs: a sequence the receiver remembers.
+
+Pattern: Cached decision; What was checked: state at start-up; What actually mattered: state at the effect; Where the repair belongs: the write itself.
+
+Pattern: Tolerance drift; What was checked: one tick; What actually mattered: accumulated excess; Where the repair belongs: a budget over a window.
+
+Pattern: Partial batch; What was checked: each item in turn; What actually mattered: the request as a unit; Where the repair belongs: validate-then-apply.
+
+Read the middle two columns together. In every row the control measured something true, and something true was not the same as the thing promised. That gap is the whole subject.
+
+Section: Place a bypass claim in the table.
+
+When you meet an evasion claim in the wild, the useful response is not to run it. It is to work out which row of that table it belongs to:
+
+Table columns: Question; Where the answer comes from.
+
+Question: What did the control promise?; Where the answer comes from: documentation, or the check’s own comment.
+
+Question: What does it actually measure?; Where the answer comes from: the code at the branch.
+
+Question: How can the two come apart?; Where the answer comes from: the pattern table above.
+
+Question: What shows the gap in practice?; Where the answer comes from: a decision that contradicts the promise.
+
+Question: Where does the invariant belong?; Where the answer comes from: the shared point where the effect becomes real.
+
+Question: What test keeps it fixed?; Where the answer comes from: one negative case and one positive case.
+
+The last row is the one people skip. A repair with only a negative test tends to be over-tightened until ordinary behavior breaks; a repair with only a positive test tends to drift back. Both, or it will not hold.
+
+Section: Glossary terms introduced here.
+
+Fail-open: treating an inconclusive check as permission.
+
+Choke point: the single place every route to an effect must pass through.
+
+Freshness: the property that a message has not been used before, which integrity alone does not provide.
+
+Tolerance budget: an allowance spent across a window rather than granted per event.
+
+Two-phase apply: validating an entire request before performing any part of it.
+
+The eleven game-and-boundary patterns in Lessons 13.7–13.8 are variations on one question: does the check guard the state and effect it claims to guard? Chapter 14 extends the machine model beyond one running operating system: a hypervisor provides a guest with virtual hardware, a console begins from a trusted boot chain, and an emulator reconstructs a machine in software. In each case, ask which component owns the state and which boundary controls an effect.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/13/09/

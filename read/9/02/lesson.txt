@@ -1,0 +1,173 @@
+Save Formats and Safe Editing
+
+Section: Locate the save by behavior.
+
+Lesson 9.1 followed one Flare character’s Physical value from running state into avatar.txt. Now we will prove the exact path, change that file once, and ask Flare to load it. Use Flare 1.12 with a disposable character. Start Process Monitor and filter to the game process.
+
+Image description: Filtering Process Monitor to the target
+
+Save the game once, then look for file writes near that timestamp.
+
+Image description: A likely save-data path
+
+Close the game before editing. Many games keep state in memory and overwrite the save during shutdown.
+
+For the actual Flare 1.12 lab, filter Process Name is flare.exe, create a character in the Empyrean campaign, then choose Save & Exit. The important writes are:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Open avatar.txt first. It contains the character XP and build values; stash_HC.txt is the shared hardcore stash. Copy both files before changing either one.
+
+Section: Make two controlled saves.
+
+Compare two disposable saves from the same character. Make one intended change through the game, such as spending one available point on Physical, and record the visible result. For example:
+
+save A has build=5,1,1,2 ;
+
+save B has build=6,1,1,2 after Physical rises from 5 to 6;
+
+no other intentional action occurs between saves.
+
+Compare them:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+If the files differ almost everywhere, compression, encryption, timestamps, or a checksum may be involved.
+
+This helper compares only the shared prefix because zip ends with the shorter file. Check the two total lengths separately; an inserted field or newline also counts as a difference.
+
+The two-save comparison is a controlled experiment, not proof that every changed byte belongs to gold. Games may update play time, random state, timestamps, object order, or integrity data during the same save. Repeat the comparison with several values and one intentional change at a time. A real field should follow the chosen change consistently; unrelated changing bytes are background state.
+
+Section: Prefer a typed text format.
+
+If the save is readable key/value text, parse lines instead of replacing every matching number:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This small example makes the field names visible, but collecting directly into a map would keep only one of two repeated build= lines. The complete editor below checks that the target line occurs exactly once and preserves the other lines and their newline style.
+
+Then require the exact field and change its complete value:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+In the exact Flare 1.12 capture, the new character has:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The four build numbers are Physical, Mental, Offense, and Defense. The original visible hack changes them to:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Reloading the disposable character shows all four values as 30.
+
+Section: Write atomically.
+
+Do not overwrite the original in place. Write a temporary sibling, flush it, then rename:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The important change is that the original path is not used as scratch space:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Writing directly truncates the original before the new bytes are safely stored. A crash or full disk can leave half a save. The sibling temporary file keeps the original untouched during construction, sync_all asks the operating system to flush it, and closing the handle before replacement avoids Windows sharing conflicts. The complete Windows lab uses ReplaceFileW so replacement and backup creation are one filesystem action.
+
+On Windows, replacing an existing file may require a platform-specific replace operation. Keep the backup until the game successfully loads the new save.
+
+Section: Prepare, validate, commit, and recover.
+
+Use four explicit stages: prepare, validate, commit, recover:
+
+Prepare: read the original and build new bytes somewhere else.
+
+Validate: confirm the target field, format, ranges, and complete output.
+
+Commit: replace the directory entry in one filesystem operation.
+
+Recover: keep enough information to return to the last known-good save.
+
+Atomic replacement and durability solve different problems. Atomic means an observer should see the old file or the new file, not a half-written mixture. Durable means completed data survives the failures the system promises to handle. Flushing the temporary file improves durability, but no single call can make the edit, the game’s other save files, cloud synchronization, and a power failure one universal transaction.
+
+The property we are designing is crash consistency: after interruption, the files should describe an old valid state, a new valid state, or an unambiguous recoverable state. “The normal path completed once” is weaker; crash consistency also accounts for every point where execution could stop.
+
+Design the on-disk states so each one has an obvious response:
+
+Table columns: Files present; Meaning; Safe response.
+
+Files present: original only; Meaning: no edit in progress; Safe response: open normally.
+
+Files present: original + temporary; Meaning: preparation was interrupted; Safe response: validate or remove only the temporary.
+
+Files present: new original + backup; Meaning: replacement completed; Safe response: test the new save; retain backup.
+
+Files present: missing original + backup; Meaning: recovery is needed; Safe response: restore backup before launching.
+
+Do not choose by modification time alone. Validate the expected filename, format, and contents, then ask the user before replacing the only known-good copy.
+
+Section: Run the complete save editor.
+
+Diagram walkthrough: Follow the Flare save through a recoverable edit. Step 1: Read the closed-game save. State: build=5,1,1,2. Close Flare and read the known avatar.txt save. Keep the original bytes available while preparing the replacement; do not edit the only copy in place. Step 2: Validate the target field. State: exactly one build= line. Require one target field and check the intended complete value. Preserve every other line and the original LF or CRLF newline style. Step 3: Construct the replacement. State: build=30,30,30,30. Build new bytes separately, changing the four named attributes together. At this point the original path still contains the untouched save. Step 4: Flush the temporary sibling. State: complete temporary file. Write all replacement bytes to a sibling temporary file, flush it, and close its handle. Interrupted preparation leaves the original save available. Step 5: Replace and keep the backup. State: new original + backup. The complete Windows lab uses ReplaceFileW to install the new save and preserve the old one at avatar.txt.gha-backup. An existing backup causes refusal. Step 6: Verify through the game. State: four attributes equals 30. Reload the disposable character, check the four visible values, and let Flare save normally. Keep the backup until the loader and serializer have accepted the edit. This is the successful route through prepare, validate, commit, and recover. The temporary file and backup make interruptions distinguishable; atomic replacement does not make every possible failure durable.
+
+Close Flare, build the Windows lab workspace, and pass the exact save path and new build value:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The tool requires exactly one build= line, preserves CRLF versus LF, writes and flushes a sibling temporary file, and uses the windows crate’s ReplaceFileW with write-through. Windows installs the new file atomically and places the original at avatar.txt.gha-backup. It refuses to overwrite an existing backup.
+
+The backup is part of the tool’s data model, not clutter to delete immediately. The edit is not considered successful until Flare parses the new file, loads the character, and later saves it normally. That final save matters because the game wrote it: if the edited value is still there, the change survived the game’s own loader and serializer.
+
+The complete program is flare_save_editor.rs; the reusable Windows replacement boundary is file_replace.rs.
+
+Additional detail: Complete lab source: flare_save_editor.rs.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Read it in five chunks: validate the three arguments, locate exactly one field, preserve the file’s newline style, flush a temporary file, then ask Windows to install it while keeping a backup. If any earlier chunk fails, the original save is untouched.
+
+Section: Checksums and integrity fields.
+
+If one small value change also changes a separate fixed-size region, the file may contain a checksum.
+
+Do not patch until you understand:
+
+which bytes are covered;
+
+which algorithm is used;
+
+where the expected checksum is stored;
+
+byte order;
+
+whether a secret key is involved.
+
+If the format is cryptographically signed, use supported modding tools instead of attempting to defeat the signature.
+
+Section: Debug the loader only if needed.
+
+Process Monitor can show the file read, and a debugger breakpoint on file APIs can show the buffer passed into parsing.
+
+Image description: A file read observed in the debugger
+
+In 32-bit Flare on Windows, open x64dbg’s Symbols tab, choose kernelbase.dll, find CreateFileA, and break at its first instruction. Saving the game puts the same avatar.txt path on the stack, independently confirming the location found with Process Monitor.
+
+The aim is to learn the format, not to disable validation.
+
+Section: Validate the result.
+
+keep the original backup;
+
+load the disposable character;
+
+confirm only the intended field changed;
+
+save again normally;
+
+confirm the game can reload that new save.
+
+If loading fails, restore the backup and compare the serializer’s whitespace, encoding, terminators, ordering, and integrity field.
+
+Flare made its fields readable as text. A different game may store the same kind of character state as raw bytes. The next lesson keeps the same copy–compare–edit–reload discipline but shows how to read that binary layout with a hex editor.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/9/02/

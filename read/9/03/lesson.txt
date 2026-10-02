@@ -1,0 +1,123 @@
+Textures and Asset Replacement
+
+Section: Identify one surface.
+
+Lesson 9.2 changed the build= character-stat line in Flare’s avatar.txt save and reloaded the character. Another stored resource controls what a game draws: an image file. We can use the same identify to copy to change one thing to reload to verify method, this time looking for a visible mark on a texture.
+
+In the offline Urban Terror target, choose a distinctive wall, sign, or object. Walk close enough to see its texture clearly.
+
+Image description: A distinctive in-game surface
+
+Search the game’s resource folders or archives for likely image names. Thumbnail tools and image dimensions can narrow the list.
+
+Urban Terror’s q3ut4 folder contains .pk3 files. A PK3 is a ZIP archive with a game-specific extension; its first two bytes are the ZIP magic PK. For this exact lab, open:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Inside it, browse to env\austria. These six images form the Austria map’s skybox.
+
+Section: Prove the file.
+
+Make a reversible test change—such as a bright corner mark—while preserving:
+
+width and height;
+
+color channels;
+
+alpha behavior;
+
+compression format;
+
+mipmap expectations;
+
+file name and path.
+
+Image description: A candidate texture file
+
+Restart or reload the level. If the mark appears on the chosen surface, the mapping is confirmed.
+
+Section: Perform the Austria skybox hack.
+
+Extract zUrT43_001.pk3 to a work folder. Keep the original PK3 as a backup. In the extracted tree:
+
+delete env\austria\austriasky_up.jpg ;
+
+copy env\austria\austriasky_dw.jpg ;
+
+rename the copy to austriasky_up.jpg ;
+
+ZIP the archive’s contents ( botfiles , env , fonts , and the other root folders), not the outer work folder;
+
+name the new archive zUrT43_001.pk3 and place it in q3ut4 .
+
+Start a local match on ut4_austria and look upward. The top of the sky now uses the downward-facing image. That unmistakable result proves you found, modified, and repacked the real game resource correctly.
+
+Section: Run the complete PK3 replacer.
+
+Close Urban Terror and give the tool the real archive path:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The program opens the PK3 as ZIP, reads env/austria/austriasky_dw.jpg, rebuilds every archive entry, substitutes those bytes only for env/austria/austriasky_up.jpg, flushes the new archive, and atomically installs it with ReplaceFileW. The untouched original becomes zUrT43_001.pk3.gha-backup, and the tool refuses to replace any other PK3 name or overwrite that backup.
+
+The full implementation is urbanterror_pk3.rs. It uses the current zip crate API, application programming interface, documented through Context7 and the shared Windows replacement helper in file_replace.rs.
+
+Additional detail: Complete lab source: urbanterror_pk3.rs.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The loop rebuilds every entry instead of modifying ZIP bytes in place. Only the exact UP path receives replacement bytes, and replaced equals 1 catches both “wrong archive” and “duplicate path” mistakes before Windows installs anything.
+
+Section: Inspect image metadata.
+
+The image crate can load common formats:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+With those dependencies in Cargo.toml, this function opens one image and prints its dimensions and color format. The result tells you whether the file still has the properties the game expects before you replace an asset.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Some game-specific formats need dedicated tools. Do not rename a PNG to another extension and assume the bytes changed format.
+
+Section: Create a marked copy.
+
+A tiny marker in one corner is enough to prove which image the game loaded, without redesigning the whole texture. This function takes an RGBA image, limits the marked square to 16 pixels on either side, and returns the changed copy for the reversible archive replacement:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Write to a new path first and compare dimensions and color type.
+
+Section: Loose files and archives.
+
+Some engines prefer a loose file over the same path inside an archive. Others require rebuilding the archive.
+
+If extracting:
+
+keep the directory structure;
+
+reject absolute and parent-traversal paths;
+
+preserve the original archive;
+
+change one entry only;
+
+use the engine’s official packer when available.
+
+Section: Texture coordinates explain repetition.
+
+A model stores UV coordinates that map its surface to the image. One texture can repeat, rotate, or cover many surfaces. Changing the image may affect more places than the one you first noticed.
+
+Image description: The replacement texture in game
+
+Section: Package as a mod.
+
+Prefer a mod directory containing only the changed file and a short manifest:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Do not redistribute original copyrighted assets when a small patch, generated replacement, or installation script is enough.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/9/03/

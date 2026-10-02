@@ -1,0 +1,221 @@
+Sampling Game State Under Load
+
+Once repeated polls have become meaningful events, we may want a record of them. A log can answer when gold changed or whether an action timed out, but recording must not hold up the game or disguise samples it failed to capture. When samples arrive faster than they can be stored, the writer creates backpressure. A bounded queue makes us choose explicitly what happens when it fills.
+
+Section: The recorder must not stall the game.
+
+A call logger, frame observer, or value recorder has two jobs with different timing needs:
+
+capture a small fact while it is fresh;
+
+format and store that fact somewhere durable.
+
+Writing a file can pause for filesystem, antivirus, indexing, or device activity. If the same thread is also handling a debugger event or time-sensitive sample, one slow write can disturb the program being measured.
+
+A telemetry pipeline separates those jobs:
+
+Diagram. From Read-only game sampler to Bounded queue: 128. The connection is labelled: try_send. From Bounded queue: 128 to Writer thread. From Writer thread to Buffered, versioned CSV. From Read-only game sampler to Dropped counter.
+
+The producer never waits for disk. The consumer owns the file.
+
+Section: Record overload and failure instead of hiding them.
+
+A fault is one thing going wrong: the disk pauses, a queue fills, the target closes, or the writer thread exits. A failure is the recorder breaking its promise to the learner—for example, inventing continuous data after samples were lost or labeling an incomplete file as clean.
+
+The design cannot prevent every fault. It can keep each one from becoming a misleading result:
+
+Table columns: Fault during a run; Honest recorder response.
+
+Fault during a run: queue reaches 128 events; Honest recorder response: apply the declared drop policy and increment dropped.
+
+Fault during a run: writer disconnects; Honest recorder response: stop recording and return an error.
+
+Fault during a run: target memory becomes unreadable; Honest recorder response: mark the run incomplete; never repeat the last value as if it were new.
+
+Fault during a run: an older reader sees a new schema; Honest recorder response: reject the unknown version or use a reader written for it.
+
+Fault during a run: shutdown begins; Honest recorder response: close producers, drain accepted events, flush, join the writer, and report counts.
+
+This is why the current recorder counts dropped samples and versions its file. A durable clean-shutdown marker is the next extension described below. These facts let a later graph distinguish “gold stayed at 100” from “the tool stopped observing for two seconds.” 📉
+
+Section: Define the smallest useful event.
+
+This recorder needs only two fields:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A compact event is cheap to copy and hard to misuse. It does not contain a raw process handle, borrowed buffer, remote pointer, or String allocation.
+
+For a call logger, the same shape could include:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Prefer module-relative addresses in durable logs. A live address alone loses meaning after ASLR, address space layout randomization, chooses a new module base.
+
+Section: Backpressure is a policy.
+
+The channel has fixed capacity:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A normal blocking send would wait when all 128 slots are occupied. The producer uses try_send instead:
+
+Diagram. From sender.try_send(event) to result?. From result? to continue sampling. The connection is labelled: Ok(()). From result? to dropped += 1. The connection is labelled: Full. From result? to bail: writer stopped early. The connection is labelled: Disconnected.
+
+The match below implements those outcomes: accepted events keep sampling, a full queue increments a visible loss count, and a dead writer stops the recorder. With a full queue, try_send returns immediately instead of waiting while the observed game runs.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Dropping an event sounds bad, but silently pausing every target thread can be worse. The important rule is make loss visible. The final report prints both written and dropped counts.
+
+Picture the queue as 128 numbered spaces between the sampler and the writer. Suppose the writer stalls while 127 spaces are occupied. The next sample takes space 128. Another sample arrives before the writer removes anything, so try_send returns Full; the sampler increments dropped to 1 and continues. When the writer resumes and removes one event, a later sample can enter again. The queue absorbed a short delay, but it did not make the disk faster or keep every sample. In the finished log, the count of one dropped event warns that the measured timeline has a gap even if the surrounding gold values look flat.
+
+Different tools can choose different policies:
+
+Table columns: Tool; Sensible full-queue policy.
+
+Tool: Five-second call logger; Sensible full-queue policy: Drop and count; stop if loss exceeds a threshold.
+
+Tool: Turn-by-turn strategy log; Sensible full-queue policy: Block briefly or stop because every event matters.
+
+Tool: High-rate overlay metrics; Sensible full-queue policy: Keep only the newest sample.
+
+Tool: Crash report; Sensible full-queue policy: Flush synchronously because the process is already failing.
+
+Backpressure is not one library call. It is the decision a system makes when producers outrun consumers.
+
+Section: Let channel closure be the stop message.
+
+The sink owns an optional sender and writer thread. Finishing removes the final sender:
+
+Labelled memory diagram. sender: Some(SyncSender); writer: Some(JoinHandle). Before finish: the sink still owns both handles.
+
+Labelled memory diagram. sender: None, highlighted; writer: None. After finish: taking the sender disconnects the channel, so the writer's recv() loop ends on its own; then the writer handle is joined.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The receiver’s loop ends naturally when the channel is disconnected and empty. No special “stop event” can become stuck behind normal events in a full queue.
+
+The writer then flushes BufWriter, returns the count, and joins. This ordering proves that a successful finish means all accepted events reached the operating-system file interface.
+
+That promise is deliberately narrow. BufWriter::flush sends buffered bytes to the file object, but it is not a guarantee that every storage device could survive an immediate power loss. A short course telemetry run needs honest completion and visible loss; a crash-resilient journal would need a stronger, explicit durability design.
+
+Drop repeats the close-and-join path as a fallback. Explicit finish is still better because it returns errors and counts to main.
+
+Section: Version the file before it contains history.
+
+The log begins:
+
+Code example. The code’s comments explain: gha-gold-telemetry v1# target=wesnoth.exe pid=4120 address=hexadecimal 1 2 3 4 5 6 7 8 elapsed_ms,gold0,10050,100100,75
+
+The version explains the schema. The target line records run-specific context. For a Wesnoth telemetry file you want to compare across several launches, also record:
+
+executable SHA-256;
+
+game and tool versions;
+
+module base;
+
+sampling period;
+
+field profile name;
+
+wall-clock start in UTC;
+
+written and dropped counts in a footer or sidecar.
+
+Do not silently reinterpret old columns after a format change. Create v2.
+
+Section: Design an explicit end record for a later format.
+
+The linked gold_telemetry.rs writes a v1 header and detail rows, then prints written and dropped counts to the console. It does not yet write a trailer. If the file itself must prove how a run ended, extend it to v2 with three parts:
+
+the header says how to interpret the run;
+
+the detail rows contain repeated observations;
+
+the trailer says how the run ended.
+
+For example:
+
+Labelled memory diagram. header: two comment lines: format version, then target and build info; detail rows: elapsed_ms,gold, then one row per sample; trailer: one comment line: written, dropped, and clean_shutdown. Three parts, one file. The trailer's written count should agree with the number of detail rows above it.
+
+Code example. The code’s comments explain: gha-gold-telemetry v2# target=wesnoth.exe build=1.14.9 sample_ms=50elapsed_ms,gold0,10050,75# end written=2 dropped=0 clean_shutdown=true
+
+This v2 example is a design exercise, not the output of the v1 code below. A v2 writer would write the trailer after draining accepted events, and its reader would check that the number of rows matches written. A missing trailer, clean_shutdown=false, or nonzero dropped count would label the run incomplete instead of quietly treating a gap as normal game behavior.
+
+Section: Sampling is an observation, not perfect time.
+
+The loop sleeps for 50 milliseconds, which aims for about 20 samples per second. Desktop scheduling is not a metronome. The code records Instant::elapsed() for each sample instead of assuming sample 20 happened at exactly one second.
+
+The tool opens Wesnoth without write rights, resolves the verified pointer path once, and records for 1–300 seconds. If the match ends and the address becomes unreadable, the run returns an error instead of fabricating a value.
+
+For a longer recorder, re-resolve and validate the object identity periodically rather than trusting one pointer forever.
+
+Section: Complete buildable recorder.
+
+Additional detail: Complete lab source: gold_telemetry.rs.
+
+Code example. The code’s comments explain: 🔒 Telemetry observes only; the process handle has no write rights. let process equals Process::open_by_name("wesnoth.exe", false)?; anyhow::ensure!( process.is_32_bit()?, "this profile requires 32-bit Wesnoth 1.14.9" ); let address equals gold_address(&process)?; let target equals format!( "{} pid={} address={address:#010x}", process.name(), process.id() ); let mut sink equals TelemetrySink::start(path.clone(), target)?;
+
+The same source is available as gold_telemetry.rs.
+
+Section: Build and run it.
+
+Start a local Wesnoth 1.14.9 match, then record 15 seconds:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Spend or gain gold during the window. Inspect the file:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Or let PowerShell parse only the data rows:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The tool should report roughly 300 accepted samples for 15 seconds (15 seconds times 20 samples per second equals 300) and zero drops on a normal disk. A nonzero drop count is not hidden; it means the writer or chosen rate needs attention.
+
+Section: Connect this design to the call logger.
+
+The call logger already knows the time-sensitive facts while Windows holds a debug event. Its advanced path should:
+
+copy registers and module-relative addresses into a compact CallEvent ;
+
+restore/re-arm the breakpoint;
+
+call try_send ;
+
+continue the debug event;
+
+let the writer format symbols and text later.
+
+Never send a borrowed DEBUG_EVENT union member to the writer. Its validity belongs to the current event-handling scope. Copy only the fields whose meaning has already been checked.
+
+Section: Test the pipeline without a game.
+
+A useful test can start a queue of capacity one, hold the receiver, and send three events:
+
+the first is accepted;
+
+later events become counted drops;
+
+the producer does not block;
+
+dropping the sender lets the receiver finish;
+
+the written count plus dropped count equals the attempted count.
+
+Also simulate a writer that exits early. Disconnected must become an error rather than another drop.
+
+Section: What the recording can claim.
+
+Each event owns a copy of the facts it needs; it cannot keep a borrowed debug-event buffer or process handle alive by accident. A full bounded queue means producers outran the writer, so the written and dropped counts both belong in the result. Dropping the last sender lets the writer drain accepted events and end cleanly. Each event carries a measured timestamp because a sample number alone cannot reveal delays or gaps in observation.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/4/08/

@@ -1,0 +1,125 @@
+Driver Requests and Device Registers
+
+Lesson 12.4 followed a request from a program down to a made-up keypad and back, and a key press from a USB keyboard up to a game. The keypad has a get status command and four 32-bit registers named CONTROL, STATUS, DATA, and ACK. This lesson opens the numbers on those paths: the parameters of a DeviceIoControl request, the four fields packed into a control code, the keypad’s registers byte by byte, the values its interrupt handlers read, and the bytes of a real key press. It ends with a lab that runs the keypad and its driver as an ordinary program.
+
+Section: What a driver reads from a control request.
+
+A DeviceIoControl request carries more parameters than a read. These are the parts of its IRP that the keypad driver reads (Windows keeps some in the IRP itself and some in a per-driver stack location attached to it):
+
+Labelled memory diagram. operation: IRP_MJ_DEVICE_CONTROL; control code: hexadecimal 8 0 0 0 6 0 0 4; output length: 4 bytes; system buffer: kernel copy of the caller's buffer; requestor: user mode; status: set at completion; information: bytes returned. What a driver reads from an IRP for a DeviceIoControl request. Requestor says the request came from user mode, so every parameter is untrusted.
+
+The toy control code uses buffered I/O. Its method bits tell the I/O manager to copy the caller’s input into a kernel system buffer before the driver runs, then copy the output back after completion. With this method, the driver works on that buffer rather than the program’s pointer. It still has to respect the lengths: the output length says how many bytes the caller’s buffer can hold, and writing even one byte more would overrun kernel memory.
+
+Section: A control code is four fields in one number.
+
+A control code is a 32-bit number that packs four fields, built by a macro called CTL_CODE:
+
+bits 16 to 31, the device type : values from hexadecimal 8 0 0 0 up belong to hardware vendors, lower ones to Microsoft;
+
+bits 14 and 15, the access the caller’s handle must hold: 0 for any, 1 for read, 2 for write, 3 for both;
+
+bits 2 to 13, the function number: vendors use hexadecimal 8 0 0 and up;
+
+bits 0 and 1, the method , which says how buffers travel: 0 means buffered.
+
+Packing the fields into one number uses a shift. Shifting a number left by n bits moves every bit n places toward the high end and fills the places it leaves with zeros. Each place a bit moves doubles what it is worth, so a shift left by n bits multiplies the number by 2ⁿ. A shift by 4 bits moves a number exactly one hex digit, because each hex digit stands for 4 bits.
+
+The toy keypad defines one control code, get status, with device type hexadecimal 8 0 0 0, function hexadecimal 8 0 1, the buffered method, and read access. Packing it takes one shift per field:
+
+hexadecimal 8 0 0 0 shifted left by 16 bits, which is 16 divided by 4 equals 4 hex digits, is hexadecimal 8 0 0 0 0 0 0 0 ;
+
+the access value 1 shifted left by 14 bits is 2 to the power of 14 equals 16,384. That is 4 times 4,096, and 4,096 equals 16 to the power of 3 is the value of a 1 in the fourth hex digit, so 16,384 is hexadecimal 4 0 0 0 ;
+
+hexadecimal 8 0 1 shifted left by 2 bits is hexadecimal 8 0 1 times 2 to the power of 2 equals hexadecimal 8 0 1 times 4 equals hexadecimal 2 0 0 4 , because hexadecimal 8 0 0 times 4 equals hexadecimal 2 0 0 0 (8 times 4 equals 32, which is hexadecimal 2 0 , and the two zero digits stay behind it) and 1 times 4 equals 4;
+
+the method, 0, adds nothing.
+
+hexadecimal 8 0 0 0 0 0 0 0 + hexadecimal 4 0 0 0 + hexadecimal 2 0 0 4 equals hexadecimal 8 0 0 0 6 0 0 4. The top half, hexadecimal 8 0 0 0, is the device type, and the low half, hexadecimal 6 0 0 4, holds the other three fields. Here are its sixteen bits, one byte at a time:
+
+Labelled memory diagram. 15: 0, highlighted; 14: 1, highlighted; 13: 1; 12: 0; 11: 0; 10: 0; 9: 0; 8: 0. Groups: access 01; function, first 6 bits 100000; hex 6; hex 0. Bits 15 to 8 of the control code hexadecimal 8 0 0 0 6 0 0 4, the byte hexadecimal 6 0. Access 01 is read, and the function number begins here.
+
+Labelled memory diagram. 7: 0; 6: 0; 5: 0; 4: 0; 3: 0; 2: 1; 1: 0; 0: 0. Groups: function, last 6 bits 000001; method 00; hex 0; hex 4. Bits 7 to 0, the byte hexadecimal 0 4. The function's twelve bits, 1000 0000 0001, are hexadecimal 8 0 1; method 00 is buffered.
+
+The access field is a security check that happens before the driver runs. The I/O manager compares it with the rights on the caller’s handle and refuses the request, without ever calling the driver, if the handle lacks them. A driver that declares a powerful command with access 0, any access, lets every program that can open the device send it, which is one of the classic driver mistakes. Drivers are also expected to compare the whole 32-bit code, not just the function number, so that a code with the right function but a different method or access is refused.
+
+Section: The toy keypad’s registers, bit by bit.
+
+The toy keypad’s four 32-bit registers take 4 times 4 equals 16 bytes in all. Suppose the firmware placed them at physical address hexadecimal F E B 0 1 0 0 0: CONTROL at offset +hexadecimal 0 0, STATUS at +hexadecimal 0 4, DATA at +hexadecimal 0 8, and ACK at +hexadecimal 0 C. STATUS therefore answers at hexadecimal F E B 0 1 0 0 0 + 4 equals hexadecimal F E B 0 1 0 0 4. Here is the block after the driver has started the device and the A key has been pressed and released, 8 bytes at a time:
+
+Labelled memory diagram. +hexadecimal 0 0: 03, highlighted; +hexadecimal 0 1: 00; +hexadecimal 0 2: 00; +hexadecimal 0 3: 00; +hexadecimal 0 4: 01, highlighted; +hexadecimal 0 5: 02, highlighted; +hexadecimal 0 6: 00; +hexadecimal 0 7: 00. Groups: CONTROL hexadecimal 0 0 0 0 0 0 0 3; STATUS hexadecimal 0 0 0 0 0 2 0 1. The first 8 bytes of the register block. Each register is little-endian, so its lowest byte comes first.
+
+Labelled memory diagram. +hexadecimal 0 8: 1E, highlighted; +hexadecimal 0 9: 00; +hexadecimal 0 A: 00; +hexadecimal 0 B: 00; +hexadecimal 0 C: 00; +hexadecimal 0 D: 00; +hexadecimal 0 E: 00; +hexadecimal 0 F: 00. Groups: DATA hexadecimal 0 0 0 0 0 0 1 E; ACK. The last 8 bytes. DATA shows what a read would return right now, and ACK always reads as 0.
+
+CONTROL, hexadecimal 0 0 0 0 0 0 0 3, is written by the driver. Bit 0, enable, makes the device scan its keys, and bit 1, interrupt enable, lets it interrupt. 3 equals 2 + 1, so both bits are set. The other 30 bits are reserved and must be written as 0.
+
+STATUS, hexadecimal 0 0 0 0 0 2 0 1, is read-only and describes the device at this moment. Because the register is little-endian, byte +hexadecimal 0 4 holds bits 0 to 7 and byte +hexadecimal 0 5 holds bits 8 to 15. Byte +hexadecimal 0 4 is hexadecimal 0 1: bit 0, data ready, is set, so an event is waiting, and bit 1, overflow, is clear. Byte +hexadecimal 0 5 is hexadecimal 0 2: bits 8 to 15 form an 8-bit count of waiting events, here 2. As one number, hexadecimal 0 2 0 1 equals 2 times 256 + 1 equals 513. Dividing 513 by 256 gives 2 remainder 1: the count, and the low byte’s flags.
+
+DATA, hexadecimal 0 0 0 0 0 0 1 E, holds the event at the front of the device’s queue. Bits 0 to 6 are the scan code, and bit 7 is set when the key was released rather than pressed. hexadecimal 1 E is 1 times 16 + 14 equals 30, binary 0001 1110. Its bit 7 is 0, so the front event is A pressed: 30 is the scan code of the A key in the numbering Windows uses, known as set 1. The event behind it is hexadecimal 9 E:
+
+Labelled memory diagram. bit 7: 1, highlighted; bit 6: 0; bit 5: 0; bit 4: 1; bit 3: 1; bit 2: 1; bit 1: 1; bit 0: 0. Groups: released; scan code 001 1110 equals hexadecimal 1 E. The second event in the queue, hexadecimal 9 E: the same key, released.
+
+hexadecimal 9 E is 9 times 16 + 14 equals 158. Bit 7 is worth 2 to the power of 7 equals 128 equals hexadecimal 8 0, and 158 minus 128 equals 30, so the remaining bits name the A key again: A released.
+
+ACK is write-only and reads as 0. Writing a 1 to bit 0 tells the device its interrupt has been handled, and the device lowers its interrupt signal; writing a 1 to bit 1 clears the overflow flag. Bits written as 0 change nothing. This write-1-to-clear convention is common because it lets a driver clear one flag without first reading the register to preserve the others.
+
+Section: The ISR and the DPC, register by register.
+
+Lesson 12.4 split a driver’s interrupt handling into a short interrupt service routine and a deferred procedure call that does the real work. Here is that sequence for the two events above, with the value each register returns:
+
+Diagram labels, in drawing order: I/O manager; Driver DPC; Driver ISR; Keypad registers; two events queued,; interrupt line raised; interrupt line lowered; interrupt; read STATUS; hexadecimal 0 0 0 0 0 2 0 1, data ready, 2 waiting; write hexadecimal 1 to ACK; queue the DPC and return; read STATUS, then DATA; hexadecimal 1 E, A pressed; hexadecimal 9 E, A released; hexadecimal 0 0 0 0 0 0 0 0, nothing left; complete the waiting IRP, 2 bytes.
+
+The ISR writes hexadecimal 1 to ACK. Only bit 0 is set, so the device lowers its interrupt line and leaves the overflow flag, bit 1, as it was. The last read of STATUS returns 0: both events have been read, so the queue is empty, and the overflow flag was never set. The 2 bytes the DPC collected, hexadecimal 1 E and hexadecimal 9 E, are what the parked read receives when the DPC completes it.
+
+Section: A key press in bytes.
+
+Two stops on the path from a USB keyboard to a game, the keyboard’s report and the message the game finally receives, pack their facts into bits.
+
+Section: The keyboard’s report.
+
+In the simple boot format that every PC understands, a keyboard’s HID report is 8 bytes:
+
+Labelled memory diagram. byte 0: 02, highlighted; byte 1: 00; byte 2: 04, highlighted; byte 3: 00; byte 4: 00; byte 5: 00; byte 6: 00; byte 7: 00. Groups: modifiers; reserved; up to six keys held. A boot-format report while left Shift and A are held.
+
+Byte 0 holds one bit per modifier key: bit 0 is left Ctrl, bit 1 left Shift, bit 2 left Alt, bit 3 the left Windows key, and bits 4 to 7 the same four keys on the right. hexadecimal 0 2 is binary 0000 0010, so only bit 1 is set: left Shift. Bytes 2 to 7 list up to six keys currently held, each as a HID usage number. The letters A to Z are usages 4 to 4 + 25 equals 29, or hexadecimal 0 4 to hexadecimal 1 D (1 times 16 + 13 equals 29), so hexadecimal 0 4 is A. Six slots is also why a keyboard reporting in boot format cannot report a seventh key held at the same time.
+
+Section: From scan code to message.
+
+KBDHID.SYS turns usage hexadecimal 0 4 into scan code hexadecimal 1 E. The toy keypad marked a release by setting bit 7, hexadecimal 8 0, which is how PS/2 keyboards sent it over their wire. The events that KBDCLASS.SYS queues keep the scan code on its own and mark a release with a separate break flag instead.
+
+When the game’s WM_KEYDOWN message arrives, its lParam packs the details of the key press into 32 bits:
+
+Labelled memory diagram. cell 1: 0; cell 2: 0; cell 3: 1; cell 4: E; cell 5: 0; cell 6: 0; cell 7: 0; cell 8: 1. Groups: flags; scan code; repeat count; hexadecimal 0 0; hexadecimal 1 E; hexadecimal 0 0 0 1 equals 1. The lParam of the WM_KEYDOWN for a first press of A, hexadecimal 0 0 1 E 0 0 0 1, one hex digit per box.
+
+hexadecimal 1 E shifted left by 16 bits, which is 4 hex digits, is hexadecimal 0 0 1 E 0 0 0 0, and adding a repeat count of 1 gives hexadecimal 0 0 1 E 0 0 0 1. The top byte, bits 24 to 31, holds flags. For the matching WM_KEYUP, bit 30 (the key was down before) and bit 31 (the key is being released) are set. Bit 31 is bit 7 of the top byte, worth 2 to the power of 7 equals 128 equals hexadecimal 8 0, and bit 30 is its bit 6, worth 2 to the power of 6 equals 64 equals hexadecimal 4 0, so the top byte becomes hexadecimal 8 0 + hexadecimal 4 0 equals hexadecimal C 0 and the lParam is hexadecimal C 0 1 E 0 0 0 1.
+
+Section: Simulate a device and its driver.
+
+The lab toy_driver_lab.rs builds the toy keypad and a driver for it as an ordinary user-mode program. Nothing in it touches hardware or the kernel: the register block is a Rust struct, the interrupt line is a bool, and an IRP is a small struct in a queue. What it keeps from the real thing are the rules described in Lesson 12.4 and here.
+
+The device’s register read shows DATA’s side effect in one line:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+register refuses an offset that is not a multiple of 4 or that lies past the 16-byte block, so a mistyped offset becomes an error instead of a read of the wrong register. The driver’s ISR is as short as Lesson 12.4 says it should be:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The dispatch routine compares the whole control code and checks the output length before it copies anything, and a separate submit function plays the I/O manager, refusing any request whose handle lacks the access bits its code demands.
+
+Build it, then run it from the rust-labs folder:
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The program parks a read request, presses and releases A, prints the register block drawn above, runs the ISR and the DPC, and shows the read completing with hexadecimal 1 E and hexadecimal 9 E. It then sends four control requests: one from a handle without read access, one with the near-miss code hexadecimal 8 0 0 0 6 0 0 7, one with a 2-byte buffer, and a valid one. Finally it presses keys six times with no driver running in between, to show the four-slot queue setting its overflow flag. The tests beside it check the register bytes from this lesson, the write-1-to-clear rule, the overflow, every refused request, and that waiting reads complete in order.
+
+Then set QUEUE_CAPACITY to 2 and work out which tests must now fail before running them.
+
+The toy kept driver mechanics inside an ordinary program: control codes, buffers, register side effects, and interrupt work were all visible without installing privileged code. The next lesson asks what changes when those mechanics belong to a real loaded driver, and builds an inventory of the components already trusted by Windows.
+
+References: defining I/O control codes, security issues for I/O control codes, keyboard and mouse HID client drivers, and WM_KEYDOWN.
+
+For the specific buffered method used in the toy code, see Microsoft’s IOCTL buffer descriptions.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/14/08/

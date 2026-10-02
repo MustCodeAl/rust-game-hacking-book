@@ -1,0 +1,147 @@
+The Host–Script Boundary
+
+Section: The host owns the interpreter.
+
+mlua creates and controls a Lua virtual machine from the host. The project pins:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+lua54 chooses Lua 5.4. vendored builds the matching Lua implementation with the crate, so a learner does not need to find a separate Lua DLL, dynamic link library,. error-send lets contextual host error-reporting carry a Lua failure through anyhow without discarding its details.
+
+The interpreter is a subsystem with its own state, memory manager, call stack, and error rules. Embedding does not merge Lua and the host into one language. mlua builds a checked bridge that converts values and controls when execution crosses between them.
+
+Treat each crossing as an interface:
+
+host-to-Lua inputs need a documented table shape and units;
+
+Lua-to-host requests need type and game-rule validation;
+
+errors need enough context to identify the script and boundary;
+
+callbacks need time and resource limits appropriate to the host loop.
+
+The safest design passes snapshots and requests, not borrowed pointers into live game objects.
+
+The host remains in charge even while Lua decides what it would like to do:
+
+Diagram. From Host to Limited game API, application programming interface,. From Limited game API to Run Lua chunk. From Run Lua chunk to Collect typed requests. From Collect typed requests to Revalidate state and rules. From Revalidate state and rules to Commit or reject.
+
+Lua plans with owned data; the host decides whether each plan is still valid at commit time.
+
+Section: Load only the libraries you need.
+
+The Rust host creates the interpreter and selects three standard-library groups. new_with returns an error if setup fails; ? passes that error to the caller before any script runs.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This lab needs table helpers, string formatting, and math. It does not load the Lua io, os, debug, or package libraries.
+
+Removing libraries is not a complete hostile-code sandbox. It is still good capability hygiene: a script cannot call a function that does not exist in its environment.
+
+Section: Expose one host function.
+
+The script needs a way to report what it observed. This closure accepts one Lua string, prints it with a prefix in the host process, and returns success; registering it under log makes the name callable from Lua.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+create_function converts Lua arguments into the requested host type. Passing a table where a String is required produces a Lua error instead of an unchecked cast.
+
+The first closure argument is the active Lua handle. It is named _ here because logging does not need to create any Lua values.
+
+Underneath, every call into a host function travels through Lua’s value stack: the caller supplies arguments, and the host function returns results through that stack. The lab’s game.distance(a, b) takes two position tables and returns one number. Take this call, and call its first table p and its second q:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The stack passes through three states:
+
+Labelled memory diagram. top to : table q; cell 2: table p; cell 3: game.distance. 1. The Lua caller pushes the function value, then the two arguments in order. Each argument slot holds a reference to a table, not a copy of it.
+
+Labelled memory diagram. index 2 to : table q; index 1 to : table p. 2. The host function sees only its arguments, numbered from 1. mlua converts index 1 and index 2 into the closure's (Table, Table) parameters. A string or number in either slot fails that conversion and becomes a Lua error before the closure body runs.
+
+Labelled memory diagram. top to : 5.0, highlighted. 3. The closure takes the differences 0 minus 3 equals minus 3, 0 minus 4 equals minus 4, and 0 minus 0 equals 0, and returns square root of (( minus 3)² + ( minus 4)² + 0 to the power of 2) equals square root of (9 + 16 + 0) equals square root of 25 equals 5.0. mlua pushes that one result and reports a count of 1, and Lua puts it where the function and both arguments used to be.
+
+Section: Prefer a namespace table.
+
+The single global log works for a first example, but a host with many functions needs an obvious boundary. Put those functions under one game table, so the next script call spells out who supplied the behavior:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Lua then calls:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The game table becomes the documented boundary between engine and script.
+
+Section: Convert host records into Lua tables.
+
+The complete host creates a table for each copied entity:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Nested tables make the script readable: entity.position.x is clearer than entity[4].
+
+For the lab’s sample data, the conversion produces this shape. Every Rust index moves up by one key, and each entity becomes two tables, one nested in the other:
+
+Diagram. From Rust slice entities[0] local_player[1] bot_alpha[2] bot_bravo to Lua table result[1] [2] [3]. The connection is labelled: index + 1. From Lua table result[1] [2] [3] to item tableid equals 0name equals local_playeralive equals true. The connection is labelled: key 1. From item tableid equals 0name equals local_playeralive equals true to position tablex equals 12.0y equals 8.0z equals 2.0. The connection is labelled: key position.
+
+The entity with id equals 0 sits at Lua key 1: the ID is data copied from the game, and the key is only its place in the sequence.
+
+Section: Load a named script with context.
+
+script_path is the file the host chose to run. Rust reads its text, gives the Lua chunk that path as a name for errors, and executes it; failure at any step returns to the host through ?.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Naming the chunk gives errors a useful file label. The complete lab adds anyhow::Context so the host error also says which script failed.
+
+Section: Separate setup, execution, and results.
+
+A clear host follows this order:
+
+create the Lua state;
+
+apply resource limits;
+
+construct the host API;
+
+load script text;
+
+execute it once or register callbacks;
+
+collect bounded requested actions;
+
+validate those actions in the host;
+
+report errors without crashing the engine.
+
+Do not let a script run during partial API construction. Do not hold a mutable game-state lock across script execution. Give Lua a copied snapshot and collect requests for later processing.
+
+This is a two-phase boundary. During planning, Lua reads an immutable snapshot and returns proposed actions. During commit, the host checks that the target, snapshot version, entity IDs, and game rules are still valid before acting. A plan based on an old snapshot is rejected instead of being applied to a different moment.
+
+Section: Run all three useful scripts.
+
+The observer logs copied entity data. The nearest-entity script measures living candidates and proposes one selection; the state-machine script proposes a marker and then stops. Compare those proposals with the host’s accepted-action output after each run.
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The host prints accepted actions after the script returns. That delay is deliberate: Lua proposes data, and the host remains the authority that decides what happens.
+
+Section: Why the host still needs validation.
+
+mlua safely converts values at the language boundary, but it cannot know your game rules. The host must still check:
+
+entity IDs exist in the current snapshot;
+
+coordinates are finite and within the map;
+
+an action is allowed in the current state;
+
+the script has not exceeded a rate limit;
+
+the target still matches the verified local build.
+
+Memory safety and game-rule validity are different jobs. A good host performs both.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/12/03/
