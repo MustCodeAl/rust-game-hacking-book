@@ -581,3 +581,15 @@ and no fixed hue names. Lesson sources, heading sizes, diagrams, and playback
 logic are unchanged. Verification uses source/token calculations and generated
 output/HTTP; browser layout inspection remains unavailable after the earlier
 policy rejection. The exact publication receipt follows when deployed.
+
+Publication is complete: source **1af51010ece05256d0d426a649ee3051d74bd627**
+was generated into **76f5b65966ba3f590d6fd87c3524e65d8d5a6754** on
+`codex/gh-pages-theme-reading-roles`, merged through
+[PR #12](https://github.com/MustCodeAl/rust-game-hacking-book/pull/12) into
+`gh-pages` at **b1dd32db93c8adc5bf095ca28045f207c907a5a4**. GitHub Pages
+reports that exact merge as **built**. Production output retains **141 pages**
+and **273 Mermaid diagrams**; all **280 menu copies** have the new role labels
+and swatches. Public Game Fundamentals, Memory, and Firmware pages, the new
+appearance stylesheet, and the reader-switching script exactly match the
+verified build. The preview on port 4322 was restored and serves both updated
+menus. The authored branch may also include this documentation-only receipt.

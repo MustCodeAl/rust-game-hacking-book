@@ -304,3 +304,9 @@ The 28 animated lessons and five adaptive reading-role palettes are source
 Pages built that exact merge; six public lesson pages, their animation code,
 both related stylesheets, and the reader-control script match the verified
 build. The publication receipt is in BOOK_REVISION_PROGRESS.md.
+
+The reading-role palette correction is source **1af5101**, published through
+**PR #12** into `gh-pages` at **b1dd32d**. Role hues now follow each theme's own
+accents, and the key uses semantic labels with swatches. Pages built that exact
+merge; three public lesson pages, the role stylesheet, and the switching script
+match the verified build. See BOOK_REVISION_PROGRESS.md for the complete record.
