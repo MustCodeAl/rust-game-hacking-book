@@ -208,7 +208,7 @@ documentation-only publication receipt; the built lesson content is 03d8ba2.
 
 ### Colour must carry meaning
 
-Every colour must have a documented role. Reading colours identify four
+Every colour must have a documented role. Chapter colours identify four
 subject areas in `site/src/data/chapters.mjs`: copper for foundations (1–4),
 blue for runtime analysis (5–7), violet for formats and interfaces (8–10),
 and cyan for systems and trust (11–14). Each chapter's explicit `area` field
@@ -225,16 +225,19 @@ on the complete-book page separately. Site-wide actions use the theme's brand
 accent; background swatches show actual reader preferences.
 
 The page also uses stable reading roles, defined in `reader-appearance.css`:
-blue for reference terms and input/data, violet for code/notation and processing,
-and teal for results, tips, and selected memory values. Informational notes use
-blue; tips use teal. Diagram stages state their role in words and include a
+terms/input/data, code/notation/processing, results/tips/selected memory values,
+and cautions. The active reader theme supplies their colours from its link,
+accent, and warning tokens. Informational notes use the information role;
+tips use the result role. Diagram stages state their role in words and include a
 colour key; do not assign roles by their position. This adds useful colour
 within a chapter without introducing decorative hue cycling. Syntax colours
 inside code blocks retain their more specific language roles.
 
-Each of the five reader palettes has its own light and dark reading-role shades;
-preserve the blue/violet/teal/amber meanings while adjusting those shades to the
-palette. The colour-guide menu always uses that palette's dark-surface variants.
+Each reader palette supplies its own role hues and light/dark shades. Preserve
+the role meanings while the colours change with the chosen theme. The colour
+key shows semantic labels and matching swatches; do not hard-code Blue/Violet/
+Teal/Amber labels. Its dark menu uses the palette's dark-surface variants.
+Light-page role accents are deepened for contrast on tinted diagram nodes.
 Check actual saved tokens against every supported page and diagram background,
 including active-node tints and Plain fills, when adjusting these colours.
 

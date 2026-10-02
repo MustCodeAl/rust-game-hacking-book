@@ -554,3 +554,30 @@ Generated SVG checks confirm all **156 state values**, **28 lesson diagrams**,
 and **28 print diagrams**, with correct node/connection counts and nodes inside
 their view boxes. The authored branch may additionally contain this
 documentation-only deployment receipt.
+
+## 2026-10-02: reading-role colours follow the actual theme palette
+
+The four reading roles now use the selected theme's link, secondary accents,
+and warning colours. Their hues change with the theme: information uses copper
+in Paper, lavender in Purple, cyan in Midnight, green in Forest, and blue in
+Contrast. Processing, results, and cautions follow the corresponding palette
+accents too. Light-mode accents are deepened for small text on tinted surfaces;
+dark mode uses the theme's existing bright colours.
+
+The **What the colours mean** key now shows four matching swatches beside
+semantic labels: Terms, inputs, and data; Code and processing; Results and tips;
+Cautions. Fixed Blue/Violet/Teal/Amber names are removed. The menu uses each
+palette's dark variants because its surface is dark in both reader modes.
+Caution callouts now explicitly use the same caution role as the key. CSS
+responds to the saved/current palette and brightness attributes, so colour
+changes take effect as soon as the reader changes those choices.
+
+Focused verification resolves the actual CSS aliases and colour mixes across
+all five themes, both modes, all page/diagram backgrounds, and four chapter
+colours: **1,200 diagram colour combinations** have no text-contrast failures.
+Minimum contrast is **5.07:1** for active role labels, **5.21:1** for inline and
+aside text, and **5.76:1** for the colour key. The key has four labelled swatches
+and no fixed hue names. Lesson sources, heading sizes, diagrams, and playback
+logic are unchanged. Verification uses source/token calculations and generated
+output/HTTP; browser layout inspection remains unavailable after the earlier
+policy rejection. The exact publication receipt follows when deployed.
