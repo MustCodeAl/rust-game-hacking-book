@@ -34,6 +34,8 @@ function mountOne(toolbar) {
 	let generation = 0;
 	let state = 'idle';
 	let activeElement = null;
+	// True once the engine has begun the passage it was last given.
+	let started = false;
 
 	function setStatus(message) {
 		status.textContent = message;
@@ -99,6 +101,7 @@ function mountOne(toolbar) {
 			return;
 		}
 		const segment = segments[index];
+		started = false;
 		const utterance = new SpeechSynthesisUtterance(segment.text);
 		const chosen = voices.find((item) => (item.voiceURI || `${item.name}|${item.lang}`) === voice.value);
 		if (voice.value !== '' && chosen) utterance.voice = chosen;
@@ -106,6 +109,7 @@ function mountOne(toolbar) {
 		utterance.rate = Number(rate.value);
 		utterance.onstart = () => {
 			if (currentGeneration !== generation) return;
+			started = true;
 			markActive(segment.element);
 			setStatus(`Reading passage ${index + 1} of ${segments.length}.`);
 		};
@@ -197,7 +201,14 @@ function mountOne(toolbar) {
 	play.addEventListener('click', () => {
 		if (!supported) return;
 		if (state === 'speaking') {
-			synth.pause();
+			if (started) {
+				synth.pause();
+			} else {
+				// A pause sent before the engine has begun the passage is ignored, and the
+				// passage then plays anyway. Drop it instead; Resume gives it again.
+				generation += 1;
+				synth.cancel();
+			}
 			state = 'paused';
 			showControls();
 			setStatus(`Paused at passage ${index + 1} of ${segments.length}.`);

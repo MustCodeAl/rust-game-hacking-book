@@ -422,7 +422,14 @@ live site loses them (publishing replaces every file).
 - **Reader mode** (`/read/…`). The play, pause, stop, progress, and **Exit reader
   mode** controls are a bar pinned to the top for the whole page
   (`ReaderTools.astro`, `.reader-dock`); settings and hand-off options stay in
-  the card below it. Diagram line breaks narrate as spaces.
+  the card below it. Diagram line breaks narrate as spaces. One button plays,
+  pauses, and resumes; Back and Forward skip by paragraph; the speed button
+  cycles 0.75–2× and restarts the current passage at the new speed
+  (`src/scripts/reader-tools.js`). Chromium ignores a pause sent before the
+  engine has started a passage, and the passage then plays while the button says
+  Resume, so Pause cancels such a passage instead (the `started` flag) and Resume
+  speaks it again. Test the player against the real engine, not a mock: the
+  in-app browser has voices.
 - **Context7 chat button.** `scripts/add-context7-widget.mjs` runs last in the
   build and puts `public/scripts/chat-widget.js` before `</body>` on every page,
   including the listening editions and the print book. The loader creates the
