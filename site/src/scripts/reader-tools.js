@@ -8,8 +8,15 @@ function mountOne(toolbar) {
 	adaptReaderArticle(article);
 
 	const play = toolbar.querySelector('[data-speech-play]');
-	const pause = toolbar.querySelector('[data-speech-pause]');
+	const playLabel = toolbar.querySelector('[data-speech-play-label]');
+	const playIcon = toolbar.querySelector('[data-speech-icon-play]');
+	const pauseIcon = toolbar.querySelector('[data-speech-icon-pause]');
+	const back = toolbar.querySelector('[data-speech-back]');
+	const forward = toolbar.querySelector('[data-speech-forward]');
 	const stop = toolbar.querySelector('[data-speech-stop]');
+	const speed = toolbar.querySelector('[data-speech-speed]');
+	const speedLabel = toolbar.querySelector('[data-speech-speed-label]');
+	const speedName = toolbar.querySelector('[data-speech-speed-name]');
 	const voice = toolbar.querySelector('[data-speech-voice]');
 	const rate = toolbar.querySelector('[data-speech-rate]');
 	const rateValue = toolbar.querySelector('[data-speech-rate-value]');
@@ -47,10 +54,16 @@ function mountOne(toolbar) {
 	}
 
 	function showControls() {
-		play.disabled = !supported || state === 'speaking';
-		play.textContent = state === 'paused' ? 'Resume' : state === 'finished' ? 'Read again' : 'Play';
-		pause.disabled = !supported || state !== 'speaking';
-		stop.disabled = !supported || (state !== 'speaking' && state !== 'paused');
+		const active = state === 'speaking' || state === 'paused';
+		// One button plays, pauses, and resumes; its label and icon say which.
+		play.disabled = !supported;
+		playLabel.textContent = state === 'speaking' ? 'Pause' : state === 'paused' ? 'Resume' : state === 'finished' ? 'Read again' : 'Play';
+		playIcon.hidden = state === 'speaking';
+		pauseIcon.hidden = state !== 'speaking';
+		back.disabled = !supported || !active;
+		forward.disabled = !supported || !active;
+		stop.disabled = !supported || !active;
+		speed.disabled = !supported;
 		voice.disabled = !supported;
 		rate.disabled = !supported;
 	}
@@ -129,17 +142,77 @@ function mountOne(toolbar) {
 		setStatus(message);
 	}
 
+	// A passage is one chunk of speech; a paragraph, list item, or heading can be
+	// several. Skipping moves by whole paragraphs, to where each one starts.
+	function blockStart(i) {
+		while (i > 0 && segments[i - 1].element === segments[i].element) i -= 1;
+		return i;
+	}
+
+	function nextBlockStart(i) {
+		let next = i + 1;
+		while (next < segments.length && segments[next].element === segments[i].element) next += 1;
+		return next;
+	}
+
+	// After a skip, show where the reading went, clear of the pinned bar.
+	function bringIntoView(element) {
+		if (!element) return;
+		const box = element.getBoundingClientRect();
+		const dock = toolbar.querySelector('.reader-dock')?.getBoundingClientRect();
+		const top = (dock ? dock.bottom : 0) + 12;
+		if (box.top >= top && box.bottom <= window.innerHeight) return;
+		const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		window.scrollTo({ top: window.scrollY + box.top - top - 8, behavior: calm ? 'auto' : 'smooth' });
+	}
+
+	// Back goes to the start of the paragraph being read and, from its start, to
+	// the one before; Forward goes to the start of the next. Skipping reads on.
+	function skip(direction) {
+		if (!segments.length || (state !== 'speaking' && state !== 'paused')) return;
+		const here = Math.min(index, segments.length - 1);
+		const start = blockStart(here);
+		const target = direction > 0 ? nextBlockStart(here) : start < here ? start : blockStart(Math.max(start - 1, 0));
+		generation += 1;
+		if (synth.paused) synth.resume();
+		synth.cancel();
+		if (target >= segments.length) {
+			index = segments.length;
+			state = 'finished';
+			markActive(null);
+			showProgress();
+			showControls();
+			setStatus('Finished reading this lesson.');
+			return;
+		}
+		index = target;
+		state = 'speaking';
+		showProgress();
+		showControls();
+		setStatus(`Reading passage ${index + 1} of ${segments.length}.`);
+		bringIntoView(segments[index].element);
+		speakNext(generation);
+	}
+
 	play.addEventListener('click', () => {
 		if (!supported) return;
+		if (state === 'speaking') {
+			synth.pause();
+			state = 'paused';
+			showControls();
+			setStatus(`Paused at passage ${index + 1} of ${segments.length}.`);
+			return;
+		}
 		if (state === 'paused') {
 			state = 'speaking';
-			if (synth.speaking) synth.resume();
-			else speakNext(generation);
+			// After a speed change there is no passage left to resume, and a paused
+			// engine ignores new speech until it is resumed.
+			synth.resume();
+			if (!synth.speaking) speakNext(generation);
 			showControls();
 			setStatus(`Reading passage ${index + 1} of ${segments.length}.`);
 			return;
 		}
-		if (state === 'speaking') return;
 		if (state === 'finished') index = 0;
 		gather();
 		if (!segments.length) {
@@ -153,13 +226,8 @@ function mountOne(toolbar) {
 		setStatus('Starting speech…');
 		speakNext(generation);
 	});
-	pause.addEventListener('click', () => {
-		if (state !== 'speaking') return;
-		synth.pause();
-		state = 'paused';
-		showControls();
-		setStatus(`Paused at passage ${index + 1} of ${segments.length}.`);
-	});
+	back.addEventListener('click', () => skip(-1));
+	forward.addEventListener('click', () => skip(1));
 	stop.addEventListener('click', () => stopReading());
 	includeCode.addEventListener('change', () => {
 		showReaderVariant(article, includeCode.checked);
@@ -170,9 +238,39 @@ function mountOne(toolbar) {
 			gather();
 		}
 	});
-	rate.addEventListener('input', () => {
+	const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
+	const speedText = (value) => `${Number(Number(value).toFixed(2))}×`;
+
+	function showSpeed() {
 		rateValue.textContent = `${Number(rate.value).toFixed(2)}×`;
+		speedLabel.textContent = speedText(rate.value);
+		speedName.textContent = `Reading speed ${speedText(rate.value)}. Press to change.`;
+	}
+
+	// Speech cannot change speed in the middle of a passage, so a new speed starts
+	// the current passage again at that speed, and reading on from there keeps it.
+	function applySpeed() {
+		showSpeed();
+		try {
+			window.localStorage.setItem('gha-speech-rate', String(rate.value));
+		} catch {
+			/* storage can be unavailable; the speed then lasts for this page */
+		}
+		if (state !== 'speaking' && state !== 'paused') return;
+		generation += 1;
+		if (synth.paused) synth.resume();
+		synth.cancel();
+		if (state === 'speaking') speakNext(generation);
+	}
+
+	// The button steps through the common speeds and wraps round to the slowest.
+	speed.addEventListener('click', () => {
+		const current = Number(rate.value);
+		rate.value = String(SPEEDS.find((step) => step > current + 0.001) ?? SPEEDS[0]);
+		applySpeed();
 	});
+	rate.addEventListener('input', showSpeed);
+	rate.addEventListener('change', applySpeed);
 
 	async function copyText(value, onSuccess, onFailure) {
 		try {
@@ -217,7 +315,13 @@ function mountOne(toolbar) {
 	});
 
 	gather();
-	rateValue.textContent = `${Number(rate.value).toFixed(2)}×`;
+	try {
+		const saved = Number(window.localStorage.getItem('gha-speech-rate'));
+		if (saved >= 0.75 && saved <= 2) rate.value = String(saved);
+	} catch {
+		/* the default speed is fine */
+	}
+	showSpeed();
 	showControls();
 	if (supported) {
 		updateVoices();
