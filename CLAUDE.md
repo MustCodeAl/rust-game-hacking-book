@@ -354,3 +354,9 @@ for subject identity, reading roles, and active states. High Contrast retains
 its stronger outlines and original subject hues. Avoid reintroducing competing
 chapter/role colours into the same table border or nested diagram frame. The
 Gradients Off and Heading rectangles options still apply independently.
+
+
+The theme-blending refinement is source **8f82f62**, published through
+**PR #14** into `gh-pages` at **89a99b7**. Pages built that exact merge;
+checked public pages and linked stylesheets match the verified build.
+See BOOK_REVISION_PROGRESS.md for the colour rules and validation receipt.

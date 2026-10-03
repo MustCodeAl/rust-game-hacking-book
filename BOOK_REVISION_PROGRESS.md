@@ -687,3 +687,15 @@ remain at least 5.07:1. Metadata text exceeds 5.36:1. The palette swatch study w
 inspected; native browser layout was not inspected. All saved appearance option
 selectors remain. Source changes are limited to seven stylesheets and these
 documentation notes; no lesson or functional script changed.
+
+
+Publication is complete: authored source **8f82f62** was generated into
+**06fab81f4c43ce22f9d00d402c1fa79c06ce4774** on
+`codex/gh-pages-theme-harmony`, merged through
+[PR #14](https://github.com/MustCodeAl/rust-game-hacking-book/pull/14) into
+`gh-pages` at **89a99b7e5a1b1e0273e9d68962101b01bdee6716**. GitHub Pages
+reports that exact merge as **built**. All **12** checked public files
+match the verified build byte-for-byte: the home, contents, glossary,
+Windows-process and Game Fundamentals lessons, listening edition, and their
+linked stylesheets. The authored branch may also include this documentation-only
+publication receipt.
