@@ -13,7 +13,7 @@
 //   bun run publish:pages             build, commit on top of gh-pages, and push
 //   bun run publish:pages --dry-run   build and commit locally (as the
 //                                     gh-pages-preview branch), but do not push
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -38,6 +38,15 @@ function succeeds(args, cwd) {
 	}
 }
 
+// The build runs through bun when a working one is on PATH, and npm otherwise.
+// A bun that is installed but broken (an empty file where the binary should be)
+// does not count, because running it would "succeed" without building anything.
+const runner = ['bun', 'npm'].find((tool) => spawnSync(tool, ['--version'], { stdio: 'ignore' }).status === 0);
+if (!runner) {
+	console.error('Neither bun nor npm runs here, so the book cannot be built.');
+	process.exit(1);
+}
+
 const root = git(['rev-parse', '--show-toplevel'], process.cwd());
 const siteDir = join(root, 'site');
 const distDir = join(siteDir, 'dist');
@@ -51,10 +60,10 @@ if (git(['status', '--porcelain', '--', ...SOURCES.filter((entry) => existsSync(
 }
 const source = git(['rev-parse', '--short', 'HEAD'], root);
 
-// Start from an empty dist/, so a build that silently does nothing (a broken
-// `bun` on PATH, say) cannot publish the previous build as if it were new.
+// Start from an empty dist/, so a build that silently does nothing cannot
+// publish the previous build as if it were new.
 rmSync(distDir, { recursive: true, force: true });
-execFileSync('bun', ['run', 'build'], { cwd: siteDir, stdio: 'inherit' });
+execFileSync(runner, ['run', 'build'], { cwd: siteDir, stdio: 'inherit' });
 if (!existsSync(join(distDir, 'index.html'))) {
 	console.error('The build did not produce site/dist/index.html; nothing was published.');
 	process.exit(1);
