@@ -748,13 +748,14 @@ table; no lesson text, number, or order changed.
 |---|---|---|
 | `Accordion` + `GitHub` | 22 lab lessons (4.3, 4.10, 5.3–5.5, 5.9, 5.10, 8.5–8.8, 9.2, 9.4, 9.8, 11.5–11.9, 11.12, 12.1, 12.6) | The "complete lab source" block is an accordion that opens on a `GitHub` card (file name, line count, link to the exact commit) above the code. The code stays in the page, so it prints and is read aloud; the card is skipped in the listening edition. |
 | `Accordion` | 3.2 | The two optional place-value derivations (decode 0.2625, decode x and y). |
-| `Steps` | 1.1, 1.9, 2.8, 2.10, 3.4, 3.5, 3.7, 5.7, 5.9, 6.3, 6.6, 7.9, 8.5, 9.4, 9.6, 9.7, 12.2, 13.6, 14.3 (24 lists) | Lists that are a procedure in a fixed order: a lab to carry out, a recovery test, or the sequence a method follows. |
+| `Steps` | 30 lessons, 39 lists: 1.1, 1.6, 1.9, 2.3, 2.8, 2.10, 3.4, 3.5, 3.7, 4.9, 5.4, 5.5, 5.7, 5.8, 5.9, 6.3, 6.5, 6.6, 6.7, 7.9, 8.5, 9.2, 9.4, 9.6, 9.7, 10.3, 11.8, 12.2, 13.6, 14.3 | Lists that are a procedure in a fixed order: a lab to carry out, a recovery test, the sequence a method follows, or the order a program performs its work. |
 | `FileTree` | 14.3 | The Cargo project layout. |
 | `Columns` | 4.1 (Where a rule lives) | Two things compared side by side. |
-| `HoverCard` | 1.7, 1.9, 4.1 | Example, reference, and recommendation cards, written so the lesson reads the same without them. |
+| `HoverCard` | 40 cards in 14 lessons: 1.2, 1.3, 1.4, 1.5, 1.7, 1.8, 1.9, 2.2, 2.4, 2.5, 3.8, 4.1, 8.2, 9.1 | Examples with real numbers, references (a lesson or an official page, checked to load), tips naming the exact menu or key of the tool in use, alternatives, a recommendation, and a caution, each written so the lesson reads the same without it. |
+| `Color` | 9.4 | The marker colour of the texture edit, as a swatch with its value. |
 | `Prompt` | AI assistants page | A copy-paste request for help with one lesson. |
 
-About a hundred other numbered lists stay as plain lists on purpose: they are
+The other 91 numbered lists stay as plain lists on purpose: they are
 questions to ask, checks to make, or facts to hold together, not steps in order
 (the README's rule for `Steps`). The build has 293 HTML pages, 277 diagrams, and
 135 listening editions (10,782 passages; the passage count fell because the

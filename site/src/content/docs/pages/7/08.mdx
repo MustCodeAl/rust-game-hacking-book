@@ -9,6 +9,7 @@ sidebar:
   order: 8
   label: "5.8 Call Tracing and Bounded Logs"
 ---
+import { Steps } from '../../../../components/kit';
 import LessonVideo from '../../../../components/LessonVideo.astro';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -139,6 +140,8 @@ stateDiagram-v2
 
 At the breakpoint event, Windows reports the address of `int3`. The logger:
 
+<Steps>
+
 1. confirms the address belongs to its breakpoint map;
 2. restores the original `E8` byte;
 3. opens the event thread and reads its `CONTEXT`;
@@ -146,6 +149,8 @@ At the breakpoint event, Windows reports the address of `int3`. The logger:
 5. sets bit 8 of `EFlags`, the trap flag;
 6. records that this thread is stepping this call;
 7. continues the event.
+
+</Steps>
 
 The CPU now executes the real call. Because the trap flag is set, Windows pauses after that one instruction with `EXCEPTION_SINGLE_STEP`. At this moment `EIP` contains the call destination. The logger clears the flag, reinstalls `0xCC` at the call site, removes the thread from the stepping map, and prints the source and destination.
 
@@ -308,12 +313,16 @@ This first complete version writes compact lines directly to the console. The bo
 
 The full [`call_logger.rs`](/windows-labs/src/bin/call_logger.rs) is longer than the scanner because it owns a live state machine. Read it in this order:
 
+<Steps>
+
 1. **Constants and guards** — caps, trap flag, known exclusions, detach cleanup.
 2. **Thread context helpers** — open only the event thread and get or set its suspended register state.
 3. **Static discovery** — copy executable regions and let iced-x86 return verified call instructions.
 4. **Breakpoint transaction** — save `E8`, install `0xCC`, and roll back already-installed sites on partial failure.
 5. **Exception state machine** — pair each breakpoint event with a later per-thread single-step event.
 6. **Event loop and shutdown** — continue every event once, close transferred handles, restore bytes, and detach.
+
+</Steps>
 
 Do not begin at `main` and dive into every Windows name. First locate these six responsibilities; then read the helper used by the phase you are studying.
 
