@@ -1,8 +1,8 @@
 ---
 title: "In-Game Menus and Text Rendering"
-description: "Understand how a game's text function can draw a small menu and why input edges, frame timing, and string lifetimes matter."
+description: "Understand what a game's interface is made of, how its text function can draw a small menu, and why input edges, frame timing, and string lifetimes matter."
 chapter: "7.13"
-minutes: 26
+minutes: 36
 author: "attilathedud"
 date: "2026-09-08"
 sidebar:
@@ -31,6 +31,53 @@ The trade is that you are now running inside the game's render path, so
 the hook must finish quickly. A file read, sleep, or blocking channel receive
 there delays the game's next frame; Lesson 4.10 measures the same cost in a
 per-frame recorder.
+
+## What a game's interface is made of
+
+Before borrowing the game's text function, it helps to know what it sits on top of. A
+game's interface is drawn by the same pipeline as its world (Lesson 7.2), in a last pass
+that ignores the 3D camera: flat rectangles and text, placed in screen units.
+
+- **Text.** A font is turned into a **glyph atlas**, a texture holding every character as a
+  small image (the atlas idea from Lesson 7.2). To draw "Gold", the engine draws one quad
+  per letter, each showing that letter's rectangle in the atlas, and moves along by each
+  letter's **advance width**. If the advances of G, o, and l are 12, 9, and 4 pixels, the
+  letter d starts 12 + 9 + 4 = 25 pixels to the right of where the G started.
+- **Layout.** Elements sit in boxes. **Anchoring** pins a box to part of the screen: a
+  200 × 50 box anchored to the bottom-right corner of a 1280 × 720 screen with a 20-pixel
+  margin is at `x = 1280 − 20 − 200 = 1060` and `y = 720 − 20 − 50 = 650`. In a **flex**
+  layout, boxes in a row share the space by weight: in a 600-pixel row, three boxes with
+  weights 1, 2, and 1 get 150, 300, and 150 pixels. A **grid** layout assigns boxes to rows
+  and columns, and size limits keep a box between a smallest and a largest size.
+- **Scaling.** Interfaces are usually designed for a reference size, such as 1920 × 1080, and
+  scaled by the smaller of `width ÷ 1920` and `height ÷ 1080`. On a 1280 × 720 screen both
+  are 0.6667, so a 300-pixel button is drawn 200 pixels wide. The window's scale factor from
+  Lesson 6.6 multiplies the result again.
+- **Stretchable art.** A button picture with decorated corners cannot simply be stretched.
+  **Nine-slice** drawing cuts it into a 3 × 3 grid: the four corners keep their size, the
+  four edges stretch in one direction, and the centre stretches in both. Drawing a picture
+  with 16-pixel corners as a 200 × 60 button gives four 16 × 16 corners, top and bottom
+  edges 200 − 32 = 168 wide, side edges 60 − 32 = 28 tall, and a 168 × 28 centre.
+- **Order and clipping.** Elements are drawn back to front by a layer number. **Clipping**
+  hides whatever falls outside a box, which is how a scrolling list works: the items are
+  moved up by the scroll amount, and only the part inside the list's box is drawn.
+- **Input and focus.** A click is tested against each box's rectangle, the 2D picking of
+  Lesson 7.5, and the topmost box under the cursor gets it. For a keyboard or gamepad, the
+  game keeps a **focus**, the element that will respond, and moves it to the nearest
+  element in the direction pressed. A **text box** keeps a string and a cursor position and
+  receives typed characters. Sliders, checkboxes, and buttons are each a small state
+  machine: a value, and whether they are hovered, pressed, or focused.
+- **Popups.** A **context menu** is a box created at the cursor when the right button is
+  pressed and sized to fit its items. If it would run off the screen it is moved back: a 150
+  pixel wide menu opened at `x = 1200` on a 1280 pixel screen is placed at
+  `min(1200, 1280 − 150) = 1130`.
+- **Where it is drawn.** Most interface is drawn over the finished 3D picture. It can also be
+  drawn into a texture and placed on a surface in the world, such as a screen on a wall, and
+  a label that follows an object uses the projection from Lesson 7.9.
+
+Lesson 6.7 contrasts the two ways such code is written: an **immediate-mode** interface
+redraws every element on every frame from the current state, and a **retained-mode**
+interface keeps a tree of elements in memory and changes them when something happens.
 
 ## Hook a per-frame site, then call the text function
 

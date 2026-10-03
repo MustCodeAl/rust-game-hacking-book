@@ -699,3 +699,41 @@ match the verified build byte-for-byte: the home, contents, glossary,
 Windows-process and Game Fundamentals lessons, listening edition, and their
 linked stylesheets. The authored branch may also include this documentation-only
 publication receipt.
+
+## How games work: engine topics added to their lessons — 2026-10-03
+
+The reader asked that the parts of a game (2D and 3D rendering, animation,
+application, assets, async tasks, audio, camera, dev tools, diagnostics, ECS,
+games, gizmos, math, movement, picking, scene, shaders and advanced shaders,
+stress tests, tools, transforms, UI, usage, window, glTF) be explained where
+they are missing or thin. Each is a section inside the lesson where its
+prerequisites are already taught, with every number derived on the page, and
+none changes an existing lesson's URL, number, or order. Existing prose was kept;
+sections were added, and the description and study time of each touched lesson
+were updated.
+
+| Part | Where it is explained |
+|---|---|
+| Application, frame, delta time, fixed timestep, cooldowns, async tasks, diagnostics | 4.1 Game Engines (starting up; one frame, step by step) |
+| ECS, scene and hierarchy, game states and loading screens | 4.1 (entities, components, and systems; scenes) |
+| Dev tools, gizmos, editors, viewers, stress tests; a whole small game | 4.1 (overlays, gizmos, editors, and stress tests; Breakout) |
+| Interpolation, easing, following, splines, bounding volumes | 4.6 Coordinates, Vectors, and Directions |
+| Transforms and parenting, quaternions, orthographic projection | 7.1 Camera Frames and Projection |
+| Materials, light, transparency, culling, render passes, 2D rendering | 7.2 The Rendering Pipeline and Its State |
+| What shaders read, variants, instancing, compute, draw-call cost | 7.3 OpenGL Draw Calls and State |
+| Picking | 7.5 Camera Rays, Collisions, and Crosshairs |
+| Skeletal and sprite animation, morph targets | 7.6 Aim Geometry and Target Selection |
+| Random spread, camera shake, follow, orbit, zoom | 7.7 Recoil, Spread, and Camera Motion |
+| Gizmos as debug drawing | 7.9 World-to-Screen Projection and Overlays |
+| UI layout, text, scaling, nine-slice, focus, popups | 7.13 In-Game Menus and Text Rendering |
+| Window, client area, scale factor, fullscreen, presenting | 6.6 Windows Input |
+| Assets and how they load | 9.1 Game Files and Live Memory |
+| glTF models, audio | 9.4 Textures and Asset Replacement |
+| Worker threads and tasks | 11.8 Threads, Contexts, and Stacks |
+
+`/how-games-work/` maps every part to its section, and 31 glossary terms were
+added for the new vocabulary (scene, material, and picking are listed in
+`EVERYDAY_WORDS` so ordinary uses of those words are not marked). The listening
+editions read each new section, and the build has **293 HTML pages**, **277**
+drawn Mermaid diagrams, and **135** listening/TXT editions; all internal links
+and anchors resolve.

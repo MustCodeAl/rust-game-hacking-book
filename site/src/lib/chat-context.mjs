@@ -7,7 +7,7 @@
 import { chapterArea, chapterOf, chapterTone } from '../data/chapters.mjs';
 
 // Pages about the book itself rather than a lesson.
-const GUIDES = new Set(['components', 'updates', 'ai-assistants']);
+const GUIDES = new Set(['components', 'updates', 'ai-assistants', 'how-games-work']);
 
 /**
  * @param {object} page

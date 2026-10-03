@@ -1,8 +1,8 @@
 ---
 title: "Camera Rays, Collisions, and Crosshairs"
-description: "See how a camera ray, collision query, and occlusion test become a game's crosshair target."
+description: "See how a camera ray, collision query, and occlusion test become a game's crosshair target, and how the same ray from a mouse cursor picks what is under it."
 chapter: "7.5"
-minutes: 26
+minutes: 34
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
@@ -108,6 +108,74 @@ is `t = -b - sqrt(discriminant)`, provided `t ≥ 0`. If the origin is inside th
 sphere, the nearer root may be negative and the farther root must be considered.
 Production engines use several shape types and acceleration structures, but this
 same “generate candidates, reject invalid roots, choose nearest” reasoning applies.
+
+## Picking: the same ray, from the cursor
+
+A mouse cursor is a crosshair that can move. **Picking** is the question "which object
+is under the cursor?", and games use it to select units, press buttons, drag items, and
+click on the world. It works like the centred crosshair, with one extra step to find the
+ray.
+
+**Step 1: pixel to normalized coordinates.** This reverses the conversion at the end of
+Lesson 7.1. On an 800 × 600 window, a cursor at pixel `(600, 150)` has
+
+```text
+ndc_x = 2 × 600 ÷ 800 − 1 = 0.5
+ndc_y = 1 − 2 × 150 ÷ 600 = 0.5
+```
+
+**Step 2: build the ray.** For a perspective camera at the origin looking along `+z`, with
+a 90° vertical field of view (`tan 45° = 1`) and aspect 800 ÷ 600 = 1.3333, the ray
+leaves the camera in the direction
+
+```text
+x = 0.5 × 1.3333 × 1 = 0.6667
+y = 0.5 × 1          = 0.5
+z = 1
+length = √(0.6667² + 0.5² + 1²) = √1.6944 = 1.3017
+normalized = (0.5122, 0.3841, 0.7682)
+```
+
+A camera that is turned adds one more step, rotating that direction by the camera's own
+axes (Lesson 7.1). An **orthographic** camera is simpler: every ray points straight
+forward, and the ray's origin is the world point under the cursor, such as the `(5, 3)`
+that Lesson 7.1 found for the pixel `(600, 180)`.
+
+**Step 3: test the candidates.** The broad phase keeps the objects whose bounding shapes
+the ray might cross, and each is tested, nearest hit wins. For a box that lines up with
+the axes the test works one axis at a time. In a flat example, a ray starts at `(0, 0)`
+and heads in the direction `(1, 0.5)`, and a box spans x from 4 to 6 and y from 1.5 to 3:
+
+```text
+x range:  t from 4 ÷ 1   = 4 to 6 ÷ 1   = 6
+y range:  t from 1.5 ÷ 0.5 = 3 to 3 ÷ 0.5 = 6
+enters at the later start  = max(4, 3) = 4
+leaves at the earlier end  = min(6, 6) = 6
+4 ≤ 6, so the ray hits the box, first at t = 4, the point (4, 2)
+```
+
+Move the box up so that y spans 3.5 to 5 and the y range becomes t from 7 to 10, so the
+ray would have to enter at 7 but has already left at `min(6, 10) = 6`. Entering after
+leaving means a miss.
+
+Two other methods are common:
+
+- **Colour picking.** Each object is drawn into an off-screen texture in its own flat
+  colour that encodes its number. Object 300 is `300 = 0 × 65536 + 1 × 256 + 44`, so its
+  colour is `(0, 1, 44)`. Reading the one pixel under the cursor and decoding the
+  colour gives the object, already corrected for anything in front of it. It costs an
+  extra pass and a read-back from the GPU.
+- **Sprite picking.** In 2D, convert the cursor to a world point as in Lesson 7.1 and
+  test whether it falls inside each sprite's rectangle, taking the topmost layer.
+
+Dragging builds on the same query. When the button goes down, the game picks the object.
+While the mouse moves, it casts the ray again each frame and moves the object to where the
+ray meets a floor or a plane. When the button comes up, it drops the object. Many engines
+also have a debug view that draws the ray and the thing it hit, which is the quickest way
+to see why a click picked the wrong object.
+
+Lesson 7.9 runs the opposite way, from a world point to a pixel. The "target under the
+crosshair" value this lesson hunts for is the result of this computation.
 
 ## Rendering visibility and collision visibility differ
 

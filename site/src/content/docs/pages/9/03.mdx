@@ -1,8 +1,8 @@
 ---
 title: "Textures and Asset Replacement"
-description: "Connect a visible game surface to its texture file, preserve the expected format, and package a reversible replacement."
+description: "Connect a visible game surface to its texture file, preserve the expected format, and package a reversible replacement, then read the same ideas in a 3D model (glTF) and a sound."
 chapter: "9.4"
-minutes: 15
+minutes: 30
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
@@ -239,7 +239,108 @@ If extracting:
 
 A model stores UV coordinates that map its surface to the image. One texture can repeat, rotate, or cover many surfaces. Changing the image may affect more places than the one you first noticed.
 
+A coordinate outside 0 to 1 is handled by the texture's **addressing mode**. With *repeat*, `u = 2.5` is treated as 0.5, so the image tiles. With *clamp*, it is treated as 1.0, so the edge pixels smear outward.
+
 ![The replacement texture in game](/assets/images/8/3/urbanterror7.png)
+
+## Models: reading a glTF file
+
+A texture is one image. A 3D model is several arrays of numbers plus the rules that join
+them. **glTF** is an open format for 3D models and scenes from the Khronos Group, the same
+group that maintains OpenGL, and it is a good example because it is plain about its own
+structure. A glTF model is a **JSON** description of what is in the model, in `.gltf` text
+with its binary data alongside, or all packed in one `.glb` file. Reading it is the
+two-stage parse from Lesson 9.1: first check that the bytes are valid JSON of the right
+shape, then check that what the JSON says makes sense.
+
+The JSON is a set of lists that point at each other by position. The smallest useful model
+is one triangle:
+
+```json
+{
+  "asset": { "version": "2.0" },
+  "scene": 0,
+  "scenes": [ { "nodes": [ 0 ] } ],
+  "nodes": [ { "mesh": 0, "translation": [ 0, 2, 0 ] } ],
+  "meshes": [ { "primitives": [ { "attributes": { "POSITION": 1 }, "indices": 0 } ] } ],
+  "buffers": [ { "uri": "triangle.bin", "byteLength": 44 } ],
+  "bufferViews": [
+    { "buffer": 0, "byteOffset": 0, "byteLength": 6,  "target": 34963 },
+    { "buffer": 0, "byteOffset": 8, "byteLength": 36, "target": 34962 }
+  ],
+  "accessors": [
+    { "bufferView": 0, "componentType": 5123, "count": 3, "type": "SCALAR" },
+    { "bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3",
+      "min": [0, 0, 0], "max": [1, 1, 0] }
+  ]
+}
+```
+
+Follow the chain from the top. The scene lists node 0. Node 0 holds mesh 0, and moves it 2
+units up with a `translation` (a node can also have a rotation, stored as a quaternion
+from Lesson 7.1, a scale, and children, which is the parent and child arrangement of
+Lesson 7.1). The mesh's one primitive says its vertex positions are in accessor 1 and its
+indices are in accessor 0. An **accessor** says how to read a stretch of bytes: accessor 1
+is `VEC3` (three numbers per item) of `componentType` 5126 (a 4-byte float), `count` 3, so
+each vertex is 3 × 4 = 12 bytes and the three vertices take 3 × 12 = 36 bytes. Accessor 0
+is `SCALAR` of 5123 (a 2-byte unsigned integer), count 3, which is 3 × 2 = 6 bytes, the three
+indices. A **buffer view** is a slice of the buffer: view 0 is bytes 0 to 6 and view 1 is
+bytes 8 to 44, because the indices are padded with 2 bytes so that the floats start on a
+4-byte boundary. The buffer is 8 + 36 = 44 bytes in all.
+
+Because a model file is untrusted input, a loader checks every one of those links. Does
+the accessor name a buffer view that exists? Does its offset plus `count` × item size fit
+inside that view? Accessor 1 needs 0 + 36 = 36 bytes and its view is 36 long, so it fits. A
+file that claims `count` 1,000,000 for the same view needs 1,000,000 × 12 = 12,000,000
+bytes, and must be rejected before anything is allocated or read.
+
+The rest of a model hangs off the same pattern: **materials** (colours, textures, and
+whether the surface is opaque, cut out, or blended, as Lesson 7.2 explained), **skins**
+(the skeleton, with the bone indices and weights of Lesson 7.6), **animations** (lists of
+times and values for a node's translation, rotation, or scale, played with the
+interpolation of Lesson 4.6), and free-form **extras** where a game can store its own data.
+A scene viewer is a tool that does nothing but load such a file and show it, which is the
+quickest way to see what a model contains.
+
+## Sounds: samples, mixing, and position
+
+A sound is stored as a list of **samples**, measurements of the sound wave taken many
+times a second. CD-quality audio takes 44,100 samples a second for each of 2 channels
+(left and right), each sample 2 bytes. That is 44,100 × 2 × 2 = 176,400 bytes a second, or
+10,584,000 bytes, about 10 MiB, a minute. A three-minute song would take about 30 MiB, so
+music is stored compressed (Ogg Vorbis and MP3 are common) and **streamed**, decoded a
+chunk at a time, while a short sound effect is decoded once and kept in memory.
+
+Several sounds play at once, but the sound card takes one stream, so the engine **mixes**
+them: for every sample it adds the playing sounds' samples, each scaled by its own volume.
+With samples running from −1 to 1, two sounds at 0.7 and 0.6 add to 1.3, which is past the
+limit, so it is cut to 1.0 and the sound distorts. Engines lower volumes or add a limiter
+to avoid that.
+
+The sound card asks for audio in small buffers. A buffer of 1,024 samples at 44,100 samples
+a second lasts 1,024 ÷ 44,100 = 0.0232 seconds, about 23 ms. If the engine has not filled
+the next one by then, the listener hears a click. So audio runs on its own thread with its
+own deadline, apart from the frame loop, as Lesson 11.8 describes.
+
+Some properties are simple to compute:
+
+- **Pitch.** Playing samples faster raises the pitch: a rate of 2.0 is an octave higher, since
+  every frequency doubles. A pure test tone of 440 hertz is generated as `sin(2π × 440 × t)`,
+  and at 44,100 samples a second one cycle is 44,100 ÷ 440 ≈ 100 samples long.
+- **Position.** A sound that comes from a place gets quieter with distance, say by
+  `1 ÷ distance`, and is placed left or right by the dot product (Lesson 4.6) of the
+  direction to it with the listener's right-hand direction. With the listener facing `+y`,
+  so that right is `+x`, a sound at `(3, 4, 0)` is 5 away, in the direction `(0.6, 0.8, 0)`, so
+  its pan is 0.6, to the right, and its loudness is 1 ÷ 5 = 0.2. Splitting that between the
+  ears by `(1 − pan) ÷ 2` and `(1 + pan) ÷ 2` gives a left volume of 0.2 × 0.2 = 0.04 and a
+  right volume of 0.2 × 0.8 = 0.16.
+- **Triggers.** A sound effect usually plays in response to an event, such as "coin 42 was
+  collected" (Lesson 1.3). The music follows the game's state, and changing tracks is a
+  cross-fade like the animation blend of Lesson 7.6: halfway through a 2-second fade, the old
+  track is at volume 0.5 and the new one at 0.5.
+
+Like a texture, a replacement sound has to match what the game expects: the same path and
+format, and usually the same sample rate and channel count.
 
 ## Package as a mod
 

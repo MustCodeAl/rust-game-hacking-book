@@ -1,8 +1,8 @@
 ---
 title: "Camera Frames and Projection"
-description: "Follow a world-space point through camera axes, view transforms, homogeneous coordinates, perspective, and screen pixels."
+description: "Follow a world-space point through camera axes, object transforms and parents, quaternions, homogeneous coordinates, perspective or orthographic projection, and screen pixels."
 chapter: "7.1"
-minutes: 18
+minutes: 32
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
@@ -185,6 +185,38 @@ expected. Raise the target to `(3.0, 4.0, 5.0)` instead and pitch becomes
 `atan2(5, 5) = 45°`: the target is now as far up as it is away, a 45-degree
 climb.
 
+## Turning without gimbal lock: quaternions
+
+Yaw, pitch, and roll are easy to read, and they have two limits. Pitch to 90°, so
+the view looks straight up, and yaw and roll then turn around the same line: one of
+the three controls is lost, which is called **gimbal lock**. And blending two sets of
+angles number by number can turn the long way round, since 350° blended with 10°
+passes through 180°.
+
+Engines often store a turn as a **quaternion** instead: four numbers
+`(x, y, z, w)` for a turn of angle θ around a unit-length axis `(ax, ay, az)`:
+
+```text
+(x, y, z, w) = (ax × sin(θ/2), ay × sin(θ/2), az × sin(θ/2), cos(θ/2))
+```
+
+No turn at all is θ = 0, so `sin 0 = 0` and `cos 0 = 1`, giving `(0, 0, 0, 1)`. A 90°
+turn about `z`, the axis `(0, 0, 1)`, has θ/2 = 45°, and `sin 45° = cos 45° ≈ 0.7071`,
+giving `(0, 0, 0.7071, 0.7071)`. Every quaternion that stands for a turn has length 1:
+here 0.7071² + 0.7071² = 0.5 + 0.5 = 1. Applying that quaternion to `(1, 0, 0)` gives
+`(0, 1, 0)`, the same result as the 90° rotation in the transform section; the
+math library does the multiplication.
+
+Two turns combine by multiplying their quaternions, with no gimbal lock. To blend
+them, engines use **slerp**, spherical interpolation, which turns at a steady speed
+along the shortest way round. Halfway between no turn and the 90° turn is a 45°
+turn: θ/2 = 22.5°, so the quaternion is `(0, 0, 0.3827, 0.9239)`, and 0.3827² + 0.9239² =
+0.1465 + 0.8535 = 1.
+
+In memory, four adjacent floats whose squares add up to 1 are very likely a
+quaternion. Three angles, by contrast, are usually plain numbers in degrees or radians
+that wrap around.
+
 ## World space to screen space
 
 A 3D point cannot be drawn directly on a 2D monitor. The renderer transforms it through several spaces:
@@ -309,6 +341,64 @@ order. “Row-major versus column-major” describes storage, while “row vecto
 column vectors” describes the multiplication convention; people often mix up
 these two separate choices.
 
+## Transforms: placing an object in the world
+
+A model stores its points relative to its own centre. To draw the object, the
+engine carries those points into the world in three steps, in this order:
+
+1. **Scale**: multiply every coordinate by the scale factor.
+2. **Rotate**: turn the points around the object's centre.
+3. **Translate**: add the object's world position.
+
+Rotating by an angle θ around the vertical `z` axis changes only `x` and `y`:
+
+```text
+x' = x × cos(θ) − y × sin(θ)
+y' = x × sin(θ) + y × cos(θ)
+z' = z
+```
+
+Take a crate whose model has a corner at `(1, 0, 0)`. Scale it by 2, turn it 90°
+about `z`, and place it at `(10, 5, 0)`. For 90°, `cos` is 0 and `sin` is 1:
+
+```text
+scale:      (1, 0, 0) × 2                    = (2, 0, 0)
+rotate:     x' = 2×0 − 0×1 = 0, y' = 2×1 + 0×0 = 2   = (0, 2, 0)
+translate:  (0 + 10, 2 + 5, 0 + 0)            = (10, 7, 0)
+```
+
+The crate's centre, `(0, 0, 0)` in the model, lands at `(10, 5, 0)`, and the corner
+ends up 2 units from it along `+y`, which is where a 90° turn sends the corner that
+started along `+x`.
+
+Objects can be built from parts. A tank has a turret, and the turret has a gun
+barrel. Each part stores a **local transform**, its position and turn *relative to
+its parent*, and the engine finds its **world** position by applying its parent's
+transform to those local numbers. Put the tank at `(10, 5, 0)`, turned 90°, with
+the turret 2 units along the tank's own front and 1 unit up, so the turret's local
+position is `(0, 2, 1)`:
+
+```text
+turret, tank turned 90°:   rotate (0, 2, 1) -> (0×0 − 2×1, 0×1 + 2×0, 1) = (−2, 0, 1)
+                           translate (−2 + 10, 0 + 5, 1 + 0)             = (8, 5, 1)
+turret, tank turned 0°:    (0, 2, 1) + (10, 5, 0)                         = (10, 7, 1)
+```
+
+The turret's stored numbers, `(0, 2, 1)`, are the same in both lines. Only its world
+position changed, because its parent turned. Give the barrel a local position of
+`(0, 1, 0)` inside the turret. Inside the tank that is `(0, 2, 1) + (0, 1, 0) = (0, 3, 1)`,
+and with the tank turned 90° the world position is `(−3, 0, 1) + (10, 5, 0) = (7, 5, 1)`.
+
+This matters when you read a game's memory. A child object often stores only its
+local numbers, so an overlay that wants a world position has to apply the parent's
+transform, then the grandparent's, up to the root. Reading the local numbers alone
+gives the right answer only for an object with no parent.
+
+Each of these three steps is one matrix, and multiplying them gives one matrix per
+object, its **world matrix** (some libraries call it the model matrix). A child's
+world matrix combines its parent's world matrix with its own local matrix, in the
+order that the library's convention requires, as noted above.
+
 ## Why 3D graphics uses four numbers for a 3D point
 
 A 3D translation cannot be represented by an ordinary 3×3 linear matrix because
@@ -431,6 +521,33 @@ because `aspect` is defined as `width / height`. Dividing `y_scale` by `aspect`
 shrinks the horizontal scale by exactly that factor, so the wider half-width
 still maps to NDC `x = 1`. Skip that division and a widescreen monitor
 squashes the image horizontally instead of showing more of the scene.
+
+## Orthographic projection: no shrinking with distance
+
+Perspective divides by depth, so distant things look smaller. An **orthographic**
+camera does not divide. It looks at a box-shaped volume, and an object has the same
+size at any depth. Two-dimensional games use it, strategy games use it so every tile
+keeps its size, and editors and shadow maps use it. Its settings are the size of the
+box, not a field of view.
+
+Say an orthographic camera shows a region 20 world units wide and 15 tall, centred
+on `(0, 0)`, on an 800 × 600 screen. Across, that is 800 ÷ 20 = 40 pixels per unit, and
+down it is 600 ÷ 15 = 40, the same, so nothing is stretched. A point at `(5, 3)` lands at:
+
+```text
+screen_x = 400 + 5 × 40 = 600
+screen_y = 300 − 3 × 40 = 180     (screen y grows downward, so up is subtracted)
+```
+
+Move the point nearer or farther and `(600, 180)` does not change. Zooming changes
+the box instead: showing 10 units across, not 20, gives 800 ÷ 10 = 80 pixels per unit,
+and the same point lands at `(400 + 5 × 80, 300 − 3 × 80) = (800, 60)`, at the right edge of
+the screen.
+
+The reverse also works, because nothing was divided. A click at pixel `(600, 180)` is
+the world point `((600 − 400) ÷ 40, (300 − 180) ÷ 40) = (5, 3)`. Turning a cursor
+position into a world position is the first step of picking, which Lesson 7.5 builds
+on.
 
 ## Screen coordinates
 

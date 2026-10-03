@@ -1,8 +1,8 @@
 ---
 title: "Recoil, Spread, and Camera Motion"
-description: "Separate input, weapon kick, spread, camera shake, and recovery to understand why the view moves after a shot."
+description: "Separate input, weapon kick, random spread, camera shake and other camera motion, and recovery to understand why the view moves after a shot."
 chapter: "7.7"
-minutes: 23
+minutes: 32
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
@@ -261,6 +261,60 @@ Fire a single shot before and after enabling it. Ammo and firing animation shoul
   duration="11 seconds"
   caption="The original no-recoil demonstration shows firing with the camera effect altered. Watch camera motion separately from ammunition and firing animation; changing one recoil store does not establish that every weapon effect has changed."
 />
+
+## Random spread: choosing a point in a circle
+
+Spread adds a random offset to the direction of a shot. The offset is usually a random
+point inside a small circle around the aim direction, and picking that point fairly is
+easier to get wrong than it looks.
+
+The obvious recipe is a random distance `r = R × u`, with `u` chosen evenly between 0
+and 1, at a random angle. It bunches the shots near the middle. Half of the values of
+`u` fall below 0.5, so half of the shots land inside the circle of radius 0.5 × R, but
+that circle has only (0.5)² = 25% of the area. The fix is to take a square root, `r = R × √u`,
+because the area inside a radius grows as the radius squared:
+
+```text
+spread radius R = 2 degrees
+u = 0.25   ->  r = 2 × √0.25 = 2 × 0.5 = 1.0 degree      (the naive recipe gives 0.5)
+v = 0.125  ->  angle = 360° × 0.125 = 45°
+offset = (r × cos 45°, r × sin 45°) = (0.7071, 0.7071) degrees
+```
+
+The two values `u` and `v` come from a pseudo-random number generator. A game that seeds
+it with the same number gets the same "random" sequence every time, which is how replays
+and networked games keep every machine in agreement. Two runs that start from the same
+seed repeat their spread exactly, and runs that start from different seeds do not.
+
+The spread offset is added to the shot direction, not to the camera, which is why the
+diagram above gives them separate paths.
+
+## Camera motion: shake, follow, orbit, and zoom
+
+The camera has more layers than recoil. Each is a rule that changes where the camera is or
+where it looks.
+
+- **Shake** is a short random offset that fades. With an amplitude of 4 pixels that fades
+  to 0 over 0.5 s, the largest offset at 0.1 s is `4 × (1 − 0.1 ÷ 0.5) = 3.2` pixels, at 0.25 s it is
+  2.0, and at 0.5 s it is 0. Many games track a "trauma" value from 0 to 1 and shake by its
+  square, so a light hit of 0.5 shakes at only 0.25 of the maximum. Shake is presentation:
+  it moves the picture, not the aim.
+- **Follow** cameras trail the player. A top-down 2D camera eases toward the player with
+  the smoothing from Lesson 4.6, and often has a dead zone, a box around the screen's centre
+  inside which the player can move without moving the camera.
+- **Orbit** cameras circle a target. With `z` up, the camera sits at the target plus
+  `distance × (cos(pitch) × cos(yaw), cos(pitch) × sin(yaw), sin(pitch))` and always looks back at
+  the target. For a target at the origin, a distance of 10, a yaw of 90°, and a pitch of
+  30°, that is `10 × (0.866 × 0, 0.866 × 1, 0.5) = (0, 8.66, 5)`.
+- **First-person** cameras sit at the character's head and take yaw and pitch from the
+  mouse. Pitch is clamped just short of straight up or down, so the view cannot flip over
+  (Lesson 7.1). The weapon in the player's hand, the **view model**, is often drawn with its
+  own field of view, narrower than the world's, so it does not look stretched.
+- **Free** and **pan** cameras are for editors: a free camera moves along its own forward
+  and right directions, and a 2D pan camera moves opposite to the drag.
+- **Zoom** narrows the field of view for a perspective camera, which Lesson 7.1 showed
+  scales the picture by 1.732 when it goes from 90° to 60°. For an orthographic camera,
+  zooming shrinks the box of visible world, so halving its width doubles the pixels per unit.
 
 ## Recoil is a sum of layers
 

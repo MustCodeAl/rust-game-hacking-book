@@ -86,8 +86,8 @@ export function mathBlocks() {
 // still links it to its definition.
 const EVERYDAY_WORDS = new Set([
 	'assessment', 'border', 'contradiction', 'control', 'coverage', 'detector', 'draining', 'freshness',
-	'generation', 'immediate', 'layout', 'oracle', 'response', 'signal', 'structure', 'tick', 'transform',
-	'wildcard',
+	'generation', 'immediate', 'layout', 'material', 'oracle', 'picking', 'response', 'scene', 'signal',
+	'structure', 'tick', 'transform', 'wildcard',
 ]);
 
 // Text inside these is never marked: headings (they are navigation), code,

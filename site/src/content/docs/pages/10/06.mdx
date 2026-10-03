@@ -223,6 +223,38 @@ A stack trace walks from the current frame toward older callers. Optimized code 
 
 That complexity is why Microsoft recommends `StackWalk64` instead of inventing a stack walker from raw pointers. Matching symbols and unwind information make the result much more reliable.
 
+## Worker threads and tasks: keeping slow work off the frame
+
+Lesson 4.1 showed that a frame has about 16.67 ms, and that loading a file or planning a
+path can take longer. Games solve this with **worker threads**. The **main thread** runs
+the frame loop, and the other threads do jobs for it.
+
+Starting a new thread for every job would be costly. Each thread reserves a stack, which
+is 1 MiB of address space by default for a Windows program, so 1,000 threads reserve about
+1,000 MiB, and the scheduler has to juggle all of them. Engines instead start a fixed
+**thread pool**: a handful of workers that wait for jobs in a queue. A common size is one
+fewer than the number of cores, leaving a core for the main thread, so 7 workers on an
+8-core processor. A job is a small function called a **task**. Whenever a worker is idle it
+takes the next task from the queue. A hundred tasks of 4 ms each take 100 ÷ 7 = 14.3, so 15,
+rounds of 4 ms = 60 ms on the 7 workers, against 100 × 4 = 400 ms on one thread.
+
+A task finishes on a worker thread, but the main thread must not find its objects
+changing in the middle of a frame. So the worker does not touch game objects. It sends its
+result through a **channel**, a queue that one thread writes and another reads, and the
+main thread picks results up at one known point, such as the start of a frame, when
+nothing else is using the data. Lesson 4.10 builds such a channel for a recorder.
+
+A result can arrive late. Suppose a task planned a path for entity 42 and, by the time
+the result is ready, that entity was despawned and its slot reused for a new entity. The
+task remembered the entity's generation number (Lesson 3.6), so the main thread compares it
+with the slot's current one and drops the result if they differ. Some engines write tasks
+as `async` functions that pause at a wait point and resume on the pool later, which is the
+same idea in different syntax.
+
+For an observer, a pool shows up as several threads that start at the same address and
+spend most of their time waiting. A tool that pauses threads, as the next lab does, may
+catch workers that are doing nothing.
+
 ## Start with a read-only thread inventory
 
 Before opening a thread or asking for its context, identify which threads belong to the target process. `TH32CS_SNAPTHREAD` creates a system-wide snapshot, even when a PID is supplied. The program must filter `th32OwnerProcessID` itself:

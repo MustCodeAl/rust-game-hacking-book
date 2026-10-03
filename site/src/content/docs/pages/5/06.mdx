@@ -1,8 +1,8 @@
 ---
 title: "Aim Geometry and Target Selection"
-description: "Connect vectors to yaw, pitch, angular error, target ranking, target points, timing, and projectile motion."
+description: "Connect vectors to yaw, pitch, angular error, target ranking, how animation poses a skeleton, target points, timing, and projectile motion."
 chapter: "7.6"
-minutes: 35
+minutes: 44
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
@@ -350,6 +350,58 @@ worth one metre. Normalize each term or state the conversion intentionally.
 Tie-breaking must also be stable. If two scores differ only by floating-point
 noise, prefer the current target or a stable entity ID. Otherwise the choice can
 oscillate every frame.
+
+## How animation moves a character
+
+The next section aims at a character's head, and a head is wherever the animation
+has put it this frame. An **animation** describes how some values change over time.
+The values can be a door's angle, a button's colour, the frame of a sprite, or the
+transforms of a whole skeleton.
+
+**Keyframes and interpolation.** An animation does not store a value for every frame.
+It stores values at a few moments, called **keyframes**, and the engine fills in the
+rest by interpolating between them (Lesson 4.6). A door keyed at 0° at time 0.0 s and
+90° at 1.0 s is at 90 × 0.25 = 22.5° a quarter of a second in. Add easing and the same
+moment gives 90 × 0.4375 = 39.375° with the ease-out curve from Lesson 4.6. Turns are
+blended as quaternions (Lesson 7.1). A sprite animation is the same idea with whole
+frames, picked from a sprite sheet by the clock (Lesson 7.2).
+
+**Skeletons and skinning.** A 3D character is a mesh attached to a **skeleton**: a
+hierarchy of **bones**, each with a transform relative to its parent bone (Lesson 7.1),
+so turning the upper arm carries the forearm and hand. Every vertex lists up to four
+bones and a **weight** for each, and the weights add up to 1. Animation changes the
+bones' transforms every frame, and the vertex shader moves each vertex by blending what
+its bones did. To see the blend, use only movement. A vertex starts at `(0, 1, 0)` with
+weight 0.75 on the upper arm and 0.25 on the forearm. In this pose the upper arm moves
+its points by `(2, 0, 0)` and the forearm by `(6, 0, 0)`:
+
+```text
+vertex = 0.75 × (0 + 2, 1, 0) + 0.25 × (0 + 6, 1, 0)
+       = (1.5, 0.75, 0) + (1.5, 0.25, 0) = (3, 1, 0)
+```
+
+The vertex goes mostly where the upper arm goes and is pulled a little toward the
+forearm, which is why a bent elbow bends smoothly instead of tearing. Real bones use
+full transforms, not just a move, but the weighted blend is the same. A skeleton of 60
+bones, with one 64-byte matrix each (Lesson 7.1), is 60 × 64 = 3,840 bytes of pose that
+is rebuilt every frame.
+
+**Choosing and blending clips.** A character has many **clips**: idle, walk, run, jump.
+An **animation graph** or state machine (Lesson 1.3) decides which clip plays and when
+to switch. A switch is a cross-fade: for 0.2 s the pose is `pose_A × (1 − w) + pose_B × w`,
+with the weight `w` rising from 0 to 1, so at 0.1 s it is an even half and half. A **mask**
+restricts a clip to some bones, such as a wave that plays on the arm while the legs keep
+walking. An **animation event** is a marker at one moment in a clip that runs code, such
+as the footstep sound 0.3 s into the walk.
+
+**Morph targets.** A face cannot be posed with bones alone. A **morph target**, or
+blend shape, stores the changed positions of vertices for one expression as offsets from
+the base mesh. A vertex at `(0, 0, 0)` with a smile offset of `(0, 0.2, 0)` and a smile
+weight of 0.5 is drawn at `(0, 0.1, 0)`. Many targets can be mixed at once.
+
+For reading memory, this means a character's pose is per-frame state, built from a clock
+value (seconds into the clip) and the bones' matrices. It is not a fixed fact stored next
+to the character's position.
 
 ## Choose an aim point, not merely an entity origin
 

@@ -1,8 +1,8 @@
 ---
 title: "OpenGL Draw Calls and State"
-description: "Understand what indexed OpenGL draws request, how bound state changes their meaning, and why observation must keep the render thread moving."
+description: "Understand what indexed OpenGL draws request, how bound state and shader inputs change their meaning, why many small draws cost frame time, and why observation must keep the render thread moving."
 chapter: "7.3"
-minutes: 30
+minutes: 40
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
@@ -272,6 +272,72 @@ a draw's texture, program, uniforms, and vertex layout are part of its identity.
 
 Older fixed-function OpenGL calls hide these programs behind predefined state, but
 the pipeline still performs equivalent transformations and color calculations.
+
+### What a shader reads
+
+A shader works only with what the draw has bound for it:
+
+- **Interpolated inputs**, the per-vertex values blended across the triangle.
+- **Uniforms**, values that are the same for every invocation of one draw, such as the
+  matrices, a light's colour, or the time since the game started.
+- **Textures and buffers**, images it can sample at a `(u, v)` position and arrays of
+  data it can read, bound before the draw as part of the state from Lesson 7.2.
+
+A small fragment shader that turns a texture grey shows how little a shader can be. It
+weights the red, green, and blue of the pixel by how bright the eye finds each:
+
+```glsl
+// Fragment shader, in GLSL: turn the texture's colour into grey.
+vec3 colour = texture(image, uv).rgb;
+float grey = dot(colour, vec3(0.299, 0.587, 0.114));
+out_colour = vec4(vec3(grey), 1.0);
+```
+
+For a pixel of `(200, 100, 50)`, the grey is 0.299 × 200 + 0.587 × 100 + 0.114 × 50 =
+59.8 + 58.7 + 5.7 = 124.2, so the pixel becomes about `(124, 124, 124)`. A shader that
+reads the time as a uniform can animate: a brightness of `0.5 + 0.5 × sin(time)` is
+0.5 at time 0 and 1.0 at time 1.5708 (a quarter of a turn in radians), and it
+repeats.
+
+Shaders are written in a shading language: GLSL for OpenGL, HLSL for Direct3D, WGSL
+for WebGPU. A driver, or the engine ahead of time, compiles them to the GPU's own
+instructions. Engines that support several graphics APIs often write a shader once and
+translate it for each.
+
+### Variants, instancing, and shaders that do not draw
+
+- **Variants.** One shader source can have switches, written as `#ifdef` lines, such
+  as "has a normal map" or "has fog." Each combination compiles to a separate
+  program, so three switches give 2 × 2 × 2 = 8 variants. Engines compile the ones a
+  scene needs, which is why a game can hitch the first time something new appears.
+- **Instancing.** To draw 1,000 copies of one tree mesh, the game makes one draw call
+  with 1,000 *instances*. A buffer holds each copy's transform, a 4 × 4 matrix of 16
+  four-byte floats, which is 64 bytes, so 1,000 copies take 64,000 bytes. Earlier we saw
+  that one draw can contain many objects; instancing is the deliberate version of it.
+- **Compute shaders.** A compute shader is not part of drawing. It is a general GPU
+  program that runs once for each item in a grid of work, reading and writing buffers.
+  Engines use it for particles, culling, mesh deformation, and post-processing.
+- **Post-processing shaders.** A fragment shader run over a full-screen rectangle, reading
+  the finished picture as a texture, produces effects such as bloom and colour grading
+  (Lesson 7.2).
+- **Extending the standard material.** Engines let a game add its own shader code and
+  extra vertex data, such as a per-vertex wind weight, to a standard material instead of
+  rewriting it.
+
+### Why many small draws cost frame time
+
+Each draw call costs the CPU something even if the GPU's share is tiny, because the
+driver checks the bound state and builds the commands. Suppose, as an illustration, one
+draw costs 5 microseconds of CPU time. Then 10,000 draws cost 10,000 × 5 = 50,000
+microseconds, which is 50 ms, three frames of the 16.67 ms budget from Lesson 4.1, with
+the GPU waiting. Instancing, merging meshes that share a material, texture atlases, and
+culling (Lesson 7.2) all exist to cut the number of draws.
+
+A **stress test** finds the limit by multiplying one thing, such as cubes, sprites,
+lights, animated characters, or text, and watching the frame time. If 1,000 cubes take
+4 ms and 4,000 take 16 ms, each costs 0.004 ms and the 16.67 ms budget runs out at about
+16.67 ÷ 0.004 = 4,167 cubes. Halving the window's pixel count tells you which processor
+is the limit: if the frame time does not change, the CPU, not the GPU, is the bottleneck.
 
 This is a classification problem. A threshold such as `count > 500` separates the examples you observed, not necessarily the concept “player.” Test it against weapons, detailed scenery, menus, different models, and different graphics settings. Report false positives (something your rule caught that is not a player) and false negatives (a player your rule missed) instead of quietly turning a correlation into a definition.
 
