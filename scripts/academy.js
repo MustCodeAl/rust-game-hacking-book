@@ -30,6 +30,8 @@
     diagramBorders: { attribute: "academyDiagramBorders", key: "gha-diagram-borders", values: ["soft", "strong", "none"], fallback: "soft", control: "data-diagram-borders-choice" },
     diagramSize: { attribute: "academyDiagramSize", key: "gha-diagram-size", values: ["fit", "actual"], fallback: "fit", control: "data-diagram-size-choice" },
     grid: { attribute: "academyGrid", key: "gha-grid", values: ["on", "off"], fallback: "on", control: "data-grid-choice" },
+    cards: { attribute: "academyCards", key: "gha-cards", values: ["on", "off"], fallback: "on", control: "data-cards-choice" },
+    chat: { attribute: "academyChat", key: "gha-chat", values: ["bottom-right", "bottom-left", "top-right", "top-left", "off"], fallback: "bottom-right", control: "data-chat-choice" },
     gradients: { attribute: "academyGradients", key: "gha-gradients", values: ["on", "off"], fallback: "on", control: "data-gradients-choice" },
     motion: { attribute: "academyMotion", key: "gha-motion", values: ["system", "onrequest", "off"], fallback: "system", control: "data-motion-choice" },
     animationSpeed: { attribute: "academyAnimationSpeed", key: "gha-animation-speed", values: ["slow", "normal", "fast"], fallback: "normal", control: "data-animation-speed-choice" },
@@ -289,7 +291,7 @@
       "[data-theme-choice], [data-mode-choice], [data-code-mode-choice], [data-syntax-palette-choice], " +
       "[data-background-choice], [data-semantic-choice], [data-ligature-choice], [data-theme-reset], " +
       "[data-diagram-background-choice], [data-diagram-fill-choice], [data-heading-style-choice], [data-text-size-choice], [data-spacing-choice], " +
-      "[data-diagram-labels-choice], [data-diagram-borders-choice], [data-diagram-size-choice], [data-grid-choice], [data-gradients-choice], [data-motion-choice], [data-animation-speed-choice], " +
+      "[data-diagram-labels-choice], [data-diagram-borders-choice], [data-diagram-size-choice], [data-grid-choice], [data-cards-choice], [data-chat-choice], [data-gradients-choice], [data-motion-choice], [data-animation-speed-choice], " +
       "[data-print-book], [data-panel-hide], [data-panel-show], .theme-switcher__toggle"
     );
     if (!target) {
@@ -308,6 +310,8 @@
     if ("diagramBordersChoice" in data) return applyReaderChoice("diagramBorders", data.diagramBordersChoice);
     if ("diagramSizeChoice" in data) return applyReaderChoice("diagramSize", data.diagramSizeChoice);
     if ("gridChoice" in data) return applyReaderChoice("grid", data.gridChoice);
+    if ("cardsChoice" in data) return applyReaderChoice("cards", data.cardsChoice);
+    if ("chatChoice" in data) return applyReaderChoice("chat", data.chatChoice);
     if ("gradientsChoice" in data) return applyReaderChoice("gradients", data.gradientsChoice);
     if ("motionChoice" in data) return applyReaderChoice("motion", data.motionChoice);
     if ("animationSpeedChoice" in data) return applyReaderChoice("animationSpeed", data.animationSpeedChoice);
