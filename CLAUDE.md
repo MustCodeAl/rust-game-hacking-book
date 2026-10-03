@@ -409,6 +409,16 @@ live site loses them (publishing replaces every file).
   a few per lesson. The card's text also stays in the page, in brackets after its
   words, so print, search, and the listening edition keep it (an external
   reference prints its address); `hover-cards.js` hides it on screen once running.
+- **Lesson components.** `src/components/kit/README.md` says when each one is
+  worth using and when it is not; import from `components/kit`. The book's own
+  conventions: a numbered list that is a procedure in fixed order (a lab, a
+  recovery test, a method's sequence) is a `<Steps>`; a list of questions,
+  checks, or facts stays a plain list. The complete source of a lab is an
+  `<Accordion title="Complete lab source: x.rs">` that opens on a
+  `<GitHub path="windows-labs/src/bin/x.rs" />` card above the code (the card is
+  `data-reader-skip`, so the listening edition does not read a file path). A
+  folder layout is a `<FileTree>`. All text stays in the page, so print, search,
+  and the listening edition keep it.
 - **Reader mode** (`/read/…`). The play, pause, stop, progress, and **Exit reader
   mode** controls are a bar pinned to the top for the whole page
   (`ReaderTools.astro`, `.reader-dock`); settings and hand-off options stay in

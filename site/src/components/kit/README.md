@@ -28,7 +28,7 @@ decoration; if the page reads as well without it, leave it out.
 | `FileTree` | How a folder is laid out. | A list that is not files. |
 | `Color` | A colour given as numbers. | Anything else. |
 | `Prompt` | Text a reader pastes into an AI assistant. | Instructions to the reader. |
-| `GitHub` | A lab or source file in this repository. It shows the line count and links to the exact version the book was built from. | Files outside the repository. |
+| `GitHub` | A lab or source file in this repository. It shows the line count and links to the exact version the book was built from. The listening edition skips the card, since a file path is not worth hearing. | Files outside the repository. |
 | `$$ ... $$` and `Math` | A formula. Add `% speak: ...` inside a display block when the automatic reading is awkward. | Code, which belongs in a code block. |
 | `Updates` / `Update` | A dated list of changes. | |
 

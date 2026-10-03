@@ -737,3 +737,25 @@ added for the new vocabulary (scene, material, and picking are listed in
 editions read each new section, and the build has **293 HTML pages**, **277**
 drawn Mermaid diagrams, and **135** listening/TXT editions; all internal links
 and anchors resolve.
+
+## Lesson components put to use across the book — 2026-10-03
+
+The kit components (`src/components/kit/`, rules in its README) were applied where
+they help a reader, following the README's "use it when / do not use it when"
+table; no lesson text, number, or order changed.
+
+| Component | Where | What changed |
+|---|---|---|
+| `Accordion` + `GitHub` | 22 lab lessons (4.3, 4.10, 5.3–5.5, 5.9, 5.10, 8.5–8.8, 9.2, 9.4, 9.8, 11.5–11.9, 11.12, 12.1, 12.6) | The "complete lab source" block is an accordion that opens on a `GitHub` card (file name, line count, link to the exact commit) above the code. The code stays in the page, so it prints and is read aloud; the card is skipped in the listening edition. |
+| `Accordion` | 3.2 | The two optional place-value derivations (decode 0.2625, decode x and y). |
+| `Steps` | 1.1, 1.9, 2.8, 2.10, 3.4, 3.5, 3.7, 5.7, 5.9, 6.3, 6.6, 7.9, 8.5, 9.4, 9.6, 9.7, 12.2, 13.6, 14.3 (24 lists) | Lists that are a procedure in a fixed order: a lab to carry out, a recovery test, or the sequence a method follows. |
+| `FileTree` | 14.3 | The Cargo project layout. |
+| `Columns` | 4.1 (Where a rule lives) | Two things compared side by side. |
+| `HoverCard` | 1.7, 1.9, 4.1 | Example, reference, and recommendation cards, written so the lesson reads the same without them. |
+| `Prompt` | AI assistants page | A copy-paste request for help with one lesson. |
+
+About a hundred other numbered lists stay as plain lists on purpose: they are
+questions to ask, checks to make, or facts to hold together, not steps in order
+(the README's rule for `Steps`). The build has 293 HTML pages, 277 diagrams, and
+135 listening editions (10,782 passages; the passage count fell because the
+`GitHub` card is no longer read aloud); all internal links and anchors resolve.
