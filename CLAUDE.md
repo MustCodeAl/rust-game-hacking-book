@@ -345,3 +345,12 @@ The listening/diagram/print update is source **19873fe**, published through
 24 checked public pages, TXT files, scripts, and styles match the verified
 build. All 135 original lessons and visuals remain. The preview on port 4322
 is still available. See BOOK_REVISION_PROGRESS.md for the full receipt.
+
+
+Theme surfaces now use `--reader-panel`, `--reader-panel-raised`, and
+`--reader-line`, derived from the selected paper/ink rather than stacked
+transparency. Keep coloured washes subtle and consistent; use stronger accents
+for subject identity, reading roles, and active states. High Contrast retains
+its stronger outlines and original subject hues. Avoid reintroducing competing
+chapter/role colours into the same table border or nested diagram frame. The
+Gradients Off and Heading rectangles options still apply independently.

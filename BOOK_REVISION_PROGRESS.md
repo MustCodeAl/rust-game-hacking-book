@@ -658,3 +658,32 @@ their component styles/scripts, and the three public control/render scripts.
 The live preview returns HTTP 200 with the new controls, graph tour, and
 listening link. The authored branch may also include this documentation-only
 publication receipt.
+
+
+## Theme colour blending — 2026-10-02
+
+All five reader themes use shared opaque surfaces derived from the selected
+page colour. Lesson headers, section headings, tables, callouts, diagrams,
+course cards, navigation, and the glossary now use smaller, consistent colour
+washes. Single gentle gradients replace layered coloured gradients. Chapter
+hues blend slightly with each palette's muted ink; their subject meanings and
+the four reading-role meanings remain intact. High Contrast keeps its original
+subject accents, stronger outlines, and neutral heading/card surfaces.
+
+Diagram frames and label backings are quieter, and original-graph walkthroughs
+share their outer panel's surface. Animated current states retain stronger
+accents. Tables use one information colour for their header, outline, and hover
+treatment; code framing blends into the selected code background. The Gradients
+Off and Heading rectangles options, diagram choices, heading sizes, lesson
+content, animations, and narration are preserved.
+
+Verification: full build produces **290 HTML pages**, **273** drawn Mermaid
+diagrams, and **135** listening/TXT editions. All **29,991** local links and
+chapter/destination colour assignments pass. Source colour calculations cover
+**1,200** combinations across five themes, both brightness modes, five page
+backgrounds, six diagram backgrounds, and four subject hues. All tested text
+pairs exceed 4.5:1; the lowest chapter-menu value is 4.85:1 and active role labels
+remain at least 5.07:1. Metadata text exceeds 5.36:1. The palette swatch study was
+inspected; native browser layout was not inspected. All saved appearance option
+selectors remain. Source changes are limited to seven stylesheets and these
+documentation notes; no lesson or functional script changed.
