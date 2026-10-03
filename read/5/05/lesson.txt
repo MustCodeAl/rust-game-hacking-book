@@ -42,6 +42,36 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 That is why two roots appear when it is positive — one where the ray enters and one where it leaves. The nearer ray hit is t equals -b - sqrt(discriminant), provided t greater than or equal to 0. If the origin is inside the sphere, the nearer root may be negative and the farther root must be considered. Production engines use several shape types and acceleration structures, but this same “generate candidates, reject invalid roots, choose nearest” reasoning applies.
 
+Section: Picking: the same ray, from the cursor.
+
+A mouse cursor is a crosshair that can move. Picking is the question “which object is under the cursor?”, and games use it to select units, press buttons, drag items, and click on the world. It works like the centred crosshair, with one extra step to find the ray.
+
+Step 1: pixel to normalized coordinates. This reverses the conversion at the end of Lesson 7.1. On an 800 times 600 window, a cursor at pixel (600, 150) has
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Step 2: build the ray. For a perspective camera at the origin looking along +z, with a 90 degrees vertical field of view (tan 45 degrees equals 1) and aspect 800 divided by 600 equals 1.3333, the ray leaves the camera in the direction
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A camera that is turned adds one more step, rotating that direction by the camera’s own axes (Lesson 7.1). An orthographic camera is simpler: every ray points straight forward, and the ray’s origin is the world point under the cursor, such as the (5, 3) that Lesson 7.1 found for the pixel (600, 180).
+
+Step 3: test the candidates. The broad phase keeps the objects whose bounding shapes the ray might cross, and each is tested, nearest hit wins. For a box that lines up with the axes the test works one axis at a time. In a flat example, a ray starts at (0, 0) and heads in the direction (1, 0.5), and a box spans x from 4 to 6 and y from 1.5 to 3:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Move the box up so that y spans 3.5 to 5 and the y range becomes t from 7 to 10, so the ray would have to enter at 7 but has already left at min(6, 10) equals 6. Entering after leaving means a miss.
+
+Two other methods are common:
+
+Colour picking. Each object is drawn into an off-screen texture in its own flat colour that encodes its number. Object 300 is 300 equals 0 times 65536 + 1 times 256 + 44, so its colour is (0, 1, 44). Reading the one pixel under the cursor and decoding the colour gives the object, already corrected for anything in front of it. It costs an extra pass and a read-back from the GPU, graphics processing unit,.
+
+Sprite picking. In 2D, convert the cursor to a world point as in Lesson 7.1 and test whether it falls inside each sprite’s rectangle, taking the topmost layer.
+
+Dragging builds on the same query. When the button goes down, the game picks the object. While the mouse moves, it casts the ray again each frame and moves the object to where the ray meets a floor or a plane. When the button comes up, it drops the object. Many engines also have a debug view that draws the ray and the thing it hit, which is the quickest way to see why a click picked the wrong object.
+
+Lesson 7.9 runs the opposite way, from a world point to a pixel. The “target under the crosshair” value this lesson hunts for is the result of this computation.
+
 Section: Rendering visibility and collision visibility differ.
 
 The renderer may omit a distant object, draw a transparent surface, or use a different level-of-detail mesh. A gameplay ray can still collide with its collision shape. The reverse can also occur: foliage may be visible but configured not to block shots.

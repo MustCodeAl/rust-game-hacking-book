@@ -42,6 +42,100 @@ Diagram. From Engine owns the loop to Game update code. The connection is labell
 
 This matters later in a practical way. A repeated call near frame presentation can be a useful meeting point when you verify that the game actually reaches it. That is why Lesson 7.10 hooks Present: this game’s rendering path calls it to show finished frames, making it a good place to observe them.
 
+Section: Starting up: plugins and settings.
+
+Before the first frame, the application starts up. It reads its settings from a file, such as the resolution, the volume, and the key bindings. It creates the window, and it sets up each part of the engine. Engines package those parts as plugins. A plugin is a module that registers what it needs, such as its systems and the event types it uses, with the application when it is added, and a plugin group adds several together, such as the window, the input, the renderer, and the audio. The game itself is then a small plugin of its own, and swapping one plugin, say for a different renderer, changes one part without touching the rest. Changed settings are written back to the file, so they persist the way a save does (Chapter 9).
+
+Section: One frame, step by step.
+
+An engine that owns the loop does the same few jobs on every pass through it, in the same order:
+
+Gather input. Ask the operating system which keys, buttons, and mouse movements happened since the last pass, and turn them into actions (Lesson 1.3).
+
+Update the world. Run the game’s rules: move things, check contacts, count timers down, let characters decide.
+
+Draw. Build the picture of the world as it is now.
+
+Present. Hand the finished picture to the display, and, with vertical sync on, wait for the display’s next refresh.
+
+Diagram. From input keys, mouse, pad to update rules, physics, timers. From update rules, physics, timers to render draw the world. From render draw the world to present show the frame. From present show the frame to input keys, mouse, pad.
+
+A display that refreshes 60 times each second takes a new picture every 1 divided by 60 equals 0.01667 seconds, which is 16.67 milliseconds. All four jobs must fit in that frame budget, or the display refreshes before the new picture is ready and shows the old one again. A frame that takes 25 milliseconds gives 1 divided by 0.025 equals 40 frames per second; one that takes 8.33 milliseconds gives 120. This is why tools report frame time, in milliseconds, as well as frames per second. Frame times add up, so a 4 milliseconds update plus a 10 milliseconds draw is a 14 milliseconds frame, but frame rates do not add.
+
+Section: Time inside the update.
+
+Lesson 1.3 showed that movement needs elapsed time: distance equals speed times time. An engine measures the delta time, the seconds since the previous frame, and hands it to every update. Physics prefers steady steps, though. If one frame moves a fast ball 3 pixels and the next moves it 30, a contact test that looks only at positions can jump the ball clean over a wall 10 pixels thick. So many engines run physics in a fixed timestep, such as 1/60 second, and carry the leftover real time into the next frame:
+
+Table columns: Frame; Real time since the last frame (ms); Time waiting to be simulated (ms); Fixed steps run (16.67 milliseconds each); Left over (ms).
+
+Frame: 1; Real time since the last frame (ms): 20.00; Time waiting to be simulated (ms): 0 + 20.00 equals 20.00; Fixed steps run (16.67 milliseconds each): 1; Left over (ms): 20.00 minus 16.67 equals 3.33.
+
+Frame: 2; Real time since the last frame (ms): 20.00; Time waiting to be simulated (ms): 3.33 + 20.00 equals 23.33; Fixed steps run (16.67 milliseconds each): 1; Left over (ms): 23.33 minus 16.67 equals 6.67.
+
+Frame: 3; Real time since the last frame (ms): 30.00; Time waiting to be simulated (ms): 6.67 + 30.00 equals 36.67; Fixed steps run (16.67 milliseconds each): 2; Left over (ms): 36.67 minus 33.33 equals 3.33.
+
+After 70 milliseconds of real time the game has run 4 steps, which is 4 times 16.67 equals 66.67 milliseconds of game time, and 3.33 milliseconds is waiting. The two add back to 70 milliseconds, so no time was lost. A slow frame runs several steps to catch up, and a quick one runs none.
+
+What is drawn after a frame is usually partway between two steps. The 3.33 milliseconds left over is 3.33 divided by 16.67 equals 20 percent of the way to the next step, and many engines blend the last two steps by that fraction, so motion looks smooth even though the rules advance in coarse steps (Lesson 4.6 shows how that blend is computed).
+
+This tells you something when you scan memory. A value the rules change moves once per step, and a value the drawing code keeps (an on-screen animation timer, an interpolated position) can change once per frame. Counting how often a value changes tells you which loop owns it.
+
+A cooldown is a timer built the same way. When an ability is used, the game stores how long remains, say 5.0 seconds, and subtracts the delta time on every step: after 60 steps of 1/60 second the value has fallen by 1.0 to 4.0, and after 300 steps it reaches 0 and the ability is ready. Some games instead store the moment it becomes ready (now + 5.0) and compare it with the clock. Either way the cooldown is a number in memory that you can scan for.
+
+Section: Slow work leaves the frame.
+
+Reading a 3 MB file can take 30 milliseconds. If the update waited for it, the game would miss 30 divided by 16.67 equals 1.8, so two, refreshes. Engines give slow jobs, such as loading files, decoding sound, or planning a path across a big map, to worker threads (Lesson 11.8) as tasks. The main loop starts a task and keeps running frames. When the task finishes, it sends its result through a channel, a queue that one thread fills and another empties, and the main loop checks the channel once per frame.
+
+Diagram labels, in drawing order: Worker thread; Main loop; frames 1, 2, and 3 keep running; start the task "load level"; result, sent through a channel; frame 4 checks the channel and uses the result.
+
+The result arrives on a frame nobody can predict, so the game has to handle “not ready yet” with a loading screen or a stand-in. Lesson 4.10 uses the same channel to move records from a game to a recorder without stalling it.
+
+Section: Measuring the frame.
+
+Engines measure themselves. A diagnostic is a named measurement with a short history, such as frame time over the last 120 frames, that can be switched on and off while the game runs. An FPS overlay draws such numbers on the screen. A log records events as lines of text, each with a severity such as error, warning, info, or debug, to a console or a file.
+
+An average can hide a stutter. Four frames of 16, 16, 16, and 66 milliseconds average (16 + 16 + 16 + 66) divided by 4 equals 28.5 milliseconds, or 1000 divided by 28.5 equals 35 frames per second, even though three frames in four were fine. The 66 milliseconds frame is the one a player feels, so a good diagnostic also reports the slowest frame.
+
+Section: Entities, components, and systems.
+
+Lesson 1.3 gave things identities, and Lesson 3.6 showed an engine keeping each kind of field in its own collection. Many engines make that the whole design. In an entity component system (ECS):
+
+an entity is only an identity, a number (with a generation, so a reused number is told apart from the old one, as Lesson 3.6 explained);
+
+a component is a plain bundle of data attached to an entity, such as Position, Velocity, or Health;
+
+a system is a function that runs on every update for all the entities that have a particular set of components.
+
+A movement system says: for every entity with both Position and Velocity, add velocity times delta time to position. A wall has a Position but no Velocity, so the movement system never touches it, and nobody wrote an “if wall” test. What an entity does comes from which components it has, not from what kind of object it is.
+
+Table columns: Entity; Components; Movement system; Collision system; Draw system.
+
+Entity: tank; Components: Position, Velocity, Size, Sprite; Movement system: runs; Collision system: runs; Draw system: runs.
+
+Entity: wall; Components: Position, Size, Sprite; Movement system: skips; Collision system: runs; Draw system: runs.
+
+Entity: coin; Components: Position, Size, Sprite, Pickup; Movement system: skips; Collision system: runs; Draw system: runs.
+
+Entity: hidden trigger; Components: Position, Size; Movement system: skips; Collision system: runs; Draw system: skips.
+
+In memory, each kind of component sits in its own run. Ten thousand Position components of two 4-byte floats each take 10,000 times 8 equals 80,000 bytes in one stretch, which is what Lesson 3.6 called a component pool. A system walks that stretch from start to end, and a scan finds the whole run at once.
+
+Engines add a few rules around this:
+
+A system should not add or remove entities while it is looping over them, or the loop could skip some and visit others twice. Instead it queues commands (spawn this, despawn that, add this component), and the engine applies them together at a safe moment between systems. A delayed command is one the engine holds back until a timer ends, such as removing an effect after 2 seconds.
+
+Disabling an entity hides it from the systems without deleting it. A marker component such as Disabled makes the queries skip it. Its identity and data stay in memory, so it can come back unchanged. Despawning is different: the identity is freed and may be reused.
+
+An observer is code that runs when something happens, such as an entity being created, a component being removed, or “coin 42 was collected” (the event from Lesson 1.3), instead of checking every frame whether it happened.
+
+Section: Scenes: a world you can load.
+
+Once the world is made of entities, the engine needs a way to create many of them at once. A scene is a group of entities with their components that can be created together: a level, a menu screen, or one character with all its parts. A scene usually lives in a file (a data format, Chapter 9) and is spawned at run time: the engine reads the file, creates the entities, and fills in the components.
+
+Entities in a scene can form a hierarchy. A tank can have a child for its turret and a grandchild for the gun barrel. A child’s position is stored relative to its parent, so moving the tank moves the turret and the barrel with it, and despawning the tank despawns them too. Lesson 7.1 works out how a child’s position becomes a world position.
+
+Games also organize scenes into states: a menu, a loading screen, the match, the game-over screen. Entering a state spawns its scene, and leaving it despawns it. A loading screen waits for every file the next scene needs. It counts the files still loading, and when the count reaches 0 it switches to the match. This matters when you hunt for addresses: the entities of one scene are freed when the scene is left, so an address found in one level can mean nothing in the next.
+
 Section: The five course games, sorted by engine.
 
 The games in this book cover most of the ways a game can relate to its engine:
@@ -93,6 +187,58 @@ Engines are built by developers who need to debug them, and many ship with those
 The rendering lessons will use some of these tools. Lesson 7.2 uses Urban Terror’s console variables — named settings the engine exposes — to switch entity drawing on and off. Lessons 7.5 and 7.6 open AssaultCube’s console with ~ and use commands such as idlebots 1, dbgpos 1, and showstats 1 to freeze the bots and print positions on screen.
 
 Those tools are gifts. A console variable that toggles a feature gives you a clean experiment: flip it, and whatever changes in memory is connected to that feature. A debug command that prints your position tells you what value to scan for. Check what the engine already offers before reaching for a debugger.
+
+Section: Overlays, gizmos, editors, and stress tests.
+
+Other developer tools are drawn by the engine itself:
+
+A debug overlay prints live numbers, such as frame time, on the screen.
+
+Debug drawing, called gizmos in some engines, draws shapes for a single frame without creating any game object: a line, an arrow, a box around a collision shape, the three coloured axes of an object’s own directions, a circle for a light’s reach, a text label. The code calls something like draw_line(a, b, colour) on every frame, and when it stops calling, the shape is gone. An editor’s transform gizmo is the interactive version: three arrows you drag to move, turn, or scale a selected object. Lesson 7.9 draws the same kind of overlay over someone else’s game.
+
+An editor lets designers place entities and save scenes, and draws a grid on the ground so the scale and the position of things can be read. A viewer shows one kind of data on its own, such as a 3D model or the buttons of a game controller, without running the whole game.
+
+A stress test deliberately runs a heavy load, such as ten thousand sprites, and watches the frame time to find where the game breaks down. If each sprite costs 0.002 milliseconds, 10,000 of them cost 20 milliseconds, which is already over the 16.67 milliseconds budget. Lesson 7.3 shows where such costs come from.
+
+Section: A whole game from these parts: Breakout.
+
+The parts fit together in a game small enough to hold in your head. In Breakout, a paddle at the bottom of the screen bounces a ball upward into rows of bricks.
+
+Entities and components. The paddle has Position, Size, and PlayerControlled. The ball has Position, Velocity, and Size. Each of the 40 bricks has Position, Size, and Brick.
+
+Systems, in order, every fixed step. Read input into the paddle’s velocity. Move everything that has a Velocity. Test the ball against the walls, the paddle, and the bricks. A hit brick is despawned by a command and adds 1 to the score. If the ball falls below the paddle, switch the game’s state to game over. After the steps, draw every entity that has a Position and a sprite.
+
+State. The score, the bricks left, and the lives are numbers in memory. So is the mode: menu, playing, or game over.
+
+One step, with real numbers. The ball is at x equals 794 with a velocity of 150 pixels per second to the right, and a step is 1/60 second:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Nothing in that step names Breakout. It is the movement and contact rules of Lesson 1.3 run by systems over entities, in the order the engine’s loop calls them.
+
+Section: Where each engine part is explained.
+
+This lesson names the parts. The lessons below explain how each one works, and the small runnable examples of an open-source engine such as Bevy (Reference: The example gallery of the Bevy engine: small programs that each show one engine part, such as sprites, lighting, audio, UI, or picking.) show nearly every one in a few dozen lines.
+
+Table columns: Engine part; What it does; Explained in.
+
+Engine part: Application, window; What it does: starts the program, opens a window, owns the loop; Explained in: this lesson; Windows Input.
+
+Engine part: Entities, components, scenes; What it does: organize the world and load it; Explained in: this lesson; Collections.
+
+Engine part: Math, transforms; What it does: positions, directions, turning, blending; Explained in: Coordinates and Vectors; Camera Frames.
+
+Engine part: Camera, picking; What it does: what is seen, and what is under the cursor; Explained in: Camera Frames; Camera Rays.
+
+Engine part: 2D and 3D rendering, shaders; What it does: turn the world into pixels; Explained in: Rendering Pipeline; Draw Calls.
+
+Engine part: Animation; What it does: change a pose over time; Explained in: Aim Geometry.
+
+Engine part: Assets, glTF, audio; What it does: files the game loads and plays; Explained in: Game Files.
+
+Engine part: UI, text; What it does: menus and on-screen controls; Explained in: Menus and Text.
+
+Engine part: Gizmos, diagnostics, tools; What it does: developer views of the running game; Explained in: this lesson; Overlays.
 
 Section: Recognizing an engine outside this book.
 

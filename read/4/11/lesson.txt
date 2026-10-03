@@ -72,9 +72,67 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 0.8 is the cosine of roughly 37 degrees, so the target sits about 37 degrees off the centre of view. If the rule is “visible within a 45-degree cone,” you never need acos at all: compare the dot product against cos(45 degrees), which is about 0.707, and anything above that threshold is inside the cone. Comparing cosines is cheaper than converting to angles, and it sidesteps the rounding trap described above.
 
+Section: Blending values: interpolation, easing, and following.
+
+Subtracting positions gives a direction. The reverse question is just as common: given two values, what is the value some fraction of the way between them? A character walks from one tile to the next, a colour fades, a camera slides toward a target. The answer is linear interpolation, usually called lerp. Start at a and add the fraction t, from 0 to 1, of the way to b:
+
+At t equals 0 the result is a, at t equals 1 it is b, and at t equals 0.25 it is a quarter of the way. For numbers, a equals 2 and b equals 10 give 2 + (10 minus 2) times 0.25 equals 4. For a vector, blend each coordinate on its own: from (2, 3) to (5, 7), halfway (t equals 0.5) is (2 + 3 times 0.5, 3 + 4 times 0.5) equals (3.5, 5). A colour is three numbers too, so a half blend of red (255, 0, 0) and blue (0, 0, 255) is (127.5, 0, 127.5), which a display stores as (128, 0, 128), a purple.
+
+Lesson 4.1 left 3.33 milliseconds over after a 16.67 milliseconds step, so t equals 3.33 divided by 16.67 equals 0.2. If a ball’s x was 794 after the earlier step and 796.5 after the later one, the picture shows 794 + (796.5 minus 794) times 0.2 equals 794.5. That is the blend the engine uses to draw motion between its steps.
+
+Section: Easing.
+
+A straight lerp moves at one speed, so it starts and stops abruptly. Easing reshapes t before it is used, so the motion can begin gently, end gently, or both. Here are four reshapings, with the value each gives at five moments:
+
+Table columns: Curve; Rule; t equals 0; t equals 0.25; t equals 0.5; t equals 0.75; t equals 1.
+
+Curve: linear; Rule: t; t equals 0: 0; t equals 0.25: 0.25; t equals 0.5: 0.5; t equals 0.75: 0.75; t equals 1: 1.
+
+Curve: ease in (starts slowly); Rule: t times t; t equals 0: 0; t equals 0.25: 0.0625; t equals 0.5: 0.25; t equals 0.75: 0.5625; t equals 1: 1.
+
+Curve: ease out (ends slowly); Rule: 1 minus (1 minus t)²; t equals 0: 0; t equals 0.25: 0.4375; t equals 0.5: 0.75; t equals 0.75: 0.9375; t equals 1: 1.
+
+Curve: smoothstep (both ends); Rule: 3t² minus 2t³; t equals 0: 0; t equals 0.25: 0.15625; t equals 0.5: 0.5; t equals 0.75: 0.84375; t equals 1: 1.
+
+Take an object that moves from x equals 0 to x equals 100 in one second. A quarter of the way through, the linear curve has put it at 25, the ease-in curve at 6.25 (it is still getting started), the ease-out curve at 43.75 (it is already slowing), and smoothstep at 15.625. Every curve starts at 0 and ends at 1, so every one reaches the same place; they differ in how they get there.
+
+Section: Following a moving target.
+
+A camera or a character that chases a target can close a fraction of the remaining gap on every update:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+With a gap of 10 and k equals 0.2, the gap after each update is 10, then 10 times 0.8 equals 8, then 6.4, then 5.12, then 4.096. The follower moves fast while it is far away and slows as it arrives, which looks smooth.
+
+One fixed k has a flaw: a game running 120 updates a second closes the gap twice as often as one running 60. The fix is to tie k to the time that passed. With a stiffness s per second, use k equals 1 minus e^( minus s times dt). For s equals 10:
+
+at 60 updates a second, dt equals 1/60, so k equals 1 minus e^( minus 0.1667) equals 1 minus 0.8465 equals 0.1535;
+
+at 120 updates a second, dt equals 1/120, so k equals 1 minus e^( minus 0.0833) equals 1 minus 0.9200 equals 0.0800.
+
+Two 120-per-second updates leave (1 minus 0.0800)² approximately 0.8465 of the gap, the same as one 60-per-second update, so the camera follows the same way on either machine.
+
+Section: Curves through several points.
+
+A path that turns smoothly, such as a camera flight or the arc of a thrown item, is built from curves called splines. The simplest piece is a quadratic Bézier curve. It starts at P0, ends at P2, and is pulled toward a control point P1 without reaching it:
+
+For P0 equals (0, 0), P1 equals (5, 10), and P2 equals (10, 0), the point halfway along is 0.25 times (0, 0) + 0.5 times (5, 10) + 0.25 times (10, 0) equals (2.5 + 2.5, 5) equals (5, 5). The curve rises to 5 even though the control point is at 10. Longer paths chain many such pieces so that each one starts where the last ended, heading the same way; that is what a cubic spline does.
+
+Blending turning angles needs more care than blending positions, because 350 degrees and 10 degrees are only 20 degrees apart. Lesson 7.1 shows how orientations are blended.
+
+Section: Bounding volumes: distance as a contact test.
+
+The length of a direction is a distance, and a distance answers a contact question. Games give objects cheap stand-in shapes, called bounding volumes, and test those instead of the full model. The simplest is a circle (a sphere in 3D). Two circles touch when the distance between their centres is less than the sum of their radii.
+
+Use the player at (2, 3) and the enemy at (5, 7) from earlier in this lesson. Their distance is 5, and its square is 3 to the power of 2 + 4 to the power of 2 equals 25. With both radii 2, the sum is 4 and 4 to the power of 2 equals 16. Since 25 is more than 16, the circles do not touch. With radii 2 and 3.5 the sum is 5.5 and 5.5 to the power of 2 equals 30.25, which is more than 25, so they do. Comparing squared values gives the same answer without the square root.
+
+A box that stays lined up with the axes is stored as its smallest and largest corner. Two such boxes overlap only if their ranges overlap on every axis. Box A spans x from 0 to 4 and y from 0 to 3, and box B spans x from 3 to 7 and y from 2 to 6. The x ranges share 3 to 4, and the y ranges share 2 to 3, so the boxes overlap. Move B to span x from 5 to 9 and they no longer do: 4 is less than 5, so one axis is enough to rule out contact.
+
+These cheap tests are why a game’s touch rules can differ from its pictures, as Lesson 1.3 noted. Lesson 7.5 tests rays against such shapes, and Lesson 7.2 uses them to skip drawing things that are out of view.
+
 Section: From geometry to an action.
 
-A position names a place. Subtracting two positions gives a direction with a length; normalizing keeps only the direction. A dot product compares alignment, which lets a decision ask whether a target lies inside a view cone without calculating its angle first. Keep the coordinate meanings and units consistent before using any of these results.
+A position names a place. Subtracting two positions gives a direction with a length; normalizing keeps only the direction. A dot product compares alignment, which lets a decision ask whether a target lies inside a view cone without calculating its angle first. Interpolation blends two values by a fraction, easing reshapes that fraction, and a bounding volume turns a distance into a contact test. Keep the coordinate meanings and units consistent before using any of these results.
 
 From Coordinates to Target Selection now finds positions in an offline game and uses copied, validated values to choose an action.
 

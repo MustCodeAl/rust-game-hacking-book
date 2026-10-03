@@ -82,6 +82,20 @@ atan2 handles all four directions around a circle. Ordinary atan(y / x) loses in
 
 Run real numbers through it. Put the camera at the origin and a target at (3.0, 4.0, 0.0) — three units along x, four along y, no height difference. delta.y.atan2(delta.x) is atan2(4, 3) approximately 53.13 degrees, so the target sits about 53 degrees around from the positive x axis. flat_distance is hypot(3, 4) equals 5: the straight-line distance across the ground, ignoring height entirely. With delta.z equals 0, pitch is atan2(0, 5) equals 0 degrees — level, as expected. Raise the target to (3.0, 4.0, 5.0) instead and pitch becomes atan2(5, 5) equals 45 degrees: the target is now as far up as it is away, a 45-degree climb.
 
+Section: Turning without gimbal lock: quaternions.
+
+Yaw, pitch, and roll are easy to read, and they have two limits. Pitch to 90 degrees, so the view looks straight up, and yaw and roll then turn around the same line: one of the three controls is lost, which is called gimbal lock. And blending two sets of angles number by number can turn the long way round, since 350 degrees blended with 10 degrees passes through 180 degrees.
+
+Engines often store a turn as a quaternion instead: four numbers (x, y, z, w) for a turn of angle θ around a unit-length axis (ax, ay, az):
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+No turn at all is θ equals 0, so sin 0 equals 0 and cos 0 equals 1, giving (0, 0, 0, 1). A 90 degrees turn about z, the axis (0, 0, 1), has θ/2 equals 45 degrees, and sin 45 degrees equals cos 45 degrees approximately 0.7071, giving (0, 0, 0.7071, 0.7071). Every quaternion that stands for a turn has length 1: here 0.7071 to the power of 2 + 0.7071 to the power of 2 equals 0.5 + 0.5 equals 1. Applying that quaternion to (1, 0, 0) gives (0, 1, 0), the same result as the 90 degrees rotation in the transform section; the math library does the multiplication.
+
+Two turns combine by multiplying their quaternions, with no gimbal lock. To blend them, engines use slerp, spherical interpolation, which turns at a steady speed along the shortest way round. Halfway between no turn and the 90 degrees turn is a 45 degrees turn: θ/2 equals 22.5 degrees, so the quaternion is (0, 0, 0.3827, 0.9239), and 0.3827 to the power of 2 + 0.9239 to the power of 2 equals 0.1465 + 0.8535 equals 1.
+
+In memory, four adjacent floats whose squares add up to 1 are very likely a quaternion. Three angles, by contrast, are usually plain numbers in degrees or radians that wrap around.
+
 Section: World space to screen space.
 
 A 3D point cannot be drawn directly on a 2D monitor. The renderer transforms it through several spaces:
@@ -154,6 +168,36 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 The rightmost operation happens first. A row-vector engine may write the reverse order. “Row-major versus column-major” describes storage, while “row vectors versus column vectors” describes the multiplication convention; people often mix up these two separate choices.
 
+Section: Transforms: placing an object in the world.
+
+A model stores its points relative to its own centre. To draw the object, the engine carries those points into the world in three steps, in this order:
+
+Scale: multiply every coordinate by the scale factor.
+
+Rotate: turn the points around the object’s centre.
+
+Translate: add the object’s world position.
+
+Rotating by an angle θ around the vertical z axis changes only x and y:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Take a crate whose model has a corner at (1, 0, 0). Scale it by 2, turn it 90 degrees about z, and place it at (10, 5, 0). For 90 degrees, cos is 0 and sin is 1:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The crate’s centre, (0, 0, 0) in the model, lands at (10, 5, 0), and the corner ends up 2 units from it along +y, which is where a 90 degrees turn sends the corner that started along +x.
+
+Objects can be built from parts. A tank has a turret, and the turret has a gun barrel. Each part stores a local transform, its position and turn relative to its parent, and the engine finds its world position by applying its parent’s transform to those local numbers. Put the tank at (10, 5, 0), turned 90 degrees, with the turret 2 units along the tank’s own front and 1 unit up, so the turret’s local position is (0, 2, 1):
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The turret’s stored numbers, (0, 2, 1), are the same in both lines. Only its world position changed, because its parent turned. Give the barrel a local position of (0, 1, 0) inside the turret. Inside the tank that is (0, 2, 1) + (0, 1, 0) equals (0, 3, 1), and with the tank turned 90 degrees the world position is ( minus 3, 0, 1) + (10, 5, 0) equals (7, 5, 1).
+
+This matters when you read a game’s memory. A child object often stores only its local numbers, so an overlay that wants a world position has to apply the parent’s transform, then the grandparent’s, up to the root. Reading the local numbers alone gives the right answer only for an object with no parent.
+
+Each of these three steps is one matrix, and multiplying them gives one matrix per object, its world matrix (some libraries call it the model matrix). A child’s world matrix combines its parent’s world matrix with its own local matrix, in the order that the library’s convention requires, as noted above.
+
 Section: Why 3D graphics uses four numbers for a 3D point.
 
 A 3D translation cannot be represented by an ordinary 3 times 3 linear matrix because linear transforms must keep the origin fixed. That restriction is easy to confirm for yourself: multiplying any 3 times 3 matrix by the point (0, 0, 0) multiplies every entry in the matrix by zero, so the answer is always (0, 0, 0) again. No arrangement of nine numbers can shift the origin somewhere else — and shifting everything by a fixed amount is precisely what translation means. Homogeneous coordinates add a fourth component so translation fits into the same matrix pipeline as rotation and scale:
@@ -203,6 +247,18 @@ Concrete numbers make the zoom effect visible. At fov_y equals 90 degrees, half 
 One practical trap sits in that formula. Trigonometric functions take radians, not degrees. Passing 90.0 where 1.5708 was expected produces a scale that is wrong by a wide margin, and the symptom is a scene that looks nothing like a camera view rather than an obviously wrong number. Convert at the boundary and put the unit in the variable name.
 
 x_scale reuses that number instead of deriving a separate one. At the same depth d, the frustum’s half-width must be aspect times its half-height, because aspect is defined as width / height. Dividing y_scale by aspect shrinks the horizontal scale by exactly that factor, so the wider half-width still maps to NDC x equals 1. Skip that division and a widescreen monitor squashes the image horizontally instead of showing more of the scene.
+
+Section: Orthographic projection: no shrinking with distance.
+
+Perspective divides by depth, so distant things look smaller. An orthographic camera does not divide. It looks at a box-shaped volume, and an object has the same size at any depth. Two-dimensional games use it, strategy games use it so every tile keeps its size, and editors and shadow maps use it. Its settings are the size of the box, not a field of view.
+
+Say an orthographic camera shows a region 20 world units wide and 15 tall, centred on (0, 0), on an 800 times 600 screen. Across, that is 800 divided by 20 equals 40 pixels per unit, and down it is 600 divided by 15 equals 40, the same, so nothing is stretched. A point at (5, 3) lands at:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Move the point nearer or farther and (600, 180) does not change. Zooming changes the box instead: showing 10 units across, not 20, gives 800 divided by 10 equals 80 pixels per unit, and the same point lands at (400 + 5 times 80, 300 minus 3 times 80) equals (800, 60), at the right edge of the screen.
+
+The reverse also works, because nothing was divided. A click at pixel (600, 180) is the world point ((600 minus 400) divided by 40, (300 minus 180) divided by 40) equals (5, 3). Turning a cursor position into a world position is the first step of picking, which Lesson 7.5 builds on.
 
 Section: Screen coordinates.
 

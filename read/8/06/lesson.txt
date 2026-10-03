@@ -52,6 +52,22 @@ Labelled memory diagram. being handled: WM_KEYDOWN, reading a large file, highli
 
 Polling is the other side of this distinction. If no one sends your tool a message when the game’s gold changes, the tool can check the value on its own schedule. It does work even when nothing changed. Lesson 4.9 shows how to compare successive snapshots so many polls produce one meaningful event instead of many repeated actions.
 
+Section: The window itself.
+
+The window that receives those messages is also what the game draws into, and a few of its properties explain problems you will meet in later lessons.
+
+Window rectangle and client area. The window rectangle includes the title bar and the borders. The client area is the part the game draws into. On one typical Windows setup, a window whose client area must be 1280 times 720 needs an outer rectangle of about 1280 + 16 equals 1296 wide and 720 + 39 equals 759 tall, because the borders and title bar take 16 pixels across and 39 down. The exact sizes depend on the theme and the scale, so the system works them out ( AdjustWindowRect ). A point in the client area becomes a screen point by adding where that area starts on the desktop ( ClientToScreen ), which is why Lesson 7.9 matches an overlay to the client area.
+
+Resizing. Dragging the edge sends WM_SIZE with the new client width and height. A game then resizes its buffers and recomputes the projection ’s aspect ratio ( Lesson 7.1 ). With a client area of 1280 times 720 the aspect is 1280 divided by 720 equals 1.7778; a game that keeps the old value after the window becomes 1000 times 720 draws a squashed picture.
+
+Scale factor. A display set to 125 percent reports a window 1,000 logical pixels wide as 1,000 times 1.25 equals 1,250 physical pixels. A game that is not aware of this has its picture stretched by the system, and one that is aware sizes its menus by the factor ( Lesson 7.13 ). Moving the window to a display with a different scale sends WM_DPICHANGED.
+
+Fullscreen. Exclusive fullscreen takes over the display and may change its resolution. Borderless windowed is an ordinary window with no border, sized to the desktop, which is quick to switch away from and can be drawn over by other windows.
+
+Presenting. The game draws into a hidden back buffer and then presents it. With vertical sync on, the present waits for the display’s next refresh, so a 60 Hz display caps the game at 60 frames a second ( Lesson 4.1 ). A game with little moving, such as a menu, may redraw only when something changes, to save power. A screenshot is a copy of the finished back buffer saved as an image file.
+
+Focus and the cursor. A window that loses focus may pause its game, but GetAsyncKeyState still reports keys, so a tool must check focus itself (below). A game can hide the cursor, confine it to the window, replace it with its own image, or read relative mouse movement instead of a position.
+
 Section: Read a hotkey with GetAsyncKeyState.
 
 The current windows crate exposes GetAsyncKeyState as an unsafe function taking a virtual-key number and returning an i16. Windows puts “down right now” in the most significant bit. Because that is the sign bit of an i16, a negative result means down:

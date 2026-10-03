@@ -9063,8 +9063,8 @@ machinery from the rules and content of one game.
 ## Lesson 4.1 — Game Engines: Where the Rules Live
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/11/
 Category: Game State, Decisions, and Automation
-Estimated reading time: 18 minutes
-Summary: Separate the reusable engine from the game built on it, see which engine each course game uses, and learn why where a rule lives decides how you change it.
+Estimated reading time: 32 minutes
+Summary: Separate the reusable engine from the game built on it, follow one frame, the entities, and the scenes inside it, see which engine each course game uses, and learn why where a rule lives decides how you change it.
 
 The previous chapters followed values into instructions and turned remote
 bytes into typed objects and collections. The next question is larger:
@@ -9147,6 +9147,191 @@ can be a useful meeting point when you verify that the game actually reaches it.
 That is why Lesson 7.10 hooks `Present`: this game's rendering path calls it to
 show finished frames, making it a good place to observe them.
 
+## Starting up: plugins and settings
+
+Before the first frame, the application starts up. It reads its **settings** from a file,
+such as the resolution, the volume, and the key bindings. It creates the window, and it
+sets up each part of the engine. Engines package those parts as **plugins**. A plugin is
+a module that registers what it needs, such as its systems and the event types it uses,
+with the application when it is added, and a **plugin group** adds several together, such
+as the window, the input, the renderer, and the audio. The game itself is then a small
+plugin of its own, and swapping one plugin, say for a different renderer, changes one part
+without touching the rest. Changed settings are written back to the file, so they persist
+the way a save does (Chapter 9).
+
+## One frame, step by step
+
+An engine that owns the loop does the same few jobs on every pass through it, in
+the same order:
+
+1. **Gather input.** Ask the operating system which keys, buttons, and mouse
+   movements happened since the last pass, and turn them into actions
+   (Lesson 1.3).
+2. **Update the world.** Run the game's rules: move things, check contacts, count
+   timers down, let characters decide.
+3. **Draw.** Build the picture of the world as it is now.
+4. **Present.** Hand the finished picture to the display, and, with vertical
+   sync on, wait for the display's next refresh.
+
+```mermaid
+flowchart LR
+    I["input<br/>keys, mouse, pad"] --> U["update<br/>rules, physics, timers"]
+    U --> R["render<br/>draw the world"]
+    R --> P["present<br/>show the frame"]
+    P --> I
+```
+
+A display that refreshes 60 times each second takes a new picture every
+1 ÷ 60 = 0.01667 seconds, which is 16.67 milliseconds. All four jobs must fit in
+that **frame budget**, or the display refreshes before the new picture is ready
+and shows the old one again. A frame that takes 25 ms gives 1 ÷ 0.025 = 40 frames
+per second; one that takes 8.33 ms gives 120. This is why tools report **frame
+time**, in milliseconds, as well as frames per second. Frame times add up, so a
+4 ms update plus a 10 ms draw is a 14 ms frame, but frame rates do not add.
+
+### Time inside the update
+
+Lesson 1.3 showed that movement needs elapsed time: distance = speed × time. An
+engine measures the **delta time**, the seconds since the previous frame, and
+hands it to every update. Physics prefers steady steps, though. If one frame
+moves a fast ball 3 pixels and the next moves it 30, a contact test that looks
+only at positions can jump the ball clean over a wall 10 pixels thick. So many
+engines run physics in a **fixed timestep**, such as 1/60 second, and carry the
+leftover real time into the next frame:
+
+| Frame | Real time since the last frame (ms) | Time waiting to be simulated (ms) | Fixed steps run (16.67 ms each) | Left over (ms) |
+|---|---|---|---|---|
+| 1 | 20.00 | 0 + 20.00 = 20.00 | 1 | 20.00 − 16.67 = 3.33 |
+| 2 | 20.00 | 3.33 + 20.00 = 23.33 | 1 | 23.33 − 16.67 = 6.67 |
+| 3 | 30.00 | 6.67 + 30.00 = 36.67 | 2 | 36.67 − 33.33 = 3.33 |
+
+After 70 ms of real time the game has run 4 steps, which is 4 × 16.67 = 66.67 ms
+of game time, and 3.33 ms is waiting. The two add back to 70 ms, so no time was
+lost. A slow frame runs several steps to catch up, and a quick one runs none.
+
+What is drawn after a frame is usually partway between two steps. The 3.33 ms
+left over is 3.33 ÷ 16.67 = 20% of the way to the next step, and many engines
+blend the last two steps by that fraction, so motion looks smooth even though
+the rules advance in coarse steps (Lesson 4.6 shows how that blend is computed).
+
+This tells you something when you scan memory. A value the rules change moves
+once per step, and a value the drawing code keeps (an on-screen animation timer,
+an interpolated position) can change once per frame. Counting how often a value
+changes tells you which loop owns it.
+
+A **cooldown** is a timer built the same way. When an ability is used, the game
+stores how long remains, say 5.0 seconds, and subtracts the delta time on every
+step: after 60 steps of 1/60 second the value has fallen by 1.0 to 4.0, and after
+300 steps it reaches 0 and the ability is ready. Some games instead store the
+moment it becomes ready (now + 5.0) and compare it with the clock. Either way the
+cooldown is a number in memory that you can scan for.
+
+### Slow work leaves the frame
+
+Reading a 3 MB file can take 30 ms. If the update waited for it, the game would
+miss 30 ÷ 16.67 = 1.8, so two, refreshes. Engines give slow jobs, such as loading
+files, decoding sound, or planning a path across a big map, to **worker
+threads** (Lesson 11.8) as **tasks**. The main loop starts a task and keeps
+running frames. When the task finishes, it sends its result through a
+**channel**, a queue that one thread fills and another empties, and the main loop
+checks the channel once per frame.
+
+```mermaid
+sequenceDiagram
+    participant M as Main loop
+    participant W as Worker thread
+    M->>W: start the task "load level"
+    Note over M: frames 1, 2, and 3 keep running
+    W-->>M: result, sent through a channel
+    M->>M: frame 4 checks the channel and uses the result
+```
+
+The result arrives on a frame nobody can predict, so the game has to handle
+"not ready yet" with a loading screen or a stand-in. Lesson 4.10 uses the same
+channel to move records from a game to a recorder without stalling it.
+
+### Measuring the frame
+
+Engines measure themselves. A **diagnostic** is a named measurement with a short
+history, such as frame time over the last 120 frames, that can be switched on and
+off while the game runs. An **FPS overlay** draws such numbers on the screen. A
+**log** records events as lines of text, each with a severity such as error,
+warning, info, or debug, to a console or a file.
+
+An average can hide a stutter. Four frames of 16, 16, 16, and 66 ms average
+(16 + 16 + 16 + 66) ÷ 4 = 28.5 ms, or 1000 ÷ 28.5 = 35 frames per second, even
+though three frames in four were fine. The 66 ms frame is the one a player feels,
+so a good diagnostic also reports the slowest frame.
+
+## Entities, components, and systems
+
+Lesson 1.3 gave things identities, and Lesson 3.6 showed an engine keeping each
+kind of field in its own collection. Many engines make that the whole design. In an
+**entity component system** (ECS):
+
+- an **entity** is only an identity, a number (with a generation, so a reused
+  number is told apart from the old one, as Lesson 3.6 explained);
+- a **component** is a plain bundle of data attached to an entity, such as
+  `Position`, `Velocity`, or `Health`;
+- a **system** is a function that runs on every update for all the entities that
+  have a particular set of components.
+
+A movement system says: for every entity with both `Position` and `Velocity`, add
+velocity × delta time to position. A wall has a `Position` but no `Velocity`, so
+the movement system never touches it, and nobody wrote an "if wall" test. What an
+entity does comes from which components it has, not from what kind of object it
+is.
+
+| Entity | Components | Movement system | Collision system | Draw system |
+|---|---|---|---|---|
+| tank | Position, Velocity, Size, Sprite | runs | runs | runs |
+| wall | Position, Size, Sprite | skips | runs | runs |
+| coin | Position, Size, Sprite, Pickup | skips | runs | runs |
+| hidden trigger | Position, Size | skips | runs | skips |
+
+In memory, each kind of component sits in its own run. Ten thousand `Position`
+components of two 4-byte floats each take 10,000 × 8 = 80,000 bytes in one
+stretch, which is what Lesson 3.6 called a component pool. A system walks that
+stretch from start to end, and a scan finds the whole run at once.
+
+Engines add a few rules around this:
+
+- A system should not add or remove entities while it is looping over them, or the
+  loop could skip some and visit others twice. Instead it queues **commands**
+  (spawn this, despawn that, add this component), and the engine applies them
+  together at a safe moment between systems. A **delayed command** is one the
+  engine holds back until a timer ends, such as removing an effect after 2
+  seconds.
+- **Disabling** an entity hides it from the systems without deleting it. A marker
+  component such as `Disabled` makes the queries skip it. Its identity and data
+  stay in memory, so it can come back unchanged. Despawning is different: the
+  identity is freed and may be reused.
+- An **observer** is code that runs when something happens, such as an entity
+  being created, a component being removed, or "coin 42 was collected" (the
+  event from Lesson 1.3), instead of checking every frame whether it happened.
+
+## Scenes: a world you can load
+
+Once the world is made of entities, the engine needs a way to create many of them
+at once. A **scene** is a group of entities with their components that can be
+created together: a level, a menu screen, or one character with all its parts. A
+scene usually lives in a file (a data format, Chapter 9) and is **spawned** at run
+time: the engine reads the file, creates the entities, and fills in the
+components.
+
+Entities in a scene can form a **hierarchy**. A tank can have a child for its
+turret and a grandchild for the gun barrel. A child's position is stored
+**relative to its parent**, so moving the tank moves the turret and the barrel
+with it, and despawning the tank despawns them too. Lesson 7.1 works out how a
+child's position becomes a world position.
+
+Games also organize scenes into **states**: a menu, a loading screen, the match,
+the game-over screen. Entering a state spawns its scene, and leaving it despawns
+it. A loading screen waits for every file the next scene needs. It counts the
+files still loading, and when the count reaches 0 it switches to the match. This
+matters when you hunt for addresses: the entities of one scene are freed when the
+scene is left, so an address found in one level can mean nothing in the next.
+
 ## The five course games, sorted by engine
 
 The games in this book cover most of the ways a game can relate to its engine:
@@ -9218,6 +9403,78 @@ Those tools are gifts. A console variable that toggles a feature gives you a
 clean experiment: flip it, and whatever changes in memory is connected to that
 feature. A debug command that prints your position tells you what value to scan
 for. Check what the engine already offers before reaching for a debugger.
+
+### Overlays, gizmos, editors, and stress tests
+
+Other developer tools are drawn by the engine itself:
+
+- A **debug overlay** prints live numbers, such as frame time, on the screen.
+- **Debug drawing**, called **gizmos** in some engines, draws shapes for a single
+  frame without creating any game object: a line, an arrow, a box around a
+  collision shape, the three coloured axes of an object's own directions, a circle
+  for a light's reach, a text label. The code calls something like
+  `draw_line(a, b, colour)` on every frame, and when it stops calling, the shape
+  is gone. An editor's **transform gizmo** is the interactive version: three
+  arrows you drag to move, turn, or scale a selected object. Lesson 7.9 draws the
+  same kind of overlay over someone else's game.
+- An **editor** lets designers place entities and save scenes, and draws a **grid** on the
+  ground so the scale and the position of things can be read. A **viewer** shows
+  one kind of data on its own, such as a 3D model or the buttons of a game
+  controller, without running the whole game.
+- A **stress test** deliberately runs a heavy load, such as ten thousand sprites,
+  and watches the frame time to find where the game breaks down. If each sprite
+  costs 0.002 ms, 10,000 of them cost 20 ms, which is already over the 16.67 ms
+  budget. Lesson 7.3 shows where such costs come from.
+
+## A whole game from these parts: Breakout
+
+The parts fit together in a game small enough to hold in your head. In Breakout, a
+paddle at the bottom of the screen bounces a ball upward into rows of bricks.
+
+- **Entities and components.** The paddle has `Position`, `Size`, and
+  `PlayerControlled`. The ball has `Position`, `Velocity`, and `Size`. Each of the
+  40 bricks has `Position`, `Size`, and `Brick`.
+- **Systems, in order, every fixed step.** Read input into the paddle's velocity.
+  Move everything that has a `Velocity`. Test the ball against the walls, the
+  paddle, and the bricks. A hit brick is despawned by a command and adds 1 to the
+  score. If the ball falls below the paddle, switch the game's state to game over.
+  After the steps, draw every entity that has a `Position` and a sprite.
+- **State.** The score, the bricks left, and the lives are numbers in memory. So
+  is the mode: menu, playing, or game over.
+
+One step, with real numbers. The ball is at x = 794 with a velocity of 150 pixels
+per second to the right, and a step is 1/60 second:
+
+```text
+move      = 150 × (1/60) = 2.5 pixels
+new x     = 794 + 2.5 = 796.5
+ball size = 16 pixels wide, so its right edge is 796.5 + 8 = 804.5
+the wall is at x = 800, and 804.5 is past it, so the ball hits the wall
+reply     = velocity x becomes −150, and x is moved back to 800 − 8 = 792
+```
+
+Nothing in that step names Breakout. It is the movement and contact rules of
+Lesson 1.3 run by systems over entities, in the order the engine's loop calls
+them.
+
+## Where each engine part is explained
+
+This lesson names the parts. The lessons below explain how each one works, and
+the small runnable examples of an open-source engine such as
+<HoverCard kind="reference" href="https://bevy.org/examples/" body="The example gallery of the Bevy engine: small programs that each show one engine part, such as sprites, lighting, audio, UI, or picking.">Bevy</HoverCard>
+show nearly every one in a few dozen lines.
+
+| Engine part | What it does | Explained in |
+|---|---|---|
+| Application, window | starts the program, opens a window, owns the loop | this lesson; [Windows Input](/pages/8/06/#the-window-itself) |
+| Entities, components, scenes | organize the world and load it | this lesson; [Collections](/pages/3/05/) |
+| Math, transforms | positions, directions, turning, blending | [Coordinates and Vectors](/pages/4/11/); [Camera Frames](/pages/5/01/) |
+| Camera, picking | what is seen, and what is under the cursor | [Camera Frames](/pages/5/01/); [Camera Rays](/pages/5/05/) |
+| 2D and 3D rendering, shaders | turn the world into pixels | [Rendering Pipeline](/pages/5/02/); [Draw Calls](/pages/5/03/) |
+| Animation | change a pose over time | [Aim Geometry](/pages/5/06/) |
+| Assets, glTF, audio | files the game loads and plays | [Game Files](/pages/9/01/) |
+| UI, text | menus and on-screen controls | [Menus and Text](/pages/8/09/) |
+| Gizmos, diagnostics, tools | developer views of the running game | this lesson; [Overlays](/pages/5/09/) |
 
 ## Recognizing an engine outside this book
 
@@ -10456,8 +10713,8 @@ That pattern applies to test bots, accessibility helpers, replay tools, and ordi
 ## Lesson 4.6 — Coordinates, Vectors, and Directions
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/4/11/
 Category: Game State, Decisions, and Automation
-Estimated reading time: 14 minutes
-Summary: Build distance and direction from positions, then use normalization and dot products to express spatial decisions.
+Estimated reading time: 26 minutes
+Summary: Build distance and direction from positions, use normalization and dot products to express spatial decisions, then blend values and test contact with simple shapes.
 
 A map tells us which places exist. Coordinates let a tool compare those places:
 where is the player, how far away is an enemy, and which way does a movement
@@ -10632,13 +10889,128 @@ about `0.707`, and anything above that threshold is inside the cone. Comparing
 cosines is cheaper than converting to angles, and it sidesteps the rounding
 trap described above.
 
+## Blending values: interpolation, easing, and following
+
+Subtracting positions gives a direction. The reverse question is just as common:
+given two values, what is the value some fraction of the way between them? A
+character walks from one tile to the next, a colour fades, a camera slides toward
+a target. The answer is **linear interpolation**, usually called **lerp**. Start at
+`a` and add the fraction `t`, from 0 to 1, of the way to `b`:
+
+$$
+% speak: the blended value p equals a plus the difference b minus a, times t
+p = a + (b - a)\,t
+$$
+
+At `t = 0` the result is `a`, at `t = 1` it is `b`, and at `t = 0.25` it is a
+quarter of the way. For numbers, `a = 2` and `b = 10` give
+2 + (10 − 2) × 0.25 = 4. For a vector, blend each coordinate on its own: from
+`(2, 3)` to `(5, 7)`, halfway (`t = 0.5`) is `(2 + 3 × 0.5, 3 + 4 × 0.5) = (3.5, 5)`. A
+colour is three numbers too, so a half blend of red `(255, 0, 0)` and blue
+`(0, 0, 255)` is `(127.5, 0, 127.5)`, which a display stores as `(128, 0, 128)`, a purple.
+
+Lesson 4.1 left 3.33 ms over after a 16.67 ms step, so `t = 3.33 ÷ 16.67 = 0.2`.
+If a ball's x was 794 after the earlier step and 796.5 after the later one, the
+picture shows 794 + (796.5 − 794) × 0.2 = 794.5. That is the blend the engine uses
+to draw motion between its steps.
+
+### Easing
+
+A straight lerp moves at one speed, so it starts and stops abruptly. **Easing**
+reshapes `t` before it is used, so the motion can begin gently, end gently, or
+both. Here are four reshapings, with the value each gives at five moments:
+
+| Curve | Rule | t = 0 | t = 0.25 | t = 0.5 | t = 0.75 | t = 1 |
+|---|---|---|---|---|---|---|
+| linear | `t` | 0 | 0.25 | 0.5 | 0.75 | 1 |
+| ease in (starts slowly) | `t × t` | 0 | 0.0625 | 0.25 | 0.5625 | 1 |
+| ease out (ends slowly) | `1 − (1 − t)²` | 0 | 0.4375 | 0.75 | 0.9375 | 1 |
+| smoothstep (both ends) | `3t² − 2t³` | 0 | 0.15625 | 0.5 | 0.84375 | 1 |
+
+Take an object that moves from `x = 0` to `x = 100` in one second. A quarter of the
+way through, the linear curve has put it at 25, the ease-in curve at 6.25 (it is
+still getting started), the ease-out curve at 43.75 (it is already slowing), and
+smoothstep at 15.625. Every curve starts at 0 and ends at 1, so every one reaches
+the same place; they differ in how they get there.
+
+### Following a moving target
+
+A camera or a character that chases a target can close a fraction of the
+remaining gap on every update:
+
+```text
+position = position + (target - position) × k
+```
+
+With a gap of 10 and `k = 0.2`, the gap after each update is 10, then 10 × 0.8 = 8,
+then 6.4, then 5.12, then 4.096. The follower moves fast while it is far away and
+slows as it arrives, which looks smooth.
+
+One fixed `k` has a flaw: a game running 120 updates a second closes the gap twice
+as often as one running 60. The fix is to tie `k` to the time that passed. With a
+stiffness `s` per second, use `k = 1 − e^(−s × dt)`. For `s = 10`:
+
+- at 60 updates a second, `dt = 1/60`, so `k = 1 − e^(−0.1667) = 1 − 0.8465 = 0.1535`;
+- at 120 updates a second, `dt = 1/120`, so `k = 1 − e^(−0.0833) = 1 − 0.9200 = 0.0800`.
+
+Two 120-per-second updates leave (1 − 0.0800)² ≈ 0.8465 of the gap, the same as one
+60-per-second update, so the camera follows the same way on either machine.
+
+### Curves through several points
+
+A path that turns smoothly, such as a camera flight or the arc of a thrown item, is
+built from curves called **splines**. The simplest piece is a quadratic Bézier
+curve. It starts at `P0`, ends at `P2`, and is pulled toward a control point `P1`
+without reaching it:
+
+$$
+% speak: the point at t is one minus t squared times P zero, plus two times one minus t times t times P one, plus t squared times P two
+B(t) = (1 - t)^2 P_0 + 2(1 - t)\,t\,P_1 + t^2 P_2
+$$
+
+For `P0 = (0, 0)`, `P1 = (5, 10)`, and `P2 = (10, 0)`, the point halfway along is
+0.25 × `(0, 0)` + 0.5 × `(5, 10)` + 0.25 × `(10, 0)` = `(2.5 + 2.5, 5)` = `(5, 5)`. The
+curve rises to 5 even though the control point is at 10. Longer paths chain many
+such pieces so that each one starts where the last ended, heading the same way;
+that is what a cubic spline does.
+
+Blending turning angles needs more care than blending positions, because 350° and
+10° are only 20° apart. Lesson 7.1 shows how orientations are blended.
+
+## Bounding volumes: distance as a contact test
+
+The length of a direction is a distance, and a distance answers a contact
+question. Games give objects cheap stand-in shapes, called **bounding volumes**,
+and test those instead of the full model. The simplest is a circle (a sphere in
+3D). Two circles touch when the distance between their centres is less than the
+sum of their radii.
+
+Use the player at `(2, 3)` and the enemy at `(5, 7)` from earlier in this lesson.
+Their distance is 5, and its square is 3² + 4² = 25. With both radii 2, the sum is 4
+and 4² = 16. Since 25 is more than 16, the circles do not touch. With radii 2 and
+3.5 the sum is 5.5 and 5.5² = 30.25, which is more than 25, so they do. Comparing
+squared values gives the same answer without the square root.
+
+A box that stays lined up with the axes is stored as its smallest and largest
+corner. Two such boxes overlap only if their ranges overlap on every axis. Box A
+spans x from 0 to 4 and y from 0 to 3, and box B spans x from 3 to 7 and y from 2 to
+6. The x ranges share 3 to 4, and the y ranges share 2 to 3, so the boxes overlap.
+Move B to span x from 5 to 9 and they no longer do: 4 is less than 5, so one axis
+is enough to rule out contact.
+
+These cheap tests are why a game's touch rules can differ from its pictures, as
+Lesson 1.3 noted. Lesson 7.5 tests rays against such shapes, and Lesson 7.2 uses
+them to skip drawing things that are out of view.
+
 ## From geometry to an action
 
 A position names a place. Subtracting two positions gives a direction with
 a length; normalizing keeps only the direction. A dot product compares
 alignment, which lets a decision ask whether a target lies inside a view
-cone without calculating its angle first. Keep the coordinate meanings
-and units consistent before using any of these results.
+cone without calculating its angle first. Interpolation blends two values by a
+fraction, easing reshapes that fraction, and a bounding volume turns a distance
+into a contact test. Keep the coordinate meanings and units consistent before
+using any of these results.
 
 [From Coordinates to Target Selection](/pages/4/05/) now finds positions in
 an offline game and uses copied, validated values to choose an action.
@@ -17812,6 +18184,40 @@ the value on its own schedule. It does work even when nothing changed.
 so many polls produce one meaningful event instead of many repeated
 actions.
 
+## The window itself
+
+The window that receives those messages is also what the game draws into, and a few
+of its properties explain problems you will meet in later lessons.
+
+- **Window rectangle and client area.** The window rectangle includes the title bar and
+  the borders. The **client area** is the part the game draws into. On one typical
+  Windows setup, a window whose client area must be 1280 × 720 needs an outer rectangle of
+  about 1280 + 16 = 1296 wide and 720 + 39 = 759 tall, because the borders and title bar
+  take 16 pixels across and 39 down. The exact sizes depend on the theme and the scale, so
+  the system works them out (`AdjustWindowRect`). A point in the client area becomes a
+  screen point by adding where that area starts on the desktop (`ClientToScreen`), which is
+  why Lesson 7.9 matches an overlay to the client area.
+- **Resizing.** Dragging the edge sends `WM_SIZE` with the new client width and height. A
+  game then resizes its buffers and recomputes the projection's aspect ratio (Lesson 7.1).
+  With a client area of 1280 × 720 the aspect is 1280 ÷ 720 = 1.7778; a game that keeps the
+  old value after the window becomes 1000 × 720 draws a squashed picture.
+- **Scale factor.** A display set to 125% reports a window 1,000 logical pixels wide as
+  1,000 × 1.25 = 1,250 physical pixels. A game that is not aware of this has its picture
+  stretched by the system, and one that is aware sizes its menus by the factor (Lesson
+  7.13). Moving the window to a display with a different scale sends `WM_DPICHANGED`.
+- **Fullscreen.** *Exclusive* fullscreen takes over the display and may change its
+  resolution. *Borderless windowed* is an ordinary window with no border, sized to the
+  desktop, which is quick to switch away from and can be drawn over by other windows.
+- **Presenting.** The game draws into a hidden back buffer and then *presents* it. With
+  vertical sync on, the present waits for the display's next refresh, so a 60 Hz display
+  caps the game at 60 frames a second (Lesson 4.1). A game with little moving, such as a
+  menu, may redraw only when something changes, to save power. A screenshot is a copy of
+  the finished back buffer saved as an image file.
+- **Focus and the cursor.** A window that loses focus may pause its game, but
+  `GetAsyncKeyState` still reports keys, so a tool must check focus itself (below). A game
+  can hide the cursor, confine it to the window, replace it with its own image, or read
+  relative mouse movement instead of a position.
+
 ## Read a hotkey with `GetAsyncKeyState`
 
 The current `windows` crate exposes
@@ -19016,8 +19422,8 @@ pixels that a rendering tool works with.
 ## Lesson 7.1 — Camera Frames and Projection
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/5/01/
 Category: 3D Space, Rendering, and Tool Design
-Estimated reading time: 18 minutes
-Summary: Follow a world-space point through camera axes, view transforms, homogeneous coordinates, perspective, and screen pixels.
+Estimated reading time: 32 minutes
+Summary: Follow a world-space point through camera axes, object transforms and parents, quaternions, homogeneous coordinates, perspective or orthographic projection, and screen pixels.
 
 A tool can know a target's position and still draw its marker in the wrong
 place. The target's coordinates describe the world; the screen describes
@@ -19191,6 +19597,38 @@ expected. Raise the target to `(3.0, 4.0, 5.0)` instead and pitch becomes
 `atan2(5, 5) = 45°`: the target is now as far up as it is away, a 45-degree
 climb.
 
+## Turning without gimbal lock: quaternions
+
+Yaw, pitch, and roll are easy to read, and they have two limits. Pitch to 90°, so
+the view looks straight up, and yaw and roll then turn around the same line: one of
+the three controls is lost, which is called **gimbal lock**. And blending two sets of
+angles number by number can turn the long way round, since 350° blended with 10°
+passes through 180°.
+
+Engines often store a turn as a **quaternion** instead: four numbers
+`(x, y, z, w)` for a turn of angle θ around a unit-length axis `(ax, ay, az)`:
+
+```text
+(x, y, z, w) = (ax × sin(θ/2), ay × sin(θ/2), az × sin(θ/2), cos(θ/2))
+```
+
+No turn at all is θ = 0, so `sin 0 = 0` and `cos 0 = 1`, giving `(0, 0, 0, 1)`. A 90°
+turn about `z`, the axis `(0, 0, 1)`, has θ/2 = 45°, and `sin 45° = cos 45° ≈ 0.7071`,
+giving `(0, 0, 0.7071, 0.7071)`. Every quaternion that stands for a turn has length 1:
+here 0.7071² + 0.7071² = 0.5 + 0.5 = 1. Applying that quaternion to `(1, 0, 0)` gives
+`(0, 1, 0)`, the same result as the 90° rotation in the transform section; the
+math library does the multiplication.
+
+Two turns combine by multiplying their quaternions, with no gimbal lock. To blend
+them, engines use **slerp**, spherical interpolation, which turns at a steady speed
+along the shortest way round. Halfway between no turn and the 90° turn is a 45°
+turn: θ/2 = 22.5°, so the quaternion is `(0, 0, 0.3827, 0.9239)`, and 0.3827² + 0.9239² =
+0.1465 + 0.8535 = 1.
+
+In memory, four adjacent floats whose squares add up to 1 are very likely a
+quaternion. Three angles, by contrast, are usually plain numbers in degrees or radians
+that wrap around.
+
 ## World space to screen space
 
 A 3D point cannot be drawn directly on a 2D monitor. The renderer transforms it through several spaces:
@@ -19315,6 +19753,64 @@ order. “Row-major versus column-major” describes storage, while “row vecto
 column vectors” describes the multiplication convention; people often mix up
 these two separate choices.
 
+## Transforms: placing an object in the world
+
+A model stores its points relative to its own centre. To draw the object, the
+engine carries those points into the world in three steps, in this order:
+
+1. **Scale**: multiply every coordinate by the scale factor.
+2. **Rotate**: turn the points around the object's centre.
+3. **Translate**: add the object's world position.
+
+Rotating by an angle θ around the vertical `z` axis changes only `x` and `y`:
+
+```text
+x' = x × cos(θ) − y × sin(θ)
+y' = x × sin(θ) + y × cos(θ)
+z' = z
+```
+
+Take a crate whose model has a corner at `(1, 0, 0)`. Scale it by 2, turn it 90°
+about `z`, and place it at `(10, 5, 0)`. For 90°, `cos` is 0 and `sin` is 1:
+
+```text
+scale:      (1, 0, 0) × 2                    = (2, 0, 0)
+rotate:     x' = 2×0 − 0×1 = 0, y' = 2×1 + 0×0 = 2   = (0, 2, 0)
+translate:  (0 + 10, 2 + 5, 0 + 0)            = (10, 7, 0)
+```
+
+The crate's centre, `(0, 0, 0)` in the model, lands at `(10, 5, 0)`, and the corner
+ends up 2 units from it along `+y`, which is where a 90° turn sends the corner that
+started along `+x`.
+
+Objects can be built from parts. A tank has a turret, and the turret has a gun
+barrel. Each part stores a **local transform**, its position and turn *relative to
+its parent*, and the engine finds its **world** position by applying its parent's
+transform to those local numbers. Put the tank at `(10, 5, 0)`, turned 90°, with
+the turret 2 units along the tank's own front and 1 unit up, so the turret's local
+position is `(0, 2, 1)`:
+
+```text
+turret, tank turned 90°:   rotate (0, 2, 1) -> (0×0 − 2×1, 0×1 + 2×0, 1) = (−2, 0, 1)
+                           translate (−2 + 10, 0 + 5, 1 + 0)             = (8, 5, 1)
+turret, tank turned 0°:    (0, 2, 1) + (10, 5, 0)                         = (10, 7, 1)
+```
+
+The turret's stored numbers, `(0, 2, 1)`, are the same in both lines. Only its world
+position changed, because its parent turned. Give the barrel a local position of
+`(0, 1, 0)` inside the turret. Inside the tank that is `(0, 2, 1) + (0, 1, 0) = (0, 3, 1)`,
+and with the tank turned 90° the world position is `(−3, 0, 1) + (10, 5, 0) = (7, 5, 1)`.
+
+This matters when you read a game's memory. A child object often stores only its
+local numbers, so an overlay that wants a world position has to apply the parent's
+transform, then the grandparent's, up to the root. Reading the local numbers alone
+gives the right answer only for an object with no parent.
+
+Each of these three steps is one matrix, and multiplying them gives one matrix per
+object, its **world matrix** (some libraries call it the model matrix). A child's
+world matrix combines its parent's world matrix with its own local matrix, in the
+order that the library's convention requires, as noted above.
+
 ## Why 3D graphics uses four numbers for a 3D point
 
 A 3D translation cannot be represented by an ordinary 3×3 linear matrix because
@@ -19438,6 +19934,33 @@ shrinks the horizontal scale by exactly that factor, so the wider half-width
 still maps to NDC `x = 1`. Skip that division and a widescreen monitor
 squashes the image horizontally instead of showing more of the scene.
 
+## Orthographic projection: no shrinking with distance
+
+Perspective divides by depth, so distant things look smaller. An **orthographic**
+camera does not divide. It looks at a box-shaped volume, and an object has the same
+size at any depth. Two-dimensional games use it, strategy games use it so every tile
+keeps its size, and editors and shadow maps use it. Its settings are the size of the
+box, not a field of view.
+
+Say an orthographic camera shows a region 20 world units wide and 15 tall, centred
+on `(0, 0)`, on an 800 × 600 screen. Across, that is 800 ÷ 20 = 40 pixels per unit, and
+down it is 600 ÷ 15 = 40, the same, so nothing is stretched. A point at `(5, 3)` lands at:
+
+```text
+screen_x = 400 + 5 × 40 = 600
+screen_y = 300 − 3 × 40 = 180     (screen y grows downward, so up is subtracted)
+```
+
+Move the point nearer or farther and `(600, 180)` does not change. Zooming changes
+the box instead: showing 10 units across, not 20, gives 800 ÷ 10 = 80 pixels per unit,
+and the same point lands at `(400 + 5 × 80, 300 − 3 × 80) = (800, 60)`, at the right edge of
+the screen.
+
+The reverse also works, because nothing was divided. A click at pixel `(600, 180)` is
+the world point `((600 − 400) ÷ 40, (300 − 180) ÷ 40) = (5, 3)`. Turning a cursor
+position into a world position is the first step of picking, which Lesson 7.5 builds
+on.
+
 ## Screen coordinates
 
 After projection and perspective division, normalized coordinates are often in `-1..=1`. Convert them to pixels:
@@ -19511,8 +20034,8 @@ Later lessons reuse this math in offline observer tools.
 ## Lesson 7.2 — The Rendering Pipeline and Its State
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/5/02/
 Category: 3D Space, Rendering, and Tool Design
-Estimated reading time: 25 minutes
-Summary: See how objects become pixels through meshes, shaders, rasterization, depth testing, and the state that gives each draw its meaning.
+Estimated reading time: 45 minutes
+Summary: See how objects become pixels through meshes, materials, light, shaders, rasterization, depth testing, transparency, culling, render passes, and the 2D case, and the state that gives each draw its meaning.
 
 ## Use a setting as an anchor
 
@@ -19580,6 +20103,35 @@ draw, `count` usually says how many indices to consume—not how many unique ver
 triangles, or objects exist. With triangle topology and no primitive restart,
 `count / 3` is the submitted triangle count, but clipping and degenerate triangles
 mean it is still not the number of visible triangles.
+
+## Materials, textures, and light
+
+A mesh says where the surface is. A **material** says how that surface looks: its
+base colour, the image wrapped over it, and how it answers light.
+
+The image is a **texture**. Each vertex carries a **texture coordinate** `(u, v)`, a
+position inside the image from 0 to 1 on each side, and the rasterizer blends those
+coordinates across the triangle so every pixel knows where to look. On a 256 × 256
+texture, `(u, v) = (0.25, 0.75)` points at pixel `(0.25 × 256, 0.75 × 256) = (64, 192)`.
+Whether `v` counts from the top or the bottom of the image differs between graphics
+APIs.
+
+Light is worked out from the **normal**, the direction the surface faces. The
+simplest model, **diffuse** lighting, makes a surface brightest when it faces the
+light and dark when it faces away. With `N` the unit normal and `L` the unit
+direction from the surface toward the light, the brightness is the larger of 0 and
+the dot product `N · L` (Lesson 4.6). For `N = (0, 0, 1)` and `L = (0.6, 0, 0.8)`, the
+dot product is 0 + 0 + 0.8 = 0.8, so a surface of colour `(200, 100, 50)` is drawn as
+`(200 × 0.8, 100 × 0.8, 50 × 0.8) = (160, 80, 40)`. Tilt the surface until the dot
+product is 0 or negative and it receives no light from that source.
+
+Realistic engines add to this. **Physically based rendering** (PBR) describes a
+material with a few measured-looking properties, such as how rough the surface is
+and whether it is metal, usually stored as more textures, and a shader turns them
+into the highlights and reflections the eye expects. A **vertex colour** is a tint
+stored per vertex and blended across the triangle. A material also states how it
+treats transparency: fully opaque, cut out wherever a texture's alpha is low, or
+blended.
 
 ## Render state is context for interpreting a draw
 
@@ -19691,6 +20243,129 @@ portals, fog-of-war systems, and server state may use entirely different data.
 
 That visual result proves a rendering rule changed; it does **not** prove which objects a call represents. You still need classification tests.
 
+## Transparency and draw order
+
+When a see-through surface is drawn over the pixels already stored, the new colour
+and the old one are mixed by the new colour's **alpha**, from 0 (invisible) to 1
+(solid):
+
+```text
+result = source × alpha + destination × (1 − alpha)
+```
+
+A red fragment `(255, 0, 0)` with alpha 0.25 over a blue-ish background `(0, 0, 200)`
+gives red `255 × 0.25 + 0 × 0.75 = 63.75`, green `0`, and blue `0 × 0.25 + 200 × 0.75 =
+150`, which rounds to `(64, 0, 150)`: the background shows through, tinted.
+
+Because the mix uses what is already there, order matters. Swap two see-through
+layers and the result changes. So engines draw all the solid objects first, with depth
+writes on, and then the see-through ones from the farthest to the nearest, with depth
+writes off, as described above. Other blend modes use a different rule: **additive**
+blending simply adds the colours, which suits glows and sparks.
+
+Two-dimensional games rely on exactly this. A sprite is a picture with transparent
+edges, and sprites are drawn in layer order, back to front.
+
+## Skipping what cannot be seen
+
+The cheapest triangle is one that is never drawn, so engines throw work away early.
+
+- **Frustum culling** skips objects outside the camera's view volume (the frustum from
+  Lesson 7.1). Each object gets a bounding sphere (Lesson 4.6), and the sphere is tested
+  against the volume's edges. In a flat example, put the camera at the origin looking
+  along `+x` with a 90° view, so the visible wedge is where `|y| ≤ x`. An object of
+  radius 1 centred at `(10, 12)` is `(12 − 10) ÷ √2 = 1.41` beyond the upper edge, which
+  is more than its radius, so it is skipped entirely. One centred at `(10, 10.5)` is only
+  `0.5 ÷ √2 = 0.35` beyond it, less than its radius, so it still crosses the edge and is
+  drawn. A debug view that draws the frustum and highlights the skipped objects shows
+  which ones were culled.
+- **Back-face culling** skips triangles that face away from the camera. A triangle with
+  normal `(0, 0, 1)` seen from a camera in the direction `(0, 0, −1)` has a dot product
+  of −1, which is negative, so its back is showing and it is not drawn.
+- **Occlusion culling** skips objects hidden behind others.
+- **Levels of detail** swap a model for a cheaper one as it gets far away, and a
+  **visibility range** hides an object past a set distance.
+
+All of this happens before any draw call exists, which is why the symptom "an object is
+absent from the visible list" in the table below points at the game, not the GPU.
+
+## A frame is several passes
+
+Most frames are not drawn in one sweep. The engine renders the scene several times
+for different purposes, in order, and each sweep is a **pass**. A pass starts by
+clearing its target to a **clear colour**, and clearing depth to its farthest value, so
+the last frame's picture is not left behind:
+
+```mermaid
+flowchart LR
+    S["Shadow pass<br/>depth seen from the light"] --> O["Opaque pass<br/>solid objects"]
+    O --> K["Sky"]
+    K --> T["Transparent pass<br/>far to near"]
+    T --> X["Post-processing<br/>full-screen effects"]
+    X --> U["UI pass<br/>menus and text"]
+    U --> P["Present"]
+```
+
+- **Shadows.** The shadow pass draws the scene's depth as seen from the light into a
+  texture called a **shadow map**. In the main pass, each pixel's position is converted
+  to the light's view and compared with the stored depth: if something nearer was
+  stored, the pixel is in shadow. A surface point 7.50 away from the light would be
+  compared with its own stored depth, 7.50, and rounding could make it shadow itself,
+  so the test uses a small **bias**: shadowed only if the stored depth is less than
+  7.50 − 0.05 = 7.45. It is not, so the point is lit.
+- **Sky and fog.** A **skybox** is a cube texture drawn so that it always looks
+  infinitely far away. **Fog** blends a surface toward a haze colour with distance. With
+  the fog starting at 10 and ending at 50, a surface 30 away has the factor
+  `(50 − 30) ÷ (50 − 10) = 0.5`, so a surface of `(200, 100, 50)` in haze `(150, 150, 150)`
+  is drawn as `(175, 125, 100)`.
+- **Post-processing.** The finished picture is stored as a texture and a full-screen
+  rectangle is drawn with a shader that reads it. **Bloom** blurs the brightest parts and
+  adds them back, and **colour grading** remaps colours. **Tone mapping** compresses
+  **HDR** (high dynamic range) values, where lighting can produce colours above 1.0, into
+  the 0 to 1 range a display can show. A simple rule, `c ÷ (1 + c)`, turns a value of
+  4.0 into 0.8, a value of 1.0 into 0.5, and a value of 0.5 into 0.33, so bright values
+  are squeezed more than dim ones.
+- **Render to texture.** A pass can draw into an off-screen texture, not the screen.
+  The texture can then be used as a mirror, a security-camera monitor, a minimap, or a
+  screen shown inside the 3D world.
+- **More than one camera.** Each camera draws into its own rectangle, or its own
+  texture. Split-screen is two cameras drawing into the left and right halves of one
+  window.
+- **Forward and deferred.** A forward renderer lights each object as it draws it. A
+  **deferred** renderer first draws position, normal, and colour for every pixel into
+  extra textures, then lights the pixels in one later pass, which makes many lights
+  affordable but handles see-through surfaces less easily.
+
+## Two-dimensional rendering uses the same pipeline
+
+A 2D game does not need a different machine. A **sprite** is a quad, two triangles
+made from four vertices, with a texture on it, drawn by an orthographic camera
+(Lesson 7.1) with alpha blending and layers (above).
+
+Many small pictures are packed into one large image, a **sprite sheet** or **texture
+atlas**, so that one texture serves many sprites. Picking a frame means choosing the
+texture coordinates for its rectangle. Take a 256 × 256 sheet of 4 × 4 frames, each
+64 × 64 pixels. Frame number 5, counting from 0, is in column `5 mod 4 = 1` and row
+`5 ÷ 4 = 1` (dropping the remainder), so it covers pixels x from 64 to 128 and y from 64
+to 128. As texture coordinates that is `u` from 64 ÷ 256 = 0.25 to 0.5 and `v` from
+0.25 to 0.5. Animation is choosing the frame from the clock: at 8 frames per second,
+the frame number is the whole part of `time × 8`, wrapped around the number of frames.
+Flipping a sprite swaps its left and right `u` values.
+
+Scaling a sprite into a box while keeping its shape uses the smaller of the two
+ratios. A 64 × 32 sprite fitted into a 100 × 100 box has ratios 100 ÷ 64 = 1.5625 and
+100 ÷ 32 = 3.125, so it is scaled by 1.5625 and ends up 100 × 50.
+
+A **tilemap** is a grid of tile numbers. Drawing it means turning each number into a
+quad that points at the right part of the atlas. A screen of 20 × 15 tiles is 300
+quads, which is 600 triangles, and the engine can send all of them to the GPU as one
+draw call from one atlas instead of 300 separate calls. This is the same grid Lesson
+4.4 reads as game state, now seen as pictures.
+
+Pixel-art games often draw the whole scene into a small texture, such as 320 × 180,
+and then enlarge it by a whole number, 4, to 1280 × 720. Whole-number scaling keeps
+every pixel a crisp square, which is called pixel snapping.
+
 ## Keep experiments frame-local
 
 Graphics state is shared. If you change a setting for one draw:
@@ -19792,8 +20467,8 @@ The comparison isolates how one CPU-side flag changes GPU behavior. It does not 
 ## Lesson 7.3 — OpenGL Draw Calls and State
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/5/03/
 Category: 3D Space, Rendering, and Tool Design
-Estimated reading time: 30 minutes
-Summary: Understand what indexed OpenGL draws request, how bound state changes their meaning, and why observation must keep the render thread moving.
+Estimated reading time: 40 minutes
+Summary: Understand what indexed OpenGL draws request, how bound state and shader inputs change their meaning, why many small draws cost frame time, and why observation must keep the render thread moving.
 
 ## A wrapper records and forwards draw calls
 
@@ -20056,6 +20731,72 @@ a draw's texture, program, uniforms, and vertex layout are part of its identity.
 
 Older fixed-function OpenGL calls hide these programs behind predefined state, but
 the pipeline still performs equivalent transformations and color calculations.
+
+### What a shader reads
+
+A shader works only with what the draw has bound for it:
+
+- **Interpolated inputs**, the per-vertex values blended across the triangle.
+- **Uniforms**, values that are the same for every invocation of one draw, such as the
+  matrices, a light's colour, or the time since the game started.
+- **Textures and buffers**, images it can sample at a `(u, v)` position and arrays of
+  data it can read, bound before the draw as part of the state from Lesson 7.2.
+
+A small fragment shader that turns a texture grey shows how little a shader can be. It
+weights the red, green, and blue of the pixel by how bright the eye finds each:
+
+```glsl
+// Fragment shader, in GLSL: turn the texture's colour into grey.
+vec3 colour = texture(image, uv).rgb;
+float grey = dot(colour, vec3(0.299, 0.587, 0.114));
+out_colour = vec4(vec3(grey), 1.0);
+```
+
+For a pixel of `(200, 100, 50)`, the grey is 0.299 × 200 + 0.587 × 100 + 0.114 × 50 =
+59.8 + 58.7 + 5.7 = 124.2, so the pixel becomes about `(124, 124, 124)`. A shader that
+reads the time as a uniform can animate: a brightness of `0.5 + 0.5 × sin(time)` is
+0.5 at time 0 and 1.0 at time 1.5708 (a quarter of a turn in radians), and it
+repeats.
+
+Shaders are written in a shading language: GLSL for OpenGL, HLSL for Direct3D, WGSL
+for WebGPU. A driver, or the engine ahead of time, compiles them to the GPU's own
+instructions. Engines that support several graphics APIs often write a shader once and
+translate it for each.
+
+### Variants, instancing, and shaders that do not draw
+
+- **Variants.** One shader source can have switches, written as `#ifdef` lines, such
+  as "has a normal map" or "has fog." Each combination compiles to a separate
+  program, so three switches give 2 × 2 × 2 = 8 variants. Engines compile the ones a
+  scene needs, which is why a game can hitch the first time something new appears.
+- **Instancing.** To draw 1,000 copies of one tree mesh, the game makes one draw call
+  with 1,000 *instances*. A buffer holds each copy's transform, a 4 × 4 matrix of 16
+  four-byte floats, which is 64 bytes, so 1,000 copies take 64,000 bytes. Earlier we saw
+  that one draw can contain many objects; instancing is the deliberate version of it.
+- **Compute shaders.** A compute shader is not part of drawing. It is a general GPU
+  program that runs once for each item in a grid of work, reading and writing buffers.
+  Engines use it for particles, culling, mesh deformation, and post-processing.
+- **Post-processing shaders.** A fragment shader run over a full-screen rectangle, reading
+  the finished picture as a texture, produces effects such as bloom and colour grading
+  (Lesson 7.2).
+- **Extending the standard material.** Engines let a game add its own shader code and
+  extra vertex data, such as a per-vertex wind weight, to a standard material instead of
+  rewriting it.
+
+### Why many small draws cost frame time
+
+Each draw call costs the CPU something even if the GPU's share is tiny, because the
+driver checks the bound state and builds the commands. Suppose, as an illustration, one
+draw costs 5 microseconds of CPU time. Then 10,000 draws cost 10,000 × 5 = 50,000
+microseconds, which is 50 ms, three frames of the 16.67 ms budget from Lesson 4.1, with
+the GPU waiting. Instancing, merging meshes that share a material, texture atlases, and
+culling (Lesson 7.2) all exist to cut the number of draws.
+
+A **stress test** finds the limit by multiplying one thing, such as cubes, sprites,
+lights, animated characters, or text, and watching the frame time. If 1,000 cubes take
+4 ms and 4,000 take 16 ms, each costs 0.004 ms and the 16.67 ms budget runs out at about
+16.67 ÷ 0.004 = 4,167 cubes. Halving the window's pixel count tells you which processor
+is the limit: if the frame time does not change, the CPU, not the GPU, is the bottleneck.
 
 This is a classification problem. A threshold such as `count > 500` separates the examples you observed, not necessarily the concept “player.” Test it against weapons, detailed scenery, menus, different models, and different graphics settings. Report false positives (something your rule caught that is not a player) and false negatives (a player your rule missed) instead of quietly turning a correlation into a definition.
 
@@ -20500,8 +21241,8 @@ The exact-build result has four observable checks:
 ## Lesson 7.5 — Camera Rays, Collisions, and Crosshairs
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/5/05/
 Category: 3D Space, Rendering, and Tool Design
-Estimated reading time: 26 minutes
-Summary: See how a camera ray, collision query, and occlusion test become a game's crosshair target.
+Estimated reading time: 34 minutes
+Summary: See how a camera ray, collision query, and occlusion test become a game's crosshair target, and how the same ray from a mouse cursor picks what is under it.
 
 ## Use an existing UI clue
 
@@ -20600,6 +21341,74 @@ is `t = -b - sqrt(discriminant)`, provided `t ≥ 0`. If the origin is inside th
 sphere, the nearer root may be negative and the farther root must be considered.
 Production engines use several shape types and acceleration structures, but this
 same “generate candidates, reject invalid roots, choose nearest” reasoning applies.
+
+## Picking: the same ray, from the cursor
+
+A mouse cursor is a crosshair that can move. **Picking** is the question "which object
+is under the cursor?", and games use it to select units, press buttons, drag items, and
+click on the world. It works like the centred crosshair, with one extra step to find the
+ray.
+
+**Step 1: pixel to normalized coordinates.** This reverses the conversion at the end of
+Lesson 7.1. On an 800 × 600 window, a cursor at pixel `(600, 150)` has
+
+```text
+ndc_x = 2 × 600 ÷ 800 − 1 = 0.5
+ndc_y = 1 − 2 × 150 ÷ 600 = 0.5
+```
+
+**Step 2: build the ray.** For a perspective camera at the origin looking along `+z`, with
+a 90° vertical field of view (`tan 45° = 1`) and aspect 800 ÷ 600 = 1.3333, the ray
+leaves the camera in the direction
+
+```text
+x = 0.5 × 1.3333 × 1 = 0.6667
+y = 0.5 × 1          = 0.5
+z = 1
+length = √(0.6667² + 0.5² + 1²) = √1.6944 = 1.3017
+normalized = (0.5122, 0.3841, 0.7682)
+```
+
+A camera that is turned adds one more step, rotating that direction by the camera's own
+axes (Lesson 7.1). An **orthographic** camera is simpler: every ray points straight
+forward, and the ray's origin is the world point under the cursor, such as the `(5, 3)`
+that Lesson 7.1 found for the pixel `(600, 180)`.
+
+**Step 3: test the candidates.** The broad phase keeps the objects whose bounding shapes
+the ray might cross, and each is tested, nearest hit wins. For a box that lines up with
+the axes the test works one axis at a time. In a flat example, a ray starts at `(0, 0)`
+and heads in the direction `(1, 0.5)`, and a box spans x from 4 to 6 and y from 1.5 to 3:
+
+```text
+x range:  t from 4 ÷ 1   = 4 to 6 ÷ 1   = 6
+y range:  t from 1.5 ÷ 0.5 = 3 to 3 ÷ 0.5 = 6
+enters at the later start  = max(4, 3) = 4
+leaves at the earlier end  = min(6, 6) = 6
+4 ≤ 6, so the ray hits the box, first at t = 4, the point (4, 2)
+```
+
+Move the box up so that y spans 3.5 to 5 and the y range becomes t from 7 to 10, so the
+ray would have to enter at 7 but has already left at `min(6, 10) = 6`. Entering after
+leaving means a miss.
+
+Two other methods are common:
+
+- **Colour picking.** Each object is drawn into an off-screen texture in its own flat
+  colour that encodes its number. Object 300 is `300 = 0 × 65536 + 1 × 256 + 44`, so its
+  colour is `(0, 1, 44)`. Reading the one pixel under the cursor and decoding the
+  colour gives the object, already corrected for anything in front of it. It costs an
+  extra pass and a read-back from the GPU.
+- **Sprite picking.** In 2D, convert the cursor to a world point as in Lesson 7.1 and
+  test whether it falls inside each sprite's rectangle, taking the topmost layer.
+
+Dragging builds on the same query. When the button goes down, the game picks the object.
+While the mouse moves, it casts the ray again each frame and moves the object to where the
+ray meets a floor or a plane. When the button comes up, it drops the object. Many engines
+also have a debug view that draws the ray and the thing it hit, which is the quickest way
+to see why a click picked the wrong object.
+
+Lesson 7.9 runs the opposite way, from a world point to a pixel. The "target under the
+crosshair" value this lesson hunts for is the result of this computation.
 
 ## Rendering visibility and collision visibility differ
 
@@ -20890,8 +21699,8 @@ The lasting skill is finding an existing semantic result—“the object under t
 ## Lesson 7.6 — Aim Geometry and Target Selection
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/5/06/
 Category: 3D Space, Rendering, and Tool Design
-Estimated reading time: 35 minutes
-Summary: Connect vectors to yaw, pitch, angular error, target ranking, target points, timing, and projectile motion.
+Estimated reading time: 44 minutes
+Summary: Connect vectors to yaw, pitch, angular error, target ranking, how animation poses a skeleton, target points, timing, and projectile motion.
 
 ## Break the problem into layers
 
@@ -21230,6 +22039,58 @@ Tie-breaking must also be stable. If two scores differ only by floating-point
 noise, prefer the current target or a stable entity ID. Otherwise the choice can
 oscillate every frame.
 
+## How animation moves a character
+
+The next section aims at a character's head, and a head is wherever the animation
+has put it this frame. An **animation** describes how some values change over time.
+The values can be a door's angle, a button's colour, the frame of a sprite, or the
+transforms of a whole skeleton.
+
+**Keyframes and interpolation.** An animation does not store a value for every frame.
+It stores values at a few moments, called **keyframes**, and the engine fills in the
+rest by interpolating between them (Lesson 4.6). A door keyed at 0° at time 0.0 s and
+90° at 1.0 s is at 90 × 0.25 = 22.5° a quarter of a second in. Add easing and the same
+moment gives 90 × 0.4375 = 39.375° with the ease-out curve from Lesson 4.6. Turns are
+blended as quaternions (Lesson 7.1). A sprite animation is the same idea with whole
+frames, picked from a sprite sheet by the clock (Lesson 7.2).
+
+**Skeletons and skinning.** A 3D character is a mesh attached to a **skeleton**: a
+hierarchy of **bones**, each with a transform relative to its parent bone (Lesson 7.1),
+so turning the upper arm carries the forearm and hand. Every vertex lists up to four
+bones and a **weight** for each, and the weights add up to 1. Animation changes the
+bones' transforms every frame, and the vertex shader moves each vertex by blending what
+its bones did. To see the blend, use only movement. A vertex starts at `(0, 1, 0)` with
+weight 0.75 on the upper arm and 0.25 on the forearm. In this pose the upper arm moves
+its points by `(2, 0, 0)` and the forearm by `(6, 0, 0)`:
+
+```text
+vertex = 0.75 × (0 + 2, 1, 0) + 0.25 × (0 + 6, 1, 0)
+       = (1.5, 0.75, 0) + (1.5, 0.25, 0) = (3, 1, 0)
+```
+
+The vertex goes mostly where the upper arm goes and is pulled a little toward the
+forearm, which is why a bent elbow bends smoothly instead of tearing. Real bones use
+full transforms, not just a move, but the weighted blend is the same. A skeleton of 60
+bones, with one 64-byte matrix each (Lesson 7.1), is 60 × 64 = 3,840 bytes of pose that
+is rebuilt every frame.
+
+**Choosing and blending clips.** A character has many **clips**: idle, walk, run, jump.
+An **animation graph** or state machine (Lesson 1.3) decides which clip plays and when
+to switch. A switch is a cross-fade: for 0.2 s the pose is `pose_A × (1 − w) + pose_B × w`,
+with the weight `w` rising from 0 to 1, so at 0.1 s it is an even half and half. A **mask**
+restricts a clip to some bones, such as a wave that plays on the arm while the legs keep
+walking. An **animation event** is a marker at one moment in a clip that runs code, such
+as the footstep sound 0.3 s into the walk.
+
+**Morph targets.** A face cannot be posed with bones alone. A **morph target**, or
+blend shape, stores the changed positions of vertices for one expression as offsets from
+the base mesh. A vertex at `(0, 0, 0)` with a smile offset of `(0, 0.2, 0)` and a smile
+weight of 0.5 is drawn at `(0, 0.1, 0)`. Many targets can be mixed at once.
+
+For reading memory, this means a character's pose is per-frame state, built from a clock
+value (seconds into the clip) and the bones' matrices. It is not a fixed fact stored next
+to the character's position.
+
 ## Choose an aim point, not merely an entity origin
 
 An entity's position often refers to its feet, collision-cylinder center, or model
@@ -21443,8 +22304,8 @@ The full compiled implementation is [`assaultcube_tools.rs`](/windows-labs/src/w
 ## Lesson 7.7 — Recoil, Spread, and Camera Motion
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/5/07/
 Category: 3D Space, Rendering, and Tool Design
-Estimated reading time: 23 minutes
-Summary: Separate input, weapon kick, spread, camera shake, and recovery to understand why the view moves after a shot.
+Estimated reading time: 32 minutes
+Summary: Separate input, weapon kick, random spread, camera shake and other camera motion, and recovery to understand why the view moves after a shot.
 
 ## What recoil is inside a program
 
@@ -21696,6 +22557,60 @@ Fire a single shot before and after enabling it. Ammo and firing animation shoul
   duration="11 seconds"
   caption="The original no-recoil demonstration shows firing with the camera effect altered. Watch camera motion separately from ammunition and firing animation; changing one recoil store does not establish that every weapon effect has changed."
 />
+
+## Random spread: choosing a point in a circle
+
+Spread adds a random offset to the direction of a shot. The offset is usually a random
+point inside a small circle around the aim direction, and picking that point fairly is
+easier to get wrong than it looks.
+
+The obvious recipe is a random distance `r = R × u`, with `u` chosen evenly between 0
+and 1, at a random angle. It bunches the shots near the middle. Half of the values of
+`u` fall below 0.5, so half of the shots land inside the circle of radius 0.5 × R, but
+that circle has only (0.5)² = 25% of the area. The fix is to take a square root, `r = R × √u`,
+because the area inside a radius grows as the radius squared:
+
+```text
+spread radius R = 2 degrees
+u = 0.25   ->  r = 2 × √0.25 = 2 × 0.5 = 1.0 degree      (the naive recipe gives 0.5)
+v = 0.125  ->  angle = 360° × 0.125 = 45°
+offset = (r × cos 45°, r × sin 45°) = (0.7071, 0.7071) degrees
+```
+
+The two values `u` and `v` come from a pseudo-random number generator. A game that seeds
+it with the same number gets the same "random" sequence every time, which is how replays
+and networked games keep every machine in agreement. Two runs that start from the same
+seed repeat their spread exactly, and runs that start from different seeds do not.
+
+The spread offset is added to the shot direction, not to the camera, which is why the
+diagram above gives them separate paths.
+
+## Camera motion: shake, follow, orbit, and zoom
+
+The camera has more layers than recoil. Each is a rule that changes where the camera is or
+where it looks.
+
+- **Shake** is a short random offset that fades. With an amplitude of 4 pixels that fades
+  to 0 over 0.5 s, the largest offset at 0.1 s is `4 × (1 − 0.1 ÷ 0.5) = 3.2` pixels, at 0.25 s it is
+  2.0, and at 0.5 s it is 0. Many games track a "trauma" value from 0 to 1 and shake by its
+  square, so a light hit of 0.5 shakes at only 0.25 of the maximum. Shake is presentation:
+  it moves the picture, not the aim.
+- **Follow** cameras trail the player. A top-down 2D camera eases toward the player with
+  the smoothing from Lesson 4.6, and often has a dead zone, a box around the screen's centre
+  inside which the player can move without moving the camera.
+- **Orbit** cameras circle a target. With `z` up, the camera sits at the target plus
+  `distance × (cos(pitch) × cos(yaw), cos(pitch) × sin(yaw), sin(pitch))` and always looks back at
+  the target. For a target at the origin, a distance of 10, a yaw of 90°, and a pitch of
+  30°, that is `10 × (0.866 × 0, 0.866 × 1, 0.5) = (0, 8.66, 5)`.
+- **First-person** cameras sit at the character's head and take yaw and pitch from the
+  mouse. Pitch is clamped just short of straight up or down, so the view cannot flip over
+  (Lesson 7.1). The weapon in the player's hand, the **view model**, is often drawn with its
+  own field of view, narrower than the world's, so it does not look stretched.
+- **Free** and **pan** cameras are for editors: a free camera moves along its own forward
+  and right directions, and a 2D pan camera moves opposite to the drag.
+- **Zoom** narrows the field of view for a perspective camera, which Lesson 7.1 showed
+  scales the picture by 1.732 when it goes from 90° to 60°. For an orthographic camera,
+  zooming shrinks the box of visible world, so halving its width doubles the pixels per unit.
 
 ## Recoil is a sum of layers
 
@@ -22548,6 +23463,36 @@ An oriented bounding box requires its local corners to pass through the object's
 world transform first. A skeletal model may need pose-derived bounds because its
 rest-pose box no longer tightly encloses the animation.
 
+## Gizmos: the same projection, used by developers
+
+Engine developers draw overlays with this same projection to see what the game cannot
+show on its own. A **gizmo**, or debug drawing, is a shape drawn for a single frame: a
+line, an arrow, a box around a collision shape, a circle for a light's reach, the axes
+of an object, or a text label. The code calls something like `line(a, b, colour)` on
+every frame, the engine projects the two ends to pixels, and the line is drawn on top.
+When the code stops calling, the line is gone. Nothing was added to the game world.
+
+The axes gizmo is the simplest. By convention red, green, and blue stand for the `x`,
+`y`, and `z` directions. For an object at `(10, 5, 0)`, with each axis drawn 1 unit long,
+the engine projects four points and draws three lines from the first:
+
+```text
+origin   (10, 5, 0)  ->  pixel A
+x end    (11, 5, 0)  ->  pixel B   red line   A to B
+y end    (10, 6, 0)  ->  pixel C   green line A to C
+z end    (10, 5, 1)  ->  pixel D   blue line  A to D
+```
+
+A bounding-box gizmo projects the box's eight corners, as above, and joins them with 12
+edges. A text gizmo puts a label at one projected point, which is what the labels of
+the overlay in this lesson are. An editor's **transform gizmo** adds interaction: the
+three arrows are picked with the mouse ray from Lesson 7.5, and dragging moves the
+selected object along the chosen axis.
+
+This is why a gizmo is a useful check on your own work. If the axes drawn at a player's
+feet do not stay glued to the player when the camera turns, the projection, the snapshot,
+or the viewport is wrong, and the failure table below tells you which to suspect.
+
 ## Diagnose world-to-screen failures
 
 | Symptom | First check |
@@ -23316,8 +24261,8 @@ the ownership, commands, and restoration rules still apply.
 ## Lesson 7.13 — In-Game Menus and Text Rendering
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/8/09/
 Category: 3D Space, Rendering, and Tool Design
-Estimated reading time: 26 minutes
-Summary: Understand how a game's text function can draw a small menu and why input edges, frame timing, and string lifetimes matter.
+Estimated reading time: 36 minutes
+Summary: Understand what a game's interface is made of, how its text function can draw a small menu, and why input edges, frame timing, and string lifetimes matter.
 
 ## A third option between a window and an overlay
 
@@ -23337,6 +24282,53 @@ The trade is that you are now running inside the game's render path, so
 the hook must finish quickly. A file read, sleep, or blocking channel receive
 there delays the game's next frame; Lesson 4.10 measures the same cost in a
 per-frame recorder.
+
+## What a game's interface is made of
+
+Before borrowing the game's text function, it helps to know what it sits on top of. A
+game's interface is drawn by the same pipeline as its world (Lesson 7.2), in a last pass
+that ignores the 3D camera: flat rectangles and text, placed in screen units.
+
+- **Text.** A font is turned into a **glyph atlas**, a texture holding every character as a
+  small image (the atlas idea from Lesson 7.2). To draw "Gold", the engine draws one quad
+  per letter, each showing that letter's rectangle in the atlas, and moves along by each
+  letter's **advance width**. If the advances of G, o, and l are 12, 9, and 4 pixels, the
+  letter d starts 12 + 9 + 4 = 25 pixels to the right of where the G started.
+- **Layout.** Elements sit in boxes. **Anchoring** pins a box to part of the screen: a
+  200 × 50 box anchored to the bottom-right corner of a 1280 × 720 screen with a 20-pixel
+  margin is at `x = 1280 − 20 − 200 = 1060` and `y = 720 − 20 − 50 = 650`. In a **flex**
+  layout, boxes in a row share the space by weight: in a 600-pixel row, three boxes with
+  weights 1, 2, and 1 get 150, 300, and 150 pixels. A **grid** layout assigns boxes to rows
+  and columns, and size limits keep a box between a smallest and a largest size.
+- **Scaling.** Interfaces are usually designed for a reference size, such as 1920 × 1080, and
+  scaled by the smaller of `width ÷ 1920` and `height ÷ 1080`. On a 1280 × 720 screen both
+  are 0.6667, so a 300-pixel button is drawn 200 pixels wide. The window's scale factor from
+  Lesson 6.6 multiplies the result again.
+- **Stretchable art.** A button picture with decorated corners cannot simply be stretched.
+  **Nine-slice** drawing cuts it into a 3 × 3 grid: the four corners keep their size, the
+  four edges stretch in one direction, and the centre stretches in both. Drawing a picture
+  with 16-pixel corners as a 200 × 60 button gives four 16 × 16 corners, top and bottom
+  edges 200 − 32 = 168 wide, side edges 60 − 32 = 28 tall, and a 168 × 28 centre.
+- **Order and clipping.** Elements are drawn back to front by a layer number. **Clipping**
+  hides whatever falls outside a box, which is how a scrolling list works: the items are
+  moved up by the scroll amount, and only the part inside the list's box is drawn.
+- **Input and focus.** A click is tested against each box's rectangle, the 2D picking of
+  Lesson 7.5, and the topmost box under the cursor gets it. For a keyboard or gamepad, the
+  game keeps a **focus**, the element that will respond, and moves it to the nearest
+  element in the direction pressed. A **text box** keeps a string and a cursor position and
+  receives typed characters. Sliders, checkboxes, and buttons are each a small state
+  machine: a value, and whether they are hovered, pressed, or focused.
+- **Popups.** A **context menu** is a box created at the cursor when the right button is
+  pressed and sized to fit its items. If it would run off the screen it is moved back: a 150
+  pixel wide menu opened at `x = 1200` on a 1280 pixel screen is placed at
+  `min(1200, 1280 − 150) = 1130`.
+- **Where it is drawn.** Most interface is drawn over the finished 3D picture. It can also be
+  drawn into a texture and placed on a surface in the world, such as a screen on a wall, and
+  a label that follows an object uses the projection from Lesson 7.9.
+
+Lesson 6.7 contrasts the two ways such code is written: an **immediate-mode** interface
+redraws every element on every frame from the current state, and a **retained-mode**
+interface keeps a tree of elements in memory and changes them when something happens.
 
 ## Hook a per-frame site, then call the text function
 
@@ -26182,8 +27174,8 @@ References: [named-pipe operations](https://learn.microsoft.com/en-us/windows/wi
 ## Lesson 9.1 — Game Files and Live Memory
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/9/01/
 Category: Game Files, Mods, and Trust
-Estimated reading time: 18 minutes
-Summary: See how saves, configuration, textures, maps, and archives preserve game state outside a running process.
+Estimated reading time: 26 minutes
+Summary: See how saves, configuration, textures, maps, and archives preserve game state outside a running process, and how a game turns an asset file into something it can draw or play.
 
 ## State can outlive a running game
 
@@ -26225,6 +27217,33 @@ If a supported mod file can express your idea, use it. File-based changes are ea
 :::
 
 ![A game world built from many resources](/assets/images/8/1/urbanterror.jpg)
+
+## From a file to something on screen: loading an asset
+
+A file on disk is not what the game draws. An **asset** is any file the game loads, such as
+a texture, a model, a sound, or a level, and loading one takes several steps:
+
+1. The game asks for the asset by **path**, and the engine hands back a **handle** at once,
+   a small ID like the entity IDs of Lesson 4.1. The data has not arrived yet.
+2. A background task (Lesson 4.1) reads the file and **decodes** it. A PNG's compressed
+   bytes become raw pixels. A 256 × 256 image that takes 40 KB on disk becomes
+   256 × 256 × 4 bytes (red, green, blue, and alpha) = 262,144 bytes. A **mipmap chain** adds
+   half-size copies, 128 × 128 down to 1 × 1, for distant surfaces, and the copies add
+   about a third more: 262,144 × 4 ÷ 3 ≈ 349,525 bytes.
+3. The pixels are **uploaded** to the graphics card's memory. Only then is the asset
+   *ready*. Until then the handle says "loading," and the engine draws a stand-in or nothing.
+4. The engine keeps a cache, so a second request for the same path gets the same handle and
+   no second copy. This is the shared asset behind the separate instances of Lesson 1.3.
+
+There are a few variations. An **embedded** asset is compiled into the executable, so a
+small icon needs no file. A **generated** asset is built while the game runs, such as a
+texture drawn by code. A **web** asset is downloaded. A loading screen waits for every
+handle it asked for and moves on when the count of unfinished ones reaches 0.
+
+This explains two things you will meet. A replacement file is found by its **path**, so a
+mod must keep the name, the folder, and the format (Lesson 9.4). And memory holds the
+decoded pixels, not the PNG, so a scan of the process finds raw image data and never the
+file's own bytes.
 
 ## Observe file access
 
@@ -27194,8 +28213,8 @@ define units and bundle mods.
 ## Lesson 9.4 — Textures and Asset Replacement
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/9/03/
 Category: Game Files, Mods, and Trust
-Estimated reading time: 15 minutes
-Summary: Connect a visible game surface to its texture file, preserve the expected format, and package a reversible replacement.
+Estimated reading time: 30 minutes
+Summary: Connect a visible game surface to its texture file, preserve the expected format, and package a reversible replacement, then read the same ideas in a 3D model (glTF) and a sound.
 
 ## Identify one surface
 
@@ -27427,7 +28446,108 @@ If extracting:
 
 A model stores UV coordinates that map its surface to the image. One texture can repeat, rotate, or cover many surfaces. Changing the image may affect more places than the one you first noticed.
 
+A coordinate outside 0 to 1 is handled by the texture's **addressing mode**. With *repeat*, `u = 2.5` is treated as 0.5, so the image tiles. With *clamp*, it is treated as 1.0, so the edge pixels smear outward.
+
 ![The replacement texture in game](/assets/images/8/3/urbanterror7.png)
+
+## Models: reading a glTF file
+
+A texture is one image. A 3D model is several arrays of numbers plus the rules that join
+them. **glTF** is an open format for 3D models and scenes from the Khronos Group, the same
+group that maintains OpenGL, and it is a good example because it is plain about its own
+structure. A glTF model is a **JSON** description of what is in the model, in `.gltf` text
+with its binary data alongside, or all packed in one `.glb` file. Reading it is the
+two-stage parse from Lesson 9.1: first check that the bytes are valid JSON of the right
+shape, then check that what the JSON says makes sense.
+
+The JSON is a set of lists that point at each other by position. The smallest useful model
+is one triangle:
+
+```json
+{
+  "asset": { "version": "2.0" },
+  "scene": 0,
+  "scenes": [ { "nodes": [ 0 ] } ],
+  "nodes": [ { "mesh": 0, "translation": [ 0, 2, 0 ] } ],
+  "meshes": [ { "primitives": [ { "attributes": { "POSITION": 1 }, "indices": 0 } ] } ],
+  "buffers": [ { "uri": "triangle.bin", "byteLength": 44 } ],
+  "bufferViews": [
+    { "buffer": 0, "byteOffset": 0, "byteLength": 6,  "target": 34963 },
+    { "buffer": 0, "byteOffset": 8, "byteLength": 36, "target": 34962 }
+  ],
+  "accessors": [
+    { "bufferView": 0, "componentType": 5123, "count": 3, "type": "SCALAR" },
+    { "bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3",
+      "min": [0, 0, 0], "max": [1, 1, 0] }
+  ]
+}
+```
+
+Follow the chain from the top. The scene lists node 0. Node 0 holds mesh 0, and moves it 2
+units up with a `translation` (a node can also have a rotation, stored as a quaternion
+from Lesson 7.1, a scale, and children, which is the parent and child arrangement of
+Lesson 7.1). The mesh's one primitive says its vertex positions are in accessor 1 and its
+indices are in accessor 0. An **accessor** says how to read a stretch of bytes: accessor 1
+is `VEC3` (three numbers per item) of `componentType` 5126 (a 4-byte float), `count` 3, so
+each vertex is 3 × 4 = 12 bytes and the three vertices take 3 × 12 = 36 bytes. Accessor 0
+is `SCALAR` of 5123 (a 2-byte unsigned integer), count 3, which is 3 × 2 = 6 bytes, the three
+indices. A **buffer view** is a slice of the buffer: view 0 is bytes 0 to 6 and view 1 is
+bytes 8 to 44, because the indices are padded with 2 bytes so that the floats start on a
+4-byte boundary. The buffer is 8 + 36 = 44 bytes in all.
+
+Because a model file is untrusted input, a loader checks every one of those links. Does
+the accessor name a buffer view that exists? Does its offset plus `count` × item size fit
+inside that view? Accessor 1 needs 0 + 36 = 36 bytes and its view is 36 long, so it fits. A
+file that claims `count` 1,000,000 for the same view needs 1,000,000 × 12 = 12,000,000
+bytes, and must be rejected before anything is allocated or read.
+
+The rest of a model hangs off the same pattern: **materials** (colours, textures, and
+whether the surface is opaque, cut out, or blended, as Lesson 7.2 explained), **skins**
+(the skeleton, with the bone indices and weights of Lesson 7.6), **animations** (lists of
+times and values for a node's translation, rotation, or scale, played with the
+interpolation of Lesson 4.6), and free-form **extras** where a game can store its own data.
+A scene viewer is a tool that does nothing but load such a file and show it, which is the
+quickest way to see what a model contains.
+
+## Sounds: samples, mixing, and position
+
+A sound is stored as a list of **samples**, measurements of the sound wave taken many
+times a second. CD-quality audio takes 44,100 samples a second for each of 2 channels
+(left and right), each sample 2 bytes. That is 44,100 × 2 × 2 = 176,400 bytes a second, or
+10,584,000 bytes, about 10 MiB, a minute. A three-minute song would take about 30 MiB, so
+music is stored compressed (Ogg Vorbis and MP3 are common) and **streamed**, decoded a
+chunk at a time, while a short sound effect is decoded once and kept in memory.
+
+Several sounds play at once, but the sound card takes one stream, so the engine **mixes**
+them: for every sample it adds the playing sounds' samples, each scaled by its own volume.
+With samples running from −1 to 1, two sounds at 0.7 and 0.6 add to 1.3, which is past the
+limit, so it is cut to 1.0 and the sound distorts. Engines lower volumes or add a limiter
+to avoid that.
+
+The sound card asks for audio in small buffers. A buffer of 1,024 samples at 44,100 samples
+a second lasts 1,024 ÷ 44,100 = 0.0232 seconds, about 23 ms. If the engine has not filled
+the next one by then, the listener hears a click. So audio runs on its own thread with its
+own deadline, apart from the frame loop, as Lesson 11.8 describes.
+
+Some properties are simple to compute:
+
+- **Pitch.** Playing samples faster raises the pitch: a rate of 2.0 is an octave higher, since
+  every frequency doubles. A pure test tone of 440 hertz is generated as `sin(2π × 440 × t)`,
+  and at 44,100 samples a second one cycle is 44,100 ÷ 440 ≈ 100 samples long.
+- **Position.** A sound that comes from a place gets quieter with distance, say by
+  `1 ÷ distance`, and is placed left or right by the dot product (Lesson 4.6) of the
+  direction to it with the listener's right-hand direction. With the listener facing `+y`,
+  so that right is `+x`, a sound at `(3, 4, 0)` is 5 away, in the direction `(0.6, 0.8, 0)`, so
+  its pan is 0.6, to the right, and its loudness is 1 ÷ 5 = 0.2. Splitting that between the
+  ears by `(1 − pan) ÷ 2` and `(1 + pan) ÷ 2` gives a left volume of 0.2 × 0.2 = 0.04 and a
+  right volume of 0.2 × 0.8 = 0.16.
+- **Triggers.** A sound effect usually plays in response to an event, such as "coin 42 was
+  collected" (Lesson 1.3). The music follows the game's state, and changing tracks is a
+  cross-fade like the animation blend of Lesson 7.6: halfway through a 2-second fade, the old
+  track is at volume 0.5 and the new one at 0.5.
+
+Like a texture, a replacement sound has to match what the game expects: the same path and
+format, and usually the same sample rate and channel count.
 
 ## Package as a mod
 
@@ -33064,6 +34184,38 @@ When function A calls function B, the program must remember where B should retur
 A stack trace walks from the current frame toward older callers. Optimized code can inline functions, omit frame pointers, move values into registers, or reuse stack slots, so the neat classroom picture is a guide rather than a promise.
 
 That complexity is why Microsoft recommends `StackWalk64` instead of inventing a stack walker from raw pointers. Matching symbols and unwind information make the result much more reliable.
+
+## Worker threads and tasks: keeping slow work off the frame
+
+Lesson 4.1 showed that a frame has about 16.67 ms, and that loading a file or planning a
+path can take longer. Games solve this with **worker threads**. The **main thread** runs
+the frame loop, and the other threads do jobs for it.
+
+Starting a new thread for every job would be costly. Each thread reserves a stack, which
+is 1 MiB of address space by default for a Windows program, so 1,000 threads reserve about
+1,000 MiB, and the scheduler has to juggle all of them. Engines instead start a fixed
+**thread pool**: a handful of workers that wait for jobs in a queue. A common size is one
+fewer than the number of cores, leaving a core for the main thread, so 7 workers on an
+8-core processor. A job is a small function called a **task**. Whenever a worker is idle it
+takes the next task from the queue. A hundred tasks of 4 ms each take 100 ÷ 7 = 14.3, so 15,
+rounds of 4 ms = 60 ms on the 7 workers, against 100 × 4 = 400 ms on one thread.
+
+A task finishes on a worker thread, but the main thread must not find its objects
+changing in the middle of a frame. So the worker does not touch game objects. It sends its
+result through a **channel**, a queue that one thread writes and another reads, and the
+main thread picks results up at one known point, such as the start of a frame, when
+nothing else is using the data. Lesson 4.10 builds such a channel for a recorder.
+
+A result can arrive late. Suppose a task planned a path for entity 42 and, by the time
+the result is ready, that entity was despawned and its slot reused for a new entity. The
+task remembered the entity's generation number (Lesson 3.6), so the main thread compares it
+with the slot's current one and drops the result if they differ. Some engines write tasks
+as `async` functions that pause at a wait point and resume on the pool later, which is the
+same idea in different syntax.
+
+For an observer, a pool shows up as several threads that start at the same address and
+spend most of their time waiting. A tool that pauses threads, as the next lab does, may
+catch workers that are doing nothing.
 
 ## Start with a read-only thread inventory
 
@@ -41619,6 +42771,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>In Lua, a key whose value is present while the next key's value is missing. The length operator <code>#</code> may return any border, so a table with a hole in its sequence has no single length.</dd>
       <dt id="term-boundary-scan"><dfn>Boundary scan</dfn></dt>
       <dd>A test method in which a cell between each chip pin and the chip's logic can capture the pin's level or drive a chosen level. The cells form a shift register, so every connection on a board can be tested through one serial chain.</dd>
+      <dt id="term-bounding-volume"><dfn>Bounding volume</dfn></dt>
+      <dd>A simple shape, such as a sphere or a box, that stands in for an object's real shape in fast tests: contact, picking, and deciding whether to draw it. It is a rough fit on purpose, so touching the shape is not always touching the model.</dd>
       <dt id="term-branch"><dfn>Branch</dfn></dt>
       <dd>An instruction that may change which instruction runs next. Conditional branches implement decisions; unconditional jumps always transfer control.</dd>
       <dt id="term-breakpoint"><dfn>Breakpoint</dfn></dt>
@@ -41661,6 +42815,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>For an old console game, an address and a value: either a byte substituted when the game reads that address, or a value written to RAM once every frame. It works because those games keep their variables at fixed addresses.</dd>
       <dt id="term-checksum"><dfn>Checksum</dfn></dt>
       <dd>A compact value used mainly to detect accidental corruption. Unlike a keyed MAC or digital signature, an ordinary checksum does not prove who produced the data.</dd>
+      <dt id="term-client-area"><dfn>Client area</dfn></dt>
+      <dd>The part of a window a program draws into, without the title bar and borders. The window rectangle includes them, so converting between window and screen positions uses the client area's own origin.</dd>
       <dt id="term-clip-space"><dfn>Clip space</dfn></dt>
       <dd>The homogeneous coordinate space produced by a projection matrix. Clipping happens here before dividing <code>x</code>, <code>y</code>, and <code>z</code> by <code>w</code> to obtain NDC.</dd>
       <dt id="term-clock-cycle"><dfn>Clock cycle</dfn> <span class="glossary-alias">Cycle</span></dt>
@@ -41677,6 +42833,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>Translating code from one representation to another. Rust commonly compiles source to native machine code before a program runs; Lua compiles source to virtual-machine bytecode when it loads a chunk.</dd>
       <dt id="term-compression"><dfn>Compression</dfn></dt>
       <dd>A reversible transformation that represents data with fewer bytes. It is not encryption: compressed data may look irregular, but no secret key is required to restore it.</dd>
+      <dt id="term-compute-shader"><dfn>Compute shader</dfn></dt>
+      <dd>A GPU program that is not part of drawing: it runs once for each item in a grid of work and reads and writes buffers. Engines use it for particles, culling, mesh deformation, and post-processing.</dd>
       <dt id="term-concurrency"><dfn>Concurrency</dfn></dt>
       <dd>Multiple tasks making progress during overlapping time. Parallelism means work literally runs at the same instant; concurrent tasks may instead take turns.</dd>
       <dt id="term-console-variable"><dfn>Console variable</dfn> <span class="glossary-alias">cvar</span></dt>
@@ -41705,6 +42863,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>Confirming a field with independent checks that all agree, such as the instructions that access it, how its value changes when the game changes, the object it belongs to, and its range relative to other fields.</dd>
       <dt id="term-crash-dump"><dfn>Crash dump</dfn></dt>
       <dd>A captured subset of process state around a failure, often including threads, registers, stacks, modules, and selected memory. It is evidence from one moment, not a full recording of everything that happened earlier.</dd>
+      <dt id="term-culling"><dfn>Culling</dfn></dt>
+      <dd>Skipping work for what cannot be seen: objects outside the camera's view volume (frustum culling), triangles facing away (back-face culling), or objects hidden behind others (occlusion culling). Culling happens before drawing; the <a href="#term-depth-buffer">depth buffer</a> decides per fragment afterward.</dd>
     </dl>
   </section>
 
@@ -41725,6 +42885,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>An observable condition associated with debugging, such as a flag, handle, exception path, timing change, or modified instruction byte. Each artifact has false positives and can disappear across versions, so treat it as evidence rather than proof.</dd>
       <dt id="term-dpc"><dfn>Deferred procedure call</dfn> <span class="glossary-alias">DPC</span></dt>
       <dd>Driver code queued by an interrupt service routine to run shortly afterward at a lower priority, where it finishes the device work and completes waiting requests.</dd>
+      <dt id="term-delta-time"><dfn>Delta time</dfn></dt>
+      <dd>The time since the previous frame or step, in seconds. Movement is scaled by it (distance = speed × delta time) so a character's speed does not depend on the frame rate.</dd>
       <dt id="term-depth-buffer"><dfn>Depth buffer</dfn></dt>
       <dd>A per-sample store used to decide which fragment is in front. Its values are produced by projection and are often nonlinear; it is not simply “distance from the camera.”</dd>
       <dt id="term-detection-rule"><dfn>Detection rule</dfn></dt>
@@ -41769,6 +42931,10 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
   <section class="glossary-group" aria-labelledby="glossary-e">
     <div class="glossary-group__letter"><h2 id="glossary-e">E</h2><a href="#glossary-top">Top</a></div>
     <dl class="glossary-list">
+      <dt id="term-easing"><dfn>Easing</dfn></dt>
+      <dd>Reshaping the fraction used in an <a href="#term-interpolation">interpolation</a> so a motion starts gently, ends gently, or both, instead of moving at one constant speed.</dd>
+      <dt id="term-ecs"><dfn>ECS</dfn> <span class="glossary-alias">Entity component system</span></dt>
+      <dd>A design in which <a href="#term-entity">entities</a> are only identities, components are plain data attached to them, and systems are functions that run over every entity that has a given set of components. Behavior comes from which components an entity has.</dd>
       <dt id="term-effect-boundary"><dfn>Effect boundary</dfn></dt>
       <dd>The shared point where a requested operation becomes canonical game state. Preconditions are strongest when enforced here rather than on a distant UI flag or copied value.</dd>
       <dt id="term-efuse"><dfn>eFuse</dfn> <span class="glossary-alias">One-time programmable fuse</span></dt>
@@ -41827,6 +42993,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A model with a finite set of states and explicit transitions caused by inputs or events. It makes automation behavior reviewable instead of scattering related booleans through the program.</dd>
       <dt id="term-firmware"><dfn>Firmware</dfn></dt>
       <dd>Software that operates a device, commonly stored in nonvolatile memory. Firmware can include a real-time operating system or run bare-metal; it is distinct from the device driver running on a host computer. <a href="../pages/14/12/">Firmware and Bare-Metal Rust</a> builds an example.</dd>
+      <dt id="term-fixed-timestep"><dfn>Fixed timestep</dfn></dt>
+      <dd>Running the simulation in steps of one set length, such as 1/60 second, and carrying leftover real time into the next frame. Physics then behaves the same at any frame rate. Compare <a href="#term-delta-time">delta time</a>, which scales each update by the time that passed.</dd>
       <dt id="term-flash"><dfn>Flash memory</dfn></dt>
       <dd>Nonvolatile memory that retains contents without power and can be erased and programmed again. Firmware instructions commonly live in flash, while ordinary changing state uses RAM; flash has different update constraints and finite endurance.</dd>
       <dt id="term-floating-point"><dfn>Floating point</dfn> <span class="glossary-alias">f32 / f64</span></dt>
@@ -41837,6 +43005,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>The angular extent a camera sees. A projection matrix may encode vertical or horizontal FOV, so aspect ratio and convention matter when converting between them.</dd>
       <dt id="term-frame"><dfn>Frame</dfn></dt>
       <dd>One produced image or one update interval, depending on context. Game simulation and rendering can run at different rates, so “once per frame” needs a named loop.</dd>
+      <dt id="term-frame-budget"><dfn>Frame budget</dfn> <span class="glossary-alias">Frame time</span></dt>
+      <dd>The time one frame may take to keep up with the display: 16.67 ms at 60 frames per second. Frame time is how long a frame actually took, and the frame rate is its reciprocal, so frame times add up where frame rates do not.</dd>
       <dt id="term-fragment"><dfn>Fragment</dfn></dt>
       <dd>A candidate contribution to a screen sample produced during rasterization. Depth, stencil, and blending tests decide whether and how it changes the framebuffer.</dd>
       <dt id="term-framing"><dfn>Framing</dfn></dt>
@@ -41863,6 +43033,14 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>The processor exception, vector 13, raised when code breaks a protection rule, such as running a privileged instruction like <code>hlt</code> or <code>wrmsr</code> in ring 3.</dd>
       <dt id="term-generation"><dfn>Generation</dfn></dt>
       <dd>A counter or version paired with an identity so reuse of the same slot or address can be distinguished from the older object that occupied it.</dd>
+      <dt id="term-gimbal-lock"><dfn>Gimbal lock</dfn></dt>
+      <dd>The loss of one rotation control when two of the yaw, pitch, and roll angles end up turning around the same line, as happens when the view points straight up. <a href="#term-quaternion">Quaternions</a> avoid it.</dd>
+      <dt id="term-gizmo"><dfn>Gizmo</dfn> <span class="glossary-alias">Debug drawing</span></dt>
+      <dd>A shape drawn for a single frame to show something invisible, such as a line, an arrow, a box around a collision shape, or an object's axes. Nothing is added to the game world. In an editor, a transform gizmo also lets you drag an object.</dd>
+      <dt id="term-gltf"><dfn>glTF</dfn></dt>
+      <dd>An open format from the Khronos Group for 3D models and scenes: a JSON description whose lists point at each other by position, plus binary buffers of vertex data. A <code>.glb</code> file packs both into one.</dd>
+      <dt id="term-glyph-atlas"><dfn>Glyph atlas</dfn></dt>
+      <dd>A texture holding every character of a font as a small image, so text is drawn as one textured rectangle per character.</dd>
       <dt id="term-gpio"><dfn>GPIO</dfn> <span class="glossary-alias">General-purpose input/output</span></dt>
       <dd>A configurable hardware pin used to sense an electrical input or drive an output. A pin's high/low level must be interpreted using the circuit's meaning; an active-low button is pressed when the input is low.</dd>
       <dt id="term-graph"><dfn>Graph</dfn></dt>
@@ -41937,6 +43115,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>PE metadata naming DLLs and symbols an image expects the loader to resolve. The IAT is the corresponding live table of resolved addresses.</dd>
       <dt id="term-in-process-tool"><dfn>In-process tool</dfn></dt>
       <dd>Code running inside the target process. It can use local pointers and call compatible functions directly, but a fault can also crash or corrupt the target.</dd>
+      <dt id="term-instancing"><dfn>Instancing</dfn></dt>
+      <dd>Drawing many copies of one mesh in a single draw call, with a buffer holding each copy's transform. It avoids the per-call cost of thousands of separate draws.</dd>
       <dt id="term-instruction"><dfn>Instruction</dfn></dt>
       <dd>One decoded machine operation. On x86, instructions have variable byte lengths, so the next instruction boundary must be found by decoding—not by assuming a fixed size.</dd>
       <dt id="term-instruction-boundary"><dfn>Instruction boundary</dfn></dt>
@@ -41949,6 +43129,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A comparison intended to detect unwanted change, such as verifying a signed file, hash, authenticated tag, or protected invariant. Its strength depends on what is covered, when it is checked, and who controls the reference value.</dd>
       <dt id="term-integrity-level"><dfn>Integrity level</dfn></dt>
       <dd>A Windows label used to limit interaction from lower-integrity callers toward higher-integrity objects and processes. It is a security boundary label, not a trustworthiness score.</dd>
+      <dt id="term-interpolation"><dfn>Interpolation</dfn> <span class="glossary-alias">Lerp</span></dt>
+      <dd>Finding a value some fraction <code>t</code> of the way between two others: <code>start + (end − start) × t</code>. Games use it to blend positions, colors, and angles, and to draw motion between simulation steps.</dd>
       <dt id="term-interpreter"><dfn>Interpreter</dfn></dt>
       <dd>A program that carries out another program's instructions, which may be source statements or virtual-machine bytecode. Lua first compiles source chunks to bytecode, then its virtual-machine interpreter executes them; the physical CPU runs the interpreter's own native instructions.</dd>
       <dt id="term-interrupt"><dfn>Interrupt</dfn></dt>
@@ -41985,6 +43167,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A CPU protection level where Windows and drivers can access system-wide resources. A bug here can compromise or crash the whole machine, unlike most user-mode failures.</dd>
       <dt id="term-key"><dfn>Cryptographic key</dfn></dt>
       <dd>A secret or public parameter that controls a cryptographic operation. A key is not the same as a password; passwords normally need a key-derivation step before becoming suitable key material.</dd>
+      <dt id="term-keyframe"><dfn>Keyframe</dfn></dt>
+      <dd>A value stored at one moment of an animation. The engine fills in the moments between keyframes by interpolating.</dd>
       <dt id="term-key-lifecycle"><dfn>Key lifecycle</dfn></dt>
       <dd>The complete path of a key: generation, storage, loading, use, rotation, revocation, backup, and destruction. Strong encryption cannot repair careless key handling.</dd>
     </dl>
@@ -42025,6 +43209,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A structured list describing files, versions, hashes, actions, or dependencies. A reversible mod manifest records both what to change and how to restore the original state.</dd>
       <dt id="term-mask"><dfn>Mask</dfn></dt>
       <dd>A value marking which bits or pattern positions matter. In a byte signature, a mask can require stable bytes while ignoring relocation-sensitive positions with wildcards.</dd>
+      <dt id="term-material"><dfn>Material</dfn></dt>
+      <dd>The description of how a surface looks: its base color, textures, response to light, and treatment of transparency. A mesh says where the surface is; its material says how it appears.</dd>
       <dt id="term-matrix"><dfn>Matrix</dfn></dt>
       <dd>A rectangular grid of numbers used to transform vectors. In graphics, matrix order, row/column convention, coordinate handedness, and storage layout must all be identified.</dd>
       <dt id="term-memory-integrity"><dfn>Memory integrity</dfn> <span class="glossary-alias">HVCI</span></dt>
@@ -42041,12 +43227,18 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A contiguous range of virtual pages reported with common state, protection, and backing type. Scanners walk regions and read only bounded, readable ranges.</dd>
       <dt id="term-mmio"><dfn>Memory-mapped I/O</dfn> <span class="glossary-alias">MMIO</span></dt>
       <dd>Reaching a device through addresses: loads and stores to those addresses go to the device’s registers instead of RAM. The kernel maps such ranges as uncacheable, and an emulator’s bus function imitates the same routing in software.</dd>
+      <dt id="term-mesh"><dfn>Mesh</dfn></dt>
+      <dd>The shape of a 3D object: a collection of vertices and the indices that join them into triangles. A mesh is geometry only; a <a href="#term-material">material</a> and <a href="#term-texture">textures</a> give it appearance.</dd>
       <dt id="term-metatable"><dfn>Metatable</dfn></dt>
       <dd>A Lua table that defines how another value responds to operations such as indexing, arithmetic, or calls. It changes behavior through named metamethods; it is not inheritance by itself.</dd>
       <dt id="term-microcontroller"><dfn>Microcontroller</dfn></dt>
       <dd>A chip combining a processor core, memory, and peripherals such as timers and I/O pins. A CPU architecture alone does not identify a microcontroller's memory map or a board's wiring.</dd>
+      <dt id="term-mipmap"><dfn>Mipmap</dfn></dt>
+      <dd>A precomputed chain of half-size copies of a texture, used for distant surfaces. The copies add about a third to the texture's memory.</dd>
       <dt id="term-module"><dfn>Module</dfn></dt>
       <dd>One loaded EXE or DLL, as it exists in memory: the address Windows placed it at, its sections, and the functions it imports and exports. Beware that the same word also means a source-code unit in most languages; context separates the two.</dd>
+      <dt id="term-morph-target"><dfn>Morph target</dfn> <span class="glossary-alias">Blend shape</span></dt>
+      <dd>Stored alternative positions for a mesh's vertices, as offsets from the base shape, mixed by weights to pose faces and soft shapes.</dd>
       <dt id="term-mutex"><dfn>Mutex</dfn></dt>
       <dd>A synchronization object that allows one holder at a time into a critical section. It protects a shared invariant; it does not automatically make every operation on the object thread-safe.</dd>
     </dl>
@@ -42065,6 +43257,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>The coordinate space after perspective division. Visible <code>x</code> and <code>y</code> are usually in a small standardized interval, while the exact depth interval depends on the graphics API.</dd>
       <dt id="term-network-byte-order"><dfn>Network byte order</dfn></dt>
       <dd>The conventional big-endian byte order used for many network-protocol integers. A protocol can explicitly choose another order, so read its contract rather than guessing.</dd>
+      <dt id="term-nine-slice"><dfn>Nine-slice</dfn> <span class="glossary-alias">9-patch</span></dt>
+      <dd>Drawing a picture cut into a 3 × 3 grid so the corners keep their size while the edges and the center stretch, which lets one image serve buttons and panels of any size.</dd>
       <dt id="term-npc"><dfn>Non-player character</dfn> <span class="glossary-alias">NPC</span></dt>
       <dd>A character the game controls rather than a person, such as a guard, a shopkeeper, or an enemy. The code that picks what it does next is usually called its AI.</dd>
       <dt id="term-normalization"><dfn>Normalization</dfn></dt>
@@ -42131,10 +43325,14 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A mechanism that causes software or configuration to survive a process exit, logout, or reboot. Defensive review inventories intentional startup paths and treats unowned changes as evidence to investigate.</dd>
       <dt id="term-physical-address"><dfn>Physical address</dfn></dt>
       <dd>A location in the machine’s physical memory address space. Ordinary process pointers are virtual addresses and require page-table translation before they can be related to a physical capture.</dd>
+      <dt id="term-picking"><dfn>Picking</dfn></dt>
+      <dd>Finding which object is under the cursor, by casting a <a href="#term-ray">ray</a> from the cursor into the world, or by reading the ID color of the pixel. The nearest hit wins.</dd>
       <dt id="term-place-value"><dfn>Place value</dfn></dt>
       <dd>What a digit is worth because of its position. In binary each position is worth twice the one to its right, so the positions of a byte are worth 128, 64, 32, 16, 8, 4, 2, and 1; position <em>n</em> is worth 2ⁿ.</dd>
       <dt id="term-plain-value"><dfn>Plain value</dfn></dt>
       <dd>The value before an encoding, obfuscation, compression, or encryption transform. “Plain” describes the representation stage, not whether the value is safe or trustworthy.</dd>
+      <dt id="term-plugin"><dfn>Plugin</dfn></dt>
+      <dd>A module of an engine that registers what it needs with the application at startup. A plugin group adds several at once, such as the window, the input, and the renderer.</dd>
       <dt id="term-pointee-type"><dfn>Pointee type</dfn></dt>
       <dd>The type of the data a pointer leads to, such as <code>f32</code> in <code>*const f32</code>. It decides how many bytes are read at the destination, how they are interpreted, and how far pointer arithmetic steps. It does not change the pointer's own size, which the process fixes at 4 or 8 bytes.</dd>
       <dt id="term-pointer"><dfn>Pointer</dfn></dt>
@@ -42143,6 +43341,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A sequence of “add an offset, read the pointer stored there” steps leading from a repeatable base to a dynamic object. Every dereference is a new validity check.</dd>
       <dt id="term-polling"><dfn>Polling</dfn></dt>
       <dd>Checking a value repeatedly on your own schedule to see whether it changed, instead of waiting to be told. An external tool polls a game's memory because the game sends it no event when a value changes.</dd>
+      <dt id="term-post-processing"><dfn>Post-processing</dfn></dt>
+      <dd>Effects applied to a finished picture by drawing a full-screen rectangle with a <a href="#term-shader">shader</a> that reads it, such as bloom, color grading, tone mapping, and motion blur.</dd>
       <dt id="term-postcondition"><dfn>Postcondition</dfn></dt>
       <dd>A fact a function promises after successful completion. Tests should check the postcondition rather than only whether the function returned.</dd>
       <dt id="term-precondition"><dfn>Precondition</dfn></dt>
@@ -42203,8 +43403,12 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>Metadata and loader work that adjusts address-dependent values when an image is mapped away from its preferred base. Relocated bytes are unstable choices for exact signatures.</dd>
       <dt id="term-remote-attestation"><dfn>Remote attestation</dfn></dt>
       <dd>A device proving to a remote service what software it booted. A key that software cannot read signs the service's nonce together with hashes recorded by each boot stage, and the service compares them with known-good values.</dd>
+      <dt id="term-render-pass"><dfn>Render pass</dfn></dt>
+      <dd>One sweep of drawing for one purpose, such as shadows, solid objects, see-through objects, post-processing, or the interface. A frame is usually several passes.</dd>
       <dt id="term-render-state"><dfn>Render state</dfn></dt>
       <dd>Persistent graphics settings and bound resources that affect later draws: shaders, buffers, textures, blend rules, depth rules, and more.</dd>
+      <dt id="term-render-to-texture"><dfn>Render to texture</dfn></dt>
+      <dd>Drawing into an off-screen <a href="#term-texture">texture</a> instead of the screen, so the result can be used as a mirror, a monitor, a minimap, or a screen inside the 3D world.</dd>
       <dt id="term-repl"><dfn>REPL</dfn> <span class="glossary-alias">Read-eval-print loop</span></dt>
       <dd>An interactive way to use a language tool: read an input, evaluate it, print the result, then wait for another input. A REPL does not by itself determine whether code is compiled or interpreted, or whether its types are static or dynamic.</dd>
       <dt id="term-reserved-memory"><dfn>Reserved memory</dfn></dt>
@@ -42227,12 +43431,16 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
   <section class="glossary-group" aria-labelledby="glossary-s">
     <div class="glossary-group__letter"><h2 id="glossary-s">S</h2><a href="#glossary-top">Top</a></div>
     <dl class="glossary-list">
+      <dt id="term-sample-rate"><dfn>Sample rate</dfn> <span class="glossary-alias">Audio sample</span></dt>
+      <dd>The number of audio samples per second for each channel; CD quality is 44,100. A sample is one measurement of the sound wave.</dd>
       <dt id="term-save-state"><dfn>Save state</dfn></dt>
       <dd>A copy of an emulated machine's entire state, including registers, RAM, I/O registers, and timing position, that can be loaded to resume from exactly that instant. Unlike a game's own save file, it works for any game at any moment.</dd>
       <dt id="term-scan-chain"><dfn>Scan chain</dfn></dt>
       <dd>Several chips' JTAG ports wired in series, each chip's TDO feeding the next chip's TDI, so a debugger sees one long shift register. With every chip in BYPASS, each adds exactly one bit.</dd>
       <dt id="term-scan-code"><dfn>Scan code</dfn></dt>
       <dd>A number that identifies a physical key position rather than the character it produces. Windows uses set-1 scan codes, in which the A key is <code>0x1E</code>.</dd>
+      <dt id="term-scene"><dfn>Scene</dfn></dt>
+      <dd>A group of <a href="#term-entity">entities</a> with their components that an engine can create together, such as a level or a menu screen, often as a hierarchy in which children are positioned relative to their parents.</dd>
       <dt id="term-scheduler"><dfn>Scheduler</dfn></dt>
       <dd>The part of the kernel that decides which ready thread runs on each processor core, using timer interrupts to take the processor back.</dd>
       <dt id="term-slat"><dfn>Second-level address translation</dfn> <span class="glossary-alias">SLAT, EPT, NPT</span></dt>
@@ -42251,6 +43459,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A design in which the server's record is the authoritative state and every client request is checked against it, because anything a client computed can be changed before it is sent.</dd>
       <dt id="term-shader"><dfn>Shader</dfn></dt>
       <dd>A program executed by the GPU for many vertices, fragments, or other work items. A vertex shader transforms geometry; a fragment shader computes candidate output values.</dd>
+      <dt id="term-shadow-map"><dfn>Shadow map</dfn></dt>
+      <dd>A texture holding the scene's depth as seen from a light. A pixel is in shadow if the map holds something nearer to the light than the pixel is.</dd>
       <dt id="term-shared-memory"><dfn>Shared memory</dfn></dt>
       <dd>Pages mapped into more than one process. Sharing removes copying but not synchronization, framing, versioning, or access-control requirements.</dd>
       <dt id="term-shape-check"><dfn>Shape check</dfn></dt>
@@ -42263,8 +43473,16 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>One observable measurement used as evidence, such as a timing outlier, flag, exception, or value change. A signal is not the same as the conclusion drawn from it.</dd>
       <dt id="term-significand"><dfn>Significand</dfn> <span class="glossary-alias">Mantissa</span></dt>
       <dd>The digits of a floating-point number with the hidden leading 1 put back. For 10.0 = 1.25 × 2³ the significand is 1.25; the stored fraction field holds only the .25 part.</dd>
+      <dt id="term-skeletal-animation"><dfn>Skeletal animation</dfn> <span class="glossary-alias">Skinning, Bone</span></dt>
+      <dd>Animating a mesh by moving a hierarchy of bones. Each vertex follows a weighted blend of the bones it is attached to, so joints bend smoothly.</dd>
+      <dt id="term-slerp"><dfn>Slerp</dfn> <span class="glossary-alias">Spherical linear interpolation</span></dt>
+      <dd>Blending two orientations at a steady turning speed along the shortest way round. It is the <a href="#term-interpolation">interpolation</a> used for <a href="#term-quaternion">quaternions</a>.</dd>
       <dt id="term-snapshot"><dfn>Snapshot</dfn></dt>
       <dd>A copy of chosen values from a known build, so later reasoning works from fixed data instead of a moving target. Capturing the fields takes time, so values gathered at slightly different moments can describe a state that never existed all at once unless the capture is coordinated.</dd>
+      <dt id="term-sprite"><dfn>Sprite</dfn></dt>
+      <dd>A picture drawn as a flat rectangle of two triangles with a texture on it, usually through an orthographic camera and in layer order. Two-dimensional games are made mostly of sprites.</dd>
+      <dt id="term-sprite-sheet"><dfn>Sprite sheet</dfn> <span class="glossary-alias">Texture atlas, Atlas</span></dt>
+      <dd>One large image holding many small pictures, so a single texture serves many sprites. A frame is chosen by giving the rectangle's texture coordinates.</dd>
       <dt id="term-stack"><dfn>Stack</dfn></dt>
       <dd>The memory a thread uses for function calls. Calling a function claims a block for its local values and return address; returning releases it again, so the space is reused constantly. Each thread has its own. It behaves like the last-in-first-out data structure of the same name, but it is a concrete memory region, not that abstract structure.</dd>
       <dt id="term-state"><dfn>State</dfn></dt>
@@ -42313,14 +43531,20 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>One line of execution running inside a process. A process can have several, all sharing the same memory but each keeping its own place in the code. Formally: an independently scheduled path of execution with its own registers, instruction pointer, and stack, sharing the rest of the process's resources.</dd>
       <dt id="term-thread-context"><dfn>Thread context</dfn></dt>
       <dd>The register state needed to describe or resume a thread at a moment. Capturing or changing it safely normally requires controlled thread state.</dd>
+      <dt id="term-thread-pool"><dfn>Thread pool</dfn> <span class="glossary-alias">Worker thread</span></dt>
+      <dd>A fixed set of threads that wait for small jobs in a queue and run them as they arrive, so slow work leaves the main thread alone. A common size is one fewer than the number of cores.</dd>
       <dt id="term-tick"><dfn>Tick</dfn></dt>
       <dd>One fixed step of a game's simulation. Every tick advances the world by the same slice of time, so behavior counted in ticks does not depend on the frame rate.</dd>
+      <dt id="term-tilemap"><dfn>Tilemap</dfn></dt>
+      <dd>A grid of tile numbers drawn as one rectangle per tile, taken from a sprite sheet, usually in a single draw call.</dd>
       <dt id="term-timing-check"><dfn>Timing check</dfn></dt>
       <dd>A comparison of elapsed time against an expectation. Debugging, scheduling, power management, virtualization, and ordinary load all affect timing, so timing alone is a noisy signal.</dd>
       <dt id="term-toctou"><dfn>TOCTOU</dfn> <span class="glossary-alias">time of check to time of use</span></dt>
       <dd>A race in which state changes after it is checked but before the guarded operation uses it. The repair connects identity and freshness at the consuming boundary.</dd>
       <dt id="term-tls"><dfn>TLS</dfn></dt>
       <dd>Usually <em>Transport Layer Security</em> in networking: encryption and peer authentication layered over a transport. In PE and loader discussions, TLS can instead mean <em>thread-local storage</em>; context is essential.</dd>
+      <dt id="term-tone-mapping"><dfn>Tone mapping</dfn></dt>
+      <dd>Compressing high-dynamic-range colors, which can exceed 1.0, into the 0 to 1 range a display can show. A simple rule, <code>c ÷ (1 + c)</code>, squeezes bright values more than dim ones.</dd>
       <dt id="term-trampoline"><dfn>Trampoline</dfn></dt>
       <dd>A small executable bridge that copies displaced instructions and jumps back after a detour site. PC-relative operands may need relocation when copied to the trampoline.</dd>
       <dt id="term-transform"><dfn>Transform</dfn></dt>
@@ -42383,6 +43607,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A target-specific table of startup values and handler addresses. On the Cortex-M system in the firmware lesson, its first entry gives the initial stack pointer and its second the reset-handler address; it is not the first sequence of application instructions.</dd>
       <dt id="term-vertex"><dfn>Vertex</dfn></dt>
       <dd>One input point of a graphics primitive together with attributes such as position, normal, color, and texture coordinates.</dd>
+      <dt id="term-vsync"><dfn>Vertical sync</dfn> <span class="glossary-alias">VSync</span></dt>
+      <dd>Making the present step wait for the display's next refresh. The frame rate is capped at the refresh rate and the picture does not tear.</dd>
       <dt id="term-view-cone"><dfn>View cone</dfn></dt>
       <dd>The range of directions an NPC can see: every direction within a set angle of its facing. Code usually tests it by comparing a dot product with the cosine of that angle.</dd>
       <dt id="term-view-matrix"><dfn>View matrix</dfn></dt>

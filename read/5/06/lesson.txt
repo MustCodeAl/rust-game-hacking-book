@@ -144,6 +144,24 @@ Do not compare mixed units directly. If a score is angle_degrees + distance_metr
 
 Tie-breaking must also be stable. If two scores differ only by floating-point noise, prefer the current target or a stable entity ID. Otherwise the choice can oscillate every frame.
 
+Section: How animation moves a character.
+
+The next section aims at a character’s head, and a head is wherever the animation has put it this frame. An animation describes how some values change over time. The values can be a door’s angle, a button’s colour, the frame of a sprite, or the transforms of a whole skeleton.
+
+Keyframes and interpolation. An animation does not store a value for every frame. It stores values at a few moments, called keyframes, and the engine fills in the rest by interpolating between them (Lesson 4.6). A door keyed at 0 degrees at time 0.0 s and 90 degrees at 1.0 s is at 90 times 0.25 equals 22.5 degrees a quarter of a second in. Add easing and the same moment gives 90 times 0.4375 equals 39.375 degrees with the ease-out curve from Lesson 4.6. Turns are blended as quaternions (Lesson 7.1). A sprite animation is the same idea with whole frames, picked from a sprite sheet by the clock (Lesson 7.2).
+
+Skeletons and skinning. A 3D character is a mesh attached to a skeleton: a hierarchy of bones, each with a transform relative to its parent bone (Lesson 7.1), so turning the upper arm carries the forearm and hand. Every vertex lists up to four bones and a weight for each, and the weights add up to 1. Animation changes the bones’ transforms every frame, and the vertex shader moves each vertex by blending what its bones did. To see the blend, use only movement. A vertex starts at (0, 1, 0) with weight 0.75 on the upper arm and 0.25 on the forearm. In this pose the upper arm moves its points by (2, 0, 0) and the forearm by (6, 0, 0):
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The vertex goes mostly where the upper arm goes and is pulled a little toward the forearm, which is why a bent elbow bends smoothly instead of tearing. Real bones use full transforms, not just a move, but the weighted blend is the same. A skeleton of 60 bones, with one 64-byte matrix each (Lesson 7.1), is 60 times 64 equals 3,840 bytes of pose that is rebuilt every frame.
+
+Choosing and blending clips. A character has many clips: idle, walk, run, jump. An animation graph or state machine (Lesson 1.3) decides which clip plays and when to switch. A switch is a cross-fade: for 0.2 s the pose is pose_A times (1 minus w) + pose_B times w, with the weight w rising from 0 to 1, so at 0.1 s it is an even half and half. A mask restricts a clip to some bones, such as a wave that plays on the arm while the legs keep walking. An animation event is a marker at one moment in a clip that runs code, such as the footstep sound 0.3 s into the walk.
+
+Morph targets. A face cannot be posed with bones alone. A morph target, or blend shape, stores the changed positions of vertices for one expression as offsets from the base mesh. A vertex at (0, 0, 0) with a smile offset of (0, 0.2, 0) and a smile weight of 0.5 is drawn at (0, 0.1, 0). Many targets can be mixed at once.
+
+For reading memory, this means a character’s pose is per-frame state, built from a clock value (seconds into the clip) and the bones’ matrices. It is not a fixed fact stored next to the character’s position.
+
 Section: Choose an aim point, not merely an entity origin.
 
 An entity’s position often refers to its feet, collision-cylinder center, or model pivot. A head position may come from a bone transform, tagged attachment point, or fixed offset. Animation changes bone positions each frame.
