@@ -14,6 +14,8 @@ export const readerSettingsScript = `(${function () {
     ['academyDiagramBorders', 'gha-diagram-borders', ['soft', 'strong', 'none'], 'soft'],
     ['academyDiagramSize', 'gha-diagram-size', ['fit', 'actual'], 'fit'],
     ['academyGrid', 'gha-grid', ['on', 'off'], 'on'],
+    ['academyCards', 'gha-cards', ['on', 'off'], 'on'],
+    ['academyChat', 'gha-chat', ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'off'], 'bottom-right'],
     ['academyGradients', 'gha-gradients', ['on', 'off'], 'on'],
     ['academyMotion', 'gha-motion', ['system', 'onrequest', 'off'], 'system'],
     ['academyAnimationSpeed', 'gha-animation-speed', ['slow', 'normal', 'fast'], 'normal'],

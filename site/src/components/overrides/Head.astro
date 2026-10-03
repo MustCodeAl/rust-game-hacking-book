@@ -6,14 +6,26 @@ import Default from '@astrojs/starlight/components/Head.astro';
 import bodyFont from '@fontsource-variable/lexend/files/lexend-latin-wght-normal.woff2?url';
 import displayFont from '@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2?url';
 import { chapterOf, chapterTone } from '../../data/chapters.mjs';
+import { chatContext, chatContextJson } from '../../lib/chat-context.mjs';
 
 // The reading colour is available before first paint, including outside the
 // Markdown panel (TOC and progress). Historical URL folders are not chapters.
-const chapter = chapterOf(Astro.locals.starlightRoute.entry.data.chapter);
-const chapterColour = chapter && `:root{--chapter-accent:var(--tone-${chapterTone(chapter.number)})}`;
+// This <style> comes before the bundled stylesheets, which declare a default
+// --chapter-accent on :root, so the selector is `html:root` (more specific)
+// rather than `:root`: with a plain :root rule the default wins by coming later
+// and every chapter's headings and links stay the foundations copper.
+const { data } = Astro.locals.starlightRoute.entry;
+const chapter = chapterOf(data.chapter);
+const chapterColour = chapter && `html:root{--chapter-accent:var(--tone-${chapterTone(chapter.number)})}`;
+
+// Where this page sits in the book, for the chat button (chat-widget.js).
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const path = Astro.url.pathname.slice(base.length).replace(/^\/|\/$/g, '');
+const chat = chatContextJson(chatContext({ path, title: data.title, lesson: data.chapter, chat: data.chat }));
 ---
 
 <link rel="preload" href={bodyFont} as="font" type="font/woff2" crossorigin />
 <link rel="preload" href={displayFont} as="font" type="font/woff2" crossorigin />
 <Default />
 {chapterColour && <style is:inline data-chapter={chapter.number} set:html={chapterColour} />}
+<script is:inline type="application/json" id="academy-chat" set:html={chat} />

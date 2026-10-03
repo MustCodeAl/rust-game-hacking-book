@@ -382,22 +382,63 @@ live site loses them (publishing replaces every file).
   `academy.js`). Saved in `gha-sidebar` and `gha-toc`; shortcuts Alt+N, Alt+O.
   The header has no panel icons.
 - **Hover cards.** `public/scripts/hover-cards.js`. Glossary words are marked
-  while building by `glossaryTerms()` in `src/plugins/satteri-academy.mjs`: the
-  first use of each term in each `##` section gets `data-gloss`, never in
-  headings, code, links, or components; ordinary-English headwords are listed in
-  `EVERYDAY_WORDS` and skipped. `lessonReferences()` links plain "Lesson 2.1"
-  mentions the same way. A card shows a glossary definition or a lesson's
+  while building by `glossaryTerms()` in `src/plugins/satteri-academy.mjs`, and
+  sparingly on purpose: `planGlossaryMarks()` walks the lessons in reading order
+  and marks a word where the book first uses it, and again only when a chapter
+  brings it back after a chapter without it (about 540 marks in the whole book,
+  not one per use). A word is marked once per page, never where the lesson
+  defines it in bold, and never in headings, code, links, or components;
+  ordinary-English headwords are listed in `EVERYDAY_WORDS` and skipped. Do not
+  turn this back into a card on every use: readers asked for fewer. The Reader
+  theme panel has a Hover cards On/Off choice (`gha-cards`,
+  `data-academy-cards`) that also removes the dotted underlines.
+  `lessonReferences()` links plain "Lesson 2.1" mentions, once per page. A card shows a glossary definition or a lesson's
   summary, study time, and done state. `data-tip` gives buttons a short tip.
   Text comes from `assets/glossary-cards.json` and `assets/lesson-cards.json`,
   fetched on the first card. `src/lib/glossary-terms.mjs` is the single reading of
   `glossary.mdx`. Cards are for things on the page, not the lesson list.
+  **Cards are not only glossary.** A lesson writes its own with
+  `<HoverCard kind="example" body="...">words</HoverCard>`
+  (`src/components/kit/HoverCard.astro`): kinds `definition`, `explanation`,
+  `reference` (give an `href`; the card shows where it goes), `example`,
+  `alternative`, `tip`, `recommendation`, `caution` (`src/data/card-kinds.mjs`).
+  Each takes a reading-role colour (information, process, result, caution) and
+  always names its kind in the card's label. A card holds only an extra the
+  lesson reads fine without: readers can turn cards off and a phone needs a tap,
+  so never put a step, a value, or a needed definition in one, and keep them to
+  a few per lesson. The card's text also stays in the page, in brackets after its
+  words, so print, search, and the listening edition keep it (an external
+  reference prints its address); `hover-cards.js` hides it on screen once running.
 - **Reader mode** (`/read/…`). The play, pause, stop, progress, and **Exit reader
   mode** controls are a bar pinned to the top for the whole page
   (`ReaderTools.astro`, `.reader-dock`); settings and hand-off options stay in
   the card below it. Diagram line breaks narrate as spaces.
-- **Context7 chat widget.** `scripts/add-context7-widget.mjs` runs last in the
-  build and puts the owner's tag before `</body>` on every page, including the
-  listening editions and the print book. It is not version-pinned, by request.
+- **Context7 chat button.** `scripts/add-context7-widget.mjs` runs last in the
+  build and puts `public/scripts/chat-widget.js` before `</body>` on every page,
+  including the listening editions and the print book. The loader creates the
+  owner's tag (`https://context7.com/widget.js`, `data-library`), not
+  version-pinned by request, because its options depend on the page and the
+  reader: `data-color` is the chapter's colour deepened until white text on it
+  is readable (4.5:1; lightened a little on dark pages), `data-position` is a
+  bottom corner, and `data-placeholder` / `data-welcome-message` name the
+  lesson, chapter, and area (`src/lib/chat-context.mjs`, written into each head
+  as JSON `#academy-chat` by `overrides/Head.astro` and the listening edition
+  page). Opening the chat re-words the placeholder for the section being read.
+  A page overrides any of the three with a `chat:` block in its frontmatter
+  (`placeholder`, `welcome`, `color`; `src/content.config.ts`). The Reader theme
+  panel's **Chat button** sets one of four corners or Off (`gha-chat`,
+  `data-academy-chat`); Off makes no request to context7.com. The widget keeps
+  a closed shadow root and has only the two bottom corners, so for the top
+  corners and the live placeholder the loader lets the widget's `attachShadow`
+  through as an open root while it is created and then restores the original;
+  if Context7 changes its markup, those two refinements do nothing and the
+  widget still works. On the listening edition the top corners fall back to the
+  bottom (the player is at the top). Print hides `#context7-widget`.
+- **Chapter colour on lesson pages.** `overrides/Head.astro` sets
+  `html:root{--chapter-accent:var(--tone-N)}`. It must keep the `html:root`
+  selector: the head `<style>` precedes the bundled stylesheets, whose
+  `:root{--chapter-accent:var(--rust-dark)}` wins over a plain `:root` rule, and
+  then every chapter's headings and links show the foundations copper.
 - **Publishing.** `bun run publish:pages` builds, commits on a detached copy of
   `origin/gh-pages`, and pushes `HEAD:gh-pages`; it never moves a local branch.
   It refuses to run with uncommitted changes under `site/` or the lab folders.

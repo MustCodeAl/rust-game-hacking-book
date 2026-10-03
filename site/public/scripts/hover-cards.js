@@ -5,6 +5,9 @@
 //   - a link to another lesson, inside a lesson or in the previous/next cards:
 //     its chapter, summary, study time, and whether it is done
 //   - anything with data-tip: what a button or icon does
+//   - words a lesson wraps in a HoverCard (src/components/kit/HoverCard.astro):
+//     an example, reference, tip, alternative, recommendation, or closer
+//     explanation, read from the card's own text in the page
 // A card opens after a short pause under the mouse, or at once when a key moves
 // focus to the element, or when a glossary word is tapped (touch has no hover).
 // It closes when the pointer leaves, on Escape, and when the page scrolls, so
@@ -61,11 +64,19 @@
   // What an element would show
   // ------------------------------------------------------------------
 
+  // The Reader theme panel can turn every card off.
+  function cardsOff() {
+    return document.documentElement.dataset.academyCards === "off";
+  }
+
   function describe(element) {
-    if (!element || !element.closest || element.closest("#" + CARD_ID)) return null;
+    if (cardsOff() || !element || !element.closest || element.closest("#" + CARD_ID)) return null;
 
     var tip = element.closest("[data-tip]");
     if (tip) return { node: tip, kind: "tip" };
+
+    var written = element.closest(".kit-card__trigger");
+    if (written && written.closest(".kit-card")) return { node: written, kind: "card", card: written.closest(".kit-card") };
 
     var word = element.closest("[data-gloss]");
     if (word) return { node: word, kind: "term", anchor: word.getAttribute("data-gloss") };
@@ -117,6 +128,24 @@
   function contents(info) {
     if (info.kind === "tip") {
       return Promise.resolve({ parts: [el("p", "academy-hovercard__tip", info.node.getAttribute("data-tip"))] });
+    }
+
+    if (info.kind === "card") {
+      // The card says what the lesson wrote beside the words: its kind as the
+      // label, an optional heading, and the text with its code and links.
+      var text = info.card.querySelector(".kit-card__text");
+      if (!text) return Promise.resolve(null);
+      var parts = [el("p", "academy-hovercard__eyebrow", info.card.getAttribute("data-card-label") || "")];
+      var heading = info.card.getAttribute("data-card-title");
+      if (heading) parts.push(el("p", "academy-hovercard__title", heading));
+      var body = el("p", "academy-hovercard__text");
+      Array.prototype.forEach.call(text.childNodes, function (child) { body.appendChild(child.cloneNode(true)); });
+      parts.push(body);
+      // A card on a link to another site says where the link goes.
+      if (info.node.tagName === "A" && info.node.origin !== window.location.origin) {
+        parts.push(el("p", "academy-hovercard__meta", "Opens " + info.node.hostname.replace(/^www\./, "")));
+      }
+      return Promise.resolve({ parts: parts, cardKind: info.card.getAttribute("data-card-kind") });
     }
 
     if (info.kind === "term") {
@@ -227,6 +256,8 @@
       shown = { info: info, pointer: pointer };
       card.replaceChildren.apply(card, result.parts);
       card.dataset.kind = info.kind;
+      if (result.cardKind) card.dataset.cardKind = result.cardKind;
+      else card.removeAttribute("data-card-kind");
       if (result.tone) card.dataset.tone = String(result.tone);
       else card.removeAttribute("data-tone");
       card.classList.remove("is-open");
@@ -235,8 +266,10 @@
       card.classList.add("is-open");
       // A tip that only repeats the button's own name adds nothing for a
       // screen reader, so it is not attached as a description.
+      // A card the lesson wrote is already the trigger's description, from the
+      // text kept in the page, so the popup is not attached a second time.
       var repeats = info.kind === "tip" && result.parts[0].textContent.trim() === accessibleName(info.node);
-      if (!repeats) setDescribedBy(trigger, true);
+      if (!repeats && info.kind !== "card") setDescribedBy(trigger, true);
     });
   }
 
@@ -289,10 +322,12 @@
     if (!staying) scheduleClose();
   });
 
-  // Touch has no hover, so tapping a glossary word shows its card, and tapping
-  // it again, or anywhere else, hides it. Links are left to navigate.
+  // Touch has no hover, so tapping a glossary word, or words with a card, shows
+  // its card, and tapping it again, or anywhere else, hides it. Links are left
+  // to navigate.
+  var TAPPABLE = "[data-gloss], span.kit-card__trigger";
   document.addEventListener("click", function (event) {
-    var word = event.target.closest && event.target.closest("[data-gloss]");
+    var word = event.target.closest && event.target.closest(TAPPABLE);
     if (!word) return;
     var info = describe(word);
     if (!info) return;
@@ -321,7 +356,7 @@
   });
 
   document.addEventListener("pointerdown", function (event) {
-    var onWord = event.target.closest && event.target.closest("[data-gloss]");
+    var onWord = event.target.closest && event.target.closest(TAPPABLE);
     if ((!card || !card.contains(event.target)) && !onWord) hide();
   }, true);
 
@@ -342,12 +377,42 @@
   window.addEventListener("resize", hide, { passive: true });
 
   // Glossary words are marked as plain text, so the keyboard can reach them
-  // only if they are made focusable; a card then opens when focus lands.
-  function makeWordsFocusable() {
-    document.querySelectorAll("[data-gloss]").forEach(function (word) {
-      if (!word.hasAttribute("tabindex")) word.setAttribute("tabindex", "0");
+  // only if they are made focusable; a card then opens when focus lands. With
+  // cards off they are ordinary text again, with no keyboard stop. The same goes
+  // for the words of a lesson's own cards, except links, which are always focusable.
+  function syncWordFocus() {
+    document.querySelectorAll("[data-gloss], span.kit-card__trigger").forEach(function (word) {
+      if (cardsOff()) word.removeAttribute("tabindex");
+      else if (!word.hasAttribute("tabindex")) word.setAttribute("tabindex", "0");
     });
   }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", makeWordsFocusable, { once: true });
-  else makeWordsFocusable();
+
+  document.addEventListener("academy:reader-preference", function (event) {
+    if (!event.detail || event.detail.name !== "cards") return;
+    hide();
+    syncWordFocus();
+  });
+
+  // The text of a lesson's own cards stays in the page for print, search, and
+  // the listening edition. Once this script has taken over, the CSS hides it on
+  // screen and each trigger is described by it, so a screen reader still has it.
+  function wireCards() {
+    var count = 0;
+    document.querySelectorAll(".kit-card").forEach(function (wrap) {
+      var body = wrap.querySelector(".kit-card__body");
+      var trigger = wrap.querySelector(".kit-card__trigger");
+      if (!body || !trigger) return;
+      if (!body.id) body.id = "kit-card-text-" + (++count);
+      trigger.setAttribute("aria-describedby", body.id);
+    });
+    document.documentElement.setAttribute("data-cards-ready", "");
+  }
+
+  function start() {
+    wireCards();
+    syncWordFocus();
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+  else start();
 })();

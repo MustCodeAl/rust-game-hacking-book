@@ -16,6 +16,20 @@ export const collections = {
 				date: z.string().optional(),
 				/** Pages that draw their own heading, such as the glossary. */
 				hideTitle: z.boolean().optional(),
+				/**
+				 * What the chat button says on this page. Each part is optional and
+				 * replaces the one worded from the page's place in the book.
+				 */
+				chat: z
+					.object({
+						/** The input's hint text; short, because the input is narrow (about 30 characters). */
+						placeholder: z.string().max(40).optional(),
+						/** The first message in the chat, as plain text. */
+						welcome: z.string().max(400).optional(),
+						/** The button's colour, as #rrggbb; it is deepened if white text on it would be hard to read. */
+						color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+					})
+					.optional(),
 			}),
 		}),
 	}),

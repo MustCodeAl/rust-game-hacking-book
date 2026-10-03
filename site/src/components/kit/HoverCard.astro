@@ -1,0 +1,61 @@
+---
+// A short card that opens over a word or phrase when it is hovered, focused, or
+// tapped: an example, a reference, a tip, an alternative, a recommendation, a
+// closer explanation. The words in the slot are what the reader sees in the
+// text; `body` is what the card says.
+//
+// The card's text stays in the page, after those words in brackets, so it prints,
+// is read aloud in the listening edition, and is searched; hover-cards.js hides
+// it on screen and shows it in a card instead. Because a reader can turn cards
+// off, a card holds only something the lesson can do without: never a step, a
+// value, or a definition a later section needs.
+//
+//   <HoverCard kind="example" body="`0x1234` is stored as the bytes `34 12`.">little-endian</HoverCard>
+//
+// With `href` the words are a link, and the card previews where it goes.
+import { CARD_KINDS } from '../../data/card-kinds.mjs';
+import { renderInline } from '../../lib/inline-markdown.mjs';
+
+interface Props {
+	/** What the card is: definition, explanation, reference, example, alternative, tip, recommendation, or caution. */
+	kind?: string;
+	/** What the card says: a sentence or two. `code`, **bold**, *emphasis*, and [links](/pages/1/01/) work. */
+	body: string;
+	/** A heading for the card, when the words alone do not name it. */
+	title?: string;
+	/** Makes the words a link to this page or address. */
+	href?: string;
+	/** Replaces the kind's label, such as "Alternative to Cheat Engine". */
+	label?: string;
+}
+
+const { kind = 'explanation', body, title, href, label } = Astro.props;
+const known = CARD_KINDS[kind as keyof typeof CARD_KINDS];
+if (!known) throw new Error(`HoverCard: unknown kind "${kind}". Use one of: ${Object.keys(CARD_KINDS).join(', ')}.`);
+if (!body?.trim()) throw new Error('HoverCard: body is required.');
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const to = href && href.startsWith('/') && !href.startsWith('//') ? `${base}${href}` : href;
+const name = label ?? known.label;
+// On paper a link has no address to follow, so a card on an external link prints it.
+const printed = to && /^https?:\/\//i.test(to) ? to : undefined;
+// The heading ends a sentence in the printed text, so it needs a full stop.
+const sentence = title && (/[.!?:]$/.test(title) ? title : `${title}.`);
+---
+
+<span class="kit-card" data-card-kind={kind} data-card-label={name} data-card-title={title}>
+	{
+		to ? (
+			<a class="kit-card__trigger" href={to}>
+				<slot />
+			</a>
+		) : (
+			<span class="kit-card__trigger" tabindex="0">
+				<slot />
+			</span>
+		)
+	}
+	<span class="kit-card__body">
+		{' ('}<span class="kit-card__label">{name}: </span>{sentence && <strong class="kit-card__title">{sentence} </strong>}<span class="kit-card__text" data-href={printed} set:html={renderInline(body, base)} />{')'}
+	</span>
+</span>

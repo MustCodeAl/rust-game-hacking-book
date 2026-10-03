@@ -2,8 +2,13 @@
 
    Colour roles: a lesson or chapter card takes that chapter's colour, a
    glossary card takes the "terms" reading role (the colour the book uses for
-   defined words), and a short tip is neutral. Only opacity and transform
-   change, and only when the card opens. */
+   defined words), a short hint on a button is neutral, and a card a lesson
+   writes (kit/HoverCard.astro) takes the reading role of its kind: information
+   for a definition, explanation, or reference; process for an example or an
+   alternative; result for a tip or a recommendation; caution for a caution.
+   The kind is always named in the card's own label too, so colour is never the
+   only difference. Only opacity and transform change, and only when the card
+   opens. */
 
 .academy-hovercard {
   --card-accent: var(--reader-line);
@@ -55,6 +60,12 @@
 .academy-hovercard[data-tone] { --card-accent: var(--chapter-accent); }
 .academy-hovercard[data-kind="term"] { --card-accent: var(--reading-information); }
 
+/* A card a lesson writes. data-card-kind is the kind; the accent is its role. */
+.academy-hovercard[data-kind="card"] { --card-accent: var(--reading-information); }
+.academy-hovercard:is([data-card-kind="example"], [data-card-kind="alternative"]) { --card-accent: var(--reading-process); }
+.academy-hovercard:is([data-card-kind="tip"], [data-card-kind="recommendation"]) { --card-accent: var(--reading-result); }
+.academy-hovercard[data-card-kind="caution"] { --card-accent: var(--reading-caution); }
+
 /* A tip is one short line, so it has no heading rule and is as narrow as it can be. */
 .academy-hovercard[data-kind="tip"] {
   width: max-content;
@@ -83,6 +94,15 @@
 
 .academy-hovercard__text { color: var(--ink); }
 
+.academy-hovercard__text code {
+  padding: 0.05em 0.3em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  font: 500 0.92em var(--mono);
+}
+
+.academy-hovercard__text a { color: var(--link); }
+
 .academy-hovercard__meta {
   margin-top: 0.6rem;
   color: var(--ink-soft);
@@ -106,13 +126,57 @@
 .academy-hovercard__link:hover,
 .academy-hovercard__link:focus-visible { color: var(--link-hover); }
 
+/* The words of a card a lesson writes. A dotted line in the kind's reading role
+   says "there is more here", as the terms role does for glossary words. A card
+   on a link (href) leaves the link looking like a link. */
+.kit-card { --card-role: var(--reading-information); }
+.kit-card:is([data-card-kind="example"], [data-card-kind="alternative"]) { --card-role: var(--reading-process); }
+.kit-card:is([data-card-kind="tip"], [data-card-kind="recommendation"]) { --card-role: var(--reading-result); }
+.kit-card[data-card-kind="caution"] { --card-role: var(--reading-caution); }
+
+/* Bold or italic words inside a card's link keep the link's colour. */
+a.kit-card__trigger :is(strong, em) { color: inherit; }
+
+span.kit-card__trigger {
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, var(--card-role) 65%, transparent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.22em;
+  cursor: help;
+}
+
+span.kit-card__trigger:hover,
+span.kit-card__trigger:focus-visible {
+  text-decoration-color: var(--card-role);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--card-role) 11%, transparent);
+}
+
+/* The card's text stays in the page for print, search, and the listening
+   edition; once hover-cards.js is running it shows in the card, not the text. */
+:root[data-cards-ready] .kit-card__body { display: none; }
+
+/* Hover cards off: words that only had a card look like ordinary text. */
+:root[data-academy-cards="off"] :is(.gloss, span.kit-card__trigger) {
+  text-decoration: none;
+  cursor: inherit;
+}
+
+:root[data-academy-cards="off"] .academy-hovercard { display: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .academy-hovercard { transition: none; transform: none; }
 }
 
 @media print {
-  .gloss {
+  .gloss,
+  span.kit-card__trigger {
     text-decoration: none;
     background: none;
   }
+
+  /* On paper nothing can be hovered, so a card's text follows its words, and
+     a card on an external link gives the address, which paper cannot follow. */
+  :root[data-cards-ready] .kit-card__body { display: inline; }
+  .kit-card__text[data-href]::after { content: " " attr(data-href); word-break: break-all; }
 }

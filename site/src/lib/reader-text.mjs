@@ -78,9 +78,12 @@ export function toSpeechText(value, seen = new Set()) {
 }
 
 function directText(element) {
+	// The pieces are joined with spaces, so a word that ends in an inline element
+	// ("a **bold** word", "`code`;") would be followed by a space before its
+	// punctuation; that space is taken out again.
 	return cleanReaderText([...element.childNodes]
 		.filter((node) => node.nodeType !== 1 || !/^(OL|UL)$/.test(node.tagName))
-		.map((node) => node.textContent).join(' '));
+		.map((node) => node.textContent).join(' ')).replace(/\s+([,;:.!?])(?=\s|$)/g, '$1');
 }
 
 // A diagram label written over two lines ("machine-code bytes<br>in the EXE")

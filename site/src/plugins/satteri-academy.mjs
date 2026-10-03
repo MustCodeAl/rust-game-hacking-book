@@ -7,6 +7,8 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { parseGlossary } from '../lib/glossary-terms.mjs';
 import { getLessonIndex } from '../data/lesson-index.mjs';
+import { renderMath } from '../lib/math.mjs';
+import { mdxToMdast } from 'satteri';
 
 /**
  * Turn ```mermaid blocks into <pre class="mermaid">. `data-diagram` is a hash
@@ -36,6 +38,41 @@ export function mermaidBlocks() {
 				};
 			},
 		},
+	};
+}
+
+/**
+ * Draw $$ ... $$ maths with KaTeX while building. The Markdown processor, with
+ * its math feature on, writes `<code class="language-math">` (inline) and
+ * `<pre><code class="language-math">` (display); both become finished HTML.
+ * Only the double-dollar form is maths (see astro.config.mjs): a single dollar
+ * sign is left alone, so a shell variable or a price never turns into a formula.
+ */
+export function mathBlocks() {
+	const isMath = (node) => {
+		const classes = node?.properties?.className;
+		return (Array.isArray(classes) ? classes : typeof classes === 'string' ? classes.split(/\s+/) : []).includes('language-math');
+	};
+	return {
+		name: 'academy-math',
+		element: [
+			{
+				filter: ['pre'],
+				visit(node, ctx) {
+					const code = node.children?.find((child) => child.type === 'element' && child.tagName === 'code');
+					if (!isMath(code)) return;
+					return { type: 'raw', value: renderMath(ctx.textContent(code), { display: true }) };
+				},
+			},
+			{
+				filter: ['code'],
+				visit(node, ctx) {
+					// A display block's code element is handled with its <pre>.
+					if (!isMath(node) || ctx.parent(node)?.tagName === 'pre') return;
+					return { type: 'raw', value: renderMath(ctx.textContent(node)) };
+				},
+			},
+		],
 	};
 }
 
@@ -122,55 +159,138 @@ function buildGlossaryMatcher() {
 	return { pattern, anchorOf, spelled };
 }
 
+// What the book's own Markdown looks like to the marking plan: only running
+// prose counts, the same text the plugin below is allowed to mark. Headings,
+// code, links, and anything inside a component are skipped.
+const PLAN_SKIPPED = new Set([
+	'heading', 'code', 'link', 'linkReference', 'image', 'imageReference', 'definition', 'html', 'yaml',
+	'mdxjsEsm', 'mdxFlowExpression', 'mdxTextExpression', 'mdxJsxFlowElement', 'mdxJsxTextElement',
+]);
+
+const plainText = (node) => (node.type === 'text' || node.type === 'inlineCode' ? node.value : (node.children ?? []).map(plainText).join(''));
+
+/** The glossary terms a lesson uses, in order, each marked as plain or defined (bolded). */
+function termsIn(tree, { pattern, anchorOf, spelled }) {
+	const found = [];
+	const scan = new RegExp(pattern.source, pattern.flags);
+	(function walk(node, blocked) {
+		if (node.type === 'text' && !blocked) {
+			scan.lastIndex = 0;
+			for (let match; (match = scan.exec(node.value)); ) {
+				const anchor = anchorOf(match[0]);
+				if (anchor) found.push({ anchor, defined: false });
+				else scan.lastIndex = match.index + 1;
+			}
+			return;
+		}
+		if (node.type === 'inlineCode') {
+			const anchor = !blocked && spelled.get(node.value);
+			if (anchor) found.push({ anchor, defined: false });
+			return;
+		}
+		// A bolded term is where the lesson defines it.
+		if (node.type === 'strong' && !blocked) {
+			const defined = anchorOf(plainText(node));
+			if (defined) {
+				found.push({ anchor: defined, defined: true });
+				return;
+			}
+		}
+		const stop = blocked || PLAN_SKIPPED.has(node.type);
+		for (const child of node.children ?? []) walk(child, stop);
+	})(tree, false);
+	return found;
+}
+
+/**
+ * Decide, for the whole book, which lessons mark which glossary words. A card
+ * on every use of every word is noise; a card where a reader first meets a
+ * word is help. So a word is marked where the book first uses it, and again
+ * only where a chapter brings it back after a chapter without it. It is never
+ * marked where the lesson itself defines it in bold (that bold word links to
+ * its entry instead), and a word the book uses in every chapter is not
+ * repeated. Lessons are walked in their displayed order, not their URL order,
+ * because the book reorders lessons without moving their files.
+ *
+ * `refresh` is "gap" (the default), "chapter" (marks a word again in every
+ * chapter's first lesson that uses it), or "never" (once in the whole book).
+ *
+ * @returns {Map<string, Set<string>>} lesson id ("pages/2/02") to the glossary anchors it marks
+ */
+export function planGlossaryMarks(matcher = buildGlossaryMatcher(), refresh = 'gap') {
+	const plan = new Map();
+	const lastChapterUsed = new Map();   // anchor -> the latest chapter whose lessons used it
+	const metInChapter = new Map();      // chapter -> anchors already met in it
+	for (const { slug, chapter } of getLessonIndex()) {
+		const number = Number(chapter.split('.')[0]);
+		if (!metInChapter.has(number)) metInChapter.set(number, new Set());
+		const met = metInChapter.get(number);
+		const marks = new Set();
+		const counted = new Set();
+		const tree = mdxToMdast(readFileSync(new URL(`../content/docs/${slug}.mdx`, import.meta.url), 'utf8'));
+		for (const { anchor, defined } of termsIn(tree, matcher)) {
+			// Only a lesson's first use of a word decides.
+			if (counted.has(anchor)) continue;
+			counted.add(anchor);
+			if (!met.has(anchor) && !defined) {
+				const last = lastChapterUsed.get(anchor);
+				const worthMarking = last === undefined
+					|| (refresh === 'chapter' && last !== number)
+					|| (refresh === 'gap' && number - last > 1);
+				if (worthMarking) marks.add(anchor);
+			}
+			met.add(anchor);
+			lastChapterUsed.set(anchor, number);
+		}
+		plan.set(slug, marks);
+	}
+	return plan;
+}
+
 /**
  * Mark glossary words in lesson text, so a card with the definition can open
- * over them. Each term is marked the first time it appears in each section
- * (each `##` heading starts a new one), which refreshes a reader's memory
- * without underlining every use. The mark is plain data (`data-gloss` holds the
- * glossary anchor): the page does no scanning, and hover-cards.js reads the
- * definition only when a card opens.
+ * over them. planGlossaryMarks decides which words each lesson marks, and each
+ * is marked once, at its first use on the page. The mark is plain data
+ * (`data-gloss` holds the glossary anchor): the page does no scanning, and
+ * hover-cards.js reads the definition only when a card opens.
  *
  * Inline code that is exactly a glossary term, such as `DllMain`, is marked in
  * place. A term the lesson bolds where it defines it is left to academy.js,
  * which links it to its glossary entry.
  */
 export function glossaryTerms() {
-	const { pattern, anchorOf, spelled } = buildGlossaryMatcher();
+	const matcher = buildGlossaryMatcher();
+	const { pattern, anchorOf, spelled } = matcher;
+	const plan = planGlossaryMarks(matcher);
 
 	return ({ fileURL }) => {
-		if (!/\/content\/docs\/pages\/\d+\/\d+\.mdx$/.test(fileURL?.pathname ?? '')) return null;
+		const here = /\/content\/docs\/(pages\/\d+\/\d+)\.mdx$/.exec(fileURL?.pathname ?? '')?.[1];
+		const allowed = here && plan.get(here);
+		if (!allowed?.size) return null;
 		const seen = new Set();
 		return {
 			name: 'academy-glossary-terms',
-			element: [
-				{
-					filter: ['h2'],
-					visit() {
-						seen.clear();
-					},
+			element: {
+				filter: ['code'],
+				visit(node, ctx) {
+					const anchor = spelled.get(ctx.textContent(node));
+					if (!anchor || !allowed.has(anchor) || seen.has(anchor)) return;
+					for (let parent = ctx.parent(node); parent && parent.type !== 'root'; parent = ctx.parent(parent)) {
+						if (parent.type !== 'element' || ['a', 'pre', 'summary'].includes(parent.tagName)) return;
+					}
+					seen.add(anchor);
+					const classes = node.properties?.className;
+					ctx.setProperty(node, 'className', [...(Array.isArray(classes) ? classes : []), 'gloss']);
+					ctx.setProperty(node, 'dataGloss', anchor);
 				},
-				{
-					filter: ['code'],
-					visit(node, ctx) {
-						const anchor = spelled.get(ctx.textContent(node));
-						if (!anchor || seen.has(anchor)) return;
-						for (let parent = ctx.parent(node); parent && parent.type !== 'root'; parent = ctx.parent(parent)) {
-							if (parent.type !== 'element' || ['a', 'pre', 'summary'].includes(parent.tagName)) return;
-						}
-						seen.add(anchor);
-						const classes = node.properties?.className;
-						ctx.setProperty(node, 'className', [...(Array.isArray(classes) ? classes : []), 'gloss']);
-						ctx.setProperty(node, 'dataGloss', anchor);
-					},
-				},
-			],
+			},
 			text(node, ctx) {
 				const value = node.value;
 				pattern.lastIndex = 0;
 				if (!pattern.test(value)) return;
 
 				// A bolded term is a definition; academy.js links it, so it is not
-				// marked here, and it counts as this section's mention.
+				// marked here, and it counts as this page's mention.
 				const parent = ctx.parent(node);
 				if (parent?.type === 'element' && (parent.tagName === 'strong' || parent.tagName === 'b')) {
 					const defined = anchorOf(ctx.textContent(parent));
@@ -191,7 +311,7 @@ export function glossaryTerms() {
 						pattern.lastIndex = match.index + 1;
 						continue;
 					}
-					if (seen.has(anchor)) continue;
+					if (!allowed.has(anchor) || seen.has(anchor)) continue;
 					seen.add(anchor);
 					if (match.index > last) parts.push({ type: 'text', value: value.slice(last, match.index) });
 					parts.push({
@@ -213,9 +333,9 @@ export function glossaryTerms() {
 /**
  * Link plain mentions of other lessons ("Lesson 2.1", "Lessons 4.2 and 4.3") to
  * those lessons, so a reader can follow one and a hover card can say what it
- * covers. A lesson is linked the first time it is mentioned in each section,
- * and never from its own page. Numbers are the displayed lesson numbers, which
- * the lesson index maps to each lesson's stable URL.
+ * covers. A lesson is linked the first time it is mentioned on a page, and
+ * never from its own page. Numbers are the displayed lesson numbers, which the
+ * lesson index maps to each lesson's stable URL.
  */
 export function lessonReferences() {
 	const slugOf = new Map(getLessonIndex().map(({ chapter, slug }) => [chapter, slug]));
@@ -228,13 +348,6 @@ export function lessonReferences() {
 		const seen = new Set([here]);
 		return {
 			name: 'academy-lesson-references',
-			element: {
-				filter: ['h2'],
-				visit() {
-					seen.clear();
-					seen.add(here);
-				},
-			},
 			text(node, ctx) {
 				const value = node.value;
 				if (!/Lessons?\s+\d/.test(value) || !isMarkable(node, ctx)) return;

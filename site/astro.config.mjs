@@ -4,13 +4,12 @@ import starlight from '@astrojs/starlight';
 import { ExpressiveCodeTheme } from '@astrojs/starlight/expressive-code';
 import { satteri } from '@astrojs/markdown-satteri';
 import { academyCodeTheme } from './src/data/code-theme.mjs';
-import { basePathLinks, glossaryTerms, lazyImages, lessonReferences, mermaidBlocks, scrollableTables } from './src/plugins/satteri-academy.mjs';
+import { basePathLinks, glossaryTerms, lazyImages, lessonReferences, mathBlocks, mermaidBlocks, scrollableTables } from './src/plugins/satteri-academy.mjs';
 import { CHAPTERS, chapterTone } from './src/data/chapters.mjs';
 import { getLessonIndex } from './src/data/lesson-index.mjs';
 import { readerSettingsScript } from './src/data/reader-settings.mjs';
+import { BASE, SITE } from './src/data/site.mjs';
 
-const SITE = 'https://mustcodeal.github.io';
-const BASE = '/rust-game-hacking-book';
 
 // Historical page URLs stay put as lessons move. The displayed chapter and
 // lesson numbers in frontmatter control navigation and pagination instead.
@@ -26,8 +25,21 @@ const chapterGroups = CHAPTERS.map((chapter) => ({
 		})),
 })).filter((chapter) => chapter.items.length);
 
+// KaTeX's stylesheet lists each font three times (woff2, woff, ttf). Every
+// browser that can read this book takes the woff2, so the other two are dropped
+// before the build bundles the fonts, instead of shipping files nobody fetches.
+const katexWoff2Only = {
+	name: 'katex-woff2-only',
+	enforce: 'pre',
+	transform(code, id) {
+		if (!/katex[\\/]dist[\\/].*\.css$/.test(id)) return;
+		return code.replace(/,url\([^)]*\.woff\)\s*format\("woff"\)/g, '').replace(/,url\([^)]*\.ttf\)\s*format\("truetype"\)/g, '');
+	},
+};
+
 export default defineConfig({
 	site: SITE,
+	vite: { plugins: [katexWoff2Only] },
 	base: BASE,
 	trailingSlash: 'always',
 	// Fetch a lesson as soon as the pointer rests on its link, so the click
@@ -35,7 +47,9 @@ export default defineConfig({
 	prefetch: { prefetchAll: true, defaultStrategy: 'hover' },
 	markdown: {
 		processor: satteri({
-			hastPlugins: [mermaidBlocks(), glossaryTerms(), lessonReferences(), scrollableTables(), lazyImages(), basePathLinks(BASE)],
+			// $$ ... $$ is maths; one dollar sign stays a dollar sign.
+			features: { math: { singleDollarTextMath: false } },
+			hastPlugins: [mermaidBlocks(), mathBlocks(), glossaryTerms(), lessonReferences(), scrollableTables(), lazyImages(), basePathLinks(BASE)],
 		}),
 	},
 	integrations: [
@@ -64,6 +78,8 @@ export default defineConfig({
 				'./src/styles/reader-appearance.css',
 				'./src/styles/reader-progress.css',
 				'./src/styles/hover-cards.css',
+				'./src/styles/kit.css',
+				'katex/dist/katex.min.css',
 				'./src/styles/mermaid.css',
 				'./src/styles/home.css',
 				'./src/styles/print.css',
@@ -92,6 +108,7 @@ export default defineConfig({
 				{ tag: 'script', attrs: { src: `${BASE}/scripts/reader-progress.js`, defer: true } },
 				{ tag: 'script', attrs: { src: `${BASE}/scripts/academy.js`, defer: true } },
 				{ tag: 'script', attrs: { src: `${BASE}/scripts/hover-cards.js`, defer: true } },
+				{ tag: 'script', attrs: { src: `${BASE}/scripts/kit.js`, defer: true } },
 				{ tag: 'script', attrs: { src: `${BASE}/scripts/learning-widgets.js`, defer: true } },
 				{ tag: 'script', attrs: { src: `${BASE}/scripts/mermaid-loader.js`, type: 'module' } },
 			],
@@ -115,6 +132,8 @@ export default defineConfig({
 						{ label: 'Glossary', link: '/glossary/' },
 						{ label: 'Print or save as PDF', link: '/print/' },
 						{ label: 'Using AI assistants', link: '/ai-assistants/' },
+						{ label: 'What’s new', link: '/updates/' },
+						{ label: 'Lesson components', link: '/components/' },
 					],
 				},
 				...chapterGroups,
