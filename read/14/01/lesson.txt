@@ -14,7 +14,7 @@ A rule written only in software could not stop it. If the kernel’s protections
 
 So the processor tracks a privilege level for the code it is running. It checks privileged instructions and page translations against that level. x86 processors define four levels, numbered 0 to 3 and usually drawn as nested rings, with ring 0 the most privileged. Windows uses two of them:
 
-kernel mode , ring 0, for the kernel and drivers;
+kernel mode , ring 0, for the kernel and drivers ;
 
 user mode , ring 3, for everything else: games, browsers, debuggers, and every tool in this book.
 
@@ -58,7 +58,7 @@ Section: How the kernel regains control.
 
 A system call is one common way execution crosses from a user thread into the kernel. Two others are exceptions, raised by the instruction that is running (a page fault, a division by zero, the int3 breakpoint), and interrupts, signals that arrive between instructions whether or not the running program expects them.
 
-Diagram. From user-mode codering 3 to system-call entry. The connection is labelled: syscall instruction. From user-mode codering 3 to exception handler. The connection is labelled: fault or breakpointduring an instruction. From device or timer to interrupt handler. The connection is labelled: interrupt betweeninstructions. From system-call entry to kernel workring 0. From exception handler to kernel workring 0. From interrupt handler to kernel workring 0. From kernel workring 0 to user-mode codering 3. The connection is labelled: return to ring 3.
+Diagram. From user-mode code ring 3 to system-call entry. The connection is labelled: syscall instruction. From user-mode code ring 3 to exception handler. The connection is labelled: fault or breakpoint during an instruction. From device or timer to interrupt handler. The connection is labelled: interrupt between instructions. From system-call entry to kernel work ring 0. From exception handler to kernel work ring 0. From interrupt handler to kernel work ring 0. From kernel work ring 0 to user-mode code ring 3. The connection is labelled: return to ring 3.
 
 The kernel does not interpret each ordinary game instruction. These entries bring a user thread into kernel code when work needs its authority. Windows also schedules its own kernel worker threads for work that need not begin in a game’s call. Both facts fit the same model: the kernel is code with privileged responsibilities, and the processor enforces who may run it.
 
@@ -94,7 +94,7 @@ When user-mode code follows a bad pointer, the processor raises a page fault and
 
 There is no separate part of Windows that can repair arbitrary damage to its own kernel state. A hypervisor may isolate a whole guest from the host, as Lesson 14.1 will show, but it cannot resume a guest kernel whose internal records are already corrupted. Kernel code does catch faults it expects, such as touching a user buffer that another thread may have freed; the copy behind ReadProcessMemory is written to catch exactly those. But a driver that follows a bad pointer by mistake can raise an unexpected fault inside the kernel, and kernel code and drivers share an address space and a set of data structures: the scheduler’s lists, the memory manager’s page records, and the locks that guard them. The fault may have struck halfway through updating one of those structures, with a lock still held. Windows cannot generally prove which of its own records remain sound, and carrying on could write corrupted data to disk. For an unrecoverable kernel failure, Windows stops on purpose.
 
-Diagram. From code follows a bad pointer to privilege levelof the faulting code. From privilege levelof the faulting code to kernel handles the page fault. The connection is labelled: ring 3. From kernel handles the page fault to access violation forthat one process. From access violation forthat one process to the process handles it or ends,everything else keeps running. From privilege levelof the faulting code to no general in-OS, operating system, repairfor damaged kernel state. The connection is labelled: ring 0, unexpected. From no general in-OS repairfor damaged kernel state to shared kernel statemay be half updated. From shared kernel statemay be half updated to bug check: stop code,crash dump, restart.
+Diagram. From code follows a bad pointer to privilege level of the faulting code. From privilege level of the faulting code to kernel handles the page fault. The connection is labelled: ring 3. From kernel handles the page fault to access violation for that one process. From access violation for that one process to the process handles it or ends, everything else keeps running. From privilege level of the faulting code to no general in-OS, operating system, repair for damaged kernel state. The connection is labelled: ring 0, unexpected. From no general in-OS repair for damaged kernel state to shared kernel state may be half updated. From shared kernel state may be half updated to bug check: stop code, crash dump, restart.
 
 That deliberate stop is a bug check, better known as the blue screen. Windows shows a stop code, such as hexadecimal 5 0 PAGE_FAULT_IN_NONPAGED_AREA or hexadecimal D 1 DRIVER_IRQL_NOT_LESS_OR_EQUAL, writes a crash dump of the whole machine if it can (Lesson 11.12 will capture a dump of one process), and restarts.
 

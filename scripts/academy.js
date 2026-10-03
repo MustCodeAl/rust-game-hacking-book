@@ -1,6 +1,8 @@
 // Game Hacking Academy page features for the Starlight site: the reader-theme
-// panel, semantic code colours, the reading progress bar, the projection
-// playground, and glossary links. Anything that would rewrite the whole page
+// panel, hiding and restoring the side panels, semantic code colours, the
+// reading progress bar, the projection playground, and glossary links. Lesson
+// completion lives in reader-progress.js and hover cards in hover-cards.js.
+// Anything that would rewrite the whole page
 // on load (table wrappers, code badges) is done by the build or by CSS instead,
 // and the rest runs lazily, so a long lesson stays quick to open and scroll.
 (function () {
@@ -117,28 +119,19 @@
       var choice = READER_CHOICES[name];
       setPressed(choice.control, root.dataset[choice.attribute] || choice.fallback);
     });
-    syncPanelToggles();
   }
 
   // The lesson list on the left and "On this page" on the right can each be
-  // hidden. A button's aria-pressed is "true" while its panel is showing.
+  // hidden by a Hide button on the panel itself (Sidebar.astro and
+  // PageSidebar.astro). While a panel is hidden, a tab at that edge of the
+  // screen brings it back, so the control is always where the panel was.
   var PANELS = {
-    sidebar: { key: "gha-sidebar", attribute: "academySidebar", label: "the lesson list", shortcut: "Alt+N" },
-    toc: { key: "gha-toc", attribute: "academyToc", label: "“On this page”", shortcut: "Alt+O" }
+    sidebar: { key: "gha-sidebar", attribute: "academySidebar", label: "Lessons", tip: "Show the lesson list · Alt+N", side: "left" },
+    toc: { key: "gha-toc", attribute: "academyToc", label: "On this page", tip: "Show “On this page” · Alt+O", side: "right" }
   };
 
   function panelShown(name) {
     return root.dataset[PANELS[name].attribute] !== "hidden";
-  }
-
-  function syncPanelToggles() {
-    document.querySelectorAll("[data-panel-toggle]").forEach(function (button) {
-      var name = button.getAttribute("data-panel-toggle");
-      if (!PANELS[name]) return;
-      var shown = panelShown(name);
-      button.setAttribute("aria-pressed", shown ? "true" : "false");
-      button.title = (shown ? "Hide " : "Show ") + PANELS[name].label + " (" + PANELS[name].shortcut + ")";
-    });
   }
 
   function applyPanel(name, shown) {
@@ -147,11 +140,64 @@
     root.dataset[panel.attribute] = shown ? "shown" : "hidden";
     if (shown) storageRemove(panel.key);
     else storageSet(panel.key, "hidden");
-    syncPanelToggles();
   }
 
   function togglePanel(name) {
     applyPanel(name, !panelShown(name));
+  }
+
+  // Hiding a panel removes the button that was just pressed, so keyboard focus
+  // moves to the tab that brings the panel back, and the other way round.
+  function movePanelFocus(name, shown) {
+    var selector = shown ? ".panel-hide--" + name : ".panel-restore--" + name;
+    var target = Array.prototype.find.call(document.querySelectorAll(selector), function (candidate) {
+      return candidate.getClientRects().length > 0;
+    });
+    if (target) target.focus();
+  }
+
+  function chevron(pointsRight) {
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", "15");
+    svg.setAttribute("height", "15");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    var path = document.createElementNS(svg.namespaceURI, "path");
+    path.setAttribute("d", pointsRight ? "m9.5 6 6 6-6 6" : "M14.5 6 8.5 12l6 6");
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "2.2");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(path);
+    return svg;
+  }
+
+  // The tabs live on <body>, outside the panels they restore, because hiding a
+  // panel hides everything inside it. reader.css shows each one only while its
+  // panel is hidden on a page that has that panel.
+  function buildPanelRestoreTabs() {
+    Object.keys(PANELS).forEach(function (name) {
+      if (document.querySelector(".panel-restore--" + name)) return;
+      var panel = PANELS[name];
+      var tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "panel-restore panel-restore--" + name;
+      tab.setAttribute("data-panel-show", name);
+      tab.setAttribute("data-tip", panel.tip);
+      var label = document.createElement("span");
+      var hidden = document.createElement("span");
+      hidden.className = "sr-only";
+      hidden.textContent = "Show ";
+      label.appendChild(hidden);
+      label.appendChild(document.createTextNode(panel.label));
+      // The arrow points the way the panel will open.
+      if (panel.side === "right") tab.appendChild(chevron(false));
+      tab.appendChild(label);
+      if (panel.side === "left") tab.appendChild(chevron(true));
+      document.body.appendChild(tab);
+    });
   }
 
   function applyTheme(id) {
@@ -244,7 +290,7 @@
       "[data-background-choice], [data-semantic-choice], [data-ligature-choice], [data-theme-reset], " +
       "[data-diagram-background-choice], [data-diagram-fill-choice], [data-heading-style-choice], [data-text-size-choice], [data-spacing-choice], " +
       "[data-diagram-labels-choice], [data-diagram-borders-choice], [data-diagram-size-choice], [data-grid-choice], [data-gradients-choice], [data-motion-choice], [data-animation-speed-choice], " +
-      "[data-print-book], [data-panel-toggle], .theme-switcher__toggle"
+      "[data-print-book], [data-panel-hide], [data-panel-show], .theme-switcher__toggle"
     );
     if (!target) {
       closeThemeMenus(event.target.closest("[data-theme-switcher]"));
@@ -270,7 +316,13 @@
     if ("spacingChoice" in data) return applyReaderChoice("spacing", data.spacingChoice);
     if ("semanticChoice" in data) return applySemanticSetting(data.semanticChoice);
     if ("ligatureChoice" in data) return applyLigatureSetting(data.ligatureChoice);
-    if ("panelToggle" in data) return togglePanel(data.panelToggle);
+    if ("panelHide" in data || "panelShow" in data) {
+      var panelName = "panelHide" in data ? data.panelHide : data.panelShow;
+      var show = "panelShow" in data;
+      applyPanel(panelName, show);
+      movePanelFocus(panelName, show);
+      return;
+    }
     if ("themeReset" in data) {
       applyTheme("paper");
       applyMode("auto");
@@ -724,10 +776,10 @@
         if (!anchor || used.has(anchor)) return;
         used.add(anchor);
 
+        // No title tooltip: hover-cards.js shows the definition itself.
         var link = document.createElement("a");
         link.className = "glossary-term-link";
         link.href = glossaryLink.href + "#" + anchor;
-        link.title = "Definition of " + node.textContent.trim() + " in the glossary";
         link.setAttribute("data-glossary-term", "true");
         while (node.firstChild) link.appendChild(node.firstChild);
         node.appendChild(link);
@@ -763,6 +815,7 @@
 
   function initializePageFeatures() {
     initThemeSwitcher();
+    buildPanelRestoreTabs();
     refreshSemanticHighlighting();
     bindReadingProgress();
     initProjectionPlaygrounds();

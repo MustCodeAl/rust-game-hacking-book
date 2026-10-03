@@ -14,7 +14,7 @@ Section: Type 1 and type 2 hypervisors.
 
 In the figure below, each arrow points from a piece of software to whatever it runs on:
 
-Diagram. From guest OS, operating system, to hypervisor applicationplus its kernel driver. From ordinary apps to host OS. From hypervisor applicationplus its kernel driver to host OS. From host OS to hardware. From Windows as theroot partition to hypervisor. From guest OS to hypervisor. From guest OS to hypervisor. From hypervisor to hardware.
+Diagram. From guest OS, operating system, to hypervisor application plus its kernel driver. From ordinary apps to host OS. From hypervisor application plus its kernel driver to host OS. From host OS to hardware. From Windows as the root partition to hypervisor. From guest OS to hypervisor. From guest OS to hypervisor. From hypervisor to hardware.
 
 A type 1 hypervisor runs directly on the hardware, with no operating system underneath it. Every operating system on the machine runs above it, including the one that manages the others. Hyper-V is type 1: when it is turned on, the hypervisor starts first at boot, and your Windows becomes the root partition, a privileged guest that manages the other guests. Xen and VMware ESXi are also type 1.
 
@@ -30,7 +30,7 @@ In 2005 and 2006, Intel and AMD added hardware support, called Intel VT-x and AM
 
 The hypervisor keeps one control structure for each virtual processor, called the VMCS on Intel and the VMCB on AMD. It holds three things:
 
-the guest’s saved state: every register, including the instruction pointer and cr3 ;
+the guest’s saved state: every register , including the instruction pointer and cr3 ;
 
 the host’s state, reloaded whenever the guest stops;
 
@@ -46,9 +46,9 @@ Typical causes of an exit:
 
 cpuid , the instruction that describes the processor. On Intel it always exits, so the hypervisor decides what the guest is told about its processor.
 
-Port I/O to a virtual device, such as the in and out instructions from Lesson 12.4.
+Port I/O to a virtual device, such as the in and out instructions from Lesson 12.4 .
 
-An access to a guest-physical address that has no usable mapping in the second stage of translation, described in the next section. That is how the hypervisor catches accesses to a virtual device’s memory-mapped registers.
+An access to a guest-physical address that has no usable mapping in the second stage of translation, described in the next section. That is how the hypervisor catches accesses to a virtual device’s memory-mapped registers .
 
 hlt , when a virtual processor has nothing to do and the hypervisor can give the real core to other work.
 
@@ -70,7 +70,7 @@ Stage 1 turns a guest virtual address into a guest physical address, through the
 
 Stage 2 turns a guest physical address into a host physical address, through tables that only the hypervisor writes. The guest cannot see them, name them, or change them.
 
-Diagram. From guest virtualaddress to guest physicaladdress. The connection is labelled: stage 1the guest's own tables. From guest physicaladdress to host physicaladdress in real RAM. The connection is labelled: stage 2the hypervisor's tables.
+Diagram. From guest virtual address to guest physical address. The connection is labelled: stage 1 the guest's own tables. From guest physical address to host physical address in real RAM. The connection is labelled: stage 2 the hypervisor's tables.
 
 Both stages work a page at a time. The low bits of an address, which pick a byte within its page, pass through unchanged, and each stage replaces only the page number above them. Lesson 14.2 follows one address through both stages digit by digit and counts what the extra stage costs.
 
@@ -82,11 +82,11 @@ Section: What a snapshot saves and restores.
 
 Lesson 1.7 took snapshots before any experiment. A snapshot can capture a whole running computer because everything that makes up a guest is something the hypervisor owns:
 
-The disk. A guest’s disk is an ordinary file on the host. Taking a snapshot freezes that file and starts a new differencing file, the delta, which receives every later write. A read checks the delta first and falls back to the frozen base.
+The disk. A guest’s disk is an ordinary file on the host . Taking a snapshot freezes that file and starts a new differencing file, the delta, which receives every later write. A read checks the delta first and falls back to the frozen base.
 
 The memory. The guest’s RAM is host memory that the stage-2 tables map. Because the hypervisor knows exactly which host pages those are, it can write all of them to a file, and a snapshot of a running VM includes that file.
 
-The processors and devices. Each virtual processor’s saved state from its control structure, every register including the instruction pointer, plus the state of every emulated device.
+The processors and devices. Each virtual processor’s saved state from its control structure, every register including the instruction pointer , plus the state of every emulated device.
 
 Labelled memory diagram. block 0: base; block 1: delta, highlighted; block 2: base; block 3: base; block 4: delta, highlighted; block 5: base. A virtual disk after a snapshot. Blocks 1 and 4 were written since, so their new contents live in the delta; the others are still read from the frozen base. Restoring the snapshot discards the delta.
 
@@ -104,11 +104,11 @@ Lesson 11.10 ended with an uncomfortable fact: kernel code can do anything, so a
 
 VTL0 , the normal world: the Windows kernel, drivers, and every program, in their usual rings 0 and 3;
 
-VTL1 , the secure world: a small secure kernel and a few isolated processes, such as the one that guards login secrets when Credential Guard is on.
+VTL1 , the secure world: a small secure kernel and a few isolated processes , such as the one that guards login secrets when Credential Guard is on.
 
 The hypervisor keeps separate stage-2 permissions for each trust level. VTL1 can ask the hypervisor to change VTL0’s permissions. Nothing in VTL0, not even ring-0 kernel code, can change them, because the stage-2 tables cannot be reached from inside VTL0 at all.
 
-Diagram. From Windows kernel and driversring 0 to secure kernel withcode integrity checksring 0. The connection is labelled: asks to load a driver. From secure kernel withcode integrity checksring 0 to Windows hypervisorowns the stage-2 tables. The connection is labelled: make its verified codeexecutable, never writable. From Windows hypervisorowns the stage-2 tables to Windows kernel and driversring 0. The connection is labelled: enforces stage-2 permissionson every VTL0 access.
+Diagram. From Windows kernel and drivers ring 0 to secure kernel with code integrity checks ring 0. The connection is labelled: asks to load a driver. From secure kernel with code integrity checks ring 0 to Windows hypervisor owns the stage-2 tables. The connection is labelled: make its verified code executable, never writable. From Windows hypervisor owns the stage-2 tables to Windows kernel and drivers ring 0. The connection is labelled: enforces stage-2 permissions on every VTL0 access.
 
 Memory integrity, also called HVCI (hypervisor-protected code integrity), is the VBS feature that uses this arrangement for the kernel’s own code. The code-integrity checks that decide whether a driver is properly signed run in VTL1, where a compromised VTL0 kernel cannot tamper with them. A kernel page becomes executable in stage 2 only after its code passes those checks, and an executable page is never writable.
 

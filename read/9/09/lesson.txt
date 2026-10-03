@@ -58,7 +58,7 @@ An offset in a file is a distance in bytes from the file’s first byte: offset 
 
 Changing byte 6 on disk does not change a running game. The game sees the new value only when it loads the file again, and a game that is still running can overwrite the edit when it saves on exit, so close it first.
 
-An address found with a memory scanner cannot be typed into a hex editor’s “go to offset” box, or the other way round. Lesson 5.1 met the same split for executables, where the section table translates between file offsets and addresses.
+An address found with a memory scanner cannot be typed into a hex editor ’s “go to offset” box, or the other way round. Lesson 5.1 met the same split for executables, where the section table translates between file offsets and addresses.
 
 Section: The magic number and the version say what the file is.
 
@@ -118,7 +118,7 @@ Labelled memory diagram. hexadecimal 0 F: 4A; hexadecimal 1 0: 03; hexadecimal 1
 
 The loader repeats that sum every time it opens the file:
 
-Diagram. From Read the whole file to First four bytesare GSAV?. From First four bytesare GSAV? to Refuse the file. The connection is labelled: no. From First four bytesare GSAV? to Version is 1?. The connection is labelled: yes. From Version is 1? to Refuse the file. The connection is labelled: no. From Version is 1? to File size equals12 + name length + 4?. The connection is labelled: yes. From File size equals12 + name length + 4? to Refuse the file. The connection is labelled: no. From File size equals12 + name length + 4? to Add up every bytebefore the checksum. The connection is labelled: yes. From Add up every bytebefore the checksum to Sum equals thestored checksum?. From Sum equals thestored checksum? to Refuse the file. The connection is labelled: no. From Sum equals thestored checksum? to Decode the fields and load. The connection is labelled: yes.
+Diagram. From Read the whole file to First four bytes are GSAV?. From First four bytes are GSAV? to Refuse the file. The connection is labelled: no. From First four bytes are GSAV? to Version is 1?. The connection is labelled: yes. From Version is 1? to Refuse the file. The connection is labelled: no. From Version is 1? to File size equals 12 + name length + 4?. The connection is labelled: yes. From File size equals 12 + name length + 4? to Refuse the file. The connection is labelled: no. From File size equals 12 + name length + 4? to Add up every byte before the checksum. The connection is labelled: yes. From Add up every byte before the checksum to Sum equals the stored checksum?. From Sum equals the stored checksum? to Refuse the file. The connection is labelled: no. From Sum equals the stored checksum? to Decode the fields and load. The connection is labelled: yes.
 
 Diagram walkthrough: Follow the 19-byte GSAV save through its loader checks. Step 1: Read the complete file. State: 19 bytes. Keep the whole byte sequence available. Offsets describe positions in this file, and no field is trusted merely because its bytes resemble readable text. Step 2: Check magic and version. State: GSAV; version equals 1. Require bytes 47 53 41 56 at offsets 0–3 and decode 01 00 as little-endian version 1. Unknown layouts stop before their fields are interpreted. Step 3: Bound the variable-length name. State: 12 + 3 + 4 equals 19. The name-length byte is 03. Twelve fixed bytes, three name bytes, and four checksum bytes must exactly fit the file before those slices can be used. Step 4: Compute the checksum. State: sum(bytes 0–14) equals 842. Add every byte before the checksum, including the header, numeric fields, length, and name. For this exact save, the total is 842. Step 5: Compare the stored total. State: 4A 03 00 00 to 842. Read the final four bytes as a little-endian u32. The stored 842 equals the computed 842; a mismatch refuses the file instead of loading damaged state. Step 6: Decode the accepted record. State: Nia: level 3, gold 250. The checked layout now gives gold 250 at offsets 6–9, level 3 at offset 10, and the three name bytes Nia at offsets 12–14. This traces the unchanged sample save. Editing gold also changes the required checksum; a correct offset and byte order cannot bypass a failed integrity check.
 
@@ -136,9 +136,9 @@ A hex editor writes straight back to the file it opened, so a few mechanical det
 
 Keep an untouched copy of the save before the first edit, and keep it until the game has loaded the edited save and saved it again. A wrong byte is only undone by that copy.
 
-Type over bytes; do not insert them. Hex editors have an overwrite mode, which replaces bytes in place, and an insert mode, which adds bytes and pushes everything after them along. In a fixed layout, one inserted byte moves every later field: the loader then reads the checksum from the wrong place and finds the file one byte too long. Changing gold overwrites exactly four bytes.
+Type over bytes; do not insert them. Hex editors have an overwrite mode, which replaces bytes in place, and an insert mode, which adds bytes and pushes everything after them along. In a fixed layout, one inserted byte moves every later field : the loader then reads the checksum from the wrong place and finds the file one byte too long. Changing gold overwrites exactly four bytes.
 
-A longer name is the one edit that must insert bytes. Renaming Nia to Grace means inserting two bytes, changing the length byte from 03 to 05 , and recomputing the checksum at its new offset, 17. Getting any one of the three wrong makes the loader refuse the file.
+A longer name is the one edit that must insert bytes. Renaming Nia to Grace means inserting two bytes, changing the length byte from 03 to 05 , and recomputing the checksum at its new offset , 17. Getting any one of the three wrong makes the loader refuse the file.
 
 A program that edits saves should write the result to a temporary file and then replace the original in one step, as in Lesson 9.2 , so a crash mid-write cannot leave half a save.
 
@@ -148,7 +148,7 @@ Everything above depends on each field being stored as plain bytes at a known pl
 
 A compressed save stores an encoded form of the data. gzip, a common compression format, starts its files with 1F 8B , the same bytes Lesson 8.2 found at the start of Wesnoth’s network payloads. The gold field is not anywhere in the file as plain bytes, and changing one compressed byte changes how everything after it decompresses; gzip’s own CRC-32 at the end of the stream then fails. The file has to be decompressed, edited, and compressed again with a tool that understands the format.
 
-An encrypted save looks like random bytes: no readable text in the character column, and every value from 00 to FF appearing about equally often. Changing the encrypted bytes, the ciphertext , changes what they decrypt to in ways nobody can choose, and authenticated encryption, covered in Lesson 9.9 , refuses the altered file outright. Without the key there is nothing to edit.
+An encrypted save looks like random bytes: no readable text in the character column, and every value from 00 to FF appearing about equally often. Changing the encrypted bytes, the ciphertext , changes what they decrypt to in ways nobody can choose, and authenticated encryption , covered in Lesson 9.9 , refuses the altered file outright. Without the key there is nothing to edit.
 
 The two-save comparison tells these cases apart quickly. A plain format changes a handful of bytes, as it did above; a compressed file, or one encrypted afresh on every save, changes almost everything from the first difference onward. If the save turns out to be text after all, Lesson 9.2’s key/value editing is simpler than any hex edit.
 
@@ -158,7 +158,7 @@ hex_save_lab.rs implements the GSAV format in portable safe Rust:
 
 every offset is a named constant, such as GOLD_OFFSET (6) and NAME_LENGTH_OFFSET (11), so no bare numbers are scattered through the code;
 
-parse checks, in the loader’s order, that the file is long enough, the magic is GSAV , the version is 1, the length byte agrees with the file size, and the stored checksum equals the recomputed sum, and it returns a distinct SaveError for each failure, such as BadMagic , TooShort , or ChecksumMismatch , instead of panicking;
+parse checks, in the loader ’s order, that the file is long enough, the magic is GSAV , the version is 1, the length byte agrees with the file size, and the stored checksum equals the recomputed sum, and it returns a distinct SaveError for each failure, such as BadMagic , TooShort , or ChecksumMismatch , instead of panicking;
 
 patch_gold overwrites the four gold bytes in a copy and then recomputes the checksum, while patch_gold_without_checksum makes the broken edit so its rejection can be seen;
 
