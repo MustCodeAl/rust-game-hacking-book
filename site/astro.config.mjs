@@ -4,7 +4,7 @@ import starlight from '@astrojs/starlight';
 import { ExpressiveCodeTheme } from '@astrojs/starlight/expressive-code';
 import { satteri } from '@astrojs/markdown-satteri';
 import { academyCodeTheme } from './src/data/code-theme.mjs';
-import { basePathLinks, lazyImages, mermaidBlocks, scrollableTables } from './src/plugins/satteri-academy.mjs';
+import { basePathLinks, glossaryTerms, lazyImages, lessonReferences, mermaidBlocks, scrollableTables } from './src/plugins/satteri-academy.mjs';
 import { CHAPTERS, chapterTone } from './src/data/chapters.mjs';
 import { getLessonIndex } from './src/data/lesson-index.mjs';
 import { readerSettingsScript } from './src/data/reader-settings.mjs';
@@ -35,7 +35,7 @@ export default defineConfig({
 	prefetch: { prefetchAll: true, defaultStrategy: 'hover' },
 	markdown: {
 		processor: satteri({
-			hastPlugins: [mermaidBlocks(), scrollableTables(), lazyImages(), basePathLinks(BASE)],
+			hastPlugins: [mermaidBlocks(), glossaryTerms(), lessonReferences(), scrollableTables(), lazyImages(), basePathLinks(BASE)],
 		}),
 	},
 	integrations: [
@@ -62,6 +62,8 @@ export default defineConfig({
 				'./src/styles/code-theme.css',
 				'./src/styles/reader.css',
 				'./src/styles/reader-appearance.css',
+				'./src/styles/reader-progress.css',
+				'./src/styles/hover-cards.css',
 				'./src/styles/mermaid.css',
 				'./src/styles/home.css',
 				'./src/styles/print.css',
@@ -72,6 +74,8 @@ export default defineConfig({
 				MarkdownContent: './src/components/overrides/MarkdownContent.astro',
 				ThemeSelect: './src/components/overrides/ThemeSelect.astro',
 				Pagination: './src/components/overrides/Pagination.astro',
+				Sidebar: './src/components/overrides/Sidebar.astro',
+				PageSidebar: './src/components/overrides/PageSidebar.astro',
 			},
 			head: [
 				// Apply every saved reader-theme choice before first paint, so a dark
@@ -85,7 +89,9 @@ export default defineConfig({
 				{ tag: 'link', attrs: { rel: 'glossary-index', type: 'application/json', href: `${BASE}/assets/glossary-index.json` } },
 				{ tag: 'link', attrs: { rel: 'alternate', type: 'text/plain', title: 'LLM-friendly summary', href: `${BASE}/llms.txt` } },
 				{ tag: 'script', attrs: { src: `${BASE}/scripts/print-book.js`, defer: true } },
+				{ tag: 'script', attrs: { src: `${BASE}/scripts/reader-progress.js`, defer: true } },
 				{ tag: 'script', attrs: { src: `${BASE}/scripts/academy.js`, defer: true } },
+				{ tag: 'script', attrs: { src: `${BASE}/scripts/hover-cards.js`, defer: true } },
 				{ tag: 'script', attrs: { src: `${BASE}/scripts/learning-widgets.js`, defer: true } },
 				{ tag: 'script', attrs: { src: `${BASE}/scripts/mermaid-loader.js`, type: 'module' } },
 			],

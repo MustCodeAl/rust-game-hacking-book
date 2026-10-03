@@ -5,8 +5,14 @@
 // updating while those workflows cannot run. `.nojekyll` tells that job to copy
 // the files as they are instead of running Jekyll over them.
 //
-//   bun run publish:pages             build, commit to gh-pages, and push
-//   bun run publish:pages --dry-run   build and commit locally, but do not push
+// The new commit is made on a detached copy of origin/gh-pages and pushed with
+// `HEAD:gh-pages`, so no local branch is ever moved: another checkout may have
+// gh-pages open, and resetting it under that checkout would leave its files
+// out of step with its branch.
+//
+//   bun run publish:pages             build, commit on top of gh-pages, and push
+//   bun run publish:pages --dry-run   build and commit locally (as the
+//                                     gh-pages-preview branch), but do not push
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -37,8 +43,10 @@ const siteDir = join(root, 'site');
 const distDir = join(siteDir, 'dist');
 
 // The published site must match a commit, so its message can name that commit.
-if (git(['status', '--porcelain', '--', 'site', 'rust-labs', 'docs.json'], root)) {
-	console.error('Commit or stash your changes under site/ first, so the live site matches a commit.');
+// The build also copies in every lab folder, so they count as much as site/.
+const SOURCES = ['site', 'rust-labs', 'windows-labs', 'lua-labs', 'advanced-memory-labs', 'firmware-labs', 'docs.json'];
+if (git(['status', '--porcelain', '--', ...SOURCES.filter((entry) => existsSync(join(root, entry)))], root)) {
+	console.error('Commit or stash your changes to the book (site/, the labs, docs.json) first, so the live site matches a commit.');
 	process.exit(1);
 }
 const source = git(['rev-parse', '--short', 'HEAD'], root);
@@ -58,9 +66,7 @@ try {
 	// adds one commit instead of replacing the branch.
 	if (succeeds(['ls-remote', '--exit-code', '--heads', 'origin', BRANCH], root)) {
 		git(['fetch', '--quiet', 'origin', BRANCH], root);
-		git(['worktree', 'add', '--quiet', '--force', '-B', BRANCH, worktree, `origin/${BRANCH}`], root);
-	} else if (succeeds(['rev-parse', '--verify', '--quiet', `refs/heads/${BRANCH}`], root)) {
-		git(['worktree', 'add', '--quiet', '--force', worktree, BRANCH], root);
+		git(['worktree', 'add', '--quiet', '--force', '--detach', worktree, `origin/${BRANCH}`], root);
 	} else {
 		git(['worktree', 'add', '--quiet', '--force', '--detach', worktree], root);
 		git(['checkout', '--quiet', '--orphan', BRANCH], worktree);
@@ -86,9 +92,10 @@ try {
 	if (local === remote) {
 		console.log(`GitHub's ${BRANCH} branch already has this build; nothing to publish.`);
 	} else if (dryRun) {
-		console.log(`Dry run: the build is committed to the local ${BRANCH} branch but not pushed.`);
+		git(['branch', '--force', `${BRANCH}-preview`, 'HEAD'], root);
+		console.log(`Dry run: the build is committed to the local ${BRANCH}-preview branch but not pushed.`);
 	} else {
-		git(['push', 'origin', BRANCH], worktree, false);
+		git(['push', 'origin', `HEAD:refs/heads/${BRANCH}`], worktree, false);
 		console.log(`Pushed ${BRANCH}. GitHub Pages redeploys it within a few minutes.`);
 	}
 } finally {

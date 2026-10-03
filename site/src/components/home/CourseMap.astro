@@ -1,9 +1,11 @@
 ---
 // One card per chapter that has lessons, so a new chapter appears here as
 // soon as its first lesson exists. Each card says how many lessons the chapter
-// holds and roughly how long it takes to study, in the chapter's colour.
+// holds and roughly how long it takes to study, in the chapter's colour, and
+// how many of them this reader has marked done (filled in by reader-progress.js).
 import { getCollection } from 'astro:content';
 import { CHAPTERS, chapterTone, compareLessons } from '../../data/chapters.mjs';
+import { chapterLessonIds } from '../../lib/lessons';
 import ColourKey from '../ColourKey.astro';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -30,6 +32,10 @@ function readingTime(minutes: number) {
 	const hours = Math.round((minutes / 60) * 2) / 2;
 	return `about ${hours} h`;
 }
+
+const lessonIds = new Map(
+	await Promise.all(chapters.map(async ({ number }) => [number, (await chapterLessonIds(number)).join(' ')] as const)),
+);
 ---
 
 <div class="section-heading not-content" id="course-map">
@@ -56,6 +62,9 @@ function readingTime(minutes: number) {
 					<p>{chapter.summary}</p>
 					<span class="course-card__meta">
 						{count} lessons · {readingTime(minutes)} of study
+						<span class="course-card__progress" data-chapter-progress data-lessons={lessonIds.get(chapter.number)}>
+							<span data-progress-text></span>
+						</span>
 					</span>
 				</a>
 			);

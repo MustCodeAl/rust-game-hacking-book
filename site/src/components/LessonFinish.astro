@@ -1,0 +1,46 @@
+---
+// The end of a lesson: mark it done, or mark its whole chapter done, and see
+// how much of the chapter is finished. Progress is kept in this browser only;
+// public/scripts/reader-progress.js wires the buttons and keeps every display
+// of it in step, including the ticks in the lesson list.
+import { chapterOf, chapterTone } from '../data/chapters.mjs';
+import { chapterLessonIds } from '../lib/lessons';
+import DoneToggle from './DoneToggle.astro';
+
+interface Props {
+	/** The lesson's URL id, such as "pages/1/10". */
+	id: string;
+	/** The displayed lesson number, such as "2.2". */
+	lesson: string;
+}
+
+const { id, lesson } = Astro.props;
+const chapter = chapterOf(lesson)!;
+const lessons = (await chapterLessonIds(chapter.number)).join(' ');
+---
+
+<section
+	class="lesson-finish not-content print:hidden"
+	data-tone={chapterTone(chapter.number)}
+	aria-labelledby="lesson-finish-title"
+>
+	<h2 id="lesson-finish-title" class="lesson-finish__title">Finished Lesson {lesson}?</h2>
+	<p class="lesson-finish__text">
+		Mark it done and the lesson list shows a <span class="done-glyph" aria-hidden="true">✓</span> beside it. A chapter
+		whose lessons are all done is marked done too. Progress is saved in this browser only.
+	</p>
+	<div class="lesson-finish__actions">
+		<DoneToggle id={id} lesson={lesson} />
+		<button type="button" class="chapter-done-button" data-chapter-done data-lessons={lessons} data-state="todo">
+			<span class="state-todo">Mark all of Chapter {chapter.number} done</span>
+			<span class="state-done">Mark Chapter {chapter.number} not done</span>
+		</button>
+	</div>
+	<div class="chapter-meter" data-chapter-progress data-lessons={lessons}>
+		<span class="chapter-meter__track" aria-hidden="true"><span class="chapter-meter__fill"></span></span>
+		<span class="chapter-meter__text">
+			Chapter {chapter.number}: <span data-progress-text>{lessons.split(' ').length} lessons</span>
+		</span>
+	</div>
+	<p class="sr-only" aria-live="polite" data-progress-status></p>
+</section>

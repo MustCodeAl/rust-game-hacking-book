@@ -360,3 +360,44 @@ The theme-blending refinement is source **8f82f62**, published through
 **PR #14** into `gh-pages` at **89a99b7**. Pages built that exact merge;
 checked public pages and linked stylesheets match the verified build.
 See BOOK_REVISION_PROGRESS.md for the colour rules and validation receipt.
+
+### Reading progress, side-panel buttons, hover cards, reader mode, chat widget
+
+Added on `claude/reader-progress-tools` on top of `codex/book-revision` (2026-10-03).
+A later publication must be built from a source that includes them, or the
+live site loses them (publishing replaces every file).
+
+- **Progress.** `public/scripts/reader-progress.js` keeps the lessons a reader
+  marked done in `localStorage["gha-done"]`, a JSON list of lesson **URL ids**
+  such as `pages/1/10`. Never key progress by displayed number: lessons keep
+  their URL when the book renumbers them. A chapter is done when all its lessons
+  are. `DoneToggle.astro` (lesson header, `/contents/`), `LessonFinish.astro`
+  (end of each lesson, from the `MarkdownContent` override), the lesson list
+  (a tick per lesson, a "3/9" or "✓ Done" chip per chapter), `/contents/`, and the
+  home cards all read the same list. Done is the success green with a check
+  mark; chapter colours still identify chapters.
+- **Hiding panels.** The lesson list and "On this page" have a Hide button on
+  the panel itself (`overrides/Sidebar.astro`, `overrides/PageSidebar.astro`);
+  while one is hidden a tab at that screen edge restores it (built by
+  `academy.js`). Saved in `gha-sidebar` and `gha-toc`; shortcuts Alt+N, Alt+O.
+  The header has no panel icons.
+- **Hover cards.** `public/scripts/hover-cards.js`. Glossary words are marked
+  while building by `glossaryTerms()` in `src/plugins/satteri-academy.mjs`: the
+  first use of each term in each `##` section gets `data-gloss`, never in
+  headings, code, links, or components; ordinary-English headwords are listed in
+  `EVERYDAY_WORDS` and skipped. `lessonReferences()` links plain "Lesson 2.1"
+  mentions the same way. A card shows a glossary definition or a lesson's
+  summary, study time, and done state. `data-tip` gives buttons a short tip.
+  Text comes from `assets/glossary-cards.json` and `assets/lesson-cards.json`,
+  fetched on the first card. `src/lib/glossary-terms.mjs` is the single reading of
+  `glossary.mdx`. Cards are for things on the page, not the lesson list.
+- **Reader mode** (`/read/…`). The play, pause, stop, progress, and **Exit reader
+  mode** controls are a bar pinned to the top for the whole page
+  (`ReaderTools.astro`, `.reader-dock`); settings and hand-off options stay in
+  the card below it. Diagram line breaks narrate as spaces.
+- **Context7 chat widget.** `scripts/add-context7-widget.mjs` runs last in the
+  build and puts the owner's tag before `</body>` on every page, including the
+  listening editions and the print book. It is not version-pinned, by request.
+- **Publishing.** `bun run publish:pages` builds, commits on a detached copy of
+  `origin/gh-pages`, and pushes `HEAD:gh-pages`; it never moves a local branch.
+  It refuses to run with uncommitted changes under `site/` or the lab folders.

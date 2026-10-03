@@ -83,23 +83,34 @@ function directText(element) {
 		.map((node) => node.textContent).join(' '));
 }
 
+// A diagram label written over two lines ("machine-code bytes<br>in the EXE")
+// has no text where the line break is, so reading it plainly would run the
+// words together ("bytesin"). Count each break as a space.
+function textWithBreaks(node) {
+	if (!node) return '';
+	if (node.nodeType === 3) return node.textContent;
+	if (node.nodeType !== 1) return '';
+	if (/^br$/i.test(node.tagName)) return ' ';
+	return [...node.childNodes].map(textWithBreaks).join('');
+}
+
 function describeMermaid(element) {
 	const nodes = [...element.querySelectorAll('.node[data-diagram-node-key]')];
-	const labels = new Map(nodes.map((node) => [node.dataset.diagramNodeKey, cleanReaderText(node.querySelector('.nodeLabel')?.textContent || node.textContent)]));
+	const labels = new Map(nodes.map((node) => [node.dataset.diagramNodeKey, cleanReaderText(textWithBreaks(node.querySelector('.nodeLabel') || node))]));
 	const edges = [...element.querySelectorAll('[data-diagram-from][data-diagram-to]')];
 	const edgeLabels = [...element.querySelectorAll('g.edgeLabel')].filter((label) => label.parentElement?.classList.contains('edgeLabels'));
 	if (labels.size && edges.length) {
 		const connections = edges.map((edge, index) => {
 			const from = labels.get(edge.dataset.diagramFrom);
 			const to = labels.get(edge.dataset.diagramTo);
-			const annotation = cleanReaderText(edgeLabels[index]?.textContent);
+			const annotation = cleanReaderText(textWithBreaks(edgeLabels[index]));
 			return from && to ? `From ${from} to ${to}${annotation ? `. The connection is labelled: ${annotation}` : ''}.` : '';
 		}).filter(Boolean);
 		return `Diagram. ${connections.join(' ')}`;
 	}
 	const svg = element.querySelector('svg');
 	if (svg) {
-		const labels = [...svg.querySelectorAll('text, foreignObject')].map((node) => cleanReaderText(node.textContent)).filter(Boolean);
+		const labels = [...svg.querySelectorAll('text, foreignObject')].map((node) => cleanReaderText(textWithBreaks(node))).filter(Boolean);
 		return `Diagram labels, in drawing order: ${[...new Set(labels)].join('; ')}.`;
 	}
 	return 'A diagram accompanies this explanation. The full lesson shows its layout.';

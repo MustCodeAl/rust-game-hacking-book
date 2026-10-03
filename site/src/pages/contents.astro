@@ -1,14 +1,16 @@
 ---
-// Every lesson in reading order, with its summary and estimated study time.
+// Every lesson in reading order, with its summary and estimated study time,
+// and the reader's progress: a tick box per lesson, a meter and a "mark the
+// whole chapter" button per chapter, and the total. reader-progress.js wires
+// them; progress is saved in this browser only.
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
-import { getCollection } from 'astro:content';
-import { CHAPTERS, chapterTone, compareLessons } from '../data/chapters.mjs';
+import { CHAPTERS, chapterTone } from '../data/chapters.mjs';
 import ColourKey from '../components/ColourKey.astro';
+import DoneToggle from '../components/DoneToggle.astro';
+import { lessonsInOrder } from '../lib/lessons';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-const lessons = (await getCollection('docs', (entry) => Boolean(entry.data.chapter))).sort((a, b) =>
-	compareLessons(a.data.chapter, b.data.chapter),
-);
+const lessons = await lessonsInOrder();
 const chapters = CHAPTERS.map((chapter) => {
 	const items = lessons.filter((entry) => entry.data.chapter!.startsWith(`${chapter.number}.`));
 	const minutes = items.reduce((total, entry) => total + (entry.data.minutes ?? 0), 0);
@@ -16,6 +18,7 @@ const chapters = CHAPTERS.map((chapter) => {
 }).filter(({ items }) => items.length > 0);
 const totalLessons = lessons.length;
 const totalHours = Math.round(chapters.reduce((total, { minutes }) => total + minutes, 0) / 60);
+const allIds = lessons.map((entry) => entry.id).join(' ');
 ---
 
 <StarlightPage
@@ -32,43 +35,91 @@ const totalHours = Math.round(chapters.reduce((total, { minutes }) => total + mi
 		use the concept titles and summaries below to find a specific explanation or worked example. Times include the
 		worked exercises; your pace will depend on how much you run and explore.
 	</p>
+	<div class="contents-progress not-content">
+		<div class="chapter-meter" data-chapter-progress data-lessons={allIds}>
+			<span class="chapter-meter__track" aria-hidden="true"><span class="chapter-meter__fill"></span></span>
+			<span class="chapter-meter__text">Your progress: <span data-progress-text>{totalLessons} lessons</span></span>
+		</div>
+		<p>
+			Tick a lesson when you finish it; the lesson list shows the same ticks. Progress is saved in this browser
+			only.
+		</p>
+		<button type="button" class="progress-clear-button" data-progress-clear>Clear all progress</button>
+		<p class="sr-only" aria-live="polite" data-progress-status></p>
+	</div>
 	<ColourKey />
 	{
-		chapters.map(({ chapter, items, minutes }) => (
-			<section class="contents-chapter not-content" data-tone={chapterTone(chapter.number)} aria-labelledby={`chapter-${chapter.number}`}>
-				<header>
-					<span class="contents-chapter__emoji" aria-hidden="true">
-						{chapter.emoji}
-					</span>
-					<div>
-						<h2 id={`chapter-${chapter.number}`}>
-							{chapter.number}. {chapter.title}
-						</h2>
-						<p>
-							{chapter.summary} <span class="contents-chapter__time">About {Math.round(minutes / 60 * 10) / 10} hours.</span>
-						</p>
-					</div>
-				</header>
-				<ol>
-					{items.map((entry) => (
-						<li>
-							<a href={`${base}/${entry.id}/`}>
-								<span class="contents-lesson__number">{entry.data.chapter}</span>
-								<span class="contents-lesson__title">{entry.data.title}</span>
-							</a>
-							{entry.data.description && <p>{entry.data.description}</p>}
-							{entry.data.minutes && <span class="contents-lesson__time">{entry.data.minutes} min</span>}
-						</li>
-					))}
-				</ol>
-			</section>
-		))
+		chapters.map(({ chapter, items, minutes }) => {
+			const ids = items.map((entry) => entry.id).join(' ');
+			return (
+				<section class="contents-chapter not-content" data-tone={chapterTone(chapter.number)} aria-labelledby={`chapter-${chapter.number}`}>
+					<header>
+						<span class="contents-chapter__emoji" aria-hidden="true">
+							{chapter.emoji}
+						</span>
+						<div>
+							<h2 id={`chapter-${chapter.number}`}>
+								{chapter.number}. {chapter.title}
+							</h2>
+							<p>
+								{chapter.summary} <span class="contents-chapter__time">About {Math.round(minutes / 60 * 10) / 10} hours.</span>
+							</p>
+							<div class="contents-chapter__progress">
+								<div class="chapter-meter" data-chapter-progress data-lessons={ids}>
+									<span class="chapter-meter__track" aria-hidden="true"><span class="chapter-meter__fill"></span></span>
+									<span class="chapter-meter__text" data-progress-text>{items.length} lessons</span>
+								</div>
+								<button type="button" class="chapter-done-button" data-chapter-done data-lessons={ids} data-state="todo">
+									<span class="state-todo">Mark chapter done</span>
+									<span class="state-done">Mark chapter not done</span>
+								</button>
+							</div>
+						</div>
+					</header>
+					<ol>
+						{items.map((entry) => (
+							<li>
+								<DoneToggle id={entry.id} lesson={entry.data.chapter!} variant="compact" />
+								<a href={`${base}/${entry.id}/`}>
+									<span class="contents-lesson__number">{entry.data.chapter}</span>
+									<span class="contents-lesson__title">{entry.data.title}</span>
+								</a>
+								{entry.data.description && <p>{entry.data.description}</p>}
+								{entry.data.minutes && <span class="contents-lesson__time">{entry.data.minutes} min</span>}
+							</li>
+						))}
+					</ol>
+				</section>
+			);
+		})
 	}
 </StarlightPage>
 
 <style>
 	.contents-intro {
 		font-size: var(--sl-text-lg);
+	}
+
+	.contents-progress {
+		display: grid;
+		gap: 0.5rem 1rem;
+		grid-template-columns: 1fr auto;
+		align-items: center;
+		margin: 1.5rem 0;
+		padding: 1rem 1.15rem;
+		border: 1px solid var(--reader-line);
+		border-radius: 12px;
+		background: var(--reader-panel);
+	}
+
+	.contents-progress .chapter-meter {
+		grid-column: 1 / -1;
+	}
+
+	.contents-progress p {
+		margin: 0;
+		color: var(--sl-color-gray-2);
+		font-size: var(--sl-text-sm);
 	}
 
 	.contents-chapter {
@@ -81,6 +132,11 @@ const totalHours = Math.round(chapters.reduce((total, { minutes }) => total + mi
 		align-items: flex-start;
 		padding-bottom: 0.75rem;
 		border-bottom: 2px solid var(--chapter-accent);
+	}
+
+	.contents-chapter header > div {
+		flex: 1;
+		min-width: 0;
 	}
 
 	.contents-chapter__emoji {
@@ -103,16 +159,30 @@ const totalHours = Math.round(chapters.reduce((total, { minutes }) => total + mi
 		white-space: nowrap;
 	}
 
+	.contents-chapter__progress {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 1rem;
+		align-items: center;
+		margin-top: 0.6rem;
+	}
+
+	.contents-chapter__progress .chapter-meter {
+		flex: 1 1 14rem;
+	}
+
 	.contents-chapter ol {
 		list-style: none;
 		margin: 0;
 		padding: 0;
 	}
 
+	/* Tick box | number and title | time, with the summary under the title. */
 	.contents-chapter li {
 		display: grid;
-		grid-template-columns: 1fr auto;
-		gap: 0.1rem 1rem;
+		grid-template-columns: auto 1fr auto;
+		gap: 0.1rem 0.75rem;
+		align-items: start;
 		padding: 0.75rem 0;
 		border-bottom: 1px solid var(--sl-color-hairline-light);
 	}
@@ -138,14 +208,14 @@ const totalHours = Math.round(chapters.reduce((total, { minutes }) => total + mi
 	}
 
 	.contents-chapter li p {
-		grid-column: 1;
+		grid-column: 2;
 		margin: 0 0 0 3.2rem;
 		color: var(--sl-color-gray-2);
 		font-size: var(--sl-text-sm);
 	}
 
 	.contents-lesson__time {
-		grid-column: 2;
+		grid-column: 3;
 		grid-row: 1;
 		color: var(--sl-color-gray-3);
 		font-size: var(--sl-text-sm);
@@ -153,6 +223,10 @@ const totalHours = Math.round(chapters.reduce((total, { minutes }) => total + mi
 	}
 
 	@media (max-width: 40rem) {
+		.contents-progress {
+			grid-template-columns: 1fr;
+		}
+
 		.contents-chapter li p {
 			margin-left: 0;
 		}
