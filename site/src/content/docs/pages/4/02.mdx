@@ -12,8 +12,8 @@ sidebar:
 import { Accordion, Badge, GitHub } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
-import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
 import Quiz from '../../../../components/Quiz.astro';
+import Scene from '../../../../components/Scene.astro';
 
 The observer in the previous lesson copied player state for display. A tool
 that changes state faces a harder problem: gold can change after the read but
@@ -32,28 +32,7 @@ That can work once, but every step depends on facts collected earlier. The game 
 
 A more reliable tool separates six phases:
 
-<AnimatedFlow
-  nativeDiagram
-  title="Guard a state change with fresh evidence"
-  stages={[
-    { label: 'Capture twice', detail: 'Read the pointer chain twice before trusting the observed value.', role: 'input', value: 'two reads', nodes: ['A'] },
-    { label: 'Build a snapshot', detail: 'Keep identity, side, address, and gold together.', role: 'state', value: 'player + gold', nodes: ['B'] },
-    { label: 'Compare captures', detail: 'Reject a changing target before proposing an action.', role: 'process', value: 'same snapshot?', nodes: ['C'] },
-    { label: 'Choose an action', detail: 'This tour follows Some(v), the requested write path.', role: 'process', value: 'Some(v)', nodes: ['D'] },
-    { label: 'Recheck and write', detail: 'Capture once more before writing the proposed value.', role: 'process', value: 'fresh then write', nodes: ['E'] },
-    { label: 'Read back', detail: 'Compare the result with the requested value.', role: 'output', value: 'equal?', nodes: ['F'] },
-  ]}
-  caption="This follows the write branch when snapshots agree; `None` remains observation-only and a changed snapshot stops the write."
->
-```mermaid
-flowchart LR
-    A["capture() twice:<br/>read the pointer chain"] --> B["Snapshot { player, side,<br/>gold_address, gold }"]
-    B --> C["require the two captures<br/>to be equal"]
-    C --> D["None: observe only<br/>Some(v): propose a write"]
-    D --> E["stable_snapshot() again,<br/>then write_u32"]
-    E --> F["read_u32 back and compare<br/>to the requested value"]
-```
-</AnimatedFlow>
+<Scene name="guarded-write" />
 
 The important idea is not extra code. It is that **data crosses a gate before the tool acts on it**. A raw address read once may already be out of date. A `Snapshot` captured twice with equal results was consistent at that moment. A write happens only if a fresh capture, taken immediately before it, still equals the snapshot.
 

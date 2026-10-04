@@ -899,3 +899,23 @@ terms. The code is loaded, with a 22 KB list of terms and lesson titles, the fir
 chat opens, and nothing is requested from context7.com for it. Fifteen checks on the matching
 run under Node (`bun run check:chat`); the rest was checked in the browser with real clicks
 and key presses, at 1280 and 375 px.
+
+## Animations that show the mechanism, and arrows that follow the reader — 2026-10-04
+
+**Animations.** The user found the step-through diagrams "kind of useless … not a slide show".
+A new engine (`src/lib/scene/`, `components/Scene.astro`, `styles/scene.css`) animates the
+real parts: bytes, pointers, stacks, queues, and messages move and change over time, with play,
+pause, step, scrub, and speed controls and the steps written under the picture. Fifteen of the
+42 old `AnimatedFlow`s are replaced (lessons 1.3, 1.6, 1.8, 2.2, 2.3, 2.4, 3.1, 3.3, 3.7, 4.4,
+4.9, 4.10, 5.1, 5.2, 5.4); each was drawn step by step with `scripts/scene-png.mjs` and fixed
+for overlaps before wiring. Twenty-seven remain (6.2, 6.5, 6.10, 7.1, 7.8, 7.9, 8.1, 8.4, 8.5,
+9.2, 9.3, 9.7, 10.1, 10.4, 10.8, 11.1, 11.8, 11.11, 12.2, 12.4, 12.8, 13.1, 13.5, 13.8, 14.3,
+14.4, 14.8). Not yet measured: scroll smoothness on a lesson with a scene, and a phone-width
+check of the controls.
+
+**Arrows.** Previous/next tabs beside the text on every lesson, a bottom pair on phones, and
+the left/right arrow keys (`pager.js`, `pager.css`). Checked at 1440 and 375 px, and a click
+and a key press both moved to the next lesson.
+
+**Not done yet:** speed typing on code snippets (a `SpeedType` component, like speedtyper.dev),
+CC0 images and animated pictures, the Source engine lesson, and the anti-cheat chapter.

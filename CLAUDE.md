@@ -532,3 +532,38 @@ long names; the chat button hides while scrolling on phones (`data-away`, set by
 throttled scroll handler in `chat-widget.js`) and returns near the top, the bottom, or when
 the panel is open; the floating "On this page" restore pill is hidden on phones, where the
 bar is always shown; and the listening dock is compact in landscape.
+
+## Animations (scenes) and the previous/next arrows
+
+**Scenes replace the old step-through diagrams.** `AnimatedFlow` only lit up one box after
+another, which the user called "a slide show". A scene (`<Scene name="x" />`, definition in
+`site/src/scenes/x.mjs`) is a set of parts (boxes, cells, text, lines, queues) with keyframe
+tracks that move or change them, so the data the lesson talks about really moves: a number is
+copied into a format and converted, a pointer's bytes reverse into an address, `call` pushes a
+return address and `ret` pops it, 32 bits are flipped and rotated, messages pass between two
+parties. The engine is plain data and pure functions (`src/lib/scene/engine.mjs`, `markup.mjs`),
+so the build draws the finished picture and the steps into the page (print, search, the
+listening edition, and a browser without scripts all work) and `runtime.js` plays, pauses,
+steps, and scrubs the same elements. It autoplays once when a scene is first on screen, only
+for the "Follow my device" motion setting and not for reduced motion.
+
+- Write a scene with `src/lib/scene/kit.mjs` (`cell`, `text`, `note`, `rect`, `line`, `strip`,
+  `group`, `timeline`); `seq.mjs` adds lifelines and messages, `bits.mjs` a 32-bit row.
+  `timeline(actors).at(t).move(id, x, y).role(id, 'state')…` says what happens when; each
+  `tl.cue(t, words)` is one written step. Use the lesson's own numbers and derive them on screen.
+- Always look at a scene before wiring it in: `node scripts/scene-png.mjs <dir> <name>` draws one
+  still per step (no browser); `scripts/scene-sheet.mjs` does the same with the site's styles.
+  Check for overlapping labels, text running off the edge, and parts that start off screen.
+- `python3 swap_flow.py` style swap: replace the `<AnimatedFlow …/>` block with
+  `<Scene name="…" />` and import `Scene` from `components/Scene.astro`. A scene name may appear
+  once per page (its id is `scene-<name>`).
+- Done so far (15 of 42): 1.3, 1.6, 1.8, 2.2, 2.3, 2.4, 3.1, 3.3, 3.7, 4.4, 4.9, 4.10, 5.1, 5.2,
+  5.4. The other 27 `AnimatedFlow`s are still the old component.
+
+**Previous/next arrows.** `public/scripts/pager.js` copies the two bottom links into a pair of
+tabs beside the text (level with the middle of the screen, coloured for the chapter they lead
+to), so a reader can move on from anywhere on the page. Below 50rem, or when a margin is under
+22 px, the pair sits at the bottom centre and hides while the page scrolls down. The left and
+right arrow keys do the same unless a field, code block, scene, quiz, or tab list has the
+keyboard (or a typing practice is open: `html[data-typing]`). `hover-cards.js` shows the
+destination's card on hover.

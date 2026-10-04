@@ -34,18 +34,21 @@ export const image = (id, x, y, w, h, src, o = {}) => ({ k: 'image', id, x, y, w
 /** Actors that move together. Their positions are relative to the group's. */
 export const group = (id, x, y, kids, o = {}) => ({ k: 'g', id, x, y, kids, ...o });
 
-/** A row of equal cells. The cells are called `${id}.0`, `${id}.1`, and so on. */
-export function strip(id, x, y, values, { w = 36, h = 36, gap = 0, ...o } = {}) {
-	return group(id, x, y, values.map((t, i) => cell(`${id}.${i}`, i * (w + gap), 0, w, h, t, o)));
+/**
+ * A row of equal cells. The cells are called `${id}.0`, `${id}.1`, and so on. An
+ * opacity given here (`o`) belongs to the whole row, so `show(id)` reveals all of it.
+ */
+export function strip(id, x, y, values, { w = 36, h = 36, gap = 0, o, ...rest } = {}) {
+	return group(id, x, y, values.map((t, i) => cell(`${id}.${i}`, i * (w + gap), 0, w, h, t, rest)), o === undefined ? {} : { o });
 }
 
 /** A grid of equal cells. The cells are called `${id}.${row}.${col}`. */
-export function grid(id, x, y, rows, cols, { size = 36, gap = 2, fill = () => '', ...o } = {}) {
+export function grid(id, x, y, rows, cols, { size = 36, gap = 2, fill = () => '', o, ...rest } = {}) {
 	const kids = [];
 	for (let r = 0; r < rows; r += 1) {
-		for (let c = 0; c < cols; c += 1) kids.push(cell(`${id}.${r}.${c}`, c * (size + gap), r * (size + gap), size, size, fill(r, c), o));
+		for (let c = 0; c < cols; c += 1) kids.push(cell(`${id}.${r}.${c}`, c * (size + gap), r * (size + gap), size, size, fill(r, c), rest));
 	}
-	return group(id, x, y, kids);
+	return group(id, x, y, kids, o === undefined ? {} : { o });
 }
 
 /**
