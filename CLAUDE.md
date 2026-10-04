@@ -567,3 +567,11 @@ to), so a reader can move on from anywhere on the page. Below 50rem, or when a m
 right arrow keys do the same unless a field, code block, scene, quiz, or tab list has the
 keyboard (or a typing practice is open: `html[data-typing]`). `hover-cards.js` shows the
 destination's card on hover.
+
+**Typing practice.** `<SpeedType id="…" title="…">` around one fenced code block (5 to 15 lines, plain
+ASCII, already explained in the lesson) adds a typing test (`public/scripts/speedtype.js`). It copies the
+block's `.ec-line .code` markup, wraps each character in a span, and tracks them; the original block is
+only hidden, so print, search, and the listening edition are unchanged. `id` keys the reader's best in
+`localStorage` (`gha-speedtype-<id>`) and must be unique. While one is open `html[data-typing]` is set,
+which turns off the arrow-key navigation and hides the previous/next pair. Fourteen blocks use it
+(see `BOOK_REVISION_PROGRESS.md`).

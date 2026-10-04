@@ -22,6 +22,7 @@ decoration; if the page reads as well without it, leave it out.
 | `LinkButton` | The one next action a page offers: start the first lesson, open a reference. `primary` for the main action, `secondary` for an alternative, `minimal` for a quiet extra. | A link inside a sentence, or a page of buttons: with several main actions there is no main action. |
 | `Tooltip` | A sentence or two on a word a reader may not know and the lesson does not depend on, with the real numbers if it has any. It is a `HoverCard` of kind `explanation`. | A word used in many places (that is a glossary entry), or anything a later step needs. |
 | `Scene` | A mechanism that is easier to see move than to read: bytes, pointers, a stack, a queue, messages between two parties. Parts really move and change over time; the steps are written under it. Never a list of boxes that light up in turn. | A fixed picture (use a diagram), or anything that is only a sequence of names. See `CLAUDE.md`, "Animations (scenes)". |
+| `SpeedType` | A short block of code (5 to 15 lines, plain ASCII) the lesson has just explained, which a reader can type out for practice: words per minute, accuracy, a personal best. | Long listings, code full of comments or symbols a keyboard cannot type, or code the lesson has not explained yet. |
 | `Frame` | A screenshot or figure with a caption. Put the full description in the image's alt text; the caption is visual only. | Decorative images. |
 | `Badge` | A short fact about what follows: "Optional", "Windows only". | Labelling a heading that already says it. |
 | `HoverCard` | An extra a reader can do without, opened over a word: an `example`, `reference`, `tip`, `alternative`, `recommendation`, closer `explanation`, `definition`, or `caution`. A glossary word needs none: the build marks those. | Anything a later step, value, or definition depends on: a reader can turn cards off, and a phone needs a tap. Never more than a few in a lesson; a card is not a footnote. |
@@ -76,6 +77,7 @@ the card. `Tooltip` is a `HoverCard` of kind `explanation`.
 - `src/components/kit/*.astro`: the components, and `index.ts` that exports them.
 - `src/styles/kit.css`: their styles, loaded on lesson pages and listening pages.
 - `public/scripts/kit.js`: tabs, accordions in print, Prompt buttons. Lesson pages only.
+- `public/scripts/speedtype.js`: the typing practice button and test for `SpeedType`.
 - `src/lib/math.mjs`, `src/lib/math-speech.mjs`: KaTeX at build time, and the
   formula read aloud.
 - `src/lib/github.mjs`: line count and the exact-version link for `GitHub`.

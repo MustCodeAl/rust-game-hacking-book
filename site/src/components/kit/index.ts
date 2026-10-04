@@ -27,6 +27,7 @@ export { default as Panel } from './Panel.astro';
 export { default as ParamField } from './ParamField.astro';
 export { default as Prompt } from './Prompt.astro';
 export { default as ResponseField } from './ResponseField.astro';
+export { default as SpeedType } from './SpeedType.astro';
 export { default as Tab } from './Tab.astro';
 export { default as Tabs } from './Tabs.astro';
 export { default as Tile } from './Tile.astro';
