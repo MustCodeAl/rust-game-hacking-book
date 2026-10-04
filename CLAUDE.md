@@ -407,6 +407,14 @@ live site loses them (publishing replaces every file).
   Text comes from `assets/glossary-cards.json` and `assets/lesson-cards.json`,
   fetched on the first card. `src/lib/glossary-terms.mjs` is the single reading of
   `glossary.mdx`. Cards are for things on the page, not the lesson list.
+  **Touch.** A finger has no hover, so a tap on a word with a card opens it, and a
+  tap on a *link* in a lesson that has a card (a lesson mention, a glossary link, or
+  a card a lesson wrote with an `href`) opens the card and does **not** follow the
+  link; the card holds an "Open ..." link and a second tap on the words follows it.
+  Only a touch pointer does this (`lastPointer`), the previous/next cards, link
+  cards, buttons, and tiles still go on the first tap, and keyboard and mouse
+  clicks follow at once. Test it with synthetic `pointerdown`/`click` events
+  (`pointerType: "touch"`, `detail: 1`): the in-app browser's clicks are mouse clicks.
   **Cards are not only glossary.** A lesson writes its own with
   `<HoverCard kind="example" body="...">words</HoverCard>`
   (`src/components/kit/HoverCard.astro`): kinds `definition`, `explanation`,
@@ -461,6 +469,21 @@ live site loses them (publishing replaces every file).
   if Context7 changes its markup, those two refinements do nothing and the
   widget still works. On the listening edition the top corners fall back to the
   bottom (the player is at the top). Print hides `#context7-widget`.
+  **Tab completion.** When the chat first opens, `chat-widget.js` fetches
+  `scripts/chat-suggest.js` and `assets/chat-suggestions.json` (terms and lesson
+  titles, about 22 KB, from `src/pages/assets/chat-suggestions.json.ts`) and calls
+  `AcademyChatSuggest.attach(shadow, ...)`. The question box then shows a grey
+  completion after what was typed: Tab (or the right arrow at the end) accepts it,
+  the up and down arrows move through the others, Escape puts it away, Enter sends
+  what is typed, and Tab with nothing to finish moves on as usual, so the keyboard
+  is never trapped. With the box empty the grey question is the best for the section
+  being read; three of them are also buttons under the welcome message, and a "Use"
+  button inside the box takes the grey one on touch. When no question starts like
+  the text, the word being typed is finished from the book's terms. Nothing is
+  requested from context7.com for this, and nothing at all with the chat off. The
+  matching is plain functions, checked by `node scripts/check-chat-suggest.mjs`
+  (`bun run check:chat`); the grey text itself needs a real click into the box
+  to test, because a hidden pane never focuses it.
 - **Chapter colour on lesson pages.** `overrides/Head.astro` sets
   `html:root{--chapter-accent:var(--tone-N)}`. It must keep the `html:root`
   selector: the head `<style>` precedes the bundled stylesheets, whose

@@ -877,3 +877,25 @@ a 1280 px window. It is now left-aligned at the column's edge (`reader-progress.
 each Hide button is on screen and the topmost element at its centre (under 800 px neither
 panel has a Hide button, as designed). The same cycle was repeated with real mouse clicks
 at 1280 px.
+
+## Cards on touch screens and Tab completion in the chat — 2026-10-04
+
+**Cards on linked words (touch).** A tap on a link in a lesson that has a card (a lesson
+mention, a glossary link, or a card a lesson wrote with an `href`) followed the link at once,
+so a phone never showed the card. A finger's first tap now opens the card and does not follow
+the link; the card holds an "Open lesson 4.1", "Open in the glossary", or "Open bevy.org"
+link, and a second tap on the words follows the link. Previous/next cards, link cards,
+buttons, and tiles still go on the first tap, and a mouse, a pen, or the keyboard follows at
+once. Checked with synthetic touch taps on a lesson link, a glossary link, a written card with
+an address, and a link card.
+
+**Tab completion in the chat.** The chat's question box (Context7's widget) shows a grey
+completion after what is typed. Tab or the right arrow at the end accepts it, the up and down
+arrows move through the others, Escape puts it away, and Tab with nothing to finish moves on
+as usual. With the box empty it offers the best question for the section being read, and the
+same questions are buttons under the welcome message; a "Use" button takes the grey one on
+touch. If no question starts like the text, the word being typed is finished from the book's
+terms. The code is loaded, with a 22 KB list of terms and lesson titles, the first time the
+chat opens, and nothing is requested from context7.com for it. Fifteen checks on the matching
+run under Node (`bun run check:chat`); the rest was checked in the browser with real clicks
+and key presses, at 1280 and 375 px.

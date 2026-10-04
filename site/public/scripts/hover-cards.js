@@ -9,7 +9,9 @@
 //     an example, reference, tip, alternative, recommendation, or closer
 //     explanation, read from the card's own text in the page
 // A card opens after a short pause under the mouse, or at once when a key moves
-// focus to the element, or when a glossary word is tapped (touch has no hover).
+// focus to the element, or when a word is tapped (touch has no hover). A tap on
+// a link in a lesson shows its card instead of following the link, and the card
+// carries an "Open" link; a second tap on the same words follows the link.
 // It closes when the pointer leaves, on Escape, and when the page scrolls, so
 // nothing is redrawn while the page moves. Definitions and lesson summaries
 // are fetched once, the first time a card needs them; the page itself does no
@@ -25,6 +27,11 @@
   var EDGE = 10;
   // Where lesson links live: inside a lesson, and in its previous/next cards.
   var LESSON_LINKS = ".sl-markdown-content a[href], .pagination-links a[href]";
+  // The links a finger's tap shows a card for: words inside a lesson's prose, and
+  // the links a lesson wrote cards for. Link cards, buttons, tiles, and the
+  // previous/next cards are navigation, so they open on the first tap.
+  var TAP_LINKS = ".sl-markdown-content a[href], a.kit-card__trigger";
+  var NAVIGATION = ".not-content, .sl-link-card, .sl-link-button, .kit-tile, .pagination-links";
 
   var card = null;
   var trigger = null;
@@ -33,6 +40,9 @@
   var closeTimer = 0;
   var pending = null;
   var requests = {};
+  // A click does not say whether a finger made it, and only a finger needs the
+  // card shown before the link is followed, so the last pointer is remembered.
+  var lastPointer = "mouse";
 
   function glossaryHref() {
     var link = document.querySelector('link[rel="glossary"]');
@@ -124,6 +134,16 @@
     return note;
   }
 
+  // The way on for a link whose card a tap opened: the card is all a finger sees
+  // of the link until it is followed, so the card holds a link of its own.
+  function openLink(node, label) {
+    var link = el("a", "academy-hovercard__link academy-hovercard__open", label);
+    link.href = node.href;
+    if (node.target) link.target = node.target;
+    if (node.rel) link.rel = node.rel;
+    return link;
+  }
+
   // Resolves to { parts, tone, role } or null when there is nothing to show.
   function contents(info) {
     if (info.kind === "tip") {
@@ -141,9 +161,13 @@
       var body = el("p", "academy-hovercard__text");
       Array.prototype.forEach.call(text.childNodes, function (child) { body.appendChild(child.cloneNode(true)); });
       parts.push(body);
-      // A card on a link to another site says where the link goes.
-      if (info.node.tagName === "A" && info.node.origin !== window.location.origin) {
-        parts.push(el("p", "academy-hovercard__meta", "Opens " + info.node.hostname.replace(/^www\./, "")));
+      // A card on a link to another site says where the link goes; one a tap
+      // opened also holds the link.
+      if (info.node.tagName === "A") {
+        var external = info.node.origin !== window.location.origin;
+        var host = info.node.hostname.replace(/^www\./, "");
+        if (info.touch) parts.push(openLink(info.node, external ? "Open " + host : "Open the page"));
+        else if (external) parts.push(el("p", "academy-hovercard__meta", "Opens " + host));
       }
       return Promise.resolve({ parts: parts, cardKind: info.card.getAttribute("data-card-kind") });
     }
@@ -175,15 +199,14 @@
         if (lesson.m) meta.appendChild(document.createTextNode(" · "));
         meta.appendChild(doneNote("Done"));
       }
-      return {
-        tone: chapter.tone,
-        parts: [
-          el("p", "academy-hovercard__eyebrow", "Lesson " + lesson.n + " · " + chapter.t),
-          el("p", "academy-hovercard__title", lesson.t),
-          el("p", "academy-hovercard__text", lesson.s),
-          meta
-        ]
-      };
+      var parts = [
+        el("p", "academy-hovercard__eyebrow", "Lesson " + lesson.n + " · " + chapter.t),
+        el("p", "academy-hovercard__title", lesson.t),
+        el("p", "academy-hovercard__text", lesson.s),
+        meta
+      ];
+      if (info.touch && info.node.tagName === "A") parts.push(openLink(info.node, "Open lesson " + lesson.n));
+      return { tone: chapter.tone, parts: parts };
     });
   }
 
@@ -323,16 +346,42 @@
   });
 
   // Touch has no hover, so tapping a glossary word, or words with a card, shows
-  // its card, and tapping it again, or anywhere else, hides it. Links are left
-  // to navigate.
+  // its card, and tapping it again, or anywhere else, hides it.
   var TAPPABLE = "[data-gloss], span.kit-card__trigger";
+
+  // A link in a lesson that has a card (a lesson, a glossary entry, or a card the
+  // lesson wrote) is the same: a finger's first tap shows the card and does not
+  // follow the link, which is what hovering does for a mouse. The card holds an
+  // "Open" link, and a second tap on the words follows the link too. Taps from a
+  // mouse, a pen, or the keyboard still follow it at once.
+  function tappedLink(target) {
+    if (cardsOff() || lastPointer !== "touch" || !target || !target.closest) return null;
+    var link = target.closest(TAP_LINKS);
+    if (!link || link.closest(NAVIGATION) || (card && card.contains(link))) return null;
+    var info = describe(link);
+    return info && info.kind !== "tip" ? info : null;
+  }
+
   document.addEventListener("click", function (event) {
     var word = event.target.closest && event.target.closest(TAPPABLE);
-    if (!word) return;
-    var info = describe(word);
-    if (!info) return;
-    if (trigger === word) hide();
-    else open(info, null);
+    if (word) {
+      var info = describe(word);
+      if (!info) return;
+      if (trigger === word) hide();
+      else open(info, null);
+      return;
+    }
+    // A click with no detail is the keyboard's or a script's, not a tap.
+    if (event.defaultPrevented || !event.detail) return;
+    var link = tappedLink(event.target);
+    if (!link) return;
+    if (trigger === link.node) {
+      hide();
+      return;
+    }
+    event.preventDefault();
+    link.touch = true;
+    open(link, null);
   });
 
   // Keyboard focus opens a card at once; a mouse click that focuses a link
@@ -347,26 +396,34 @@
     if (keyboard) open(info, null);
   });
 
+  // Moving focus into the card, to follow its link, is not leaving the words:
+  // hiding the card then would take the link away from under the finger.
   document.addEventListener("focusout", function (event) {
-    if (trigger && event.target === trigger) hide();
+    if (!trigger || event.target !== trigger) return;
+    if (event.relatedTarget && card && card.contains(event.relatedTarget)) return;
+    hide();
   });
 
   document.addEventListener("keydown", function (event) {
+    lastPointer = "key";
     if (event.key === "Escape" && trigger) hide();
   });
 
   document.addEventListener("pointerdown", function (event) {
-    var onWord = event.target.closest && event.target.closest(TAPPABLE);
+    lastPointer = event.pointerType || lastPointer;
+    var onWord = event.target.closest && (event.target.closest(TAPPABLE) || (lastPointer === "touch" && tappedLink(event.target)));
     if ((!card || !card.contains(event.target)) && !onWord) hide();
   }, true);
 
   // A hovered card closes when anything scrolls. A card opened by keyboard
   // focus or a tap follows its element instead, because moving focus to an
-  // element off the screen is itself what scrolls the page.
+  // element off the screen is itself what scrolls the page. A link a tap opened
+  // a card for may never have had focus (iOS does not focus links), so a tap
+  // counts as much as focus does.
   var following = false;
   document.addEventListener("scroll", function () {
     if (!shown) return hide();
-    if (shown.pointer || document.activeElement !== trigger) return hide();
+    if (shown.pointer || (document.activeElement !== trigger && !shown.info.touch)) return hide();
     if (following) return;
     following = true;
     requestAnimationFrame(function () {
