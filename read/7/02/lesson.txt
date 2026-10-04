@@ -50,7 +50,25 @@ Diagram. From hexadecimal 2 0 0 0 section start to hexadecimal 2 3 4 0 +hexadeci
 
 Follow the hexadecimal 2 3 4 0 branch through the section mapping. Subtraction finds a distance inside the section; addition then expresses it in the file’s coordinate system:
 
-Diagram walkthrough: Translate one RVA without confusing address spaces. Step 1: Start with the RVA. State: RVA: hexadecimal 2 3 4 0. The requested RVA is hexadecimal 2 3 4 0. It is measured from the mapped image base, not from the beginning of the file on disk. Step 2: Find its virtual section. State: section: [hexadecimal 2 0 0 0, hexadecimal 2 9 0 0). The example section starts at RVA hexadecimal 2 0 0 0 and extends to hexadecimal 2 9 0 0, exclusive. RVA hexadecimal 2 3 4 0 lies inside that virtual range. Step 3: Find the distance into the section. State: section offset: hexadecimal 0 3 4 0. Subtract the section virtual start: hexadecimal 2 3 4 0 minus hexadecimal 2 0 0 0 equals hexadecimal 0 3 4 0. This offset can now be measured from the raw section start too. Step 4: Check that raw bytes exist. State: hexadecimal 0 3 4 0 less than hexadecimal 0 8 0 0. SizeOfRawData is hexadecimal 0 8 0 0. Because hexadecimal 0 3 4 0 is below hexadecimal 0 8 0 0, the requested location has a corresponding stored byte. Step 5: Express the location on disk. State: file offset: hexadecimal 0 9 4 0. Add PointerToRawData hexadecimal 0 6 0 0 to the section offset hexadecimal 0 3 4 0. The resulting file offset is hexadecimal 0 9 4 0. The other illustrated RVA, hexadecimal 2 8 8 0, fails the raw-byte check: its hexadecimal 8 8 0 section offset lies in the zero-filled virtual tail.
+Watch it happenAn RVA, a distance into the section, and a file offset
+
+Two bars drawn to the same scale: the loaded section covering RVAs hexadecimal 2 0 0 0 to hexadecimal 2 9 0 0 with a zero-filled tail after hexadecimal 2 8 0 0, and the file’s raw data from hexadecimal 0 6 0 0 to hexadecimal 0 E 0 0. RVA hexadecimal 2 3 4 0 is hexadecimal 0 3 4 0 into the section; adding that to hexadecimal 0 6 0 0 gives file offset hexadecimal 0 9 4 0. RVA hexadecimal 2 8 8 0 is hexadecimal 0 8 8 0 in, beyond the raw data, so it has no file byte.
+
+Additional detail: Read the steps.
+
+A section is stored in the file and also mapped into memory, and the two places are numbered differently. Its row says: RVA range [hexadecimal 2 0 0 0, hexadecimal 2 9 0 0), hexadecimal 0 8 0 0 bytes of raw data, stored from file offset hexadecimal 0 6 0 0.
+
+Start with an RVA: hexadecimal 2 3 4 0. It is a distance from the mapped image’s base, not a position in the file. It lies inside the section’s virtual range.
+
+Find how far into the section it is: hexadecimal 2 3 4 0 minus hexadecimal 2 0 0 0 equals hexadecimal 0 3 4 0. That distance is the same in memory and in the file’s raw data.
+
+Check that the file has a byte there: SizeOfRawData is hexadecimal 0 8 0 0, and hexadecimal 0 3 4 0 is below it.
+
+Carry the same distance to the file: PointerToRawData hexadecimal 0 6 0 0 + hexadecimal 0 3 4 0 equals hexadecimal 0 9 4 0. That is where the byte lives on disk.
+
+A different RVA, hexadecimal 2 8 8 0, fails the check. Its distance into the section is hexadecimal 0 8 8 0, which is not below hexadecimal 0 8 0 0: it falls in the zero-filled tail that exists only in memory.
+
+The other illustrated RVA, hexadecimal 2 8 8 0, fails the raw-byte check: its hexadecimal 8 8 0 section offset lies in the zero-filled virtual tail.
 
 A rigorous parser checks every subtraction and addition, validates section ranges against the actual file length, and rejects overlapping or impossible metadata. PE headers describe a file; they do not deserve blind trust merely because Windows-shaped field names were decoded.
 

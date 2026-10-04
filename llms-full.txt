@@ -10742,28 +10742,7 @@ That can work once, but every step depends on facts collected earlier. The game 
 
 A more reliable tool separates six phases:
 
-<AnimatedFlow
-  nativeDiagram
-  title="Guard a state change with fresh evidence"
-  stages={[
-    { label: 'Capture twice', detail: 'Read the pointer chain twice before trusting the observed value.', role: 'input', value: 'two reads', nodes: ['A'] },
-    { label: 'Build a snapshot', detail: 'Keep identity, side, address, and gold together.', role: 'state', value: 'player + gold', nodes: ['B'] },
-    { label: 'Compare captures', detail: 'Reject a changing target before proposing an action.', role: 'process', value: 'same snapshot?', nodes: ['C'] },
-    { label: 'Choose an action', detail: 'This tour follows Some(v), the requested write path.', role: 'process', value: 'Some(v)', nodes: ['D'] },
-    { label: 'Recheck and write', detail: 'Capture once more before writing the proposed value.', role: 'process', value: 'fresh then write', nodes: ['E'] },
-    { label: 'Read back', detail: 'Compare the result with the requested value.', role: 'output', value: 'equal?', nodes: ['F'] },
-  ]}
-  caption="This follows the write branch when snapshots agree; `None` remains observation-only and a changed snapshot stops the write."
->
-```mermaid
-flowchart LR
-    A["capture() twice:<br/>read the pointer chain"] --> B["Snapshot { player, side,<br/>gold_address, gold }"]
-    B --> C["require the two captures<br/>to be equal"]
-    C --> D["None: observe only<br/>Some(v): propose a write"]
-    D --> E["stable_snapshot() again,<br/>then write_u32"]
-    E --> F["read_u32 back and compare<br/>to the requested value"]
-```
-</AnimatedFlow>
+<Scene name="guarded-write" />
 
 The important idea is not extra code. It is that **data crosses a gate before the tool acts on it**. A raw address read once may already be out of date. A `Snapshot` captured twice with equal results was consistent at that moment. A write happens only if a fresh capture, taken immediately before it, still equals the snapshot.
 
@@ -12716,18 +12695,7 @@ Why use an enum? Each variant defines exactly which data belongs to that event. 
 Follow the two accepted snapshots through `diff`, then compare an unchanged
 poll. The endpoints reveal changes, not the reason gold changed:
 
-<AnimatedFlow
-  title="A changing value becomes an event only at its edge"
-  stages={[
-    { label: 'Keep the accepted baseline', detail: 'The earlier validated snapshot contains 120 gold and menu_open false. Its identity and read checks have passed.', role: 'state', value: 'gold: 120; menu: false' },
-    { label: 'Receive a new accepted snapshot', detail: 'The next validated snapshot contains 145 gold and menu_open true. In this example the other fields have not changed.', role: 'input', value: 'gold: 145; menu: true' },
-    { label: 'Compare the fields', detail: 'diff detects different gold amounts and the false-to-true menu transition. It compares endpoints; it does not establish whether earning, editing, or another rule changed gold.', role: 'process', value: 'gold: +25; menu: false → true' },
-    { label: 'Produce the named changes', detail: 'The result includes GoldChanged { before: 120, after: 145 } and MenuOpened. Their enum variants carry the data the action layer needs.', role: 'output', value: 'GoldChanged + MenuOpened' },
-    { label: 'Use the new accepted baseline', detail: 'For the next comparison, retain the accepted 145-gold, open-menu snapshot as the previous state. The opening edge has already been reported.', role: 'state', value: 'previous: 145; menu: true' },
-    { label: 'Report no event for no change', detail: 'If the next accepted snapshot is identical, diff returns an empty vector. The still-open menu does not become a second MenuOpened event.', role: 'output', value: 'events: []' },
-  ]}
-  caption="Level state remains true across polls; an edge event describes the transition between accepted states."
-/>
+<Scene name="edge-events" />
 
 ## Debouncing asks for stability
 
@@ -14119,30 +14087,7 @@ the numbers are related but not interchangeable.
 A parser follows the file's own chain of verified offsets. Each header tells it
 where the next structure begins or how large that structure is:
 
-<AnimatedFlow
-  nativeDiagram
-  title="Read a PE file in dependency order"
-  stages={[
-    { label: 'Confirm the DOS header', detail: 'MZ marks the first header of the file.', role: 'input', value: 'MZ', nodes: ['A'] },
-    { label: 'Find the PE header', detail: 'e_lfanew gives its file offset.', role: 'process', value: 'e_lfanew', nodes: ['B'] },
-    { label: 'Confirm PE identity', detail: 'Check the signature before interpreting the following bytes.', role: 'state', value: 'PE signature', nodes: ['C'] },
-    { label: 'Read machine details', detail: 'The COFF header identifies architecture and section count.', role: 'process', value: 'COFF', nodes: ['D'] },
-    { label: 'Read image details', detail: 'The optional header describes how Windows maps the image.', role: 'process', value: 'image layout', nodes: ['E'] },
-    { label: 'Read sections', detail: 'Section records connect stored bytes to mapped regions.', role: 'process', value: 'section table', nodes: ['F'] },
-    { label: 'Resolve an address', detail: 'Use the headers to relate a file offset and an RVA.', role: 'output', value: 'offset ↔ RVA', nodes: ['G'] },
-  ]}
-  caption="Each PE field tells the reader where or how to interpret the next field; the section table finally connects disk positions to image-relative addresses."
->
-```mermaid
-flowchart TD
-    A["DOS header and MZ"] --> B["Read e_lfanew"]
-    B --> C["PE signature"]
-    C --> D["COFF header"]
-    D --> E["Optional header"]
-    E --> F["Section table"]
-    F --> G["Map file offsets and RVAs"]
-```
-</AnimatedFlow>
+<Scene name="pe-header-walk" />
 
 Never skip directly to a later box using a guessed offset. A damaged or wrong
 header should stop the parse before its numbers are trusted.
@@ -14426,17 +14371,7 @@ Follow the `0x2340` branch through the section mapping. Subtraction finds a
 distance inside the section; addition then expresses it in the file's
 coordinate system:
 
-<AnimatedFlow
-  title="Translate one RVA without confusing address spaces"
-  stages={[
-    { label: 'Start with the RVA', detail: 'The requested RVA is 0x2340. It is measured from the mapped image base, not from the beginning of the file on disk.', role: 'input', value: 'RVA: 0x2340' },
-    { label: 'Find its virtual section', detail: 'The example section starts at RVA 0x2000 and extends to 0x2900, exclusive. RVA 0x2340 lies inside that virtual range.', role: 'state', value: 'section: [0x2000, 0x2900)' },
-    { label: 'Find the distance into the section', detail: 'Subtract the section virtual start: 0x2340 minus 0x2000 equals 0x0340. This offset can now be measured from the raw section start too.', role: 'process', value: 'section offset: 0x0340' },
-    { label: 'Check that raw bytes exist', detail: 'SizeOfRawData is 0x0800. Because 0x0340 is below 0x0800, the requested location has a corresponding stored byte.', role: 'process', value: '0x0340 < 0x0800' },
-    { label: 'Express the location on disk', detail: 'Add PointerToRawData 0x0600 to the section offset 0x0340. The resulting file offset is 0x0940.', role: 'output', value: 'file offset: 0x0940' },
-  ]}
-  caption="The other illustrated RVA, 0x2880, fails the raw-byte check: its 0x880 section offset lies in the zero-filled virtual tail."
-/>
+<Scene name="rva-to-file-offset" />
 
 A rigorous parser checks every subtraction and addition, validates section
 ranges against the actual file length, and rejects overlapping or impossible
@@ -15300,18 +15235,7 @@ fn finds_match_at_last_possible_offset() {
 Follow that boundary test as two candidate windows. All byte values below are
 hexadecimal; offset `1` must be included in the scan:
 
-<AnimatedFlow
-  title="The final legal window can contain the only match"
-  stages={[
-    { label: 'Take the copied byte buffer', detail: 'The test supplies three local bytes: 0x10, 0x20, 0x30. Matching this slice performs no further reads from the game.', role: 'input', value: 'bytes: 10 20 30' },
-    { label: 'Keep the two exact pattern bytes', detail: 'The pattern requires Exact(0x20) followed by Exact(0x30). Both positions must match; this particular test has no wildcards.', role: 'state', value: 'pattern: 20 30' },
-    { label: 'Compute both legal starts', detail: 'Three input bytes minus two pattern bytes gives final start 1. The inclusive range 0..=1 therefore contains two candidate windows.', role: 'process', value: 'start offsets: 0..=1' },
-    { label: 'Reject the first window', detail: 'At offset 0 the candidate bytes are 0x10, 0x20. The first exact byte already disagrees with 0x20, so this window does not match.', role: 'process', value: 'offset 0: 10 20 ≠ 20 30' },
-    { label: 'Accept the final window', detail: 'At offset 1 the candidate bytes are 0x20, 0x30. Both exact comparisons pass. An exclusive upper bound would skip this only match.', role: 'process', value: 'offset 1: 20 30 = 20 30' },
-    { label: 'Return the local match offset', detail: 'find_all collects offset 1, so the test expects vec![1]. This number identifies a match inside the copied buffer; it is not yet a verified game instruction address.', role: 'output', value: 'matches: [1]' },
-  ]}
-  caption="A range boundary is part of correctness. Matching bytes still leaves the separate checks for build identity and instruction meaning."
-/>
+<Scene name="pattern-scan-window" />
 
 Also test empty patterns, all wildcards, a pattern longer than input, no matches, overlapping matches, and multiple matches.
 

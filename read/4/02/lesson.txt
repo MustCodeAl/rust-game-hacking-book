@@ -12,7 +12,29 @@ That can work once, but every step depends on facts collected earlier. The game 
 
 A more reliable tool separates six phases:
 
-Diagram walkthrough: Guard a state change with fresh evidence. Step 1: Capture twice. State: two reads. Read the pointer chain twice before trusting the observed value. Step 2: Build a snapshot. State: player + gold. Keep identity, side, address, and gold together. Step 3: Compare captures. State: same snapshot?. Reject a changing target before proposing an action. Step 4: Choose an action. State: Some(v). This tour follows Some(v), the requested write path. Step 5: Recheck and write. State: fresh then write. Capture once more before writing the proposed value. Step 6: Read back. State: equal?. Compare the result with the requested value. This follows the write branch when snapshots agree; None remains observation-only and a changed snapshot stops the write.
+Watch it happenCapture twice, recheck, then write, and read back
+
+A pointer chain in game memory leads to a gold value of 100. The tool captures it twice, but income changes the gold to 130 in between, so the two captures differ and are discarded. Two new captures agree, the snapshot is kept, a fresh capture just before the write still matches, the tool writes 500, and reading back gives 500.
+
+Additional detail: Read the steps.
+
+The tool wants to write 500 into the game’s gold. It does not trust one read, so it first captures the whole pointer chain: player, side, gold address, and gold.
+
+Attempt 1, capture 1: the four values are read and kept together as one snapshot.
+
+Capture 2 reads the chain again. While it runs, income arrives and the game changes the gold from 100 to 130.
+
+The two snapshots differ in the gold field, so the tool refuses to act on either one. A blind write would have overwritten the income.
+
+Attempt 2: the tool throws the pair away and captures twice more. This time both captures agree in all four fields.
+
+The tool keeps that snapshot. The caller asked for Some(500), so it will propose a write. (None would mean observe only.)
+
+Recheck, then write: one more capture right before the write. Only if it still equals the snapshot does the write happen.
+
+Read back: the tool reads the gold again and compares it with the 500 it asked for. Equal means the write took effect.
+
+This follows the write branch when snapshots agree; None remains observation-only and a changed snapshot stops the write.
 
 The important idea is not extra code. It is that data crosses a gate before the tool acts on it. A raw address read once may already be out of date. A Snapshot captured twice with equal results was consistent at that moment. A write happens only if a fresh capture, taken immediately before it, still equals the snapshot.
 

@@ -48,7 +48,25 @@ Why use an enum? Each variant defines exactly which data belongs to that event. 
 
 Follow the two accepted snapshots through diff, then compare an unchanged poll. The endpoints reveal changes, not the reason gold changed:
 
-Diagram walkthrough: A changing value becomes an event only at its edge. Step 1: Keep the accepted baseline. State: gold: 120; menu: false. The earlier validated snapshot contains 120 gold and menu_open false. Its identity and read checks have passed. Step 2: Receive a new accepted snapshot. State: gold: 145; menu: true. The next validated snapshot contains 145 gold and menu_open true. In this example the other fields have not changed. Step 3: Compare the fields. State: gold: +25; menu: false to true. diff detects different gold amounts and the false-to-true menu transition. It compares endpoints; it does not establish whether earning, editing, or another rule changed gold. Step 4: Produce the named changes. State: GoldChanged + MenuOpened. The result includes GoldChanged { before: 120, after: 145 } and MenuOpened. Their enum variants carry the data the action layer needs. Step 5: Use the new accepted baseline. State: previous: 145; menu: true. For the next comparison, retain the accepted 145-gold, open-menu snapshot as the previous state. The opening edge has already been reported. Step 6: Report no event for no change. State: events: []. If the next accepted snapshot is identical, diff returns an empty vector. The still-open menu does not become a second MenuOpened event. Level state remains true across polls; an edge event describes the transition between accepted states.
+Watch it happenA value becomes an event only at its edge
+
+A baseline snapshot of 120 gold and a closed menu is compared with a new snapshot of 145 gold and an open menu. The two differences become the events GoldChanged and MenuOpened, the new snapshot becomes the baseline, and an identical next snapshot produces an empty list of events.
+
+Additional detail: Read the steps.
+
+The accepted baseline is the last validated snapshot: 120 gold, menu closed. Its identity and read checks have passed.
+
+The next validated snapshot arrives: 145 gold, menu open. In this example nothing else has changed.
+
+diff compares the fields. Gold differs, from 120 to 145, a change of 25. The menu went from false to true. It compares endpoints only, so it cannot say why gold changed.
+
+Each difference becomes a named event. The variant carries the data the action layer needs, such as the before and after gold.
+
+The accepted snapshot becomes the new baseline: 145 gold, menu open. That opening has already been reported once.
+
+If the next accepted snapshot is identical, diff returns an empty list. The menu is still open, but that is a level, not a new edge, so there is no second MenuOpened.
+
+Level state remains true across polls; an edge event describes the transition between accepted states.
 
 Section: Debouncing asks for stability.
 
