@@ -1,0 +1,65 @@
+---
+// An animation in which the things that really move or change in the system
+// move or change on the screen. Scenes live in src/scenes/<name>.mjs; see
+// components/kit/README.md for what makes one worth having.
+//
+// The page holds the finished picture and the written steps, so printing, search,
+// the listening edition, and a browser without scripts all work. The script only
+// adds playback: play, pause, step, and scrub.
+import { renderScene } from '../lib/scene/markup.mjs';
+import { playerSpec } from '../lib/scene/engine.mjs';
+import { inlineMarkdown } from '../lib/inline-md';
+import '../styles/scene.css';
+
+interface Props {
+	name: string;
+}
+
+const { name } = Astro.props;
+const scenes = import.meta.glob('../scenes/*.mjs', { eager: true }) as Record<string, { default: any }>;
+const sc = scenes[`../scenes/${name}.mjs`]?.default;
+if (!sc) throw new Error(`There is no scene called "${name}". Add src/scenes/${name}.mjs.`);
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const counter = globalThis as { __sceneCount?: number };
+counter.__sceneCount = (counter.__sceneCount || 0) + 1;
+const uid = `scene-${name}-${counter.__sceneCount}`;
+const picture = renderScene(sc, sc.duration, { id: uid, base });
+// "<" never appears raw inside the embedded data, so it cannot close the script early.
+const spec = JSON.stringify(playerSpec(sc)).replace(/</g, '\\u003c');
+---
+
+<figure class="scene not-content" data-scene data-scene-id={uid} style={`--scene-w:${sc.w}`} aria-labelledby={`${uid}-title`}>
+	<figcaption class="scene__top">
+		<span class="scene__eyebrow">Watch it happen</span>
+		<strong id={`${uid}-title`} class="scene__title">{sc.title}</strong>
+	</figcaption>
+	<div class="scene__stage">
+		<svg class="scene__svg" viewBox={`0 0 ${sc.w} ${sc.h}`} aria-hidden="true" focusable="false" set:html={picture} />
+	</div>
+	<p class="scene__alt">{sc.alt}</p>
+	<p class="scene__cue" data-scene-cue data-reader-skip hidden></p>
+	<div class="scene__controls" data-scene-controls data-reader-skip hidden>
+		<button type="button" data-scene-action="play">Play</button>
+		<button type="button" data-scene-action="prev" aria-label="Previous step">‹ Step</button>
+		<button type="button" data-scene-action="next" aria-label="Next step">Step ›</button>
+		<button type="button" data-scene-action="restart">Restart</button>
+		<button type="button" data-scene-action="speed" aria-label="Playback speed">1×</button>
+		<input class="scene__scrub" data-scene-scrub type="range" min="0" max="1000" value="0" aria-label="Position in the animation" />
+	</div>
+	<p class="scene__live" data-scene-live role="status" aria-live="polite"></p>
+	<details class="scene__steps">
+		<summary>Read the steps</summary>
+		<ol>
+			{sc.cues.map(([, words]: [number, string]) => <li set:html={inlineMarkdown(words)} />)}
+		</ol>
+	</details>
+	{sc.caption && <p class="scene__caption" set:html={inlineMarkdown(sc.caption)} />}
+	<script type="application/json" data-scene-spec set:html={spec} />
+</figure>
+
+<script>
+	import { mountScenes } from '../lib/scene/runtime.js';
+	mountScenes(document);
+	document.addEventListener('astro:page-load', () => mountScenes(document));
+</script>
