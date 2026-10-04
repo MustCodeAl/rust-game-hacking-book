@@ -864,3 +864,16 @@ Verification: the build has **297 HTML pages**, **284** drawn diagrams, and **13
 listening and TXT editions (11,375 passages, 534 explained visuals). All internal links
 and anchors resolve (297 pages, 0 broken). Not inspected: native phone browsers, audible
 voice output, and a reply from the chat button (only its loader and placement were tested).
+
+## "On this page" Hide button was off screen on wide windows — 2026-10-04
+
+On windows wider than 72rem (1152 px) the Hide button on the "On this page" panel could
+not be seen, so after the panel was brought back from its edge tab there was no way to hide
+it again. Starlight's right column is a fixed box as wide as the window, with its left edge
+on the column, and the button had been right-aligned inside it, which put it at x = 2174 on
+a 1280 px window. It is now left-aligned at the column's edge (`reader-progress.css`); below
+72rem it still floats over the "On this page" bar. Checked at 1920, 1600, 1280, 1152, 1151,
+1100, 1000, 900, 800, 799, 700, and 375 px: from 800 px up, both panels hide and restore, and
+each Hide button is on screen and the topmost element at its centre (under 800 px neither
+panel has a Hide button, as designed). The same cycle was repeated with real mouse clicks
+at 1280 px.

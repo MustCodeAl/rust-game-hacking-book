@@ -381,7 +381,16 @@ live site loses them (publishing replaces every file).
   the panel itself (`overrides/Sidebar.astro`, `overrides/PageSidebar.astro`);
   while one is hidden a tab at that screen edge restores it (built by
   `academy.js`). Saved in `gha-sidebar` and `gha-toc`; shortcuts Alt+N, Alt+O.
-  The header has no panel icons.
+  The header has no panel icons. Starlight's `.right-sidebar` is a **fixed box as
+  wide as the window** (its left edge sits on the column and the rest runs off the
+  right of the screen), so nothing inside it may be right-aligned at 72rem and up:
+  the "On this page" Hide button was once pushed to x = 2174 and could not be
+  seen, so after the panel was restored there was no way to hide it again. It is
+  left-aligned there, and floats over the "On this page" bar below 72rem. On
+  phones (under 50rem) neither panel has a Hide button by design. After changing
+  these controls, hide and restore both panels at several widths (800 to 1920 px)
+  and check each Hide button is on screen and is the topmost element at its
+  centre.
 - **Hover cards.** `public/scripts/hover-cards.js`. Glossary words are marked
   while building by `glossaryTerms()` in `src/plugins/satteri-academy.mjs`, and
   sparingly on purpose: `planGlossaryMarks()` walks the lessons in reading order
