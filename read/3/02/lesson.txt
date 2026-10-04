@@ -10,6 +10,34 @@ Diagram. From address hexadecimal 5 0 0 0 to physical RAM, random access memory,
 
 Windows maps virtual addresses separately for each process. Reading a local pointer with the same number would inspect the tool’s own memory. A process handle names the target and carries the rights granted for this opening; the Windows read uses that handle with the target address and a byte count. Lesson 11.6 later examines handles in more depth.
 
+That read is the Windows function ReadProcessMemory. Its arguments split cleanly into what belongs to the game and what belongs to the tool:
+
+ReadProcessMemory, argument by argument
+
+hProcesshandlerequired
+
+The process handle, opened with the right to read (PROCESS_VM_READ). It says which process’s address map to use.
+
+lpBaseAddressaddress in the gamerequired
+
+Where to start reading. To the tool this is only a number, so it is never dereferenced locally.
+
+lpBufferaddress in the toolrequired
+
+Where Windows stores the copied bytes: memory the tool owns, with room for at least nSize bytes.
+
+nSizebytesrequired
+
+How many bytes to copy.
+
+lpNumberOfBytesReadbytes, optional
+
+Where Windows reports how many bytes were actually copied. A tool that ignores it can decode stale bytes left in its buffer.
+
+return valuenonzero on success
+
+Zero means the read failed. GetLastError then says why, such as ERROR_PARTIAL_COPY (299) when only part of the range could be read.
+
 For this lab, the program discovers wesnoth.exe with the Windows ToolHelp API, application programming interface,, opens it, resolves the verified pointer chain, and performs the guarded write. There is no PID, process identifier, or raw-address placeholder for the reader to fill in.
 
 An external tool cannot dereference a target-process pointer directly. Windows mediates the boundary, and the handle represents the particular access the observer was granted:
@@ -26,7 +54,7 @@ Step through that race. Each read can succeed while the pair of observations bec
 
 Diagram walkthrough: Two successful reads can describe two different objects. Step 1: Request the player pointer. State: read pointer at hexadecimal 2 0 0 0. The tool asks Windows to read the pointer stored at hexadecimal 2 0 0 0 in the game process. This request identifies a location, not a permanent object. Step 2: Keep the first observation. State: hexadecimal 5 0 0 0 to enemy A. The returned pointer is hexadecimal 5 0 0 0, which names enemy A at this moment. The tool retains that address for its next read. Step 3: Let the game advance. State: hexadecimal 5 0 0 0 to enemy B. Before the next request, the game removes enemy A and reuses allocation hexadecimal 5 0 0 0 for enemy B. The numeric address has not changed, but its occupant has. Step 4: Request the health field. State: read health at hexadecimal 5 0 3 0. The tool adds the health offset hexadecimal 3 0 to its retained base hexadecimal 5 0 0 0 and reads at hexadecimal 5 0 3 0. That location now belongs to enemy B. Step 5: Keep the second observation. State: health: 87, from enemy B. Windows successfully returns health 87. Those bytes describe enemy B, even though the tool associated its first observation with enemy A. Step 6: Notice the invalid pairing. State: INVALID: A + health from B. Combining the two results reports enemy A with health taken from enemy B. Success of each copy does not prove the combined observation describes one object. This is an illustrated failure, not a valid snapshot. Copy checks and object-path revalidation help detect uncertainty; they do not make separate reads atomic.
 
-Check the returned byte count and revalidate the object path after a multi-step read. That reduces stale observations; it does not turn several Windows calls into one atomic snapshot. Lesson 4.3 builds a bounded double-capture check for that remaining uncertainty.
+Check the returned byte count and revalidate the object path after a multi-step read. That reduces stale observations; it does not turn several Windows calls into one atomic snapshot. Lesson 4.4 builds a bounded double-capture check for that remaining uncertainty.
 
 Section: Hands-on target: Wesnoth 1.14.9.
 

@@ -60,11 +60,15 @@ Present. Hand the finished picture to the display, and, with vertical sync on, w
 
 Diagram. From input keys, mouse, pad to update rules, physics, timers. From update rules, physics, timers to render draw the world. From render draw the world to present show the frame. From present show the frame to input keys, mouse, pad.
 
+Frame time and frame rate are reciprocals of each other:
+
 A display that refreshes 60 times each second takes a new picture every 1 divided by 60 equals 0.01667 seconds, which is 16.67 milliseconds. All four jobs must fit in that frame budget, or the display refreshes before the new picture is ready and shows the old one again. A frame that takes 25 milliseconds gives 1 divided by 0.025 equals 40 frames per second; one that takes 8.33 milliseconds gives 120. This is why tools report frame time, in milliseconds, as well as frames per second. Frame times add up, so a 4 milliseconds update plus a 10 milliseconds draw is a 14 milliseconds frame, but frame rates do not add.
 
 Section: Time inside the update.
 
 Lesson 1.3 showed that movement needs elapsed time: distance equals speed times time. An engine measures the delta time, the seconds since the previous frame, and hands it to every update. Physics prefers steady steps, though. If one frame moves a fast ball 3 pixels and the next moves it 30, a contact test that looks only at positions can jump the ball clean over a wall 10 pixels thick. So many engines run physics in a fixed timestep, such as 1/60 second, and carry the leftover real time into the next frame:
+
+ExampleThree frames of fixed steps
 
 Table columns: Frame; Real time since the last frame (ms); Time waiting to be simulated (ms); Fixed steps run (16.67 milliseconds each); Left over (ms).
 
@@ -76,11 +80,37 @@ Frame: 3; Real time since the last frame (ms): 30.00; Time waiting to be simulat
 
 After 70 milliseconds of real time the game has run 4 steps, which is 4 times 16.67 equals 66.67 milliseconds of game time, and 3.33 milliseconds is waiting. The two add back to 70 milliseconds, so no time was lost. A slow frame runs several steps to catch up, and a quick one runs none.
 
-What is drawn after a frame is usually partway between two steps. The 3.33 milliseconds left over is 3.33 divided by 16.67 equals 20 percent of the way to the next step, and many engines blend the last two steps by that fraction, so motion looks smooth even though the rules advance in coarse steps (Lesson 4.6 shows how that blend is computed).
+What is drawn after a frame is usually partway between two steps. The 3.33 milliseconds left over is 3.33 divided by 16.67 equals 20 percent of the way to the next step, and many engines blend the last two steps by that fraction, so motion looks smooth even though the rules advance in coarse steps (Lesson 4.7 shows how that blend is computed).
 
 This tells you something when you scan memory. A value the rules change moves once per step, and a value the drawing code keeps (an on-screen animation timer, an interpolated position) can change once per frame. Counting how often a value changes tells you which loop owns it.
 
 A cooldown is a timer built the same way. When an ability is used, the game stores how long remains, say 5.0 seconds, and subtracts the delta time on every step: after 60 steps of 1/60 second the value has fallen by 1.0 to 4.0, and after 300 steps it reaches 0 and the ability is ready. Some games instead store the moment it becomes ready (now + 5.0) and compare it with the clock. Either way the cooldown is a number in memory that you can scan for.
+
+Section: Real time, game time, and the clamp.
+
+The delta time an update receives is not always the time that really passed. Engines keep two clocks. Real time is the wall clock (Explanation: The time a clock on a wall shows. It keeps running whatever the game does, so pausing the game cannot stop it.): it never stops, and a loading spinner or a menu animation uses it. Game time is what the rules use. Each frame the engine takes the real time since the last frame, limits it to a maximum, and multiplies it by a time scale:
+
+A scale of 1 is normal speed, 0.5 is slow motion, 2 is fast forward, and 0 is a pause. A pause stops game time but not real time, which is why a paused game still draws its menu and answers the mouse. The scale also stretches every timer that counts game time:
+
+ExampleOne 16.67 milliseconds frame at four time scales
+
+Table columns: Time scale; Game time added by the frame; A 5.0 s cooldown ends after.
+
+Time scale: 1 (normal); Game time added by the frame: 16.67 milliseconds; A 5.0 s cooldown ends after: 5.0 divided by 1 equals 5.0 s of real time.
+
+Time scale: 0.5 (slow motion); Game time added by the frame: 16.67 times 0.5 equals 8.33 milliseconds; A 5.0 s cooldown ends after: 5.0 divided by 0.5 equals 10.0 s.
+
+Time scale: 2 (fast forward); Game time added by the frame: 16.67 times 2 equals 33.33 milliseconds; A 5.0 s cooldown ends after: 5.0 divided by 2 equals 2.5 s.
+
+Time scale: 0 (paused); Game time added by the frame: 0 milliseconds; A 5.0 s cooldown ends after: never, while paused.
+
+The limit protects the rules from a frame that stalled. A laptop that sleeps, or a window held still by the mouse for 3 seconds, would otherwise hand the next update a delta of 3.0 s. A ball moving 150 pixels a second would jump 150 times 3.0 equals 450 pixels at once, straight through any wall, and a fixed-step loop would owe 3.0 divided by (1/60) equals 180 steps. Bevy’s default limit is 250 milliseconds, so the longest delta any frame can add is 0.25 s, and at 60 steps a second the loop owes at most 0.25 divided by (1/60) equals 15 steps.
+
+Diagram. From real time since the last frame to limit to a maximum (250 milliseconds in Bevy). From limit to a maximum (250 milliseconds in Bevy) to multiply by the time scale (0 equals paused). From multiply by the time scale (0 equals paused) to game time added this frame. From game time added this frame to fixed steps owed: game time divided by step length.
+
+The limit also ends a failure called the spiral of death. Suppose each fixed step takes 20 milliseconds of real time to compute but advances game time by only 16.67 milliseconds. While the engine computes one step, the real clock moves 20 milliseconds, so the next frame owes 20 milliseconds of game time, which is 20 divided by 16.67 equals 1.2 times as much as the step paid off. The frame after that owes 1.2 times as much again. Each step leaves the game 20 minus 16.67 equals 3.33 milliseconds further behind real time, so after 60 steps it is 60 times 3.33 equals 200 milliseconds behind, and running more steps to catch up only adds more debt. The clamp throws the excess away, so the game falls behind real time and runs in slow motion instead of freezing.
+
+Scanning memory is easier with this in mind. A game’s elapsed time may exist twice: one value that always rises, and one that stops during a pause. A cooldown that compares itself with the second pauses with the game, and one that compares itself with the first keeps running behind the pause menu.
 
 Section: Slow work leaves the frame.
 
@@ -88,13 +118,15 @@ Reading a 3 MB file can take 30 milliseconds. If the update waited for it, the g
 
 Diagram labels, in drawing order: Worker thread; Main loop; frames 1, 2, and 3 keep running; start the task "load level"; result, sent through a channel; frame 4 checks the channel and uses the result.
 
-The result arrives on a frame nobody can predict, so the game has to handle “not ready yet” with a loading screen or a stand-in. Lesson 4.10 uses the same channel to move records from a game to a recorder without stalling it.
+The result arrives on a frame nobody can predict, so the game has to handle “not ready yet” with a loading screen or a stand-in. Lesson 4.11 uses the same channel to move records from a game to a recorder without stalling it.
 
 Section: Measuring the frame.
 
 Engines measure themselves. A diagnostic is a named measurement with a short history, such as frame time over the last 120 frames, that can be switched on and off while the game runs. An FPS overlay draws such numbers on the screen. A log records events as lines of text, each with a severity such as error, warning, info, or debug, to a console or a file.
 
 An average can hide a stutter. Four frames of 16, 16, 16, and 66 milliseconds average (16 + 16 + 16 + 66) divided by 4 equals 28.5 milliseconds, or 1000 divided by 28.5 equals 35 frames per second, even though three frames in four were fine. The 66 milliseconds frame is the one a player feels, so a good diagnostic also reports the slowest frame.
+
+The build changes the measurement as much as the code does. A debug build leaves out most optimizations so that mistakes are easier to find, and engine code that loops over thousands of entities can run many times slower in it than in a release build. Suppose a system takes 0.4 milliseconds in a release build and 12 milliseconds in a debug build. That is 12 divided by 0.4 equals 30 times slower, and 12 milliseconds alone is 12 divided by 16.67 equals 72 percent of the frame budget. A frame time means little until you know which kind of build produced it.
 
 Section: Entities, components, and systems.
 
@@ -127,6 +159,8 @@ A system should not add or remove entities while it is looping over them, or the
 Disabling an entity hides it from the systems without deleting it. A marker component such as Disabled makes the queries skip it. Its identity and data stay in memory, so it can come back unchanged. Despawning is different: the identity is freed and may be reused.
 
 An observer is code that runs when something happens, such as an entity being created, a component being removed, or “coin 42 was collected” (the event from Lesson 1.3), instead of checking every frame whether it happened.
+
+Lesson 4.2 follows how systems share data through resources and events, how the engine decides which system runs first and which can run at the same time, and how it notices only what changed.
 
 Section: Scenes: a world you can load.
 
@@ -214,6 +248,8 @@ Systems, in order, every fixed step. Read input into the paddle’s velocity. Mo
 
 State. The score, the bricks left, and the lives are numbers in memory. So is the mode: menu, playing, or game over.
 
+ExampleOne step of Breakout
+
 One step, with real numbers. The ball is at x equals 794 with a velocity of 150 pixels per second to the right, and a step is 1/60 second:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
@@ -229,6 +265,10 @@ Table columns: Engine part; What it does; Explained in.
 Engine part: Application, window; What it does: starts the program, opens a window, owns the loop; Explained in: this lesson; Windows Input.
 
 Engine part: Entities, components, scenes; What it does: organize the world and load it; Explained in: this lesson; Collections.
+
+Engine part: Resources, events, schedules, change detection; What it does: how systems share data, in what order they run, and what they skip; Explained in: Ordering and Sharing Work.
+
+Engine part: Input; What it does: turns key, stick, and mouse events into actions; Explained in: How a Game Reads Input; Windows Input.
 
 Engine part: Math, transforms; What it does: positions, directions, turning, blending; Explained in: Coordinates and Vectors; Camera Frames.
 
@@ -263,5 +303,7 @@ Section: Where the change belongs.
 An engine supplies reusable machinery; the game adds its particular rules and content. A library responds when your code calls it, while an engine also calls game code at the points it controls. The course games use different engines, so a rule may live in data, a script, native code, or managed code. A memory edit lasts for a running process; a data-file edit can persist when the file is loaded again. Engine consoles and debug commands expose named state that can help identify the right layer before changing it.
 
 To describe a match, a tool needs more than one verified field: it needs the players and values that belong together at one moment. From One Player to a Game-State Snapshot builds that view while keeping the engine’s changing state separate from the tool’s local copy.
+
+Section: Where each engine part is taught in depth.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/11/

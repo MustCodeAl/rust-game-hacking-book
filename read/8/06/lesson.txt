@@ -2,7 +2,7 @@ Windows Input: Polling, Events, and Messages
 
 Section: “Send a key” can mean three different things.
 
-Our DLL, dynamic link library, now has a controlled lifecycle, and the scanner can do work off the game thread. A local tool also needs a deliberate way to start or stop a feature. Pressing a menu hotkey, sending a synthetic key to an offline game, and calling a window procedure solve different problems, even though all three sound like “input.”
+Our DLL, dynamic link library, now has a controlled lifecycle, and the scanner can do work off the game thread. A local tool also needs a deliberate way to start or stop a feature. Pressing a menu hotkey, sending a synthetic key to an offline game, and calling a window procedure solve different problems, even though all three sound like “input.” Lesson 6.6 explained what a game does with input once it has arrived: the three layers of device, state, and action, and why presses are edges. This lesson is about the ways Windows delivers that input and the ways a tool can read or send it.
 
 Windows has several input paths because programs receive interaction in different ways:
 
@@ -46,11 +46,11 @@ Diagram. From handle waiting messages; continue at once if there are none to upd
 
 TranslateMessage can post character messages derived from key messages; DispatchMessage sends a retrieved message to its window procedure. PeekMessage reports no available queued message without waiting, which is why the game-style loop can continue its own work. The exact handling of Raw Input and other message types varies by application; do not assume every game consumes WM_KEYDOWN as its gameplay input. See Microsoft’s GetMessageW and PeekMessageW references for their return and queue rules.
 
-The callback must also return promptly. While a window procedure is busy reading a large file or waiting on a network request, other messages for windows on that thread cannot be handled. The window may stop repainting or responding to input. Microsoft’s window-procedure guidance explains this bottleneck. The same concern appears when a hook adds work to a game’s time-sensitive path: move slow work elsewhere and make overload visible, as Lesson 4.10 does for a recorder.
+The callback must also return promptly. While a window procedure is busy reading a large file or waiting on a network request, other messages for windows on that thread cannot be handled. The window may stop repainting or responding to input. Microsoft’s window-procedure guidance explains this bottleneck. The same concern appears when a hook adds work to a game’s time-sensitive path: move slow work elsewhere and make overload visible, as Lesson 4.11 does for a recorder.
 
 Labelled memory diagram. being handled: WM_KEYDOWN, reading a large file, highlighted; waiting: WM_MOUSEMOVE; waiting: WM_PAINT; waiting: WM_CLOSE. Groups: these messages wait until the first handler returns. One thread's message queue. A slow first handler delays movement, repainting, and close handling.
 
-Polling is the other side of this distinction. If no one sends your tool a message when the game’s gold changes, the tool can check the value on its own schedule. It does work even when nothing changed. Lesson 4.9 shows how to compare successive snapshots so many polls produce one meaningful event instead of many repeated actions.
+Polling is the other side of this distinction. If no one sends your tool a message when the game’s gold changes, the tool can check the value on its own schedule. It does work even when nothing changed. Lesson 4.10 shows how to compare successive snapshots so many polls produce one meaningful event instead of many repeated actions.
 
 Section: The window itself.
 
@@ -62,11 +62,13 @@ Resizing. Dragging the edge sends WM_SIZE with the new client width and height. 
 
 Scale factor. A display set to 125 percent reports a window 1,000 logical pixels wide as 1,000 times 1.25 equals 1,250 physical pixels. A game that is not aware of this has its picture stretched by the system, and one that is aware sizes its menus by the factor ( Lesson 7.13 ). Moving the window to a display with a different scale sends WM_DPICHANGED.
 
+More than one window. An application can own several windows, such as the game’s window and a separate settings or tool window. Each has its own handle ( HWND ), client area, and scale factor, and windows made by one thread share that thread’s message queue. A screen point belongs to the window that contains it. Say the game’s client area starts at the screen point (100, 100) and is 1280 wide, and a tool window’s client area starts at (1400, 100). The screen point (1500, 200) is (1500 minus 100, 200 minus 100) equals (1400, 100) in the game’s client coordinates, which is past its 1280-pixel width, and (1500 minus 1400, 200 minus 100) equals (100, 100) in the tool window’s. Subtracting the wrong window’s origin is a common reason an overlay is off by a constant amount.
+
 Fullscreen. Exclusive fullscreen takes over the display and may change its resolution. Borderless windowed is an ordinary window with no border, sized to the desktop, which is quick to switch away from and can be drawn over by other windows.
 
 Presenting. The game draws into a hidden back buffer and then presents it. With vertical sync on, the present waits for the display’s next refresh, so a 60 Hz display caps the game at 60 frames a second ( Lesson 4.1 ). A game with little moving, such as a menu, may redraw only when something changes, to save power. A screenshot is a copy of the finished back buffer saved as an image file.
 
-Focus and the cursor. A window that loses focus may pause its game, but GetAsyncKeyState still reports keys, so a tool must check focus itself (below). A game can hide the cursor, confine it to the window, replace it with its own image, or read relative mouse movement instead of a position.
+Focus and the cursor. A window that loses focus may pause its game, but GetAsyncKeyState still reports keys, so a tool must check focus itself (below). A game can hide the cursor, confine it to the window, replace it with its own image, or read relative mouse movement instead of a position (Lesson 6.6 shows the arithmetic of a look-around loop).
 
 Section: Read a hotkey with GetAsyncKeyState.
 
@@ -96,6 +98,44 @@ Then send a balanced key-down/key-up pair:
 
 Code example. The code’s comments explain: 🛡️ SAFETY: `events` is initialized and its element size matches INPUT. let sent equals unsafe { SendInput(&events, input_size) }; anyhow::ensure!(sent equals events.len() as u32, "sent {sent} of 2 events"); Ok(())}
 
+A key event is an INPUT whose type says “keyboard” and whose union holds a KEYBDINPUT. The code above sets two of its fields and leaves the rest at zero:
+
+KEYBDINPUT: the fields that matter
+
+wVkvirtual-key coderequired
+
+Which key. This is the number from VK_INSERT and its relatives, the same ones GetAsyncKeyState takes.
+
+dwFlagsflagsdefault 0
+
+Zero means the key goes down. KEYEVENTF_KEYUP means it is released, which is why the code sends one of each. KEYEVENTF_SCANCODE switches the event to the hardware scan code in wScan instead.
+
+Additional detail: The four flags and how they combine.
+
+Table columns: Flag; Value; Meaning.
+
+Flag: KEYEVENTF_EXTENDEDKEY; Value: hexadecimal 0 0 0 1; Meaning: the scan code carries the hexadecimal E 0 prefix that extended keys use, such as the arrow keys in their own cluster and the right-hand Ctrl and Alt.
+
+Flag: KEYEVENTF_KEYUP; Value: hexadecimal 0 0 0 2; Meaning: the key is released.
+
+Flag: KEYEVENTF_UNICODE; Value: hexadecimal 0 0 0 4; Meaning: wScan holds a Unicode character instead of a key, and wVk must be zero.
+
+Flag: KEYEVENTF_SCANCODE; Value: hexadecimal 0 0 0 8; Meaning: wScan identifies the key, and wVk is ignored.
+
+Flags are bits, so they combine with OR. Releasing a key by scan code sets two of them: hexadecimal 0 0 0 8 | hexadecimal 0 0 0 2 equals hexadecimal 0 0 0 A, which is 8 + 2 equals 10.
+
+wScanscan codedefault 0
+
+The key’s position on the keyboard, used only with KEYEVENTF_SCANCODE. Some games read scan codes, so a virtual-key event does not reach them.
+
+timemillisecondsdefault 0
+
+Zero lets Windows stamp the event itself.
+
+dwExtraInfointegerdefault 0
+
+An extra value the receiving window can read back. Almost nothing uses it.
+
 Always release a key or mouse button during shutdown, even if a feature fails. SendInput is subject to User Interface Privilege Isolation (UIPI): Windows blocks input from a lower-integrity process into a window owned by a higher-integrity one, such as a game running as administrator while your tool does not. Windows does not tell you why: neither SendInput’s return value nor GetLastError identifies UIPI as the cause, and the target window simply never reacts, which looks identical to a wrong virtual-key code or an unfocused window.
 
 Diagram. From SendInput(events) to target window's integrity level vs. your process's integrity level. From target window's integrity level vs. your process's integrity level to event reaches the window normally. The connection is labelled: equal or lower. From target window's integrity level vs. your process's integrity level to UIPI blocks the event. The connection is labelled: higher, e.g. game runs as admin. From UIPI blocks the event to nothing says UIPI was the cause: the window simply never reacts.
@@ -115,6 +155,8 @@ Most 3D games do not treat WM_KEYDOWN as authoritative gameplay input. They may 
 Section: Other Windows APIs worth knowing.
 
 Choose by question instead of memorizing a giant list:
+
+Other input and window APIs
 
 Table columns: Question; Relevant APIs; Lesson rule.
 

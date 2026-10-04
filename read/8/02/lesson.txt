@@ -60,6 +60,42 @@ Why does the sample pass a locally resolved LoadLibraryW address to the game? Ge
 
 Why can LoadLibraryW be used as a thread start routine in this 32-bit lab? Both use the Windows system calling convention and take one pointer argument. Here the HMODULE result fits in the thread’s 32-bit DWORD exit code. The remote allocation holding the wide path is the argument. The code requires a nonzero exit code before calculating the DLL-relative gha_start address. This return-value shortcut does not carry over unchanged to a 64-bit injector.
 
+The seven arguments of that CreateRemoteThread call, with the value this lab passes for each:
+
+CreateRemoteThread, argument by argument
+
+hProcesshandlerequired
+
+The game’s process handle, opened with the rights this step needs, including the right to create a thread.
+
+lpThreadAttributesoptionaldefault None
+
+Security settings for the new thread’s handle. None takes the defaults, and the handle cannot be inherited by child processes.
+
+dwStackSizebytesdefault 0
+
+The new thread’s stack size. Zero uses the default of the game’s executable.
+
+lpStartAddressaddress in the gamerequired
+
+Where the thread begins running. Here it is LoadLibraryW, which is why the same-base assumption above matters.
+
+lpParameteraddress in the game
+
+The one pointer handed to the start routine: the remote allocation that holds the wide DLL path.
+
+dwCreationFlagsflagsdefault 0
+
+Zero starts the thread at once. CREATE_SUSPENDED would create it paused.
+
+lpThreadIdoptionaldefault None
+
+Where to store the new thread’s ID. The lab does not need it.
+
+return valuethread handle
+
+The handle of the new thread, which the lab wraps in an owned type so it is always closed. A thread that starts is not a thread that succeeded: the lab still waits for it and reads its exit code.
+
 The wrapper methods are small unsafe boundaries over:
 
 OpenProcess;

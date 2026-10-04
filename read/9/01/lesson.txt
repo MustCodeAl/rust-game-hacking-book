@@ -48,6 +48,50 @@ There are a few variations. An embedded asset is compiled into the executable, s
 
 This explains two things you will meet. A replacement file is found by its path, so a mod must keep the name, the folder, and the format (Lesson 9.4). And memory holds the decoded pixels, not the PNG, so a scan of the process finds raw image data and never the file’s own bytes.
 
+Section: How long an asset lives.
+
+Loading is the first half of an asset’s life. The rest depends on who still holds its handle.
+
+In Bevy and engines like it, a handle comes in two kinds. A strong handle keeps the asset alive, and the engine counts them. A weak handle names the asset without keeping it alive, so a lookup can use it without delaying the moment the asset is freed. When the count of strong handles reaches 0, the engine frees the decoded data, and the copy on the graphics card goes with it.
+
+ExampleA 256 times 256 bullet texture with 40 bullets
+
+The level’s loader holds one strong handle, and every bullet that draws the texture holds another.
+
+Table columns: Moment; Strong handles; Texture in memory?.
+
+Moment: the level has loaded, no bullets yet; Strong handles: 1; Texture in memory?: yes, 349,525 bytes with its mipmaps.
+
+Moment: 40 bullets are fired; Strong handles: 1 + 40 equals 41; Texture in memory?: yes.
+
+Moment: all 40 bullets despawn; Strong handles: 1; Texture in memory?: yes.
+
+Moment: the level unloads and its loader lets go; Strong handles: 0; Texture in memory?: freed.
+
+Diagram. From not loaded to loading. The connection is labelled: first request. From loading to ready. The connection is labelled: decoded and uploaded. From loading to failed. The connection is labelled: file missing or invalid. From ready to loading. The connection is labelled: file changed on disk (hot reload). From ready to freed. The connection is labelled: last strong handle dropped.
+
+So a scan for the decoded pixels finds them only between the first request and the moment the last handle is dropped. After the level changes, the same address can hold something else, as entity addresses do (Lesson 4.1).
+
+One file can hold several assets. A 3D model file typically holds meshes, materials, textures, animations, and scenes, and the engine gives each part its own handle, named by the file’s path and a label, such as ship.glb#Mesh0. A model with 3 meshes, 2 materials, 1 texture, 2 animations, and 1 scene gives 3 + 2 + 1 + 2 + 1 equals 9 assets from one path, and the cache described above keeps one copy of each.
+
+Section: Events and reloading.
+
+The engine announces changes to assets. When an asset is added, modified, or removed, it sends an asset event, and a system can react to the event instead of checking. A system that builds a collision shape when its mesh finishes loading then runs once, on the event. Checking every frame for the 5 seconds the mesh takes to load would run it 5 times 60 equals 300 times to learn the same thing.
+
+A game under development usually also supports hot reloading. It watches its asset folder, and when a file’s modification time (Explanation: Every file records when it was last changed, and the operating system updates that time on each save. A watcher only has to compare the time it saw last with the time now.) changes, it decodes the file again, replaces the data behind the same handle, and sends a “modified” event. Everything holding the handle shows the new version on its next draw, with no restart. A shipped game usually turns the watcher off and reads each file once, when the level loads. What a replaced file does depends on which of these the game does:
+
+When a replaced file shows up
+
+Table columns: How the game gets the asset; When your replacement shows.
+
+How the game gets the asset: it watches its folder, as a development build does; When your replacement shows: on the next frame.
+
+How the game gets the asset: it reads the file when a level loads; When your replacement shows: the next time that level loads.
+
+How the game gets the asset: it reads from an archive; When your replacement shows: after the archive is rebuilt and the level loads again.
+
+How the game gets the asset: it has the asset embedded in the executable; When your replacement shows: never, because no file is read.
+
 Section: Observe file access.
 
 We know the Flare attribute is saved, but a folder may contain several saves, backups, and shared stashes. Use Process Monitor (Reference: Microsoft Sysinternals' Process Monitor records file, registry, and process events on Windows as they happen. Download it from Microsoft's own page.) inside the VM, virtual machine, to see which paths the game opens when you:
