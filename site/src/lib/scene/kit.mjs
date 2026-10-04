@@ -48,6 +48,88 @@ export function grid(id, x, y, rows, cols, { size = 36, gap = 2, fill = () => ''
 	return group(id, x, y, kids);
 }
 
+/**
+ * Say what happens when, instead of writing keyframes. The timeline remembers
+ * where each part currently is, so a move needs only its destination.
+ *
+ *   const tl = timeline(actors);
+ *   tl.at(1.5).move('chip', 300, 120, 0.8).role('tile', 'state').wait(0.8).hide('chip');
+ *   tl.cue(0, 'Words shown beside the picture from here on.');
+ *   scene({ ..., cues: tl.cues, tracks: tl.tracks });
+ *
+ * A step that starts at a time begins there and lasts `dur` seconds (default
+ * 0.8 for moves, 0.3 for fades). `at(t)` puts the cursor at an absolute time and
+ * `wait(dt)` moves it on, so one chain can read as a short sequence.
+ */
+export function timeline(actors) {
+	const byId = new Map();
+	const visit = (a) => {
+		if (a.id) byId.set(a.id, a);
+		(a.kids || []).forEach(visit);
+	};
+	actors.forEach(visit);
+	const initial = {
+		x: (a) => a.x ?? 0, y: (a) => a.y ?? 0, o: (a) => a.o ?? 1, s: (a) => a.s ?? 1, a: (a) => a.a ?? 0,
+		w: (a) => a.w, h: (a) => a.h, draw: (a) => a.draw ?? 1, num: (a) => a.num ?? 0, u: () => 0,
+		text: (a) => a.t, role: (a) => a.role ?? 'plain',
+	};
+	const last = new Map();
+	const tracks = {};
+	const cues = [];
+
+	const current = (id, prop) => {
+		if (last.has(`${id}.${prop}`)) return last.get(`${id}.${prop}`);
+		const actor = byId.get(id);
+		if (!actor) throw new Error(`timeline: no actor called ${id}`);
+		return initial[prop](actor);
+	};
+	function put(id, prop, t0, dur, to, ease) {
+		const list = ((tracks[id] ||= {})[prop] ||= []);
+		const from = current(id, prop);
+		if (typeof to === 'number' && typeof from === 'number') {
+			list.push([t0, from]);
+			list.push([t0 + dur, to, ease]);
+		} else {
+			list.push([t0, to]);
+		}
+		last.set(`${id}.${prop}`, to);
+	}
+
+	const cursor = (start) => {
+		let t = start;
+		const api = {
+			at: (time) => cursor(time),
+			wait: (dt) => { t += dt; return api; },
+			get t() { return t; },
+			move: (id, x, y, dur = 0.8, ease) => { if (x !== null) put(id, 'x', t, dur, x, ease); if (y !== null) put(id, 'y', t, dur, y, ease); return api; },
+			fade: (id, to, dur = 0.3) => { put(id, 'o', t, dur, to); return api; },
+			show: (id, dur = 0.3) => { put(id, 'o', t, dur, 1); return api; },
+			hide: (id, dur = 0.3) => { put(id, 'o', t, dur, 0); return api; },
+			role: (id, role) => { put(id, 'role', t, 0, role); return api; },
+			text: (id, words) => { put(id, 'text', t, 0, words); return api; },
+			num: (id, value, dur = 0) => { put(id, 'num', t, dur, value, 'out'); return api; },
+			draw: (id, to = 1, dur = 0.6, ease = 'inOut') => { put(id, 'draw', t, dur, to, ease); return api; },
+			scale: (id, to, dur = 0.3) => { put(id, 's', t, dur, to, 'out'); return api; },
+			rotate: (id, to, dur = 0.6) => { put(id, 'a', t, dur, to); return api; },
+			resize: (id, w, h, dur = 0.6) => { if (w !== null) put(id, 'w', t, dur, w); if (h !== null) put(id, 'h', t, dur, h); return api; },
+			follow: (id, u, dur = 1) => { put(id, 'u', t, dur, u); return api; },
+			pulse: (id, size = 1.2, dur = 0.5) => { put(id, 's', t, dur / 2, size, 'out'); t += dur / 2; put(id, 's', t, dur / 2, 1, 'in'); return api; },
+		};
+		return api;
+	};
+
+	return {
+		at: (time) => cursor(time),
+		cue: (time, words) => { cues.push([time, words]); },
+		cues,
+		/** The finished tracks. Call once, after the last step. */
+		get tracks() {
+			for (const props of Object.values(tracks)) for (const list of Object.values(props)) list.sort((a, b) => a[0] - b[0]);
+			return tracks;
+		},
+	};
+}
+
 /** Join lists of keys into one track, in time order. */
 export const keys = (...lists) => lists.flat().sort((a, b) => a[0] - b[0]);
 

@@ -81,7 +81,9 @@ function mount(root) {
 		}
 		if (actor.line && 'draw' in values) {
 			const draw = values.draw;
-			actor.line.style.strokeDashoffset = String(round(1 - draw));
+			const len = Number(actor.line.dataset.len) || 1;
+			actor.line.style.strokeDashoffset = String(round(len * (1 - draw)));
+			actor.line.style.visibility = draw <= 0.001 ? 'hidden' : 'visible';
 			if (actor.line.dataset.arrow) {
 				const role = values.role || actor.node.dataset.role || 'plain';
 				actor.line.style.markerEnd = draw >= 0.999 ? `url(#${id}-head-${role})` : 'none';

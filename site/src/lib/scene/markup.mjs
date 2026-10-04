@@ -16,7 +16,7 @@ function defs(id) {
 
 function lines(p, className) {
 	const text = p.num !== undefined ? format(p.num, p.fmt) : p.text ?? p.t;
-	const size = p.size ? ` font-size="${p.size}"` : '';
+	const size = ` font-size="${p.size ?? 15}"`;
 	const weight = p.weight ? ` font-weight="${p.weight}"` : '';
 	const anchor = p.anchor ? ` text-anchor="${p.anchor}"` : '';
 	const attrs = `${anchor}${size}${weight}`;
@@ -48,7 +48,7 @@ function actorMarkup(a, state, ctx) {
 		case 'cell':
 			inner =
 				`<rect class="scene__rect${a.look ? ` scene__rect--${a.look}` : ''}" width="${round(p.w)}" height="${round(p.h)}" rx="${a.r ?? 5}"/>` +
-				`<text class="scene__label scene__mid${mono}" x="${round(p.w / 2)}" y="${round(p.h / 2)}" dy=".35em" text-anchor="middle"${p.size ? ` font-size="${p.size}"` : ''}${p.weight ? ` font-weight="${p.weight}"` : ''}>${escape(p.num !== undefined ? format(p.num, p.fmt) : p.text ?? p.t)}</text>`;
+				`<text class="scene__label scene__mid${mono}" x="${round(p.w / 2)}" y="${round(p.h / 2)}" dy=".35em" text-anchor="middle" font-size="${p.size ?? 15}"${p.weight ? ` font-weight="${p.weight}"` : ''}>${escape(p.num !== undefined ? format(p.num, p.fmt) : p.text ?? p.t)}</text>`;
 			break;
 		case 'text':
 			inner = lines(p, `scene__label scene__free${mono}`);
@@ -65,14 +65,20 @@ function actorMarkup(a, state, ctx) {
 		case 'line':
 		case 'path': {
 			const d = a.k === 'line' ? `M0 0L${round(a.x2 - a.x)} ${round(a.y2 - a.y)}` : a.d;
+			// A line is drawn on by hiding all but part of one long dash. The length is
+			// known for a line; a curve gives it as `len`.
+			const len = a.k === 'line' ? Math.hypot(a.x2 - a.x, a.y2 - a.y) : a.len;
 			const drawn = p.draw;
 			const full = drawn === undefined || drawn >= 0.999;
-			const dash = a.dash ? ' stroke-dasharray="5 4"' : drawn !== undefined ? ` stroke-dasharray="1" stroke-dashoffset="${round(1 - drawn)}"` : '';
+			const dash = a.dash ? ' stroke-dasharray="5 4"' : drawn !== undefined && len ? ` stroke-dasharray="${round(len)}" stroke-dashoffset="${round(len * (1 - drawn))}"` : '';
 			const head = a.arrow && full ? ` marker-end="url(#${ctx.id}-head-${p.role || 'plain'})"` : '';
 			// A class rule beats a presentation attribute, so a custom width is an inline style.
-			const width = a.width ? ` style="stroke-width:${a.width}px"` : '';
+			const styles = [];
+			if (a.width) styles.push(`stroke-width:${a.width}px`);
+			if (drawn !== undefined && drawn <= 0.001) styles.push('visibility:hidden');
+			const width = styles.length ? ` style="${styles.join(';')}"` : '';
 			const shape = a.fill ? ' scene__rect' : '';
-			inner = `<path class="scene__line${shape}"${a.arrow ? ' data-arrow="1"' : ''} d="${d}"${drawn !== undefined ? ' pathLength="1"' : ''}${dash}${head}${width}/>`;
+			inner = `<path class="scene__line${shape}"${a.arrow ? ' data-arrow="1"' : ''}${len ? ` data-len="${round(len)}"` : ''} d="${d}"${dash}${head}${width}/>`;
 			break;
 		}
 		default:

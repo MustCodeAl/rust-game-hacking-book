@@ -13,7 +13,7 @@ import { Fields, GitHub, ParamField, ResponseField } from '../../../../component
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
-import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
+import Scene from '../../../../components/Scene.astro';
 
 ## External means “a separate process”
 
@@ -121,21 +121,10 @@ sequenceDiagram
     Note over Tool: reports enemy A<br/>with enemy B's health
 ```
 
-Step through that race. Each read can succeed while the pair of observations
+Watch that race. Each read can succeed while the pair of observations
 becomes inconsistent:
 
-<AnimatedFlow
-  title="Two successful reads can describe two different objects"
-  stages={[
-    { label: 'Request the player pointer', detail: 'The tool asks Windows to read the pointer stored at 0x2000 in the game process. This request identifies a location, not a permanent object.', role: 'input', value: 'read pointer at 0x2000' },
-    { label: 'Keep the first observation', detail: 'The returned pointer is 0x5000, which names enemy A at this moment. The tool retains that address for its next read.', role: 'state', value: '0x5000 → enemy A' },
-    { label: 'Let the game advance', detail: 'Before the next request, the game removes enemy A and reuses allocation 0x5000 for enemy B. The numeric address has not changed, but its occupant has.', role: 'process', value: '0x5000 → enemy B' },
-    { label: 'Request the health field', detail: 'The tool adds the health offset 0x30 to its retained base 0x5000 and reads at 0x5030. That location now belongs to enemy B.', role: 'input', value: 'read health at 0x5030' },
-    { label: 'Keep the second observation', detail: 'Windows successfully returns health 87. Those bytes describe enemy B, even though the tool associated its first observation with enemy A.', role: 'state', value: 'health: 87, from enemy B' },
-    { label: 'Notice the invalid pairing', detail: 'Combining the two results reports enemy A with health taken from enemy B. Success of each copy does not prove the combined observation describes one object.', role: 'output', value: 'INVALID: A + health from B' },
-  ]}
-  caption="This is an illustrated failure, not a valid snapshot. Copy checks and object-path revalidation help detect uncertainty; they do not make separate reads atomic."
-/>
+<Scene name="torn-read-pair" />
 
 Check the returned byte count and revalidate the object path after a multi-step
 read. That reduces stale observations; it does not turn several Windows calls
