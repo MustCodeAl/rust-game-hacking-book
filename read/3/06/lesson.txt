@@ -34,7 +34,23 @@ That last property is the important one: decoding the encoded value must recover
 
 Follow the loop’s 100 case with its key hexadecimal A 1 B 2 C 3 D 4. The changing numbers below are all 32-bit values; the final result must return to the starting one:
 
-Diagram walkthrough: Undo a transformation in the opposite order. Step 1: Start with the logical value. State: value: 100; key: hexadecimal A 1 B 2 C 3 D 4. Use value 100 and key hexadecimal A 1 B 2 C 3 D 4, the same key passed to both functions in the test loop. Step 2: XOR with the key. State: after XOR: hexadecimal A 1 B 2 C 3 B 0. 100 XOR hexadecimal A 1 B 2 C 3 D 4 gives hexadecimal A 1 B 2 C 3 B 0. This intermediate value is what encode rotates next. Step 3: Store the rotated representation. State: encoded: hexadecimal D 9 6 1 D 8 5 0. Rotate the 32-bit intermediate left by seven positions. The encoded value is hexadecimal D 9 6 1 D 8 5 0, which differs from the logical value 100. Step 4: Undo the rotation first. State: after rotate: hexadecimal A 1 B 2 C 3 B 0. decode rotates hexadecimal D 9 6 1 D 8 5 0 right by seven positions. That recovers the intermediate hexadecimal A 1 B 2 C 3 B 0 before applying the key. Step 5: XOR with the same key again. State: decoded: 100. hexadecimal A 1 B 2 C 3 B 0 XOR hexadecimal A 1 B 2 C 3 D 4 returns 100. The round-trip assertion checks this result against the original input. Encoding applies XOR then rotation; decoding reverses the order. This reversible toy representation is not a security guarantee.
+Watch it happenXOR then rotate, and the same steps undone in reverse
+
+A row of 32 bits starts as the value 100. XOR with the key hexadecimal A 1 B 2 C 3 D 4 flips the bits above the key’s ones, giving hexadecimal A 1 B 2 C 3 B 0. Rotating left by seven carries the first seven bits round to the end, giving hexadecimal D 9 6 1 D 8 5 0. Rotating right by seven and XORing with the key again return the bits to 100.
+
+Additional detail: Read the steps.
+
+The value 100 is hexadecimal 0 0 0 0 0 0 6 4 as 32 bits. The key, hexadecimal A 1 B 2 C 3 D 4, sits below it. encode will XOR with the key and then rotate; decode has to undo those two steps in the opposite order.
+
+XOR with the key: wherever the key has a 1, the bit above it flips. 100 XOR hexadecimal A 1 B 2 C 3 D 4 is hexadecimal A 1 B 2 C 3 B 0.
+
+Rotate left by seven: the first seven bits, 1010000, are carried round to the other end. The stored value is hexadecimal D 9 6 1 D 8 5 0, which looks nothing like 100.
+
+To decode, undo the rotation first: rotate right by seven, and the same seven bits go back round. That recovers hexadecimal A 1 B 2 C 3 B 0.
+
+Then XOR with the same key again. The same bits flip back, and the result is hexadecimal 0 0 0 0 0 0 6 4: the original 100.
+
+Encoding applies XOR then rotation; decoding reverses the order. This reversible toy representation is not a security guarantee.
 
 Section: An integrity value is another clue.
 

@@ -1040,18 +1040,9 @@ two bytes alone do not label their own meanings. Writing the text digits
 Real formats can include additional fields, larger values, and checks;
 this example only shows how a declared format gives bytes meaning.
 
-<AnimatedFlow
-  title="Follow the meaning into a byte representation"
-  stages={[
-    { label: 'World idea', detail: 'A character owns spendable coins.', role: 'input', value: 'spendable coins' },
-    { label: 'Game model', detail: 'Player entity 17 has a wallet with 76 gold.', role: 'state', value: 'player 17: gold = 76' },
-    { label: 'Save or message format', detail: 'This toy format writes player ID, then gold, one byte each.', role: 'process', value: 'ID byte | gold byte' },
-    { label: 'Bytes', detail: '11 4C in hexadecimal encodes ID 17 and gold 76 under those rules.', role: 'output', value: '11 4C' },
-  ]}
-  caption="Design chooses the model; a format and encoding describe how selected information becomes saved or transmitted bytes."
-/>
+<Scene name="meaning-to-bytes" />
 
-This flow is a way to follow the meaning through design choices. Live
+The animation follows the meaning through those design choices. Live
 fields in RAM are already represented by bytes too; a game does not have
 to turn its whole world into a save file on every tick. In memory, code
 uses a known layout and types. In a save or message, code uses that
@@ -2378,26 +2369,7 @@ the purchase rule. Other explanations are possible. The game may keep a
 display copy, recalculate gold from other data, or let a server decide
 the result. A matching number is therefore a candidate, not a conclusion.
 
-<AnimatedFlow
-  nativeDiagram
-  title="Follow one controlled game experiment"
-  stages={[
-    { label: 'Act', detail: 'Buy one item whose cost is known.', role: 'input', value: 'cost = 25', nodes: ['A'] },
-    { label: 'Observe', detail: 'The displayed amount falls from 100 to 75.', role: 'state', value: '100 → 75', nodes: ['O'] },
-    { label: 'Hypothesize', detail: 'A stored value may govern the purchase.', role: 'process', value: 'which value?', nodes: ['H'] },
-    { label: 'Test one candidate', detail: 'Change one candidate and repeat the purchase.', role: 'process', value: 'one controlled change', nodes: ['T'] },
-    { label: 'Judge the evidence', detail: 'Check whether the rule, the display, or neither changed.', role: 'output', value: 'rule / text / neither', nodes: ['E'] },
-  ]}
-  caption="The visible change motivates a hypothesis; the second purchase tests whether the candidate affects game state or only its display."
->
-```mermaid
-flowchart TD
-    A["action: buy an item for 25"] --> O["observation: screen shows 100 → 75"]
-    O --> H["hypothesis: one stored value controls purchases"]
-    H --> T["test: change one candidate, then try a purchase"]
-    T --> E["evidence: did the rule change, only the text, or neither?"]
-```
-</AnimatedFlow>
+<Scene name="controlled-experiment" />
 
 The fastest way to get completely lost is to open a memory scanner and
 start searching before deciding what you are asking. You can end up with
@@ -3493,19 +3465,10 @@ may land somewhere new every time the game starts, while the health field can
 remain 48 bytes into the same object layout for that build. Verify the offset
 again when the game or layout changes.
 
-Step through the pointer read and the field calculation together. Notice when
+Watch the pointer read and the field calculation together. Notice when
 a number is being read from memory and when it is being used as an address:
 
-<AnimatedFlow
-  title="From pointer storage to the health field"
-  stages={[
-    { label: 'Start at the pointer storage', detail: 'At address 0x2000, this example stores the four bytes 00 50 00 00. This is where the pointer lives, not where the player object starts.', role: 'input', value: '0x2000: 00 50 00 00' },
-    { label: 'Read the stored address', detail: 'Read those bytes as a little-endian u32 to obtain 0x5000. The result names the beginning of the player object for this example.', role: 'process', value: 'object base = 0x5000' },
-    { label: 'Locate the field', detail: 'Use the object base 0x5000 and add the verified health offset 0x30. The sum is 0x5030; adding the offset computes an address without reading health.', role: 'process', value: '0x5000 + 0x30 = 0x5030' },
-    { label: 'Read health at the destination', detail: 'Read the health field from 0x5030 using its verified type. The field value comes from the bytes there, not from the pointer value 0x5000 or the offset 0x30.', role: 'output', value: 'health = read(0x5030)' },
-  ]}
-  caption="Two memory reads with an address calculation between them: first obtain the object base, then locate and read its health field."
-/>
+<Scene name="pointer-to-health" />
 
 ## Why an address can stop working
 
@@ -4146,29 +4109,7 @@ library) is compiled code that a running program can load and call. Once
 loaded, either one is a **module** with a starting address and a range of
 code and data in the process.
 
-<AnimatedFlow
-  nativeDiagram
-  title="Trace source code into a running process"
-  stages={[
-    { label: 'Source files', detail: 'Names, types, and comments describe the program for its author.', role: 'input', value: 'source text', nodes: ['A'] },
-    { label: 'Compile', detail: 'The compiler turns source into object files and chooses layouts.', role: 'process', value: 'object files', nodes: ['B', 'C'] },
-    { label: 'Link', detail: 'The linker resolves names and lays out the executable image.', role: 'process', value: 'linked image', nodes: ['D'] },
-    { label: 'File on disk', detail: 'The EXE or DLL records imports and a preferred base.', role: 'state', value: 'EXE or DLL', nodes: ['E'] },
-    { label: 'Load', detail: 'Windows chooses a live base, applies relocations, and resolves imports.', role: 'process', value: 'mapped image', nodes: ['F'] },
-    { label: 'Run', detail: 'Threads execute instructions from the mapped process image.', role: 'output', value: 'running process', nodes: ['G'] },
-  ]}
-  caption="Follow one compiled route: source becomes object files, a linked image, and finally a process whose live addresses the loader chose."
->
-```mermaid
-flowchart TD
-    A["Source files<br/>names, types, comments"] --> B["Compiler"]
-    B -->|"chooses compiled layouts;<br/>many source names are no longer needed"| C["Object files"]
-    C --> D["Linker"]
-    D -->|"resolves function names, lays out the image,<br/>records a preferred base and the imports it needs"| E["EXE or DLL on disk"]
-    E --> F["Windows loader"]
-    F -->|"picks the base, applies relocations,<br/>writes real addresses into the import slots"| G["Running process"]
-```
-</AnimatedFlow>
+<Scene name="source-to-process" />
 
 Each stage keeps what the next stage needs. A release build may omit
 information that helped the programmer but is unnecessary for execution.
@@ -4728,17 +4669,7 @@ Follow the `call calculate_damage` above through its return. The saved address
 belongs to the caller's next instruction; it is separate from the address of
 `calculate_damage`:
 
-<AnimatedFlow
-  title="A function call leaves a route back"
-  stages={[
-    { label: 'Reach the call', detail: 'The caller reaches call calculate_damage. Execution must enter calculate_damage and later continue at the instruction immediately after this call.', role: 'input', value: 'call calculate_damage' },
-    { label: 'Save the continuation', detail: 'On the 32-bit x86 path described here, call pushes the address of the next instruction onto the stack. That stored return address records where the caller should resume.', role: 'state', value: 'return address on stack' },
-    { label: 'Run the function', detail: 'Execution jumps to calculate_damage. Any temporary pushes must have matching cleanup so that the saved return address is available when the function returns.', role: 'process', value: 'eip: calculate_damage' },
-    { label: 'Read the return address', detail: 'ret takes the saved address from the stack and places it in eip. An unmatched push could leave an unrelated value where ret expects that address.', role: 'process', value: 'eip: saved continuation' },
-    { label: 'Continue in the caller', detail: 'Execution resumes immediately after call calculate_damage, at the line marked by the comment in the assembly fragment.', role: 'output', value: 'next instruction in caller' },
-  ]}
-  caption="The function's entry address tells call where to go; the saved continuation tells ret where to come back."
-/>
+<Scene name="call-and-return" />
 
 ## Calling conventions are agreements between functions
 
@@ -5116,18 +5047,7 @@ belongs to one thread, which is why debugger state records thread IDs.
 Follow the subtraction example through both events. The saved `29` byte must
 be executable for one instruction before `CC` can safely be installed again:
 
-<AnimatedFlow
-  title="A breakpoint needs one instruction to get past itself"
-  stages={[
-    { label: 'Keep the breakpoint armed', detail: 'At 0x007CCD91 the first byte is CC instead of the original 29. The debugger retains 29 so it can restore the subtraction instruction.', role: 'state', value: 'code: CC 42 04; saved: 29' },
-    { label: 'Receive the breakpoint event', detail: 'The CPU executes the one-byte int3. Windows reports the breakpoint; the instruction pointer has already advanced past that byte.', role: 'input', value: 'event: breakpoint' },
-    { label: 'Restore and rewind', detail: 'Write the original 29 byte back and move the instruction pointer to 0x007CCD91. The complete subtraction instruction is available again.', role: 'process', value: 'code: 29 42 04; eip: 0x007CCD91' },
-    { label: 'Run one real instruction', detail: 'Enable the trap flag for this thread and continue. The restored subtraction executes before the CPU reports its one-instruction step.', role: 'process', value: 'trap flag: on' },
-    { label: 'Receive the single-step event', detail: 'The original instruction has finished. This second event is the point at which the debugger can put the breakpoint back without trapping on it immediately.', role: 'input', value: 'event: single-step' },
-    { label: 'Rearm for a later visit', detail: 'Restore CC at the breakpoint address and turn stepping off. The debugger can now continue or keep the process paused for the reader.', role: 'output', value: 'code: CC 42 04; trap flag: off' },
-  ]}
-  caption="The breakpoint event restores the instruction; the single-step event restores the breakpoint. Those are different moments."
-/>
+<Scene name="breakpoint-restore" />
 
 ## Step, step over, and run to return
 
@@ -6496,24 +6416,7 @@ reference such as `&Player` from a remote address.
 
 Instead, use a clear boundary:
 
-<AnimatedFlow
-  nativeDiagram
-  title="Carry remote bytes across a safe boundary"
-  stages={[
-    { label: 'Name a remote range', detail: 'An address and size refer to bytes in the game process.', role: 'input', value: 'address + length', nodes: ['A'] },
-    { label: 'Ask Windows to copy', detail: 'The read is checked and may fail or return fewer bytes.', role: 'process', value: 'checked read', nodes: ['B'] },
-    { label: 'Own the local copy', detail: 'The returned buffer belongs to our process.', role: 'state', value: 'owned bytes', nodes: ['C'] },
-    { label: 'Interpret locally', detail: 'Parsing and searching operate on the bounded local buffer.', role: 'output', value: 'validated meaning', nodes: ['D'] },
-  ]}
-  caption="A remote address is never treated as a local pointer; Windows copies bytes before safe parsing begins."
->
-```mermaid
-flowchart LR
-    A["remote address<br/>+ requested size"] --> B["checked Windows read"]
-    B --> C["owned byte buffer<br/>in our process"]
-    C --> D["safe parsing<br/>and searching"]
-```
-</AnimatedFlow>
+<Scene name="remote-read" />
 
 After the copy succeeds, ordinary ownership rules protect the local buffer. Before
 the copy, the address is untrusted input that needs checked arithmetic, region
@@ -7612,21 +7515,10 @@ sequenceDiagram
     Note over Tool: reports enemy A<br/>with enemy B's health
 ```
 
-Step through that race. Each read can succeed while the pair of observations
+Watch that race. Each read can succeed while the pair of observations
 becomes inconsistent:
 
-<AnimatedFlow
-  title="Two successful reads can describe two different objects"
-  stages={[
-    { label: 'Request the player pointer', detail: 'The tool asks Windows to read the pointer stored at 0x2000 in the game process. This request identifies a location, not a permanent object.', role: 'input', value: 'read pointer at 0x2000' },
-    { label: 'Keep the first observation', detail: 'The returned pointer is 0x5000, which names enemy A at this moment. The tool retains that address for its next read.', role: 'state', value: '0x5000 → enemy A' },
-    { label: 'Let the game advance', detail: 'Before the next request, the game removes enemy A and reuses allocation 0x5000 for enemy B. The numeric address has not changed, but its occupant has.', role: 'process', value: '0x5000 → enemy B' },
-    { label: 'Request the health field', detail: 'The tool adds the health offset 0x30 to its retained base 0x5000 and reads at 0x5030. That location now belongs to enemy B.', role: 'input', value: 'read health at 0x5030' },
-    { label: 'Keep the second observation', detail: 'Windows successfully returns health 87. Those bytes describe enemy B, even though the tool associated its first observation with enemy A.', role: 'state', value: 'health: 87, from enemy B' },
-    { label: 'Notice the invalid pairing', detail: 'Combining the two results reports enemy A with health taken from enemy B. Success of each copy does not prove the combined observation describes one object.', role: 'output', value: 'INVALID: A + health from B' },
-  ]}
-  caption="This is an illustrated failure, not a valid snapshot. Copy checks and object-path revalidation help detect uncertainty; they do not make separate reads atomic."
-/>
+<Scene name="torn-read-pair" />
 
 Check the returned byte count and revalidate the object path after a multi-step
 read. That reduces stale observations; it does not turn several Windows calls
@@ -9170,17 +9062,7 @@ That last property is the important one: decoding the encoded value must recover
 Follow the loop's `100` case with its key `0xA1B2_C3D4`. The changing numbers
 below are all 32-bit values; the final result must return to the starting one:
 
-<AnimatedFlow
-  title="Undo a transformation in the opposite order"
-  stages={[
-    { label: 'Start with the logical value', detail: 'Use value 100 and key 0xA1B2_C3D4, the same key passed to both functions in the test loop.', role: 'input', value: 'value: 100; key: 0xA1B2C3D4' },
-    { label: 'XOR with the key', detail: '100 XOR 0xA1B2_C3D4 gives 0xA1B2_C3B0. This intermediate value is what encode rotates next.', role: 'process', value: 'after XOR: 0xA1B2C3B0' },
-    { label: 'Store the rotated representation', detail: 'Rotate the 32-bit intermediate left by seven positions. The encoded value is 0xD961_D850, which differs from the logical value 100.', role: 'state', value: 'encoded: 0xD961D850' },
-    { label: 'Undo the rotation first', detail: 'decode rotates 0xD961_D850 right by seven positions. That recovers the intermediate 0xA1B2_C3B0 before applying the key.', role: 'process', value: 'after rotate: 0xA1B2C3B0' },
-    { label: 'XOR with the same key again', detail: '0xA1B2_C3B0 XOR 0xA1B2_C3D4 returns 100. The round-trip assertion checks this result against the original input.', role: 'output', value: 'decoded: 100' },
-  ]}
-  caption="Encoding applies XOR then rotation; decoding reverses the order. This reversible toy representation is not a security guarantee."
-/>
+<Scene name="xor-rotate-roundtrip" />
 
 ## An integrity value is another clue
 
@@ -12689,18 +12571,7 @@ fn bfs_walks_around_a_wall() {
 Follow that test through the queue. The wall removes the direct move, leaving
 the route through the open second row:
 
-<AnimatedFlow
-  title="A FIFO frontier finds the route around the wall"
-  stages={[
-    { label: 'Use the validated grid', detail: 'The test starts at (0,0), aims for (2,0), and rejects wall (1,0). Only x from 0 to 2 and y from 0 to 1 are walkable candidates.', role: 'input', value: 'start: (0,0); goal: (2,0)' },
-    { label: 'Seed the frontier', detail: 'Put (0,0) into the FIFO queue and record its parent as None. This marks the start as seen before any neighboring tile is added.', role: 'state', value: 'queue: [(0,0)]' },
-    { label: 'Visit the start', detail: 'Pop (0,0). Its right neighbor is the wall, and its left and upper neighbors are outside the grid. Enqueue (0,1) and remember (0,0) as its parent.', role: 'process', value: 'queue: [(0,1)]' },
-    { label: 'Advance along row one', detail: 'Pop (0,1). The only legal unseen neighbor is (1,1); the start is already seen. Enqueue (1,1) with parent (0,1).', role: 'process', value: 'queue: [(1,1)]' },
-    { label: 'Reach the goal from below', detail: 'Popping (1,1) discovers (2,1). Popping (2,1) then discovers (2,0), with each tile retaining the parent that first reached it.', role: 'process', value: 'queue: [(2,0)]' },
-    { label: 'Rebuild the route', detail: 'When (2,0) leaves the queue, follow parents backward and reverse them: (0,0), (0,1), (1,1), (2,1), (2,0). The route takes four equal-cost moves and never enters the wall.', role: 'output', value: '4 moves; 5 tiles; no wall' },
-  ]}
-  caption="The queue controls exploration order; came_from records both visited tiles and the route back to the start."
-/>
+<Scene name="bfs-around-wall" />
 
 Also test:
 

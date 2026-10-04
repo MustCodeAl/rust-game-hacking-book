@@ -26,12 +26,12 @@
   var GAP = 8;
   var EDGE = 10;
   // Where lesson links live: inside a lesson, and in its previous/next cards.
-  var LESSON_LINKS = ".sl-markdown-content a[href], .pagination-links a[href]";
+  var LESSON_LINKS = ".sl-markdown-content a[href], .pagination-links a[href], .floating-pager a[href]";
   // The links a finger's tap shows a card for: words inside a lesson's prose, and
   // the links a lesson wrote cards for. Link cards, buttons, tiles, and the
   // previous/next cards are navigation, so they open on the first tap.
   var TAP_LINKS = ".sl-markdown-content a[href], a.kit-card__trigger";
-  var NAVIGATION = ".not-content, .sl-link-card, .sl-link-button, .kit-tile, .pagination-links";
+  var NAVIGATION = ".not-content, .sl-link-card, .sl-link-button, .kit-tile, .pagination-links, .floating-pager";
 
   var card = null;
   var trigger = null;

@@ -50,9 +50,27 @@ Even two successful reads can describe different moments. Suppose the tool follo
 
 Diagram labels, in drawing order: The game; Your tool; removes enemy A and; reuses hexadecimal 5 0 0 0 for enemy B; reports enemy A; with enemy B's health; read the pointer at hexadecimal 2 0 0 0; hexadecimal 5 0 0 0, which is enemy A; read health at hexadecimal 5 0 0 0 + hexadecimal 3 0; 87, which is enemy B's health.
 
-Step through that race. Each read can succeed while the pair of observations becomes inconsistent:
+Watch that race. Each read can succeed while the pair of observations becomes inconsistent:
 
-Diagram walkthrough: Two successful reads can describe two different objects. Step 1: Request the player pointer. State: read pointer at hexadecimal 2 0 0 0. The tool asks Windows to read the pointer stored at hexadecimal 2 0 0 0 in the game process. This request identifies a location, not a permanent object. Step 2: Keep the first observation. State: hexadecimal 5 0 0 0 to enemy A. The returned pointer is hexadecimal 5 0 0 0, which names enemy A at this moment. The tool retains that address for its next read. Step 3: Let the game advance. State: hexadecimal 5 0 0 0 to enemy B. Before the next request, the game removes enemy A and reuses allocation hexadecimal 5 0 0 0 for enemy B. The numeric address has not changed, but its occupant has. Step 4: Request the health field. State: read health at hexadecimal 5 0 3 0. The tool adds the health offset hexadecimal 3 0 to its retained base hexadecimal 5 0 0 0 and reads at hexadecimal 5 0 3 0. That location now belongs to enemy B. Step 5: Keep the second observation. State: health: 87, from enemy B. Windows successfully returns health 87. Those bytes describe enemy B, even though the tool associated its first observation with enemy A. Step 6: Notice the invalid pairing. State: INVALID: A + health from B. Combining the two results reports enemy A with health taken from enemy B. Success of each copy does not prove the combined observation describes one object. This is an illustrated failure, not a valid snapshot. Copy checks and object-path revalidation help detect uncertainty; they do not make separate reads atomic.
+Watch it happenTwo successful reads, two different objects
+
+A tool and a game exchange messages. The tool reads a pointer and gets hexadecimal 5 0 0 0, which holds enemy A. The game then reuses hexadecimal 5 0 0 0 for enemy B. The tool reads health at hexadecimal 5 0 3 0 and gets 87, which is enemy B’s health, and wrongly reports enemy A with health 87.
+
+Additional detail: Read the steps.
+
+The tool wants enemy A’s health. First it asks Windows to read the pointer stored at hexadecimal 2 0 0 0 in the game. That request names a location, not a permanent object.
+
+The game answers hexadecimal 5 0 0 0, which names enemy A at this moment. The tool keeps that address for its next read.
+
+Before the tool’s next request, the game removes enemy A and reuses the allocation at hexadecimal 5 0 0 0 for enemy B. The number hexadecimal 5 0 0 0 has not changed, but who lives there has.
+
+The tool adds the health offset hexadecimal 3 0 to the hexadecimal 5 0 0 0 it kept and reads at hexadecimal 5 0 3 0. That location now belongs to enemy B.
+
+Windows reads it successfully and returns 87. Those bytes are enemy B’s health.
+
+Combining the two results reports enemy A with health taken from enemy B. Each copy succeeded, yet the pair describes no real player.
+
+This is an illustrated failure, not a valid snapshot. Copy checks and object-path revalidation help detect uncertainty; they do not make separate reads atomic.
 
 Check the returned byte count and revalidate the object path after a multi-step read. That reduces stale observations; it does not turn several Windows calls into one atomic snapshot. Lesson 4.4 builds a bounded double-capture check for that remaining uncertainty.
 

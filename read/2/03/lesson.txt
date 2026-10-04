@@ -102,7 +102,25 @@ On x86, single stepping uses the trap flag in the thread’s flags register. Whe
 
 Follow the subtraction example through both events. The saved 29 byte must be executable for one instruction before CC can safely be installed again:
 
-Diagram walkthrough: A breakpoint needs one instruction to get past itself. Step 1: Keep the breakpoint armed. State: code: CC 42 04; saved: 29. At hexadecimal 0 0 7 C C D 9 1 the first byte is CC instead of the original 29. The debugger retains 29 so it can restore the subtraction instruction. Step 2: Receive the breakpoint event. State: event: breakpoint. The CPU executes the one-byte int3. Windows reports the breakpoint; the instruction pointer has already advanced past that byte. Step 3: Restore and rewind. State: code: 29 42 04; eip: hexadecimal 0 0 7 C C D 9 1. Write the original 29 byte back and move the instruction pointer to hexadecimal 0 0 7 C C D 9 1. The complete subtraction instruction is available again. Step 4: Run one real instruction. State: trap flag: on. Enable the trap flag for this thread and continue. The restored subtraction executes before the CPU reports its one-instruction step. Step 5: Receive the single-step event. State: event: single-step. The original instruction has finished. This second event is the point at which the debugger can put the breakpoint back without trapping on it immediately. Step 6: Rearm for a later visit. State: code: CC 42 04; trap flag: off. Restore CC at the breakpoint address and turn stepping off. The debugger can now continue or keep the process paused for the reader. The breakpoint event restores the instruction; the single-step event restores the breakpoint. Those are different moments.
+Watch it happenA breakpoint needs one instruction to get past itself
+
+Three code bytes, 29 42 04, at hexadecimal 0 0 7 C C D 9 1. The debugger swaps the first byte for CC and keeps the original. When the CPU hits it, the debugger restores the 29, rewinds the instruction pointer, runs exactly one real instruction with the trap flag set, and only after the single-step event writes CC back.
+
+Additional detail: Read the steps.
+
+The breakpoint is armed: the first byte is CC (int3) instead of the original 29. The debugger keeps the 29 so it can put the subtraction back.
+
+The CPU reaches hexadecimal 0 0 7 C C D 9 1 and executes the one-byte int3. Windows reports a breakpoint event. The instruction pointer has already moved past that byte, to hexadecimal 0 0 7 C C D 9 2.
+
+Restore and rewind: write the saved 29 back and move eip to hexadecimal 0 0 7 C C D 9 1, so the whole subtraction is available again.
+
+Run one real instruction: turn on the trap flag for this thread and continue. The restored subtraction executes, and only then does the CPU report a one-instruction step.
+
+The single-step event: the original instruction has finished, and eip is at the next one, hexadecimal 0 0 7 C C D 9 4. This second event is the moment the debugger can put the breakpoint back without trapping on it immediately.
+
+Re-arm: write CC back at hexadecimal 0 0 7 C C D 9 1 and turn stepping off. The debugger can now continue, or keep the process paused.
+
+The breakpoint event restores the instruction; the single-step event restores the breakpoint. Those are different moments.
 
 Section: Step, step over, and run to return.
 
