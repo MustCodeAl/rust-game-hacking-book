@@ -25,8 +25,16 @@
 // original method is put back as soon as the script has run. If Context7
 // changes the widget's markup, those two refinements quietly do nothing and the
 // widget still works in its own bottom corner with the page's own wording.
+//
+// The same open root lets chat-suggest.js give the question box Tab completion.
+// That file, and the book's term list it completes from, are fetched from this
+// site when the chat is first opened, not on every page view.
 (function () {
   "use strict";
+
+  // Where the site is served: this script's own address, minus scripts/chat-widget.js.
+  var SCRIPT = document.currentScript && document.currentScript.src;
+  var BASE = SCRIPT ? SCRIPT.replace(/scripts\/chat-widget\.js(\?.*)?$/, "") : null;
 
   var LIBRARY = "/mustcodeal/rust-game-hacking-book";
   var WIDGET = "https://context7.com/widget.js";
@@ -77,7 +85,7 @@
 
   // The section being read: the last heading that has reached the upper part
   // of the screen. Only asked for when the chat opens.
-  function currentSection() {
+  function currentHeading() {
     var headings = document.querySelectorAll(".sl-markdown-content h2[id], .sl-markdown-content h3[id]");
     var line = window.innerHeight * 0.35;
     var found = null;
@@ -85,7 +93,12 @@
       if (headings[i].getBoundingClientRect().top > line) break;
       found = headings[i];
     }
-    return found ? found.textContent.replace(/\s+/g, " ").trim() : null;
+    return found;
+  }
+
+  function currentSection() {
+    var heading = currentHeading();
+    return heading ? heading.textContent.replace(/\s+/g, " ").trim() : null;
   }
 
   // The input fits about thirty characters, so these stay short.
@@ -320,7 +333,7 @@
     script.setAttribute("data-welcome-message", welcome());
 
     var restore = expose(capture, /^top/.test(corner));
-    mounted = { script: script, capture: capture, restore: restore, side: /^top/.test(corner) ? "top" : "bottom" };
+    mounted = { script: script, capture: capture, restore: restore, color: color, side: /^top/.test(corner) ? "top" : "bottom" };
     function finished() {
       restore();
       // A script from an earlier build that finished late leaves its own
@@ -332,15 +345,56 @@
     document.body.appendChild(script);
   }
 
+  // Tab completion for the question box (chat-suggest.js), and the names it
+  // completes from, are fetched the first time the chat opens. A page with the
+  // chat turned off never asks for either.
+  var completion = null;
+  var vocabulary = null;
+
+  function loadVocabulary() {
+    if (!vocabulary && BASE && typeof fetch === "function") {
+      vocabulary = fetch(BASE + "assets/chat-suggestions.json")
+        .then(function (response) { return response.ok ? response.json() : null; })
+        .catch(function () { return null; });
+    }
+    return vocabulary;
+  }
+
+  function loadCompletion() {
+    if (!completion) {
+      completion = new Promise(function (resolve) {
+        if (window.AcademyChatSuggest) return resolve(window.AcademyChatSuggest);
+        if (!BASE) return resolve(null);
+        var script = document.createElement("script");
+        script.src = BASE + "scripts/chat-suggest.js";
+        script.async = true;
+        script.addEventListener("load", function () { resolve(window.AcademyChatSuggest || null); });
+        script.addEventListener("error", function () { resolve(null); });
+        document.body.appendChild(script);
+      });
+    }
+    return completion;
+  }
+
+  function offerCompletion(capture, color) {
+    loadCompletion().then(function (api) {
+      if (!api || !capture.shadow || !capture.host.isConnected) return;
+      api.attach(capture.shadow, { context: context, accent: color, heading: currentHeading, load: loadVocabulary });
+    });
+  }
+
   // When the chat is about to open, word its placeholder for the section being
-  // read. The click on the button reaches the page with the widget's host as
-  // its target.
+  // read, and give its box completions. The click on the button reaches the
+  // page with the widget's host as its target.
   document.addEventListener("click", function (event) {
     var capture = mounted && mounted.capture;
     if (!capture || !capture.host || event.target !== capture.host) return;
     var panel = capture.shadow.querySelector(".c7-panel");
     var input = capture.shadow.querySelector(".c7-input");
-    if (panel && input && !panel.classList.contains("open")) input.placeholder = placeholder(currentSection());
+    if (panel && input && !panel.classList.contains("open")) {
+      input.placeholder = placeholder(currentSection());
+      offerCompletion(capture, mounted.color);
+    }
   }, true);
 
   // Slides the button away on a scroll down and back on a scroll up, on a phone.
