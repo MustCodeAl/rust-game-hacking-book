@@ -1,4 +1,4 @@
-//! NPC brain lab for Lessons 4.9 and 4.10.
+//! NPC brain lab for Lessons 4.12 and 4.13.
 //!
 //! A toy guard senses, decides, and acts once per tick, the way an NPC does
 //! inside a game loop. It shows perception (distance, view cone, and line of

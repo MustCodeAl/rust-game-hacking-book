@@ -9,7 +9,7 @@ sidebar:
   order: 5
   label: "11.5 Process Access Rights"
 ---
-import { Accordion, GitHub } from '../../../../components/kit';
+import { Accordion, Badge, Fields, GitHub, Panel, ParamField, ResponseField } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -43,6 +43,34 @@ meaningful to Windows in this process, and an API checks its recorded rights,
 not a handwritten label. This is why finding the right PID does not rescue a
 handle that lacks `PROCESS_VM_READ`.
 
+The call that issues the handle takes three arguments:
+
+<Fields title="OpenProcess, argument by argument">
+<ParamField name="dwDesiredAccess" type="access mask" required>
+
+The rights to ask for, as bits ORed together. Ask for the smallest set the job
+needs; the table further down lists the rights this course uses.
+
+</ParamField>
+<ParamField name="bInheritHandle" type="bool" default="false">
+
+Whether a process this one starts later inherits the handle. The course passes
+`false`, so nothing a tool launches quietly receives access.
+
+</ParamField>
+<ParamField name="dwProcessId" type="u32" required>
+
+The PID of the target. It names the process and grants nothing by itself.
+
+</ParamField>
+<ResponseField name="return value" type="handle, or an error">
+
+A handle carrying the granted rights, or an error such as “access denied” when
+the target's security rules refuse the request. Close a handle you no longer need.
+
+</ResponseField>
+</Fields>
+
 ## Treat a handle as a capability
 
 A capability combines a reference to an object with authority to perform particular operations. A process handle opened for limited queries can identify the process and ask for its image path, but it cannot become a memory-writing handle because a later function wishes it could.
@@ -71,6 +99,8 @@ The access check happens when Windows creates or duplicates the handle. Afterwar
 
 These course tools use several process rights:
 
+<Panel title="Process access rights at a glance">
+
 | Right | What it permits in this course |
 |---|---|
 | `PROCESS_QUERY_LIMITED_INFORMATION` | Ask for basic information such as the executable path. |
@@ -78,6 +108,8 @@ These course tools use several process rights:
 | `PROCESS_VM_READ` | Copy readable bytes from the target with `ReadProcessMemory`. |
 | `PROCESS_VM_OPERATION` | Change or allocate virtual-memory regions. |
 | `PROCESS_VM_WRITE` | Copy bytes into the target with `WriteProcessMemory`. |
+
+</Panel>
 
 `PROCESS_ALL_ACCESS` is not a convenient “make it work” flag. It requests many unrelated powers and makes failures harder to diagnose.
 
@@ -95,6 +127,8 @@ These course tools use several process rights:
 The small request documents the tool's purpose. If Windows grants it, you know the program did not quietly obtain memory-write, thread-creation, handle-duplication, or termination rights.
 
 ## Build a limited query tool
+
+<Badge text="Windows VM" variant="note" />
 
 This program finds a named process through the shared ToolHelp code, opens it with only `PROCESS_QUERY_LIMITED_INFORMATION`, and asks Windows for the image path:
 

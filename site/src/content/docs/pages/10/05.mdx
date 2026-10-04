@@ -9,7 +9,7 @@ sidebar:
   order: 7
   label: "11.7 Virtual Address Spaces and Page Protections"
 ---
-import { Accordion, GitHub } from '../../../../components/kit';
+import { Accordion, Badge, Fields, GitHub, ResponseField } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
@@ -163,7 +163,44 @@ current = next;
 
 The checked addition prevents an invalid region from wrapping to a low address. The progress check prevents an endless loop if the reported range does not move forward.
 
+The fields of `MEMORY_BASIC_INFORMATION` that the walk and the scanner rely on:
+
+<Fields title="What VirtualQueryEx reports about one run">
+<ResponseField name="BaseAddress" type="pointer">
+
+Where the run starts. Pages are 4 KiB, so this is the queried address rounded down to a page boundary. The walk advances from here, not from the address it asked about.
+
+</ResponseField>
+<ResponseField name="RegionSize" type="bytes">
+
+How long the run is. Every page from `BaseAddress` for this many bytes shares one state, one type, and one protection, and a new run begins wherever any of the three changes.
+
+</ResponseField>
+<ResponseField name="State" type="MEM_COMMIT, MEM_RESERVE, or MEM_FREE">
+
+Whether storage is ready. Only committed pages can hold bytes a scanner may read.
+
+</ResponseField>
+<ResponseField name="Type" type="MEM_IMAGE, MEM_MAPPED, or MEM_PRIVATE">
+
+Where committed pages came from: a PE image, a mapped file or shared section, or private process memory.
+
+</ResponseField>
+<ResponseField name="Protect" type="PAGE_* flags">
+
+Which operations the pages allow. The course prints the read, write, and execute bits as `R`, `W`, and `X`, and treats `PAGE_GUARD` as a reason to skip the run.
+
+</ResponseField>
+<ResponseField name="AllocationBase" type="pointer">
+
+Where the whole allocation begins. Several runs with different protections can belong to one allocation, so they share this value.
+
+</ResponseField>
+</Fields>
+
 ## Build a read-only module mapper
+
+<Badge text="Windows VM" variant="note" />
 
 The complete tool opens the process without write rights, finds one module, clips every returned region to that module, and prints an access summary.
 

@@ -19,6 +19,8 @@ decoration; if the page reads as well without it, leave it out.
 | `Accordion` / `Expandable` | Material a reader may skip on a first pass. | Anything a later section depends on. Never hide a derivation. |
 | `Columns` | Two or three things compared side by side. | Long prose; narrow columns are hard to read. |
 | `Card`, `LinkCard`, `Tiles` | A few next places to go, each with a sentence. | Inside the teaching flow; the lesson order already says what is next. |
+| `LinkButton` | The one next action a page offers: start the first lesson, open a reference. `primary` for the main action, `secondary` for an alternative, `minimal` for a quiet extra. | A link inside a sentence, or a page of buttons: with several main actions there is no main action. |
+| `Tooltip` | A sentence or two on a word a reader may not know and the lesson does not depend on, with the real numbers if it has any. It is a `HoverCard` of kind `explanation`. | A word used in many places (that is a glossary entry), or anything a later step needs. |
 | `Frame` | A screenshot or figure with a caption. Put the full description in the image's alt text; the caption is visual only. | Decorative images. |
 | `Badge` | A short fact about what follows: "Optional", "Windows only". | Labelling a heading that already says it. |
 | `HoverCard` | An extra a reader can do without, opened over a word: an `example`, `reference`, `tip`, `alternative`, `recommendation`, closer `explanation`, `definition`, or `caution`. A glossary word needs none: the build marks those. | Anything a later step, value, or definition depends on: a reader can turn cards off, and a phone needs a tap. Never more than a few in a lesson; a card is not a footnote. |

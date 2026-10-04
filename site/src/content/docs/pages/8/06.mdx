@@ -1,20 +1,20 @@
 ---
 title: "Windows Input: Polling, Events, and Messages"
-description: "Compare hotkey polling, synthetic input, and window messages so a local game tool chooses the right input boundary."
-chapter: "6.6"
-minutes: 34
+description: "Compare hotkey polling, synthetic input, and window messages so a local game tool chooses the right input boundary, and see how the window's client area, scale, and several windows change the coordinates it works with."
+chapter: "6.7"
+minutes: 36
 author: "attilathedud"
 date: "2026-08-14"
 sidebar:
-  order: 6
-  label: "6.6 Windows Input: Polling, Events, and Messages"
+  order: 7
+  label: "6.7 Windows Input: Polling, Events, and Messages"
 ---
-import { Steps } from '../../../../components/kit';
+import { Expandable, Fields, Panel, ParamField, Steps } from '../../../../components/kit';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
 ## “Send a key” can mean three different things
 
-Our DLL now has a controlled lifecycle, and the scanner can do work off the game thread. A local tool also needs a deliberate way to start or stop a feature. Pressing a menu hotkey, sending a synthetic key to an offline game, and calling a window procedure solve different problems, even though all three sound like “input.”
+Our DLL now has a controlled lifecycle, and the scanner can do work off the game thread. A local tool also needs a deliberate way to start or stop a feature. Pressing a menu hotkey, sending a synthetic key to an offline game, and calling a window procedure solve different problems, even though all three sound like “input.” Lesson 6.6 explained what a game does with input once it has arrived: the three layers of device, state, and action, and why presses are edges. This lesson is about the ways Windows delivers that input and the ways a tool can read or send it.
 
 Windows has several input paths because programs receive interaction in
 different ways:
@@ -128,7 +128,7 @@ may stop repainting or responding to input. Microsoft's
 [window-procedure guidance](https://learn.microsoft.com/en-us/windows/win32/learnwin32/writing-the-window-procedure#avoiding-bottlenecks-in-your-window-procedure)
 explains this bottleneck. The same concern appears when a hook adds
 work to a game's time-sensitive path: move slow work elsewhere and
-make overload visible, as Lesson 4.10 does for a recorder.
+make overload visible, as Lesson 4.11 does for a recorder.
 
 <MemoryStrip
   cells="being handled=WM_KEYDOWN, reading a large file|waiting=WM_MOUSEMOVE|waiting=WM_PAINT|waiting=WM_CLOSE"
@@ -140,7 +140,7 @@ make overload visible, as Lesson 4.10 does for a recorder.
 **Polling** is the other side of this distinction. If no one sends
 your tool a message when the game's gold changes, the tool can check
 the value on its own schedule. It does work even when nothing changed.
-[Lesson 4.9](/pages/4/07/) shows how to compare successive snapshots
+[Lesson 4.10](/pages/4/07/) shows how to compare successive snapshots
 so many polls produce one meaningful event instead of many repeated
 actions.
 
@@ -165,6 +165,16 @@ of its properties explain problems you will meet in later lessons.
   1,000 × 1.25 = 1,250 physical pixels. A game that is not aware of this has its picture
   stretched by the system, and one that is aware sizes its menus by the factor (Lesson
   7.13). Moving the window to a display with a different scale sends `WM_DPICHANGED`.
+- **More than one window.** An application can own several windows, such as the game's
+  window and a separate settings or tool window. Each has its own handle (`HWND`), client
+  area, and scale factor, and windows made by one thread share that thread's message
+  queue. A screen point belongs to the window that contains it. Say the game's client
+  area starts at the screen point `(100, 100)` and is 1280 wide, and a tool window's
+  client area starts at `(1400, 100)`. The screen point `(1500, 200)` is
+  `(1500 − 100, 200 − 100) = (1400, 100)` in the game's client coordinates, which is past
+  its 1280-pixel width, and `(1500 − 1400, 200 − 100) = (100, 100)` in the tool window's.
+  Subtracting the wrong window's origin is a common reason an overlay is off by a
+  constant amount.
 - **Fullscreen.** *Exclusive* fullscreen takes over the display and may change its
   resolution. *Borderless windowed* is an ordinary window with no border, sized to the
   desktop, which is quick to switch away from and can be drawn over by other windows.
@@ -176,7 +186,8 @@ of its properties explain problems you will meet in later lessons.
 - **Focus and the cursor.** A window that loses focus may pause its game, but
   `GetAsyncKeyState` still reports keys, so a tool must check focus itself (below). A game
   can hide the cursor, confine it to the window, replace it with its own image, or read
-  relative mouse movement instead of a position.
+  relative mouse movement instead of a position (Lesson 6.6 shows the arithmetic of a
+  look-around loop).
 
 ## Read a hotkey with `GetAsyncKeyState`
 
@@ -301,6 +312,55 @@ fn tap_key(key: VIRTUAL_KEY) -> anyhow::Result<()> {
 }
 ```
 
+A key event is an `INPUT` whose `type` says “keyboard” and whose union holds a
+`KEYBDINPUT`. The code above sets two of its fields and leaves the rest at zero:
+
+<Fields title="KEYBDINPUT: the fields that matter">
+<ParamField name="wVk" type="virtual-key code" required>
+
+Which key. This is the number from `VK_INSERT` and its relatives, the same ones
+`GetAsyncKeyState` takes.
+
+</ParamField>
+<ParamField name="dwFlags" type="flags" default="0">
+
+Zero means the key goes down. `KEYEVENTF_KEYUP` means it is released, which is why
+the code sends one of each. `KEYEVENTF_SCANCODE` switches the event to the
+hardware scan code in `wScan` instead.
+
+<Expandable title="The four flags and how they combine">
+
+| Flag | Value | Meaning |
+|---|---|---|
+| `KEYEVENTF_EXTENDEDKEY` | `0x0001` | the scan code carries the `0xE0` prefix that extended keys use, such as the arrow keys in their own cluster and the right-hand Ctrl and Alt |
+| `KEYEVENTF_KEYUP` | `0x0002` | the key is released |
+| `KEYEVENTF_UNICODE` | `0x0004` | `wScan` holds a Unicode character instead of a key, and `wVk` must be zero |
+| `KEYEVENTF_SCANCODE` | `0x0008` | `wScan` identifies the key, and `wVk` is ignored |
+
+Flags are bits, so they combine with OR. Releasing a key by scan code sets two of them:
+`0x0008 | 0x0002 = 0x000A`, which is 8 + 2 = 10.
+
+</Expandable>
+
+</ParamField>
+<ParamField name="wScan" type="scan code" default="0">
+
+The key's position on the keyboard, used only with `KEYEVENTF_SCANCODE`. Some games
+read scan codes, so a virtual-key event does not reach them.
+
+</ParamField>
+<ParamField name="time" type="milliseconds" default="0">
+
+Zero lets Windows stamp the event itself.
+
+</ParamField>
+<ParamField name="dwExtraInfo" type="integer" default="0">
+
+An extra value the receiving window can read back. Almost nothing uses it.
+
+</ParamField>
+</Fields>
+
 Always release a key or mouse button during shutdown, even if a feature fails.
 `SendInput` is subject to **User Interface Privilege Isolation (UIPI)**: Windows
 blocks input from a lower-integrity process into a window owned by a
@@ -377,6 +437,8 @@ it is a different communication path.
 
 Choose by question instead of memorizing a giant list:
 
+<Panel title="Other input and window APIs">
+
 | Question | Relevant APIs | Lesson rule |
 |---|---|---|
 | Which top-level window belongs to my PID? | `EnumWindows`, `GetWindowThreadProcessId` | Match the process, not a changeable title |
@@ -388,6 +450,8 @@ Choose by question instead of memorizing a giant list:
 | Did patched code become executable correctly? | `VirtualProtectEx`, `FlushInstructionCache` | Save/restore protection and verify every byte |
 | How do I observe execution? | `DebugActiveProcess`, `WaitForDebugEvent`, `ContinueDebugEvent` | Continue every event exactly once |
 | How do two local components exchange data? | named pipes, file mappings, events | Frame, authenticate, bound, and close resources |
+
+</Panel>
 
 An `HWND` is also called a handle, but it is owned by the window manager and is
 not closed with `CloseHandle`. This is why “wrap every `H...` value in the same

@@ -1,15 +1,15 @@
 ---
 title: "Game Files and Live Memory"
-description: "See how saves, configuration, textures, maps, and archives preserve game state outside a running process, and how a game turns an asset file into something it can draw or play."
+description: "See how saves, configuration, textures, maps, and archives preserve game state outside a running process, how a game turns an asset file into something it can draw or play, and how long that asset stays loaded, changes, or reloads."
 chapter: "9.1"
-minutes: 26
+minutes: 32
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 1
   label: "9.1 Game Files and Live Memory"
 ---
-import { HoverCard } from '../../../../components/kit';
+import { Example, Frame, HoverCard, Panel, Tooltip } from '../../../../components/kit';
 
 ## State can outlive a running game
 
@@ -50,7 +50,11 @@ If a supported mod file can express your idea, use it. File-based changes are ea
 🗂️ **Parser rule:** copy the original, parse into named fields, validate every boundary, then write a new file. Keep the untouched source as your way back.
 :::
 
+<Frame caption="A game world built from many resources: textures, models, sounds, and maps.">
+
 ![A game world built from many resources](/assets/images/8/1/urbanterror.jpg)
+
+</Frame>
 
 ## From a file to something on screen: loading an asset
 
@@ -78,6 +82,76 @@ This explains two things you will meet. A replacement file is found by its **pat
 mod must keep the name, the folder, and the format (Lesson 9.4). And memory holds the
 decoded pixels, not the PNG, so a scan of the process finds raw image data and never the
 file's own bytes.
+
+## How long an asset lives
+
+Loading is the first half of an asset's life. The rest depends on who still holds its
+handle.
+
+In Bevy and engines like it, a handle comes in two kinds. A **strong** handle keeps the
+asset alive, and the engine counts them. A **weak** handle names the asset without
+keeping it alive, so a lookup can use it without delaying the moment the asset is
+freed. When the count of strong handles reaches 0, the engine frees the decoded data,
+and the copy on the graphics card goes with it.
+
+<Example title="A 256 × 256 bullet texture with 40 bullets">
+
+The level's loader holds one strong handle, and every bullet that draws the texture holds
+another.
+
+| Moment | Strong handles | Texture in memory? |
+|---|---|---|
+| the level has loaded, no bullets yet | 1 | yes, 349,525 bytes with its mipmaps |
+| 40 bullets are fired | 1 + 40 = 41 | yes |
+| all 40 bullets despawn | 1 | yes |
+| the level unloads and its loader lets go | 0 | freed |
+
+</Example>
+
+```mermaid
+flowchart LR
+    N["not loaded"] -->|"first request"| L["loading"]
+    L -->|"decoded and uploaded"| R["ready"]
+    L -->|"file missing<br/>or invalid"| F["failed"]
+    R -->|"file changed on disk<br/>(hot reload)"| L
+    R -->|"last strong handle<br/>dropped"| X["freed"]
+```
+
+So a scan for the decoded pixels finds them only between the first request and the
+moment the last handle is dropped. After the level changes, the same address can hold
+something else, as entity addresses do (Lesson 4.1).
+
+One file can hold several assets. A 3D model file typically holds meshes, materials,
+textures, animations, and scenes, and the engine gives each part its own handle, named
+by the file's path and a label, such as `ship.glb#Mesh0`. A model with 3 meshes,
+2 materials, 1 texture, 2 animations, and 1 scene gives 3 + 2 + 1 + 2 + 1 = 9 assets
+from one path, and the cache described above keeps one copy of each.
+
+### Events and reloading
+
+The engine announces changes to assets. When an asset is added, modified, or removed, it
+sends an **asset event**, and a system can react to the event instead of checking. A
+system that builds a collision shape when its mesh finishes loading then runs once, on
+the event. Checking every frame for the 5 seconds the mesh takes to load would run it
+5 × 60 = 300 times to learn the same thing.
+
+A game under development usually also supports **hot reloading**. It watches its asset folder, and
+when a file's <Tooltip tip="Every file records when it was last changed, and the operating system updates that time on each save. A watcher only has to compare the time it saw last with the time now.">modification time</Tooltip> changes, it decodes the file again, replaces the data
+behind the same handle, and sends a "modified" event. Everything holding the handle
+shows the new version on its next draw, with no restart. A shipped game usually turns
+the watcher off and reads each file once, when the level loads. What a replaced file
+does depends on which of these the game does:
+
+<Panel title="When a replaced file shows up">
+
+| How the game gets the asset | When your replacement shows |
+|---|---|
+| it watches its folder, as a development build does | on the next frame |
+| it reads the file when a level loads | the next time that level loads |
+| it reads from an archive | after the archive is rebuilt and the level loads again |
+| it has the asset embedded in the executable | never, because no file is read |
+
+</Panel>
 
 ## Observe file access
 

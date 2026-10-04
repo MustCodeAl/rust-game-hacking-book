@@ -9,7 +9,7 @@ sidebar:
   order: 5
   label: "2.5 From a Game Value to the Code That Changes It"
 ---
-import { HoverCard } from '../../../../components/kit';
+import { Frame, HoverCard, Tab, Tabs } from '../../../../components/kit';
 
 ## Find the instruction that changes gold
 
@@ -24,11 +24,19 @@ shown in your match when checking the paused instruction.
 
 ## Attach x64dbg
 
-Launch Wesnoth, begin a local match, and find the gold address again. Then attach <HoverCard kind="alternative" body="Other tools can answer the same question. Cheat Engine's *Find out what writes to this address* lists the instructions that write a value, and WinDbg is Microsoft's own debugger. The book uses x64dbg; its [documentation](https://help.x64dbg.com/en/latest/) covers every view named here.">x64dbg</HoverCard> to the running process.
+Launch Wesnoth, begin a local match, and find the gold address again. Then attach <HoverCard kind="reference" href="https://help.x64dbg.com/en/latest/" body="The x64dbg documentation covers every view and menu used in this lesson.">x64dbg</HoverCard> to the running process.
+
+<Frame caption="x64dbg's Attach command hooks the debugger to the running game.">
 
 ![The Attach command in x64dbg](/assets/images/2/4/reversing1.png)
 
+</Frame>
+
+<Frame caption="Choose the Wesnoth process from the list.">
+
 ![Selecting the Wesnoth process](/assets/images/2/4/reversing2.png)
+
+</Frame>
 
 The CPU view contains four useful areas:
 
@@ -37,7 +45,11 @@ The CPU view contains four useful areas:
 - dump—raw memory;
 - stack—return addresses and temporary data.
 
+<Frame caption="The CPU view: disassembly, registers, dump, and stack.">
+
 ![The main x64dbg view](/assets/images/2/4/reversing3.png)
+
+</Frame>
 
 Attaching may pause in Windows system code. That is normal. Resume the process before triggering your experiment.
 
@@ -45,9 +57,17 @@ Attaching may pause in Windows system code. That is normal. Resume the process b
 
 Open the dump view’s “go to expression” command and enter the address found by the memory scanner.
 
+<Frame caption="Go to expression in the dump, with the address the scanner found.">
+
 ![Going to an address in the dump](/assets/images/2/4/reversing5.png)
 
+</Frame>
+
+<Frame caption="The dump at the gold address, showing the value's bytes.">
+
 ![The player gold address in memory](/assets/images/2/4/reversing7.png)
+
+</Frame>
 
 The bytes in the dump are little-endian. If the gold is `100`, the 32-bit value `0x00000064` appears as:
 
@@ -59,7 +79,30 @@ The least-significant byte comes first.
 
 ## Break on writes
 
-Set a hardware breakpoint on **write**, <HoverCard kind="tip" body="In x64dbg, select the four bytes in the dump, right-click, and choose Breakpoint, then Hardware, Write, then Dword.">covering four bytes</HoverCard> at the gold address.
+Set a hardware breakpoint on **write**, covering four bytes at the gold address.
+The lesson uses x64dbg, but any debugger that can watch an address will do:
+
+<Tabs sync="debugger">
+<Tab label="x64dbg">
+
+Select the four bytes in the dump, right-click, and choose **Breakpoint**, then
+**Hardware, Write**, then **Dword**.
+
+</Tab>
+<Tab label="WinDbg">
+
+Type `ba w4` followed by the address, for example `ba w4 0A3C1230`, to break on a
+four-byte write. Then type `g` to let the game run.
+
+</Tab>
+<Tab label="Cheat Engine">
+
+Right-click the gold entry in the address list and choose **Find out what writes
+to this address**. Cheat Engine lists each instruction that writes it, with a
+count.
+
+</Tab>
+</Tabs>
 
 A hardware memory breakpoint does not replace the game’s instruction bytes.
 The debugger programs special CPU debug registers with an address, access type,
@@ -75,7 +118,11 @@ different functions write gold, the same watch can reveal all three. A software
 breakpoint placed on a code address answers the opposite question: “When does
 this exact instruction execute?”
 
+<Frame caption="Select the four bytes, right-click, then Breakpoint, Hardware, Write, Dword.">
+
 ![Setting a write breakpoint on gold](/assets/images/2/4/reversing8.png)
+
+</Frame>
 
 Resume the game and recruit one unit. The debugger should pause close to an instruction that resembles:
 
@@ -91,7 +138,11 @@ access information and nearby disassembly to identify the triggering
 write, then confirm that its calculated destination is your gold
 address. Builds and runs can differ.
 
+<Frame caption="The debugger paused at the instruction that changes gold.">
+
 ![The instruction that changes player gold](/assets/images/2/4/reversing11.png)
+
+</Frame>
 
 ## Ask the five assembly questions
 
@@ -154,11 +205,19 @@ this instruction writes the gold you found.
 
 Copy the original instruction bytes first, so you can write them back. Then temporarily replace the **entire** subtraction instruction with <HoverCard kind="example" body="The length comes from the encoding. `sub [edx+4], eax` is the three bytes `29 42 04`, so it takes three `90` bytes. `sub [edx+0x1234], eax` is the six bytes `29 82 34 12 00 00`, so it takes six. The disassembly's bytes column shows the count.">the same number of `nop` bytes</HoverCard>.
 
+<Frame caption="Fill the whole instruction with nop bytes.">
+
 ![Filling the instruction with NOP bytes](/assets/images/2/4/reversing12.png)
+
+</Frame>
 
 Resume and recruit another unit. If gold no longer decreases, this instruction is the one that subtracts the price. Restore the original bytes immediately afterward.
 
+<Frame caption="The instruction after patching: only nop bytes remain.">
+
 ![The patched instruction](/assets/images/2/4/reversing14.png)
+
+</Frame>
 
 ## Turn one discovery into a repeatable patch
 
@@ -176,7 +235,11 @@ Checking the original bytes is crucial. Refusing to patch an unknown version is 
 
 Remove the breakpoint through x64dbg’s Breakpoints tab and confirm the original instruction is restored.
 
+<Frame caption="The Breakpoints tab lists every breakpoint and removes it.">
+
 ![The Breakpoints tab](/assets/images/2/4/reversing15.png)
+
+</Frame>
 
 The scan gave us a candidate *value*; the write breakpoint gave us a
 specific instruction and the register values from one recruitment.

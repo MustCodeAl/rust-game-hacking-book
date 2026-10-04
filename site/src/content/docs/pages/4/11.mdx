@@ -1,14 +1,16 @@
 ---
 title: "Coordinates, Vectors, and Directions"
 description: "Build distance and direction from positions, use normalization and dot products to express spatial decisions, then blend values and test contact with simple shapes."
-chapter: "4.6"
+chapter: "4.7"
 minutes: 26
 author: "attilathedud"
 date: "2026-09-30"
 sidebar:
-  order: 6
-  label: "4.6 Coordinates, Vectors, and Directions"
+  order: 7
+  label: "4.7 Coordinates, Vectors, and Directions"
 ---
+import { Color, Example, Frame } from '../../../../components/kit';
+
 
 A map tells us which places exist. Coordinates let a tool compare those places:
 where is the player, how far away is an enemy, and which way does a movement
@@ -19,7 +21,11 @@ distance and direction. The same operations work in two dimensions or three.
 
 A 2D game often describes a position with `x` and `y`.
 
+<Frame caption="A 2D game world: every position is an (x, y) pair.">
+
 ![A 2D game world](/assets/images/5/1/wesnoth1.png)
+
+</Frame>
 
 Picture a player at `(2, 3)` on that map and an enemy at `(5, 7)`. The enemy
 is 3 units farther along `x` and 4 along `y`. Those differences form an arrow
@@ -63,7 +69,11 @@ Games disagree about which axis means “up.” Never assume. Move in one direct
 🧭 **Coordinate check:** change one axis while keeping the others still. The field that follows the movement tells you what that axis means in this game.
 :::
 
+<Frame caption="A 3D game world: the same idea with a third coordinate.">
+
 ![A 3D game world](/assets/images/5/1/urbanterror.jpg)
+
+</Frame>
 
 
 ## Position versus direction
@@ -200,8 +210,9 @@ At `t = 0` the result is `a`, at `t = 1` it is `b`, and at `t = 0.25` it is a
 quarter of the way. For numbers, `a = 2` and `b = 10` give
 2 + (10 − 2) × 0.25 = 4. For a vector, blend each coordinate on its own: from
 `(2, 3)` to `(5, 7)`, halfway (`t = 0.5`) is `(2 + 3 × 0.5, 3 + 4 × 0.5) = (3.5, 5)`. A
-colour is three numbers too, so a half blend of red `(255, 0, 0)` and blue
-`(0, 0, 255)` is `(127.5, 0, 127.5)`, which a display stores as `(128, 0, 128)`, a purple.
+colour is three numbers too, so a half blend of red <Color value="rgb(255, 0, 0)" /> and blue
+<Color value="rgb(0, 0, 255)" /> is `(127.5, 0, 127.5)`, which a display stores as
+<Color value="rgb(128, 0, 128)" />, a purple.
 
 Lesson 4.1 left 3.33 ms over after a 16.67 ms step, so `t = 3.33 ÷ 16.67 = 0.2`.
 If a ball's x was 794 after the earlier step and 796.5 after the later one, the
@@ -249,6 +260,39 @@ stiffness `s` per second, use `k = 1 − e^(−s × dt)`. For `s = 10`:
 
 Two 120-per-second updates leave (1 − 0.0800)² ≈ 0.8465 of the gap, the same as one
 60-per-second update, so the camera follows the same way on either machine.
+
+### Past the two samples: extrapolation
+
+The lerp formula does not forbid a `t` above 1. With `t = 1.5` it continues the same
+line beyond `b`, and that is **extrapolation**: a guess about a value past the last
+one known. A game needs it when its newest information is already old. A client that
+receives another player's position 10 times a second, every 0.10 s, still draws 60
+pictures a second. Between two updates it can show a past state that lies between
+two known points (interpolation), or guess the present from the last two
+(extrapolation).
+
+Take an update of `x = 100` at 0.00 s and one of `x = 106` at 0.10 s, so the speed is
+(106 − 100) ÷ 0.10 = 60 units a second. At 0.15 s, `t = (0.15 − 0.00) ÷ 0.10 = 1.5`,
+and the guess is 100 + (106 − 100) × 1.5 = 109. Now suppose the player stopped at
+106, and the update for 0.20 s says so. The interpolated view draws the state from
+0.10 s earlier, so both neighbouring updates are always known:
+
+<Example title="A player who stops at x = 106">
+
+| Draw time | Where the player is | Interpolated view (shows the state 0.10 s earlier) | Extrapolated view (the newest two updates) |
+|---|---|---|---|
+| 0.10 s | 106 | state at 0.00 s: 100, late by 6 | 106 |
+| 0.15 s | 106 | state at 0.05 s: 100 + 6 × 0.5 = 103, late by 3 | 106 + 60 × 0.05 = 109, 3 too far |
+| 0.19 s | 106 | state at 0.09 s: 100 + 6 × 0.9 = 105.4, late by 0.6 | 106 + 60 × 0.09 = 111.4, 5.4 too far |
+| 0.20 s | 106 | state at 0.10 s: 106 | the update arrives, the speed is 0, and the view shows 106 |
+
+</Example>
+
+The interpolated view is always behind the truth, by 0.10 s here, but it only ever
+shows places the player really was. The extrapolated view is never behind, but when
+the guess is wrong it overshoots and then snaps back: from 111.4 to 106 in one
+frame. When you read another player's position from a client's memory, the value may
+be one of these display values rather than the server's own (Chapter 8).
 
 ### Curves through several points
 

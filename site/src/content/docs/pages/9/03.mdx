@@ -1,15 +1,15 @@
 ---
 title: "Textures and Asset Replacement"
-description: "Connect a visible game surface to its texture file, preserve the expected format, and package a reversible replacement, then read the same ideas in a 3D model (glTF) and a sound."
+description: "Connect a visible game surface to its texture file, preserve the expected format, and package a reversible replacement, then read the same ideas in a 3D model (glTF) and a sound, including how a sound is placed between two ears and fades with distance."
 chapter: "9.4"
-minutes: 30
+minutes: 34
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 4
   label: "9.4 Textures and Asset Replacement"
 ---
-import { Accordion, Color, GitHub, Steps } from '../../../../components/kit';
+import { Accordion, Badge, Color, FileTree, Frame, GitHub, Panel, Steps } from '../../../../components/kit';
 
 ## Identify one surface
 
@@ -17,7 +17,11 @@ Lesson 9.2 changed the `build=` character-stat line in Flare's `avatar.txt` save
 
 In the offline Urban Terror target, choose a distinctive wall, sign, or object. Walk close enough to see its texture clearly.
 
+<Frame caption="A distinctive in-game surface to replace.">
+
 ![A distinctive in-game surface](/assets/images/8/3/urbanterror1.png)
+
+</Frame>
 
 Search the game’s resource folders or archives for likely image names. Thumbnail tools and image dimensions can narrow the list.
 
@@ -31,6 +35,8 @@ Inside it, browse to `env\austria`. These six images form the Austria map’s sk
 
 ## Prove the file
 
+<Badge text="Windows VM" variant="note" />
+
 Make a reversible test change—such as a bright corner mark—while preserving:
 
 - width and height;
@@ -40,13 +46,32 @@ Make a reversible test change—such as a bright corner mark—while preserving:
 - mipmap expectations;
 - file name and path.
 
+<Frame caption="The candidate texture file.">
+
 ![A candidate texture file](/assets/images/8/3/urbanterror3.png)
+
+</Frame>
 
 Restart or reload the level. If the mark appears on the chosen surface, the mapping is confirmed.
 
 ## Perform the Austria skybox hack
 
-Extract `zUrT43_001.pk3` to a work folder. Keep the original PK3 as a backup. In the extracted tree:
+Extract `zUrT43_001.pk3` to a work folder. Keep the original PK3 as a backup. The extracted tree has the sky images three folders down:
+
+<FileTree>
+
+- zUrT43_001/ the work folder you extracted into
+  - botfiles/
+  - env/
+    - austria/
+      - austriasky_dw.jpg the downward-facing image to copy
+      - **austriasky_up.jpg** the file to replace
+  - fonts/
+  - …
+
+</FileTree>
+
+In that tree:
 
 <Steps>
 
@@ -244,11 +269,15 @@ If extracting:
 
 ## Texture coordinates explain repetition
 
-A model stores UV coordinates that map its surface to the image. One texture can repeat, rotate, or cover many surfaces. Changing the image may affect more places than the one you first noticed.
+A model stores UV coordinates that map its surface to the image. One texture can repeat, rotate, or cover many surfaces. Changing the image may affect more places than the one you first noticed. If the replacement appears upside down, the file and the engine disagree about which edge `v = 0` names (Lesson 7.1).
 
 A coordinate outside 0 to 1 is handled by the texture's **addressing mode**. With *repeat*, `u = 2.5` is treated as 0.5, so the image tiles. With *clamp*, it is treated as 1.0, so the edge pixels smear outward.
 
+<Frame caption="The replacement texture in the game.">
+
 ![The replacement texture in game](/assets/images/8/3/urbanterror7.png)
+
+</Frame>
 
 ## Models: reading a glTF file
 
@@ -305,7 +334,7 @@ The rest of a model hangs off the same pattern: **materials** (colours, textures
 whether the surface is opaque, cut out, or blended, as Lesson 7.2 explained), **skins**
 (the skeleton, with the bone indices and weights of Lesson 7.6), **animations** (lists of
 times and values for a node's translation, rotation, or scale, played with the
-interpolation of Lesson 4.6), and free-form **extras** where a game can store its own data.
+interpolation of Lesson 4.7), and free-form **extras** where a game can store its own data.
 A scene viewer is a tool that does nothing but load such a file and show it, which is the
 quickest way to see what a model contains.
 
@@ -335,7 +364,7 @@ Some properties are simple to compute:
   every frequency doubles. A pure test tone of 440 hertz is generated as `sin(2π × 440 × t)`,
   and at 44,100 samples a second one cycle is 44,100 ÷ 440 ≈ 100 samples long.
 - **Position.** A sound that comes from a place gets quieter with distance, say by
-  `1 ÷ distance`, and is placed left or right by the dot product (Lesson 4.6) of the
+  `1 ÷ distance`, and is placed left or right by the dot product (Lesson 4.7) of the
   direction to it with the listener's right-hand direction. With the listener facing `+y`,
   so that right is `+x`, a sound at `(3, 4, 0)` is 5 away, in the direction `(0.6, 0.8, 0)`, so
   its pan is 0.6, to the right, and its loudness is 1 ÷ 5 = 0.2. Splitting that between the
@@ -345,6 +374,37 @@ Some properties are simple to compute:
   collected" (Lesson 1.3). The music follows the game's state, and changing tracks is a
   cross-fade like the animation blend of Lesson 7.6: halfway through a 2-second fade, the old
   track is at volume 0.5 and the new one at 0.5.
+
+### Two ears and falloff
+
+The pan above gives a single number for left and right. A **spatial audio** mode instead
+puts two ears on the listener, a fixed gap apart along its right-hand direction, and
+works out the volume at each ear from that ear's own distance. Take a gap of 2, so the
+ears are at `(−1, 0, 0)` and `(1, 0, 0)`, and the same sound at `(3, 4, 0)`. The left ear
+is `√((3 − (−1))² + 4²) = √32 = 5.66` away and the right ear is
+`√((3 − 1)² + 4²) = √20 = 4.47` away. With the `1 ÷ distance` rule the left ear hears
+1 ÷ 5.66 = 0.177 and the right ear 1 ÷ 4.47 = 0.224. The right ear is louder by a factor
+of 0.224 ÷ 0.177 = 1.26, much less than the factor of 4 (0.16 ÷ 0.04) that the simple
+pan gave, because two ears this close together differ little in distance.
+
+How quickly a sound fades with distance is its **falloff**. Two common choices, for a
+sound that plays at full volume out to 1 unit and, for the linear one, reaches silence
+at 50 units:
+
+<Panel title="Two falloff curves">
+
+| Distance | Inverse: `1 ÷ d` | Linear: `1 − (d − 1) ÷ 49` |
+|---|---|---|
+| 5 | 1 ÷ 5 = 0.2 | 1 − 4 ÷ 49 = 0.92 |
+| 10 | 1 ÷ 10 = 0.1 | 1 − 9 ÷ 49 = 0.82 |
+| 50 | 1 ÷ 50 = 0.02 | 1 − 49 ÷ 49 = 0 |
+
+</Panel>
+
+Inverse falloff halves the volume each time the distance doubles, and it never reaches
+silence, so a game also sets a distance beyond which the sound is not mixed at all,
+which saves the work. Linear falloff stays loud nearby and reaches 0 exactly at its
+limit.
 
 Like a texture, a replacement sound has to match what the game expects: the same path and
 format, and usually the same sample rate and channel count.

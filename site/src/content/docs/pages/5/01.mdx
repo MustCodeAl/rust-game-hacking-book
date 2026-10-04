@@ -1,14 +1,16 @@
 ---
 title: "Camera Frames and Projection"
-description: "Follow a world-space point through camera axes, object transforms and parents, quaternions, homogeneous coordinates, perspective or orthographic projection, and screen pixels."
+description: "Follow a world-space point through engine axis conventions, camera axes, object transforms and their local and world copies, quaternions, homogeneous coordinates, perspective or orthographic projection, several cameras with their own viewports, and screen pixels and texture coordinates."
 chapter: "7.1"
-minutes: 32
+minutes: 40
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 1
   label: "7.1 Camera Frames and Projection"
 ---
+import { CardGrid, Example, LinkCard, Panel, Tooltip } from '../../../../components/kit';
+
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
 import Quiz from '../../../../components/Quiz.astro';
@@ -108,6 +110,36 @@ choice of basis directions.
 Do not infer handedness from axis labels alone. An engine may call an axis
 `forward` while using a different sign than a math library. Confirm it with three
 known movements or by reading the matrix construction code.
+
+### Four engines, four conventions
+
+Engines made different choices, so a coordinate copied from one game means something
+else in another. Four common ones:
+
+<Panel title="Axis conventions of four engines">
+
+| Engine | Up | Forward | Handedness |
+|---|---|---|---|
+| Bevy | +Y | −Z | right-handed |
+| Godot | +Y | −Z | right-handed |
+| Unity | +Y | +Z | left-handed |
+| Unreal Engine | +Z | +X | left-handed |
+
+</Panel>
+
+A tree 5 metres in front of a camera at the origin is at `(0, 0, −5)` in Bevy and at
+`(0, 0, 5)` in Unity. It is the same place, with the opposite sign of `z`. The two
+engines differ in handedness, so converting between them means flipping exactly one
+axis. Unity and Unreal share a handedness, so no flip is needed, but their axes are
+named differently and their units differ: Unreal counts in centimetres, and Unity
+treats one unit as a metre by convention. A point 500 cm ahead, 100 cm to the right,
+and 200 cm up is `(500, 100, 200)` in Unreal, listed as forward, right, up. Unity
+lists right, up, forward, in metres: `(100 ÷ 100, 200 ÷ 100, 500 ÷ 100) = (1, 2, 5)`.
+
+An overlay that reads positions from one engine and draws with another's mathematics
+has to make this conversion before any of the camera work below. A picture that is
+mirrored left to right, or an object that sits 100 times too far away, is what a
+missing conversion looks like.
 
 ## A basis defines the local axes
 
@@ -399,6 +431,47 @@ object, its **world matrix** (some libraries call it the model matrix). A child'
 world matrix combines its parent's world matrix with its own local matrix, in the
 order that the library's convention requires, as noted above.
 
+### Two copies of a transform
+
+Many engines, Bevy among them, keep two copies of every object's transform. The
+**local transform** is the one game code edits. The **world transform** is derived
+from it: once per frame, in a step the engine runs late in the frame (Lesson 4.2), it
+multiplies each object's local transform by its parents'. The local copy is the
+source, and the world copy is a cached answer.
+
+```mermaid
+flowchart LR
+    W["movement system<br/>writes the local transform"] --> L["local transforms<br/>(the source)"]
+    L --> P["late step: combine each local<br/>transform with its parents'"]
+    P --> G["world transforms<br/>(the derived copy)"]
+    G --> D["visibility and drawing<br/>read the world copy"]
+    R["a system that reads the world<br/>copy before the late step"] -.->|"sees last frame's value"| G
+```
+
+Take the turret of the tank above, at `(10, 7, 1)` in the world while the tank sits at
+`(10, 5, 0)`, not turned. In frame 20 a movement system adds 1 to the tank's `x`. The
+turret's local `(0, 2, 1)` does not change at all, and its world copy is not rebuilt
+until the engine's late step:
+
+| Moment in frame 20 | Tank local | Turret local | Turret world copy |
+|---|---|---|---|
+| before the movement system | (10, 5, 0) | (0, 2, 1) | (10, 7, 1) |
+| after it, before the world copies are rebuilt | (11, 5, 0) | (0, 2, 1) | (10, 7, 1), now stale |
+| after the rebuild | (11, 5, 0) | (0, 2, 1) | (11, 7, 1) |
+
+A system that reads the turret's world position between the second and third rows
+gets the previous frame's answer. A tank that moves 60 units a second advances
+60 × (1 ÷ 60) = 1 unit in a frame, so a marker drawn from the stale copy trails the
+turret by exactly 1 unit. A rule that must see the new value in the same frame has to
+run after the rebuild, or work out the world position itself from the local numbers,
+as above.
+
+Two facts follow for memory work. While the tank drives, the turret's local numbers
+stay the same and its world numbers change, so a scan for "the turret's position"
+whose value changes with every move has found the world copy. And writing to the
+world copy changes nothing that lasts, because the next rebuild overwrites it from
+the local transforms. To move the object, write the source.
+
 ## Why 3D graphics uses four numbers for a 3D point
 
 A 3D translation cannot be represented by an ordinary 3×3 linear matrix because
@@ -509,7 +582,8 @@ bigger multiplier, so the same `view_y / view_depth` now produces a larger NDC
 value and the scene looks zoomed in. A smaller field of view makes
 `tan(fov_y / 2)` smaller, so the scale grows and the view zooms in.
 
-One practical trap sits in that formula. Trigonometric functions take radians,
+One practical trap sits in that formula. Trigonometric functions take
+<Tooltip tip="A radian measures an angle by the arc it covers on a circle of radius 1. A full turn is 2π = 6.2832 radians, so a quarter turn, 90°, is 6.2832 ÷ 4 = 1.5708 radians.">radians</Tooltip>,
 not degrees. Passing `90.0` where `1.5708` was expected produces a scale that
 is wrong by a wide margin, and the symptom is a scene that looks nothing like a
 camera view rather than an obviously wrong number. Convert at the boundary and
@@ -549,6 +623,44 @@ the world point `((600 − 400) ÷ 40, (300 − 180) ÷ 40) = (5, 3)`. Turning a
 position into a world position is the first step of picking, which Lesson 7.5 builds
 on.
 
+## Several cameras, one world
+
+A camera is an object with a position and a turn like any other, plus a projection
+and a few settings: which surface it draws into (the window, or an off-screen image),
+which rectangle of that surface (its **viewport**), and when it draws compared with
+the other cameras (its **order**). A split screen, a minimap, a rear-view mirror, and
+a security monitor inside the game each use another camera. A camera that draws into
+an off-screen image makes a texture that a material can then show on a mirror or a
+monitor. Every formula in this lesson works for each camera separately, with one
+rule: use that camera's viewport, not the window's.
+
+<Example title="A 1920 × 1080 window with two players and a minimap">
+
+| Camera | Viewport (x, y, width, height) | Aspect | Centre of its picture |
+|---|---|---|---|
+| player 1 | (0, 0, 960, 1080) | 960 ÷ 1080 = 0.889 | (480, 540) |
+| player 2 | (960, 0, 960, 1080) | 960 ÷ 1080 = 0.889 | (960 + 480, 540) = (1440, 540) |
+| minimap | (1664, 0, 256, 256) | 256 ÷ 256 = 1 | (1664 + 128, 128) = (1792, 128) |
+
+The window's own aspect is 1920 ÷ 1080 = 1.778. Give player 1's camera that value
+instead of 0.889, and its horizontal scale, `y_scale ÷ aspect`, comes out
+0.889 ÷ 1.778 = 0.5 times what it should be, so the picture is squeezed to half its
+width. And a world point that projects to the middle of player 2's picture belongs at
+pixel x = 1440, not at 480.
+
+</Example>
+
+The minimap's viewport lies inside player 2's, so the minimap must draw later. The
+camera with the lower order draws first, and a later camera can paint over what is
+already there instead of clearing it, which is how a minimap sits on top of the main
+picture. Which objects each camera draws is decided by the visibility rules in
+Lesson 7.2.
+
+In memory, a game with several cameras can hold several view-projection matrices. The
+one that belongs to the picture you draw over is the one that changes when you turn
+that player's view, and its viewport is the rectangle to use in the pixel conversion
+that follows.
+
 ## Screen coordinates
 
 After projection and perspective division, normalized coordinates are often in `-1..=1`. Convert them to pixels:
@@ -561,7 +673,35 @@ fn ndc_to_screen(x: f32, y: f32, width: f32, height: f32) -> (f32, f32) {
 }
 ```
 
-The `1.0 - y` flips an upward math axis into a downward screen-pixel axis.
+The `1.0 - y` flips an upward math axis into a downward screen-pixel axis. The
+result counts from the top left of the viewport, so a game with several cameras needs
+the viewport's own origin added to give window pixels: for player 2 above, the centre
+of the picture is `(480, 540)` inside the viewport and `(960 + 480, 540)` in the
+window.
+
+## Texture coordinates: the same top-or-bottom choice
+
+A texture is read with **UV coordinates**. `u` runs across the picture and `v` runs
+down it or up it, both from 0 to 1, whatever the picture's size in pixels. APIs
+disagree about where `v = 0` is. Direct3D, Vulkan, Metal, WebGPU, and the glTF model
+format put it at the top row. Classic OpenGL puts it at the bottom row.
+
+<Example title="One pixel, two conventions">
+
+Take a 256 × 256 texture and the pixel in column 64 and row 32, counting rows from the
+top.
+
+| Convention | `u` | `v` |
+|---|---|---|
+| origin at the top left | 64 ÷ 256 = 0.25 | 32 ÷ 256 = 0.125 |
+| origin at the bottom left | 0.25 | 1 − 0.125 = 0.875 |
+
+</Example>
+
+A model made for one convention shows its texture upside down in an engine that
+expects the other. The repair is the same flip, `v` becomes `1 − v`, applied when the
+model is exported or loaded, and it is the first thing to try when a texture, or a
+replaced texture from Lesson 9.4, appears upside down.
 
 ## Coordinate sanity checks
 
@@ -593,6 +733,10 @@ When a transform fails, identify the earliest wrong space:
 | correct until camera rotates | basis or matrix order |
 | behind-camera points appear mirrored | `w` test |
 | correct shape but wrong location | viewport origin or window/client-area offset |
+| a marker trails a moving object by one frame | the world copy of the transform was read before it was rebuilt |
+| picture squeezed in a split-screen half | aspect taken from the window instead of the camera's viewport |
+| positions 100 times too large, or one axis mirrored | engine units or handedness not converted |
+| texture appears upside down | the `v` origin differs between the file and the engine |
 
 ## How the coordinate spaces connect
 
@@ -617,3 +761,11 @@ Later lessons reuse this math in offline observer tools.
   answer="0"
   explanation="Substituting 1 gives `(1 − 1) × 0.5 × height = 0`. Normalized device coordinates point upward, while ordinary screen y grows downward, so the formula flips the direction."
 />
+
+## Where camera maths is used next
+
+<CardGrid>
+  <LinkCard title="Coordinates, Vectors, and Directions" description="The vectors and directions this lesson builds on." href="/pages/4/11/" />
+  <LinkCard title="Camera Rays, Collisions, and Crosshairs" description="A ray from the camera through the cursor." href="/pages/5/05/" />
+  <LinkCard title="World-to-Screen Projection and Overlays" description="World points turned into screen pixels." href="/pages/5/09/" />
+</CardGrid>

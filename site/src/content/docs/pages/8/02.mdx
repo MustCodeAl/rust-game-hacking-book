@@ -9,7 +9,7 @@ sidebar:
   order: 3
   label: "6.3 DLL Loading Across Process Boundaries"
 ---
-import { Steps } from '../../../../components/kit';
+import { Badge, Fields, GitHub, ParamField, ResponseField, Steps } from '../../../../components/kit';
 
 ## Keep target identity explicit
 
@@ -196,6 +196,58 @@ remote allocation holding the wide path is the argument. The code requires a
 nonzero exit code before calculating the DLL-relative `gha_start` address.
 This return-value shortcut does not carry over unchanged to a 64-bit injector.
 
+The seven arguments of that `CreateRemoteThread` call, with the value this lab
+passes for each:
+
+<Fields title="CreateRemoteThread, argument by argument">
+<ParamField name="hProcess" type="handle" required>
+
+The game's process handle, opened with the rights this step needs, including the
+right to create a thread.
+
+</ParamField>
+<ParamField name="lpThreadAttributes" type="optional" default="None">
+
+Security settings for the new thread's handle. `None` takes the defaults, and the
+handle cannot be inherited by child processes.
+
+</ParamField>
+<ParamField name="dwStackSize" type="bytes" default="0">
+
+The new thread's stack size. Zero uses the default of the game's executable.
+
+</ParamField>
+<ParamField name="lpStartAddress" type="address in the game" required>
+
+Where the thread begins running. Here it is `LoadLibraryW`, which is why the
+same-base assumption above matters.
+
+</ParamField>
+<ParamField name="lpParameter" type="address in the game">
+
+The one pointer handed to the start routine: the remote allocation that holds the
+wide DLL path.
+
+</ParamField>
+<ParamField name="dwCreationFlags" type="flags" default="0">
+
+Zero starts the thread at once. `CREATE_SUSPENDED` would create it paused.
+
+</ParamField>
+<ParamField name="lpThreadId" type="optional" default="None">
+
+Where to store the new thread's ID. The lab does not need it.
+
+</ParamField>
+<ResponseField name="return value" type="thread handle">
+
+The handle of the new thread, which the lab wraps in an owned type so it is always
+closed. A thread that starts is not a thread that succeeded: the lab still waits
+for it and reads its exit code.
+
+</ResponseField>
+</Fields>
+
 The wrapper methods are small `unsafe` boundaries over:
 
 - `OpenProcess`;
@@ -250,6 +302,8 @@ RAII types make this happen during early returns.
 
 ## Run the real game lab
 
+<Badge text="Windows VM" variant="note" />
+
 <Steps>
 
 1. Build both injector and DLL for `i686-pc-windows-msvc`.
@@ -267,3 +321,7 @@ If the loader thread returns zero, inspect the target PID, both architectures, t
 The completed tool performs a real injection into the course games with exact target checks, owned handles, bounded waits, and cleanup. Its local-system-DLL address assumption remains a limitation of this version.
 
 The complete buildable source is [`injector.rs`](/windows-labs/src/bin/injector.rs). It includes the allowlist, architecture check, UTF-16 conversion, allocation, both remote threads, `gha_start` RVA calculation under ASLR, timeout handling, exit-code checks, and cleanup. Its shared process/handle wrappers are in [`process.rs`](/windows-labs/src/windows_impl/process.rs) and [`handle.rs`](/windows-labs/src/windows_impl/handle.rs).
+
+<GitHub path="windows-labs/src/bin/injector.rs" />
+
+<GitHub path="windows-labs/src/windows_impl/process.rs" />

@@ -717,7 +717,7 @@ were updated.
 | Application, frame, delta time, fixed timestep, cooldowns, async tasks, diagnostics | 4.1 Game Engines (starting up; one frame, step by step) |
 | ECS, scene and hierarchy, game states and loading screens | 4.1 (entities, components, and systems; scenes) |
 | Dev tools, gizmos, editors, viewers, stress tests; a whole small game | 4.1 (overlays, gizmos, editors, and stress tests; Breakout) |
-| Interpolation, easing, following, splines, bounding volumes | 4.6 Coordinates, Vectors, and Directions |
+| Interpolation, easing, following, splines, bounding volumes | 4.7 Coordinates, Vectors, and Directions |
 | Transforms and parenting, quaternions, orthographic projection | 7.1 Camera Frames and Projection |
 | Materials, light, transparency, culling, render passes, 2D rendering | 7.2 The Rendering Pipeline and Its State |
 | What shaders read, variants, instancing, compute, draw-call cost | 7.3 OpenGL Draw Calls and State |
@@ -726,7 +726,7 @@ were updated.
 | Random spread, camera shake, follow, orbit, zoom | 7.7 Recoil, Spread, and Camera Motion |
 | Gizmos as debug drawing | 7.9 World-to-Screen Projection and Overlays |
 | UI layout, text, scaling, nine-slice, focus, popups | 7.13 In-Game Menus and Text Rendering |
-| Window, client area, scale factor, fullscreen, presenting | 6.6 Windows Input |
+| Window, client area, scale factor, fullscreen, presenting | 6.7 Windows Input |
 | Assets and how they load | 9.1 Game Files and Live Memory |
 | glTF models, audio | 9.4 Textures and Asset Replacement |
 | Worker threads and tasks | 11.8 Threads, Contexts, and Stacks |
@@ -746,9 +746,9 @@ table; no lesson text, number, or order changed.
 
 | Component | Where | What changed |
 |---|---|---|
-| `Accordion` + `GitHub` | 22 lab lessons (4.3, 4.10, 5.3–5.5, 5.9, 5.10, 8.5–8.8, 9.2, 9.4, 9.8, 11.5–11.9, 11.12, 12.1, 12.6) | The "complete lab source" block is an accordion that opens on a `GitHub` card (file name, line count, link to the exact commit) above the code. The code stays in the page, so it prints and is read aloud; the card is skipped in the listening edition. |
+| `Accordion` + `GitHub` | 22 lab lessons (4.4, 4.11, 5.3–5.5, 5.9, 5.10, 8.5–8.8, 9.2, 9.4, 9.8, 11.5–11.9, 11.12, 12.1, 12.6) | The "complete lab source" block is an accordion that opens on a `GitHub` card (file name, line count, link to the exact commit) above the code. The code stays in the page, so it prints and is read aloud; the card is skipped in the listening edition. |
 | `Accordion` | 3.2 | The two optional place-value derivations (decode 0.2625, decode x and y). |
-| `Steps` | 30 lessons, 39 lists: 1.1, 1.6, 1.9, 2.3, 2.8, 2.10, 3.4, 3.5, 3.7, 4.9, 5.4, 5.5, 5.7, 5.8, 5.9, 6.3, 6.5, 6.6, 6.7, 7.9, 8.5, 9.2, 9.4, 9.6, 9.7, 10.3, 11.8, 12.2, 13.6, 14.3 | Lists that are a procedure in a fixed order: a lab to carry out, a recovery test, the sequence a method follows, or the order a program performs its work. |
+| `Steps` | 30 lessons, 39 lists: 1.1, 1.6, 1.9, 2.3, 2.8, 2.10, 3.4, 3.5, 3.7, 4.10, 5.4, 5.5, 5.7, 5.8, 5.9, 6.3, 6.5, 6.7, 6.8, 7.9, 8.5, 9.2, 9.4, 9.6, 9.7, 10.3, 11.8, 12.2, 13.6, 14.3 | Lists that are a procedure in a fixed order: a lab to carry out, a recovery test, the sequence a method follows, or the order a program performs its work. |
 | `FileTree` | 14.3 | The Cargo project layout. |
 | `Columns` | 4.1 (Where a rule lives) | Two things compared side by side. |
 | `HoverCard` | 40 cards in 14 lessons: 1.2, 1.3, 1.4, 1.5, 1.7, 1.8, 1.9, 2.2, 2.4, 2.5, 3.8, 4.1, 8.2, 9.1 | Examples with real numbers, references (a lesson or an official page, checked to load), tips naming the exact menu or key of the tool in use, alternatives, a recommendation, and a caution, each written so the lesson reads the same without it. |
@@ -760,3 +760,107 @@ questions to ask, checks to make, or facts to hold together, not steps in order
 (the README's rule for `Steps`). The build has 293 HTML pages, 277 diagrams, and
 135 listening editions (10,782 passages; the passage count fell because the
 `GitHub` card is no longer read aloud); all internal links and anchors resolve.
+
+## Two new lessons, renumbering, engine topics in more lessons, and phone layout — 2026-10-03
+
+The reader asked whether every game part in the Bevy example gallery was explained, for
+the phone layout to be fixed, for the Unofficial Bevy Cheat Book to be used to find
+gaps, and for more of the lesson components to be used across lessons and pages. The cheat
+book was read for coverage and accuracy only; nothing is copied or cited, and every
+section is in the book's own words with its numbers derived on the page.
+
+### Two new lessons (137 in all)
+
+| Lesson | File | What it adds |
+|---|---|---|
+| **4.2 How an Engine Orders and Shares Its Work** | `pages/4/12` | Components, resources, and events as the three ways systems share data; queries and filters; change detection (a write counts as a change even when the value is equal); a frame as a fixed list of schedules and why fixed steps run 0, 1, or more times; ordering and parallel work; run conditions and states; deferred commands; table versus sparse-set storage; the same ideas in Bevy (compiled against Bevy 0.19); symptoms to look for in a running game. |
+| **6.6 How a Game Reads Input** | `pages/8/11` | Device, state, and action layers; down, just pressed, just released and why an edge lasts one frame; why a fixed step can miss it; sticks, dead zones (per-axis versus radial) and diagonal speed; key position versus typed character, scan codes, and input method editors; cursor position, motion, wheel units, locked and confined modes; touch and controllers; focus loss; bindings as data; finding an input array in memory. |
+
+Chapter 4's old 4.2–4.12 are now **4.3–4.13**, and Chapter 6's old 6.6–6.9 are now
+**6.7–6.10**. URLs, listening editions, and `gha-done` progress are unchanged. One script
+made the 82 edits: the frontmatter of 15 lessons, 49 "Lesson N.M" mentions (linked and
+plain), 15 keys in `lesson-quizzes.json`, the NPC lab comment (two copies), and the
+137-lesson guard in `write-reader-editions.mjs`. The two new lessons have quizzes. Every
+`[Lesson N.M](…)` label was then checked against its target's `chapter` (0 mismatches) and
+each plain mention was read against the title of the lesson it now names. The sections that
+earlier rows of this file place at 4.3, 4.10, 6.6, and similar numbers use the numbering
+before this change; the two tables above them were corrected.
+
+### Sections added to existing lessons
+
+| Lesson | Added |
+|---|---|
+| 4.1 Game Engines | Real time, game time, the time scale, the delta clamp and the spiral of death; debug builds and what they do to every measurement; a pointer to 4.2 and the new parts in its table. |
+| 4.7 Coordinates, Vectors, and Directions | Extrapolation beside interpolation, with one worked case of the two views of a player who stops. |
+| 7.1 Camera Frames and Projection | Axis conventions of Bevy, Godot, Unity, and Unreal and how to convert; local and world copies of a transform and why a read can be one frame stale; several cameras and viewports; texture coordinates and the top-or-bottom `v` origin. |
+| 7.2 The Rendering Pipeline | Who decides whether an object is drawn (settings, parents, render layers) with a bit-mask worked case and a "does not appear" table; HDR and its memory cost; MSAA, FXAA, and TAA as tabs; the renderer's own copy of the world and pipelined rendering. |
+| 6.7 Windows Input | Several windows and which origin to subtract; the flag values of `KEYBDINPUT` and how they combine. |
+| 9.1 Game Files | How long an asset lives (strong and weak handles, labels, asset events) and hot reloading, with a table of when a replaced file takes effect. |
+| 9.4 Textures and Asset Replacement | A sound placed between two ears, and inverse versus linear falloff. |
+
+`how-games-work` gained links to all of these, a card grid of its five groups, four
+screenshot tiles, and "Where to start" buttons. 29 glossary terms were added (451 in all);
+the single ordinary words among them (`resource`, `query`, `schedule`) are in `EVERYDAY_WORDS`.
+Facts were checked against the cheat book and Bevy's own documentation (maximum delta of
+250 ms, the 64 Hz fixed step, events kept for two frames, the state-transition order,
+transform propagation late in the frame, Y-up right-handed axes with −Z forward, strong
+handles, asset events, and the `file_watcher` feature). The Bevy snippet in 4.2 and the
+Rust and Lua dead-zone functions in 6.6 were compiled or run, not just written.
+
+### Coverage of the 26 gallery parts
+
+| Part | Where | State |
+|---|---|---|
+| 2D rendering | 7.2, 7.1 | Explained: sprites, sheets, tilemaps, layers, orthographic cameras, viewports. 2D lighting is not covered. |
+| 3D rendering | 7.2, 7.1 | Explained and deepened: visibility, HDR, anti-aliasing, passes. Physically based material parameters are named, not derived. |
+| Animation | 7.6 | Explained: keyframes, skeletons, sprites, morph targets. Animation graphs are not covered. |
+| Application | 4.1, 4.2 | Explained and deepened: startup, plugins, the loop, clocks, schedules. |
+| Assets | 9.1 | Deepened: loading, lifetime, events, hot reloading. Custom loaders and asset processing are not covered. |
+| Async tasks | 4.1, 11.8 | Explained. |
+| Audio | 9.4 | Deepened: samples, mixing, pitch, panning, two ears, falloff, streaming. Effects such as reverb are not covered. |
+| Camera | 7.1, 7.7 | Deepened: projection, several cameras, shake, follow, orbit, zoom. |
+| Dev tools | 4.1 | Explained as ideas; the engine's own tool names are not listed. |
+| Diagnostics | 4.1 | Explained, with debug builds added. |
+| ECS | 4.1, 4.2, 3.6 | Deepened: resources, events, queries, change detection, schedules, run conditions, commands, storage. |
+| Games | 4.1 | One whole small game (Breakout); the gallery's other games are not walked through. |
+| Gizmos | 4.1, 7.9 | Explained. |
+| Math | 4.7, 7.1, 7.7 | Explained; extrapolation added. |
+| Movement | 1.3, 4.1, 4.7 | Explained. Physics engines and collision response are only touched. |
+| Picking | 7.5 | Explained. |
+| Scene | 4.1 | Explained; scene file formats are not taught. |
+| Shaders | 7.3 | Explained. |
+| Shaders (advanced) | 7.3 | Explained as ideas; writing a shader is not taught. |
+| Stress tests | 4.1, 7.3 | Explained. |
+| Tools | 4.1 | Explained. |
+| Transforms | 7.1 | Deepened: local and world copies, conventions. |
+| UI | 7.13 | Explained: text, flex and grid layout, scaling, nine-slice, clipping, focus. |
+| Usage | 4.1, 7.13 | Explained. |
+| Window | 6.7, 6.6 | Deepened: client area, scale, several windows, cursor modes. |
+| glTF | 9.4 | Explained. |
+
+Input, which the gallery files elsewhere, now has its own lesson (6.6).
+
+### Components, and the phone layout
+
+`Tooltip` (5 lessons), `LinkButton` (How games work, AI assistants, What's new, and
+Components), `Tiles` (How games work), `Expandable` (the `KEYBDINPUT` flags in 6.7),
+`AccordionGroup` (4.2), `Color` swatches (7.2 and 4.7), `CodeGroup` (6.6), an `Accordion`
+with Bevy code (4.2), and more `Example`, `Tabs`, `Panel`, `Math`, and `Fields` now sit in
+the lessons that need them; `components.mdx` and the kit README document `LinkButton`,
+`Tooltip`, and `Math`. Starlight's own `Card` still appears only on the Components page.
+A bug found while doing this: the content-link rule in `reader.css` is unlayered, so it
+beat Starlight's layered button styles and gave a primary link button a label the colour of
+its own fill. Buttons are now left out of that rule; their label contrast is at least 6.5:1
+in all five themes and both modes.
+
+Phone fixes: long file names in a lab's source card no longer widen the page; the chat
+button hides while scrolling and returns near the top, the bottom, or when its panel is
+open; the "On this page" restore pill is hidden on phones, where the bar is always shown;
+and the listening dock is compact in landscape. All **144** pages other than the listening
+and print editions were measured at 320 and at 375 pixels wide, and none scrolls
+horizontally.
+
+Verification: the build has **297 HTML pages**, **284** drawn diagrams, and **137**
+listening and TXT editions (11,375 passages, 534 explained visuals). All internal links
+and anchors resolve (297 pages, 0 broken). Not inspected: native phone browsers, audible
+voice output, and a reply from the chat button (only its loader and placement were tested).

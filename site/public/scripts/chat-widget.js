@@ -243,6 +243,21 @@
     return style;
   }
 
+  // On a phone the button would sit over the text column the whole time, so it
+  // is a little smaller and slides out of the way while the reader scrolls down.
+  // It comes back on any scroll up, at the top and the bottom of the page, and
+  // whenever the chat is open (see onScroll).
+  function phoneStyle() {
+    var style = document.createElement("style");
+    style.textContent =
+      "@media (max-width:640px){" +
+        ".c7-bubble{transform:scale(.88)!important;transition:transform .2s ease,opacity .2s ease!important}" +
+        ":host([data-away=bottom]) .c7-bubble{transform:translateY(calc(100% + 28px)) scale(.88)!important;opacity:0!important;pointer-events:none!important}" +
+        ":host([data-away=top]) .c7-bubble{transform:translateY(calc(-100% - 28px)) scale(.88)!important;opacity:0!important;pointer-events:none!important}}" +
+      "@media (prefers-reduced-motion:reduce){.c7-bubble{transition:none!important}}";
+    return style;
+  }
+
   // Lets the widget's attachShadow through as an open root, remembering it, and
   // returns the function that puts the original back.
   function expose(capture, top) {
@@ -253,6 +268,7 @@
       var shadow = original.call(this, Object.assign({}, init, { mode: "open" }));
       capture.host = this;
       capture.shadow = shadow;
+      shadow.appendChild(phoneStyle());
       if (top) shadow.appendChild(topStyle());
       return shadow;
     };
@@ -304,7 +320,7 @@
     script.setAttribute("data-welcome-message", welcome());
 
     var restore = expose(capture, /^top/.test(corner));
-    mounted = { script: script, capture: capture, restore: restore };
+    mounted = { script: script, capture: capture, restore: restore, side: /^top/.test(corner) ? "top" : "bottom" };
     function finished() {
       restore();
       // A script from an earlier build that finished late leaves its own
@@ -327,7 +343,35 @@
     if (panel && input && !panel.classList.contains("open")) input.placeholder = placeholder(currentSection());
   }, true);
 
+  // Slides the button away on a scroll down and back on a scroll up, on a phone.
+  var phone = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
+  var anchor = window.pageYOffset;
+  var pending = 0;
+
+  function onScroll() {
+    if (pending) return;
+    pending = window.setTimeout(function () {
+      pending = 0;
+      var capture = mounted && mounted.capture;
+      var y = window.pageYOffset;
+      if (!capture || !capture.host || !phone.matches) {
+        anchor = y;
+        return;
+      }
+      var open = capture.shadow && capture.shadow.querySelector(".c7-panel.open");
+      var edge = y < 120 || y + window.innerHeight > document.documentElement.scrollHeight - 200;
+      if (open || edge || y < anchor - 12) {
+        capture.host.removeAttribute("data-away");
+        anchor = y;
+      } else if (y > anchor + 12) {
+        capture.host.setAttribute("data-away", mounted.side);
+        anchor = y;
+      }
+    }, 60);
+  }
+
   function start() {
+    window.addEventListener("scroll", onScroll, { passive: true });
     mount();
     new MutationObserver(function () {
       clearTimeout(timer);

@@ -1,19 +1,25 @@
 ---
 title: "The Rendering Pipeline and Its State"
-description: "See how objects become pixels through meshes, materials, light, shaders, rasterization, depth testing, transparency, culling, render passes, and the 2D case, and the state that gives each draw its meaning."
+description: "See how objects become pixels through meshes, materials, light, shaders, rasterization, depth testing, transparency, visibility flags and layers, culling, render passes, HDR and anti-aliasing, the renderer's own copy of the world, and the 2D case, and the state that gives each draw its meaning."
 chapter: "7.2"
-minutes: 45
+minutes: 55
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 2
   label: "7.2 The Rendering Pipeline and Its State"
 ---
+import { Color, Example, Frame, GitHub, Panel, Tab, Tabs, Tooltip } from '../../../../components/kit';
+
 ## Use a setting as an anchor
 
 Urban Terror 4.3.4 has console variables that visibly affect rendering. In an offline local session, toggling entity drawing gives us a clean experiment.
 
+<Frame caption="A console command changing how entities are drawn.">
+
 ![A console command changing entity drawing](/assets/images/5/2/urbanterror1.png)
+
+</Frame>
 
 When entities disappear, the game is likely checking a flag before submitting their draw work.
 
@@ -92,9 +98,9 @@ Light is worked out from the **normal**, the direction the surface faces. The
 simplest model, **diffuse** lighting, makes a surface brightest when it faces the
 light and dark when it faces away. With `N` the unit normal and `L` the unit
 direction from the surface toward the light, the brightness is the larger of 0 and
-the dot product `N · L` (Lesson 4.6). For `N = (0, 0, 1)` and `L = (0.6, 0, 0.8)`, the
-dot product is 0 + 0 + 0.8 = 0.8, so a surface of colour `(200, 100, 50)` is drawn as
-`(200 × 0.8, 100 × 0.8, 50 × 0.8) = (160, 80, 40)`. Tilt the surface until the dot
+the dot product `N · L` (Lesson 4.7). For `N = (0, 0, 1)` and `L = (0.6, 0, 0.8)`, the
+dot product is 0 + 0 + 0.8 = 0.8, so a surface of colour <Color value="rgb(200, 100, 50)" /> is drawn as
+`(200 × 0.8, 100 × 0.8, 50 × 0.8)`, which is <Color value="rgb(160, 80, 40)" />. Tilt the surface until the dot
 product is 0 or negative and it receives no light from that source.
 
 Realistic engines add to this. **Physically based rendering** (PBR) describes a
@@ -120,13 +126,21 @@ Changing `depth_test_enabled` is different from changing the depth comparison fr
 `LESS` to `ALWAYS`, and both are different from leaving the test on while disabling
 depth writes.
 
+<Frame caption="Entities no longer drawn after the command.">
+
 ![Entities no longer being drawn](/assets/images/5/2/urbanterror2.png)
+
+</Frame>
 
 ## Search for the flag
 
 Scan for the flag’s current integer value. Toggle it, filter, and repeat. Then set a read breakpoint on a confirmed candidate and render one frame.
 
+<Frame caption="A render flag in the debugger.">
+
 ![A render flag in the debugger](/assets/images/5/2/urbanterror4.png)
+
+</Frame>
 
 Look for a conditional pattern:
 
@@ -169,7 +183,11 @@ Pause where one entity is prepared for drawing. Compare the pointer across:
 - a weapon;
 - a map object.
 
+<Frame caption="Memory around a possible entity structure.">
+
 ![Inspecting a possible entity structure](/assets/images/5/2/urbanterror5.png)
+
+</Frame>
 
 Put only confirmed fields into the layout type:
 
@@ -211,7 +229,11 @@ The depth buffer answers “which submitted fragment wins at this sample?” It 
 not answer whether an object is logically visible to gameplay. Collision queries,
 portals, fog-of-war systems, and server state may use entirely different data.
 
+<Frame caption="A depth-test experiment in the offline target.">
+
 ![A depth-test experiment in an offline target](/assets/images/5/2/urbanterror13.png)
+
+</Frame>
 
 That visual result proves a rendering rule changed; it does **not** prove which objects a call represents. You still need classification tests.
 
@@ -225,9 +247,10 @@ and the old one are mixed by the new colour's **alpha**, from 0 (invisible) to 1
 result = source × alpha + destination × (1 − alpha)
 ```
 
-A red fragment `(255, 0, 0)` with alpha 0.25 over a blue-ish background `(0, 0, 200)`
-gives red `255 × 0.25 + 0 × 0.75 = 63.75`, green `0`, and blue `0 × 0.25 + 200 × 0.75 =
-150`, which rounds to `(64, 0, 150)`: the background shows through, tinted.
+A red fragment <Color value="rgb(255, 0, 0)" /> with alpha 0.25 over a blue-ish background
+<Color value="rgb(0, 0, 200)" /> gives red `255 × 0.25 + 0 × 0.75 = 63.75`, green `0`, and
+blue `0 × 0.25 + 200 × 0.75 = 150`, which rounds to <Color value="rgb(64, 0, 150)" />: the
+background shows through, tinted.
 
 Because the mix uses what is already there, order matters. Swap two see-through
 layers and the result changes. So engines draw all the solid objects first, with depth
@@ -243,7 +266,7 @@ edges, and sprites are drawn in layer order, back to front.
 The cheapest triangle is one that is never drawn, so engines throw work away early.
 
 - **Frustum culling** skips objects outside the camera's view volume (the frustum from
-  Lesson 7.1). Each object gets a bounding sphere (Lesson 4.6), and the sphere is tested
+  Lesson 7.1). Each object gets a bounding sphere (Lesson 4.7), and the sphere is tested
   against the volume's edges. In a flat example, put the camera at the origin looking
   along `+x` with a 90° view, so the visible wedge is where `|y| ≤ x`. An object of
   radius 1 centred at `(10, 12)` is `(12 − 10) ÷ √2 = 1.41` beyond the upper edge, which
@@ -260,6 +283,63 @@ The cheapest triangle is one that is never drawn, so engines throw work away ear
 
 All of this happens before any draw call exists, which is why the symptom "an object is
 absent from the visible list" in the table below points at the game, not the GPU.
+
+## Who decides whether an object is drawn
+
+Culling is the last of several decisions. Before it, the engine has already asked three
+questions about each object:
+
+1. **Its own setting.** An object is visible, hidden, or *inherited*, which means it
+   follows its parent.
+2. **The result after its parents.** The engine combines each object's setting with its
+   parent's, from the root down. An inherited object under a hidden parent is hidden, so
+   hiding the tank hides its turret and its barrel. This result is another value derived
+   once per frame from the settings, like the world transform in Lesson 7.1.
+3. **The view.** For each camera, the object must lie inside the camera's view volume
+   (the culling above) and share at least one **render layer** with it.
+
+A render layer is one bit of a number. Every object and every camera carries a mask,
+a number whose set bits name the layers it belongs to or can see, and a camera draws an
+object only if the two masks share a set bit. The test is a **bitwise AND**, which
+compares two numbers bit by bit and keeps a bit only where both have it: `011` AND `101`
+is `001`, so 3 AND 5 is 1. A result that is not zero means the masks share a layer. Take
+three layers: the world is bit 0 (value 1), the first-person weapon is bit 1 (value 2),
+and the minimap icon is bit 2 (value 4).
+
+<Example title="Which camera draws which object">
+
+The main camera's mask is 1 + 2 = 3, which is `011` in binary, and the minimap camera's
+mask is 1 + 4 = 5, which is `101`.
+
+| Object | Mask | Main camera: 3 AND mask | Minimap camera: 5 AND mask |
+|---|---|---|---|
+| tree | 1 (`001`) | 1, drawn | 1, drawn |
+| weapon | 2 (`010`) | 2, drawn | 0, not drawn |
+| icon | 4 (`100`) | 0, not drawn | 4, drawn |
+
+</Example>
+
+The weapon is drawn by the main camera only and the icon by the minimap only, although
+all three objects live in the same world. An object that fails one of these three
+questions never reaches a draw call, so it is absent from the visible list, which is
+the first row of the table at the end of this lesson.
+
+When an object that should appear does not, the cause is usually one of these, and each
+leaves a different trace:
+
+<Panel title="An object that should appear does not">
+
+| Cause | What it looks like |
+|---|---|
+| Its own setting, or a parent's, is hidden | gone from every camera at every distance |
+| It shares no render layer with the camera | drawn by one camera and absent from another |
+| It is behind the camera or past the camera's far limit | appears when the camera turns round or moves closer; an object 1,500 units away is never drawn by a camera whose far limit is 1,000 |
+| Its scale is 0 on every axis | everything collapses to one point, which has no area to draw; a scale of 0 on one axis flattens it into a sheet that vanishes when seen edge-on |
+| Its triangles are <Tooltip tip="A triangle lists its three corners in an order, clockwise or anticlockwise as seen from one side. The renderer treats one direction, usually anticlockwise, as the front, so a mesh whose corners are listed the other way has its outside counted as the back.">wound the wrong way</Tooltip> for back-face culling | the outside is invisible and the inside shows |
+| A lit material has no light | drawn, but dark or black, so against a dark background it looks absent |
+| In 2D, its depth lies outside the camera's depth range | a camera that sees depths from −1,000 to 0 never draws a sprite at depth 5 |
+
+</Panel>
 
 ## A frame is several passes
 
@@ -288,8 +368,8 @@ flowchart LR
 - **Sky and fog.** A **skybox** is a cube texture drawn so that it always looks
   infinitely far away. **Fog** blends a surface toward a haze colour with distance. With
   the fog starting at 10 and ending at 50, a surface 30 away has the factor
-  `(50 − 30) ÷ (50 − 10) = 0.5`, so a surface of `(200, 100, 50)` in haze `(150, 150, 150)`
-  is drawn as `(175, 125, 100)`.
+  `(50 − 30) ÷ (50 − 10) = 0.5`, so a surface of <Color value="rgb(200, 100, 50)" /> in haze
+  <Color value="rgb(150, 150, 150)" /> is drawn as <Color value="rgb(175, 125, 100)" />.
 - **Post-processing.** The finished picture is stored as a texture and a full-screen
   rectangle is drawn with a shader that reads it. **Bloom** blurs the brightest parts and
   adds them back, and **colour grading** remaps colours. **Tone mapping** compresses
@@ -307,6 +387,113 @@ flowchart LR
   **deferred** renderer first draws position, normal, and colour for every pixel into
   extra textures, then lights the pixels in one later pass, which makes many lights
   affordable but handles see-through surfaces less easily.
+
+## Wider colours and smoother edges
+
+### HDR needs wider pixels
+
+An ordinary picture keeps each colour channel in 8 bits, which is 256 levels from 0 to
+1, so nothing can be brighter than 1.0. Lighting can produce more. Say a sunlit wall
+comes out at 1.4 and a lamp at 12.0. In an 8-bit picture both are cut off at 1.0 and
+look equally bright. **HDR** rendering draws into a texture whose channels are wider
+and floating-point, commonly 16 bits each, so the difference survives until the
+tone-mapping step at the end compresses the result into the 0 to 1 range of the
+display. With the `c ÷ (1 + c)` rule from above, the wall becomes 1.4 ÷ 2.4 = 0.58 and
+the lamp 12 ÷ 13 = 0.92: still different, and both displayable.
+
+The wider pixels cost memory. A 1920 × 1080 picture has 1920 × 1080 = 2,073,600 pixels.
+With 4 channels of 1 byte it takes 2,073,600 × 4 = 8,294,400 bytes, about 8.3 MB. With
+4 channels of 2 bytes it takes 2,073,600 × 8 = 16,588,800 bytes, about 16.6 MB.
+
+HDR is also what makes bloom mean something. Bloom blurs only the part of each pixel
+above a threshold, here 1.0. The wall has 1.4 − 1.0 = 0.4 above it and the lamp has
+12.0 − 1.0 = 11.0, so the lamp glows 11.0 ÷ 0.4 = 27.5 times as strongly. In the 8-bit
+picture both had 0 above the threshold, and nothing could glow.
+
+### Smoothing jagged edges
+
+The edge of a diagonal shape comes out as stair-steps, because each pixel is either
+inside the shape or outside it. **Anti-aliasing** hides the steps. Three common methods
+work in different places:
+
+<Tabs sync="antialiasing">
+<Tab label="MSAA">
+
+**Multisample anti-aliasing** tests coverage at several points inside each pixel. With
+4 sample points per pixel, written 4×, a triangle that covers 3 of the 4 points of an
+edge pixel contributes 3 ÷ 4 = 0.75 of its colour. Over a blue background
+<Color value="rgb(0, 0, 200)" />, a red triangle <Color value="rgb(255, 0, 0)" /> covering
+3 of 4 points gives `0.75 × (255, 0, 0) + 0.25 × (0, 0, 200) = (191.25, 0, 50)`, drawn as
+<Color value="rgb(191, 0, 50)" />.
+
+The shader still runs once per pixel, so the extra cost is memory: colour and depth are
+stored for every sample. The colour samples alone take 2,073,600 pixels × 4 samples ×
+4 bytes = 33,177,600 bytes, about 33.2 MB, which is four times the 8.3 MB of one sample
+per pixel. MSAA smooths the edges of triangles but not sharp patterns that a shader or
+a texture draws inside a triangle.
+
+</Tab>
+<Tab label="FXAA">
+
+**Fast approximate anti-aliasing** works on the finished picture. It looks for pixels
+where the brightness changes sharply from one neighbour to the next and blurs across
+those edges. It stores no extra samples and costs one full-screen pass over the
+2,073,600 pixels, so it is cheap, and it also smooths edges drawn by shaders and
+textures. Its price is that it blurs text and fine texture detail too, because it cannot
+tell the edge of a shape from a sharp line in a picture.
+
+</Tab>
+<Tab label="TAA">
+
+**Temporal anti-aliasing** shifts the camera by a fraction of a pixel on every frame,
+called **jitter**, and blends each pixel with the same pixel's colour from earlier
+frames. With 8 different jitter positions, a pixel has been sampled at 8 places after
+8 frames, for the cost of keeping one extra copy of the picture. To find where a pixel
+was last frame, the engine needs a **motion vector** for it. Where the vectors are wrong,
+such as behind a transparent surface, old colours linger and leave a ghost trail behind
+a moving object.
+
+</Tab>
+</Tabs>
+
+## The renderer works from its own copy
+
+Many engines keep two worlds. The **main world** holds the game: positions, health, and
+what is hidden. The **render world** holds what drawing needs: meshes, materials,
+lights, and the final transforms. Once per frame an **extract** step copies the data
+that drawing needs from the first into the second. The renderer then works only from
+its copy, so the game can start simulating the next frame while the renderer is still
+drawing this one. That overlap is called **pipelined rendering**.
+
+```mermaid
+flowchart LR
+    subgraph G["game thread: main world"]
+        S1["simulate 1"] --> S2["simulate 2"] --> S3["simulate 3"]
+    end
+    subgraph R["render thread: render world"]
+        R1["draw 1"] --> R2["draw 2"]
+    end
+    S1 -.->|"extract 1"| R1
+    S2 -.->|"extract 2"| R2
+```
+
+Suppose simulating a frame takes 6 ms and drawing it takes 8 ms. The extract copy takes
+a little time of its own, which the figures ignore:
+
+| Arrangement | Time per frame | Frames per second |
+|---|---|---|
+| one stage after the other | 6 + 8 = 14 ms | 1000 ÷ 14 = 71 |
+| overlapped | the slower stage, 8 ms | 1000 ÷ 8 = 125 |
+
+Overlapping has a price. What is drawn comes from the state copied at extract, so it is
+one frame behind the simulation that is already working on the next one.
+
+For memory work this means a game's positions can exist twice, once in each world. The
+render copy is overwritten from the main copy at every extract, so editing it changes
+the picture only until the next extract, while editing the main copy changes the rules
+and the picture together. A hook on a draw call (Lesson 7.10) sees the render copy, and
+the game's rules see the main one. Lesson 7.12 shows how to avoid mixing values from
+different frames.
 
 ## Two-dimensional rendering uses the same pipeline
 
@@ -332,7 +519,7 @@ A **tilemap** is a grid of tile numbers. Drawing it means turning each number in
 quad that points at the right part of the atlas. A screen of 20 × 15 tiles is 300
 quads, which is 600 triangles, and the engine can send all of them to the GPU as one
 draw call from one atlas instead of 300 separate calls. This is the same grid Lesson
-4.4 reads as game state, now seen as pictures.
+4.5 reads as game state, now seen as pictures.
 
 Pixel-art games often draw the whole scene into a small texture, such as 320 × 180,
 and then enlarge it by a whole number, 4, to 1280 × 720. Whole-number scaling keeps
@@ -375,6 +562,8 @@ render-thread state merely because it has the same function pointers.
 
 Use the earliest observable difference to narrow the cause:
 
+<Panel title="Visibility failures by stage">
+
 | Symptom | Likely stage |
 |---|---|
 | object absent from visible list | game filtering or CPU culling |
@@ -383,6 +572,8 @@ Use the earliest observable difference to narrow the cause:
 | fragments exist but fail depth | depth state or existing occluder |
 | fragments pass but write no color | color mask, shader discard, stencil |
 | color appears but looks wrong | shader inputs, texture, lighting, blend, color space |
+
+</Panel>
 
 This table is a diagnostic order, not proof. Some engines merge or reorder stages,
 and GPU-driven pipelines can construct visible lists on the GPU.
@@ -430,6 +621,10 @@ Install a six-byte verified detour at `0x0052D2FD`, enter a local game, enable `
 Restore the original six hook bytes when the feature is disabled. This memory-based wallhack is intentionally kept as a full target-specific lab before the more general OpenGL approach.
 
 The DLL already contains the complete verified implementation. Build and inject it into `Quake3-UrT.exe`, enter a local bot match, and press **F1** to toggle this memory wallhook. Press **End** to stop and restore all six bytes. See [`install_urban_terror_memory_wallhook`](/windows-labs/src/windows_impl/game_hooks.rs) and the Urban Terror hotkey worker in [`dll.rs`](/windows-labs/src/windows_impl/dll.rs).
+
+<GitHub path="windows-labs/src/windows_impl/game_hooks.rs" />
+
+<GitHub path="windows-labs/src/windows_impl/dll.rs" />
 
 ## What the experiment proves
 

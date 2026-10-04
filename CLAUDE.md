@@ -147,8 +147,9 @@ The user identified `gh-pages` as the target edition. Recheck the plan's source-
 The full-book pass is implemented on `codex/book-revision`. Read
 `BOOK_REVISION_PROGRESS.md` for the branch, current reading order, relocation
 map, and validation. `BOOK_REVISION_AUDIT.md` records the disposition of all
-132 lessons before redistribution; the current book has 135 lessons after two
-topic splits and the firmware lesson. Lessons 1.3, 1.4, 1.5, and 1.6 are Game Fundamentals, Programming
+132 lessons before redistribution; after two topic splits and the firmware
+lesson it had 135, and since 2026-10-03 it has 137 (see "Two new lessons"
+below). Lessons 1.3, 1.4, 1.5, and 1.6 are Game Fundamentals, Programming
 Fundamentals, the Rust Primer, and Hacking Fundamentals. The complete memory
 model is Lesson 1.8, directly before the first memory experiment in 1.9.
 Treat Ada and Bo as local example names, not cross-lesson prerequisites.
@@ -265,7 +266,7 @@ may also include a documentation-only receipt; the built content is fb6319b.
 
 ### Firmware and fundamentals additions
 
-The current book has **135 lessons**. Firmware and Bare-Metal Rust is **14.3**,
+At this point the book had **135 lessons**. Firmware and Bare-Metal Rust is **14.3**,
 at `pages/14/12`, before console architecture. Chapter 14's remaining displayed
 numbers advance to 14.4–14.8 while their historical URLs stay stable. Keep
 `firmware-labs/` separate from the host labs: it targets Cortex-M3 and is tested
@@ -337,7 +338,7 @@ provider API credentials or automatic content submission are used.
 The toolbar prints its current lesson when visuals are ready. `/print/` is a
 lightweight scope chooser; `/print/chapter/N/` contains one complete chapter.
 Only Prepare complete book loads all fourteen chapters, with progress and
-cancellation. Preserve all 135 lessons and their visuals in that assembled
+cancellation. Preserve all 137 lessons and their visuals in that assembled
 document. See BOOK_REVISION_PROGRESS.md for verification and publication.
 
 The listening/diagram/print update is source **19873fe**, published through
@@ -459,3 +460,43 @@ live site loses them (publishing replaces every file).
 - **Publishing.** `bun run publish:pages` builds, commits on a detached copy of
   `origin/gh-pages`, and pushes `HEAD:gh-pages`; it never moves a local branch.
   It refuses to run with uncommitted changes under `site/` or the lab folders.
+
+### Two new lessons and the second renumbering (2026-10-03)
+
+The book has **137 lessons**. **4.2 How an Engine Orders and Shares Its Work**
+(`pages/4/12`) and **6.6 How a Game Reads Input** (`pages/8/11`) are new, and the
+lessons after them moved up by one: Chapter 4's old 4.2–4.12 are 4.3–4.13 and
+Chapter 6's old 6.6–6.9 are 6.7–6.10. URLs and `gha-done` progress did not change.
+Whenever lessons are renumbered:
+
+- Edit `chapter`, `sidebar.order`, and `sidebar.label` together
+  (`lesson-index.mjs` throws if they disagree, or if a chapter has a gap).
+- Key `src/data/lesson-quizzes.json` by the **displayed** number and give every new
+  lesson a quiz (`id` unique).
+- Shift every "Lesson N.M" mention, plain or linked. Plain mentions become links on their
+  own, but they are text: nothing checks them. Check that each `[Lesson N.M](/pages/…)`
+  label equals the target lesson's `chapter`, and read each plain mention against the
+  lesson's title.
+- The listening build counts lessons: `scripts/write-reader-editions.mjs` expects
+  exactly 137.
+- `rust-labs/src/bin/npc_brain_lab.rs` names its lessons in a comment (4.12 and 4.13),
+  and `site/public/rust-labs/` holds the synced copy.
+
+New engine, input, and rendering sections are in 4.1 (real time, game time, the clamp,
+debug builds), 4.7 (extrapolation), 7.1 (axis conventions, local and world transforms,
+several cameras, texture coordinates), 7.2 (visibility and render layers, HDR,
+anti-aliasing, the render world), 9.1 (asset lifetime, events, hot reloading), 9.4
+(two ears and falloff), and 6.7 (several windows). They were checked against the Unofficial Bevy Cheat
+Book and Bevy's own documentation for accuracy, and are written in the book's own words:
+do not copy or cite the cheat book. The Bevy snippet in 4.2 compiles against Bevy 0.19.
+The glossary gained 29 terms; single ordinary words among them (`resource`, `query`,
+`schedule`) are in `EVERYDAY_WORDS` so they are not marked in unrelated lessons.
+`Math` carries formulas with braces (MDX reads braces in prose as code and `$$` blocks
+holding `\text{…}` fail to parse); `LinkButton` and `Tooltip` now have uses and entries in
+`components.mdx` and the kit README.
+
+Phone layout fixes made with them: `.kit-github` columns use `minmax(0, 1fr)` and wrap
+long names; the chat button hides while scrolling on phones (`data-away`, set by a
+throttled scroll handler in `chat-widget.js`) and returns near the top, the bottom, or when
+the panel is open; the floating "On this page" restore pill is hidden on phones, where the
+bar is always shown; and the listening dock is compact in landscape.

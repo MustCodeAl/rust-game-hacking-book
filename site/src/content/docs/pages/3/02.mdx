@@ -9,6 +9,8 @@ sidebar:
   order: 3
   label: "3.3 How External Tools Read Game Memory"
 ---
+import { Fields, GitHub, ParamField, ResponseField } from '../../../../components/kit';
+
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
 import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
@@ -38,6 +40,47 @@ pointer with the same number would inspect the tool's own memory. A process
 **handle** names the target and carries the rights granted for this opening;
 the Windows read uses that handle with the target address and a byte count.
 Lesson 11.6 later examines handles in more depth.
+
+That read is the Windows function `ReadProcessMemory`. Its arguments split cleanly
+into what belongs to the game and what belongs to the tool:
+
+<Fields title="ReadProcessMemory, argument by argument">
+<ParamField name="hProcess" type="handle" required>
+
+The process handle, opened with the right to read (`PROCESS_VM_READ`). It says
+*which* process's address map to use.
+
+</ParamField>
+<ParamField name="lpBaseAddress" type="address in the game" required>
+
+Where to start reading. To the tool this is only a number, so it is never
+dereferenced locally.
+
+</ParamField>
+<ParamField name="lpBuffer" type="address in the tool" required>
+
+Where Windows stores the copied bytes: memory the tool owns, with room for at
+least `nSize` bytes.
+
+</ParamField>
+<ParamField name="nSize" type="bytes" required>
+
+How many bytes to copy.
+
+</ParamField>
+<ParamField name="lpNumberOfBytesRead" type="bytes, optional">
+
+Where Windows reports how many bytes were actually copied. A tool that ignores it
+can decode stale bytes left in its buffer.
+
+</ParamField>
+<ResponseField name="return value" type="nonzero on success">
+
+Zero means the read failed. `GetLastError` then says why, such as
+`ERROR_PARTIAL_COPY` (299) when only part of the range could be read.
+
+</ResponseField>
+</Fields>
 
 For this lab, the program discovers `wesnoth.exe` with the Windows ToolHelp API,
 opens it, resolves the verified pointer chain, and performs the guarded write.
@@ -96,7 +139,7 @@ becomes inconsistent:
 
 Check the returned byte count and revalidate the object path after a multi-step
 read. That reduces stale observations; it does not turn several Windows calls
-into one atomic snapshot. [Lesson 4.3](/pages/4/02/) builds a bounded
+into one atomic snapshot. [Lesson 4.4](/pages/4/02/) builds a bounded
 double-capture check for that remaining uncertainty.
 
 ## Hands-on target: Wesnoth 1.14.9
@@ -195,6 +238,8 @@ value leaves scope. Keeping `OwnedHandle` private also prevents callers from
 copying the raw handle and closing it twice. The wrapper does not hide Windows
 errors; it only makes the cleanup rule automatic.
 :::
+
+<GitHub path="windows-labs/src/windows_impl/process.rs" />
 
 The `Process` type stores this `OwnedHandle`. The rest of the program cannot
 forget to close it. Its complete ToolHelp implementation is in
@@ -404,6 +449,8 @@ cargo build --release --target i686-pc-windows-msvc --bin wesnoth_gold
 ```
 
 The complete entry point is [`wesnoth_gold.rs`](/windows-labs/src/bin/wesnoth_gold.rs).
+
+<GitHub path="windows-labs/src/bin/wesnoth_gold.rs" />
 
 ## Make failure useful
 

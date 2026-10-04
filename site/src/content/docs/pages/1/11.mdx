@@ -1,15 +1,15 @@
 ---
 title: "Game Engines: Where the Rules Live"
-description: "Separate the reusable engine from the game built on it, follow one frame, the entities, and the scenes inside it, see which engine each course game uses, and learn why where a rule lives decides how you change it."
+description: "Separate the reusable engine from the game built on it, follow one frame and the clocks that drive it, the entities and the scenes inside it, see which engine each course game uses, and learn why where a rule lives decides how you change it."
 chapter: "4.1"
-minutes: 32
+minutes: 35
 author: "attilathedud"
 date: "2026-09-24"
 sidebar:
   order: 1
   label: "4.1 Game Engines: Where the Rules Live"
 ---
-import { Column, Columns, HoverCard } from '../../../../components/kit';
+import { CardGrid, Column, Columns, Example, HoverCard, LinkCard, Math, Tooltip } from '../../../../components/kit';
 
 The previous chapters followed values into instructions and turned remote
 bytes into typed objects and collections. The next question is larger:
@@ -126,6 +126,10 @@ flowchart LR
     P --> I
 ```
 
+Frame time and frame rate are reciprocals of each other:
+
+<Math block tex="t_{\text{frame}} = \frac{1000}{\text{fps}}\ \text{ms}" speak="the frame time in milliseconds equals one thousand divided by the frames per second" />
+
 A display that refreshes 60 times each second takes a new picture every
 1 ÷ 60 = 0.01667 seconds, which is 16.67 milliseconds. All four jobs must fit in
 that **frame budget**, or the display refreshes before the new picture is ready
@@ -144,6 +148,8 @@ only at positions can jump the ball clean over a wall 10 pixels thick. So many
 engines run physics in a **fixed timestep**, such as 1/60 second, and carry the
 leftover real time into the next frame:
 
+<Example title="Three frames of fixed steps">
+
 | Frame | Real time since the last frame (ms) | Time waiting to be simulated (ms) | Fixed steps run (16.67 ms each) | Left over (ms) |
 |---|---|---|---|---|
 | 1 | 20.00 | 0 + 20.00 = 20.00 | 1 | 20.00 − 16.67 = 3.33 |
@@ -154,10 +160,12 @@ After 70 ms of real time the game has run 4 steps, which is 4 × 16.67 = 66.67 m
 of game time, and 3.33 ms is waiting. The two add back to 70 ms, so no time was
 lost. A slow frame runs several steps to catch up, and a quick one runs none.
 
+</Example>
+
 What is drawn after a frame is usually partway between two steps. The 3.33 ms
 left over is 3.33 ÷ 16.67 = 20% of the way to the next step, and many engines
 blend the last two steps by that fraction, so motion looks smooth even though
-the rules advance in coarse steps (Lesson 4.6 shows how that blend is computed).
+the rules advance in coarse steps (Lesson 4.7 shows how that blend is computed).
 
 This tells you something when you scan memory. A value the rules change moves
 once per step, and a value the drawing code keeps (an on-screen animation timer,
@@ -170,6 +178,62 @@ step: after 60 steps of 1/60 second the value has fallen by 1.0 to 4.0, and afte
 300 steps it reaches 0 and the ability is ready. Some games instead store the
 moment it becomes ready (now + 5.0) and compare it with the clock. Either way the
 cooldown is a number in memory that you can scan for.
+
+### Real time, game time, and the clamp
+
+The delta time an update receives is not always the time that really passed. Engines
+keep two clocks. **Real time** is the <Tooltip tip="The time a clock on a wall shows. It keeps running whatever the game does, so pausing the game cannot stop it.">wall clock</Tooltip>: it never stops, and a loading
+spinner or a menu animation uses it. **Game time** is what the rules use. Each frame
+the engine takes the real time since the last frame, limits it to a maximum, and
+multiplies it by a **time scale**:
+
+<Math block tex="\Delta_{\text{game}} = \min(\Delta_{\text{real}},\ \Delta_{\max}) \times s" speak="the game delta equals the smaller of the real delta and the maximum delta, times the time scale s" />
+
+A scale of 1 is normal speed, 0.5 is slow motion, 2 is fast forward, and 0 is a
+pause. A pause stops game time but not real time, which is why a paused game still
+draws its menu and answers the mouse. The scale also stretches every timer that
+counts game time:
+
+<Example title="One 16.67 ms frame at four time scales">
+
+| Time scale | Game time added by the frame | A 5.0 s cooldown ends after |
+|---|---|---|
+| 1 (normal) | 16.67 ms | 5.0 ÷ 1 = 5.0 s of real time |
+| 0.5 (slow motion) | 16.67 × 0.5 = 8.33 ms | 5.0 ÷ 0.5 = 10.0 s |
+| 2 (fast forward) | 16.67 × 2 = 33.33 ms | 5.0 ÷ 2 = 2.5 s |
+| 0 (paused) | 0 ms | never, while paused |
+
+</Example>
+
+The limit protects the rules from a frame that stalled. A laptop that sleeps, or a
+window held still by the mouse for 3 seconds, would otherwise hand the next update a
+delta of 3.0 s. A ball moving 150 pixels a second would jump 150 × 3.0 = 450 pixels
+at once, straight through any wall, and a fixed-step loop would owe 3.0 ÷ (1/60) =
+180 steps. Bevy's default limit is 250 ms, so the longest delta any frame can add is
+0.25 s, and at 60 steps a second the loop owes at most 0.25 ÷ (1/60) = 15 steps.
+
+```mermaid
+flowchart LR
+    R["real time since<br/>the last frame"] --> C["limit to a maximum<br/>(250 ms in Bevy)"]
+    C --> S["multiply by the<br/>time scale (0 = paused)"]
+    S --> G["game time added<br/>this frame"]
+    G --> F["fixed steps owed:<br/>game time ÷ step length"]
+```
+
+The limit also ends a failure called the **spiral of death**. Suppose each fixed step
+takes 20 ms of real time to compute but advances game time by only 16.67 ms. While
+the engine computes one step, the real clock moves 20 ms, so the next frame owes
+20 ms of game time, which is 20 ÷ 16.67 = 1.2 times as much as the step paid off.
+The frame after that owes 1.2 times as much again. Each step leaves the game
+20 − 16.67 = 3.33 ms further behind real time, so after 60 steps it is 60 × 3.33 =
+200 ms behind, and running more steps to catch up only adds more debt. The clamp
+throws the excess away, so the game falls behind real time and runs in slow motion
+instead of freezing.
+
+Scanning memory is easier with this in mind. A game's elapsed time may exist twice:
+one value that always rises, and one that stops during a pause. A cooldown that
+compares itself with the second pauses with the game, and one that compares itself
+with the first keeps running behind the pause menu.
 
 ### Slow work leaves the frame
 
@@ -192,7 +256,7 @@ sequenceDiagram
 ```
 
 The result arrives on a frame nobody can predict, so the game has to handle
-"not ready yet" with a loading screen or a stand-in. Lesson 4.10 uses the same
+"not ready yet" with a loading screen or a stand-in. Lesson 4.11 uses the same
 channel to move records from a game to a recorder without stalling it.
 
 ### Measuring the frame
@@ -207,6 +271,13 @@ An average can hide a stutter. Four frames of 16, 16, 16, and 66 ms average
 (16 + 16 + 16 + 66) ÷ 4 = 28.5 ms, or 1000 ÷ 28.5 = 35 frames per second, even
 though three frames in four were fine. The 66 ms frame is the one a player feels,
 so a good diagnostic also reports the slowest frame.
+
+The build changes the measurement as much as the code does. A **debug build** leaves
+out most optimizations so that mistakes are easier to find, and engine code that loops
+over thousands of entities can run many times slower in it than in a **release
+build**. Suppose a system takes 0.4 ms in a release build and 12 ms in a debug build.
+That is 12 ÷ 0.4 = 30 times slower, and 12 ms alone is 12 ÷ 16.67 = 72% of the frame
+budget. A frame time means little until you know which kind of build produced it.
 
 ## Entities, components, and systems
 
@@ -254,6 +325,10 @@ Engines add a few rules around this:
 - An **observer** is code that runs when something happens, such as an entity
   being created, a component being removed, or "coin 42 was collected" (the
   event from Lesson 1.3), instead of checking every frame whether it happened.
+
+Lesson 4.2 follows how systems share data through resources and events, how the
+engine decides which system runs first and which can run at the same time, and how
+it notices only what changed.
 
 ## Scenes: a world you can load
 
@@ -397,6 +472,8 @@ paddle at the bottom of the screen bounces a ball upward into rows of bricks.
 - **State.** The score, the bricks left, and the lives are numbers in memory. So
   is the mode: menu, playing, or game over.
 
+<Example title="One step of Breakout">
+
 One step, with real numbers. The ball is at x = 794 with a velocity of 150 pixels
 per second to the right, and a step is 1/60 second:
 
@@ -412,6 +489,8 @@ Nothing in that step names Breakout. It is the movement and contact rules of
 Lesson 1.3 run by systems over entities, in the order the engine's loop calls
 them.
 
+</Example>
+
 ## Where each engine part is explained
 
 This lesson names the parts. The lessons below explain how each one works, and
@@ -423,6 +502,8 @@ show nearly every one in a few dozen lines.
 |---|---|---|
 | Application, window | starts the program, opens a window, owns the loop | this lesson; [Windows Input](/pages/8/06/#the-window-itself) |
 | Entities, components, scenes | organize the world and load it | this lesson; [Collections](/pages/3/05/) |
+| Resources, events, schedules, change detection | how systems share data, in what order they run, and what they skip | [Ordering and Sharing Work](/pages/4/12/) |
+| Input | turns key, stick, and mouse events into actions | [How a Game Reads Input](/pages/8/11/); [Windows Input](/pages/8/06/) |
 | Math, transforms | positions, directions, turning, blending | [Coordinates and Vectors](/pages/4/11/); [Camera Frames](/pages/5/01/) |
 | Camera, picking | what is seen, and what is under the cursor | [Camera Frames](/pages/5/01/); [Camera Rays](/pages/5/05/) |
 | 2D and 3D rendering, shaders | turn the world into pixels | [Rendering Pipeline](/pages/5/02/); [Draw Calls](/pages/5/03/) |
@@ -466,3 +547,14 @@ To describe a match, a tool needs more than one verified field: it needs
 the players and values that belong together at one moment. [From One
 Player to a Game-State Snapshot](/pages/4/01/) builds that view while keeping
 the engine's changing state separate from the tool's local copy.
+
+## Where each engine part is taught in depth
+
+<CardGrid>
+  <LinkCard title="How an Engine Orders and Shares Its Work" description="Resources, events, schedules, and change detection." href="/pages/4/12/" />
+  <LinkCard title="How a Game Reads Input" description="Edges, dead zones, key layouts, and the mouse." href="/pages/8/11/" />
+  <LinkCard title="Camera Frames and Projection" description="Transforms, cameras, and projection." href="/pages/5/01/" />
+  <LinkCard title="The Rendering Pipeline and Its State" description="Materials, light, passes, and 2D rendering." href="/pages/5/02/" />
+  <LinkCard title="Game Files and Live Memory" description="How a file becomes an asset the game can use." href="/pages/9/01/" />
+  <LinkCard title="Windows Input: Polling, Events, and Messages" description="The window, and how input reaches a game." href="/pages/8/06/" />
+</CardGrid>

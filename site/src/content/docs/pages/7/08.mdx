@@ -9,7 +9,7 @@ sidebar:
   order: 8
   label: "5.8 Call Tracing and Bounded Logs"
 ---
-import { Steps } from '../../../../components/kit';
+import { Badge, GitHub, Panel, Steps } from '../../../../components/kit';
 import LessonVideo from '../../../../components/LessonVideo.astro';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -292,6 +292,8 @@ Set a limit such as 1,000 events or five seconds. The output should show real mo
 
 ## Run the complete Wesnoth logger
 
+<Badge text="Windows VM" variant="note" />
+
 The compiled course tool chooses the Wesnoth main module, asks `VirtualQueryEx` for readable executable regions, decodes them as x86 with iced-x86, and installs at most 2,000 verified `E8` call breakpoints. It excludes two known noisy call sites from the historical lab. When a call fires, it restores `E8`, rewinds `EIP`, sets the trap flag, executes the real call once, records the destination `EIP`, reinserts `0xCC`, and continues.
 
 ```powershell
@@ -299,6 +301,10 @@ The compiled course tool chooses the Wesnoth main module, asks `VirtualQueryEx` 
 ```
 
 Exercise a small Wesnoth path, then press **End**. The tool restores every installed call byte before detaching. The full code is [`call_logger.rs`](/windows-labs/src/bin/call_logger.rs); shared memory and region enumeration are in [`process.rs`](/windows-labs/src/windows_impl/process.rs).
+
+<GitHub path="windows-labs/src/bin/call_logger.rs" />
+
+<GitHub path="windows-labs/src/windows_impl/process.rs" />
 
 This first complete version writes compact lines directly to the console. The bounded-channel design above is the next performance step when you add file output; it is not required to run or reproduce the actual call logger.
 
@@ -328,6 +334,8 @@ Do not begin at `main` and dive into every Windows name. First locate these six 
 
 ## Diagnose by the last completed state
 
+<Panel title="Troubleshooting by the last completed state">
+
 | Symptom | Likely boundary |
 |---|---|
 | No call sites discovered | Wrong bitness, module range, region permissions, or decoder input |
@@ -336,5 +344,7 @@ Do not begin at `main` and dive into every Windows name. First locate these six 
 | Unhandled single-step event | The thread ID was absent from the stepping map |
 | Target stays paused | A `WaitForDebugEvent` result did not reach one matching continue |
 | Target crashes after detach | Original bytes were not completely restored |
+
+</Panel>
 
 This table is why the state machine is explained explicitly: the symptom tells you which transition to inspect instead of encouraging random breakpoint changes.
