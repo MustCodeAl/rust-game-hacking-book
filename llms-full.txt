@@ -3443,15 +3443,6 @@ it leads to a single byte or a 2,000-byte player object.
 how the pointee type also decides how far a pointer moves when it steps to the
 next item in a list.
 
-<Quiz
-  id="pointer-size-vs-pointee"
-  title="Pointer size or pointee size?"
-  prompt="A 32-bit game holds a `*const f32` and a `*const u8`. How many bytes does each pointer itself take up?"
-  options="4 and 4, because a pointer's own size is set by the process||4 and 1, because each pointer matches what it points to||8 and 8, because pointers are always 8 bytes||It depends on the value stored at the destination"
-  answer="0"
-  explanation="These plain raw pointers in a 32-bit process each hold a 32-bit address, so both are 4 bytes. The pointee types decide what gets read at the destination: 4 bytes as a float, or 1 byte."
-/>
-
 ## An offset is a distance, not a place
 
 Say a player object starts at `0x5000`, and its health sits 48 bytes into it.
@@ -4884,16 +4875,6 @@ Trace it with `gold = 100` and `price = 25`:
 
 Now trace `gold = 20`. The `jb` branch skips the subtraction and returns zero. That is assembly comprehension: follow state changes and rebuild the higher-level decision.
 
-<Quiz
-  id="assembly-gold-branch"
-  type="multiple-choice"
-  title="Trace the branch"
-  prompt="In the example above, `gold` is 20 and the price is 25. What happens after the unsigned comparison?"
-  options="The subtraction runs and produces −5||The below branch is taken and the function returns zero||The CPU changes 20 into 25 before comparing||The return instruction repeats the comparison"
-  answer="1"
-  explanation="For unsigned values, 20 is below 25, so `jb` takes the failure path. That path clears the return register to zero. The important habit is to follow the flags and branch instead of mentally executing every line in order."
-/>
-
 ## What the debugger is showing
 
 Assembly text is a readable rendering of machine bytes for one CPU
@@ -5163,16 +5144,6 @@ The next lesson uses x64dbg's built-in breakpoint controls rather than a
 custom debugger. Start with the gold address, watch a write, and use the
 paused registers and instruction to test the purchase rule. The enum
 becomes useful later when we write our own event-handling code.
-
-<Quiz
-  id="breakpoint-evidence"
-  type="multiple-choice"
-  title="One instruction, several uses"
-  prompt="A write breakpoint on the player's health fires while damage is taken. What is the best next step?"
-  options="Assume the instruction only handles damage||Delete every other breakpoint and patch immediately||Check the call stack, then heal, load, and respawn to see which of those also reach the same instruction||Change all writable values near the address"
-  answer="2"
-  explanation="A breakpoint tells you that the condition happened; it does not tell you every role of the instruction. The same write can run for damage, healing, loading, and respawning, and the call stack at each pause shows which path led there."
-/>
 
 ---
 ## Lesson 2.5 — From a Game Value to the Code That Changes It
@@ -5831,16 +5802,6 @@ link that failed instead of returning one mysterious “bad address” message.
   label="Interactive pointer-chain walkthrough"
 />
 
-<Quiz
-  id="pointer-chain-dereference"
-  type="short-answer"
-  title="Name the pointer action"
-  prompt="What computer-science word means ‘read the address stored here, then follow it to the next object’?"
-  answer="dereference"
-  alternatives="dereferencing||pointer dereference"
-  explanation="To dereference a pointer is to use the address it contains. In a pointer chain, link offsets usually lead to another pointer that must be dereferenced; the final field offset often leads directly to data and should not be followed again."
-/>
-
 ---
 ## Lesson 2.8 — How Pointer Paths Survive Restarts
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/2/09/
@@ -6194,16 +6155,6 @@ The key distinction is **lifecycle code versus boundary code**. The manager owns
 the patch, validates the target, reports failures, and restores state. Assembly describes
 the few CPU instructions that must run at the exact hijacked boundary.
 
-<Quiz
-  id="detour-instruction-boundary"
-  type="multiple-choice"
-  title="Make room for a detour"
-  prompt="A jump needs five bytes, but the fifth byte lands in the middle of the next CPU instruction. What should the patcher do?"
-  options="Overwrite the five bytes anyway||Move the return address back one byte||Cover enough whole instructions, save them, and replay their meaning before jumping back||Fill the instruction fragment with random padding"
-  answer="2"
-  explanation="The CPU decodes instructions from byte boundaries. Returning into half an instruction changes the byte stream into nonsense. A safe detour covers complete instructions, preserves their original behavior in the cave, and resumes at the first untouched instruction."
-/>
-
 ---
 ## Lesson 2.10 — What a Working Detour Must Preserve
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/2/07/
@@ -6528,24 +6479,16 @@ runs. `Vec::push` may need to move the vector's heap allocation to a larger
 space. Keeping `view` alive across that operation could leave a dangling
 reference, so Rust rejects the overlap.
 
-\{% capture ownership_quiz_program %\}
-fn main() \{
+The shared borrow can end before mutation when its final use comes first:
+
+```rust
+fn main() {
     let mut bytes = vec![10, 20, 30];
     let view = &bytes;
-    println!("\{\}", view[0]);
+    println!("{}", view[0]);
     bytes.push(40);
-\}
-\{% endcapture %\}
-<Quiz
-  id="ownership-borrow-order"
-  type="tracing"
-  title="Trace the loan, not just the lines"
-  prompt="Does this rearranged program compile? Decide where `view` is used for the last time before answering."
-  program="ownership_quiz_program"
-  answer="true"
-  explanation="Yes. The shared borrow's final use is the `println!` call. After that statement, the loan can end, so `push` can take exclusive mutable access to `bytes`. Rust follows actual uses instead of blindly keeping the loan alive to the closing brace; this is called non-lexical lifetime analysis."
-/>
-
+}
+```
 ## Convert bytes deliberately
 
 A debugger displays bytes; a game interprets them as types. The conversion should state that meaning explicitly:
@@ -7273,15 +7216,6 @@ hidden digit off and the power fixed at 2⁻¹²⁶, the value is 100 ÷ 8,388,6
 2⁻¹²⁶, about 1.4 × 10⁻⁴³: a decimal point, then 42 zeros, then 14. A `u32` read
 of the same bytes gives 100.
 
-<Quiz
-  id="f32-exponent-field"
-  title="Decode an exponent"
-  prompt="An `f32`'s exponent field holds `1000 0011`. What does the number get multiplied by?"
-  options="2⁴, because 128 + 2 + 1 = 131 and 131 − 127 = 4||2¹³¹, because the field holds 131||2³, because the field always means 130||It depends on the sign bit"
-  answer="0"
-  explanation="Positions 7, 1, and 0 hold a 1, worth 128 + 2 + 1 = 131. Subtracting the bias of 127 leaves a real exponent of 4, so the significand is multiplied by 2⁴ = 16."
-/>
-
 ## Decode a whole position
 
 Now apply the same decoding to a 3D position stored as three `f32` values in a
@@ -7401,15 +7335,6 @@ choose the right instructions: a four-byte whole-number read, a float load, or a
 one-byte read. The compiled game keeps only those instructions. When you study a
 game, you work out what a pointer points to the same way you work out any other
 type: from what the code does at the destination.
-
-<Quiz
-  id="pointer-add-step"
-  title="Step a typed pointer"
-  prompt="A `*const u32` named `p` holds the address `0x5000`. Which address does `p.add(2)` point at?"
-  options="`0x5008`, because each step moves one whole `u32`, which is 4 bytes||`0x5002`, because each step moves one byte||`0x5004`, because `add` always moves 4 bytes in total||`0x5010`, because each step moves 8 bytes, the size of a 64-bit pointer"
-  answer="0"
-  explanation="`add` counts in whole values of the pointee type. Two `u32` steps are 2 × 4 = 8 bytes, and `0x5000` + 8 = `0x5008`."
-/>
 
 The same bytes can describe a whole number, a fraction, or an address,
 depending on the width and interpretation selected by the code. Knowing
@@ -7863,16 +7788,6 @@ Test these cases:
 - pointer in the chain is zero.
 
 A good low-level tool is not the one that never sees errors. It is the one that sees errors clearly and stops before making a bad write.
-
-<Quiz
-  id="guarded-write-reason"
-  type="multiple-choice"
-  title="Guard the final write"
-  prompt="Why read the current value and compare it with the expected value immediately before writing?"
-  options="It makes Windows assign a permanent address||It turns a 32-bit target into a 64-bit target||It catches a stale scan result or a value that changed since you inspected it||It allows the tool to ignore handle permissions"
-  answer="2"
-  explanation="A scan or earlier read describes only the moment it happened. The process keeps running. A final comparison catches a restart, race, wrong build, or normal game update before your tool writes to a location whose meaning has changed."
-/>
 
 ---
 ## Lesson 3.4 — How C++ Objects Appear in Memory
@@ -10736,16 +10651,6 @@ If one player has impossible values, stop and revisit the table base, record siz
 
 The key upgrade is conceptual: instead of “address plus magic number,” we now have a named layout, checked math, a bounded collection, and owned snapshots.
 
-<Quiz
-  id="player-record-stride"
-  type="short-answer"
-  title="Calculate a record field"
-  prompt="Player records are `0x270` bytes apart and gold is at offset `0x04`. What offset from the table base reaches the third player's gold? Use hexadecimal."
-  answer="0x4e4"
-  alternatives="4e4||0X4E4"
-  explanation="The third player has zero-based index 2. First find the record: `2 × 0x270 = 0x4E0`. Then add the gold field: `0x4E0 + 0x04 = 0x4E4`. Keeping stride math separate from field math makes the layout easier to verify."
-/>
-
 ---
 ## Lesson 4.4 — Why Snapshots Need Guarded Actions
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/4/02/
@@ -11074,16 +10979,6 @@ Once this pipeline is clear, try these controlled upgrades:
 - unit-test decision logic with fake snapshots, without opening a process.
 
 Keep remote I/O at the edge. The middle of the program should compare ordinary typed values.
-
-<Quiz
-  id="advanced-snapshot-write-gate"
-  type="multiple-choice"
-  title="Choose the final write gate"
-  prompt="The tool captured a valid gold address, but the second snapshot has a different side pointer. What should the advanced pipeline do?"
-  options="Stop without writing because the object identity changed||Write to the old address because it was valid earlier||Search all writable memory for the old gold number||Ignore the pointer and compare only the PID"
-  answer="0"
-  explanation="A remote address has meaning only while the object path and target profile still support it. A changed side pointer invalidates the earlier destination, so the correct transaction outcome is no write."
-/>
 
 ## What the write gate establishes
 
@@ -13394,16 +13289,6 @@ A useful test can start a queue of capacity one, hold the receiver, and send thr
 
 Also simulate a writer that exits early. `Disconnected` must become an error rather than another drop.
 
-<Quiz
-  id="advanced-telemetry-backpressure"
-  type="multiple-choice"
-  title="Choose a hot-path logging policy"
-  prompt="A debugger call logger's file writer cannot keep up, and the bounded queue is full. Which policy best protects the paused target while keeping the loss visible?"
-  options="Use nonblocking send, increment a dropped-event counter, and stop if loss exceeds a limit||Block inside the debug event forever||Allocate an unlimited vector||Write each event synchronously before continuing the target"
-  answer="0"
-  explanation="The debug loop should restore state and continue promptly. A bounded queue controls memory, nonblocking send avoids holding the target for disk I/O, and an explicit loss counter keeps lost events from going unnoticed."
-/>
-
 ## What the recording can claim
 
 Each event owns a copy of the facts it needs; it cannot keep a borrowed
@@ -13877,15 +13762,6 @@ with two multiplications and one addition.
 [Lesson 4.7](/pages/4/11/#length-normalization-and-alignment) uses the same
 comparison in three dimensions, for a camera's field of view.
 
-<Quiz
-  id="npc-view-cone-dot"
-  title="Inside the cone?"
-  prompt="A guard faces (1, 0). The unit direction to the player is (0.6, 0.8). With VIEW_CONE_COS = 0.5, can the guard see the player, ignoring walls and distance?"
-  options="Yes: 0.6 × 1 + 0.8 × 0 = 0.6, which is at least 0.5||No: 0.8 is larger than 0.6, so the player is mostly to the side||Yes: every direction with a positive y is inside||No: 0.6 + 0.8 = 1.4, which is more than 1"
-  answer="0"
-  explanation="For unit vectors the dot product is the cosine of the angle between them. 0.6 is at least cos 60° = 0.5, so the player is less than 60° from the facing (about 53°) and inside the cone."
-/>
-
 ### Line of sight
 
 The last check, `line_of_sight`, walks from the guard toward the target in
@@ -14330,16 +14206,6 @@ Then inspect `ac_client.exe` and `Quake3-UrT.exe`. The layout changes, but the m
 The complete buildable parser is [`pe_inspector.rs`](/windows-labs/src/bin/pe_inspector.rs). It performs checked offset math for every field and never uses `unsafe`.
 
 <GitHub path="windows-labs/src/bin/pe_inspector.rs" />
-
-<Quiz
-  id="pe-rva-address"
-  type="multiple-choice"
-  title="Place an instruction in memory"
-  prompt="A PE section reports an instruction RVA of `0x1200`, and Windows loads the module at `0x7FF600000000`. What is the live virtual address?"
-  options="0x1200||0x7FF600001200||The file offset of the section||The preferred image base without the RVA"
-  answer="1"
-  explanation="An RVA is a distance from the module's live base. Add the two: `0x7FF600000000 + 0x1200 = 0x7FF600001200`. A file offset answers where bytes sit on disk; it is not automatically the address the CPU executes."
-/>
 
 ## What the PE map tells us
 
@@ -15432,16 +15298,6 @@ Notice the order: restrict to the correct module, restrict again to readable exe
 
 Error messages should preserve this distinction. “Scanner failed” is not actionable; “pattern matched six locations in executable regions” tells the learner exactly which assumption to revisit.
 
-<Quiz
-  id="pattern-many-matches"
-  type="multiple-choice"
-  title="Handle an ambiguous signature"
-  prompt="A code pattern matches six executable locations in the exact supported build. What is the safest next step?"
-  options="Patch all six locations||Choose the first match because addresses are sorted||Refine the signature and verify surrounding instructions until one meaning is proven||Turn every byte into a wildcard"
-  answer="2"
-  explanation="Several matches mean the pattern is not a unique identity. Add stable surrounding bytes, reduce unnecessary wildcards, and disassemble each candidate. A scanner should refuse ambiguity instead of turning uncertainty into six writes."
-/>
-
 ---
 ## Lesson 5.5 — Memory Regions and Value Scanning
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/7/05/
@@ -15960,16 +15816,6 @@ The refusal cases are successful safety behavior. They stop the program from wri
   id="candidate-scan-filter"
   lab="scan-filter"
   label="Interactive memory-scan candidate filter"
-/>
-
-<Quiz
-  id="scanner-second-pass"
-  type="multiple-choice"
-  title="Narrow the candidate list"
-  prompt="A first scan finds every address containing 100. You spend points and the visible value becomes 75. What should the next scan keep?"
-  options="Every address that has ever contained 100||Only old candidates that now contain 75||Every readable address containing 75, ignoring the first scan||Only addresses in executable pages"
-  answer="1"
-  explanation="The first scan creates a candidate set. The second scan asks which members of that same set changed to the new value. Repeating controlled changes removes unrelated copies until a small, explainable group remains."
 />
 
 ---
@@ -16514,16 +16360,6 @@ End a turn to hit the real income instruction. The tool prints `EAX`, signed and
 The complete state machine is [`wesnoth_debugger.rs`](/windows-labs/src/bin/wesnoth_debugger.rs). It implements attach, exact opcode verification, `WaitForDebugEvent`, event-handle cleanup, x86 thread contexts, `EIP` rewind, trap-flag stepping, re-arming, error-path continuation, byte restoration, and detach using the `windows` crate.
 
 <GitHub path="windows-labs/src/bin/wesnoth_debugger.rs" />
-
-<Quiz
-  id="software-breakpoint-step"
-  type="multiple-choice"
-  title="Re-arm a software breakpoint"
-  prompt="After an `int3` breakpoint fires, why restore the original byte, rewind `EIP`, set the trap flag, and continue for one instruction?"
-  options="To let the real instruction run once before putting `0xCC` back||To make the process permanently single-threaded||To convert x86 instructions into source code||To skip the instruction that was replaced"
-  answer="0"
-  explanation="The CPU pauses after consuming the one-byte `0xCC`, so `EIP` points just past it. Rewinding and restoring lets the displaced instruction execute. The trap flag pauses immediately afterward, giving the debugger a safe moment to reinsert the breakpoint."
-/>
 
 ---
 ## Lesson 5.8 — Call Tracing and Bounded Logs
@@ -17510,16 +17346,6 @@ Create local byte buffers and verify:
 8. sorted output across repeated runs.
 
 Do these tests without a game process. Only the small capture layer requires Windows and Wesnoth.
-
-<Quiz
-  id="advanced-parallel-scan-boundary"
-  type="multiple-choice"
-  title="Choose the concurrency boundary"
-  prompt="Which parallel scanner design gives workers the most stable input?"
-  options="Copy bounded readable code regions once, then scan immutable local buffers||Let every worker repeatedly query and read arbitrary remote pages||Give every byte its own operating-system thread||Patch matches as soon as any worker finds them"
-  answer="0"
-  explanation="Remote memory changes and Windows reads can fail. Copying once keeps that unstable boundary in one stage; workers then perform deterministic comparisons over immutable slices."
-/>
 
 ## What makes the parallel result trustworthy
 
@@ -21713,16 +21539,6 @@ flowchart LR
 
 Later lessons reuse this math in offline observer tools.
 
-<Quiz
-  id="ndc-top-edge"
-  type="multiple-choice"
-  title="Place a point on the screen"
-  prompt="With `screen_y = (1 − ndc_y) × 0.5 × height`, where does `ndc_y = 1` appear?"
-  options="At the top edge, where screen y is 0||At the vertical center||At the bottom edge||Behind the camera"
-  answer="0"
-  explanation="Substituting 1 gives `(1 − 1) × 0.5 × height = 0`. Normalized device coordinates point upward, while ordinary screen y grows downward, so the formula flips the direction."
-/>
-
 ## Where camera maths is used next
 
 <CardGrid>
@@ -24259,16 +24075,6 @@ The full compiled implementation is [`assaultcube_tools.rs`](/windows-labs/src/w
 
 <GitHub path="windows-labs/src/windows_impl/dll.rs" />
 
-<Quiz
-  id="angle-wraparound"
-  type="multiple-choice"
-  title="Choose the shortest turn"
-  prompt="Your current yaw is `179°` and the desired yaw is `-179°`. What signed angular change follows the shortest path?"
-  options="-358°||-180°||+2°||+358°"
-  answer="2"
-  explanation="Angles wrap at the edge of their range. Turning forward by 2° crosses from 179° to -179° and is much shorter than turning backward by 358°. The normalization function exists so target selection compares this wrapped difference instead of ordinary subtraction."
-/>
-
 ---
 ## Lesson 7.7 — Recoil, Spread, and Camera Motion
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/5/07/
@@ -25521,16 +25327,6 @@ or the viewport is wrong, and the failure table below tells you which to suspect
 ## Scope
 
 Keep the observer in an offline match with bots. The transferable skill is the 3D-to-2D transformation pipeline used in editors, accessibility tools, debug HUDs, and visualization software.
-
-<Quiz
-  id="clip-w-rejection"
-  type="multiple-choice"
-  title="Reject a point behind the camera"
-  prompt="The transform produces a finite `clip_w` of `−0.4`. What should the observer do before the perspective divide?"
-  options="Draw the point at the center||Take the absolute value of `w`||Reject the point as behind or outside the usable camera half-space||Replace `w` with 1"
-  answer="2"
-  explanation="A non-positive `w` means the point is behind the camera for this projection convention. Dividing anyway can mirror it onto the screen. Rejecting it before the divide keeps the overlay from drawing convincing but false positions."
-/>
 
 ---
 ## Lesson 7.10 — Direct3D Interfaces and Vtables
@@ -26862,16 +26658,6 @@ The capture, replay, and proxy examples use loopback or a local test server. Tha
 
 Now that the message boundary and its byte order have a purpose, Lesson 8.2 records a real local exchange and asks which captured bytes correspond to one controlled action.
 
-<Quiz
-  id="tcp-message-boundary"
-  type="multiple-choice"
-  title="Read a TCP message safely"
-  prompt="Why can one call to `read` not be assumed to return one complete application message?"
-  options="TCP is a byte stream and does not preserve application write boundaries||TCP silently converts every message to UDP||Windows always removes the first byte||Ports make every message the same size"
-  answer="0"
-  explanation="TCP preserves ordered bytes, not message-shaped chunks. One read may return part of a frame or several frames together. Your protocol must define a length, delimiter, or fixed size, and the reader must loop until that rule is satisfied."
-/>
-
 ---
 ## Lesson 8.2 — Protocol Capture and Message Framing
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/6/02/
@@ -27459,16 +27245,6 @@ Preserving those categories in error messages is part of the explanation. If eve
   id="bounded-packet-framer"
   lab="packet-framer"
   label="Interactive length-prefixed packet parser"
-/>
-
-<Quiz
-  id="round-trip-shared-bug"
-  type="multiple-choice"
-  title="Challenge a round-trip test"
-  prompt="Your encoder's output can be decoded by your decoder. Why is one real captured fixture still valuable?"
-  options="A round trip proves only that both halves agree and they could share the same wrong assumption||Captured bytes make bounds checks unnecessary||A fixture changes TCP into message mode||Real data guarantees every future version is compatible"
-  answer="0"
-  explanation="An encoder and decoder written from the same mistaken idea can agree perfectly with each other. A known real frame anchors the test to the actual protocol and exposes shared mistakes in lengths, byte order, compression, or field layout."
 />
 
 ---
@@ -29201,16 +28977,6 @@ The buildable source is [`named_pipe_lab.rs`](/windows-labs/src/bin/named_pipe_l
 
 References: [named-pipe operations](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-operations), [`CreateNamedPipeW`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createnamedpipew), [`ConnectNamedPipe`](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-connectnamedpipe), and [`SetNamedPipeHandleState`](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-setnamedpipehandlestate).
 
-<Quiz
-  id="pipe-connected-race"
-  type="multiple-choice"
-  title="Interpret the connection race"
-  prompt="`ConnectNamedPipe` reports `ERROR_PIPE_CONNECTED` immediately after the server creates its pipe. What does that result mean here?"
-  options="The pipe name is invalid||A client already connected during the small timing window||The client must be disconnected||Message mode has changed to byte mode"
-  answer="1"
-  explanation="A fast client can connect after `CreateNamedPipeW` but before the server calls `ConnectNamedPipe`. Windows reports that race as `ERROR_PIPE_CONNECTED`. The server should treat this specific result as a successful connection, not tear down a healthy client."
-/>
-
 ---
 ## Lesson 8.9 — How the Source Engine Works
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/6/09/
@@ -30405,15 +30171,6 @@ after the text, the convention C uses. In an unfamiliar save, a byte just
 before some text that equals the number of characters after it is the
 fingerprint of a length-prefixed string.
 
-<Quiz
-  id="gsav-checksum-offset"
-  title="Follow the length byte"
-  prompt="A `GSAV` save has `05` in its name-length byte at offset 11. At which offset does its checksum start?"
-  options="17||15||5||21"
-  answer="0"
-  explanation="The fixed fields fill offsets 0 to 11, which is 12 bytes. The name takes the next 5 bytes, offsets 12 to 16, so the checksum starts at 12 + 5 = 17 and the file ends at 17 + 4 = 21 bytes."
-/>
-
 ## Find a field by comparing two saves
 
 The layout above was handed to you. A real game's layout usually is not, so its
@@ -30524,15 +30281,6 @@ which algorithm runs, where the result is stored, and in which byte order, as
 listed in [Lesson 9.2](/pages/9/02/#checksums-and-integrity-fields). If the
 check uses a secret key, as a MAC does, or a digital signature, it cannot be
 recomputed without that key; [Lesson 9.9](/pages/9/08/) explains why.
-
-<Quiz
-  id="gsav-level-byte-sum"
-  title="Predict the loader's sum"
-  prompt="Nia's save is valid, with stored checksum 842. You change only the level byte at offset 10 from `03` to `04`. What sum does the loader compute, and what happens?"
-  options="843, so it refuses the save||842, so it accepts the save||846, so it refuses the save||4, because only the level byte is summed"
-  answer="0"
-  explanation="The level byte used to add 3 and now adds 4, so the total rises by one: 842 − 3 + 4 = 843. The stored checksum still says 842, so the file is refused until the checksum bytes are rewritten as `4B 03 00 00`, because 843 = 3 × 256 + 75 and 75 = 4 × 16 + 11 = 0x4B."
-/>
 
 ## Edit without losing the original
 
@@ -31791,15 +31539,6 @@ signing in [Lesson 12.4](/pages/14/02/), and a console's secure boot in
 ones this lesson keeps returning to: a signature says who approved the bytes,
 not that the bytes are safe, and if a publisher's private key is stolen, the
 thief can sign anything until the certificate is revoked.
-
-<Quiz
-  id="signature-key-roles"
-  title="Which key does what?"
-  prompt="A publisher signs a game patch, and Windows checks the signature on your machine. Which key does each side use?"
-  options="The publisher makes the signature with its private key; Windows checks it with the public key from the certificate||The publisher makes the signature with its public key; Windows checks it with the private key||Both sides use the same shared secret key||Windows needs no key, because the hash alone proves who made the file"
-  answer="0"
-  explanation="Only the private key can make a signature that the matching public key accepts, so it never leaves the publisher. The public key travels inside the certificate, where anyone can use it to check. If checking needed the private key, every user would hold the secret needed to sign malware."
-/>
 
 ## Unsigned does not mean malicious
 
@@ -36514,16 +36253,6 @@ The buildable tool is [`memory_map.rs`](/windows-labs/src/bin/memory_map.rs), an
 
 References: [`VirtualQueryEx`](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualqueryex) and [memory protection constants](https://learn.microsoft.com/en-us/windows/win32/memory/memory-protection-constants).
 
-<Quiz
-  id="memory-map-least-privilege"
-  type="multiple-choice"
-  title="Choose the smallest handle rights"
-  prompt="A tool only maps regions and reads bytes. Which handle design best follows least privilege?"
-  options="Request every process right in case a later feature needs it||Request query and read rights only||Request write and remote-thread rights but never use them||Open no handle and guess the memory map"
-  answer="1"
-  explanation="Permissions should match the operation the tool performs now. Query-and-read rights are enough for a read-only mapper. Smaller rights reduce accidental capability, make intent clear, and are less likely to fail under ordinary Windows security rules."
-/>
-
 ---
 ## Lesson 11.8 — Threads, Contexts, and Stacks
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/10/06/
@@ -37508,15 +37237,6 @@ through a few entry points that the kernel prepared in advance. The most
 important of them is the `syscall` instruction, and the rest of this lesson
 follows one trip through it.
 
-<Quiz
-  id="kernel-cs-privilege-bits"
-  title="Read the privilege level"
-  prompt="A 32-bit game running on 64-bit Windows shows `cs` = `0023` in x64dbg. At which privilege level is its code running?"
-  options="Ring 0, because `0x23` is smaller than the 64-bit value `0x33`||Ring 3, because `0x23` is `0010 0011` and its lowest two bits are `11`||Ring 2, because `0x23` begins with the digit 2||The value of `cs` says nothing about privilege"
-  answer="1"
-  explanation="Only the lowest two bits of `cs` hold the privilege level. `0x23` is 2 × 16 + 3 = 35, or `0010 0011` in binary, and its lowest two bits are `11` = 3. The upper bits pick a different code segment (a 32-bit one), but the level is still ring 3, user mode."
-/>
-
 ## One bit marks a page as the kernel's
 
 Lesson 11.10 said that a page-table entry's **user/supervisor** bit, bit 2,
@@ -37681,15 +37401,6 @@ illustrates the native 64-bit path, not every instruction a 32-bit caller runs.
 :::
 
 <Scene name="privilege-copy" />
-
-<Quiz
-  id="kernel-handle-rights-and"
-  title="Predict the kernel's answer"
-  prompt="A tool opened a game with `PROCESS_QUERY_INFORMATION` (`0x0400`) and `PROCESS_QUERY_LIMITED_INFORMATION` (`0x1000`), so its handle's rights are `0x1400`. It calls `ReadProcessMemory`, which needs `PROCESS_VM_READ` (`0x0010`). What happens?"
-  options="The kernel copies the bytes, because a handle that can query a process can also read it||The kernel refuses with `STATUS_ACCESS_DENIED`, because `0x1400` AND `0x0010` is 0||The processor raises a general-protection fault inside the tool||The read succeeds if the tool runs as administrator"
-  answer="1"
-  explanation="`0x0400` is 4 × 256 = 1,024 = 2¹⁰ (bit 10) and `0x1000` is 2¹² (bit 12), so `0x1400` has bits 12 and 10 set. The read needs bit 4, which is 0, so the AND is 0 and the kernel returns an error status. Nothing faults: the system call returns normally with `STATUS_ACCESS_DENIED`, and `kernelbase.dll` reports error 5. Running as administrator affects what `OpenProcess` may grant; it cannot add rights to a handle that already exists."
-/>
 
 References: [process security and access rights](https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights), [using NTSTATUS values](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/using-ntstatus-values), and the [Intel Software Developer Manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html) for `syscall`, privilege levels, and page-table bits.
 
@@ -39043,15 +38754,6 @@ mistakes. Drivers are also expected to compare the whole 32-bit code, not just
 the function number, so that a code with the right function but a different
 method or access is refused.
 
-<Quiz
-  id="driver-ioctl-near-miss"
-  title="Spot the near miss"
-  prompt="The keypad driver receives the control code `0x8000_6007` instead of `0x8000_6004`. What changed, and what should the driver do?"
-  options="Only the method bits changed, from `00` to `11`, so the driver should refuse the request because it is not exactly the code it defines||The function number changed to `0x802`, so the driver should run a different command||Nothing that matters: the driver should mask off the low bits and run the command||The access bits changed, so the I/O manager will refuse it before the driver sees it"
-  answer="0"
-  explanation="`0x7` is `0111` and `0x4` is `0100`, so only bits 0 and 1 differ: the method went from 0, buffered, to 3, which passes the caller's raw user-mode addresses instead of a safe kernel copy. Bits 14 and 15 are still `01`, so the I/O manager's access check passes and the decision falls to the driver. A driver that ignored the method would treat raw user pointers as a kernel buffer. Comparing the whole 32-bit value refuses the request."
-/>
-
 ## The toy keypad's registers, bit by bit
 
 The toy keypad's four 32-bit registers take
@@ -39110,15 +38812,6 @@ writing a 1 to bit 1 clears the overflow flag. Bits written as 0 change
 nothing. This **write-1-to-clear** convention is common because it lets a
 driver clear one flag without first reading the register to preserve the
 others.
-
-<Quiz
-  id="driver-status-decode"
-  title="Decode a STATUS value"
-  prompt="The keypad's STATUS register reads `0x0000_0403`. What is the device reporting?"
-  options="Three events waiting, and the device is disabled||Four events waiting, data ready, and at least one event was dropped||1,027 events waiting||Data ready, no overflow, and three events waiting"
-  answer="1"
-  explanation="Split the value by bytes. The low byte, `0x03`, is `0000 0011`, so bit 0 (data ready) and bit 1 (overflow) are both set. The next byte, `0x04`, is the count in bits 8 to 15: 4 events waiting. As one number `0x0403` is 4 × 256 + 3 = 1,027, but only the separate fields mean anything. Four is also the toy keypad's queue size, so the queue was full when an event was dropped."
-/>
 
 ## The ISR and the DPC, register by register
 
@@ -42557,15 +42250,6 @@ use *paravirtual* devices, virtual devices designed to need few exits. It is
 the idea [Lesson 11.9](/pages/10/07/) called limited direct execution, one
 level further down: run natively, and trap only what must stay under control.
 
-<Quiz
-  id="vm-exit-causes"
-  title="Which one leaves the guest?"
-  prompt="A guest runs on an Intel processor with hardware virtualization and second-level address translation. Which of these guest actions causes a VM exit?"
-  options="An `add` instruction in a guest program||A system call from a guest program into the guest kernel||A `cpuid` instruction||A page fault on a guest virtual page that the guest kernel has not mapped yet"
-  answer="2"
-  explanation="Ordinary instructions and system calls run natively inside the guest, and a fault on a page the guest's own tables do not map is delivered to the guest kernel, which handles it as it would on real hardware. `cpuid` always exits on Intel processors, so the hypervisor controls what the guest learns about its processor."
-/>
-
 ## Two stages of address translation
 
 Each guest believes it owns physical memory starting at address 0. It cannot:
@@ -42828,15 +42512,6 @@ physical frame `0x52E3`:
 `0x52E3` × `0x1000` = `0x52E_3000`, and adding `0xA2C` gives `0x052E_3A2C`. The
 offset rode through both stages untouched; each stage only swapped the number
 above it.
-
-<Quiz
-  id="vm-two-stage-translation"
-  title="Translate one more address"
-  prompt="Using the same mappings as the worked example, which host physical address holds the byte at guest virtual address `0x0040_3F00`?"
-  options="`0x052E_3F00`||`0x001F_7F00`||`0x052E_4F00`||`0x0040_3F00`"
-  answer="0"
-  explanation="`0x0040_3F00` lies on the same guest virtual page, `0x403`, at offset `0xF00`. Stage 1 maps page `0x403` to guest frame `0x1F7`, giving `0x001F_7F00`, which is only a guest physical address. Stage 2 maps frame `0x1F7` to host frame `0x52E3`. The offset never changes, so the answer is `0x52E3` × `0x1000` + `0xF00` = `0x052E_3F00`."
-/>
 
 ## What two stages cost
 
@@ -43390,15 +43065,6 @@ but does not make it free. Record only the events needed
 to distinguish the competing explanations, and compare behaviour with logging
 disabled when investigating a timing problem.
 
-<Quiz
-  id="firmware-held-button"
-  title="A press is a transition"
-  prompt="The input samples are false, true, true, true. How many times does this lesson's controller toggle the lamp?"
-  options="Once, when false first becomes true||Three times, once for every true sample||Four times, because every sample is an event||Zero times, because firmware needs a guest OS"
-  answer="0"
-  explanation="The controller remembers whether the previous sample was pressed. Only the first true follows a false; the other true samples describe the same held press. This assumes already debounced logical input, not a bouncing physical contact."
-/>
-
 You have now built the software that runs after reset, rather than just a
 program launched by an OS. The next lesson uses these startup responsibilities
 to explain a console's larger boot chain; the hardware debugging lessons show
@@ -43584,15 +43250,6 @@ consoles already sold: nothing checks the ROM and nothing can rewrite it, so
 only a new revision of the chip fixes it. This has happened to at least one
 console family, whose early units remain modifiable for that reason alone.
 
-<Quiz
-  id="console-boot-rom-flaw"
-  title="The one stage no update reaches"
-  prompt="A flaw is found in one stage of a console's boot chain. Which stage's flaw cannot be fixed by a system update on consoles that are already sold?"
-  options="The boot ROM||The bootloader||The system kernel||The game partition's OS"
-  answer="0"
-  explanation="The boot ROM is written into the chip at the factory and cannot be rewritten, and nothing runs before it to check it. Every later stage can be replaced by an update, because the stage before it verifies the new version's signature like any other. A boot ROM flaw is fixed only in new chips."
-/>
-
 ## Anti-rollback: old versions stay dead
 
 A signature proves who made the code, not that it is the latest version. If
@@ -43615,15 +43272,6 @@ blows fuse 3, and from then on a version-3 image is refused. A fuse cannot be
 unblown, so the minimum only ever rises. And because a bank of eight fuses can
 count only to 8, makers raise the security version only for updates that fix a
 security flaw, not for every update: each increase spends a fuse forever.
-
-<Quiz
-  id="console-anti-rollback"
-  title="Genuine, signed, and refused"
-  prompt="A console's anti-rollback fuses record a minimum security version of 3. It is offered a boot image that the platform holder genuinely signed, with security version 2. What happens?"
-  options="The boot code refuses it, because 2 is below the fused minimum of 3||It runs, because the signature is valid||It runs, and the console blows another fuse||It runs only while the console is offline"
-  answer="0"
-  explanation="A signature proves who made the code, not that it is current. Version 2 may contain a hole that version 3 fixed, so the boot code compares the image's security version with the count of blown fuses and refuses anything lower, however genuine its signature."
-/>
 
 ## Code signing and encrypted game packages
 
@@ -44051,15 +43699,6 @@ once the devices are in customers' hands. Development boards sold for learning
 embedded programming are the opposite case: they leave SWD open on purpose and
 document it, because their owners are the developers.
 
-<Quiz
-  id="jtag-debug-below-the-kernel"
-  title="Why the kernel cannot help"
-  prompt="A phone's kernel marks a page holding a key as readable only in kernel mode. An engineer halts the processor through an open JTAG port and reads that page. Why did the kernel's protection not stop the read?"
-  options="The debug logic reads memory over the chip's bus itself, and the kernel's rules are enforced by a processor that is now stopped||The kernel always gives debuggers permission to read||JTAG reads memory faster than the kernel can check it||The page was never really protected"
-  answer="0"
-  explanation="Memory protection is enforced by the running processor as it executes code. A halted core executes nothing, and the debug unit performs its own bus reads. That is why production devices lock the port in hardware, with fuses and authentication, instead of relying on software running on the chip."
-/>
-
 The JTAG lab is in [Lesson 14.6](/pages/14/10/#simulate-a-tap-controller): a
 simulated two-chip scan chain that you drive one clock at a time.
 
@@ -44214,15 +43853,6 @@ clocks:
 | 3 | 0 | Select-DR-Scan | Capture-DR |
 | 4 | 0 | Capture-DR, where the register loads | Shift-DR |
 
-<Quiz
-  id="jtag-shift-last-bit"
-  title="The clock that leaves Shift-DR"
-  prompt="The controller has just entered Shift-DR, and the debugger wants to shift exactly 8 bits through a data register and then stop shifting. How should it set TMS on the next clocks?"
-  options="7 clocks with TMS at 0, then an 8th clock with TMS at 1||8 clocks with TMS at 0, then a 9th clock with TMS at 1||8 clocks with TMS at 1||1 clock with TMS at 1, then 8 clocks with TMS at 0"
-  answer="0"
-  explanation="Every clock spent in Shift-DR shifts one bit, including the clock that raises TMS to leave for Exit1-DR, because each state does its work on the rising edge that leaves it. Seven clocks with TMS at 0 shift bits 1 to 7 and stay in Shift-DR; the eighth, with TMS at 1, shifts bit 8 and leaves. A ninth clock would shift one bit too many."
-/>
-
 Lesson 14.5 said that five clocks with TMS at 1 reach Test-Logic-Reset from any
 state. To check it, hold TMS at 1 and work outward from Test-Logic-Reset,
 following the arrows labelled TMS 1:
@@ -44296,15 +43926,6 @@ bit from TDI:
 The 1 went in on clock 1 and came out on clock 3, so the chain held it for
 3 − 1 = 2 clocks. Each one-bit register holds a bit for exactly one clock, so
 there are 2 chips.
-
-<Quiz
-  id="jtag-bypass-count"
-  title="Count the chips"
-  prompt="Every chip on a chain is in BYPASS. The debugger sends a single 1 on clock 1, followed by 0s, and the 1 comes out of TDO on clock 4. How many chips are on the chain?"
-  options="3||4||1||It depends on how long each chip's instruction register is"
-  answer="0"
-  explanation="Each chip in BYPASS adds a one-bit register, and each one-bit register holds the bit for one clock. The 1 was held for 4 − 1 = 3 clocks, so it passed through 3 chips. Instruction-register lengths stop mattering once every chip is in BYPASS, because the data path is then one bit per chip."
-/>
 
 ## Reading a chip's identity
 
@@ -44595,15 +44216,6 @@ The speed has two costs:
   [Lesson 14.4](/pages/14/05/#code-signing-and-encrypted-game-packages) showed
   that consoles, and some phone platforms, refuse ordinary programs exactly that
   combination. Emulators on those platforms have to interpret.
-
-<Quiz
-  id="emulator-stale-translation"
-  title="When code changes under a recompiler"
-  prompt="A recompiler has translated a guest loop into host code and stored it. The guest program then writes a new byte into the middle of that loop, over the operand of an `ADD` instruction. What must the emulator do before the loop runs again?"
-  options="Throw away the stored translation that covers the changed address and translate the block again||Nothing, because the stored translation is still correct||Run the old translation once more, then translate again||Stop the guest, because code is not allowed to change"
-  answer="0"
-  explanation="The stored host code still adds the old number, which no longer matches the guest's memory. Code is data, and a guest may legally rewrite its own instructions, so the recompiler has to watch for writes to translated addresses and discard those translations. Otherwise the emulated program runs code that no longer exists."
-/>
 
 ## The memory map and memory-mapped I/O
 
@@ -44913,15 +44525,6 @@ first pass, 3 + 2 + 3 + 1 + 2 = 11 for the second, and 3 + 1 = 4 for the ending.
   cells="PC=0x0E|A=20|X=0|Z=1|0x80 · gold=20|0xF0 · display=20"
   groups="0-3:CPU registers|4:RAM|5:I/O"
   caption="After `HLT`. PC is `0x0E`, one past the `HLT` at `0x0D`, because fetching the opcode moved it on."
-/>
-
-<Quiz
-  id="emulator-jnz-falls-through"
-  title="Why the loop ends"
-  prompt="At step 11 of the trace, `JNZ 0x02` does not jump. Why not?"
-  options="DEX at step 10 made X zero, which set Z to 1||A holds 20, which is not zero||0x02 is not a valid jump target||JNZ can only jump once per program"
-  answer="0"
-  explanation="`JNZ` jumps only while Z is 0, and Z records whether the last result was zero. The instruction just before it, `DEX`, computed X = 1 − 1 = 0, so Z became 1. `ADD` sets Z too, but `DEX` ran after it, and neither `STA` nor `JNZ` changes Z."
 />
 
 ## The interpreter in Rust

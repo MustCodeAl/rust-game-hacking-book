@@ -80,6 +80,8 @@
     meter.style.setProperty("--progress", ids.length ? String(finished / ids.length) : "0");
     meter.classList.toggle("has-progress", finished > 0);
     meter.classList.toggle("is-complete", ids.length > 0 && finished === ids.length);
+    var section = meter.closest("[data-chapter-section]");
+    if (section) section.classList.toggle("is-complete", ids.length > 0 && finished === ids.length);
     var text = meter.querySelector("[data-progress-text]");
     if (text) text.textContent = progressText(finished, ids.length, meter.classList.contains("course-card__progress"));
   }
@@ -136,10 +138,12 @@
   function render() {
     document.querySelectorAll("[data-done-toggle]").forEach(function (button) {
       button.dataset.state = done.has(button.getAttribute("data-done-toggle")) ? "done" : "todo";
+      button.setAttribute("aria-pressed", String(button.dataset.state === "done"));
     });
     document.querySelectorAll("[data-chapter-done]").forEach(function (button) {
       var ids = idsOf(button);
       button.dataset.state = ids.length && countDone(ids) === ids.length ? "done" : "todo";
+      button.setAttribute("aria-pressed", String(button.dataset.state === "done"));
     });
     document.querySelectorAll("[data-chapter-progress]").forEach(renderMeter);
     renderLessonList();
@@ -164,6 +168,23 @@
     });
   }
 
+  function chapterIdsFor(id) {
+    var groups = document.querySelectorAll("[data-chapter-section], #starlight__sidebar ul.top-level > li");
+    for (var group of groups) {
+      var ids = group.hasAttribute("data-chapter-section")
+        ? idsOf(group)
+        : Array.from(group.querySelectorAll("a[data-chapter]")).map(function (link) {
+          return idOf(link.getAttribute("href"));
+        }).filter(isId);
+      if (ids.includes(id)) return ids;
+    }
+    return [];
+  }
+
+  function completion(kind) {
+    document.dispatchEvent(new CustomEvent("academy:completed", { detail: { kind: kind } }));
+  }
+
   document.addEventListener("click", function (event) {
     var target = event.target.closest && event.target.closest("[data-done-toggle], [data-chapter-done], [data-progress-clear]");
     if (!target) return;
@@ -172,8 +193,10 @@
       var id = target.getAttribute("data-done-toggle");
       if (!isId(id)) return;
       var nowDone = !done.has(id);
+      var chapterIds = chapterIdsFor(id);
       setDone([id], nowDone);
       announce(nowDone ? "Lesson marked done." : "Lesson marked not done.");
+      if (nowDone) completion(chapterIds.length && countDone(chapterIds) === chapterIds.length ? "chapter" : "lesson");
       return;
     }
 
@@ -183,6 +206,7 @@
       var allDone = countDone(ids) === ids.length;
       setDone(ids, !allDone);
       announce(allDone ? "Chapter marked not done." : "All " + ids.length + " lessons in this chapter marked done.");
+      if (!allDone) completion("chapter");
       return;
     }
 
