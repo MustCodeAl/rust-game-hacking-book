@@ -29212,6 +29212,292 @@ References: [named-pipe operations](https://learn.microsoft.com/en-us/windows/wi
 />
 
 ---
+## Lesson 8.9 — How the Source Engine Works
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/6/09/
+Category: Messages Across Networks and Processes
+Estimated reading time: 18 minutes
+Summary: Follow a player's command through Source's modules, prediction, server simulation, and snapshots, then connect those boundaries to settings and game files.
+
+You press forward. Your player moves immediately, yet the server has not
+received the input. Later, a reply may adjust that movement. To understand
+why, follow the input across the pieces of the game that own each decision.
+[Lesson 8.1](/pages/6/01/) introduced client and server messages. Source gives
+us a concrete engine in which those messages connect to objects and time.
+
+## Why study Source?
+
+**Source** is Valve's game-engine family behind Half-Life 2, Counter-Strike:
+Source, Team Fortress 2, Left 4 Dead, and the original Counter-Strike: Global
+Offensive. They share architectural ideas, but their engine branches differ.
+Counter-Strike 2 uses **Source 2**, a later engine family. An interface name or
+memory layout from Source 1 is not a promise about Counter-Strike 2.
+
+Valve's public **Source SDK 2013** supplies game code and interfaces for
+Half-Life 2, Half-Life 2: Deathmatch, and Team Fortress 2. An SDK, or software
+development kit, gives developers code and tools for building compatible
+software. This repository lets us inspect the game side of the boundary. It
+does not supply every implementation inside a shipping engine.
+
+This lesson follows the SDK revision beginning `b8cfb12`. Treat its named
+interfaces and defaults as facts about that revision. Keep experiments in
+your own offline SDK mod. A **mod** supplies changed game content or rules
+while using the engine's supported loading contracts.
+
+## The engine connects client and server game code
+
+A launcher starts the engine and selects the game to load. The engine
+provides common services such as files, rendering, sound, and networking.
+Game-specific code supplies weapons, entities, movement rules, and decisions
+about what happens next.
+
+On Windows, this game code commonly comes in `client.dll` and `server.dll`.
+A **DLL** is a library loaded into a process while it runs, as introduced in
+[Lesson 6.2](/pages/8/01/). Other operating systems use their own shared-library
+formats for the same architectural division.
+
+The client library handles the player's input, local presentation, and
+prediction. The server library owns the simulated game rules and the state
+that clients must follow. Some movement code is shared so both sides can
+compute comparable results. Rendering a player and deciding whether that
+player can pass a wall are separate responsibilities.
+
+A **listen server** hosts the simulation inside a game that also has a local
+player. A **dedicated server** runs the hosting side without that local
+player's view. Even a local game can retain the client/server division. The
+boundary describes who owns a decision, whether its messages cross the
+Internet or stay on one machine.
+
+<MarginNote kind="brief">The client presents and predicts. The server decides the game state. The engine connects their game libraries.</MarginNote>
+
+## Modules ask for an interface by name
+
+The engine cannot call an arbitrary function inside a loaded library and
+hope its arguments fit. The two sides need an agreed set of operations.
+That set is an **interface**: a contract describing which methods an object
+provides and how to call them.
+
+Source modules expose a factory named `CreateInterface`. A **factory** is a
+function that supplies an object through an agreed interface. The caller
+passes the requested name. The module searches its registered interfaces
+and returns a pointer to the matching object, or a null pointer if it cannot
+provide one. An optional status output receives `IFACE_OK` or `IFACE_FAILED`.
+The pointer is the function's result; the status is a separate output.
+
+For this revision, `VClient017` names the client game interface, while
+`VEngineClient014` names engine services used by client code. On the server
+side, `VEngineServer023` exposes engine services, `ServerGameDLL012` exposes
+game callbacks, and `ServerGameClients005` covers player-related callbacks.
+The suffix is part of the requested contract.
+
+The SDK's registration macros, including `EXPOSE_INTERFACE`, attach a name
+and creation function to a registration list. Lookup matches that name.
+The returned object's virtual methods use the C++ calling contract already
+introduced in earlier lessons. A different interface version can change
+that contract, even when its name looks similar.
+
+<MarginNote kind="alternative">Picture a shared menu of operations. The version name selects the menu both modules agree to use.</MarginNote>
+
+This explains a startup failure that otherwise looks mysterious: a library
+loads successfully, but it cannot provide the interface the engine asks for.
+Loading bytes and agreeing on their callable contract are different checks.
+
+## Entity state becomes selected network properties
+
+Once the libraries connect, the server can create an **entity**, an object
+the game tracks: a player, door, projectile, or another piece of the world.
+Its full object contains more information than a client needs. Some fields
+are server bookkeeping. Others describe what the client must display.
+
+A **SendTable** declares properties that server game code makes available
+for network encoding. A corresponding **RecvTable** describes how client
+game code receives those properties. These are descriptions of fields and
+their encoding, rather than a copy of the whole C++ object. Nested tables
+let one class reuse another class's networked fields.
+
+Think of a door whose server object stores its position, opening state, and
+internal scheduling data. The client needs enough state to place and draw
+the door. It does not need every scheduling field. The property declarations
+make that selection explicit. The engine can also limit which entities and
+updates are relevant to a particular client.
+
+Floating-point properties can trade precision for bandwidth through
+**quantization**: representing a range with a limited set of codes. As an
+illustration, four bits give `2⁴ = 16` codes. Spread those codes across a
+chosen range from 0 to 15, including both ends. The spacing is
+`(15 − 0) ÷ (16 − 1) = 1`. Values between the available steps need an
+encoding rule that chooses a representable value.
+
+The SDK's `SendPropFloat` accepts a bit count, range, and flags. Some settings
+use an unscaled float instead. The four-bit example explains the trade;
+it does not describe every Source float on the wire. A client-side value can
+therefore differ slightly from the server's value even when both sides work
+correctly.
+
+## Input becomes a command record
+
+Now the player presses a movement key. The client game interface's
+`CreateMove` produces a **user command**, one record of player input for
+simulation. Source names that record `CUserCmd`.
+
+Its `command_number` identifies a command in the sequence. Its `tick_count`
+records the tick when the client created it. A **tick** is one step of the
+simulation clock. Command numbers and tick numbers have different jobs,
+even when a small example gives them matching values.
+
+The record includes view angles and the intended movement values
+`forwardmove`, `sidemove`, and `upmove`. It also includes weapon selection
+and mouse movement. These inputs describe what the player requests. They
+do not establish the final position, damage, or inventory result.
+
+The `buttons` field packs several requests into one integer. In this SDK,
+attack uses bit 0 and jump uses bit 1. Their values are `2⁰ = 1` and
+`2¹ = 2`. Requesting both sets the combined mask `1 | 2 = 3`, whose two
+lowest bits are on. The server can test each bit separately.
+
+This memory object is not the packet format. Command encoding records
+changes relative to another command, and decoding rebuilds the record.
+Fields used for local prediction bookkeeping do not all become raw packet
+bytes. Keeping object layout and wire encoding separate matters just as it
+did for the message parsers earlier in this chapter.
+
+## A tick advances the world; prediction advances the local estimate
+
+The SDK's default tick interval is `0.015` seconds. Multiply by 1000 to get
+15 milliseconds per tick. Divide one second by the interval to get
+`1 ÷ 0.015 ≈ 66.67` simulation steps per second. A game can supply its own
+interval, so this default is not every Source game's rate.
+
+The server game interface exposes `GameFrame` for simulation work and
+`GetTickInterval` for its interval. Drawing frames happens on another
+schedule. A faster renderer can draw additional views between simulation
+ticks; it does not give the player additional accepted movement.
+
+Waiting for a network reply before showing every step would make movement
+feel delayed. **Prediction** lets the client run its local player's movement
+using input commands immediately. The server still runs its own simulation
+and returns authoritative results. **Authoritative** means that those results
+are the state the client must reconcile with.
+
+Use a deliberately small movement model to see the reconciliation. Start
+at `x = 0`. Each accepted forward command adds one position unit. Commands
+1 and 2 request `+1`, giving `0 + 1 = 1`, then `1 + 1 = 2`. These are toy
+displacements, not Source's velocity and collision formulas. The scene's
+15-millisecond clock comes from the SDK default.
+
+A barrier now closes on the server and prevents movement past `x = 2`.
+The client has not received that update. Command 3 requests another `+1`.
+The client predicts `2 + 1 = 3`; server collision keeps the position at 2.
+Before the reply arrives, command 4 requests `−1`. The client's current
+prediction becomes `3 − 1 = 2`.
+
+<MarginNote kind="narration">The server's barrier has closed. The client's earlier prediction has not heard about it yet.</MarginNote>
+
+<Scene name="source-command-tick" />
+
+The server reply acknowledges command 3 and reports position 2. An
+**acknowledgment** identifies the input already covered by the returned
+state. The client starts from that authoritative position and drops commands
+1 through 3 from its pending history. Command 4 is still pending, so it
+replays that `−1`: `2 − 1 = 1`.
+
+That replay preserves the player's newer input while correcting the earlier
+prediction. Simply replacing the displayed position would lose pending
+movement. Replaying commands already acknowledged would repeat work the
+server's state already contains.
+
+## Snapshots smooth other players; lag compensation checks past positions
+
+A **snapshot** describes server state at a point in simulation time.
+It may be encoded as changes from an earlier known snapshot. Snapshot
+delivery, tick rate, and rendering rate are separate schedules.
+
+For another player's movement, the client usually has received states
+rather than that player's newest input. **Interpolation** draws intermediate
+positions between received states. Showing a slightly older timeline gives
+the renderer states on both sides of the time it wants to draw. That makes
+motion smooth instead of jumping whenever a message arrives.
+
+Prediction estimates the local player's response to input. Interpolation
+fills the visible gaps between other entities' received states. Neither
+makes a client observation newer than the information actually received.
+
+This delay also matters when a player fires. The target they saw may occupy
+an earlier position than the server's current position. **Lag compensation**
+temporarily uses recorded earlier player states for the relevant server-side
+hit check, then restores the current simulation.
+
+In this SDK, the initial target tick is the command's `tick_count` minus
+the interpolation delay expressed in ticks. The server also checks that
+time against its latency estimate. A discrepancy greater than `0.2` seconds
+uses a latency-based target instead. The inspected `sv_maxunlag` default is
+1 second and bounds the allowed correction. This is a bound on the decision;
+it is not a promise that every past state remains available for exactly one
+second.
+
+The important ownership stays intact: the server performs the hit check.
+It temporarily adjusts eligible recorded player state and then restores
+it. The world does not permanently travel backward because a packet arrived.
+
+## Console variables carry rules as well as values
+
+Games need settings without recompiling each change. A **console variable**,
+or **ConVar**, is a named setting with a value and flags describing how it may
+be used. The developer console exposes these settings and named commands.
+
+`FCVAR_CHEAT` restricts certain development controls to permitted cheat
+contexts, including the server's `sv_cheats` setting. `FCVAR_REPLICATED`
+marks a server-controlled setting enforced on connected clients. Flags
+describe permissions and ownership as well as storage behavior.
+
+A server can ask for a client's variable through `StartQueryCvarValue`.
+The request returns a **cookie**, an identifier for matching a later reply
+to that request. It does not return the variable's value immediately.
+`OnQueryCvarValueFinished` supplies the later status and value. The
+`FCVAR_SERVER_CANNOT_QUERY` flag forbids that query for the marked variable.
+
+For a defender, a client-reported setting is evidence about what the client
+reported. It does not replace server-side movement, inventory, or damage
+validation. A timeout or failed query also needs its own interpretation;
+it is not automatically proof of cheating.
+
+## The same engine loads packages and compiled maps
+
+Those entities need geometry, models, textures, and sounds. **VPK**, short
+for Valve PacK, bundles resource files behind a directory tree. An entry
+identifies where its bytes live, possibly in a companion archive. Some
+bytes can be stored with the directory as preload data. This lets the file
+system locate a resource without treating every small asset as a separate
+loose file.
+
+A **BSP** is a compiled map. The name comes from binary space partitioning,
+which divides space to organize geometry queries. A Source BSP contains
+sections called **lumps**, holding map data such as geometry, visibility,
+and starting entity definitions. It can also contain embedded resources.
+
+The inspected header starts with `VBSP`, then a version and a directory of
+64 lump descriptors. Each descriptor provides an offset, length, and
+version-related metadata. Different game branches can interpret sections
+differently. Reading a file therefore starts with identifying its format
+and validating its bounded sections, not treating its bytes as a live
+entity object. Chapter 9 develops that file-validation work.
+
+## Use each boundary for the question it can answer
+
+An offline observer built with supported interfaces can record command
+numbers, simulation ticks, received properties, and prediction corrections.
+Those records answer different questions. A rendered location describes a
+view; a server result describes an accepted simulation step; a package
+entry locates stored content.
+
+For your own mod, keep module versions explicit and record which side owns
+each value. Follow the DLL lifetime rules when starting and stopping tools.
+For defenders, validate player requests against server-owned state and keep
+work per client bounded. Interpolation, quantization, and correction explain
+some ordinary discrepancies, so one mismatch needs context. The upcoming
+defensive chapter builds on this separation between requests, observations,
+and decisions.
+
+---
 ## Lesson 9.1 — Game Files and Live Memory
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/9/01/
 Category: Game Files, Mods, and Trust
@@ -45001,6 +45287,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>An instruction that may change which instruction runs next. Conditional branches implement decisions; unconditional jumps always transfer control.</dd>
       <dt id="term-breakpoint"><dfn>Breakpoint</dfn></dt>
       <dd>A debugger stop condition attached to an instruction, memory access, or event. A breakpoint gives you one observation point; it does not by itself explain why execution arrived there.</dd>
+      <dt id="term-bsp"><dfn>BSP</dfn> <span class="glossary-alias">Binary Space Partitioning</span></dt>
+      <dd>A map format used by Source games. Its sections store compiled world geometry and related level data. It is a level description; it is not the archive that groups many separate game assets.</dd>
       <dt id="term-buffer"><dfn>Buffer</dfn></dt>
       <dd>A memory area reserved to hold bytes temporarily. Correct code tracks both capacity and current length and never trusts an external length before checking it.</dd>
       <dt id="term-bug-check"><dfn>Bug check</dfn> <span class="glossary-alias">Blue screen, stop error</span></dt>
@@ -45075,6 +45363,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A 32-bit number sent with <code>DeviceIoControl</code> that packs a device type, the access the caller's handle must hold, a function number, and a buffer method.</dd>
       <dt id="term-control-flow"><dfn>Control flow</dfn></dt>
       <dd>The order in which instructions execute, shaped by sequential steps, calls, returns, branches, exceptions, and threads.</dd>
+      <dt id="term-convar"><dfn>ConVar</dfn> <span class="glossary-alias">Console variable</span></dt>
+      <dd>A named game-engine setting with a current value and flags. Flags can control who may change it, whether the server replicates it, and whether another process may query it.</dd>
       <dt id="term-coordinate-system"><dfn>Coordinate system</dfn></dt>
       <dd>An origin, axes, units, and orientation used to describe positions. Numbers are meaningless until you know which space and convention they belong to.</dd>
       <dt id="term-correlation-id"><dfn>Correlation ID</dfn></dt>
@@ -45113,6 +45403,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A tool that controls and observes a running program: pausing threads, reading registers and memory, stepping instructions, and receiving debug events.</dd>
       <dt id="term-debugger-artifact"><dfn>Debugger artifact</dfn></dt>
       <dd>An observable condition associated with debugging, such as a flag, handle, exception path, timing change, or modified instruction byte. Each artifact has false positives and can disappear across versions, so treat it as evidence rather than proof.</dd>
+      <dt id="term-dedicated-server"><dfn>Dedicated server</dfn></dt>
+      <dd>A server process that runs the shared simulation without a local player client. A listen server hosts the simulation while its owner also plays through a client.</dd>
       <dt id="term-deferred-command"><dfn>Deferred command</dfn></dt>
       <dd>A request such as “spawn a bullet here” or “despawn brick 7” that a system records instead of doing at once. The engine applies the queue at a safe point, so a spawned entity is first seen by systems that run later, or by every system on the next frame.</dd>
       <dt id="term-dpc"><dfn>Deferred procedure call</dfn> <span class="glossary-alias">DPC</span></dt>
@@ -45425,6 +45717,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
   <section class="glossary-group" aria-labelledby="glossary-l">
     <div class="glossary-group__letter"><h2 id="glossary-l">L</h2><a href="#glossary-top">Top</a></div>
     <dl class="glossary-list">
+      <dt id="term-lag-compensation"><dfn>Lag compensation</dfn></dt>
+      <dd>A server technique that evaluates an action against an earlier world state chosen from bounded history, then restores the present state. It helps account for network delay; it does not make a client authoritative.</dd>
       <dt id="term-layout"><dfn>Layout</dfn></dt>
       <dd>The byte positions, sizes, alignment, and interpretation of fields in a value or object. A recovered layout is versioned evidence, not a promise that later builds keep the same offsets.</dd>
       <dt id="term-length-prefixed-string"><dfn>Length-prefixed string</dfn></dt>
@@ -45599,6 +45893,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A fact a function promises after successful completion. Tests should check the postcondition rather than only whether the function returned.</dd>
       <dt id="term-precondition"><dfn>Precondition</dfn></dt>
       <dd>A fact that must be true before an operation is valid—for example, that a range is readable and large enough for the requested type.</dd>
+      <dt id="term-prediction"><dfn>Prediction</dfn></dt>
+      <dd>Applying local input before the server reply arrives. The client later corrects to the server state and can replay input the server has not acknowledged yet.</dd>
       <dt id="term-privilege"><dfn>Privilege</dfn></dt>
       <dd>A named operating-system authority associated with a security token. Being an administrator and having a particular privilege enabled are related but not identical facts.</dd>
       <dt id="term-privilege-escalation"><dfn>Privilege escalation</dfn></dt>
@@ -45621,6 +45917,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
   <section class="glossary-group" aria-labelledby="glossary-q">
     <div class="glossary-group__letter"><h2 id="glossary-q">Q</h2><a href="#glossary-top">Top</a></div>
     <dl class="glossary-list">
+      <dt id="term-quantization"><dfn>Quantization</dfn></dt>
+      <dd>Mapping a range of values onto a finite set of encodable levels. Fewer levels reduce the number of transmitted bits but increase the possible rounding error.</dd>
       <dt id="term-quaternion"><dfn>Quaternion</dfn></dt>
       <dd>A four-component representation commonly used for 3D rotation. Unit quaternions compose smoothly and avoid the gimbal-lock singularity of Euler-angle coordinates, though they are less intuitive to inspect directly.</dd>
       <dt id="term-query"><dfn>Query</dfn></dt>
@@ -45647,6 +45945,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A hooked or callback path being entered again before an earlier call has returned. The implementation must deliberately allow, bypass, or reject nested entry.</dd>
       <dt id="term-reason-code"><dfn>Reason code</dfn></dt>
       <dd>A stable bounded value explaining why a decision was made. Reason codes are easier to test and compare than free-form log sentences.</dd>
+      <dt id="term-recvtable"><dfn>RecvTable</dfn></dt>
+      <dd>A Source client description of network properties and how received values update its entity representation. It pairs with the server-side SendTable; the two processes need not have identical memory layouts.</dd>
       <dt id="term-register"><dfn>Register</dfn></dt>
       <dd>A small named storage location inside the CPU. Registers hold operands, addresses, results, flags, stack position, and control state while instructions execute.</dd>
       <dt id="term-regression-test"><dfn>Regression test</dfn></dt>
@@ -45717,6 +46017,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A small separate processor on a console or PC chip that starts before the main cores, holds the device's keys, and performs boot checks and decryption. The main cores and their software never see the keys.</dd>
       <dt id="term-semihosting"><dfn>Semihosting</dfn></dt>
       <dd>A mechanism for target code to request host operations from a supporting debugger or emulator. The firmware lab uses it for terminal output and QEMU termination; it is neither a UART nor a guest OS service.</dd>
+      <dt id="term-sendtable"><dfn>SendTable</dfn></dt>
+      <dd>A Source server description of entity properties that may be sent to clients. Each property describes a value and its encoding, such as an integer width or a bounded float range.</dd>
       <dt id="term-serialization"><dfn>Serialization</dfn></dt>
       <dd>Turning structured values into bytes or text that can be stored or transmitted. Deserialization reverses the representation and must validate untrusted lengths and values.</dd>
       <dt id="term-server-authority"><dfn>Server authority</dfn> <span class="glossary-alias">Authoritative server</span></dt>
@@ -45863,6 +46165,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A small region where code accepts responsibility for facts the compiler cannot prove, such as raw-pointer validity or a foreign ABI. The boundary should state and check its preconditions, then expose a safer interface.</dd>
       <dt id="term-upvalue"><dfn>Upvalue</dfn></dt>
       <dd>Lua’s representation of a local variable captured by a closure. It lets the value outlive the stack frame that originally created it.</dd>
+      <dt id="term-user-command"><dfn>User command</dfn></dt>
+      <dd>A sequenced sample of a player’s requested input, such as buttons, viewing direction, and movement intent. The server processes it under game rules; it is not a trusted claim about the final world state.</dd>
       <dt id="term-user-mode"><dfn>User mode</dfn></dt>
       <dd>The restricted CPU protection level where ordinary games and tools run. User-mode code accesses protected system resources through operating-system interfaces instead of directly controlling the kernel.</dd>
       <dt id="term-utility-ai"><dfn>Utility AI</dfn> <span class="glossary-alias">utility scoring</span></dt>
@@ -45905,6 +46209,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>The processor stopping a guest, saving its state, and running the hypervisor's handler with a reason code, for example after <code>cpuid</code> or an access to a guest physical page with no second-stage mapping.</dd>
       <dt id="term-vm-snapshot"><dfn>VM snapshot</dfn></dt>
       <dd>A saved state of a whole virtual machine: its disk, frozen with later writes going to a delta file, and for a running machine its memory, processor registers, and device state.</dd>
+      <dt id="term-vpk"><dfn>VPK</dfn> <span class="glossary-alias">Valve PacK</span></dt>
+      <dd>An asset archive format used by Source games. Its directory identifies files and the location of their stored data, which may be in the directory archive or companion archives. A VPK does not define the server’s movement rules.</dd>
       <dt id="term-vptr"><dfn>vptr</dfn></dt>
       <dd>A compiler-generated pointer stored in many polymorphic C++ objects that points to a vtable. The exact placement and even existence are ABI and compiler details, not a language-level guarantee.</dd>
       <dt id="term-vtable"><dfn>vtable</dfn></dt>
