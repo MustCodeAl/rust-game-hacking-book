@@ -35,8 +35,9 @@ for (const file of htmlFiles('dist/pages')) {
       assert.ok(exported[0].media?.src.startsWith('/rust-game-hacking-book/assets/reader/'));
       const image = listening.querySelector(`[data-narration-id="${exported[0].id}"] img`);
       assert.ok(image, `${file}: static diagram remains visible`);
-      assert.equal(image.getAttribute('alt'), '', 'Native voices have no diagram label recital');
-      assert.ok(image.closest('[data-reader-skip][aria-hidden="true"]'));
+      assert.ok(image.getAttribute('alt').split(/\s+/).length <= 12, 'Native readers get only a brief image label');
+      assert.ok(image.closest('[data-reader-skip]'));
+      assert.equal(image.closest('[aria-hidden="true"]'), null, 'Edge retains informative images');
       assert.ok(readFileSync(join('dist', exported[0].media.src.replace('/rust-game-hacking-book/', '')), 'utf8').includes('<svg'));
     }
     const copies = printed.flatMap((doc) => [...doc.querySelectorAll(`[data-scene-id="${figure.dataset.sceneId}"]`)]);

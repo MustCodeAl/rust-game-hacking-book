@@ -87,9 +87,12 @@ work in T7 or immediately after it; do not lose them after the urgent release.
 
 Current task state: T1 and T2 are complete, published, and confirmed live. T2
 source `a505cfd` is published at `gh-pages` `1c8e249`. T3 is complete and verified locally: all 23 remaining walkthroughs were replaced,
-for 42 causal scenes in total. T3 publication is next. T4
-through T8 remain required: CC0 artwork/GIFs, Source engine lesson, defensive
-anti-cheat chapter, metadata/reader counts, and additional typing practice.
+for 42 causal scenes in total. Source `b5400fb` is published at `a37eae7`; the
+changed projection page and its new reader image matched the live site. T4 is
+finished and verified locally: compact original CC0 artwork, sprites, and an
+optional GIF. Publication receipts follow in the progress log. T5 through T8
+remain required: Source engine lesson, defensive anti-cheat chapter, quiz banks
+and completion controls, metadata/reader counts, and typing practice.
 
 ## 0. Paste-ready prompt
 

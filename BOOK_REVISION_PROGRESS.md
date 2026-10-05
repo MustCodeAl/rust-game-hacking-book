@@ -1037,3 +1037,31 @@ No lab programs or lab tests were run. Native Edge's final colour/extraction,
 actual Chrome Reading mode, and physical phone performance remain unverified.
 T4–T8 and the recorded quiz/completion requests remain required. T3 is ready
 for its source push and verified publication; receipt follows in the next task.
+
+T3 receipt: source `b5400fb`, published at `gh-pages` `a37eae7`. After the
+deployment wait, `pages/5/09/` and its new reader projection SVG returned HTTP
+200 and matched the verified build byte for byte.
+
+## T4 — compact original artwork and optional GIF (2026-10-05)
+
+Added three original CC0 illustrations for grid layers, a view cone, and wall
+samples. Added four tiny pathfinding sprites. A 360-by-182 optional GIF shows
+the difference between a held input and a fresh press. All assets are under
+30 KB; generators and rights are recorded in Image credits. The GIF starts
+as a still. Pause, offscreen movement, hidden tabs, print, and reduced motion
+stop playback. Reader editions retain the still.
+
+Viewed all illustrations, GIF frames, and sprite scene contact sheets before
+wiring. Reviewed the lesson pages and reader image in the browser. Play
+selects the GIF; Pause restores the still. The build exits 0: 297 pages, 270
+Mermaid diagrams, 137 listening articles, 806 preserved visuals. Links report
+0 broken. All 42 reader scene checks pass. Proof: `/tmp/gha-t4-final.jpg`.
+
+Native Edge F9 dropped decorative images; brief labels and normal figure
+semantics restore them. The site narration still skips picture internals.
+Edge displayed a published HTTPS scene with clear colours. Localhost image
+loads were blocked in native F9. Fixed lowercase foreignObject tags in
+exported SVGs to retain Mermaid labels. Final published reader review follows
+the deployment wait. Actual Chrome Reading mode and physical phone speed
+remain unverified. No lab programs or lab tests were run. T5–T8 and the
+recorded quiz/chapter-completion work remain required.

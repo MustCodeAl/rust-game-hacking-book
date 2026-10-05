@@ -4,7 +4,7 @@
 // not exact; check a finished scene on the real page too.
 //
 //   node scripts/scene-png.mjs <out-dir> [scene-name ...]
-import { mkdirSync, readdirSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import sharp from 'sharp';
 import { renderScene } from '../src/lib/scene/markup.mjs';
@@ -28,6 +28,7 @@ const PALETTE = {
 };
 const css = `
 text{font-family:Helvetica,Arial,sans-serif;fill:#11151a}
+image{image-rendering:pixelated}
 .scene__mono{font-family:Menlo,Courier,monospace}
 .scene__rect{fill:${PALETTE.plain[0]};stroke:${PALETTE.plain[1]};stroke-width:1.5}
 .scene__rect--plain{fill:#fff}
@@ -46,6 +47,21 @@ marker .scene__tip[data-role="${role}"]{fill:${stroke}}`).join('')}
 `;
 
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+const publicDir = new URL('../public/', import.meta.url);
+const embeddedImages = new Map();
+function embedLocalImages(markup) {
+	return markup.replace(/(<image\s[^>]*href=")([^"\s]+)(")/g, (match, before, src, after) => {
+		if (!src.startsWith('/assets/')) return match;
+		if (!embeddedImages.has(src)) {
+			const file = new URL(`.${src}`, publicDir);
+			if (!file.pathname.startsWith(publicDir.pathname)) throw new Error(`Image outside public: ${src}`);
+			const mime = src.endsWith('.png') ? 'image/png' : src.endsWith('.svg') ? 'image/svg+xml' : null;
+			if (!mime) throw new Error(`Unsupported still image: ${src}`);
+			embeddedImages.set(src, `data:${mime};base64,${readFileSync(file).toString('base64')}`);
+		}
+		return before + embeddedImages.get(src) + after;
+	});
+}
 function wrap(text, width) {
 	const lines = [];
 	let line = '';
@@ -74,7 +90,7 @@ for (const name of wanted) {
 	const parts = frames.map((frame, i) => {
 		const x = 12 + (i % cols) * cellW;
 		const y = 12 + Math.floor(i / cols) * cellH;
-		const body = renderScene(sc, frame.t, { id: `f${i}`, base: '' });
+		const body = embedLocalImages(renderScene(sc, frame.t, { id: `f${i}`, base: '' }));
 		const cap = wrap(`${frame.t.toFixed(1)} s  ${frame.label}`, Math.floor(sc.w / 6.2)).slice(0, capLines);
 		return `<g transform="translate(${x} ${y})"><rect width="${sc.w}" height="${sc.h}" fill="#fff" stroke="#c9d0d8"/>${body}${cap.map((l, k) => `<text class="cap" x="0" y="${sc.h + 18 + k * 15}">${esc(l)}</text>`).join('')}</g>`;
 	});

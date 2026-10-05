@@ -524,6 +524,20 @@ throttled scroll handler in `chat-widget.js`) and returns near the top, the bott
 the panel is open; the floating "On this page" restore pill is hidden on phones, where the
 bar is always shown; and the listening dock is compact in landscape.
 
+## Original images and optional GIFs
+
+New original artwork is in `site/public/assets/images/original/`; its CC0
+dedication and reproducible generators are listed in `assets/images/CREDITS.md`.
+Keep the tiny sprites and concept pictures at their authored size, bounded by
+the article width. `scene-png.mjs` embeds local sprite images when drawing
+contact sheets, so those reviews show the actual assets.
+
+`MotionPicture` starts with a still and offers Play/Pause for a small original
+GIF. It stops when hidden or outside the viewport and before printing. Reader
+editions retain the still silently. The reader's canonical URL points to its
+own reading edition so native browser readers do not substitute the source
+lesson's denser text.
+
 ## Animations (scenes) and the previous/next arrows
 
 **All 42 step-through diagrams are now causal scenes.** A scene (`<Scene name="x" />`, definition in
@@ -567,3 +581,10 @@ only hidden, so print, search, and the listening edition are unchanged. `id` key
 `localStorage` (`gha-speedtype-<id>`) and must be unique. While one is open `html[data-typing]` is set,
 which turns off the arrow-key navigation and hides the previous/next pair. Fourteen blocks use it
 (see `BOOK_REVISION_PROGRESS.md`).
+
+Native Edge reader images need short informative alt labels, without an
+aria-hidden wrapper. Keep these labels at twelve words or fewer. The site
+speech queue still skips their internals. Preserve the XML spelling
+`foreignObject` in exported Mermaid SVGs; HTML serializers lowercase it.
+Reader canonical URLs point to the listening edition itself. Native Edge
+blocked localhost image loads in review; check the published HTTPS page too.

@@ -141,7 +141,10 @@ function svgMedia(svg, alt) {
 	copy.removeAttribute('class');
 	copy.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
 	const box = (copy.getAttribute('viewBox') || '').split(/[ ,]+/).map(Number);
-	return { svg: copy.outerHTML, alt, width: box[2] || 480, height: box[3] || 260 };
+	// HTML serializers lowercase this XML-only tag. Restore its SVG spelling
+	// so standalone image files retain Mermaid's HTML labels.
+	const markup = copy.outerHTML.replace(/<(\/?)(foreignobject)\b/gi, '<$1foreignObject');
+	return { svg: markup, alt, width: box[2] || 480, height: box[3] || 260 };
 }
 
 function memoryMedia(figure) {
@@ -241,9 +244,8 @@ export function collectReadableBlocks(article, includeCode = false) {
 		}
 		if (scene === element) {
 			const title = cleanReaderText(element.querySelector('.scene__title')?.textContent);
-			const alt = cleanReaderText(element.querySelector('.scene__alt')?.textContent);
 			const caption = cleanReaderText(element.querySelector('.scene__caption')?.textContent);
-			add(`Diagram: ${title}. ${caption}`, element, 'diagram', svgMedia(element.querySelector('svg'), alt || title));
+			add(`Diagram: ${title}. ${caption}`, element, 'diagram', svgMedia(element.querySelector('svg'), title));
 			continue;
 		}
 		if (memory === element) {
@@ -340,7 +342,6 @@ export function showReaderVariant(article, includeCode = false) {
 		if (block.kind === 'code') node.setAttribute('style', 'color:var(--code-text,#1c2733);background:var(--code-bg,#edf2f7)');
 		if (SILENT_VISUALS.has(block.kind)) {
 			node.setAttribute('data-reader-skip', '');
-			node.setAttribute('aria-hidden', 'true');
 		}
 		node.textContent = block.text;
 		if (block.media) {
@@ -350,8 +351,9 @@ export function showReaderVariant(article, includeCode = false) {
 			if (media.src) {
 				const img = article.ownerDocument.createElement('img');
 				img.src = media.src;
-				img.alt = '';
-				img.setAttribute('title', media.alt);
+				// Edge discards decorative images. A brief label keeps the picture
+				// in native reading views without reciting its internal text.
+				img.alt = media.alt.split(/\s+/).slice(0, 12).join(' ');
 				// Native reading views extract the article without scrolling it first.
 				// Load these small pictures immediately and keep their authored size.
 				if (media.width) {

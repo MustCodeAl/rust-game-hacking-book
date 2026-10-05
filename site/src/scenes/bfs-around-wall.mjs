@@ -1,6 +1,6 @@
 // Lesson 4.9: a breadth-first search finds the route around a wall. The 3-by-2 grid,
 // the wall at (1,0), and the five tiles of the route are the ones the lesson's test uses.
-import { scene, cell, text, note, rect, line } from '../lib/scene/kit.mjs';
+import { scene, cell, text, note, rect, line, image } from '../lib/scene/kit.mjs';
 
 const S = 84;
 const GAP = 3;
@@ -28,6 +28,7 @@ const done = () => {
 
 const grid = [];
 const route = [];
+const sprites = [];
 const labels = [];
 const overlay = [];
 const cues = [];
@@ -38,13 +39,22 @@ const tiles = [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]];
 for (const [x, y] of tiles) {
 	const isWall = x === wall[0] && y === wall[1];
 	grid.push(rect(`t${x}${y}`, colX(x), rowY(y), S, S, { r: 5, ...(isWall ? { role: 'muted' } : {}) }));
+	if (!isWall) sprites.push(image(`floor${x}${y}`, colX(x) + 7, rowY(y) + S - 30, 26, 26, '/assets/images/original/path-floor.png', { o: 0.6 }));
 	const [cx, cy] = centre(x, y);
 	labels.push(text(`l${x}${y}`, cx, cy + 5, isWall ? 'wall' : name(x, y), { anchor: 'middle', mono: true, size: 14 }));
 }
-labels.push(note('tagStart', colX(0) + S / 2, rowY(0) + 20, 'start', { anchor: 'middle', size: 12 }));
-labels.push(note('tagGoal', colX(2) + S / 2, rowY(0) + 20, 'goal', { anchor: 'middle', size: 12 }));
+labels.push(note('tagStart', colX(0) + 8, rowY(0) + 20, 'start', { size: 12 }));
+labels.push(note('tagGoal', colX(2) + 8, rowY(0) + 20, 'goal', { size: 12 }));
 for (let c = 0; c < 3; c += 1) labels.push(note(`cx${c}`, colX(c) + S / 2, Y0 - 9, `x = ${c}`, { anchor: 'middle', size: 12 }));
 for (let r = 0; r < 2; r += 1) labels.push(note(`ry${r}`, X0 - 8, rowY(r) + S / 2 + 4, `y=${r}`, { anchor: 'end', size: 12 }));
+
+// Small original sprites leave tile coordinates and probe arrows unobstructed.
+// Their SVG positions are drawing units, not extra world coordinates.
+const heroPosition = (x, y) => [colX(x) + S - 36, rowY(y) + 5];
+const heroRoute = [[0, 0], [0, 1], [1, 1], [2, 1], [2, 0]].map(([x, y]) => heroPosition(x, y));
+sprites.push(image('wallSprite', colX(1) + S - 35, rowY(0) + 6, 28, 28, '/assets/images/original/path-wall.png'));
+sprites.push(image('chest', colX(2) + S - 33, rowY(0) + S - 29, 26, 26, '/assets/images/original/path-chest.png'));
+sprites.push(image('hero', ...heroRoute[0], 32, 32, '/assets/images/original/path-hero.png', { follow: heroRoute }));
 
 // ---- the queue, the tile just taken from it, and what has been recorded ----
 overlay.push(note('laneTitle', LANE.x, LANE.y - 9, 'queue: leaves at the front, joins at the back', { size: 12 }));
@@ -146,7 +156,7 @@ cues.push([t5, 'Take (2,1). Left is seen. Up is (2,0), the goal, and it is new: 
 const t6 = round(3, [2, 1], [[[1, 1], 'seen'], [[2, 0], 'ok']], [2, 0], 4, t5);
 
 // Pop the goal and walk the parents back.
-cues.push([t6, 'Take (2,0). It is the goal, so the search stops. Follow came_from backward from the goal, (2,0), (2,1), (1,1), (0,1), (0,0), and reverse the list. The route is four moves and never touches the wall.']);
+cues.push([t6, 'Take (2,0). It is the goal, so the search stops. Follow came_from backward from the goal, (2,0), (2,1), (1,1), (0,1), (0,0), and reverse the list. Only after that route is known does the hero follow its four moves around the wall.']);
 pop(4, [2, 0], t6);
 add('t20', 'role', [t6 + 0.6, 'process'], [t6 + 1.1, 'output']);
 add('cf4', 'role', [0, 'plain'], [t6 + 1.1, 'output']);
@@ -162,15 +172,18 @@ back.forEach(([from, to, row], k) => {
 	add(`cf${row}`, 'role', [0, 'plain'], [at, 'output']);
 });
 add('route', 'o', [0, 0], [t6 + 1.3 + 4 * 0.7, 0], [t6 + 1.3 + 4 * 0.7 + 0.4, 1]);
+// The last parent edge finishes at t6 + 3.95. Walking begins after it settles.
+add('hero', 'u', [0, 0], [t6 + 4.05, 0], [t6 + 6.25, 1, 'linear']);
 
 export default scene({
 	id: 'bfs-around-wall',
 	title: 'A first-in, first-out queue finds the route around the wall',
-	alt: 'A grid three tiles wide and two tall with a wall at the top middle. The search takes one tile at a time from the front of a queue, tests its neighbours, queues the new ones, and records each new tile’s parent in a came_from list. When the goal is taken from the queue, the parent links are followed backward to draw the four-move route through the bottom row.',
-	caption: 'The queue sets the order in which tiles are explored. `came_from` records which tiles have been seen and, at the end, the way back to the start.',
+	alt: 'A grid three tiles wide and two tall with a wall at the top middle. The search takes one tile at a time from the front of a queue, tests its neighbours, queues the new ones, and records each new tile’s parent in a came_from list. When the goal is taken from the queue, the parent links are followed backward to draw the four-move route through the bottom row. A small hero then walks that route to the chest without crossing the wall.',
+	caption: 'The queue sets the exploration order. `came_from` records seen tiles and the way back to the start. Hero movement illustrates the proposed route on this unchanged test grid.',
 	w: 480,
 	h: 392,
+	end: 28,
 	cues,
-	actors: [...grid, ...route, ...labels, ...overlay],
+	actors: [...grid, ...sprites, ...route, ...labels, ...overlay],
 	tracks: done(),
 });
