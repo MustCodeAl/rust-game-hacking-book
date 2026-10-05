@@ -12,29 +12,7 @@ That can work once, but every step depends on facts collected earlier. The game 
 
 A more reliable tool separates six phases:
 
-Watch it happenCapture twice, recheck, then write, and read back
-
-A pointer chain in game memory leads to a gold value of 100. The tool captures it twice, but income changes the gold to 130 in between, so the two captures differ and are discarded. Two new captures agree, the snapshot is kept, a fresh capture just before the write still matches, the tool writes 500, and reading back gives 500.
-
-Additional detail: Read the steps.
-
-The tool wants to write 500 into the game’s gold. It does not trust one read, so it first captures the whole pointer chain: player, side, gold address, and gold.
-
-Attempt 1, capture 1: the four values are read and kept together as one snapshot.
-
-Capture 2 reads the chain again. While it runs, income arrives and the game changes the gold from 100 to 130.
-
-The two snapshots differ in the gold field, so the tool refuses to act on either one. A blind write would have overwritten the income.
-
-Attempt 2: the tool throws the pair away and captures twice more. This time both captures agree in all four fields.
-
-The tool keeps that snapshot. The caller asked for Some(500), so it will propose a write. (None would mean observe only.)
-
-Recheck, then write: one more capture right before the write. Only if it still equals the snapshot does the write happen.
-
-Read back: the tool reads the gold again and compares it with the 500 it asked for. Equal means the write took effect.
-
-This follows the write branch when snapshots agree; None remains observation-only and a changed snapshot stops the write.
+Animated diagram: Capture twice, recheck, then write, and read back. A pointer chain in game memory leads to a gold value of 100. The tool captures it twice, but income changes the gold to 130 in between, so the two captures differ and are discarded. Two new captures agree, the snapshot is kept, a fresh capture just before the write still matches, the tool writes 500, and reading back gives 500. Step 1: The tool wants to write 500 into the game’s gold. It does not trust one read, so it first captures the whole pointer chain: player, side, gold address, and gold. Step 2: Attempt 1, capture 1: the four values are read and kept together as one snapshot. Step 3: Capture 2 reads the chain again. While it runs, income arrives and the game changes the gold from 100 to 130. Step 4: The two snapshots differ in the gold field, so the tool refuses to act on either one. A blind write would have overwritten the income. Step 5: Attempt 2: the tool throws the pair away and captures twice more. This time both captures agree in all four fields. Step 6: The tool keeps that snapshot. The caller asked for Some(500), so it will propose a write. (None would mean observe only.) Step 7: Recheck, then write: one more capture right before the write. Only if it still equals the snapshot does the write happen. Step 8: Read back: the tool reads the gold again and compares it with the 500 it asked for. Equal means the write took effect. This follows the write branch when snapshots agree; None remains observation-only and a changed snapshot stops the write.
 
 The important idea is not extra code. It is that data crosses a gate before the tool acts on it. A raw address read once may already be out of date. A Snapshot captured twice with equal results was consistent at that moment. A write happens only if a fresh capture, taken immediately before it, still equals the snapshot.
 
