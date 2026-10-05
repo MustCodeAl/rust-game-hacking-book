@@ -1065,3 +1065,31 @@ exported SVGs to retain Mermaid labels. Final published reader review follows
 the deployment wait. Actual Chrome Reading mode and physical phone speed
 remain unverified. No lab programs or lab tests were run. T5–T8 and the
 recorded quiz/chapter-completion work remain required.
+
+T4 receipt: source `f0c2c4e`, published at `gh-pages` `9648dfb`. After the
+deployment wait, `pages/4/07/` and `input-edge.gif` returned HTTP 200 and matched
+the verified build. The published HTTPS reader was checked in native Edge F9:
+Mermaid labels, scene colours, and original images remain visible. Native
+Read aloud used Microsoft Guy Online (Natural), preserved the chosen speed,
+and was paused after review. No lengthy diagram label recital appeared in
+the extracted text.
+
+## T5 — How the Source Engine Works (2026-10-05)
+
+Added lesson 8.9 with module interfaces, network properties, command bits,
+ticks, prediction, interpolation, lag compensation, console permissions,
+and VPK/BSP formats. Facts were checked against pinned Source SDK 2013
+commit b8cfb12 and the Valve Developer Wiki in a browser. The new compact
+simulation moves client/server players, commands, and an acknowledgement;
+it preserves pending input during correction. Its stills were viewed before
+wiring. Added a page-specific quiz seed and ten glossary entries. Updated
+the lesson count and regenerated docs.json.
+
+Build exits 0: 299 pages, 138 listening articles, 807 preserved visuals.
+Links report 0 broken. All 43 reader scenes and 15 chat checks pass. The
+actual simulation was stepped in the browser through correction and replay;
+the reader picture loads and there is no horizontal overflow at 375 pixels.
+Proof: /tmp/gha-t5-final.jpg. No lab programs or lab tests were run.
+
+T6–T8 and the recorded quiz-bank/chapter-completion requests remain pending.
+T5 publication receipt follows in the next verified batch.

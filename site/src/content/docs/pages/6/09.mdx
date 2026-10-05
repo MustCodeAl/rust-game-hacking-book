@@ -1,0 +1,292 @@
+---
+title: "How the Source Engine Works"
+description: "Follow a player's command through Source's modules, prediction, server simulation, and snapshots, then connect those boundaries to settings and game files."
+chapter: "8.9"
+minutes: 18
+author: "attilathedud"
+date: "2026-10-05"
+sidebar:
+  order: 9
+  label: "8.9 How the Source Engine Works"
+---
+import { MarginNote } from '../../../../components/kit';
+import Scene from '../../../../components/Scene.astro';
+
+You press forward. Your player moves immediately, yet the server has not
+received the input. Later, a reply may adjust that movement. To understand
+why, follow the input across the pieces of the game that own each decision.
+[Lesson 8.1](/pages/6/01/) introduced client and server messages. Source gives
+us a concrete engine in which those messages connect to objects and time.
+
+## Why study Source?
+
+**Source** is Valve's game-engine family behind Half-Life 2, Counter-Strike:
+Source, Team Fortress 2, Left 4 Dead, and the original Counter-Strike: Global
+Offensive. They share architectural ideas, but their engine branches differ.
+Counter-Strike 2 uses **Source 2**, a later engine family. An interface name or
+memory layout from Source 1 is not a promise about Counter-Strike 2.
+
+Valve's public **Source SDK 2013** supplies game code and interfaces for
+Half-Life 2, Half-Life 2: Deathmatch, and Team Fortress 2. An SDK, or software
+development kit, gives developers code and tools for building compatible
+software. This repository lets us inspect the game side of the boundary. It
+does not supply every implementation inside a shipping engine.
+
+This lesson follows the SDK revision beginning `b8cfb12`. Treat its named
+interfaces and defaults as facts about that revision. Keep experiments in
+your own offline SDK mod. A **mod** supplies changed game content or rules
+while using the engine's supported loading contracts.
+
+## The engine connects client and server game code
+
+A launcher starts the engine and selects the game to load. The engine
+provides common services such as files, rendering, sound, and networking.
+Game-specific code supplies weapons, entities, movement rules, and decisions
+about what happens next.
+
+On Windows, this game code commonly comes in `client.dll` and `server.dll`.
+A **DLL** is a library loaded into a process while it runs, as introduced in
+[Lesson 6.2](/pages/8/01/). Other operating systems use their own shared-library
+formats for the same architectural division.
+
+The client library handles the player's input, local presentation, and
+prediction. The server library owns the simulated game rules and the state
+that clients must follow. Some movement code is shared so both sides can
+compute comparable results. Rendering a player and deciding whether that
+player can pass a wall are separate responsibilities.
+
+A **listen server** hosts the simulation inside a game that also has a local
+player. A **dedicated server** runs the hosting side without that local
+player's view. Even a local game can retain the client/server division. The
+boundary describes who owns a decision, whether its messages cross the
+Internet or stay on one machine.
+
+<MarginNote kind="brief">The client presents and predicts. The server decides the game state. The engine connects their game libraries.</MarginNote>
+
+## Modules ask for an interface by name
+
+The engine cannot call an arbitrary function inside a loaded library and
+hope its arguments fit. The two sides need an agreed set of operations.
+That set is an **interface**: a contract describing which methods an object
+provides and how to call them.
+
+Source modules expose a factory named `CreateInterface`. A **factory** is a
+function that supplies an object through an agreed interface. The caller
+passes the requested name. The module searches its registered interfaces
+and returns a pointer to the matching object, or a null pointer if it cannot
+provide one. An optional status output receives `IFACE_OK` or `IFACE_FAILED`.
+The pointer is the function's result; the status is a separate output.
+
+For this revision, `VClient017` names the client game interface, while
+`VEngineClient014` names engine services used by client code. On the server
+side, `VEngineServer023` exposes engine services, `ServerGameDLL012` exposes
+game callbacks, and `ServerGameClients005` covers player-related callbacks.
+The suffix is part of the requested contract.
+
+The SDK's registration macros, including `EXPOSE_INTERFACE`, attach a name
+and creation function to a registration list. Lookup matches that name.
+The returned object's virtual methods use the C++ calling contract already
+introduced in earlier lessons. A different interface version can change
+that contract, even when its name looks similar.
+
+<MarginNote kind="alternative">Picture a shared menu of operations. The version name selects the menu both modules agree to use.</MarginNote>
+
+This explains a startup failure that otherwise looks mysterious: a library
+loads successfully, but it cannot provide the interface the engine asks for.
+Loading bytes and agreeing on their callable contract are different checks.
+
+## Entity state becomes selected network properties
+
+Once the libraries connect, the server can create an **entity**, an object
+the game tracks: a player, door, projectile, or another piece of the world.
+Its full object contains more information than a client needs. Some fields
+are server bookkeeping. Others describe what the client must display.
+
+A **SendTable** declares properties that server game code makes available
+for network encoding. A corresponding **RecvTable** describes how client
+game code receives those properties. These are descriptions of fields and
+their encoding, rather than a copy of the whole C++ object. Nested tables
+let one class reuse another class's networked fields.
+
+Think of a door whose server object stores its position, opening state, and
+internal scheduling data. The client needs enough state to place and draw
+the door. It does not need every scheduling field. The property declarations
+make that selection explicit. The engine can also limit which entities and
+updates are relevant to a particular client.
+
+Floating-point properties can trade precision for bandwidth through
+**quantization**: representing a range with a limited set of codes. As an
+illustration, four bits give `2⁴ = 16` codes. Spread those codes across a
+chosen range from 0 to 15, including both ends. The spacing is
+`(15 − 0) ÷ (16 − 1) = 1`. Values between the available steps need an
+encoding rule that chooses a representable value.
+
+The SDK's `SendPropFloat` accepts a bit count, range, and flags. Some settings
+use an unscaled float instead. The four-bit example explains the trade;
+it does not describe every Source float on the wire. A client-side value can
+therefore differ slightly from the server's value even when both sides work
+correctly.
+
+## Input becomes a command record
+
+Now the player presses a movement key. The client game interface's
+`CreateMove` produces a **user command**, one record of player input for
+simulation. Source names that record `CUserCmd`.
+
+Its `command_number` identifies a command in the sequence. Its `tick_count`
+records the tick when the client created it. A **tick** is one step of the
+simulation clock. Command numbers and tick numbers have different jobs,
+even when a small example gives them matching values.
+
+The record includes view angles and the intended movement values
+`forwardmove`, `sidemove`, and `upmove`. It also includes weapon selection
+and mouse movement. These inputs describe what the player requests. They
+do not establish the final position, damage, or inventory result.
+
+The `buttons` field packs several requests into one integer. In this SDK,
+attack uses bit 0 and jump uses bit 1. Their values are `2⁰ = 1` and
+`2¹ = 2`. Requesting both sets the combined mask `1 | 2 = 3`, whose two
+lowest bits are on. The server can test each bit separately.
+
+This memory object is not the packet format. Command encoding records
+changes relative to another command, and decoding rebuilds the record.
+Fields used for local prediction bookkeeping do not all become raw packet
+bytes. Keeping object layout and wire encoding separate matters just as it
+did for the message parsers earlier in this chapter.
+
+## A tick advances the world; prediction advances the local estimate
+
+The SDK's default tick interval is `0.015` seconds. Multiply by 1000 to get
+15 milliseconds per tick. Divide one second by the interval to get
+`1 ÷ 0.015 ≈ 66.67` simulation steps per second. A game can supply its own
+interval, so this default is not every Source game's rate.
+
+The server game interface exposes `GameFrame` for simulation work and
+`GetTickInterval` for its interval. Drawing frames happens on another
+schedule. A faster renderer can draw additional views between simulation
+ticks; it does not give the player additional accepted movement.
+
+Waiting for a network reply before showing every step would make movement
+feel delayed. **Prediction** lets the client run its local player's movement
+using input commands immediately. The server still runs its own simulation
+and returns authoritative results. **Authoritative** means that those results
+are the state the client must reconcile with.
+
+Use a deliberately small movement model to see the reconciliation. Start
+at `x = 0`. Each accepted forward command adds one position unit. Commands
+1 and 2 request `+1`, giving `0 + 1 = 1`, then `1 + 1 = 2`. These are toy
+displacements, not Source's velocity and collision formulas. The scene's
+15-millisecond clock comes from the SDK default.
+
+A barrier now closes on the server and prevents movement past `x = 2`.
+The client has not received that update. Command 3 requests another `+1`.
+The client predicts `2 + 1 = 3`; server collision keeps the position at 2.
+Before the reply arrives, command 4 requests `−1`. The client's current
+prediction becomes `3 − 1 = 2`.
+
+<MarginNote kind="narration">The server's barrier has closed. The client's earlier prediction has not heard about it yet.</MarginNote>
+
+<Scene name="source-command-tick" />
+
+The server reply acknowledges command 3 and reports position 2. An
+**acknowledgment** identifies the input already covered by the returned
+state. The client starts from that authoritative position and drops commands
+1 through 3 from its pending history. Command 4 is still pending, so it
+replays that `−1`: `2 − 1 = 1`.
+
+That replay preserves the player's newer input while correcting the earlier
+prediction. Simply replacing the displayed position would lose pending
+movement. Replaying commands already acknowledged would repeat work the
+server's state already contains.
+
+## Snapshots smooth other players; lag compensation checks past positions
+
+A **snapshot** describes server state at a point in simulation time.
+It may be encoded as changes from an earlier known snapshot. Snapshot
+delivery, tick rate, and rendering rate are separate schedules.
+
+For another player's movement, the client usually has received states
+rather than that player's newest input. **Interpolation** draws intermediate
+positions between received states. Showing a slightly older timeline gives
+the renderer states on both sides of the time it wants to draw. That makes
+motion smooth instead of jumping whenever a message arrives.
+
+Prediction estimates the local player's response to input. Interpolation
+fills the visible gaps between other entities' received states. Neither
+makes a client observation newer than the information actually received.
+
+This delay also matters when a player fires. The target they saw may occupy
+an earlier position than the server's current position. **Lag compensation**
+temporarily uses recorded earlier player states for the relevant server-side
+hit check, then restores the current simulation.
+
+In this SDK, the initial target tick is the command's `tick_count` minus
+the interpolation delay expressed in ticks. The server also checks that
+time against its latency estimate. A discrepancy greater than `0.2` seconds
+uses a latency-based target instead. The inspected `sv_maxunlag` default is
+1 second and bounds the allowed correction. This is a bound on the decision;
+it is not a promise that every past state remains available for exactly one
+second.
+
+The important ownership stays intact: the server performs the hit check.
+It temporarily adjusts eligible recorded player state and then restores
+it. The world does not permanently travel backward because a packet arrived.
+
+## Console variables carry rules as well as values
+
+Games need settings without recompiling each change. A **console variable**,
+or **ConVar**, is a named setting with a value and flags describing how it may
+be used. The developer console exposes these settings and named commands.
+
+`FCVAR_CHEAT` restricts certain development controls to permitted cheat
+contexts, including the server's `sv_cheats` setting. `FCVAR_REPLICATED`
+marks a server-controlled setting enforced on connected clients. Flags
+describe permissions and ownership as well as storage behavior.
+
+A server can ask for a client's variable through `StartQueryCvarValue`.
+The request returns a **cookie**, an identifier for matching a later reply
+to that request. It does not return the variable's value immediately.
+`OnQueryCvarValueFinished` supplies the later status and value. The
+`FCVAR_SERVER_CANNOT_QUERY` flag forbids that query for the marked variable.
+
+For a defender, a client-reported setting is evidence about what the client
+reported. It does not replace server-side movement, inventory, or damage
+validation. A timeout or failed query also needs its own interpretation;
+it is not automatically proof of cheating.
+
+## The same engine loads packages and compiled maps
+
+Those entities need geometry, models, textures, and sounds. **VPK**, short
+for Valve PacK, bundles resource files behind a directory tree. An entry
+identifies where its bytes live, possibly in a companion archive. Some
+bytes can be stored with the directory as preload data. This lets the file
+system locate a resource without treating every small asset as a separate
+loose file.
+
+A **BSP** is a compiled map. The name comes from binary space partitioning,
+which divides space to organize geometry queries. A Source BSP contains
+sections called **lumps**, holding map data such as geometry, visibility,
+and starting entity definitions. It can also contain embedded resources.
+
+The inspected header starts with `VBSP`, then a version and a directory of
+64 lump descriptors. Each descriptor provides an offset, length, and
+version-related metadata. Different game branches can interpret sections
+differently. Reading a file therefore starts with identifying its format
+and validating its bounded sections, not treating its bytes as a live
+entity object. Chapter 9 develops that file-validation work.
+
+## Use each boundary for the question it can answer
+
+An offline observer built with supported interfaces can record command
+numbers, simulation ticks, received properties, and prediction corrections.
+Those records answer different questions. A rendered location describes a
+view; a server result describes an accepted simulation step; a package
+entry locates stored content.
+
+For your own mod, keep module versions explicit and record which side owns
+each value. Follow the DLL lifetime rules when starting and stopping tools.
+For defenders, validate player requests against server-owned state and keep
+work per client bounded. Interpolation, quantization, and correction explain
+some ordinary discrepancies, so one mismatch needs context. The upcoming
+defensive chapter builds on this separation between requests, observations,
+and decisions.

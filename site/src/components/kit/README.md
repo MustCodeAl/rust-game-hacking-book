@@ -83,3 +83,8 @@ kind `explanation`.
 - `src/lib/math.mjs`, `src/lib/math-speech.mjs`: KaTeX at build time, and the
   formula read aloud.
 - `src/lib/github.mjs`: line count and the exact-version link for `GitHub`.
+
+`source-command-tick` compares local prediction and server authority. Its queue
+retains unacknowledged commands while a returning snapshot corrects the base
+state. Position units are an explained toy model; the clock uses the inspected
+SDK default.
