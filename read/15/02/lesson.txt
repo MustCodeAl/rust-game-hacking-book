@@ -1,0 +1,39 @@
+What the Server Can See
+
+The server receives requests and runs the shared simulation. It can see the accepted position, inventory, cooldowns, and command history. It does not directly see what a player was thinking or every program on their computer. Build checks around what the server actually knows.
+
+Section: Validate an action in the current world.
+
+Validation checks that data satisfies the rules before using it. For a movement command, check the input’s finite numeric values and allowed range. Then simulate movement using server-owned speed, collision, and time. A client-reported final position cannot replace those steps.
+
+The permitted range must come from the game’s rules. A knockback, vehicle, or teleport ability changes what movement is possible. Checking only a single speed ceiling can mistake a valid ability for cheating.
+
+A purchase needs the player’s identity, the item’s current price, and their server-owned balance. Apply the debit and reward together. Otherwise, two concurrent requests could both spend the same old balance, like the lost-update problem in the threading lessons.
+
+Section: Bound how much work a client causes.
+
+A rate limit bounds work or requests within a period. Limit expensive queries, parser allocation, and accepted actions separately. Receiving a burst after network delay does not mean the player earned extra simulation time.
+
+Lesson 8.1 separated framing, parsing, and session rules. Keep that order here. Reject an invalid length before allocating its claimed buffer. Reject an action in the wrong session state before changing the world. Handle duplicates according to the action’s documented retry rules.
+
+Record the original server timing as well as the command’s claimed timing. Source’s lag-compensation checks in Lesson 8.9 illustrate why the server must bound and compare those claims rather than accepting arbitrary history.
+
+Section: Withhold information the client does not need.
+
+Fog of war is a disclosure rule: hide game information until the player is entitled to observe it. A server that sends every hidden enemy position and merely hides the corresponding drawing has already disclosed the data.
+
+In the toy picture, a wall blocks the observer’s sightline. The server knows the enemy’s position but sends none to this client. The enemy moves above the wall. Only after the new sightline clears the wall does its position enter the client’s observation.
+
+Real visibility systems must account for more than this one line. Animation, sound, team information, latency, and other players’ perspectives can make an entity relevant. Reveal it early enough to avoid visible pop-in, but do not disclose unrelated hidden state. Lesson 7.8 applies the same ownership rule to radar markers.
+
+Alternative: Ask what the client needs to draw now. Construct that observation on the server before sending it.
+
+Section: Replays preserve useful context.
+
+A replay records enough accepted state and input to inspect a past sequence. Store the game version and timing rules alongside it. A video from one client can omit information available to the server and include prediction or interpolation differences.
+
+Replay review helps distinguish an impossible state from an unusual but legal tactic. It also reveals what a check was unable to observe. A replay that omits raw input edges cannot prove the timing of those omitted edges.
+
+Machine learning fits a model to examples instead of using only hand- written rules. It can rank large numbers of replay segments for review. Its training labels can contain mistakes, and a new game update can change the input distribution. Test on held-out legitimate matches, different devices, and the updated game. A model score is a signal with measured limits, not an explanation of guilt by itself.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/15/02/

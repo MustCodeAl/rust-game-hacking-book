@@ -29493,9 +29493,8 @@ For your own mod, keep module versions explicit and record which side owns
 each value. Follow the DLL lifetime rules when starting and stopping tools.
 For defenders, validate player requests against server-owned state and keep
 work per client bounded. Interpolation, quantization, and correction explain
-some ordinary discrepancies, so one mismatch needs context. The upcoming
-defensive chapter builds on this separation between requests, observations,
-and decisions.
+some ordinary discrepancies, so one mismatch needs context. [Chapter 15](/pages/15/01/) builds on this separation between requests,
+observations, and decisions.
 
 ---
 ## Lesson 9.1 — Game Files and Live Memory
@@ -45158,6 +45157,822 @@ Before you run the traced program with gold watched, predict which PC values it
 records and why they are not `0x06`, the address of the `STA`.
 
 ---
+## Lesson 15.1 — Why Games Need Anti-Cheat
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/15/01/
+Category: Anti-Cheat: How Games Defend Themselves
+Estimated reading time: 7 minutes
+Summary: Separate a player's requests from the game's decisions, and connect prevention, detection, and fair enforcement.
+
+A multiplayer game asks several computers to agree on one world. Each
+player controls a **client**, the program that sends their input and draws
+their view. The player also controls the machine running it. That machine
+cannot be the sole authority for rules that affect everyone else.
+
+**Anti-cheat** is the collection of controls that protects those rules from
+unauthorized advantages. It includes game design, server validation,
+client protection, investigation, and enforcement. A scanner alone cannot
+repair a game that accepts any score a client sends.
+
+## Requests cross an authority boundary
+
+An **authority boundary** separates a request from the party allowed to
+decide its result. In [Lesson 8.9](/pages/6/09/), a Source client predicts
+movement, while the server owns the accepted simulation.
+
+Consider a toy game with three points already earned. One uncollected coin
+is worth one point. A client claims that its score is now 99. The server
+ignores that claimed total. It checks whether the player's simulated
+position reaches the available coin. A valid pickup removes the coin and
+adds its reward: `3 + 1 = 4`.
+
+<Scene name="server-authority" />
+
+The boundary prevents this score manipulation even if the client display
+has been changed. Detection can still help explain the attempted request,
+but protecting the result does not have to wait for an account ban.
+
+<MarginNote kind="brief">Protect the shared result first. Decide what a suspicious request means using its context.</MarginNote>
+
+## Different advantages leave different observations
+
+An information advantage exposes something the player should not know,
+such as an opponent behind a wall. An input advantage automates decisions
+or timing that the rules reserve for the player. A state advantage changes
+movement, damage, inventory, or another accepted result.
+
+Other problems involve message order and volume, account abuse, or the
+game's economy. A reward request arriving twice may be a normal retry after
+packet loss. The game must prevent duplicate rewards before deciding
+whether the repetition was malicious.
+
+These categories overlap. They describe the violated rule, rather than a
+particular brand of tool. An accessibility device and an automation tool
+may both produce unusual inputs. Policy, supported controls, and the
+actual advantage matter when interpreting them.
+
+## Prevent, detect, and respond
+
+**Prevention** stops an invalid effect. A server rejects movement through
+a solid wall or refuses a purchase without sufficient currency.
+**Detection** identifies an observation worth investigating. A sequence
+of inconsistent movement commands may trigger a recorded flag.
+**Deterrence** makes abuse less attractive through credible rules and
+consequences. **Mitigation** reduces harm while a case is being resolved.
+
+These jobs need different evidence. A malformed request can be rejected
+immediately. An irreversible accusation needs stronger support than an
+unusual mouse movement. Publicly accusing a player also exposes them to
+harassment, so a defender should separate internal investigation from
+public messaging.
+
+## A false flag has a cost
+
+A **false positive** is an honest case incorrectly marked suspicious.
+A **false negative** is cheating that the detector misses. Neither rate
+can be understood by looking only at players already banned.
+
+**Telemetry** is recorded information about a running system. Useful
+telemetry includes the rule version, server state, command timing, and
+the reason a check failed. It lets an investigator reproduce a decision
+and notice when a game update changes legitimate behavior.
+
+An enforcement system also needs corrections and appeals. Keep the
+evidence needed to review a case, limit who can access it, and stop
+collecting data that does not help protect the game. This chapter studies
+defenses in owned offline examples. It does not require testing a live
+service or another player's machine.
+
+---
+## Lesson 15.2 — What the Server Can See
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/15/02/
+Category: Anti-Cheat: How Games Defend Themselves
+Estimated reading time: 8 minutes
+Summary: Validate commands against server-owned state, withhold hidden information, and use replays carefully.
+
+The server receives requests and runs the shared simulation. It can see
+the accepted position, inventory, cooldowns, and command history. It does
+not directly see what a player was thinking or every program on their
+computer. Build checks around what the server actually knows.
+
+## Validate an action in the current world
+
+**Validation** checks that data satisfies the rules before using it.
+For a movement command, check the input's finite numeric values and allowed
+range. Then simulate movement using server-owned speed, collision, and
+time. A client-reported final position cannot replace those steps.
+
+The permitted range must come from the game's rules. A knockback, vehicle,
+or teleport ability changes what movement is possible. Checking only a
+single speed ceiling can mistake a valid ability for cheating.
+
+A purchase needs the player's identity, the item's current price, and
+their server-owned balance. Apply the debit and reward together. Otherwise,
+two concurrent requests could both spend the same old balance, like the
+lost-update problem in the threading lessons.
+
+## Bound how much work a client causes
+
+A **rate limit** bounds work or requests within a period. Limit expensive
+queries, parser allocation, and accepted actions separately. Receiving a
+burst after network delay does not mean the player earned extra simulation
+time.
+
+[Lesson 8.1](/pages/6/01/) separated framing, parsing, and session rules.
+Keep that order here. Reject an invalid length before allocating its
+claimed buffer. Reject an action in the wrong session state before changing
+the world. Handle duplicates according to the action's documented retry
+rules.
+
+Record the original server timing as well as the command's claimed timing.
+Source's lag-compensation checks in Lesson 8.9 illustrate why the server
+must bound and compare those claims rather than accepting arbitrary history.
+
+## Withhold information the client does not need
+
+**Fog of war** is a disclosure rule: hide game information until the player
+is entitled to observe it. A server that sends every hidden enemy position
+and merely hides the corresponding drawing has already disclosed the data.
+
+In the toy picture, a wall blocks the observer's sightline. The server
+knows the enemy's position but sends none to this client. The enemy moves
+above the wall. Only after the new sightline clears the wall does its
+position enter the client's observation.
+
+<Scene name="server-visibility-filter" />
+
+Real visibility systems must account for more than this one line.
+Animation, sound, team information, latency, and other players' perspectives
+can make an entity relevant. Reveal it early enough to avoid visible
+pop-in, but do not disclose unrelated hidden state.
+[Lesson 7.8](/pages/5/08/) applies the same ownership rule to radar markers.
+
+<MarginNote kind="alternative">Ask what the client needs to draw now. Construct that observation on the server before sending it.</MarginNote>
+
+## Replays preserve useful context
+
+A **replay** records enough accepted state and input to inspect a past
+sequence. Store the game version and timing rules alongside it. A video
+from one client can omit information available to the server and include
+prediction or interpolation differences.
+
+Replay review helps distinguish an impossible state from an unusual but
+legal tactic. It also reveals what a check was unable to observe. A replay
+that omits raw input edges cannot prove the timing of those omitted edges.
+
+**Machine learning** fits a model to examples instead of using only hand-
+written rules. It can rank large numbers of replay segments for review.
+Its training labels can contain mistakes, and a new game update can change
+the input distribution. Test on held-out legitimate matches, different
+devices, and the updated game. A model score is a signal with measured
+limits, not an explanation of guilt by itself.
+
+---
+## Lesson 15.3 — Server Plugins, Counters, and False Flags
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/15/03/
+Category: Anti-Cheat: How Games Defend Themselves
+Estimated reading time: 10 minutes
+Summary: Read Macrodox and other SourceMod designs as measurement systems, separating button edges, weighted history, and enforcement.
+
+**SourceMod** lets a Source server run plugins that observe game events and
+player commands. A plugin is code loaded through the server's supported
+extension system. It sees the engine's reported state and the inputs
+reaching that server. It does not gain a trustworthy view of all client
+software.
+
+The command boundary from [Lesson 8.9](/pages/6/09/) explains both its power
+and its limits. A plugin can compare movement requests with accepted state.
+It cannot conclude which program created a request from its timing alone.
+
+## Macrodox counts button edges
+
+The inspected Macrodox version is 1.9, from the source supplied for this
+book revision. Its original forum discussion describes a detector built
+for Counter-Strike: Source bunnyhop servers. **Bunnyhopping** chains jumps
+to maintain movement speed under a game's movement rules.
+
+Macrodox remembers whether a player's jump button was already held. A new
+press increments its counter only when the input changes from released
+to held. Repeated commands with the same held button do not each become
+a new press.
+
+For the five toy samples `0, 1, 1, 0, 1`, zero means released and one means
+held. The first `0 → 1` adds one press. The second consecutive one adds none.
+The later release allows the final `0 → 1` to add another. There are two
+fresh presses, because there are two rising edges.
+
+<Scene name="detector-input-window" />
+
+A **rising edge** is that transition from zero to one. Separating levels
+from edges matters in ordinary game input too. A held key can span many
+commands while describing one physical press.
+
+## Its histories answer different questions
+
+At a game-reported jump event, Macrodox records the counted presses and
+horizontal speed. It retains a circular array of recent jump counts.
+A **circular array** reuses its oldest slot when the write position reaches
+the end. The inspected declaration reserves 30 slots; that is a chosen
+storage capacity, not a universal detection rule.
+
+Other measurements use a **weighted average**, which gives older and newer
+observations different influence. The source updates these averages with
+`(old × 9 + sample) ÷ 10`. Dividing each term by ten shows the weights:
+`0.9 × old + 0.1 × sample`.
+
+For an illustrative old value of `0.5` and a new sample of `1`, the result
+is `(0.5 × 9 + 1) ÷ 10 = 5.5 ÷ 10 = 0.55`. The older value still contributes.
+This is not a ratio computed over exactly the last fifteen jumps.
+
+The perfect-jump measurement samples fresh presses using the previous and
+current ground state. A press on the transition to grounded contributes
+one; a press after remaining grounded contributes zero. Other command
+states do not automatically contribute another sample. The circular log
+and this weighted measurement therefore have different meanings.
+
+<MarginNote kind="brief">A recent-history array, a weighted score, and a consecutive counter are different measurements. Define which one a rule uses.</MarginNote>
+
+## Context can change an apparently perfect pattern
+
+The Macrodox discussion warns against combining it with automatic-jump
+plugins. Such a plugin changes legitimate input behavior. Map conditions
+and timing also affect what the detector observes. A goal of eliminating
+false positives does not establish that the goal was achieved.
+
+The inspected code queues flagged identities in a file and applies actions
+on configured map cycles. Persisting an identity helps a server restart
+retain a decision. It does not strengthen the underlying measurement.
+Before an irreversible action, preserve the relevant trace, map, settings,
+and detector version for review.
+
+## Other plugins expose the same maintenance problem
+
+SourceMod Anti-Cheat, or **SMAC**, divides checks into modules. An inspected
+SMAC fork's February 2025 changelog removed a console-variable check after
+a game update because the older rule could falsely ban players. A detector
+must follow the rules of the game version it is protecting.
+
+**Little Anti-Cheat**, also called Lilac, documents a case where scroll-wheel
+attack input can trigger an autoshoot heuristic. Its original repository
+was archived in September 2024. An archived detector can teach a design,
+but it does not promise maintenance for later game updates.
+
+The supplied CowAntiCheat case combines command counters, view changes,
+server state, and client-reported settings. A client report must never be
+allowed to disable a server check. A missing or unusual report calls for
+separate handling. It does not prove either innocence or cheating.
+
+A **threshold** is a chosen cutoff for a decision. Test thresholds against
+legitimate trace data, including permitted devices and server settings.
+Permanent bans and public accusations need more support than a heuristic
+crossing its cutoff. These case studies explain measurements and their
+failure modes; their implementation and tuning recipes are not reproduced.
+
+---
+## Lesson 15.4 — What Client Protection Can See
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/15/04/
+Category: Anti-Cheat: How Games Defend Themselves
+Estimated reading time: 8 minutes
+Summary: Connect local integrity checks and kernel protection to boot trust, driver risk, privacy, and reliability.
+
+Server validation protects accepted results. It cannot directly inspect
+every change inside a player's local process. **Client protection** adds
+observations on that machine, including file integrity, loaded code, and
+access to the game process.
+
+## User-mode checks inspect a limited view
+
+**User mode** is the operating system's restricted execution environment
+for ordinary applications. A local protection component can compare game
+files with trusted hashes, inspect loaded modules, or record permitted
+process-access events. Its permissions and operating-system interfaces
+limit what it can observe.
+
+A **handle** grants access to an operating-system object, such as a process.
+An unexpected process with game-memory access can be relevant to an
+investigation. A handle's existence alone does not establish a cheat.
+Debuggers, crash reporters, and permitted overlays can also interact with
+processes. Check the access rights, provenance, and game's supported tools.
+
+[Lesson 13.3](/pages/13/02/) separates integrity checks from the trust in
+the checking code. If a local checker and its reference are both under an
+adversary's control, its successful report cannot establish an independent
+truth. [Lesson 13.4](/pages/13/03/) makes the same distinction for debugger
+signals: an observation and an enforcement decision are different jobs.
+
+## Kernel privilege adds visibility and responsibility
+
+The **kernel** is the operating system's privileged core. A **kernel driver**
+is code loaded into that environment to perform operating-system services.
+It can observe or enforce some boundaries unavailable to an ordinary
+application. See [Lesson 12.6](/pages/11/05/) for this trust boundary.
+
+That privilege also increases the consequences of a defect. A bad memory
+access can crash the system rather than just the game. A vulnerable driver
+can expose dangerous operations to other software. Signing identifies an
+approved publisher and protects the signed bytes against alteration; it
+does not prove that their implementation is free of security bugs.
+
+Microsoft's vulnerable-driver blocklist illustrates an additional loading
+policy. A known vulnerable signed driver can be refused even though its
+signature is valid. An allowed driver still requires maintenance and
+compatibility testing.
+
+<Scene name="driver-trust-gate" />
+
+Trend Micro documented ransomware abuse of a vulnerable Genshin Impact
+anti-cheat driver. The lesson is broader than one game: a privileged
+security component can become a security liability if its exposed
+operations are unsafe. Driver revocation, updates, constrained interfaces,
+and operating-system protections all matter.
+
+## Boot trust and attestation answer narrower questions
+
+Loading protection at boot can help it observe the environment before the
+game starts. Loading it with the game limits its lifetime. Neither timing
+choice makes privileged code infallible. A product may support different
+modes on systems with different security guarantees.
+
+**Secure Boot** checks that the boot chain uses components authorized by
+the configured signing policy. A **Trusted Platform Module**, or **TPM**,
+can retain protected keys and record boot measurements. A measurement is a
+record of what was loaded, commonly represented by cryptographic hashes.
+
+**Attestation** is a verifiable report about measured system state. A
+verifier checks the signing identity, expected measurements, and a fresh
+challenge so an old report cannot be reused as a current one. The protocol
+must also bind the report to the intended session. The hash and signature
+distinction from [Lesson 9.8](/pages/9/07/) applies here.
+
+Such a report can support a claim about a measured boot environment. It
+does not prove that every later action is fair, or that all possible
+software and hardware behavior was measured. Server-owned rules remain
+necessary.
+
+<MarginNote kind="brief">More local privilege expands what protection can inspect. It also expands the damage its own defects can cause.</MarginNote>
+
+## Collect what the defense needs
+
+Protection should document its lifetime, privileges, collected information,
+retention, and uninstall behavior. Limit collected data to its stated
+purpose. Test updates against supported hardware and software, with a
+recovery path for failures.
+
+Privacy and reliability are engineering constraints. A protection system
+that repeatedly crashes honest players or cannot explain its data use
+weakens trust in the game it is trying to protect.
+
+---
+## Lesson 15.5 — How Detections Work
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/15/05/
+Category: Anti-Cheat: How Games Defend Themselves
+Estimated reading time: 8 minutes
+Summary: Compare detector signals and count the real people behind a false-positive rate.
+
+A detector turns observations into a signal. To assess that signal, ask
+what was observed, what rule matched, and how often it makes mistakes in
+the population where it runs. Its output is not automatically a verdict.
+
+## Different signals measure different things
+
+A **signature detector** matches a known pattern. A byte signature can
+identify a known code sequence, as in [Lesson 5.4](/pages/7/04/). A file hash
+can identify exact bytes. Matching a pattern is only as meaningful as its
+uniqueness and the trust in the observation.
+
+A **heuristic** is a rule based on an expected pattern rather than an exact
+identity. Repeated input timing or an unlikely view change might trigger
+one. Legitimate devices, accessibility controls, or gameplay changes can
+also produce that pattern.
+
+A **behavioral detector** studies actions over time. It may compare input
+edges, aiming transitions, or movement consistency. A statistical model
+describes the distribution of these observations. A machine-learning
+model learns relationships from labeled examples. Both need evaluation
+on legitimate cases outside the data used to build the model.
+
+An **integrity signal** compares observed state with an expected reference.
+Hardware and account signals describe another part of the environment or
+its history. A new account or private profile is not itself proof of an
+unfair game action. Combining signals requires attention to what each
+actually measures.
+
+## Count a rare event before trusting a flag
+
+The **base rate** is how common a condition is in the population being
+tested. Use a hypothetical population of 100,000 players. Assume one in
+1,000 cheats. Then `100,000 ÷ 1,000 = 100` cheat, and
+`100,000 − 100 = 99,900` are honest.
+
+Now assume the detector catches 99 percent of cheaters and wrongly flags
+1 percent of honest players. These are chosen teaching assumptions, not
+claims about a real anti-cheat product.
+
+Among the 100 cheaters, `0.99 × 100 = 99` are caught. The remaining
+`100 − 99 = 1` is missed. Among the 99,900 honest players,
+`0.01 × 99,900 = 999` are wrongly flagged. The remaining
+`99,900 − 999 = 98,901` are correctly left unflagged.
+
+The flagged group therefore contains `99 + 999 = 1,098` people. Only
+`99 ÷ 1,098 ≈ 0.0902`, or about 9 percent, are cheating.
+
+<Scene name="detector-base-rate" />
+
+The picture groups nine flagged people into each dot. Nine is chosen
+because it divides both flagged counts exactly: `99 ÷ 9 = 11` dots for cheating,
+and `999 ÷ 9 = 111` dots for honest players. Together they make 122 dots. It depicts
+the flagged group, rather than every person in the original population.
+
+**Detection precision** is the fraction of flags that are correct. In this example
+it is about 9 percent, even though the detector catches almost all cheaters.
+**Detection recall** is the fraction of cheaters caught: here `99 ÷ 100 = 99%`.
+The two numbers answer different questions.
+
+<MarginNote kind="brief">A small error rate applied to a large honest population can produce more false flags than true ones.</MarginNote>
+
+## Match the response to the evidence
+
+A hard rule violation, such as an impossible purchase against server-owned
+inventory, can be prevented immediately. A weak behavioral flag can send a
+trace for review without publicly naming the player.
+
+Rechecking with another observation can help, but its errors may be
+correlated with the first check. Two models trained on the same mislabeled
+examples are not two independent witnesses. Measure the combined decision
+on real legitimate cases instead of multiplying error rates by assumption.
+
+Delaying enforcement can allow further validation and group related cases.
+It also leaves time for harm, so prevention and mitigation must continue.
+Human reviewers need the trace and its context, clear decision criteria,
+and a way to correct mistakes. A human verdict is not automatically
+error-free either.
+
+---
+## Lesson 15.6 — Layers, Trust, and Review
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/15/06/
+Category: Anti-Cheat: How Games Defend Themselves
+Estimated reading time: 7 minutes
+Summary: Combine game, platform, league, and server observations without treating duplicated reports as independent proof.
+
+A match can have several protection layers. The game validates its rules.
+A platform provides account and service signals. A league may add its own
+client requirements and review process. A community server may run plugins
+with local policies. These layers need not see the same facts or impose
+the same consequences.
+
+## Know which observation a layer owns
+
+The game server knows its accepted inventory and simulation. Client
+protection sees parts of the local software environment. An account service
+can know historical enforcement records. A replay reviewer sees whatever
+the recording retained. Each observation has a time, scope, and source.
+
+**Provenance** records where information came from and how it was obtained.
+Keep the originating event identifier, game version, server state, and
+detector version when forwarding a signal. Otherwise, a later service may
+misinterpret a copied report as a new measurement.
+
+## Three reports can describe one event
+
+Label a toy event A. The game logs it, a plugin forwards it, and a player
+report references it. That creates three notifications. Their common
+origin means they still describe one event.
+
+<Scene name="evidence-correlation" />
+
+A later event B adds another observation. Now there are two distinct
+events. Distinct does not automatically mean statistically independent:
+both might have been affected by the same game bug or network condition.
+
+**Correlation** means observations vary together. When several detectors
+share inputs or assumptions, their mistakes can occur together too. Count
+unique events and evaluate the combined policy on legitimate cases. Do
+not turn a copied signal into extra confidence merely by routing it
+through additional services.
+
+<MarginNote kind="alternative">Preserve the original event identity across services. Combine its context before deciding how much weight it deserves.</MarginNote>
+
+## Matchmaking risk is different from a cheating verdict
+
+A **trust score** summarizes risk or expected match quality for a policy.
+It may guide matchmaking or prioritize review. It is not necessarily an
+assertion that the account cheated in a particular match.
+
+Valve's published CS:GO Trust Factor explanation illustrates that
+distinction: it describes matchmaking using account and play observations,
+while leaving changing details undisclosed. An account score does not
+replace a rule-specific explanation for an enforcement decision.
+
+New accounts, shared hardware, changing devices, and unusual but permitted
+play can complicate such signals. Keep the scope of a consequence tied to
+the evidence and documented rules. A community server's local removal is
+different from a platform-wide sanction.
+
+## Delayed enforcement has tradeoffs
+
+A **ban wave** applies accumulated enforcement decisions in a batch.
+Grouping cases can give investigators time to validate them and make
+immediate detector feedback less revealing. The delay also allows further
+harm unless other controls prevent or mitigate it.
+
+Use durable case records and preserve the rule version that made each
+decision. If an update causes a false-positive cluster, pause the affected
+enforcement rule, investigate its shared cause, and correct affected cases.
+A general recovery process should exist before a large batch is applied.
+
+Review queues need clear prioritization and limited data access. A report
+can be valuable without being sufficient evidence for a ban. Repeated
+reports from the same source or the same incident should not automatically
+increase the penalty. The purpose of layering is to add useful coverage
+and context, not to hide responsibility behind a majority of flags.
+
+---
+## Lesson 15.7 — Cheat Categories from the Defender's Side
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/15/07/
+Category: Anti-Cheat: How Games Defend Themselves
+Estimated reading time: 8 minutes
+Summary: Connect different locations of unauthorized code and automation to the observations and boundaries a defender can use.
+
+A defender benefits from knowing where an unfair advantage originates.
+That location affects which observations and protections are available.
+It does not change who should own the game's accepted results.
+
+## Process location changes local observations
+
+An **external** tool runs outside the game process. An **internal** tool
+runs code inside it. Depending on permissions and operating-system
+interfaces, a defender may observe process access, loaded modules, or
+unexpected integrity changes. Legitimate development and accessibility
+software can create some of the same observations.
+
+**Cheat Engine** is a development and modding tool with memory inspection,
+debugging, and scripting capabilities. Those capabilities can be useful in
+an owned offline program, like the memory examples earlier in this book.
+The presence of a general-purpose tool is different from proving an unfair
+action in a protected match. Nor does changing client memory automatically
+change the server's inventory or simulation.
+
+Do not assume that a project having publicly visible source settles every
+license or distribution question. Check the actual components and current
+terms before redistributing software. This lesson studies tool categories;
+it does not ask you to install or use them against protected games.
+
+## Privilege is one boundary, information is another
+
+**Kernel-assisted** abuse uses privileged operating-system code. It expands
+the local access problem described in Lesson 15.4. Defenders can combine
+driver policy, integrity protections, updates, and server validation.
+These controls cover different parts of the problem.
+
+**Direct memory access**, or **DMA**, lets hardware devices transfer memory
+without having the CPU copy every byte. [Lesson 12.7](/pages/11/06/) explains
+why device access needs isolation. An **IOMMU**, an input-output memory
+management unit, restricts which memory regions a device can access under
+the configured policy. Firmware and operating-system configuration affect
+whether that protection is actually in place.
+
+Neither greater software privilege nor device access creates a hidden
+server value that was never sent. In the picture, the server sends the
+player's own health but excludes an unrelated hidden enemy. Observing the
+client's received memory yields only the available information.
+
+<Scene name="information-boundary" />
+
+This is why local protection and server disclosure rules complement one
+another. Audit other channels too. Sounds, event messages, timing, or team
+updates can reveal information that one position filter withheld.
+
+## Screen-based automation changes the observation problem
+
+**Computer vision** extracts information from images. A vision-based
+automation system can act on the ordinary game view and emulate input.
+It may not need access to the game's internal memory.
+
+The server still sees resulting commands and their timing. Behavioral
+signals, supported-input policy, and review can contribute evidence.
+Unusual input consistency also occurs with some permitted devices, so a
+pattern alone needs legitimate-device testing and context.
+
+<MarginNote kind="brief">Defend the result and the information boundary as well as the location of code. Different tool categories can produce similar commands.</MarginNote>
+
+## Network and asset changes need their own controls
+
+Network abuse can involve invalid messages, repeated requests, excessive
+work, or inconsistent session claims. Parse bounded input, authenticate
+the session, validate actions against current state, and define retry
+behavior. A cryptographically protected connection does not make the
+authenticated player's requests truthful.
+
+An **asset** is stored game content such as a model, texture, or sound.
+Unauthorized replacement can change the information or visibility a game
+intends to provide. A server can require an approved asset set where the
+rules call for it. Use signed manifests and trusted references rather than
+letting the client select both the content and the expected checksum.
+See [Lesson 9.8](/pages/9/07/).
+
+Permitted mods have a separate policy and supported loading path. They
+should not be silently treated as cheating merely because their bytes
+differ from the stock installation. Define the protected mode, authorized
+extensions, and review procedure before interpreting a local mismatch.
+
+---
+## Lesson 15.8 — Anti-Cheat in Modern Games
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/15/08/
+Category: Anti-Cheat: How Games Defend Themselves
+Estimated reading time: 8 minutes
+Summary: Compare documented protection boundaries and lifetimes without treating product names as proof of effectiveness.
+
+This comparison was checked on **October 5, 2026**. Products change their
+requirements, supported games, and detection systems. The examples show
+documented architecture, rather than a ranking or a guarantee that any
+particular match is free of cheating.
+
+## VALORANT and Vanguard
+
+Riot describes Vanguard as a game-time client component and a kernel
+driver. Its traditional mode starts the driver at boot so protection can
+observe the environment before the game client starts.
+
+On June 24, 2026, Riot announced optional **on-demand** sessions for
+sufficiently secured PCs. In this mode, protection starts with a Riot
+game and runs while it is being played. The published prerequisites include
+an appropriate Windows version, Secure Boot, a TPM, virtualization-based
+security, code-integrity protection, and an IOMMU. Boot-managed operation
+remains a different mode; it is inaccurate to describe every Vanguard
+installation as always starting at boot.
+
+VALORANT also illustrates why client protection cannot replace server
+design. Its server-side visibility policy limits hidden information sent
+to a client. Local privilege and server disclosure are separate controls.
+
+## Protection lifetime is a concrete difference
+
+A kernel component's privilege describes what it may access. Its lifetime
+describes when it runs. The two properties are separate. The diagram
+compares illustrative boot-managed and session-managed lifetimes. Its
+animation time is slowed for viewing, rather than measuring a real boot.
+
+<Scene name="protection-session" />
+
+The bars preserve the period each component was active. Ending a
+session-managed monitor when the game stops does not mean it had lower
+privilege while the game was running.
+
+## Counter-Strike and Valve's layers
+
+**VAC**, Valve Anti-Cheat, contributes client-side detection and server
+enforcement of VAC status. The game still needs its own validation and
+review systems. The public material does not provide a complete recipe for
+VAC or VAC Live detections, so do not infer one from a product label.
+
+Valve's August 19, 2024 update described initial limited-match testing of
+VacNet 3.0 and asked for details of incorrectly cancelled matches. That
+dated announcement does not establish a universal current rollout or a
+measured detection rate.
+
+Valve's April 25, 2024 Counter-Strike 2 notes added an **Overwatch** system
+for match-demo review by trusted partners. This is a dated description of
+review support, not a promise that every account can access the old CS:GO
+review interface.
+
+The earlier CS:GO **Trust Factor** documentation describes matchmaking
+using account and play observations, with changing factors left
+undisclosed. Matchmaking risk, detection, and a reviewed sanction are
+different decisions. A historical FAQ cannot establish today's internal
+CS2 scoring formula.
+
+## Call of Duty and RICOCHET
+
+Activision's current description combines server-side systems and
+investigation with a PC kernel driver. It states that the driver operates
+only while a protected Call of Duty title runs, and monitors software
+interacting with those titles.
+
+Server-side protections can also affect console players through shared
+services and cross-play. The presence of a PC driver does not imply that
+every participant uses the same local component.
+
+## Easy Anti-Cheat and BattlEye
+
+Epic's **Easy Anti-Cheat** integration through Epic Online Services supports
+client-server and peer-to-peer architectures. In client-server mode, game
+network code carries opaque messages between the client and server
+protection modules. **Opaque** means the game transports the data without
+interpreting its internal format. The developer still owns game-rule
+validation and must integrate the required session and message lifecycle.
+
+BattlEye describes user-mode and kernel-mode protection, proactive
+prevention, and detection. These descriptions establish parts of its
+design, rather than an independent measurement of how well it protects
+every supported title.
+
+<MarginNote kind="alternative">Compare what a system sees, when it runs, and who owns the decision. Marketing names do not answer those questions alone.</MarginNote>
+
+A useful comparison also includes supported platforms, privacy, reliability,
+appeals, and the game's own authority model. Public ban counts lack the
+undetected cases and legitimate population needed to calculate precision
+or recall. Lesson 15.5 explains those missing denominators.
+
+---
+## Lesson 15.9 — Designing a Game That Is Hard to Cheat In
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/15/09/
+Category: Anti-Cheat: How Games Defend Themselves
+Estimated reading time: 8 minutes
+Summary: Place authority, disclosure, retries, evidence, and permissions into the game's design from the beginning.
+
+The strongest defense often removes an opportunity before a detector is
+needed. Decide who owns each result, what a client may learn, and what
+must happen when a request is repeated or delayed.
+
+## Write the rule at its owning boundary
+
+An **invariant** is a condition that must remain true across valid
+operations. Examples include an item being consumed at most once, a
+balance remaining within its permitted range, or a purchase granting only
+the reward paid for.
+
+Put these rules beside the state they protect. A user-interface check can
+improve feedback, but it cannot replace the server's purchase validation.
+An authenticated session establishes the requester; it does not establish
+that every requested action is permitted.
+
+Check object ownership and current state when applying an action. A valid
+earlier snapshot can become stale before the request arrives. A pickup
+observed by two players still represents one available world object.
+
+## Make retries safe
+
+**Idempotence** means repeating an operation has the same effect as applying
+it once. Network retries are common when a reply is lost. Reward operations
+need an identity and a committed result so the same request cannot earn
+another reward.
+
+The toy server owns one coin, labelled C, and begins at score zero. The
+first permitted pickup consumes C and adds one point: `0 + 1 = 1`. A later
+delivery repeats that pickup. The server finds its committed result and
+returns it without adding another point.
+
+<Scene name="validated-pickup" />
+
+Commit the reward and consumption together. If another request can run
+between the availability check and consumption, both might observe an
+available coin. Use the appropriate transaction or synchronization for
+the owning system. Remember that a transaction's scope must include all
+state needed to preserve the invariant.
+
+Repeated delivery here explains a normal network condition. Handling it
+safely is better evidence of sound design than treating every retry as a
+reason to ban its sender.
+
+## Keep observations small and relevant
+
+Construct each client's permitted observation on the server. Include
+information needed for responsive presentation, but exclude unrelated
+hidden state. A label hidden on screen is not information removed from
+client memory.
+
+Bound parsing, queued work, history, and requests per client. Use explicit
+overflow and disconnect policies. Test normal delays, packet duplication,
+lost replies, and concurrent actions in a synthetic offline harness.
+Those cases expose trust and lifetime errors without requiring a real
+cheater or a live service.
+
+Keep authoritative records distinct from predictions and presentation.
+That distinction lets a reviewer understand whether a mismatch changed the
+shared world or merely corrected a local view.
+
+## Plan enforcement and recovery together
+
+Record the reason, rule version, and context for a decision. Minimize
+personal data and restrict access to case records. Preserve enough
+information for a correction without retaining unrelated private content.
+
+Start new heuristic rules in an observation mode against representative
+legitimate play. Inspect error clusters after game and device updates.
+Have a way to stop a faulty enforcement rule and correct its consequences.
+Deploying more privileged protection does not remove that responsibility.
+
+<MarginNote kind="brief">A repeatable decision and a recovery path protect honest players as well as the game.</MarginNote>
+
+## Permissions remain part of the project
+
+Keep learning experiments inside programs, captures, servers, and mods
+you own or have explicit permission to test. Written scope should identify
+the systems, allowed data, permitted actions, and when testing stops.
+Do not collect other players' private data to make a lesson example.
+
+Technical access does not settle copyright, license, contract, privacy,
+or computer-access questions. These depend on the applicable rules and
+permissions. Verify the actual license and terms for the work you intend
+to distribute; seek appropriate advice for consequential legal decisions.
+The defensive designs here do not require claims about the outcome of a
+particular lawsuit or permission to interfere with an online match.
+
+If you discover a defect in an authorized test, preserve a minimal
+reproduction and report it through the owner's stated process. Share only
+the data needed to explain the problem. A reliable fix, bounded evidence,
+and a clear permission boundary complete the engineering work.
+
+---
 ## Glossary
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
 
@@ -45225,6 +46040,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A finite, repeatable method for turning input into output. The code is one implementation; the underlying steps are the algorithm.</dd>
       <dt id="term-anti-aliasing"><dfn>Anti-aliasing</dfn> <span class="glossary-alias">MSAA / FXAA / TAA</span></dt>
       <dd>Hiding the stair-steps on the edge of a diagonal shape. MSAA tests coverage at several points inside each pixel, FXAA blurs high-contrast edges in the finished picture, and TAA shifts the camera a little every frame and blends the results over time. They cost memory, a full-screen pass, and a history buffer respectively.</dd>
+      <dt id="term-anti-cheat"><dfn>Anti-cheat</dfn></dt>
+      <dd>Controls that protect game rules against unauthorized advantages, including server validation, client protection, investigation, and enforcement.</dd>
       <dt id="term-anti-debugging"><dfn>Anti-debugging</dfn></dt>
       <dd>Behavior that detects or reacts to debugger-related conditions. Defensive analysis names the observable artifact and tests it; it does not assume every delay, exception, or unusual branch proves a debugger check.</dd>
       <dt id="term-anti-rollback"><dfn>Anti-rollback</dfn></dt>
@@ -45253,6 +46070,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>Encryption that also detects unauthorized modification, usually through an AEAD construction. Confidentiality hides plaintext; authentication detects tampering. Both properties matter and are different.</dd>
       <dt id="term-authoritative-state"><dfn>Authoritative state</dfn></dt>
       <dd>The one copy of a value whose contents decide what happens next, such as the simulation's entity object or, in a multiplayer game, the server's record. Checks that protect a value must run against this copy, not a cached or displayed one.</dd>
+      <dt id="term-authority-boundary"><dfn>Authority boundary</dfn></dt>
+      <dd>The separation between a request and the party permitted to decide its result.</dd>
     </dl>
   </section>
 
@@ -45263,6 +46082,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>Programming that runs without an operating system providing application services. The image needs a suitable startup arrangement, memory layout, and hardware interfaces; Rust's <code>no_std</code> alone does not supply them.</dd>
       <dt id="term-base-address"><dfn>Base address</dfn></dt>
       <dd>The starting virtual address of a mapped image or region. A live image address is commonly <code>module base + RVA</code>.</dd>
+      <dt id="term-base-rate"><dfn>Base rate</dfn></dt>
+      <dd>How common a condition is in the population being observed. Rare cheating can make false flags outnumber true flags even with a small false-positive rate.</dd>
       <dt id="term-batch-processing"><dfn>Batch processing</dfn></dt>
       <dd>Processing a collected group of data together, such as recalculating a leaderboard from finished-match results. Stream processing instead handles an ongoing sequence of events as they arrive.</dd>
       <dt id="term-behavior-tree"><dfn>Behavior tree</dfn></dt>
@@ -45329,8 +46150,12 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>For an old console game, an address and a value: either a byte substituted when the game reads that address, or a value written to RAM once every frame. It works because those games keep their variables at fixed addresses.</dd>
       <dt id="term-checksum"><dfn>Checksum</dfn></dt>
       <dd>A compact value used mainly to detect accidental corruption. Unlike a keyed MAC or digital signature, an ordinary checksum does not prove who produced the data.</dd>
+      <dt id="term-circular-array"><dfn>Circular array</dfn></dt>
+      <dd>Fixed-capacity storage whose write position returns to the beginning and replaces the oldest slot.</dd>
       <dt id="term-client-area"><dfn>Client area</dfn></dt>
       <dd>The part of a window a program draws into, without the title bar and borders. The window rectangle includes them, so converting between window and screen positions uses the client area's own origin.</dd>
+      <dt id="term-client-protection"><dfn>Client protection</dfn></dt>
+      <dd>Checks and controls running on a player's machine, with observations limited by permissions and trust in that environment.</dd>
       <dt id="term-clip-space"><dfn>Clip space</dfn></dt>
       <dd>The homogeneous coordinate space produced by a projection matrix. Clipping happens here before dividing <code>x</code>, <code>y</code>, and <code>z</code> by <code>w</code> to obtain NDC.</dd>
       <dt id="term-clock-cycle"><dfn>Clock cycle</dfn> <span class="glossary-alias">Cycle</span></dt>
@@ -45367,6 +46192,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A named game-engine setting with a current value and flags. Flags can control who may change it, whether the server replicates it, and whether another process may query it.</dd>
       <dt id="term-coordinate-system"><dfn>Coordinate system</dfn></dt>
       <dd>An origin, axes, units, and orientation used to describe positions. Numbers are meaningless until you know which space and convention they belong to.</dd>
+      <dt id="term-correlation"><dfn>Correlation</dfn></dt>
+      <dd>A tendency for observations to vary together. Shared inputs or defects can make detector errors occur together.</dd>
       <dt id="term-correlation-id"><dfn>Correlation ID</dfn></dt>
       <dd>An identifier attached to events from one logical action so observations from different threads or stages can be joined without assuming timestamps alone prove causality.</dd>
       <dt id="term-coverage"><dfn>Coverage</dfn></dt>
@@ -45413,6 +46240,10 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>The time since the previous frame or step, in seconds. Movement is scaled by it (distance = speed × delta time) so a character's speed does not depend on the frame rate.</dd>
       <dt id="term-depth-buffer"><dfn>Depth buffer</dfn></dt>
       <dd>A per-sample store used to decide which fragment is in front. Its values are produced by projection and are often nonlinear; it is not simply “distance from the camera.”</dd>
+      <dt id="term-detection-precision"><dfn>Detection precision</dfn></dt>
+      <dd>The fraction of flagged cases that actually have the condition being detected.</dd>
+      <dt id="term-detection-recall"><dfn>Detection recall</dfn></dt>
+      <dd>The fraction of cases with the condition that the detector successfully flags.</dd>
       <dt id="term-detection-rule"><dfn>Detection rule</dfn></dt>
       <dd>A precise query over observations that identifies evidence of a stated condition. A useful rule names its inputs and possible false results instead of hiding them behind an unexplained score.</dd>
       <dt id="term-detector"><dfn>Detector</dfn></dt>
@@ -45641,6 +46472,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>The live PE table whose slots contain resolved addresses of imported functions. Replacing one slot redirects calls that go through that slot, not every possible call to the function.</dd>
       <dt id="term-idcode"><dfn>IDCODE</dfn></dt>
       <dd>A 32-bit JTAG register that identifies a chip by version, part number, and JEDEC manufacturer code. Its bit 0 is always 1, which tells it apart from a bypass register's captured 0.</dd>
+      <dt id="term-idempotence"><dfn>Idempotence</dfn></dt>
+      <dd>The property that repeating an operation has the same effect as applying it once. It makes retries safe for actions such as rewards.</dd>
       <dt id="term-identity-check"><dfn>Identity check</dfn></dt>
       <dd>Evidence that a candidate object is the intended instance reached through the expected ownership path. This is stronger than a shape check that only says its bytes look plausible.</dd>
       <dt id="term-image-base"><dfn>Image base</dfn></dt>
@@ -45909,6 +46742,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>One of the processor's privilege levels, numbered 0 to 3 on x86. Windows runs the kernel and drivers in ring 0 and ordinary programs in ring 3; the current level is the lowest two bits of the <code>cs</code> register.</dd>
       <dt id="term-protocol"><dfn>Protocol</dfn></dt>
       <dd>A shared agreement about message boundaries, field meaning, order, state, and error handling. A byte layout is only one layer of the protocol.</dd>
+      <dt id="term-provenance"><dfn>Provenance</dfn></dt>
+      <dd>The recorded origin of information, including the event, system, version, and method that produced an observation.</dd>
       <dt id="term-proxy"><dfn>Proxy</dfn></dt>
       <dd>An intermediary that receives traffic and forwards it to another endpoint, optionally recording or transforming it. Correct proxies preserve framing, backpressure, errors, and connection lifecycle.</dd>
     </dl>
@@ -45977,6 +46812,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A value that exists once for the whole world, such as the clock, the score, or the keyboard state. A system asks for it by kind instead of by <a href="#term-entity">entity</a>, so a scan for it finds a single record rather than one per object.</dd>
       <dt id="term-response"><dfn>Response</dfn></dt>
       <dd>The behavior chosen after an assessment, such as recording a diagnostic event or refusing one invalid command. Keep it separate from the signal that triggered the assessment.</dd>
+      <dt id="term-rising-edge"><dfn>Rising edge</dfn></dt>
+      <dd>A transition from zero to one. Input code can count fresh presses by separating these transitions from held button levels.</dd>
       <dt id="term-root-of-trust"><dfn>Root of trust</dfn></dt>
       <dd>The first link of a chain of trust, trusted without being checked because it cannot be changed, such as a boot ROM with a key hash in fuses. A flaw in it cannot be fixed on devices already sold.</dd>
       <dt id="term-round-trip"><dfn>Round trip</dfn></dt>
@@ -46045,6 +46882,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>Blending two orientations at a steady turning speed along the shortest way round. It is the <a href="#term-interpolation">interpolation</a> used for <a href="#term-quaternion">quaternions</a>.</dd>
       <dt id="term-snapshot"><dfn>Snapshot</dfn></dt>
       <dd>A copy of chosen values from a known build, so later reasoning works from fixed data instead of a moving target. Capturing the fields takes time, so values gathered at slightly different moments can describe a state that never existed all at once unless the capture is coordinated.</dd>
+      <dt id="term-source-mod"><dfn>SourceMod</dfn></dt>
+      <dd>A supported server plugin platform for Source games. Plugins observe game events and commands through its extension interfaces.</dd>
       <dt id="term-sparse-set-storage"><dfn>Sparse-set storage</dfn></dt>
       <dd>A way of storing one kind of component in its own pool, with an index from entity to position. Adding or removing the component is cheap, but every read costs an extra lookup. Compare <a href="#term-table-storage">table storage</a>.</dd>
       <dt id="term-spatial-audio"><dfn>Spatial audio</dfn></dt>
@@ -46227,6 +47066,8 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/glossary/
       <dd>A hardware timer that can reset a stalled device unless software services it as required. Its timeout and recovery policy must fit the device; logging or debugger pauses can affect its behaviour.</dd>
       <dt id="term-watchpoint"><dfn>Watchpoint</dfn></dt>
       <dd>A debugger stop condition triggered when an address is read, written, or executed. Hardware supports only a small number and has size/alignment limits.</dd>
+      <dt id="term-weighted-average"><dfn>Weighted average</dfn></dt>
+      <dd>An average in which observations contribute different amounts. Repeated weighting can preserve older history without a fixed window boundary.</dd>
       <dt id="term-wildcard"><dfn>Wildcard</dfn></dt>
       <dd>A pattern position allowed to match any byte. Wildcards exclude unstable operands from a signature, but too many make the pattern ambiguous.</dd>
       <dt id="term-win32"><dfn>Win32</dfn></dt>
