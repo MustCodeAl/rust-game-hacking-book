@@ -919,3 +919,10 @@ and a key press both moved to the next lesson.
 
 **Not done yet:** speed typing on code snippets (a `SpeedType` component, like speedtyper.dev),
 CC0 images and animated pictures, the Source engine lesson, and the anti-cheat chapter.
+
+## Hand-off — 2026-10-04
+
+The assistant's usage ran out. `HANDOFF_PLAN.md` lists the unfinished work in order (check the listening edition
+for scenes, wire four drafted scenes, 23 more animations, CC0 art, the Source engine lesson 8.9, the anti-cheat
+chapter 15) with the verified facts gathered so far. The arrows beside the text now stand at the outer edge of each
+margin with a gap before the text.

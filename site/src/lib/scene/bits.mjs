@@ -29,6 +29,8 @@ export function bitRow(id, x, y, value, { cw = 12.5, ch = 24, gap = 3, role = 'p
 	return {
 		actors,
 		px,
+		/** The id of the cell now at position `pos`, counted from the left (the high end). */
+		idAt: (pos) => `${id}.${order[pos]}`,
 		get hex() { return hexOf(bits); },
 		get bits() { return [...bits]; },
 		/** Flip the bits at the positions where `mask` has a 1, one after another. */
