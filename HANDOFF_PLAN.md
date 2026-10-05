@@ -81,12 +81,13 @@ Additional steering on October 5:
   automatically completes its chapter. Checks for the whole completed chapter
   use a darker colour.
 
-Current task state: T1–T6 are complete, published, and confirmed live. Source
+Current task state: T1–T7 are complete, published, and confirmed live. Source
 receipts: T1 `74d3016`, T2 `a505cfd`, T3 `b5400fb`, T4 `f0c2c4e`, T5 `8b6444c`,
 T6 `05b1729`. T6 Pages receipt is `0be0aa2`; the Macrodox page and new SVG
 matched the verified build.
 
-T7 housekeeping and the finished runtime/completion batch are verified and ready to publish. Every lesson now has one quiz, consolidating
+T7 housekeeping and the finished runtime/completion batch are published and
+confirmed live: source `35900d6`, Pages `f7a8a0b`. Every lesson now has one quiz, consolidating
 42 inline questions from 36 pages into their page's pool. Chapter-wide
 borrowing is removed. Source 8.9 has 30 distinct questions/ten per batch;
 each Chapter 15 page has 15/five. New quiz changes batch membership; Retake
@@ -97,8 +98,10 @@ and optional completion sounds respect the saved effects preference.
 **Remaining content work:** 137 older page pools still need their five-to-ten
 question batches and at least three-times distinct question pools. Do not
 claim those requests complete or restore off-topic chapter borrowing.
-T8 typing-practice polish remains pending. See BOOK_REVISION_PROGRESS.md
-for executed checks and publication receipts.
+T8 adds four already explained ASCII snippets (18 total), smaller desktop
+controls, clearer untyped code, and a fix for doubled blank rows. Its build,
+links, and browser checks pass; publication is the next step. See
+BOOK_REVISION_PROGRESS.md for executed checks and publication receipts.
 
 ## 0. Paste-ready prompt
 

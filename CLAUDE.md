@@ -578,7 +578,7 @@ keyboard (or a typing practice is open: `html[data-typing]`). `hover-cards.js` s
 destination's card on hover.
 
 **Typing practice.** `<SpeedType id="…" title="…">` around one fenced code block (5 to 15 lines, plain
-ASCII, already explained in the lesson) adds a typing test (`public/scripts/speedtype.js`). It copies the
+ASCII, already explained in the lesson) adds a typing test (`public/scripts/speedtype.js`). There are 18 wrapped snippets. Keep desktop actions compact and phone targets at least 44 pixels. Empty rendered code rows use one Enter marker, so they do not double their height. It copies the
 block's `.ec-line .code` markup, wraps each character in a span, and tracks them; the original block is
 only hidden, so print, search, and the listening edition are unchanged. `id` keys the reader's best in
 `localStorage` (`gha-speedtype-<id>`) and must be unique. While one is open `html[data-typing]` is set,

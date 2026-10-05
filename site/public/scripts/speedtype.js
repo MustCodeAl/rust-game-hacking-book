@@ -59,6 +59,9 @@
     var seq = [];
     var lines = block.querySelectorAll(".ec-line .code");
     lines.forEach(function (code, index) {
+      // The renderer fills an empty row with a newline. Our own Enter marker
+      // already represents that row, so keep the copy to one visible line.
+      if (/^[ \t\r\n]*$/.test(code.textContent || "")) code.textContent = "";
       var walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
       var texts = [];
       while (walker.nextNode()) texts.push(walker.currentNode);
