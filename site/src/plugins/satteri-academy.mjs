@@ -85,8 +85,8 @@ export function mathBlocks() {
 // alone in running text. A lesson that bolds one as the term it is introducing
 // still links it to its definition.
 const EVERYDAY_WORDS = new Set([
-	'assessment', 'border', 'contradiction', 'control', 'coverage', 'detector', 'draining', 'freshness',
-	'generation', 'immediate', 'layout', 'material', 'oracle', 'picking', 'query', 'resource', 'response',
+	'assessment', 'border', 'contradiction', 'control', 'correlation', 'coverage', 'detector', 'draining', 'freshness',
+	'generation', 'immediate', 'layout', 'material', 'oracle', 'picking', 'provenance', 'query', 'resource', 'response',
 	'scene', 'schedule', 'signal', 'structure', 'tick', 'transform', 'wildcard',
 ]);
 

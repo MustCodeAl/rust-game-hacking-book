@@ -329,7 +329,7 @@ provider API credentials or automatic content submission are used.
 The toolbar prints its current lesson when visuals are ready. `/print/` is a
 lightweight scope chooser; `/print/chapter/N/` contains one complete chapter.
 Only Prepare complete book loads all fourteen chapters, with progress and
-cancellation. Preserve all 138 lessons and their visuals in that assembled
+cancellation. Preserve all 147 lessons and their visuals in that assembled
 document. See BOOK_REVISION_PROGRESS.md for verification and publication.
 
 The listening/diagram/print update is source **19873fe**, published through
@@ -486,8 +486,8 @@ live site loses them (publishing replaces every file).
 
 ### Two new lessons and the second renumbering (2026-10-03)
 
-This renumbering produced **137 lessons**. The current book has **138**, including
-8.9 How the Source Engine Works. **4.2 How an Engine Orders and Shares Its Work**
+This renumbering produced **137 lessons**. The current book has **147**, including
+8.9 How the Source Engine Works and nine defensive lessons in chapter 15. **4.2 How an Engine Orders and Shares Its Work**
 (`pages/4/12`) and **6.6 How a Game Reads Input** (`pages/8/11`) are new, and the
 lessons after them moved up by one: Chapter 4's old 4.2–4.12 are 4.3–4.13 and
 Chapter 6's old 6.6–6.9 are 6.7–6.10. URLs and `gha-done` progress did not change.
@@ -502,7 +502,7 @@ Whenever lessons are renumbered:
   label equals the target lesson's `chapter`, and read each plain mention against the
   lesson's title.
 - The listening build counts lessons: `scripts/write-reader-editions.mjs` expects
-  exactly 138.
+  exactly 147.
 - `rust-labs/src/bin/npc_brain_lab.rs` names its lessons in a comment (4.12 and 4.13),
   and `site/public/rust-labs/` holds the synced copy.
 
@@ -542,7 +542,7 @@ lesson's denser text.
 ## Animations (scenes) and the previous/next arrows
 
 **All 42 step-through diagrams are now causal scenes.** Lesson 8.9 adds a new
-command prediction scene, bringing the current total to 43. A scene (`<Scene name="x" />`, definition in
+command prediction scene, bringing the total to 43. Chapter 15 adds nine, for 52 current scenes. A scene (`<Scene name="x" />`, definition in
 `site/src/scenes/x.mjs`) is a set of parts (boxes, cells, text, lines, queues) with keyframe
 tracks that move or change them, so the data the lesson talks about really moves: a number is
 copied into a format and converted, a pointer's bytes reverse into an address, `call` pushes a
@@ -600,3 +600,12 @@ is separate. Flags vary by branch. A command object is not the wire format.
 VPK and BSP were checked in the Valve Developer Wiki in a browser. The
 command scene uses explicitly derived toy position units and the SDK default
 15-millisecond interval. Keep experiments in an owned offline mod.
+
+## Defensive chapter 15
+
+Nine lessons explain authority, visibility, server plugins, client protection,
+detector errors, layers, tool categories, current products, and safe design.
+There are 147 lessons and 52 scenes. Macrodox was read from the user-supplied
+version 1.9; its perfect-jump metric uses exponential weighting, not a fixed
+last-fifteen ratio. Do not copy plugin source or teach evasion. Primary audit
+references and scope limits are in CHAPTER_15_SOURCE_NOTES.md.

@@ -85,14 +85,14 @@ The quiz-bank, quiz controls, and chapter-completion requests are newly queued
 work, not yet verified or published. Complete them with the metadata/progress
 work in T7 or immediately after it; do not lose them after the urgent release.
 
-Current task state: T1 and T2 are complete, published, and confirmed live. T2
-source `a505cfd` is published at `gh-pages` `1c8e249`. T3 is complete and verified locally: all 23 remaining walkthroughs were replaced,
-for 42 causal scenes in total. Source `b5400fb` is published at `a37eae7`; the
-changed projection page and its new reader image matched the live site. T4 is
-finished and verified locally: compact original CC0 artwork, sprites, and an
-optional GIF. Publication receipts follow in the progress log. T5 through T8
-remain required: Source engine lesson, defensive anti-cheat chapter, quiz banks
-and completion controls, metadata/reader counts, and typing practice.
+Current task state: T1–T5 are complete, published, and confirmed live. Source
+receipts: T1 `74d3016`, T2 `a505cfd`, T3 `b5400fb`, T4 `f0c2c4e`, T5 `8b6444c`.
+T5 Pages receipt is `df857e7`; the page and new reader image matched after
+GitHub's queued deployment completed. T6 is being verified: nine defensive
+lessons and nine original simulations, using the supplied Macrodox source.
+T7 remains required, including the requested quiz banks and completion
+controls. T8 typing-practice polish remains required by the continuation
+request. See BOOK_REVISION_PROGRESS.md for executed checks and receipts.
 
 ## 0. Paste-ready prompt
 
@@ -246,7 +246,7 @@ Developer Wiki blocks automated fetching, so open it in a browser if you need it
 - `game/shared/usercmd.h`, class `CUserCmd`: `command_number` (matches server and client commands),
   `tick_count` (the tick the client created the command), `viewangles`, `forwardmove`/`sidemove`/`upmove`
   (floats), `buttons` (int), `impulse` (byte), `weaponselect`, `weaponsubtype`, `random_seed`,
-  `server_random_seed` (server only), `mousedx`/`mousedy` (shorts), `hasbeenpredicted` (client only).
+  `server_random_seed` (server only), `mousedx`/`mousedy` (shorts), `hasbeenpredicted` (prediction bookkeeping; its declaration is not client-only).
 - `game/shared/in_buttons.h`: `IN_ATTACK` bit 0, `IN_JUMP` 1, `IN_DUCK` 2, `IN_FORWARD` 3, `IN_BACK` 4, `IN_USE` 5,
   `IN_LEFT` 7, `IN_RIGHT` 8, `IN_MOVELEFT` 9, `IN_MOVERIGHT` 10, `IN_ATTACK2` 11, `IN_RELOAD` 13, `IN_SPEED` 17,
   `IN_WALK` 18. One integer, one bit per key (a good worked example of flags).
@@ -254,7 +254,7 @@ Developer Wiki blocks automated fetching, so open it in a browser if you need it
   `DEFAULT_TICK_INTERVAL` 0.015 s ("15 msec is the default", 66.67 ticks per second); `ABSOLUTE_PLAYER_LIMIT` 255.
 - `public/tier1/interface.h`: every interface derives `IBaseInterface`; classes are registered in a linked list
   (`InterfaceReg`) by `EXPOSE_INTERFACE`/`EXPOSE_SINGLE_INTERFACE`; `typedef void* (*CreateInterfaceFn)(const char *pName, int *pReturnCode)`;
-  the exported `CreateInterface` returns `IFACE_OK` or `IFACE_FAILED`; names end in a version number.
+  the exported `CreateInterface` returns an object pointer or null; the optional status output receives `IFACE_OK` or `IFACE_FAILED`. Names include a version suffix.
 - `public/cdll_int.h`: `CLIENT_DLL_INTERFACE_VERSION "VClient017"`, `VENGINE_CLIENT_INTERFACE_VERSION "VEngineClient014"`,
   `IBaseClientDLL::CreateMove(int sequence_number, float input_sample_frametime, bool active)`.
   `public/eiface.h`: `"VEngineServer023"`, `"ServerGameDLL012"`, `"ServerGameClients005"`; `IServerGameDLL::GameFrame`,
@@ -393,7 +393,7 @@ tick rates produce false positives.
 - **Macrodox** (AlliedModders, "[CS:S] Macrodox - Bhop cheat detection", by Inami, v1.9): written 2009 for a bhop
   server to catch cheaters seeking speedrun records; goal: automatic bans with no false positives; slays players using
   +left/+right strafe binds; detects hacks, macros, hyper/auto-scroll; bans are delayed so cheaters cannot tell
-  whether they were caught; the "perf" ratio is how many of a player's last 15 jumps were timed perfectly (1.0 = all);
+  whether they were caught; the inspected version 1.9 source uses a weighted perfect-jump metric, updating `(old × 9 + sample) ÷ 10`; it is not a fixed last-15 ratio;
   admin command `mdx_stats <#userid|name|@all>`; do not combine with auto-jump plugins. A community guide says
   scripted jumps show "1 1 1 1" scroll patterns, hyperscrollers show 17 to 25+ scrolls, and 300 FPS on 100 tick rarely
   exceeds 70% perfect legitimately.

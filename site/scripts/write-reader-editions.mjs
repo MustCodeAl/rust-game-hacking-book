@@ -57,5 +57,5 @@ for (const folder of readdirSync(directory, { withFileTypes: true })) {
     diagrams += narration.filter((block) => block.media).length;
   }
 }
-if (lessons !== 138) throw new Error(`Expected 138 listening editions, found ${lessons}.`);
+if (lessons !== 147) throw new Error(`Expected 147 listening editions, found ${lessons}.`);
 console.log(`reader-editions: published ${lessons} listening articles and TXT files; ${blocks} blocks, ${diagrams} preserved visuals (silent during narration).`);

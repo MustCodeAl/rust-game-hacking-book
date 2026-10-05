@@ -15,6 +15,7 @@ export const CHAPTERS = [
 	{ number: 12, area: 'systems', title: 'Process Boundaries and Physical Memory', emoji: '🛡️', summary: 'Trace DLL and driver boundaries before validating offline physical-memory captures.' },
 	{ number: 13, area: 'systems', title: 'Advanced Game Hacking', emoji: '🧩', summary: 'Use invariants and telemetry to explain integrity checks, value transforms, control gaps, and repairs.' },
 	{ number: 14, area: 'systems', title: 'Virtual Machines, Hardware, and Consoles', emoji: '🔌', summary: 'Connect guest execution and firmware to console architecture, hardware debugging, and software emulation.' },
+	{ number: 15, area: 'systems', title: 'Anti-Cheat: How Games Defend Themselves', emoji: '🛡️', summary: 'Protect server authority and information, interpret detector errors, and combine client protection with fair review.' },
 ];
 
 // Reading colours identify subject areas, not a chapter's position in a cycle.

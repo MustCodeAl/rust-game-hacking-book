@@ -88,3 +88,8 @@ kind `explanation`.
 retains unacknowledged commands while a returning snapshot corrects the base
 state. Position units are an explained toy model; the clock uses the inspected
 SDK default.
+
+Chapter 15 adds nine synthetic defensive scenes. They show authority, visibility,
+input edges, driver loading policy, counted false flags, event deduplication,
+information disclosure, protection lifetimes, and an idempotent pickup. Their
+shared builder is `src/lib/scene/defence.mjs`. No scene is a production detector.

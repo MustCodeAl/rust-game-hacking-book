@@ -1093,3 +1093,28 @@ Proof: /tmp/gha-t5-final.jpg. No lab programs or lab tests were run.
 
 T6–T8 and the recorded quiz-bank/chapter-completion requests remain pending.
 T5 publication receipt follows in the next verified batch.
+
+T5 receipt: source `8b6444c`, published at `gh-pages` `df857e7`. The deployment
+waited in GitHub's queue before succeeding. The Source lesson and its new
+reader SVG returned HTTP 200 and matched the verified build byte for byte.
+
+
+## T6 — Defensive anti-cheat chapter (2026-10-05)
+
+Added nine original lessons in Chapter 15, with nine causal scenes, balanced
+page-specific quiz seeds, sixteen glossary definitions, cross-links, chapter
+metadata, and regenerated contents. Read the supplied Macrodox 1.9 source;
+the lesson distinguishes fresh presses, circular history, and exponential
+weighting. CHAPTER_15_SOURCE_NOTES.md records primary sources and limits.
+No GPL implementation or evasion instructions were copied.
+
+Scene contact sheets were rendered and viewed before integration, then
+re-rendered after geometry and label repairs. All nine lesson simulations
+were stepped in the browser. The reader picture loads; 375-pixel layout has
+no horizontal overflow. Proof: /tmp/gha-t6-final.jpg.
+
+Final build exits 0: 318 pages, 147 listening articles, 816 preserved visuals.
+Links report 0 broken. All 52 reader scenes and 15 chat checks pass.
+No lab programs or lab tests were run. T7 final housekeeping and the
+recorded quiz-bank/completion work, then T8 typing polish, remain pending.
+Publication receipt follows after the deployment is verified.

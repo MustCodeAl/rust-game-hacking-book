@@ -1,0 +1,107 @@
+---
+title: "Server Plugins, Counters, and False Flags"
+description: "Read Macrodox and other SourceMod designs as measurement systems, separating button edges, weighted history, and enforcement."
+chapter: "15.3"
+minutes: 10
+author: "attilathedud"
+date: "2026-10-05"
+sidebar:
+  order: 3
+  label: "15.3 Server Plugins, Counters, and False Flags"
+---
+import Scene from '../../../../components/Scene.astro';
+import { MarginNote } from '../../../../components/kit';
+
+**SourceMod** lets a Source server run plugins that observe game events and
+player commands. A plugin is code loaded through the server's supported
+extension system. It sees the engine's reported state and the inputs
+reaching that server. It does not gain a trustworthy view of all client
+software.
+
+The command boundary from [Lesson 8.9](/pages/6/09/) explains both its power
+and its limits. A plugin can compare movement requests with accepted state.
+It cannot conclude which program created a request from its timing alone.
+
+## Macrodox counts button edges
+
+The inspected Macrodox version is 1.9, from the source supplied for this
+book revision. Its original forum discussion describes a detector built
+for Counter-Strike: Source bunnyhop servers. **Bunnyhopping** chains jumps
+to maintain movement speed under a game's movement rules.
+
+Macrodox remembers whether a player's jump button was already held. A new
+press increments its counter only when the input changes from released
+to held. Repeated commands with the same held button do not each become
+a new press.
+
+For the five toy samples `0, 1, 1, 0, 1`, zero means released and one means
+held. The first `0 → 1` adds one press. The second consecutive one adds none.
+The later release allows the final `0 → 1` to add another. There are two
+fresh presses, because there are two rising edges.
+
+<Scene name="detector-input-window" />
+
+A **rising edge** is that transition from zero to one. Separating levels
+from edges matters in ordinary game input too. A held key can span many
+commands while describing one physical press.
+
+## Its histories answer different questions
+
+At a game-reported jump event, Macrodox records the counted presses and
+horizontal speed. It retains a circular array of recent jump counts.
+A **circular array** reuses its oldest slot when the write position reaches
+the end. The inspected declaration reserves 30 slots; that is a chosen
+storage capacity, not a universal detection rule.
+
+Other measurements use a **weighted average**, which gives older and newer
+observations different influence. The source updates these averages with
+`(old × 9 + sample) ÷ 10`. Dividing each term by ten shows the weights:
+`0.9 × old + 0.1 × sample`.
+
+For an illustrative old value of `0.5` and a new sample of `1`, the result
+is `(0.5 × 9 + 1) ÷ 10 = 5.5 ÷ 10 = 0.55`. The older value still contributes.
+This is not a ratio computed over exactly the last fifteen jumps.
+
+The perfect-jump measurement samples fresh presses using the previous and
+current ground state. A press on the transition to grounded contributes
+one; a press after remaining grounded contributes zero. Other command
+states do not automatically contribute another sample. The circular log
+and this weighted measurement therefore have different meanings.
+
+<MarginNote kind="brief">A recent-history array, a weighted score, and a consecutive counter are different measurements. Define which one a rule uses.</MarginNote>
+
+## Context can change an apparently perfect pattern
+
+The Macrodox discussion warns against combining it with automatic-jump
+plugins. Such a plugin changes legitimate input behavior. Map conditions
+and timing also affect what the detector observes. A goal of eliminating
+false positives does not establish that the goal was achieved.
+
+The inspected code queues flagged identities in a file and applies actions
+on configured map cycles. Persisting an identity helps a server restart
+retain a decision. It does not strengthen the underlying measurement.
+Before an irreversible action, preserve the relevant trace, map, settings,
+and detector version for review.
+
+## Other plugins expose the same maintenance problem
+
+SourceMod Anti-Cheat, or **SMAC**, divides checks into modules. An inspected
+SMAC fork's February 2025 changelog removed a console-variable check after
+a game update because the older rule could falsely ban players. A detector
+must follow the rules of the game version it is protecting.
+
+**Little Anti-Cheat**, also called Lilac, documents a case where scroll-wheel
+attack input can trigger an autoshoot heuristic. Its original repository
+was archived in September 2024. An archived detector can teach a design,
+but it does not promise maintenance for later game updates.
+
+The supplied CowAntiCheat case combines command counters, view changes,
+server state, and client-reported settings. A client report must never be
+allowed to disable a server check. A missing or unusual report calls for
+separate handling. It does not prove either innocence or cheating.
+
+A **threshold** is a chosen cutoff for a decision. Test thresholds against
+legitimate trace data, including permitted devices and server settings.
+Permanent bans and public accusations need more support than a heuristic
+crossing its cutoff. These case studies explain measurements and their
+failure modes; their implementation and tuning recipes are not reproduced.
