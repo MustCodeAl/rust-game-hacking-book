@@ -12,7 +12,6 @@ sidebar:
 import { GitHub } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
-import Quiz from '../../../../components/Quiz.astro';
 
 [Lesson 12.4](/pages/14/02/) followed a request from a program down to a
 made-up keypad and back, and a key press from a USB keyboard up to a game. The
@@ -103,15 +102,6 @@ mistakes. Drivers are also expected to compare the whole 32-bit code, not just
 the function number, so that a code with the right function but a different
 method or access is refused.
 
-<Quiz
-  id="driver-ioctl-near-miss"
-  title="Spot the near miss"
-  prompt="The keypad driver receives the control code `0x8000_6007` instead of `0x8000_6004`. What changed, and what should the driver do?"
-  options="Only the method bits changed, from `00` to `11`, so the driver should refuse the request because it is not exactly the code it defines||The function number changed to `0x802`, so the driver should run a different command||Nothing that matters: the driver should mask off the low bits and run the command||The access bits changed, so the I/O manager will refuse it before the driver sees it"
-  answer="0"
-  explanation="`0x7` is `0111` and `0x4` is `0100`, so only bits 0 and 1 differ: the method went from 0, buffered, to 3, which passes the caller's raw user-mode addresses instead of a safe kernel copy. Bits 14 and 15 are still `01`, so the I/O manager's access check passes and the decision falls to the driver. A driver that ignored the method would treat raw user pointers as a kernel buffer. Comparing the whole 32-bit value refuses the request."
-/>
-
 ## The toy keypad's registers, bit by bit
 
 The toy keypad's four 32-bit registers take
@@ -170,15 +160,6 @@ writing a 1 to bit 1 clears the overflow flag. Bits written as 0 change
 nothing. This **write-1-to-clear** convention is common because it lets a
 driver clear one flag without first reading the register to preserve the
 others.
-
-<Quiz
-  id="driver-status-decode"
-  title="Decode a STATUS value"
-  prompt="The keypad's STATUS register reads `0x0000_0403`. What is the device reporting?"
-  options="Three events waiting, and the device is disabled||Four events waiting, data ready, and at least one event was dropped||1,027 events waiting||Data ready, no overflow, and three events waiting"
-  answer="1"
-  explanation="Split the value by bytes. The low byte, `0x03`, is `0000 0011`, so bit 0 (data ready) and bit 1 (overflow) are both set. The next byte, `0x04`, is the count in bits 8 to 15: 4 events waiting. As one number `0x0403` is 4 × 256 + 3 = 1,027, but only the separate fields mean anything. Four is also the toy keypad's queue size, so the queue was full when an event was dropped."
-/>
 
 ## The ISR and the DPC, register by register
 

@@ -2,6 +2,7 @@
 // A knowledge check. learning-widgets.js hydrates it: checking, retrying,
 // shuffling options, and drawing related follow-up questions.
 import { inlineMarkdown } from '../lib/inline-md';
+import banks from '../data/lesson-quiz-banks.json';
 
 interface Props {
 	id: string;
@@ -33,6 +34,20 @@ const optionList = options
 	.split('||')
 	.map((option) => option.trim())
 	.filter(Boolean);
+const authored = (banks as Record<string, { batchSize?: number; questions: any[] }>)[lesson];
+const questions = [{
+	id, type, prompt, options: optionList, answer, explanation,
+	alternatives: alternatives.split('||').filter(Boolean), program
+}, ...(authored?.questions ?? [])].map(question => ({
+	...question,
+	promptHTML: inlineMarkdown(question.prompt),
+	explanationHTML: inlineMarkdown(question.explanation),
+	optionsHTML: (question.options ?? []).map(inlineMarkdown)
+}));
+const specification = JSON.stringify({
+	batchSize: authored?.batchSize ?? Math.min(5, questions.length),
+	questions
+}).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 ---
 
 <section
@@ -92,4 +107,5 @@ const optionList = options
 	</div>
 
 	<noscript>Enable JavaScript to check this answer interactively.</noscript>
+	<script type="application/json" data-quiz-bank set:html={specification} is:inline />
 </section>

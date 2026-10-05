@@ -496,7 +496,8 @@ Whenever lessons are renumbered:
 - Edit `chapter`, `sidebar.order`, and `sidebar.label` together
   (`lesson-index.mjs` throws if they disagree, or if a chapter has a gap).
 - Key `src/data/lesson-quizzes.json` by the **displayed** number and give every new
-  lesson a quiz (`id` unique).
+  lesson a quiz (`id` unique). Keep its distinct follow-up questions in
+  `src/data/lesson-quiz-banks.json`, keyed by the same displayed lesson number.
 - Shift every "Lesson N.M" mention, plain or linked. Plain mentions become links on their
   own, but they are text: nothing checks them. Check that each `[Lesson N.M](/pages/…)`
   label equals the target lesson's `chapter`, and read each plain mention against the
@@ -609,3 +610,23 @@ There are 147 lessons and 52 scenes. Macrodox was read from the user-supplied
 version 1.9; its perfect-jump metric uses exponential weighting, not a fixed
 last-fifteen ratio. Do not copy plugin source or teach evasion. Primary audit
 references and scope limits are in CHAPTER_15_SOURCE_NOTES.md.
+
+### Scoped quizzes and completion (2026-10-05)
+
+Each lesson has one quiz at its end. Former inline questions are retained in
+that page's bank. Do not add a separate Quiz inside MDX or borrow from a
+chapter-wide pool. Question IDs and explanations stay attached during
+shuffling. New quiz changes membership; Retake keeps the last membership
+and shuffles question and choice order. Attempt recovery checks the content
+fingerprint and rejects unknown/duplicate IDs.
+
+Source 8.9 has 30 distinct questions with ten per batch. The nine Chapter 15
+pages have fifteen with five per batch. The 137 older pools remain below
+the user's requested coverage; they need original page-specific expansion.
+Run `node scripts/check-lesson-quizzes.mjs` after building. The checker reports
+that gap rather than counting reworded duplicates or unrelated questions.
+
+Mark chapter done belongs on Contents. All lessons done automatically
+completes their chapter; complete-chapter checks are deeper green. Completion
+sounds use the explicit saved effects preference and never start background
+audio. One final lesson emits the chapter sound once, rather than two tones.

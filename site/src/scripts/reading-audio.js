@@ -12,6 +12,8 @@ export function mountReadingAudio() {
 	let message = 'Sound starts off. Play when you want it.';
 	let generation = 0;
 	try { volume = Math.max(0, Math.min(100, Number(localStorage.getItem('gha-audio-volume') ?? 20))) || 0; } catch {}
+	try { effects = localStorage.getItem('gha-audio-effects') === 'on'; } catch {}
+	if (effects) message = 'Soft effects on. Background sound stays paused.';
 
 	function render() {
 		const playing = player && !player.paused;
@@ -63,7 +65,7 @@ export function mountReadingAudio() {
 		}
 		render();
 	}
-	async function chime() {
+	async function chime(kind = 'button') {
 		if (!effects || volume === 0) return;
 		const AudioContext = window.AudioContext || window.webkitAudioContext;
 		if (!AudioContext) return;
@@ -75,16 +77,17 @@ export function mountReadingAudio() {
 			const gain = context.createGain();
 			const now = context.currentTime;
 			tone.type = 'sine';
-			tone.frequency.setValueAtTime(440, now);
-			tone.frequency.exponentialRampToValueAtTime(660, now + 0.06);
+			const duration = kind === 'chapter' ? 0.32 : kind === 'lesson' ? 0.22 : 0.12;
+			tone.frequency.setValueAtTime(kind === 'button' ? 440 : 523.25, now);
+			tone.frequency.exponentialRampToValueAtTime(kind === 'chapter' ? 1046.5 : kind === 'lesson' ? 783.99 : 660, now + duration * 0.5);
 			gain.gain.setValueAtTime(0, now);
 			gain.gain.linearRampToValueAtTime(volume / 100 * 0.035, now + 0.008);
-			gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
+			gain.gain.exponentialRampToValueAtTime(0.0001, now + duration - 0.01);
 			tone.connect(gain);
 			gain.connect(context.destination);
 			tone.onended = () => { tone.disconnect(); gain.disconnect(); };
 			tone.start(now);
-			tone.stop(now + 0.12);
+			tone.stop(now + duration);
 		} catch { /* Sound is optional; reading controls still work. */ }
 	}
 	for (const root of roots) {
@@ -105,6 +108,7 @@ export function mountReadingAudio() {
 		});
 		root.querySelector('[data-audio-effects]').addEventListener('change', event => {
 			effects = event.target.checked;
+			try { localStorage.setItem('gha-audio-effects', effects ? 'on' : 'off'); } catch {}
 			render();
 			if (effects) chime();
 			else if (context) context.suspend().catch(() => {});
@@ -112,8 +116,9 @@ export function mountReadingAudio() {
 	}
 	document.addEventListener('click', event => {
 		const button = event.target.closest('button');
-		if (button && !button.disabled && !button.closest('[data-reading-audio]')) chime();
+		if (button && !button.disabled && !button.closest('[data-reading-audio]') && !button.matches('[data-done-toggle], [data-chapter-done]')) chime();
 	});
+	document.addEventListener('academy:completed', event => chime(event.detail?.kind === 'chapter' ? 'chapter' : 'lesson'));
 	window.addEventListener('pagehide', () => { stop(); if (context) context.close().catch(() => {}); });
 	render();
 }

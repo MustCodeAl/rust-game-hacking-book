@@ -1,10 +1,12 @@
 # Book revision progress
 
-Updated 2026-09-30. The full-book teaching pass is implemented on
+Updated 2026-10-05. The current book has **147 lessons in 15 chapters**.
+The full-book teaching pass is implemented on
 `codex/book-revision`. [BOOK_REVISION_AUDIT.md](BOOK_REVISION_AUDIT.md)
 records a prerequisite, teaching thread, and disposition for **each of the
-132 lessons before the latest redistribution**. Two topic splits now make
-**134 lessons**, with every original lesson and URL retained.
+132 lessons before the latest redistribution**. Two topic splits made
+**134 lessons** in that earlier pass. Later additions now make 147, with
+every original lesson and URL retained.
 [BOOK_REVISION_PLAN.md](BOOK_REVISION_PLAN.md) records
 the original editorial contract and source investigation.
 
@@ -1118,3 +1120,48 @@ Links report 0 broken. All 52 reader scenes and 15 chat checks pass.
 No lab programs or lab tests were run. T7 final housekeeping and the
 recorded quiz-bank/completion work, then T8 typing polish, remain pending.
 Publication receipt follows after the deployment is verified.
+
+T6 receipt: source `05b1729`, published at `gh-pages` `0be0aa2`. After the
+deployment wait, the Macrodox lesson and its new input-edge reader SVG
+returned HTTP 200 and matched the verified build byte for byte.
+
+
+## T7 — Housekeeping, scoped quizzes, and completion (2026-10-05)
+
+Regenerated docs.json: 16 groups, 150 entries. Current counts are 147 lessons,
+15 chapters, and 52 scenes. Explicit Lesson N.M link labels match targets.
+The contents, glossary, guidance, updates, and 147-reader guard agree.
+
+All 147 lesson pages now have one quiz. Moved 42 existing inline questions
+from 36 pages into their own page pools, preserving their types and
+explanations. Fixed the old ownership quiz's literal capture-name display.
+Removed chapter-wide borrowing and its off-topic study questions. Added 155
+original questions: Source 8.9 has 30/ten per batch; each Chapter 15 page
+has 15/five. The correct choice is uniquely longest in only 11 of these
+165 questions, including seeds. There are 344 scoped questions overall.
+
+New quiz changes membership. Retake preserves the last batch and shuffles
+questions and choices. Content fingerprints and known IDs gate recovery.
+The browser scored a five-question attempt correctly at 2/5, retained it
+after reload, and verified both retake and new-batch behavior. Compact quiz
+headers and choices use no shadow; lesson footers have no chapter button.
+Chapter marking stays on Contents. Finishing the ninth lesson automatically
+completed Chapter 15 and deepened every check. Test progress was restored.
+Optional button/lesson/chapter tones respect the saved effects preference;
+offline consent and duplicate-sound checks pass without playing audio.
+
+Final build exits 0: 318 pages, 147 listening articles, 816 silent visuals.
+Links report 0 broken; 52 reader scenes and 15 chat checks pass. The quiz
+checker verifies one quiz per lesson, scoped pools, changed membership,
+retake identity, grading, and recovery. All 147 pages were scanned at 320
+and 375 pixels. One transient style-load flag cleared on both-width
+recheck; no lasting horizontal overflow remains. A scene and typing practice
+were checked in light/dark modes; typing registered a deliberate mistake.
+Appearance was restored. Proof: /tmp/gha-t7-final.jpg and
+/tmp/gha-t7-progress.jpg. No lab programs or lab tests were run.
+
+**Incomplete user request:** the 137 older page pools still need their
+five-to-ten question batches and at least three-times distinct original
+questions, with balanced choices. The checker and handoff report this gap.
+The runtime and ten new pools are finished; no placeholder pool is counted
+as complete. T8 typing polish remains pending. Publication receipt follows.

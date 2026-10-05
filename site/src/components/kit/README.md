@@ -93,3 +93,12 @@ Chapter 15 adds nine synthetic defensive scenes. They show authority, visibility
 input edges, driver loading policy, counted false flags, event deduplication,
 information disclosure, protection lifetimes, and an idempotent pickup. Their
 shared builder is `src/lib/scene/defence.mjs`. No scene is a production detector.
+
+### One quiz per lesson
+
+The MarkdownContent override appends the page's Quiz. Keep additional
+authored questions in src/data/lesson-quiz-banks.json rather than inserting
+another Quiz in MDX. Use five to ten questions per batch and at least three
+times that many distinct page-specific questions. Balance options and derive
+any arithmetic from the lesson. New quiz samples a changed batch; Retake
+reuses its IDs in a new order. The 137 older pools still require expansion.

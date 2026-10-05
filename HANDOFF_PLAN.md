@@ -81,18 +81,24 @@ Additional steering on October 5:
   automatically completes its chapter. Checks for the whole completed chapter
   use a darker colour.
 
-The quiz-bank, quiz controls, and chapter-completion requests are newly queued
-work, not yet verified or published. Complete them with the metadata/progress
-work in T7 or immediately after it; do not lose them after the urgent release.
+Current task state: T1–T6 are complete, published, and confirmed live. Source
+receipts: T1 `74d3016`, T2 `a505cfd`, T3 `b5400fb`, T4 `f0c2c4e`, T5 `8b6444c`,
+T6 `05b1729`. T6 Pages receipt is `0be0aa2`; the Macrodox page and new SVG
+matched the verified build.
 
-Current task state: T1–T5 are complete, published, and confirmed live. Source
-receipts: T1 `74d3016`, T2 `a505cfd`, T3 `b5400fb`, T4 `f0c2c4e`, T5 `8b6444c`.
-T5 Pages receipt is `df857e7`; the page and new reader image matched after
-GitHub's queued deployment completed. T6 is being verified: nine defensive
-lessons and nine original simulations, using the supplied Macrodox source.
-T7 remains required, including the requested quiz banks and completion
-controls. T8 typing-practice polish remains required by the continuation
-request. See BOOK_REVISION_PROGRESS.md for executed checks and receipts.
+T7 housekeeping and the finished runtime/completion batch are verified and ready to publish. Every lesson now has one quiz, consolidating
+42 inline questions from 36 pages into their page's pool. Chapter-wide
+borrowing is removed. Source 8.9 has 30 distinct questions/ten per batch;
+each Chapter 15 page has 15/five. New quiz changes batch membership; Retake
+reorders the same batch and choices. Completed attempts survive reload.
+Chapter marking remains on Contents, automatic completion uses deeper checks,
+and optional completion sounds respect the saved effects preference.
+
+**Remaining content work:** 137 older page pools still need their five-to-ten
+question batches and at least three-times distinct question pools. Do not
+claim those requests complete or restore off-topic chapter borrowing.
+T8 typing-practice polish remains pending. See BOOK_REVISION_PROGRESS.md
+for executed checks and publication receipts.
 
 ## 0. Paste-ready prompt
 
@@ -317,7 +323,7 @@ anti-debug), 8.9 (Source). Outline (adjust after drafting):
 Optional offline lab in `rust-labs` (a detector over hand-written input traces); compile-checks only.
 
 ### T7. Housekeeping whenever lessons are added
-- `site/scripts/write-reader-editions.mjs` line 32 expects exactly 137 lessons: change it (137 + new lessons).
+- `site/scripts/write-reader-editions.mjs` expects exactly 147 lessons after T5 and T6; update this guard whenever more are added.
 - Search for "137" in `CLAUDE.md`, `BOOK_REVISION_PROGRESS.md`, `site/src/content/docs/*.mdx`; regenerate
   `docs.json` with `node scripts/write-docs-json.mjs`; `lesson-index.mjs` throws on any mismatch between
   `chapter`, `sidebar.order`, and `sidebar.label`, or on a gap.

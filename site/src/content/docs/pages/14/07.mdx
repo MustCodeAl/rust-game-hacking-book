@@ -10,7 +10,6 @@ sidebar:
   label: "11.11 System Calls and Privilege Checks"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
-import Quiz from '../../../../components/Quiz.astro';
 import Scene from '../../../../components/Scene.astro';
 
 [Lesson 11.10](/pages/14/01/) showed the processor keeping user-mode code away
@@ -46,15 +45,6 @@ refuses any change of code segment that would raise the privilege level, except
 through a few entry points that the kernel prepared in advance. The most
 important of them is the `syscall` instruction, and the rest of this lesson
 follows one trip through it.
-
-<Quiz
-  id="kernel-cs-privilege-bits"
-  title="Read the privilege level"
-  prompt="A 32-bit game running on 64-bit Windows shows `cs` = `0023` in x64dbg. At which privilege level is its code running?"
-  options="Ring 0, because `0x23` is smaller than the 64-bit value `0x33`||Ring 3, because `0x23` is `0010 0011` and its lowest two bits are `11`||Ring 2, because `0x23` begins with the digit 2||The value of `cs` says nothing about privilege"
-  answer="1"
-  explanation="Only the lowest two bits of `cs` hold the privilege level. `0x23` is 2 × 16 + 3 = 35, or `0010 0011` in binary, and its lowest two bits are `11` = 3. The upper bits pick a different code segment (a 32-bit one), but the level is still ring 3, user mode."
-/>
 
 ## One bit marks a page as the kernel's
 
@@ -220,15 +210,6 @@ illustrates the native 64-bit path, not every instruction a 32-bit caller runs.
 :::
 
 <Scene name="privilege-copy" />
-
-<Quiz
-  id="kernel-handle-rights-and"
-  title="Predict the kernel's answer"
-  prompt="A tool opened a game with `PROCESS_QUERY_INFORMATION` (`0x0400`) and `PROCESS_QUERY_LIMITED_INFORMATION` (`0x1000`), so its handle's rights are `0x1400`. It calls `ReadProcessMemory`, which needs `PROCESS_VM_READ` (`0x0010`). What happens?"
-  options="The kernel copies the bytes, because a handle that can query a process can also read it||The kernel refuses with `STATUS_ACCESS_DENIED`, because `0x1400` AND `0x0010` is 0||The processor raises a general-protection fault inside the tool||The read succeeds if the tool runs as administrator"
-  answer="1"
-  explanation="`0x0400` is 4 × 256 = 1,024 = 2¹⁰ (bit 10) and `0x1000` is 2¹² (bit 12), so `0x1400` has bits 12 and 10 set. The read needs bit 4, which is 0, so the AND is 0 and the kernel returns an error status. Nothing faults: the system call returns normally with `STATUS_ACCESS_DENIED`, and `kernelbase.dll` reports error 5. Running as administrator affects what `OpenProcess` may grant; it cannot add rights to a handle that already exists."
-/>
 
 References: [process security and access rights](https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights), [using NTSTATUS values](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/using-ntstatus-values), and the [Intel Software Developer Manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html) for `syscall`, privilege levels, and page-table bits.
 
