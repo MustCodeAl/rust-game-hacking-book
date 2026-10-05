@@ -81,7 +81,7 @@ Additional steering on October 5:
   automatically completes its chapter. Checks for the whole completed chapter
   use a darker colour.
 
-Current task state: T1–T7 are complete, published, and confirmed live. Source
+Current task state: T1–T8 are complete, published, and confirmed live. Source
 receipts: T1 `74d3016`, T2 `a505cfd`, T3 `b5400fb`, T4 `f0c2c4e`, T5 `8b6444c`,
 T6 `05b1729`. T6 Pages receipt is `0be0aa2`; the Macrodox page and new SVG
 matched the verified build.
@@ -99,8 +99,8 @@ and optional completion sounds respect the saved effects preference.
 question batches and at least three-times distinct question pools. Do not
 claim those requests complete or restore off-topic chapter borrowing.
 T8 adds four already explained ASCII snippets (18 total), smaller desktop
-controls, clearer untyped code, and a fix for doubled blank rows. Its build,
-links, and browser checks pass; publication is the next step. See
+controls, clearer untyped code, and a fix for doubled blank rows. It is
+published and confirmed live: source `3a484fe`, Pages `4059943`. See
 BOOK_REVISION_PROGRESS.md for executed checks and publication receipts.
 
 ## 0. Paste-ready prompt

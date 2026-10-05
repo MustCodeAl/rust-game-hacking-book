@@ -1173,7 +1173,7 @@ page's five-question quiz loaded with choices and New quiz in the browser.
 ## T8 — Compact typing polish (2026-10-05)
 
 Wrapped four existing, already explained ASCII snippets in lessons 3.1, 8.3,
-12.4, and 14.8. They have ten, seven, five, and seven lines respectively.
+10.4, and 14.8. They have ten, seven, five, and seven lines respectively.
 All code fences match the preceding commit; no lab code was changed or run.
 There are now 18 snippets with unique saved-progress IDs. Desktop controls
 are smaller and aligned; phone targets remain 44 pixels. Untyped syntax is
@@ -1189,7 +1189,12 @@ row repair was measured in the browser: one line, not two. Desktop action
 buttons are 34 pixels; appearance and viewport were restored.
 Proof: /tmp/gha-t8-final.jpg. No lab programs or lab tests were run.
 
-Publication receipt follows after deployment. The recorded 137 older quiz
+T8 receipt: source `3a484fe`, published at `gh-pages` `4059943`. Deployment
+succeeded. The Lua snapshot lesson and updated speedtype.js returned HTTP
+200 and matched the verified build byte for byte. The typing control also
+opened on the public page in the browser. Public proof: /tmp/gha-t8-live.jpg.
+
+The recorded 137 older quiz
 pools remain incomplete. Final native Edge review was blocked by a locked
 Mac; the earlier published-reader Edge F9/Natural voice check remains valid.
 Chrome Reading mode and a physical phone keyboard remain unverified.
