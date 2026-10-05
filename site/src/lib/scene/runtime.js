@@ -76,7 +76,19 @@ function mount(root) {
 			const text = 'num' in values ? format(values.num, actor.fmt) : values.text;
 			if (actor.written.label !== text) {
 				actor.written.label = text;
-				actor.label.textContent = text;
+				if (Array.isArray(text)) {
+					const x = actor.label.getAttribute('x') || '0';
+					const leading = actor.label.querySelector('tspan[dy]')?.getAttribute('dy') || '1.35em';
+					actor.label.replaceChildren(...text.map((line, index) => {
+						const span = doc.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+						span.setAttribute('x', x);
+						if (index) span.setAttribute('dy', leading);
+						span.textContent = line;
+						return span;
+					}));
+				} else {
+					actor.label.textContent = text;
+				}
 			}
 		}
 		if (actor.line && 'draw' in values) {
@@ -165,7 +177,7 @@ function mount(root) {
 		pause();
 		wantsPlay = false;
 		const here = currentCue(time);
-		const target = direction > 0 ? here + 1 : (time - spec.c[Math.max(here, 0)] > 0.3 ? here : here - 1);
+		const target = here + (direction > 0 ? 1 : -1);
 		if (target >= spec.c.length) {
 			seek(duration);
 			return;
@@ -178,7 +190,9 @@ function mount(root) {
 	// A cue names the moment an action begins; its picture is complete a little later.
 	function settle(index) {
 		const next = spec.c[index + 1] !== undefined ? spec.c[index + 1] : duration;
-		return Math.min(1.6, (next - spec.c[index]) * 0.9);
+		// A long copy or rotation must finish before a manual step freezes it.
+		// Stay within this cue so its explanation still matches the picture.
+		return next - spec.c[index] - (index + 1 < spec.c.length ? 0.001 : 0);
 	}
 
 	function announce() {

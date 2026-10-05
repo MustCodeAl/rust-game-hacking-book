@@ -23,6 +23,7 @@ export { default as HoverCard } from './HoverCard.astro';
 export { default as LinkButton } from './LinkButton.astro';
 export { default as LinkCard } from './LinkCard.astro';
 export { default as Math } from './Math.astro';
+export { default as MarginNote } from './MarginNote.astro';
 export { default as Panel } from './Panel.astro';
 export { default as ParamField } from './ParamField.astro';
 export { default as Prompt } from './Prompt.astro';

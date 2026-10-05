@@ -34,6 +34,9 @@ function mountOne(toolbar) {
 	let generation = 0;
 	let state = 'idle';
 	let activeElement = null;
+	let activeUtterance = null;
+	let preferredVoice = '';
+	try { preferredVoice = window.localStorage.getItem('gha-speech-voice') || ''; } catch { /* default voice */ }
 	// True once the engine has begun the passage it was last given.
 	let started = false;
 
@@ -79,16 +82,23 @@ function mountOne(toolbar) {
 
 	function updateVoices() {
 		if (!supported) return;
-		const selected = voice.value;
+		const selected = preferredVoice || voice.value;
+		const english = (item) => /^en(?:-|$)/i.test(item.lang);
+		const quality = (item) => /natural|neural|premium/i.test(item.name) ? 2 : /enhanced/i.test(item.name) ? 1 : 0;
 		voices = synth.getVoices().slice().sort((a, b) =>
-			(a.lang + a.name).localeCompare(b.lang + b.name),
+			Number(english(b)) - Number(english(a)) || quality(b) - quality(a) || (a.lang + a.name).localeCompare(b.lang + b.name),
 		);
-		voice.replaceChildren(new Option('Browser default', ''));
+		const automatic = voices.find(english) || voices.find((item) => item.default) || voices[0];
+		voice.replaceChildren(new Option(automatic ? `Automatic · ${automatic.name}` : 'Browser default', ''));
 		voices.forEach((item) => {
 			voice.add(new Option(`${item.name} · ${item.lang}`, item.voiceURI || `${item.name}|${item.lang}`));
 		});
 		if ([...voice.options].some((option) => option.value === selected)) voice.value = selected;
 	}
+	voice.addEventListener('change', () => {
+		preferredVoice = voice.value;
+		try { window.localStorage.setItem('gha-speech-voice', preferredVoice); } catch { /* page-only choice */ }
+	});
 
 	function speakNext(currentGeneration) {
 		if (currentGeneration !== generation || state !== 'speaking') return;
@@ -103,8 +113,9 @@ function mountOne(toolbar) {
 		const segment = segments[index];
 		started = false;
 		const utterance = new SpeechSynthesisUtterance(segment.text);
-		const chosen = voices.find((item) => (item.voiceURI || `${item.name}|${item.lang}`) === voice.value);
-		if (voice.value !== '' && chosen) utterance.voice = chosen;
+		activeUtterance = utterance;
+		const chosen = voice.value ? voices.find((item) => (item.voiceURI || `${item.name}|${item.lang}`) === voice.value) : voices.find((item) => /^en(?:-|$)/i.test(item.lang));
+		if (chosen) utterance.voice = chosen;
 		utterance.lang = chosen?.lang || document.documentElement.lang || 'en';
 		utterance.rate = Number(rate.value);
 		utterance.onstart = () => {
@@ -115,12 +126,14 @@ function mountOne(toolbar) {
 		};
 		utterance.onend = () => {
 			if (currentGeneration !== generation) return;
+			activeUtterance = null;
 			index += 1;
 			showProgress();
 			window.setTimeout(() => speakNext(currentGeneration), 0);
 		};
 		utterance.onerror = (event) => {
 			if (currentGeneration !== generation) return;
+			activeUtterance = null;
 			state = 'idle';
 			markActive(null);
 			showControls();
@@ -138,6 +151,7 @@ function mountOne(toolbar) {
 	function stopReading(message = 'Stopped. Press Play to start again.') {
 		generation += 1;
 		synth?.cancel();
+		activeUtterance = null;
 		state = 'idle';
 		index = 0;
 		markActive(null);

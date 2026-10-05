@@ -38,6 +38,8 @@ const actors = [
 	cell('mask', 352, 264, 110, 34, '', { mono: true, size: 15, role: 'state', o: 0 }),
 	cell('phys', 352, 322, 110, 34, '', { mono: true, size: 15, role: 'output', o: 0 }),
 	note('physLabel', 352, 316, 'physical address', { size: 12, o: 0 }),
+	...pages.map(([, , entry], i) => cell(`chip${i}`, 34, PY(i) + 22, 110, 18, entry, { mono: true, size: 12, role: 'input', o: 0 })),
+	text('formula', 24, 408, '0x5000 + 0x123 = 0x5123', { mono: true, size: 14, role: 'output', o: 0 }),
 	poly('ptr', 6, PY(0) + 15, [[0, -7], [11, 0], [0, 7]], { role: 'process' }),
 ];
 
@@ -58,6 +60,10 @@ for (let i = 0; i < 4; i += 1) {
 				: `Level 4, the page table, at 0x4000: entry 0 holds 0x5001, present. Clearing the flags leaves 0x5000, the base of the data page. The table walk has the page but not yet the byte.`);
 	tl.at(t).role(`ix${i}`, 'process').move('ptr', 6, PY(i) + 15, 0.6).role(`pg${i}`, 'process').text('base', addr).role('base', 'process');
 	tl.at(t + 0.8).text('ent', entry).show('ent', 0.3).show(`en${i}`, 0.3).text(`en${i}`, `entry 0 = ${entry}`).role(`en${i}`, 'input');
+	tl.at(t + 0.8).show(`chip${i}`, 0.2).move(`chip${i}`, 352, 196, 0.7).resize(`chip${i}`, 110, 34, 0.7);
+	tl.at(t + 1.6).text(`chip${i}`, next).role(`chip${i}`, 'process').move(`chip${i}`, 352, 264, 0.6);
+	tl.at(t + 2.6).move(`chip${i}`, 352, 128, 0.8);
+	tl.at(t + 3.4).hide(`chip${i}`, 0.2).text('base', next);
 	tl.at(t + 2.2).text('mask', next).show('mask', 0.3).role(`ix${i}`, 'output').role(`pg${i}`, 'output');
 	tl.at(t + 3.8).hide('ent', 0.3).hide('mask', 0.3);
 }
@@ -65,7 +71,7 @@ for (let i = 0; i < 4; i += 1) {
 const tEnd = 3 + 4 * 4.6 + 0.4;
 tl.cue(tEnd, 'Combine the aligned page base 0x5000 with the offset 0x123: physical address 0x5123. That is where the capture stores GHA DMA. A real read must still check that its whole range fits inside the file.');
 tl.at(tEnd).move('ptr', 6, PY(4) + 15, 0.6).role('pg4', 'output').role('off', 'process').text('base', '0x5000').role('base', 'output');
-tl.at(tEnd + 1).show('physLabel', 0.3).text('phys', '0x5123').show('phys', 0.3).role('gha', 'output');
+tl.at(tEnd + 1).show('physLabel', 0.3).text('phys', '0x5123').show('phys', 0.3).role('gha', 'output').show('formula', 0.3);
 
 export default scene({
 	id: 'page-table-walk',
@@ -73,7 +79,7 @@ export default scene({
 	alt: 'A virtual address, 0x0123, is split into four zero table indices and an offset of 0x123. Starting from CR3 = 0x1000, each table’s entry 0 is read: 0x2001, 0x3001, 0x4001, 0x5001. Clearing the flag bits gives the next table base each time, ending at the data page 0x5000. Adding the offset gives the physical address 0x5123, where GHA DMA is stored.',
 	caption: 'Each step depends on a valid eight-byte entry: an out-of-range address or a clear present bit stops the walk at that level. This fixture uses four levels and 4 KiB pages.',
 	w: 480,
-	h: 392,
+	h: 424,
 	cues: tl.cues,
 	actors,
 	tracks: tl.tracks,

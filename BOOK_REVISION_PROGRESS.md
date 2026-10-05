@@ -948,3 +948,62 @@ loading. The sampler was removed before committing. This small desktop sample
 is not a phone performance measurement. Typing practice opens and returns to
 reading; a physical phone keyboard and audible narration were not available
 for verification. No lab programs or lab tests were run.
+
+## T2: causal scenes, compact layout, and reader repairs — 2026-10-05
+
+Four reviewed scenes replace the old step-through figures in 10.8, 12.8, 14.8,
+and 13.5. The stack carries at most two temporary values; arithmetic pops its
+operands and pushes the result. The page-table walk reads an entry and clears
+flags before following the next table base. LDA counts each read and copies RAM
+into A. Encoding rotates the actual bits and copies each byte to its
+little-endian memory cell. Every displayed value comes from its lesson. The
+four contact sheets were inspected before wiring, and updated sheets and all
+four actual lesson pages were reviewed. Manual Next/Previous now finish the
+action rather than freezing long copies and rotations partway through it.
+
+The CPU instruction reference keeps byte pairs together. Its interactive LDA
+simulation marks the next action, read source, read buffer, and changed
+registers. Input 10 reaches A=10, Z=0, PC=0x04, and five cycles without changing
+RAM. Zero sets Z; 256 is rejected. Reset cancels a running transfer.
+
+Reader editions retain pictures, memory-cell braces, and compact table pictures.
+All 802 visual blocks are silent during narration; numeric rows and diagram
+labels do not enter the speech queue or TXT export. This follows the user's
+latest preference and supersedes T1's full visual recital. Register identifiers
+are spelled as letters, ordinary words such as “flags” remain words, and long
+addresses/bit patterns/large numeric literals are not recited. Hover-card bodies
+and dynamic tooltips are excluded while their surrounding sentence remains.
+Sentence chunks stay together, voice selection survives asynchronous voice
+loading, and English Natural/Neural/Premium voices rank first when the browser
+exposes them. Native Edge Natural voices are selected in Edge's own controls.
+
+Eleven original margin notes give brief, alternative, or narrative explanations
+on the four lessons. Controls, graphics, labs, and table columns use less
+padding. Section headings, lesson completion, and Previous/Next no longer have
+large surrounding cards. On the desktop reference page, the two trace tables
+are about 238 and 273 pixels high; small tables keep intrinsic widths, and wide
+phone tables scroll inside their own region.
+
+Original 32-second music and rain loops are released under CC0 with their source
+generator and credits. Reading sound starts off. Background Play/Pause/Stop,
+track switching, volume, and optional gentle button sounds share one player.
+
+Verification: the build exits 0 with 297 pages; links report 0 broken; the
+reader-scene check passes for 19 scenes. Browser checks cover the four scenes,
+CPU actions, visible silent reader pictures, compact footer, and 320/375-pixel
+layouts without sideways page scrolling. A temporary desktop scroll sampler on
+the long CPU lesson measured 120 frames: median 16.7 ms, 95th percentile 18.6 ms,
+none over 50 ms. The sampler was removed. Node checks cover register spelling,
+hover exclusion, sentence preservation, and silent visuals. Targeted parallel
+source audits reported roughly 174k tokens saved through TokenSave.
+
+Native Edge Reading mode and its Microsoft Guy Online (Natural) voice were
+observed earlier. The final native Edge colour/extraction check was interrupted
+by active browser use; the final checks above use the in-app browser. Actual
+Chrome Reading mode, physical phone input/performance, and audible music quality
+remain unverified. No lab programs or lab tests were run.
+
+New quiz-bank, quiz-control, and chapter-completion requests are recorded in
+`HANDOFF_PLAN.md` and remain pending. T3 has 23 scenes left; T4–T8 remain required.
+Publish this verified batch after committing and pushing it, then check the live
+reader page and a new script/image.

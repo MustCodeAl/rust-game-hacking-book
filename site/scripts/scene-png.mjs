@@ -62,7 +62,7 @@ function wrap(text, width) {
 mkdirSync(`${outDir}/png`, { recursive: true });
 for (const name of wanted) {
 	const sc = (await import(pathToFileURL(new URL(`${name}.mjs`, scenesDir).pathname))).default;
-	const settle = (i) => Math.min(1.6, ((sc.cues[i + 1] ? sc.cues[i + 1][0] : sc.duration) - sc.cues[i][0]) * 0.9);
+	const settle = (i) => (sc.cues[i + 1] ? sc.cues[i + 1][0] - 0.001 : sc.duration) - sc.cues[i][0];
 	const frames = [{ t: 0, label: 'start' }, ...sc.cues.map(([t, words], i) => ({ t: Math.min(sc.duration, t + settle(i)), label: words })), { t: sc.duration, label: 'end' }];
 	const cols = sc.w <= 500 ? 2 : 1;
 	const capLines = 5;

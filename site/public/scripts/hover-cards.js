@@ -219,6 +219,7 @@
     card = el("div", "academy-hovercard");
     card.id = CARD_ID;
     card.setAttribute("role", "tooltip");
+    card.setAttribute("data-reader-skip", "");
     card.hidden = true;
     document.body.appendChild(card);
     return card;

@@ -9,11 +9,12 @@ sidebar:
   order: 8
   label: "14.8 Emulator Timing and State"
 ---
-import { Badge, GitHub, Panel } from '../../../../components/kit';
+import { Badge, GitHub, MarginNote } from '../../../../components/kit';
+import CpuStepLab from '../../../../components/CpuStepLab.astro';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
-import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
+import Scene from '../../../../components/Scene.astro';
 
 [Lesson 14.7](/pages/14/06/) explained how an emulator works and ran one
 instruction of a made-up 8-bit console through the fetch–decode–execute loop.
@@ -21,6 +22,8 @@ This lesson builds the whole console, follows a complete program through it
 cycle by cycle, and ends with a lab that runs it.
 
 ## A toy 8-bit CPU
+
+<MarginNote>The opcode chooses the operation. The operand supplies a number or an address. An address operand needs another memory read.</MarginNote>
 
 The CPU is made up, but it is built like the 8-bit processors in 1980s consoles.
 It has four registers:
@@ -34,7 +37,8 @@ It has four registers:
 It understands seven instructions. Each begins with its opcode, and some carry
 an operand byte:
 
-<Panel title="The toy CPU's instructions">
+<div class="cpu-instructions" role="region" aria-label="The toy CPU's instructions">
+<p class="cpu-instructions__title">The toy CPU's instructions</p>
 
 | Bytes | Written as | Length | What it does | Cycles |
 |---|---|---:|---|---|
@@ -46,7 +50,7 @@ an operand byte:
 | `06 a` | `JNZ a` | 2 | if Z is 0, jump: PC = a | 2, or 3 if it jumps |
 | `FF` | `HLT` | 1 | stop | 1 |
 
-</Panel>
+</div>
 
 A `#` marks an **immediate**: `#5` means the number 5 itself, while an operand
 without `#` is an address, and the instruction uses the byte stored there. `STA`
@@ -197,18 +201,15 @@ for anything that is not an instruction, and the `?` turns that into an
 opcode might raise an exception, as x86 does, or do something undocumented. An
 emulator that guessed would hide bugs in the guest program and in itself.
 
-<AnimatedFlow
-  title="One LDA instruction: bytes become CPU state"
-  stages={[
-    { label: 'Start at step 2 of the trace', role: 'state', value: 'PC=02 A=0 X=2 Z=0 cycles=2', detail: 'The earlier LDX has finished: PC = 0x02, A = 0, X = 2, Z = 0, and the cycle count is 2. RAM at 0x80 contains gold = 10. The next instruction bytes are 02 80.' },
-    { label: 'Fetch the opcode', role: 'input', value: 'opcode=02 PC=03', detail: 'fetch reads byte 0x02 at PC = 0x02, then advances PC to 0x03. This byte identifies the operation; it has not loaded the gold value into A.' },
-    { label: 'Decode the operation', role: 'process', value: '02 -> LDA', detail: 'Opcode::decode maps 0x02 to LDA. The LDA arm requires one address operand followed by a data read. An unrecognized opcode would return IllegalOpcode before this arm runs.' },
-    { label: 'Fetch the address operand', role: 'input', value: 'operand=80 PC=04', detail: 'The second fetch reads byte 0x80 at PC = 0x03 and advances PC to 0x04. The operand names RAM address 0x80, whose stored byte is the value the instruction will load.' },
-    { label: 'Update A and the zero flag', role: 'state', value: 'A=10 Z=0 X=2 RAM[80]=10', detail: 'read(0x80) returns 10, so A becomes 10. Because A is nonzero, Z remains 0. X remains 2, and RAM still holds gold = 10 because LDA only reads it.' },
-    { label: 'Finish the instruction', role: 'output', value: 'PC=04 cycles=2+3=5', detail: 'The arm returns a cost of 3 cycles: opcode fetch, operand fetch, and data read. The total becomes 2 + 3 = 5. PC = 0x04 now selects ADD #5, matching step 2 of the trace.' },
-  ]}
-  caption="An instruction can use several emulated cycles. The later `ADD` changes A, and `STA` writes that result back to RAM; following those separate changes explains why a saved register and a saved memory byte can disagree."
-/>
+<Scene name="lda-step" />
+
+<MarginNote kind="narration">The number travels from RAM into A. RAM keeps its copy. Later arithmetic can change A before a store changes RAM.</MarginNote>
+
+The same instruction can load a different value. Change the memory byte below,
+then step through the fetches and the data read. Try zero: the loaded value
+also changes the zero flag. Each memory read costs one cycle in this toy CPU.
+
+<CpuStepLab />
 
 Because `step` decodes every instruction each time it runs, the loop body from
 `0x02` to `0x0A` is decoded afresh on both passes. That repetition is what the
@@ -259,6 +260,8 @@ bigger version of the one above.
 
 ## Frame budgets and overshoot
 
+<MarginNote>An instruction finishes as a whole. A frame budget can be exceeded by the final instruction's cost.</MarginNote>
+
 A real frame's budget, like the one in Lesson 14.7, runs to thousands of
 cycles, while the whole traced program takes only 29. So the lab uses a tiny
 budget of 18 cycles, which ends a frame partway through the program. Its `run`
@@ -294,6 +297,8 @@ Here is the machine at that frame boundary:
 
 ## A save state, byte by byte
 
+<MarginNote kind="alternative">Saving RAM alone suits a data backup. Resuming this emulator also needs the registers, flags, counters, and device state.</MarginNote>
+
 At that frame boundary the new gold total exists only in A, so a snapshot of
 RAM alone would restore gold = 15 and lose the 20. The lab's `SaveState` copies
 every part of the machine and converts it to a row of bytes:
@@ -317,6 +322,8 @@ and refuses a Z or halted byte that holds anything other than 0 or 1, because no
 real run of the machine could have produced it.
 
 ## A cheat code racing a register
+
+<MarginNote kind="narration">There are two copies to follow here. A frame-end RAM write can be replaced by the value still waiting in A.</MarginNote>
 
 The lab's `run_frame` runs one frame and then applies every cheat, the way a
 cheat cartridge wrote its values once per frame:

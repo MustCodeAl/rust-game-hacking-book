@@ -5,6 +5,93 @@ read `CLAUDE.md`, `BOOK_REVISION_PLAN.md`, and `BOOK_REVISION_PROGRESS.md`.** Th
 Academy": a beginner (about 15 years old) book, Astro 7 + Starlight in `site/`, live at
 https://mustcodeal.github.io/rust-game-hacking-book/ (served from branch `gh-pages`).
 
+## Latest user requests — 2026-10-05
+
+These requests supersede conflicting details elsewhere in this handoff. Record
+new steering here and verification in `BOOK_REVISION_PROGRESS.md`.
+
+- **Reader appearance:** fix black code blocks and diagrams. Keep diagrams,
+  tables, and images visible, at a compact size. Do not replace them with long
+  spoken descriptions.
+- **Narration:** skip diagrams, images, and tables in the read-aloud queue and
+  listening TXT export. Avoid a native reader reciting their labels or rows.
+  Spell register identifiers as separate letters: `eax` becomes “e a x,”
+  `ecx` becomes “e c x,” and similarly for other registers and initialisms.
+- **Browser priority:** Microsoft Edge Reading mode and its Natural/Neural
+  voices come first; Chrome comes second. Native Edge voices are selected in
+  Edge's Voice options. Do not claim the site's speech API exposes every native
+  voice. Keep sentences together and preserve a chosen browser voice.
+- **Margin comments:** short authored lesson explanations, rather than personal
+  notes. Include TL;DRs, alternative explanations or approaches, and grounded
+  narrative asides. The user's kernel-component example demonstrates the tone;
+  it does not establish a fact to repeat without a source.
+- **Minimal controls:** smaller buttons and less prominent settings. Avoid
+  wrapping every section in a square box. In particular, Finished lesson and
+  Previous/Next should be plain, compact parts of the article.
+- **Compact layout:** reduce empty space in live labs, graphics, tables, and
+  individual columns. Keep machine notation together and allow local scrolling
+  where genuinely needed. Do not squeeze prose into unreadable columns.
+- **Teach with mechanisms:** animations must simulate what changes, not act as
+  slide shows or merely move text around. Show actual reads, writes, positions,
+  bit movement, path expansion, state changes, and call routes. Derive numbers
+  from the lesson and show cause and result.
+- **Specific repairs:** “The toy CPU's instructions” must keep byte pairs and
+  instruction names intact. “Try a different memory byte” must mark the next
+  action, its read source, the copied byte, and written registers. Audit other
+  diagrams for comparable layout and visual-indicator problems.
+- **Interactive learning:** use appropriate code tracers, movement/physics
+  controls, editable state networks, pathfinding/cost visuals, and reset/hint
+  controls as simulations. Logic blanks, choices with visible consequences,
+  targeted review, or progress displays belong only where they improve an
+  existing lesson tool. Do not add an exercise track; new exercises are allowed
+  where they replace an existing quiz/live lab or clearly suit the lesson.
+- **Artwork:** more CC0/public-domain images and optional short GIFs that
+  illustrate concepts. Original GIFs are allowed by this explicit request,
+  despite the older SVG-only suggestion in T4. Keep them small, provide still
+  alternatives, respect reduced motion, and record provenance.
+- **Optional sound:** original relaxing background music/audio and gentle sound
+  effects, with clear pause/stop and volume controls. Sound starts off; users
+  must choose to enable it. Record rights for every audio asset.
+- **Delivery:** finish and publish the important verified reader, layout, and
+  simulation fixes first. Work faster with parallel agents where useful; the
+  user explicitly authorized spawning agents. Preserve the task order and
+  build/link/browser/still/publication checks. Write down every new request.
+
+Additional steering on October 5:
+
+- Tables may have brief useful narration, but never an obnoxious recital of
+  cells or raw numeric literals. Keep numeric tables silent by default. Skip
+  long addresses/bit patterns in prose while retaining small worked arithmetic.
+- Fix narration of hover cards. Their optional body text and dynamic tooltips
+  are excluded; the surrounding sentence and link words remain.
+- Use **one quiz per page** unless another quiz is necessary. Replace redundant
+  quizzes with appropriate simulations rather than adding more exercises.
+- Keep quiz questions about that page. A small page may need limited earlier
+  prerequisite material. Balance answer lengths so the correct choice is not
+  predictably the longest. Randomize answer order.
+- Add **New quiz**, which draws a different random batch, and **Retake quiz**,
+  which reuses the last batch with shuffled questions and shuffled answers.
+- Small pages have five questions; longer pages have six to ten. Author at least
+  three times the batch size as distinct questions: five needs at least fifteen,
+  ten needs at least thirty. The user's thirty-question example also demands
+  distinct questions, rather than repeated wording.
+- Add an optional sound when marking a lesson or chapter done. Use the sound
+  preference; do not make completion noisy when sound effects are off.
+- Move **Mark chapter done** to the table of contents. Completing every lesson
+  automatically completes its chapter. Checks for the whole completed chapter
+  use a darker colour.
+
+The quiz-bank, quiz controls, and chapter-completion requests are newly queued
+work, not yet verified or published. Complete them with the metadata/progress
+work in T7 or immediately after it; do not lose them after the urgent release.
+
+Current task state: T1 is complete and published. T2 contains the four scene
+conversions plus the urgent reader/layout/audio changes above and has passed
+local verification; publish the verified commit and confirm it live. T3 still
+has 23 old step-through diagrams to replace. T4
+through T8 remain required: CC0 artwork/GIFs, Source engine lesson, defensive
+anti-cheat chapter, metadata/reader counts, and additional typing practice.
+
 ## 0. Paste-ready prompt
 
 > Continue the Game Hacking Academy book. Work in the repo at

@@ -6,21 +6,24 @@ import { scene, cell, text, note, strip, timeline } from '../lib/scene/kit.mjs';
 import { bitRow } from '../lib/scene/bits.mjs';
 
 const KEY = 0x5a3c96e1;
+const byteBits = [[24, 'AD'], [16, '42'], [8, '4B'], [0, '1E']];
 const work = bitRow('v', 29, 118, 100, { role: 'plain' });
-const key = bitRow('k', 29, 188, KEY, { dim: true });
+const key = bitRow('k', 29, 218, KEY, { dim: true });
 
 const steps = ['start', 'XOR key', 'rotate left 7', 'in memory', 'rotate right 7', 'XOR key'];
 const actors = [
 	...steps.map((s, i) => cell(`st${i}`, 24 + i * 73, 12, 69, 28, s, { size: 11, role: 'muted' })),
 	text('val', 24, 78, 'value = 100', { mono: true, size: 16, weight: 700 }),
-	note('workTag', 29, 100, 'the value, 32 bits', { size: 12 }),
-	note('keyTag', 29, 170, 'the key 0x5A3C96E1, which never changes', { size: 12 }),
-	text('op', 24, 244, '', { size: 14, role: 'process' }),
+	note('workTag', 29, 100, 'working value, 32 bits', { size: 12 }),
+	note('keyTag', 29, 200, 'the key 0x5A3C96E1, which never changes', { size: 12 }),
+	text('op', 24, 264, '', { size: 14, role: 'process' }),
 
-	note('memTag', 29, 276, 'in memory, lowest address first (x86 is little-endian)', { size: 12, o: 0 }),
-	...['+0', '+1', '+2', '+3'].map((a, i) => note(`ma${i}`, 29 + i * 60 + 28, 296, a, { anchor: 'middle', size: 11, mono: true, o: 0 })),
-	strip('mem', 29, 302, ['', '', '', ''], { w: 56, h: 36, gap: 4, mono: true, size: 16, role: 'state', o: 0 }),
-	text('foot', 24, 372, '', { size: 13, role: 'output', o: 0 }),
+	note('memTag', 29, 298, 'in memory, lowest address first (x86 is little-endian)', { size: 12, o: 0 }),
+	...['+0', '+1', '+2', '+3'].map((a, i) => note(`ma${i}`, 29 + i * 60 + 28, 318, a, { anchor: 'middle', size: 11, mono: true, o: 0 })),
+	strip('mem', 29, 324, ['', '', '', ''], { w: 56, h: 36, gap: 4, mono: true, size: 16, role: 'state', o: 0 }),
+	...byteBits.map(([bit, hex], i) => cell(`byteCopy${i}`, work.px(bit) + 25, 148, 56, 28, hex, { mono: true, size: 14, role: 'input', o: 0 })),
+	note('ramKeeps', 29, 382, 'RAM keeps the encoded bytes while the working value decodes.', { size: 12, o: 0 }),
+	text('foot', 24, 400, '', { size: 13, role: 'output', o: 0 }),
 	...work.actors,
 	...key.actors,
 ];
@@ -30,7 +33,6 @@ const mark = (t, i) => {
 	if (i > 0) tl.at(t).role(`st${i - 1}`, 'state');
 	tl.at(t).role(`st${i}`, 'process');
 };
-const byteBits = [[24, 'AD'], [16, '42'], [8, '4B'], [0, '1E']];
 
 tl.cue(0, 'The plain value 100 is 0x00000064 as 32 bits. The key 0x5A3C96E1 is below it. The width, 32 bits, and the rotation, 7, stay the same all the way through.');
 mark(0, 0);
@@ -57,19 +59,20 @@ byteBits.forEach(([bit, hex], k) => {
 		tl.at(at).role(id, 'process');
 		tl.at(at + 0.9).role(id, 'plain');
 	}
-	tl.at(at).text(`mem.${k}`, hex).role(`mem.${k}`, 'process').wait(0.8).role(`mem.${k}`, 'state');
+	tl.at(at).show(`byteCopy${k}`, 0.1).move(`byteCopy${k}`, 29 + k * 60, 324, 0.7, 'inOut').wait(0.7).hide(`byteCopy${k}`, 0.15);
+	tl.at(at + 0.7).text(`mem.${k}`, hex).role(`mem.${k}`, 'process').wait(0.2).role(`mem.${k}`, 'state');
 });
 
 tl.cue(19.2, 'To decode, read the four bytes back as one little-endian number, 0x1E4B42AD, and undo the rotation first: rotate right by seven. The low seven bits return to the top, restoring 0x5A3C9685.');
 mark(19.2, 4);
-tl.at(19.2).text('op', 'rotate right 7: the low seven bits return to the top');
+tl.at(19.2).text('op', 'rotate right 7: the low seven bits return to the top').show('ramKeeps', 0.3);
 const t3 = work.rotr(tl, 20, 7, 2.2);
 tl.at(t3).text('val', 'after rotate = 0x5A3C9685');
 
-tl.cue(24.4, 'Then XOR with the same key: the key bits cancel, leaving 0x00000064, which is 100. Decoding reversed both the order of the steps and the direction of the rotation.');
-mark(24.4, 5);
-tl.at(24.4).text('op', 'XOR again: the same bits flip back');
-const t4 = work.flip(tl, 25.2, KEY, { stagger: 0.05 });
+tl.cue(23.4, 'Then XOR with the same key: the key bits cancel, leaving 0x00000064, which is 100. Decoding reversed both the order of the steps and the direction of the rotation.');
+mark(23.4, 5);
+tl.at(23.4).text('op', 'XOR again: the same bits flip back');
+const t4 = work.flip(tl, 24.2, KEY, { stagger: 0.05 });
 tl.at(t4).text('val', 'decoded = 100').show('foot', 0.5).text('foot', 'Reversible, but not a security guarantee.');
 
 export default scene({
@@ -78,7 +81,7 @@ export default scene({
 	alt: 'The value 100 as 32 bits is XORed with the key 0x5A3C96E1, giving 0x5A3C9685, then rotated left by seven to 0x1E4B42AD. In memory the four bytes appear lowest first as AD, 42, 4B, 1E. Decoding rotates right by seven and XORs with the key again, returning 100.',
 	caption: 'It shows a reversible representation; the separate integrity relation must still be checked before a decoded value is used.',
 	w: 480,
-	h: 392,
+	h: 424,
 	cues: tl.cues,
 	actors,
 	tracks: tl.tracks,

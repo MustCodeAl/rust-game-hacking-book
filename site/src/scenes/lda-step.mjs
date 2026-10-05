@@ -43,7 +43,7 @@ tl.cue(0, 'Before the instruction: PC = 0x02, A = 0, X = 2, Z = 0, and 2 cycles 
 
 tl.cue(3, 'Fetch the opcode: read the byte at PC = 0x02, which is 02, and advance PC to 0x03. This byte names the operation; it has not loaded the gold yet.');
 tl.at(3).show('chipOp', 0.1).move('chipOp', 52, 262, 1.1, 'inOut').role('b0', 'process');
-tl.at(4.2).text('dec', 'opcode: 02').role('dec', 'input').hide('chipOp', 0.3).num('pc', 3, 0.5);
+tl.at(4.2).text('dec', 'opcode: 02').role('dec', 'input').hide('chipOp', 0.3).num('pc', 3, 0.5).text('cy', '3').role('cy', 'input');
 tl.at(4.2).move('pcMark', 94 + 32 - 8, 112, 0.7).move('pcMarkTag', 94 + 32, 130, 0.7).role('b0', 'plain');
 
 tl.cue(6.5, 'Decode: the opcode 02 maps to LDA. The LDA arm needs one address operand and then a data read. An unknown opcode would stop here with an error.');
@@ -51,17 +51,17 @@ tl.at(6.5).text('dec', '02 means LDA').role('dec', 'process').scale('dec', 1.06,
 
 tl.cue(9, 'Fetch the address operand: read the byte at PC = 0x03, which is 80, and advance PC to 0x04. The operand names RAM address 0x80.');
 tl.at(9).show('chipAd', 0.1).role('b1', 'process').move('chipAd', 298, 262, 1.1, 'inOut');
-tl.at(10.2).text('opd', 'operand: 80').role('opd', 'input').hide('chipAd', 0.3).num('pc', 4, 0.5).role('b1', 'plain');
+tl.at(10.2).text('opd', 'operand: 80').role('opd', 'input').hide('chipAd', 0.3).num('pc', 4, 0.5).role('b1', 'plain').text('cy', '4');
 tl.at(10.2).move('pcMark', 164 + 32 - 8, 112, 0.7).move('pcMarkTag', 164 + 32, 130, 0.7);
 
 tl.cue(12.5, 'Read RAM[0x80]: the byte there is 10, so A becomes 10. Because A is not zero, Z stays 0. X is untouched, and RAM still holds 10, because LDA only reads it.');
 tl.at(12.5).role('ram', 'process').show('chipV', 0.1).move('chipV', 130, 214, 1.4, 'inOut');
-tl.at(13.9).hide('chipV', 0.2).text('a', '10').role('a', 'output').scale('a', 1.15, 0.3).wait(0.3).scale('a', 1, 0.3).role('ram', 'state');
+tl.at(13.9).hide('chipV', 0.2).text('cy', '5').role('cy', 'output').text('a', '10').role('a', 'output').scale('a', 1.15, 0.3).wait(0.3).scale('a', 1, 0.3).role('ram', 'state');
 tl.at(14.4).role('z', 'plain');
 
 tl.cue(16.5, 'Finish: LDA costs 3 cycles, one for the opcode, one for the operand, one for the data read. The total is 2 + 3 = 5, and PC = 0x04 now selects ADD #5.');
 tl.at(16.5).text('cy', '2 + 3 = 5').role('cy', 'output').scale('cy', 1.1, 0.3).wait(0.3).scale('cy', 1, 0.3);
-tl.at(17.5).role('b2', 'process').text('foot', 'A = 10, RAM[0x80] = 10: the register and the memory byte are separate copies.');
+tl.at(17.5).role('b2', 'process').text('foot', ['A = 10, RAM[0x80] = 10:', 'the register and the memory byte are separate copies.']);
 
 export default scene({
 	id: 'lda-step',

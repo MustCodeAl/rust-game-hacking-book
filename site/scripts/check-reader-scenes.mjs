@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseHTML } from 'linkedom';
-import { collectReadableBlocks, cleanReaderText } from '../src/lib/reader-text.mjs';
+import { collectReadableBlocks, cleanReaderText, chunkSpeechBlocks } from '../src/lib/reader-text.mjs';
 
 function htmlFiles(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((item) =>
@@ -25,11 +25,19 @@ for (const file of htmlFiles('dist/pages')) {
       const blocks = collectReadableBlocks(article, includeCode).filter((block) => figure.contains(block.element));
       assert.equal(blocks.length, 1, `${file}: one narration block for ${title}`);
       assert.equal(blocks[0].kind, 'diagram');
-      assert.equal((blocks[0].text.match(/Step \d+:/g) || []).length, steps);
-      const exported = (includeCode ? variants.withCode : variants.prose).filter((block) => block.text.startsWith(`Animated diagram: ${title}.`));
+      assert.equal(chunkSpeechBlocks(blocks).length, 0, 'Diagram never enters speech queue');
+      assert.equal((blocks[0].text.match(/Step \d+:/g) || []).length, 0, 'Short caption, no automatic step recital');
+      assert.ok(blocks[0].media?.svg, `${file}: preserve the scene picture`);
+      const exported = (includeCode ? variants.withCode : variants.prose).filter((block) => block.text === blocks[0].text);
       assert.equal(exported.length, 1, `${file}: one exported description`);
       assert.equal(exported[0].kind, 'diagram');
-      assert.equal((exported[0].text.match(/Step \d+:/g) || []).length, steps);
+      assert.equal((exported[0].text.match(/Step \d+:/g) || []).length, 0);
+      assert.ok(exported[0].media?.src.startsWith('/rust-game-hacking-book/assets/reader/'));
+      const image = listening.querySelector(`[data-narration-id="${exported[0].id}"] img`);
+      assert.ok(image, `${file}: static diagram remains visible`);
+      assert.equal(image.getAttribute('alt'), '', 'Native voices have no diagram label recital');
+      assert.ok(image.closest('[data-reader-skip][aria-hidden="true"]'));
+      assert.ok(readFileSync(join('dist', exported[0].media.src.replace('/rust-game-hacking-book/', '')), 'utf8').includes('<svg'));
     }
     const copies = printed.flatMap((doc) => [...doc.querySelectorAll(`[data-scene-id="${figure.dataset.sceneId}"]`)]);
     assert.equal(copies.length, 1, `${file}: one chapter-print scene`);
@@ -40,4 +48,4 @@ for (const file of htmlFiles('dist/pages')) {
   }
 }
 assert.ok(scenes > 0, 'No scenes checked');
-console.log(`reader-scenes: ${scenes} scenes described once in both listening variants and chapter print.`);
+console.log(`reader-scenes: ${scenes} scene pictures remain visible and silent in both listening variants; complete steps remain in print.`);

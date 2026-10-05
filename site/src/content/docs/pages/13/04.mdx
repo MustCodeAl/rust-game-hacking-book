@@ -10,7 +10,8 @@ sidebar:
   label: "13.5 Obfuscated Values and Reversible Transforms"
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
-import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
+import Scene from '../../../../components/Scene.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 A value that looks random in a scan may be a familiar number after a few
 reversible operations. Here we follow hexadecimal values through XOR, bit
@@ -66,6 +67,8 @@ inverse and the order of operations.
 
 ## Obfuscation and encryption answer different questions
 
+<MarginNote kind="alternative">Use authenticated encryption when secrecy and tamper detection are required. A reversible representation alone supplies neither guarantee.</MarginNote>
+
 | Property | Reversible obfuscation | Authenticated encryption |
 |---|---|---|
 | Main purpose | Change representation | Keep data secret and detect modification |
@@ -103,6 +106,8 @@ This “reverse order, invert each step” rule also helps when disassembly show
 longer composition.
 
 ## One value through the transform, bit by bit
+
+<MarginNote>The order matters. Undo the rotation first, then XOR with the same key. That restores the original bits.</MarginNote>
 
 Take `value = 100` and `key = 0x5A3C96E1`. The whole round trip, before each
 arrow is worked out below:
@@ -170,18 +175,7 @@ XOR with the key then cancels it: the top six digits are identical in both
 numbers, and anything XORed with itself is 0, while the last byte gives
 `1000 0101` against `1110 0001` = `0110 0100` = `0x64` = 100.
 
-<AnimatedFlow
-  title="Follow the same 32 bits through encoding and decoding"
-  stages={[
-    { label: 'Start with the plain value', role: 'input', value: '100 / 0x00000064', detail: 'The input is 100, represented as a 32-bit integer. The toy transform uses key 0x5A3C96E1 and a seven-bit rotation; width and rotation count remain the same throughout.' },
-    { label: 'XOR with the key', role: 'process', value: '0x5A3C9685', detail: '0x00000064 XOR 0x5A3C96E1 gives 0x5A3C9685. This changes bit values while keeping their positions; XOR with the same key again can undo this step.' },
-    { label: 'Rotate left by seven', role: 'process', value: '0x1E4B42AD', detail: 'A 32-bit left rotation moves the top seven bits to the bottom and produces 0x1E4B42AD. The operation preserves all 32 bits while changing their positions.' },
-    { label: 'Store in little-endian order', role: 'state', value: 'AD 42 4B 1E', detail: 'x86 memory stores the lowest byte first, so the encoded integer appears as AD 42 4B 1E. Reading those four bytes as a little-endian u32 reconstructs 0x1E4B42AD before decoding.' },
-    { label: 'Undo the rotation first', role: 'process', value: '0x5A3C9685', detail: 'Rotate the reconstructed integer right by seven. The low seven bits return to the top, restoring the intermediate XOR result 0x5A3C9685.' },
-    { label: 'Undo XOR and recover the value', role: 'output', value: '100 / 0x00000064', detail: 'XOR the intermediate result with the same key. The key bits cancel, giving 0x00000064, or 100. Decoding reversed both the operation order and the direction of the rotation.' },
-  ]}
-  caption="The moving data value follows the existing round-trip diagram, bit calculations, and memory strips. It shows a reversible representation; the separate integrity relation must still be checked before a decoded value is used."
-/>
+<Scene name="encode-roundtrip-memory" />
 
 ## Compare encodings of values that differ in one known way
 
