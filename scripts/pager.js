@@ -11,7 +11,10 @@
 
   var NARROW = "(max-width: 49.99rem)";
   var MIN_MARGIN = 22;
-  var MAX_TAB = 34;
+  var MIN_TAB = 14;
+  var MAX_TAB = 30;
+  var GAP = 8;
+  var EDGE = 2;
   // Places an arrow key must not take over: anything a reader types in or steers
   // with the arrows, and code blocks that scroll sideways.
   var KEEP_ARROWS = "input, textarea, select, [contenteditable], [role='tab'], [role='slider'], [role='radio'], pre, .expressive-code, [data-speedtype-active], .scene, .academy-quiz, .kit-tabs";
@@ -67,15 +70,18 @@
     if (!text || !main) return;
     var t = text.getBoundingClientRect();
     var m = main.getBoundingClientRect();
-    var left = t.left - Math.max(m.left, 0);
-    var right = Math.min(m.right, window.innerWidth) - t.right;
+    var edgeL = Math.max(m.left, 0);
+    var edgeR = Math.min(m.right, window.innerWidth);
+    var left = t.left - edgeL;
+    var right = edgeR - t.right;
     var narrow = window.matchMedia(NARROW).matches || Math.min(left, right) < MIN_MARGIN;
     nav.dataset.layout = narrow ? "bottom" : "sides";
     if (narrow) return;
-    var tab = Math.min(MAX_TAB, Math.floor(Math.min(left, right) - 2));
+    // The tabs stand at the outer edge of each margin, leaving a clear gap before the text.
+    var tab = Math.max(MIN_TAB, Math.min(MAX_TAB, Math.floor(Math.min(left, right) - GAP - EDGE)));
     nav.style.setProperty("--pager-tab", tab + "px");
-    nav.style.setProperty("--pager-left", Math.round(t.left - tab - 1) + "px");
-    nav.style.setProperty("--pager-right", Math.round(window.innerWidth - t.right - tab - 1) + "px");
+    nav.style.setProperty("--pager-left", Math.round(edgeL + EDGE) + "px");
+    nav.style.setProperty("--pager-right", Math.round(window.innerWidth - edgeR + EDGE) + "px");
   }
 
   // On a phone the pair would cover the text it is there to leave, so it hides
