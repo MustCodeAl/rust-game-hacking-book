@@ -926,3 +926,25 @@ The assistant's usage ran out. `HANDOFF_PLAN.md` lists the unfinished work in or
 for scenes, wire four drafted scenes, 23 more animations, CC0 art, the Source engine lesson 8.9, the anti-cheat
 chapter 15) with the verified facts gathered so far. The arrows beside the text now stand at the outer edge of each
 margin with a gap before the text.
+
+
+## T1: scene reading editions and browser verification — 2026-10-04
+
+Scenes are now collected as explained visuals. Each listening transcript has one
+block containing its title, description, numbered steps, and caption. Descendant
+text and live playback controls are skipped. Printed scenes show the description
+below the final picture. `scripts/check-reader-scenes.mjs` checks both listening
+variants and all chapter-print copies against the built lesson scenes.
+
+Verification: `npm run build` exits 0; `check-links.py dist` reports 297 pages,
+0 broken; the scene check passes for all 15 current scenes. The existing public
+`speedtype.js` and `pager.js` return HTTP 200, and typing practice is present on
+the public lesson. Browser checks cover the pathfinding scene, its listening
+edition, and its chapter-print document. Controls fit at 320 and 375 pixels
+without sideways page scroll; playback, manual stepping, dark mode, and Plain
+fills work. A temporary local-only frame sampler measured 112 scrolling frames:
+median 16.7 ms, 95th percentile 17.8 ms, one frame over 50 ms during initial
+loading. The sampler was removed before committing. This small desktop sample
+is not a phone performance measurement. Typing practice opens and returns to
+reading; a physical phone keyboard and audible narration were not available
+for verification. No lab programs or lab tests were run.

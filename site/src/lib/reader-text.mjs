@@ -1,7 +1,7 @@
 // The reader view keeps the original lesson markup. This module selects the
 // parts that make sense when spoken or exported as plain text.
 
-const BLOCKS = 'h1, h2, h3, h4, h5, h6, p, li, summary, figcaption, tr, pre, img, figure[data-animated-flow], figure.mem-figure, figure.lesson-video';
+const BLOCKS = 'h1, h2, h3, h4, h5, h6, p, li, summary, figcaption, tr, pre, img, figure[data-scene], figure[data-animated-flow], figure.mem-figure, figure.lesson-video';
 const SKIP = '[data-reader-skip], .reader-tools, .academy-quiz, .concept-lab, .ownership-scope, .projection-lab, nav, script, style, noscript, [hidden], [aria-hidden="true"]';
 const ACRONYMS = {
 	CPU: 'central processing unit',
@@ -134,9 +134,19 @@ export function collectReadableBlocks(article, includeCode = false) {
 		if (element.closest(SKIP)) continue;
 		const tag = element.tagName.toLowerCase();
 		const flow = element.closest('[data-animated-flow]');
+		const scene = element.closest('[data-scene]');
 		const memory = element.closest('.mem-figure');
 		const video = element.closest('.lesson-video');
-		if ((flow && flow !== element) || (memory && memory !== element) || (video && video !== element)) continue;
+		if ((scene && scene !== element) || (flow && flow !== element) || (memory && memory !== element) || (video && video !== element)) continue;
+		if (scene === element) {
+			const title = cleanReaderText(element.querySelector('.scene__title')?.textContent);
+			const alt = cleanReaderText(element.querySelector('.scene__alt')?.textContent);
+			const steps = [...element.querySelectorAll('.scene__steps li')].map((step, index) =>
+				`Step ${index + 1}: ${cleanReaderText(step.textContent)}`);
+			const caption = cleanReaderText(element.querySelector('.scene__caption')?.textContent);
+			add(`Animated diagram: ${title}. ${alt} ${steps.join(' ')} ${caption}`, element, 'diagram');
+			continue;
+		}
 		if (flow === element) {
 			const title = cleanReaderText(element.querySelector('.animated-flow__header strong')?.textContent);
 			const steps = [...element.querySelectorAll('[data-flow-stage]')].map((stage, index) => {
