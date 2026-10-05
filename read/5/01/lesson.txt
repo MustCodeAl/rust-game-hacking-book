@@ -50,16 +50,6 @@ Engines made different choices, so a coordinate copied from one game means somet
 
 Axis conventions of four engines
 
-Table columns: Engine; Up; Forward; Handedness.
-
-Engine: Bevy; Up: +Y; Forward: minus Z; Handedness: right-handed.
-
-Engine: Godot; Up: +Y; Forward: minus Z; Handedness: right-handed.
-
-Engine: Unity; Up: +Y; Forward: +Z; Handedness: left-handed.
-
-Engine: Unreal Engine; Up: +Z; Forward: +X; Handedness: left-handed.
-
 A tree 5 metres in front of a camera at the origin is at (0, 0, minus 5) in Bevy and at (0, 0, 5) in Unity. It is the same place, with the opposite sign of z. The two engines differ in handedness, so converting between them means flipping exactly one axis. Unity and Unreal share a handedness, so no flip is needed, but their axes are named differently and their units differ: Unreal counts in centimetres, and Unity treats one unit as a metre by convention. A point 500 cm ahead, 100 cm to the right, and 200 cm up is (500, 100, 200) in Unreal, listed as forward, right, up. Unity lists right, up, forward, in metres: (100 divided by 100, 200 divided by 100, 500 divided by 100) equals (1, 2, 5).
 
 An overlay that reads positions from one engine and draws with another’s mathematics has to make this conversion before any of the camera work below. A picture that is mirrored left to right, or an object that sits 100 times too far away, is what a missing conversion looks like.
@@ -71,8 +61,6 @@ A basis is the set of directions you measure coordinates against — the rulers 
 They have to be independent, meaning no one of them can be built by combining the others. If up were just forward tilted slightly, the two would partly measure the same thing and some positions would have no unique description at all.
 
 When those directions are additionally all exactly length one and all at right angles to each other, the basis is called orthonormal. That is worth insisting on, because it makes measuring cheap: to find how far along a direction a point lies, you take a dot product and stop. No division, no correction for skew.
-
-Diagram. From World-space point to Subtract camera position. From Subtract camera position to Dot with camera right to view x. From Subtract camera position to Dot with camera up to view y. From Subtract camera position to Dot with camera forward to view depth.
 
 This is the view transform in plain English. First express the point relative to the camera, then ask how much of that displacement lies along each camera ruler:
 
@@ -106,7 +94,7 @@ Section: Turning without gimbal lock: quaternions.
 
 Yaw, pitch, and roll are easy to read, and they have two limits. Pitch to 90 degrees, so the view looks straight up, and yaw and roll then turn around the same line: one of the three controls is lost, which is called gimbal lock. And blending two sets of angles number by number can turn the long way round, since 350 degrees blended with 10 degrees passes through 180 degrees.
 
-Engines often store a turn as a quaternion instead: four numbers (x, y, z, w) for a turn of angle θ around a unit-length axis (ax, ay, az):
+Engines often store a turn as a quaternion instead: four numbers (x, y, z, w) for a turn of angle θ around a unit-length axis (a x, ay, az):
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -119,8 +107,6 @@ In memory, four adjacent floats whose squares add up to 1 are very likely a quat
 Section: World space to screen space.
 
 A 3D point cannot be drawn directly on a 2D monitor. The renderer transforms it through several spaces:
-
-Diagram walkthrough: Follow a vertex from model to screen. Step 1: Model space. State: local point. The point starts in local object coordinates. Step 2: World space. State: world point. Object placement gives the point a world position. Step 3: Camera space. State: view position. Express the point relative to the viewer. Step 4: Clip space. State: clip coordinates. Projection prepares the point for visibility testing. Step 5: Normalized space. State: normalized point. Divide and map into the canonical view range. Step 6: Screen pixels. State: pixel position. The viewport turns the projected position into pixels. Each coordinate space answers a different question: where the point is in the object, world, camera, projected view, and finally the screen.
 
 A coordinate space is one specific choice of where the origin sits and which way each axis points. The same physical spot in the level gets different numbers in each space, so a coordinate is meaningless until you say which space it belongs to.
 
@@ -138,20 +124,6 @@ The point is not physically moving through five worlds. We keep expressing the s
 
 The spaces can be summarized as contracts:
 
-Table columns: Space; Origin; Axes/basis; Typical units.
-
-Space: Model/local; Origin: model pivot; Axes/basis: model’s own orientation; Typical units: model units.
-
-Space: World; Origin: level origin; Axes/basis: level axes; Typical units: world units.
-
-Space: View/camera; Origin: camera position; Axes/basis: camera right/up/forward; Typical units: world units.
-
-Space: Clip; Origin: projection-defined; Axes/basis: not yet divided by w; Typical units: homogeneous.
-
-Space: NDC; Origin: center of visible volume; Axes/basis: API, application programming interface, convention; Typical units: usually -1..1.
-
-Space: Screen; Origin: viewport top-left or bottom-left; Axes/basis: pixel axes; Typical units: pixels.
-
 Never add values from different spaces. world_position + model_offset is valid only after the model offset has been rotated/scaled into world space.
 
 Section: What a matrix actually does.
@@ -165,8 +137,6 @@ To produce one number of the output, walk one row of the matrix alongside the po
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 As boxes, one row multiplied term by term against the point and added:
-
-Labelled memory diagram. cell 1: a; cell 2: b; cell 3: c; cell 4: d. Groups: times x; times y; times z; times 1. a dot x + b dot y + c dot z + d dot 1. Four rows like this one produce the whole output point.
 
 Do that once per row and you have the whole output point. For a 4 times 4 matrix that is four multiply-and-add passes. Nothing more mysterious is happening.
 
@@ -222,17 +192,7 @@ Section: Two copies of a transform.
 
 Many engines, Bevy among them, keep two copies of every object’s transform. The local transform is the one game code edits. The world transform is derived from it: once per frame, in a step the engine runs late in the frame (Lesson 4.2), it multiplies each object’s local transform by its parents’. The local copy is the source, and the world copy is a cached answer.
 
-Diagram. From movement system writes the local transform to local transforms (the source). From local transforms (the source) to late step: combine each local transform with its parents'. From late step: combine each local transform with its parents' to world transforms (the derived copy). From world transforms (the derived copy) to visibility and drawing read the world copy. From a system that reads the world copy before the late step to world transforms (the derived copy). The connection is labelled: sees last frame's value.
-
 Take the turret of the tank above, at (10, 7, 1) in the world while the tank sits at (10, 5, 0), not turned. In frame 20 a movement system adds 1 to the tank’s x. The turret’s local (0, 2, 1) does not change at all, and its world copy is not rebuilt until the engine’s late step:
-
-Table columns: Moment in frame 20; Tank local; Turret local; Turret world copy.
-
-Moment in frame 20: before the movement system; Tank local: (10, 5, 0); Turret local: (0, 2, 1); Turret world copy: (10, 7, 1).
-
-Moment in frame 20: after it, before the world copies are rebuilt; Tank local: (11, 5, 0); Turret local: (0, 2, 1); Turret world copy: (10, 7, 1), now stale.
-
-Moment in frame 20: after the rebuild; Tank local: (11, 5, 0); Turret local: (0, 2, 1); Turret world copy: (11, 7, 1).
 
 A system that reads the turret’s world position between the second and third rows gets the previous frame’s answer. A tank that moves 60 units a second advances 60 times (1 divided by 60) equals 1 unit in a frame, so a marker drawn from the stale copy trails the turret by exactly 1 unit. A rule that must see the new value in the same frame has to run after the rebuild, or work out the world position itself from the local numbers, as above.
 
@@ -243,10 +203,6 @@ Section: Why 3D graphics uses four numbers for a 3D point.
 A 3D translation cannot be represented by an ordinary 3 times 3 linear matrix because linear transforms must keep the origin fixed. That restriction is easy to confirm for yourself: multiplying any 3 times 3 matrix by the point (0, 0, 0) multiplies every entry in the matrix by zero, so the answer is always (0, 0, 0) again. No arrangement of nine numbers can shift the origin somewhere else — and shifting everything by a fixed amount is precisely what translation means. Homogeneous coordinates add a fourth component so translation fits into the same matrix pipeline as rotation and scale:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-Labelled memory diagram. cell 1: x; cell 2: y; cell 3: z; cell 4: 1, highlighted. A position: (x, y, z, 1). The translation matrix's shift term multiplies this 1, so it reaches the point.
-
-Labelled memory diagram. cell 1: x; cell 2: y; cell 3: z; cell 4: 0, highlighted. A direction: (x, y, z, 0). The same shift term multiplies this 0 and vanishes, so translation cannot move a direction.
 
 A translation matrix affects the position because its w is 1, but it does not move a direction because its w is 0. This distinction is mathematical, not just extra padding.
 
@@ -268,11 +224,11 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 That is why world-to-screen code checks w before producing pixels.
 
-For a symmetric perspective camera, the projected scale is proportional to 1 / depth. Ignoring signs and API details, the central idea is:
+For a symmetric perspective camera, the projected scale is proportional to 1 / depth. Ignoring signs and A P I, application programming interface, details, the central idea is:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Double the depth while keeping the sideways offset unchanged and the point moves half as far from the screen center. A perspective matrix stores this division in w so the GPU, graphics processing unit, can delay it until after clipping.
+Double the depth while keeping the sideways offset unchanged and the point moves half as far from the screen center. A perspective matrix stores this division in w so the G P U, graphics processing unit, can delay it until after clipping.
 
 Section: What field of view and aspect ratio change.
 
@@ -284,7 +240,7 @@ Here is where that comes from. Picture the frustum at some depth d straight ahea
 
 Concrete numbers make the zoom effect visible. At fov_y equals 90 degrees, half the angle is 45 degrees and tan(45 degrees) equals 1, so y_scale equals 1. Narrow the field of view to 60 degrees: half the angle is 30 degrees, tan(30 degrees) approximately 0.577, and y_scale approximately 1.732 — a bigger multiplier, so the same view_y / view_depth now produces a larger NDC value and the scene looks zoomed in. A smaller field of view makes tan(fov_y / 2) smaller, so the scale grows and the view zooms in.
 
-One practical trap sits in that formula. Trigonometric functions take radians (Explanation: A radian measures an angle by the arc it covers on a circle of radius 1. A full turn is 2 pi equals 6.2832 radians, so a quarter turn, 90 degrees, is 6.2832 divided by 4 equals 1.5708 radians.), not degrees. Passing 90.0 where 1.5708 was expected produces a scale that is wrong by a wide margin, and the symptom is a scene that looks nothing like a camera view rather than an obviously wrong number. Convert at the boundary and put the unit in the variable name.
+One practical trap sits in that formula. Trigonometric functions take radians, not degrees. Passing 90.0 where 1.5708 was expected produces a scale that is wrong by a wide margin, and the symptom is a scene that looks nothing like a camera view rather than an obviously wrong number. Convert at the boundary and put the unit in the variable name.
 
 x_scale reuses that number instead of deriving a separate one. At the same depth d, the frustum’s half-width must be aspect times its half-height, because aspect is defined as width / height. Dividing y_scale by aspect shrinks the horizontal scale by exactly that factor, so the wider half-width still maps to NDC x equals 1. Skip that division and a widescreen monitor squashes the image horizontally instead of showing more of the scene.
 
@@ -305,14 +261,6 @@ Section: Several cameras, one world.
 A camera is an object with a position and a turn like any other, plus a projection and a few settings: which surface it draws into (the window, or an off-screen image), which rectangle of that surface (its viewport), and when it draws compared with the other cameras (its order). A split screen, a minimap, a rear-view mirror, and a security monitor inside the game each use another camera. A camera that draws into an off-screen image makes a texture that a material can then show on a mirror or a monitor. Every formula in this lesson works for each camera separately, with one rule: use that camera’s viewport, not the window’s.
 
 ExampleA 1920 times 1080 window with two players and a minimap
-
-Table columns: Camera; Viewport (x, y, width, height); Aspect; Centre of its picture.
-
-Camera: player 1; Viewport (x, y, width, height): (0, 0, 960, 1080); Aspect: 960 divided by 1080 equals 0.889; Centre of its picture: (480, 540).
-
-Camera: player 2; Viewport (x, y, width, height): (960, 0, 960, 1080); Aspect: 960 divided by 1080 equals 0.889; Centre of its picture: (960 + 480, 540) equals (1440, 540).
-
-Camera: minimap; Viewport (x, y, width, height): (1664, 0, 256, 256); Aspect: 256 divided by 256 equals 1; Centre of its picture: (1664 + 128, 128) equals (1792, 128).
 
 The window’s own aspect is 1920 divided by 1080 equals 1.778. Give player 1’s camera that value instead of 0.889, and its horizontal scale, y_scale divided by aspect, comes out 0.889 divided by 1.778 equals 0.5 times what it should be, so the picture is squeezed to half its width. And a world point that projects to the middle of player 2’s picture belongs at pixel x equals 1440, not at 480.
 
@@ -336,12 +284,6 @@ ExampleOne pixel, two conventions
 
 Take a 256 times 256 texture and the pixel in column 64 and row 32, counting rows from the top.
 
-Table columns: Convention; u; v.
-
-Convention: origin at the top left; u: 64 divided by 256 equals 0.25; v: 32 divided by 256 equals 0.125.
-
-Convention: origin at the bottom left; u: 0.25; v: 1 minus 0.125 equals 0.875.
-
 A model made for one convention shows its texture upside down in an engine that expects the other. The repair is the same flip, v becomes 1 minus v, applied when the model is exported or loaded, and it is the first thing to try when a texture, or a replaced texture from Lesson 9.4, appears upside down.
 
 Section: Coordinate sanity checks.
@@ -364,33 +306,9 @@ points behind the camera are rejected.
 
 When a transform fails, identify the earliest wrong space:
 
-Table columns: Symptom; First assumption to check.
-
-Symptom: every point follows camera translation backward; First assumption to check: view translation/sign.
-
-Symptom: left and right are mirrored; First assumption to check: handedness or x sign.
-
-Symptom: correct at center, increasingly wrong near edges; First assumption to check: field of view/aspect ratio.
-
-Symptom: correct until camera rotates; First assumption to check: basis or matrix order.
-
-Symptom: behind-camera points appear mirrored; First assumption to check: w test.
-
-Symptom: correct shape but wrong location; First assumption to check: viewport origin or window/client-area offset.
-
-Symptom: a marker trails a moving object by one frame; First assumption to check: the world copy of the transform was read before it was rebuilt.
-
-Symptom: picture squeezed in a split-screen half; First assumption to check: aspect taken from the window instead of the camera’s viewport.
-
-Symptom: positions 100 times too large, or one axis mirrored; First assumption to check: engine units or handedness not converted.
-
-Symptom: texture appears upside down; First assumption to check: the v origin differs between the file and the engine.
-
 Section: How the coordinate spaces connect.
 
 Do not memorize every engine’s coordinate system. Remember the pipeline:
-
-Diagram. From find positions to subtract to get a direction. From subtract to get a direction to use atan2 for angles. From use atan2 for angles to transform through the camera. From transform through the camera to convert normalized coordinates to pixels.
 
 Later lessons reuse this math in offline observer tools.
 

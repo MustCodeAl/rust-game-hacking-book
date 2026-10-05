@@ -8,18 +8,6 @@ These words are often mixed together. Their jobs are not interchangeable:
 
 Five tools, five jobs
 
-Table columns: Tool; Reversible?; Secret required?; Main job.
-
-Tool: Encoding; Reversible?: Yes; Secret required?: No; Main job: Represent data, such as Base64 or UTF-8.
-
-Tool: Hash; Reversible?: No; Secret required?: No; Main job: Produce a fixed-size fingerprint.
-
-Tool: MAC; Reversible?: No; Secret required?: Yes; Main job: Detect changes made without the secret key.
-
-Tool: Encryption; Reversible?: Yes, with key; Secret required?: Yes; Main job: Hide the plaintext.
-
-Tool: AEAD; Reversible?: Yes, with key; Secret required?: Yes; Main job: Hide plaintext and authenticate it and its context.
-
 AEAD means authenticated encryption with associated data. It is usually the right starting point for a new encrypted file or message because confidentiality without tamper detection is incomplete.
 
 Section: One shared key or a key pair.
@@ -50,8 +38,6 @@ Section: The parts of an encrypted envelope.
 
 The lab uses XChaCha20-Poly1305 from the RustCrypto chacha20poly1305 crate. One envelope contains:
 
-Labelled memory diagram. +hexadecimal 0 0: nonce, 24 bytes; +hexadecimal 1 8: ciphertext, same length as the plaintext; end minus hexadecimal 1 0: 16-byte Poly1305 tag. One sealed envelope, in the order seal writes it. split_at_checked(24) in the decryption code is what separates the nonce from everything after it.
-
 The nonce is not a password and does not need to be hidden. It must be unique for messages protected by the same key. XChaCha20’s larger nonce makes random generation practical, but the program still stores it with the ciphertext so decryption can use the same value.
 
 Section: Associated data protects context.
@@ -61,8 +47,6 @@ Some information should remain readable but must not be silently swapped. The la
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 If someone moves the ciphertext to slot four or claims it uses another format, opening it fails.
-
-Diagram. From seal with context save-slot:3, format:1 to envelope stored on disk. From envelope stored on disk to open with context save-slot:4. From open with context save-slot:4 to decryption fails. The connection is labelled: context does not match what was authenticated.
 
 The associated data is not encrypted; it is included in the authentication calculation.
 
@@ -76,7 +60,7 @@ The complete lab returns descriptive errors and includes tests. Its dependency i
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-This uses the current 0.11 API, application programming interface, documented by RustCrypto.
+This uses the current 0.11 A P I, application programming interface, documented by RustCrypto.
 
 Section: Opening must fail closed.
 
@@ -114,17 +98,15 @@ Taking the key is the realistic attack, because guessing it is hopeless. Trying 
 
 Each extra bit doubles the number of keys, so 128 bits give 2 to the power of 128 keys. To size that, use 2 to the power of 10 equals 1,024, which is a little more than 1,000: every 10 bits multiply the count by about 1,000. 128 bits is twelve groups of 10 bits plus 8 more, so 2 to the power of 128 is roughly 1,000 to the power of 12 times 2 to the power of 8 equals 256 times 10 to the power of 36. Each 1,024 is slightly more than 1,000, which lifts the exact value to about 3.4 times 10 to the power of 38.
 
-Now be generous to the attacker: a billion computers, each testing a trillion keys every second, is 10 to the power of 9 times 10 to the power of 12 equals 10 to the power of 21 keys per second. A year has 60 times 60 times 24 times 365 equals 31,536,000 seconds, about 3.2 times 10 to the power of 7, so that is about 3.2 times 10 to the power of 28 keys a year. Dividing gives
+Now be generous to the attacker: a billion computers, each testing a trillion keys every second, is 10 to the power of 9 times 10 to the power of 12 equals 10 to the power of 21 keys per second. A year has 60 times 60 times 24 times 365 equals the large number shown seconds, about 3.2 times 10 to the power of 7, so that is about 3.2 times 10 to the power of 28 keys a year. Dividing gives
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 about 11 billion years to try them all, close to the 13.8-billion-year age of the universe. The lab’s key is 256 bits, and 2 to the power of 256 is 2 to the power of 128 multiplied by itself, so its count is that enormous number squared.
 
-Brute force stops being hopeless when the secret is small. A six-letter lowercase password has 26 to the power of 6 possibilities: 26 times 26 times 26 equals 17,576, and 17,576 times 17,576 equals 308,915,776. At a billion guesses per second, that is all of them in about a third of a second. That is why encryption keys are random 128- or 256-bit values rather than passwords, and why a password that must protect a key is first run through a deliberately slow key-derivation function, so each guess costs the attacker real time.
+Brute force stops being hopeless when the secret is small. A six-letter lowercase password has 26 to the power of 6 possibilities: 26 times 26 times 26 equals 17,576, and 17,576 times 17,576 equals the large number shown. At a billion guesses per second, that is all of them in about a third of a second. That is why encryption keys are random 128- or 256-bit values rather than passwords, and why a password that must protect a key is first run through a deliberately slow key-derivation function, so each guess costs the attacker real time.
 
 Think of a key as having a lifecycle rather than merely a location:
-
-Diagram labels, in drawing order: cryptographically secure RNG; access-controlled storage; load for one operation; erase from memory when the operation ends; rotation policy; old envelopes still readable or migrated; retirement policy; old backups handled; key lost; recovery path; Generated; Stored; Loaded; Rotated; Retired; Recovered.
 
 Generation needs a cryptographically secure random source. Storage needs an access boundary. Use should keep the plaintext and key alive for no longer than necessary. Rotation needs a way to distinguish old envelopes and either read or migrate them. Retirement needs a policy for old backups. Recovery needs an answer for a lost key; otherwise “secure” may simply mean “the player’s save is gone forever.”
 
@@ -150,7 +132,7 @@ That third test is easy to forget and is exactly why tests should describe the s
 
 Section: Analysis does not magically reveal plaintext.
 
-During the course fixture’s execution, you may see plaintext where the program uses it, the key where the crypto API receives it, and ciphertext where the file is written. That does not mean encryption “does nothing.” Encryption protects data outside the trusted processing moment, such as at rest or in transit.
+During the course fixture’s execution, you may see plaintext where the program uses it, the key where the crypto A P I receives it, and ciphertext where the file is written. That does not mean encryption “does nothing.” Encryption protects data outside the trusted processing moment, such as at rest or in transit.
 
 Use breakpoints and data-flow tracing to follow the fixture’s complete key lifecycle: creation, use, storage, rotation, and destruction. A partial trace can make a correct design look broken.
 

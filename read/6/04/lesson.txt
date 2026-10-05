@@ -12,8 +12,6 @@ A chat message before the greeting may be invalid even when its length and UTF-8
 
 Replay processes the saved frames in order. A record changes the modeled session only after both its bytes and its transition have passed validation:
 
-Diagram. From Immutable capture log to Read the next record. From Read the next record to Decode its frame. From Decode its frame to Validate the message. From Validate the message to Check the legal transition. From Check the legal transition to Update modeled state. From Update modeled state to Compare with expectations.
-
 If any stage fails, the record and old state remain available for diagnosis; the replay never needs to invent a replacement state.
 
 Section: A message log and a session state are different things.
@@ -23,8 +21,6 @@ The capture is an ordered log of the frames that crossed the connection. The ses
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 For a five-frame capture of one short session, starting from Connected:
-
-Labelled memory diagram. frame 0: Greeting v1; frame 1: LobbyJoined; frame 2: Chat; frame 3: MatchStarted; frame 4: Goodbye. Groups: to Greeted; to InLobby; stays InLobby; to InMatch; to Closed. The boxes are the log; the labels under them are the state after each frame is applied. The log never stores a state, so a corrected rule can rebuild every state from the same five frames.
 
 Keep the raw log immutable and rebuild the model from it. If a parser or transition rule changes, you can replay the same log and see exactly which frame now produces a different result. Editing the stored “current state” by hand loses that history.
 
@@ -46,13 +42,9 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Drawn as a diagram, apply is this state machine:
 
-Diagram labels, in drawing order: Greeting version 1; LobbyJoined with a room name; MatchStarted with a scenario; Chat; Goodbye; Connected; Greeted; InLobby; InMatch; Closed.
-
 Each arrow is one arm of the match. A message with no arrow out of the current state, such as Chat while Greeted, falls through to the last arm and returns IllegalTransition. A Greeting with any version other than 1 is refused by its own arm with UnsupportedVersion, and Goodbye is accepted in every state, including Closed itself.
 
 This looks more verbose than a chain of if statements. The benefit is coverage: the compiler helps you notice new states and message variants that need rules.
-
-Diagram walkthrough: Replay the five captured messages through the session states. Step 1: Start the replay. State: state equals Connected. Begin with the initial session state and the unchanged capture log. Parsing each record produces a message; the transition function decides whether it is legal now. Step 2: Accept Greeting version 1. State: Connected to Greeted. The first frame selects the version-1 greeting arm. Another version is refused, and another greeting after this transition has no legal arrow. Step 3: Accept LobbyJoined. State: Greeted to InLobby. A nonempty room name permits entry to the lobby. A parseable frame alone cannot make this transition from an unrelated session state. Step 4: Accept Chat in the lobby. State: InLobby to InLobby. The chat frame is legal here, but it does not advance the session. An accepted message can preserve the current state. Step 5: Accept MatchStarted. State: InLobby to InMatch. A nonempty scenario name permits the match transition. The same message received before the lobby would be an illegal transition. Step 6: Accept Goodbye. State: InMatch to Closed. The final frame closes this replayed session. Goodbye is accepted from every modeled state, so cleanup does not depend on reaching the happy path first. These are the same five frames shown in the log above. The log stays fixed; each accepted message updates the modeled state, and an illegal message stops replay at its recorded frame.
 
 Section: Store captures as direction plus bytes.
 
@@ -106,8 +98,6 @@ The expected outcome is a precise error at a precise frame, never an out-of-boun
 
 A length larger than the available payload has to fail before any message is decoded:
 
-Labelled memory diagram. 0: 00; 1: 00; 2: 00; 3: 09; 4: 43; 5: 44; 6: 45; 7: ??, highlighted; 8: ??, highlighted; 9: ??, highlighted; 10: ??, highlighted; 11: ??, highlighted; 12: ??, highlighted. Groups: length field: 9; 3 payload bytes present; 6 bytes the frame claims but does not have. The big-endian length 00 00 00 09 promises 9 payload bytes, but only 3 follow, so 9 minus 3 equals 6 are missing. A parser that trusted the length would read 6 bytes past the end of the frame; a checked slice turns that into an error for this frame instead.
-
 For messages that may be retried, test idempotence explicitly. Applying the same acknowledgment twice should either preserve the same state or return a clear duplicate error; it should not create a second match, grant a reward twice, or move backward in the session.
 
 Think of a toy server processing a request claim reward #42. If the reply is lost, the client may send the same request again. The server can remember request #42 and return the earlier result, or reject it as a duplicate; adding five gold again would be a bug. The identifier is what makes “same request” testable. A repeated Chat with identical text could instead be a new message, so matching bytes alone is not a safe duplicate rule.
@@ -130,27 +120,15 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 The client samples input, labels it, and sends a command. The server processes commands during its own ticks and periodically sends a snapshot or delta. The client then draws frames between confirmed server states:
 
-Diagram labels, in drawing order: Renderer; Server simulation; Client simulation; Input sampler; command 418: move right; predict command 418; command 418; validate and simulate tick 9021; tick 9021, ack 418, state delta; reconcile prediction; interpolate a display state.
-
 A field’s meaning depends on the kind of message carrying it. Imagine a player at (10, 15) requesting a move north to (10, 14). The request is an intent; the coordinate is a desired destination. An acknowledgment confirms that a command arrived or was applied. A snapshot reports enough state to stand alone, while a delta reports only changes from an identified earlier state. If the server replies with (10, 14), that coordinate is an accepted position. Equal-looking bytes can have different authority.
 
 Several similar-looking states can therefore coexist:
-
-Table columns: State; Purpose; Important label.
-
-State: Last confirmed state; Purpose: What the server has accepted; Important label: Server tick or snapshot ID.
-
-State: Predicted state; Purpose: Immediate response to local input; Important label: Last locally simulated command.
-
-State: Interpolated state; Purpose: Smooth display of remote objects; Important label: Render timestamp between snapshots.
-
-State: Historical state; Purpose: Rewind or lag-compensation query; Important label: Past server tick or time.
 
 This explains why a coordinate found in memory can be correct yet appear to “snap back.” You may have found the predicted or rendered copy while a later server snapshot replaced it. Three facts tell the copies apart: which thread writes the field, whether its updates follow input or incoming packets, and which tick or sequence number travels beside it.
 
 Section: Ordering has to be carried in the message.
 
-Packet arrival order is not automatically simulation order. UDP, user datagram protocol, packets can arrive late or twice; even over TCP, transmission control protocol,, one stream can contain application events whose own timestamps refer to different moments. Protocols commonly carry:
+Packet arrival order is not automatically simulation order. U D P, user datagram protocol, packets can arrive late or twice; even over T C P, transmission control protocol,, one stream can contain application events whose own timestamps refer to different moments. Protocols commonly carry:
 
 a monotonically increasing sequence number;
 

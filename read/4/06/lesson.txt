@@ -18,8 +18,6 @@ For a map with width w, tile (x, y) is stored at y * w + x. Always bounds-check 
 
 BFS and A-Star use the same search loop. The important difference is how the frontier chooses which tile comes out next:
 
-Diagram. From Validated tile grid to Put start in frontier. From Put start in frontier to Choose the next tile. From Choose the next tile to Goal reached?. From Goal reached? to Add legal unseen neighbors. The connection is labelled: No. From Add legal unseen neighbors to Choose the next tile. From Goal reached? to Rebuild route from parents. The connection is labelled: Yes.
-
 BFS chooses in first-in-first-out order; A-Star chooses the tile with the best known cost plus its estimate. Both must reject invalid tiles before searching.
 
 Section: Breadth-first search first.
@@ -38,7 +36,7 @@ BFS finds the direct route in two moves: S to M to G. Its travel cost is 9 + 1 e
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-came_from does two jobs: it marks visited tiles and remembers how to reconstruct the route. If the goal is absent, ? returns None instead of inventing a path.
+came_from does two jobs: it marks visited tiles and remembers how to reconstruct the route. If the goal is absent? returns None instead of inventing a path.
 
 Section: Turn coordinates into an array index safely.
 
@@ -46,9 +44,7 @@ A Vec<T> stores its elements in one contiguous row of memory. A game can use tha
 
 Do not perform that formula until negative and out-of-range coordinates have been rejected. Also use checked arithmetic, because a corrupted width from a bad reverse-engineered layout must not wrap into a believable index:
 
-Labelled memory diagram. (0,0): 0; (1,0): 1; (2,0): 2; (0,1): 3; (1,1): 4; (2,1): 5. Groups: row y=0; row y=1. For example, a 3-wide grid: (x, y) maps to index y * width + x. Row 1 starts right where row 0 ends, at index width.
-
-Code example. The code’s comments explain: 🧮 Checked math refuses impossible dimensions instead of wrapping. let index equals y.checked_mul(self.width)?.checked_add(x)?; self.cells.get(index) }}
+Code example. The code’s comments explain: 🧭 Conversion fails for negative coordinates. 🧮 Checked math refuses impossible dimensions instead of wrapping.
 
 cells.get(index) performs one final length check. That catches an incomplete snapshot whose header claims a 100 times 100 map but whose copied array contains fewer than 10,000 tiles.
 
@@ -84,8 +80,6 @@ Setting the heuristic to zero turns A-Star into Dijkstra’s algorithm. That is 
 
 Section: Keep three layers separate.
 
-Diagram. From observer snapshot to validated grid. From validated grid to search algorithm. From search algorithm to proposed route. From proposed route to input adapter.
-
 The search function should never call ReadProcessMemory or press keys. It accepts an ordinary copied grid and returns ordinary coordinates. This makes it testable on any computer.
 
 The input adapter is the only part allowed to translate one confirmed route step into a supported action in your offline lab.
@@ -94,15 +88,11 @@ Section: Tests that catch real mistakes.
 
 For example, here is the exact 3 times 2 grid this test builds, with the wall forcing a detour through row 1:
 
-Diagram. From (0,0) start to (0,1). The connection is labelled: 1. From (0,1) to (1,1). The connection is labelled: 2. From (1,1) to (2,1). The connection is labelled: 3. From (2,1) to (2,0) goal. The connection is labelled: 4.
-
 The test below gives BFS the start and goal from the diagram and rejects the wall tile (1, 0). A valid result begins at (0, 0), ends at (2, 0), and never includes the wall. The intermediate route follows the open second row.
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 Follow that test through the queue. The wall removes the direct move, leaving the route through the open second row:
-
-Animated diagram: A first-in, first-out queue finds the route around the wall. A grid three tiles wide and two tall with a wall at the top middle. The search takes one tile at a time from the front of a queue, tests its neighbours, queues the new ones, and records each new tile’s parent in a came_from list. When the goal is taken from the queue, the parent links are followed backward to draw the four-move route through the bottom row. Step 1: The grid is 3 tiles wide and 2 tall. The search starts at (0,0) and wants (2,0), but (1,0) is a wall. Step 2: Seed the queue with the start, (0,0), and record that it has no parent. A tile that is in the queue counts as seen, so nothing can add it twice. Step 3: Take (0,0) from the front. Its right neighbour is the wall, and its left and upper neighbours are off the grid. Only (0,1), below, is new, so it joins the back of the queue with (0,0) as its parent. Step 4: Take (0,1). Up is (0,0), already seen, so skip it. Right is (1,1), which is new: queue it with (0,1) as its parent. Step 5: Take (1,1). Left is seen and up is the wall. Right is (2,1), which is new: queue it with (1,1) as its parent. Step 6: Take (2,1). Left is seen. Up is (2,0), the goal, and it is new: queue it with (2,1) as its parent. Step 7: Take (2,0). It is the goal, so the search stops. Follow came_from backward from the goal, (2,0), (2,1), (1,1), (0,1), (0,0), and reverse the list. The route is four moves and never touches the wall. The queue sets the order in which tiles are explored. came_from records which tiles have been seen and, at the end, the way back to the start.
 
 Also test:
 

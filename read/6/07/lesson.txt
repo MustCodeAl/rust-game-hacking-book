@@ -4,19 +4,15 @@ Section: Processes normally have separate address spaces.
 
 The proxy copied messages between sockets. A supported game add-on and a separate visualizer could instead agree on a local shared byte region. The message still needs a layout and a lifetime; only the transport changes.
 
-Two running programs can both use the address hexadecimal 0 0 4 0 0 0 0 0, yet those numbers can refer to completely different physical storage. Each process has its own virtual address space.
+Two running programs can both use the address shown here, yet those numbers can refer to completely different physical storage. Each process has its own virtual address space.
 
 That separation is a safety feature. A map helper should not need to patch a game process merely to receive a supported event from a mod. Windows provides interprocess communication, or IPC, for programs that intentionally cooperate.
 
 Named shared memory is one IPC option:
 
-Diagram. From writer's view (its own address) to one file-mapping object. From reader's view (its own address) to one file-mapping object. From one file-mapping object to the same shared bytes.
-
 The two views do not need the same virtual address. Windows connects both views to the same file-mapping object.
 
 The programs share bytes through one kernel-managed object, not pointers to each other’s private address spaces:
-
-Diagram. From Writer value to Encode length and UTF-8. From Encode length and UTF-8 to Writer view. From Writer view to Shared mapping object. From Shared mapping object to Reader view. From Reader view to Validate length and UTF-8. From Validate length and UTF-8 to Reader value.
 
 The views may have different addresses, but they expose the same mapped bytes. The small protocol is what turns those bytes back into a trustworthy value.
 
@@ -44,8 +40,6 @@ Section: Bytes need a tiny protocol.
 
 Memory has no built-in String type. Both programs must agree on a layout:
 
-Labelled memory diagram. 0..4: little-endian `u32` text length; 4..4+len: UTF-8 text; 4+len..: zeroed. The shared-memory wire format. HEADER_BYTES is 4; everything from 4 + len onward is left as zero padding.
-
 The four-byte length makes embedded zero bytes unambiguous and lets the reader reject impossible sizes before creating a string slice.
 
 This is the beginning of serialization: turning structured information into an agreed byte representation.
@@ -54,9 +48,7 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 One hazard is worth naming here, even though this one-shot lab sidesteps it by writing only once. Shared memory gives two processes access to the same bytes. It gives them no agreement about when. Nothing prevents a reader from arriving in the middle of a write:
 
-Diagram labels, in drawing order: Reader; Shared bytes; Writer; payload bytes are still; the previous message; store length equals 11; read length (11) and the payload; copy the new text into the payload.
-
-The reader’s length check passes, the UTF-8 decode very likely succeeds, and the text returned is simply wrong — or is half of the previous message. Writing the payload before the length narrows that window without closing it, since the CPU, central processing unit, and the compiler may reorder the two stores anyway. Closing it takes a sequence number the reader checks before and after copying, or a real synchronization object.
+The reader’s length check passes, the UTF-8 decode very likely succeeds, and the text returned is simply wrong — or is half of the previous message. Writing the payload before the length narrows that window without closing it, since the C P U, central processing unit, and the compiler may reorder the two stores anyway. Closing it takes a sequence number the reader checks before and after copying, or a real synchronization object.
 
 For a small concrete case, suppose the old payload is READY (five bytes) and the writer announces a new seven-byte payload RUNNING before copying it. The reader can observe length 7 alongside READY and two old padding bytes. Seven bytes fit inside the mapping, and zero bytes are valid UTF-8, so both checks in read_text can succeed while the message is not the one the writer meant to publish. The sequence diagram shows that exact gap between publishing the length and finishing the payload. A shared map is like a notice board both programs can see; visibility does not give either program an agreed moment to read a completed notice.
 
@@ -64,7 +56,7 @@ Section: Build the writer and reader.
 
 Additional detail: Complete lab source: shared_memory_lab.rs.
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: 🛡️ SAFETY: handle refers to a file-mapping object. A null address is checked before any slice is created, and the view is unmapped in Drop. ✅ SAFETY: MapViewOfFile returned a non-null view of length MAPPING_BYTES, and self keeps the view mapped for the slice's entire lifetime. 🔒 SAFETY: the writer requested FILE_MAP_WRITE, owns this mutable borrow, and the mapped range remains valid until Drop. 🧹 SAFETY: this object owns one live mapped view and unmaps it once. 🛡️ SAFETY: INVALID_HANDLE_VALUE requests paging-file-backed memory. The mapping name is static and the size is nonzero. 📦 Zeroing removes bytes left by an older, longer message. The first four bytes are the only trusted boundary for the current payload. 🧹 Keep both the mapping handle and its view alive until the reader has opened the named object; dropping the last handle destroys its name. 🔍 SAFETY: the name is static, inheritance is disabled, and the reader requests read-only access. 📏 The writer stores a little-endian byte length, not a character count. 🛡️ Validate the length before slicing, then validate UTF-8 before treating arbitrary shared bytes as text.
 
 Section: Why is this unsafe code contained?.
 

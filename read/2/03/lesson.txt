@@ -4,7 +4,7 @@ Section: What a breakpoint does.
 
 A breakpoint asks the debugger to pause when a specific event happens. The two kinds we use most are:
 
-code breakpoint — pause when the CPU, central processing unit, reaches an instruction;
+code breakpoint — pause when the C P U, central processing unit, reaches an instruction;
 
 memory breakpoint — pause when code reads, writes, or executes at an address.
 
@@ -32,9 +32,7 @@ This is the difference between a trace and an explanation. A trace records what 
 
 Section: Memory breakpoints.
 
-A hardware breakpoint uses CPU debug registers to watch a small address range. It is ideal when you know the gold address but not the instruction that changes it.
-
-Labelled memory diagram. DR0: hexadecimal 0 5 5 0 A 0 3 4, highlighted; DR1: unused; DR2: unused; DR3: unused; DR7: which of DR0 to DR3 are on, what each watches, and how many bytes. One thread's debug registers with a write watchpoint on four bytes of gold. Four address slots are all there are.
+A hardware breakpoint uses C P U debug registers to watch a small address range. It is ideal when you know the gold address but not the instruction that changes it.
 
 The debug registers can watch for a write, for a read or write, or for an execute — x86 has no read-only setting. A debugger that offers a pure read breakpoint implements it another way, usually with page protection.
 
@@ -56,7 +54,7 @@ an instruction reads when it needs the old bytes;
 
 it writes when it stores new bytes;
 
-a read-modify-write instruction such as sub [address], eax does both;
+a read-modify-write instruction such as sub [address], e a x does both;
 
 execute means the watched bytes are being treated as code.
 
@@ -68,13 +66,9 @@ Once a memory breakpoint identifies the instruction that writes gold, a code bre
 
 On x86, a debugger often implements a software breakpoint by temporarily replacing the first byte of an instruction with hexadecimal C C, the int3 instruction.
 
-Use a concrete three-byte subtraction as the byte-level example below: sub dword ptr [edx+4], eax subtracts the value in eax from a four-byte field at address edx+4. The debugger changes only its first instruction byte to set the breakpoint.
+Use a concrete three-byte subtraction as the byte-level example below: sub dword ptr [e d x+4], e a x subtracts the value in e a x from a four-byte field at address e d x+4. The debugger changes only its first instruction byte to set the breakpoint.
 
-Labelled memory diagram. hexadecimal 0 0 7 C C D 9 1: 29; cell 2: 42; cell 3: 04. Groups: sub dword ptr [edx+4], eax. The three-byte subtraction before a software breakpoint is installed.
-
-Labelled memory diagram. hexadecimal 0 0 7 C C D 9 1: CC, highlighted; cell 2: 42; cell 3: 04. Groups: int3. The same bytes with a breakpoint set. The CPU now executes int3 and stops; the debugger keeps the original 29 to put back.
-
-When the CPU executes int3, Windows reports a breakpoint exception. The debugger:
+When the C P U executes int3, Windows reports a breakpoint exception. The debugger:
 
 pauses the process;
 
@@ -94,35 +88,19 @@ Section: How a software breakpoint pauses and resumes.
 
 The original instruction still has to execute. A debugger normally handles the hexadecimal C C pause in two events:
 
-Diagram. From the CPU executes int3 to breakpoint event. From breakpoint event to restore the original byte. From restore the original byte to move the instruction pointer back to the restored instruction. From move the instruction pointer back to the restored instruction to turn on one-instruction stepping. From turn on one-instruction stepping to the real instruction runs. From the real instruction runs to single-step event. From single-step event to write hexadecimal C C back. From write hexadecimal C C back to turn stepping off, then continue or pause for the user.
+The instruction pointer needs rewinding because the C P U has already consumed the one-byte int3. The one-instruction step lets the real instruction run before the breakpoint byte is restored. Lesson 5.7 models this as explicit Armed and Stepping states so the byte is never restored at the wrong time.
 
-The instruction pointer needs rewinding because the CPU has already consumed the one-byte int3. The one-instruction step lets the real instruction run before the breakpoint byte is restored. Lesson 5.7 models this as explicit Armed and Stepping states so the byte is never restored at the wrong time.
-
-On x86, single stepping uses the trap flag in the thread’s flags register. When set, the CPU raises a debug exception after the next instruction. The flag belongs to one thread, which is why debugger state records thread IDs.
+On x86, single stepping uses the trap flag in the thread’s flags register. When set, the C P U raises a debug exception after the next instruction. The flag belongs to one thread, which is why debugger state records thread IDs.
 
 Follow the subtraction example through both events. The saved 29 byte must be executable for one instruction before CC can safely be installed again:
 
-Animated diagram: A breakpoint needs one instruction to get past itself. Three code bytes, 29 42 04, at hexadecimal 0 0 7 C C D 9 1. The debugger swaps the first byte for CC and keeps the original. When the CPU hits it, the debugger restores the 29, rewinds the instruction pointer, runs exactly one real instruction with the trap flag set, and only after the single-step event writes CC back. Step 1: The breakpoint is armed: the first byte is CC (int3) instead of the original 29. The debugger keeps the 29 so it can put the subtraction back. Step 2: The CPU reaches hexadecimal 0 0 7 C C D 9 1 and executes the one-byte int3. Windows reports a breakpoint event. The instruction pointer has already moved past that byte, to hexadecimal 0 0 7 C C D 9 2. Step 3: Restore and rewind: write the saved 29 back and move eip to hexadecimal 0 0 7 C C D 9 1, so the whole subtraction is available again. Step 4: Run one real instruction: turn on the trap flag for this thread and continue. The restored subtraction executes, and only then does the CPU report a one-instruction step. Step 5: The single-step event: the original instruction has finished, and eip is at the next one, hexadecimal 0 0 7 C C D 9 4. This second event is the moment the debugger can put the breakpoint back without trapping on it immediately. Step 6: Re-arm: write CC back at hexadecimal 0 0 7 C C D 9 1 and turn stepping off. The debugger can now continue, or keep the process paused. The breakpoint event restores the instruction; the single-step event restores the breakpoint. Those are different moments.
-
 Section: Step, step over, and run to return.
 
-When paused at a call, you have choices (Tip: In x64dbg, F7 steps into, F8 steps over, Ctrl+F9 runs until the function returns, and F9 resumes. F2 sets or clears a breakpoint on the selected instruction.):
-
-Table columns: Action; What it does.
-
-Action: Step into; What it does: Enter the called function.
-
-Action: Step over; What it does: Run the called function and pause after it.
-
-Action: Run to return; What it does: Continue until the current function returns.
-
-Action: Resume; What it does: Continue until another event pauses the process.
-
-Diagram. From paused at call calculate_damage to first instruction inside calculate_damage. The connection is labelled: step into. From paused at call calculate_damage to the instruction after the call. The connection is labelled: step over. From first instruction inside calculate_damage to the instruction after the call. The connection is labelled: run to return.
+When paused at a call, you have choices:
 
 Step into code you need to understand. Step over code that is not part of your question.
 
-“Step over” is not one special CPU instruction. At a call, the debugger can place a temporary breakpoint at the instruction after the call and resume. If the call never returns normally, that temporary breakpoint may never fire.
+“Step over” is not one special C P U instruction. At a call, the debugger can place a temporary breakpoint at the instruction after the call and resume. If the call never returns normally, that temporary breakpoint may never fire.
 
 “Run to return” relies on the current call frame and can be confused by tail calls, exceptions, corrupted stacks, or optimized code. These controls are convenient ways to express a debugging goal, not guarantees about source-level functions.
 
@@ -136,12 +114,6 @@ If this removes gold and you temporarily replace the whole instruction with nop 
 
 NOPing an instruction removes all of its effects, including effects that are easy to overlook. Arithmetic instructions often update flags used by the next conditional branch. A floating-point store may also pop a value from an x87 stack. A test that appears visually correct can still damage later control flow or machine state.
 
-Labelled memory diagram. cell 1: 29; cell 2: 41; cell 3: 30. Groups: sub [ecx+30h], eax: three bytes. The original instruction.
-
-Labelled memory diagram. cell 1: 90, highlighted; cell 2: 90, highlighted; cell 3: 90, highlighted. Groups: nop; nop; nop. All three bytes replaced. The subtraction is gone, and so are the flags it would have set.
-
-Labelled memory diagram. cell 1: 90; cell 2: 90; cell 3: 30, highlighted. Groups: two nops; leftover. Only two bytes replaced. The CPU decodes the leftover 30 as the start of an xor instruction that swallows the bytes after it.
-
 Before patching, ask:
 
 How many complete bytes does the instruction occupy?
@@ -154,7 +126,7 @@ What should visibly change in the game if the patch works?
 
 How will the original bytes be restored?
 
-Always save a copy of the original bytes before patching, so they can be written back. An incomplete replacement can make the CPU decode the remaining bytes as a completely different instruction.
+Always save a copy of the original bytes before patching, so they can be written back. An incomplete replacement can make the C P U decode the remaining bytes as a completely different instruction.
 
 Section: Represent debug events as explicit states.
 

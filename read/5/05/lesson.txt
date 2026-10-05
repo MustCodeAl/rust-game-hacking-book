@@ -4,11 +4,7 @@ Section: Use an existing UI clue.
 
 Use AssaultCube 1.2.0.2. Enable nametags, start a single-player deathmatch with eight bots, open the console with ~, and run idlebots 1. AssaultCube displays a name when the crosshair passes over a player, which means the game already computes a target-under-crosshair result.
 
-Image description: AssaultCube showing a target name
-
 Searching for the visible name and breaking on reads can lead from text back to the target-selection logic.
-
-Image description: Searching for a player name
 
 Section: A crosshair is a ray through the camera.
 
@@ -25,8 +21,6 @@ Crosshairs away from screen center require unprojection: transform a near and fa
 Section: Ray casting is a nearest-valid-hit problem.
 
 A collision system rarely tests every triangle directly. It commonly uses:
-
-Diagram. From Camera ray to Broad phase: spatial tree / bounding volumes. From Broad phase: spatial tree / bounding volumes to Small candidate set. From Small candidate set to Narrow phase: shapes / triangles. From Narrow phase: shapes / triangles to Nearest accepted hit. From Nearest accepted hit to Semantic filters: team, alive, material.
 
 The broad phase quickly rejects distant regions. The narrow phase computes more exact intersections. The query then chooses the smallest nonnegative hit parameter and applies rules such as collision masks and ignored entities.
 
@@ -64,7 +58,7 @@ Move the box up so that y spans 3.5 to 5 and the y range becomes t from 7 to 10,
 
 Two other methods are common:
 
-Colour picking. Each object is drawn into an off-screen texture in its own flat colour that encodes its number. Object 300 is 300 equals 0 times 65536 + 1 times 256 + 44, so its colour is (0, 1, 44). Reading the one pixel under the cursor and decoding the colour gives the object, already corrected for anything in front of it. It costs an extra pass and a read-back from the GPU, graphics processing unit,.
+Colour picking. Each object is drawn into an off-screen texture in its own flat colour that encodes its number. Object 300 is 300 equals 0 times 65536 + 1 times 256 + 44, so its colour is (0, 1, 44). Reading the one pixel under the cursor and decoding the colour gives the object, already corrected for anything in front of it. It costs an extra pass and a read-back from the G P U, graphics processing unit.
 
 Sprite picking. In 2D, convert the cursor to a world point as in Lesson 7.1 and test whether it falls inside each sprite’s rectangle, taking the topmost layer.
 
@@ -75,16 +69,6 @@ Lesson 7.9 runs the opposite way, from a world point to a pixel. The “target u
 Section: Rendering visibility and collision visibility differ.
 
 The renderer may omit a distant object, draw a transparent surface, or use a different level-of-detail mesh. A gameplay ray can still collide with its collision shape. The reverse can also occur: foliage may be visible but configured not to block shots.
-
-Table columns: Question; Likely data source.
-
-Question: what pixel is visible?; Likely data source: depth/render buffers.
-
-Question: what geometry blocks a shot?; Likely data source: physics/collision query.
-
-Question: which entity gets a nametag?; Likely data source: UI selection result.
-
-Question: which entity receives damage?; Likely data source: weapon/gameplay logic.
 
 These results may agree most of the time without being the same variable.
 
@@ -128,7 +112,7 @@ The visible field needs an exact definition. It might mean “the game’s exist
 
 Section: Reproduce the actual AssaultCube hook.
 
-The ray, collision, and target-observation model above can be tested without injection. The pinned hook below applies the DLL, dynamic link library, lifecycle from Lesson 6.4 and the Windows input boundary from Lesson 6.7. Follow the target-specific evidence before writing to its memory.
+The ray, collision, and target-observation model above can be tested without injection. The pinned hook below applies the D L L, dynamic link library, lifecycle from Lesson 6.4 and the Windows input boundary from Lesson 6.7. Follow the target-specific evidence before writing to its memory.
 
 Search Cheat Engine for one idle bot’s name. For each remaining text address, use Find out what accesses this address, look away, then look back at the bot. The useful address is accessed heavily only while the nametag is visible.
 
@@ -136,25 +120,23 @@ In x64dbg, the relevant 1.2.0.2 code is:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-When the crosshair is over a player, eax/edi is non-zero. Looking at empty space produces zero. Replace the five-byte call at hexadecimal 0 0 4 0 A D 9 D with a verified detour, execute the original call inside the cave, then publish the result to a typed handler:
+When the crosshair is over a player, e a x/e d i is non-zero. Looking at empty space produces zero. Replace the five-byte call at this value with a verified detour, execute the original call inside the cave, then publish the result to a typed handler:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The worker thread turns only state transitions into mouse events: send MOUSEEVENTF_LEFTDOWN when the atomic changes from false to true and MOUSEEVENTF_LEFTUP when it changes back. With the DLL loaded in the offline bot match, moving the crosshair onto a bot should fire; moving away should release the button.
+The worker thread turns only state transitions into mouse events: send MOUSEEVENTF_LEFTDOWN when the atomic changes from false to true and MOUSEEVENTF_LEFTUP when it changes back. With the D L L loaded in the offline bot match, moving the crosshair onto a bot should fire; moving away should release the button.
 
 Here is the complete windows-crate input boundary used by that worker:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: SAFETY: `input` is fully initialized and the size matches this INPUT type.
 
 The actual worker remembers whether it previously pressed the button:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-This comparison is edge detection. Holding a target does not send thousands of repeated down events; only a false-to-true or true-to-false change produces input. The build-checked cave, original call bytes, detour installer, input function, and DLL worker are in game_hooks.rs and dll.rs.
+This comparison is edge detection. Holding a target does not send thousands of repeated down events; only a false-to-true or true-to-false change produces input. The build-checked cave, original call bytes, detour installer, input function, and D L L worker are in game_hooks.rs and dll.rs.
 
 Always send the final mouse-up event when disabling or unloading the feature. Otherwise Windows can keep the button logically held down.
-
-Silent video demonstration: Crosshair-triggered firing in AssaultCube. The original trigger demonstration connects a target under the crosshair to firing. Watch when the target enters the crosshair; the implementation above turns changes in that result into mouse-down and mouse-up edges.
 
 Section: Add debounce.
 
@@ -165,8 +147,6 @@ Code example. The surrounding prose explains this example; the full lesson conta
 Section: Verify the source.
 
 The name-rendering path may use a cached or display-only target. Confirm it updates at the expected time and matches the game’s own hit logic.
-
-Image description: Code associated with the name display
 
 Trace the value’s producer, not only its final display. Reusing an internal result is more reliable than recreating a ray test from incomplete data.
 
@@ -189,20 +169,6 @@ whether a later gameplay check can reject the UI selection.
 Section: Failure patterns reveal the wrong assumption.
 
 Failure patterns and what they suggest
-
-Table columns: Symptom; Check first.
-
-Symptom: target appears selected through thin walls; Check first: collision mask or stale cached result.
-
-Symptom: selection is offset while moving; Check first: camera snapshot timing.
-
-Symptom: center works but edge crosshair does not; Check first: missing screen unprojection.
-
-Symptom: nearest target is skipped; Check first: ignored layers, dead state, or hitbox mismatch.
-
-Symptom: result points to a reused entity; Check first: handle generation/lifetime.
-
-Symptom: flicker at silhouette edges; Check first: ray precision, animation, or frame-to-frame pose changes.
 
 Section: Scope.
 

@@ -1,6 +1,6 @@
 Safe Boundaries for Game Memory
 
-Chapter 2 found game state and the code that changes it. Now we need to carry that knowledge into a tool without mistaking a remote address for our own memory. This chapter begins with safe type and ownership boundaries, then derives how bytes represent numbers and pointers. An external reader turns those representations into local values; objects, collections, encoded fields, and text show what those values can mean inside a game. DLL, dynamic link library, call contracts return later when our code enters the process itself.
+Chapter 2 found game state and the code that changes it. Now we need to carry that knowledge into a tool without mistaking a remote address for our own memory. This chapter begins with safe type and ownership boundaries, then derives how bytes represent numbers and pointers. An external reader turns those representations into local values; objects, collections, encoded fields, and text show what those values can mean inside a game. D L L, dynamic link library, call contracts return later when our code enters the process itself.
 
 Section: Start with one boundary rule.
 
@@ -20,8 +20,6 @@ It cannot prove equivalent facts about an address copied from another process. T
 
 Instead, use a clear boundary:
 
-Animated diagram: Carrying remote bytes across a checked boundary. A tool asks Windows to read four bytes at hexadecimal 2 0 0 0 in the game. Windows checks the range, copies the bytes 00 50 00 00 across into a local buffer owned by the tool, leaving the game’s memory unchanged, and the tool parses the local copy as hexadecimal 5 0 0 0. Step 1: Our tool names a range in the game process: address hexadecimal 2 0 0 0, length 4. That address means something only inside the game, so the tool cannot follow it like a pointer of its own. Step 2: The tool asks Windows to copy the bytes. The read is checked, and it may fail or return fewer bytes than asked for. Step 3: Windows reads the four bytes from the game’s memory and copies them across the boundary. The game’s own bytes are left where they are. Step 4: The copy now belongs to the tool. From here on, ordinary safe code can work on a bounded local buffer, with no remote address in sight. Step 5: Parsing and searching use only that local copy. 00 50 00 00 read as a little-endian number is hexadecimal 5 0 0 0. A remote address is never treated as a local pointer; Windows copies bytes before safe parsing begins.
-
 After the copy succeeds, ordinary ownership rules protect the local buffer. Before the copy, the address is untrusted input that needs checked arithmetic, region validation, and a useful error.
 
 Section: Values and types.
@@ -32,7 +30,7 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Use usize for address calculations, not for game values just because it is convenient.
 
-The target process does not store the words u32 or f32 beside each value. For example, 00 00 20 41 reads as 1,092,616,192 with u32 and 10.0 with f32; the type tells the reader which interpretation to use. We need the widths now to read memory safely. Lesson 3.2 derives the bit patterns behind those interpretations before we build the external reader.
+The target process does not store the words u32 or f32 beside each value. For example, 00 00 20 41 reads as the large number shown with u32 and 10.0 with f32; the type tells the reader which interpretation to use. We need the widths now to read memory safely. Lesson 3.2 derives the bit patterns behind those interpretations before we build the external reader.
 
 usize is large enough to index memory in the current build. It is 32 bits in an i686-pc-windows-msvc tool and 64 bits in an x86-64 tool. A game’s u32 health value stays four bytes on both. Address width and value width answer different questions.
 
@@ -40,7 +38,7 @@ Section: Give equal-sized values different meanings.
 
 A player ID and a health amount might both fit in a u32, yet swapping them should be an error. Rust can wrap the same stored bits in distinct types:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: damage(Health(50), PlayerId(3)); // rejected: the arguments are swapped
 
 These are newtypes. The wrapper tells the compiler that equal byte representations do not mean interchangeable values. The same technique keeps a remote address, a byte offset, and a game value from being passed to the wrong parameter just because all three happen to be integers. Chapter 1 first kept these ideas separate in words; a newtype can enforce the distinction in code.
 
@@ -82,29 +80,17 @@ Use Result<T, E> when callers need to know why an operation failed:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-For a one-purpose tool such as memory_scanner.exe, the anyhow crate is useful because each failed Windows call can say which process, address, or operation failed. Code reused by several lessons—such as a packet, PE (Portable Executable, the header-and-sections layout Windows uses for .exe and .dll files), or byte-pattern parser—benefits from a typed error enum. The caller can then handle truncated bytes differently from an unsupported size or invalid text. Those errors should also explain themselves when printed:
+For a one-purpose tool such as memory_scanner.exe, the anyhow crate is useful because each failed Windows call can say which process, address, or operation failed. Code reused by several lessons—such as a packet, P E (Portable Executable, the header-and-sections layout Windows uses for .exe and .dll files), or byte-pattern parser—benefits from a typed error enum. The caller can then handle truncated bytes differently from an unsupported size or invalid text. Those errors should also explain themselves when printed:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Debug shows the exact failure variant while you debug a parser. Display gives the learner a useful sentence such as “the packet ended before the requested value.” Implementing Error lets the scanner, proxy, or PE inspector keep that parser failure underneath its own context instead of flattening it into a string. The portable rust-labs implementation follows this pattern and tests the message produced for an oversized field. 🧭
+Debug shows the exact failure variant while you debug a parser. Display gives the learner a useful sentence such as “the packet ended before the requested value.” Implementing Error lets the scanner, proxy, or P E inspector keep that parser failure underneath its own context instead of flattening it into a string. The portable rust-labs implementation follows this pattern and tests the message produced for an oversized field. 🧭
 
 Section: Separate the cause from the decision.
 
 An error value should report what failed; the outermost tool should decide what to do about it. A memory reader should not silently retry forever, and a parser should not terminate the whole application.
 
-Labelled memory diagram. low-level cause: ReadProcessMemory returned access denied; operation context: while reading the local-player pointer; target context: pid 4242, build a3f1c9e2, address hexadecimal 0 1 7 E E D 1 8; outer policy: retry once, skip this snapshot, or stop safely. Each layer adds context without erasing the one below it. The outermost layer, outer policy, is the only one that decides what the tool actually does.
-
 Add context at each boundary without erasing the original Windows or parsing error. Then classify the final decision:
-
-Table columns: Situation; Sensible tool behavior.
-
-Situation: Game exited; Sensible tool behavior: Stop normally and close owned handles..
-
-Situation: Pointer changed during a scene load; Sensible tool behavior: Discard the snapshot and observe again..
-
-Situation: Layout validation failed; Sensible tool behavior: Refuse the action and report the build plus field..
-
-Situation: Programmer invariant failed; Sensible tool behavior: Stop; retrying would hide a tool bug..
 
 This makes failure part of the design. “Keep going” is safe only when the next iteration starts from fresh, validated state.
 
@@ -120,7 +106,7 @@ Section: Give each game helper one obvious import path.
 
 Avoid pub use windows_impl::* in the shared lab crate. A wildcard could expose an unfinished hook or internal address helper merely because somebody marked it pub inside that module. It can also make the same type appear under several paths. Export only the tools the lessons are meant to use:
 
-Code example. The code’s comments explain: ✅ Course tools get a short, reviewable list of supported imports.#[doc(inline)]pub use windows_impl::{OwnedHandle, PatchPlan, Process};
+Code example. The code’s comments explain: ✅ Course tools get a short, reviewable list of supported imports.
 
 The Windows lab keeps its implementation module private, so a memory scanner imports gha_windows_labs::Process and a reversible hook imports gha_windows_labs::PatchPlan. #[doc(inline)] puts the ownership and error notes at those exact paths. A learner should not have to search several modules to discover which process wrapper is the supported one.
 
@@ -140,7 +126,7 @@ still valid.
 
 Dereferencing one therefore requires unsafe:
 
-Code example. The code’s comments explain: / # Safety/// `pointer` must be non-null, aligned, readable, and point to an initialized `u32`.unsafe fn read_raw_u32(pointer: *const u32) to u32 { // 🛡️ SAFETY: the caller promises all requirements listed above. unsafe { pointer.read() }}
+Code example. The code’s comments explain: / # Safety / `pointer` must be non-null, aligned, readable, and point to an initialized `u32`. 🛡️ SAFETY: the caller promises all requirements listed above.
 
 This function reads a pointer in the tool’s own address space only when its caller can uphold every safety condition in the comment. A numeric address from the game process is different: the external tool must ask Windows to copy those bytes rather than casting the remote address to *const u32 and dereferencing it locally.
 
@@ -148,13 +134,11 @@ Section: What .offset() actually does.
 
 Raw pointers have an offset method, but its number is an element count, not a byte count. If pointer has type *const u32, one element is four bytes:
 
-Labelled memory diagram. +hexadecimal 0 0: 10; +hexadecimal 0 4: 20; +hexadecimal 0 8: 30, highlighted; +hexadecimal 0 C: 40. Groups: first, at offset 0; first.offset(2): two elements along, 8 bytes to 30. Each box is one u32, 4 bytes. .offset() counts in elements of the pointer's type, so offset(2) moves two boxes, not two bytes, landing on 30.
-
-Code example. The code’s comments explain: 🧭 `offset(2)` means "move by two u32 values," so this advances 8 bytes.let third equals unsafe { first.offset(2) }; 🛡️ SAFETY: `third` is aligned, initialized, and still inside `values`.assert_eq!(unsafe { third.read() }, 30);
+Code example. The code’s comments explain: 🧭 `offset(2)` means "move by two u32 values," so this advances 8 bytes. 🛡️ SAFETY: `third` is aligned, initialized, and still inside `values`.
 
 The signed isize argument is what makes .offset() different from .add(). first.add(2) can move forward by two elements; third.offset(-1) can move backward by one element. When the number you recovered is a byte offset, use a byte pointer or .byte_offset() so the unit is obvious:
 
-Code example. The code’s comments explain: 📏 This count is explicitly bytes because `bytes` points to u8 values.let second equals unsafe { bytes.offset(one_u32_in_bytes).cast::<u32>() };assert_eq!(unsafe { second.read() }, 20);
+Code example. The code’s comments explain: 📏 This count is explicitly bytes because `bytes` points to u8 values.
 
 Calling .offset() is already unsafe, even before dereferencing the result. Rust requires the start pointer, the result, and the range between them to stay inside the same allocation (or exactly one element past its end). The byte calculation must also fit in an isize. An address that merely looks plausible does not satisfy those promises.
 
@@ -166,7 +150,7 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Notice that Rust 2024 still requires an inner unsafe block inside an unsafe fn. The dangerous operation remains easy to find in review.
 
-Never use unsafe to “make the borrow checker stop complaining.” First understand the ownership problem. In this course, unsafe is reserved for operating-system, graphics, foreign-function-interface (FFI, foreign function interface,) — that is, calls into code compiled from another language — and verified raw-memory boundaries.
+Never use unsafe to “make the borrow checker stop complaining.” First understand the ownership problem. In this course, unsafe is reserved for operating-system, graphics, foreign-function-interface (F F I, foreign function interface,) — that is, calls into code compiled from another language — and verified raw-memory boundaries.
 
 Section: Set up a Windows project.
 
@@ -180,7 +164,7 @@ Add the libraries:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The windows crate generates typed bindings from Microsoft’s Windows metadata. We enable only the API, application programming interface, groups we use.
+The windows crate generates typed bindings from Microsoft’s Windows metadata. We enable only the A P I, application programming interface, groups we use.
 
 Section: Make the tools teach you.
 
@@ -204,9 +188,9 @@ Run this small quality loop from PowerShell:
 
 Terminal window
 
-Code example. The code’s comments explain: ✅ Format first so later output focuses on behavior, not spacing.cargo fmt --check 🧭 Ask the compiler for type, ownership, and name errors quickly.cargo check 🧪 Run behavior checks after the program type-checks.cargo test 💡 Ask Clippy for common mistakes and clearer alternatives.cargo clippy --all-targets --all-features -- -D warnings 📚 Build documentation for this project and its dependencies.cargo doc --open
+Code example. The code’s comments explain: ✅ Format first so later output focuses on behavior, not spacing. 🧭 Ask the compiler for type, ownership, and name errors quickly. 🧪 Run behavior checks after the program type-checks. 💡 Ask Clippy for common mistakes and clearer alternatives. 📚 Build documentation for this project and its dependencies.
 
-cargo test runs the project’s test targets. Clippy’s official usage guide explains its lint levels. A lint is guidance, not an oracle: understand a suggestion before accepting it, especially around raw pointers and Windows FFI.
+cargo test runs the project’s test targets. Clippy’s official usage guide explains its lint levels. A lint is guidance, not an oracle: understand a suggestion before accepting it, especially around raw pointers and Windows F F I.
 
 Fix a warning when you can. If a Windows boundary genuinely needs an exception, keep it as narrow as possible and record the reason with #[expect(..., reason equals "...")]. Prefer expect to a broad allow: the compiler can then tell you when the expected warning no longer occurs and the exception has become stale. Never disable a lint for an entire crate just to hide one unexplained cast.
 
@@ -216,7 +200,7 @@ Section: Reuse code without turning off judgment.
 
 Crates can save months of work. Before adding one, check:
 
-Does its API match the actual problem?
+Does its A P I match the actual problem?
 
 Does it support the toolchain and Windows versions you use?
 
@@ -226,7 +210,7 @@ Are its unsafe boundaries and maintenance history understandable?
 
 Can you cover your use of it with a small test?
 
-Autocomplete and AI, artificial intelligence, can also save typing. For every non-trivial suggestion you accept, be able to explain the types, ownership, side effects, failure path, and test. “It compiled” proves syntax and types; it does not prove the call targets the right process, preserves the right bytes, or cleans up a handle.
+Autocomplete and A I, artificial intelligence, can also save typing. For every non-trivial suggestion you accept, be able to explain the types, ownership, side effects, failure path, and test. “It compiled” proves syntax and types; it does not prove the call targets the right process, preserves the right bytes, or cleans up a handle.
 
 Section: The shape of our programs.
 

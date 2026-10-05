@@ -2,23 +2,21 @@ How NPCs Sense and Decide
 
 Recording a guard’s movement tells us when it turned, chased, or stopped. It does not explain why. To recover that rule, follow the information the game gave the guard, the decision it made from that information, and the action that followed.
 
-Section: An NPC, non player character, is a small program that runs every tick.
+Section: An N P C, non player character, is a small program that runs every tick.
 
-A non-player character (NPC) is any character the game controls rather than a person: a guard, a shopkeeper, an enemy soldier. In games, “AI, artificial intelligence,” means the code that picks what an NPC does next. It is usually far simpler than the AI in the news: a handful of rules, checked quickly, many times per second.
+A non-player character (N P C) is any character the game controls rather than a person: a guard, a shopkeeper, an enemy soldier. In games, “A I, artificial intelligence,” means the code that picks what an N P C does next. It is usually far simpler than the A I in the news: a handful of rules, checked quickly, many times per second.
 
 The portable lab npc_brain_lab.rs builds one such character, a guard, and this lesson follows it piece by piece. Nothing in it touches a real game.
 
 The game loop from Lesson 1.2 reads input, updates the world, and draws a frame. Many games update the world in fixed steps called ticks. Every tick advances the simulation by the same slice of time, however fast the computer draws. The lab runs its guard at 10 ticks per second (the constant TICKS_PER_SECOND), which makes each tick 1000 divided by 10 equals 100 milliseconds.
 
-An NPC makes one decision per tick, for two reasons:
+An N P C makes one decision per tick, for two reasons:
 
 Behavior follows simulated time, not the frame rate. A guard that reacts after 3 ticks reacts after 3 times 100 equals 300 milliseconds on a fast computer and on a slow one. If it decided once per drawn frame, a machine drawing 144 frames per second would make it react faster than one drawing 30.
 
 The cost is bounded and the behavior repeats. Fifty guards cost fifty decisions per tick, no matter what the renderer does. The same inputs, tick by tick, give the same decisions, which is what lets the lab test its guard without drawing anything.
 
 Each tick, the guard’s tick method runs three stages in a fixed order: sense, decide, and act. Sensing also updates what the guard remembers:
-
-Diagram. From Sense distance, view cone, line of sight to Remember seen_for and last_known. From Remember seen_for and last_known to Decide the state machine picks this tick's state. From Decide the state machine picks this tick's state to Act move one step or attack.
 
 The guard never reads the player’s true position directly. It gets the player’s position only through its senses, and remembers the last place it saw them in last_known. That separation is what makes hiding behind a wall work.
 
@@ -31,8 +29,6 @@ Distance: the target is no more than VIEW_DISTANCE equals 10 units away.
 View cone: the target is inside the guard’s view cone, the range of directions it can see: within 60 degrees of the way it faces, on either side, so 60 + 60 equals 120 degrees in all. Everything behind the guard is outside it.
 
 Line of sight: the straight line from the guard to the target is free of solid geometry, so no wall hides the target.
-
-Diagram. From target position to distance 10 or less?. From distance 10 or less? to within 60 degrees of the facing?. The connection is labelled: yes. From within 60 degrees of the facing? to line of sight clear?. The connection is labelled: yes. From line of sight clear? to sees the target. The connection is labelled: yes. From distance 10 or less? to cannot see. The connection is labelled: no. From within 60 degrees of the facing? to cannot see. The connection is labelled: no. From line of sight clear? to cannot see. The connection is labelled: no.
 
 The order matters for speed: the first two checks cost a handful of arithmetic operations each, while the last walks along the line and tests every wall, so it runs only after the cheap checks pass. Each check also gives the player a way to stay unseen: keep your distance, stay behind the guard, or put a wall between you.
 
@@ -54,11 +50,9 @@ Flee: health is FLEE_HEALTH equals 25 or less, so run.
 
 The whole decision is one function of the current state and this tick’s senses:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: The reaction delay: one glimpse is not enough to start a chase.
 
 Drawn out, the transitions are:
-
-Diagram labels, in drawing order: seen 3 ticks in a row; in sight, distance 1.5 or less; in sight, distance over 1.5; lost sight; count below 4, add 1; count reached 4; health 25 or less; Patrol; Chase; Search; Attack; Flee.
 
 When no arrow applies, the state stays the same. Three details of the code decide the shape of that diagram:
 
@@ -80,40 +74,6 @@ Section: One run, tick by tick.
 
 The lab’s first demo puts the guard at its post, (0, 0), facing east, (1, 0). A wall fills the box from (5.5, minus 1) to (6.5, 1): every point with x from 5.5 to 6.5 and y from minus 1 to 1. The player stands in the open at (5, 0) for ticks 1 to 7, then slips behind the wall to (8, 0) for ticks 8 to 16. “Distance” is measured before the guard moves:
 
-Table columns: Tick; Sees; seen_for; Distance; State; Guard after acting.
-
-Tick: 1; Sees: yes; seen_for: 1; Distance: 5; State: Patrol; Guard after acting: (0, 0).
-
-Tick: 2; Sees: yes; seen_for: 2; Distance: 5; State: Patrol; Guard after acting: (0, 0).
-
-Tick: 3; Sees: yes; seen_for: 3; Distance: 5; State: Chase; Guard after acting: (1, 0).
-
-Tick: 4; Sees: yes; seen_for: 4; Distance: 4; State: Chase; Guard after acting: (2, 0).
-
-Tick: 5; Sees: yes; seen_for: 5; Distance: 3; State: Chase; Guard after acting: (3, 0).
-
-Tick: 6; Sees: yes; seen_for: 6; Distance: 2; State: Chase; Guard after acting: (4, 0).
-
-Tick: 7; Sees: yes; seen_for: 7; Distance: 1; State: Attack; Guard after acting: (4, 0).
-
-Tick: 8; Sees: no; seen_for: 0; Distance: 4; State: Search { ticks: 0 }; Guard after acting: (5, 0).
-
-Tick: 9; Sees: no; seen_for: 0; Distance: 3; State: Search { ticks: 1 }; Guard after acting: (5, 0).
-
-Tick: 10; Sees: no; seen_for: 0; Distance: 3; State: Search { ticks: 2 }; Guard after acting: (5, 0).
-
-Tick: 11; Sees: no; seen_for: 0; Distance: 3; State: Search { ticks: 3 }; Guard after acting: (5, 0).
-
-Tick: 12; Sees: no; seen_for: 0; Distance: 3; State: Search { ticks: 4 }; Guard after acting: (5, 0).
-
-Tick: 13; Sees: no; seen_for: 0; Distance: 3; State: Patrol; Guard after acting: (4, 0).
-
-Tick: 14; Sees: no; seen_for: 0; Distance: 4; State: Patrol; Guard after acting: (3, 0).
-
-Tick: 15; Sees: no; seen_for: 0; Distance: 5; State: Patrol; Guard after acting: (2, 0).
-
-Tick: 16; Sees: no; seen_for: 0; Distance: 6; State: Patrol; Guard after acting: (1, 0).
-
 Every row follows from the rules above:
 
 Ticks 1 and 2: the player is 5 away, straight ahead, and in the open, so all three checks pass, but seen_for is only 1, then 2.
@@ -130,25 +90,23 @@ Tick 13: the count has reached 4, so the guard returns to Patrol, turns west tow
 
 Ticks 14 to 16: the player is now straight behind the guard, 180 degrees from its facing and far outside the cone.
 
-Games also use two other ways to decide, often mixed with small state machines: utility scoring runs whichever action scores highest right now, and a behavior tree checks an NPC’s priorities from the top every tick. Lesson 4.13 works through both.
+Games also use two other ways to decide, often mixed with small state machines: utility scoring runs whichever action scores highest right now, and a behavior tree checks an N P C’s priorities from the top every tick. Lesson 4.13 works through both.
 
 Section: Moving is a separate system.
 
 The lab’s guard moves with move_toward, which turns to face the target and steps straight at it, ignoring walls. It avoids the wall in the demo only because the spot it walks to, (5, 0), happens to be in front of it.
 
-Games split movement off into a navigation system. The decision layer picks where to go. The navigation layer works out how: it plans a route over a grid or a navigation mesh, a set of polygons covering the floor an NPC can walk on, with a search such as A* from Lesson 4.9, then steers the NPC along that route one tick at a time.
+Games split movement off into a navigation system. The decision layer picks where to go. The navigation layer works out how: it plans a route over a grid or a navigation mesh, a set of polygons covering the floor an N P C can walk on, with a search such as A* from Lesson 4.9, then steers the N P C along that route one tick at a time.
 
-Section: An NPC in memory.
+Section: An N P C in memory.
 
-A game written in C++ usually stores each NPC as a structure, a block of memory with each field at a fixed offset from its start, and keeps the state machine’s current state as a small number in one of those fields. In a toy layout of the guard, the state is a single byte:
-
-Labelled memory diagram. 0: Patrol; 1: Chase, highlighted; 2: Attack; 3: Search; 4: Flee. What each value of the state byte means in the toy layout. The highlighted 1 is Chase. No other value means anything to the code.
+A game written in C++ usually stores each N P C as a structure, a block of memory with each field at a fixed offset from its start, and keeps the state machine’s current state as a small number in one of those fields. In a toy layout of the guard, the state is a single byte:
 
 Lesson 4.13 lays out the whole structure field by field.
 
 Section: What editing the state byte would do.
 
-Take a toy program you wrote yourself, or an offline single-player game running in your lab VM, virtual machine,, whose guard follows the lab’s rules. Changing the state byte between two ticks has very different effects depending on the value:
+Take a toy program you wrote yourself, or an offline single-player game running in your lab V M, virtual machine,, whose guard follows the lab’s rules. Changing the state byte between two ticks has very different effects depending on the value:
 
 Write 4 (Flee) mid-chase: on the next tick decide sees Flee, and nothing leads out of Flee, so the guard turns and runs from the last place it saw the player until the program restarts. The edit lasts.
 
@@ -160,7 +118,7 @@ The pattern behind those results: the state is an output the game recomputes fro
 
 Section: Why online NPCs are out of reach.
 
-In an online game, the server runs the NPCs. Their state bytes, timers, and decision code exist in the server’s memory, on a machine you do not control. The server is the authoritative copy: its decisions are the ones that count. Your client receives only what it needs to draw, such as positions, animations, and perhaps a health bar, and Lesson 1.3 describes why changing a client-side copy does not change what the server decides. Editing an NPC’s position or state in client memory changes, at most, what your own screen draws until the next server update overwrites it. Tampering with a live multiplayer service is also outside this book’s scope; everything above belongs in your own toy programs and offline games.
+In an online game, the server runs the NPCs. Their state bytes, timers, and decision code exist in the server’s memory, on a machine you do not control. The server is the authoritative copy: its decisions are the ones that count. Your client receives only what it needs to draw, such as positions, animations, and perhaps a health bar, and Lesson 1.3 describes why changing a client-side copy does not change what the server decides. Editing an N P C’s position or state in client memory changes, at most, what your own screen draws until the next server update overwrites it. Tampering with a live multiplayer service is also outside this book’s scope; everything above belongs in your own toy programs and offline games.
 
 Section: Run the lab.
 

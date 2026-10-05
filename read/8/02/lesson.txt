@@ -1,8 +1,8 @@
-DLL, dynamic link library, Loading Across Process Boundaries
+D L L, dynamic link library, Loading Across Process Boundaries
 
 Section: Keep target identity explicit.
 
-Lesson 6.2 built a DLL with a tiny DllMain and an explicit gha_start, but that file is still on disk. To run it inside the course game, the injector must ask the target process to load the exact DLL, wait for loading to finish, and only then call its start function. Every temporary handle and allocation needs an owner along the way.
+Lesson 6.2 built a D L L with a tiny DllMain and an explicit gha_start, but that file is still on disk. To run it inside the course game, the injector must ask the target process to load the exact D L L, wait for loading to finish, and only then call its start function. Every temporary handle and allocation needs an owner along the way.
 
 This injector accepts only the exact target builds used in the book. Put the allowlist in code so a mistyped command cannot select an unrelated process.
 
@@ -14,13 +14,11 @@ It is worth knowing that this is one route among several, so you do not mistake 
 
 This route uses the loader. You hand the target a path and ask it to run LoadLibraryW, and the loader then maps the sections, applies relocations, resolves imports, prepares thread-local storage, runs DllMain, and adds the module to the process’s module list.
 
-That last step is easy to overlook and is precisely why this book takes this route. Because the loader registers the module, your DLL appears in the inventory that Lesson 12.1 builds, GetModuleHandle can find it, and unloading runs through the same bookkeeping in reverse. Every step is observable and reversible.
+That last step is easy to overlook and is precisely why this book takes this route. Because the loader registers the module, your D L L appears in the inventory that Lesson 12.1 builds, GetModuleHandle can find it, and unloading runs through the same bookkeeping in reverse. Every step is observable and reversible.
 
-Routes that avoid the loader have to do the loader’s job themselves — walking the relocation table, resolving each import by hand, and handling TLS — which is where the PE, portable executable, structure from Lesson 5.1 stops being background reading. They exist mainly so that a module does not appear in that list, which is a goal about avoiding detection rather than about understanding the program, and it is not what this book is for.
+Routes that avoid the loader have to do the loader’s job themselves — walking the relocation table, resolving each import by hand, and handling TLS — which is where the P E, portable executable, structure from Lesson 5.1 stops being background reading. They exist mainly so that a module does not appear in that list, which is a goal about avoiding detection rather than about understanding the program, and it is not what this book is for.
 
 Section: The classic loader sequence.
-
-Diagram. From Open exact game process to Allocate remote memory. From Allocate remote memory to Write absolute DLL path. From Write absolute DLL path to Find LoadLibraryW. From Find LoadLibraryW to Start remote thread. From Start remote thread to Wait and check result. From Wait and check result to Free memory and close handles.
 
 Every box can fail and must clean up what earlier boxes created.
 
@@ -36,11 +34,9 @@ Section: Own remote memory.
 
 Model the allocation so cleanup is not optional:
 
-Diagram. From VirtualAllocEx succeeds to RemoteAllocation owns process + address. From RemoteAllocation owns process + address to write_exact writes the wide path. From write_exact writes the wide path to RemoteAllocation is dropped. The connection is labelled: an early ? returns. From write_exact writes the wide path to RemoteAllocation is dropped. The connection is labelled: normal continuation. From RemoteAllocation is dropped to Drop::drop calls VirtualFreeEx.
-
 RemoteAllocation puts that cleanup rule in one Rust type. It stores the process handle and remote address, then its Drop method releases the address whether the caller finishes normally or returns early with an error.
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: SAFETY: this allocation belongs to this process and is released once.
 
 Allocate and write the path with the actual windows crate calls:
 
@@ -56,9 +52,9 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Two things about that sequence deserve an explanation, because both look wrong the first time you read them.
 
-Why does the sample pass a locally resolved LoadLibraryW address to the game? GetProcAddress returns an address in the injector’s process. DLLs often map at the same base in both processes, which makes this common course shortcut work, but that is an assumption to check, not a Windows guarantee. Microsoft documents that a DLL can load at a different base when its preferred one is unavailable, and CreateRemoteThread can even succeed with an invalid start address before the new thread faults. For a reusable injector, find the target process’s actual system-DLL base, resolve or verify the export at that base, and refuse to start the thread if the address is not established. The buildable course injector currently relies on the shared-base assumption in this exact lab. Never apply its locally obtained address to arbitrary game DLLs. See DLL memory protection and CreateRemoteThread.
+Why does the sample pass a locally resolved LoadLibraryW address to the game? GetProcAddress returns an address in the injector’s process. DLLs often map at the same base in both processes, which makes this common course shortcut work, but that is an assumption to check, not a Windows guarantee. Microsoft documents that a D L L can load at a different base when its preferred one is unavailable, and CreateRemoteThread can even succeed with an invalid start address before the new thread faults. For a reusable injector, find the target process’s actual system-D L L base, resolve or verify the export at that base, and refuse to start the thread if the address is not established. The buildable course injector currently relies on the shared-base assumption in this exact lab. Never apply its locally obtained address to arbitrary game DLLs. See D L L memory protection and CreateRemoteThread.
 
-Why can LoadLibraryW be used as a thread start routine in this 32-bit lab? Both use the Windows system calling convention and take one pointer argument. Here the HMODULE result fits in the thread’s 32-bit DWORD exit code. The remote allocation holding the wide path is the argument. The code requires a nonzero exit code before calculating the DLL-relative gha_start address. This return-value shortcut does not carry over unchanged to a 64-bit injector.
+Why can LoadLibraryW be used as a thread start routine in this 32-bit lab? Both use the Windows system calling convention and take one pointer argument. Here the HMODULE result fits in the thread’s 32-bit DWORD exit code. The remote allocation holding the wide path is the argument. The code requires a nonzero exit code before calculating the D L L-relative gha_start address. This return-value shortcut does not carry over unchanged to a 64-bit injector.
 
 The seven arguments of that CreateRemoteThread call, with the value this lab passes for each:
 
@@ -82,7 +78,7 @@ Where the thread begins running. Here it is LoadLibraryW, which is why the same-
 
 lpParameteraddress in the game
 
-The one pointer handed to the start routine: the remote allocation that holds the wide DLL path.
+The one pointer handed to the start routine: the remote allocation that holds the wide D L L path.
 
 dwCreationFlagsflagsdefault 0
 
@@ -112,21 +108,19 @@ CloseHandle.
 
 Section: Architecture must match.
 
-A 32-bit DLL loads into a 32-bit process. A 64-bit DLL loads into a 64-bit process. Check both the loader and target architecture before allocating anything.
+A 32-bit D L L loads into a 32-bit process. A 64-bit D L L loads into a 64-bit process. Check both the loader and target architecture before allocating anything.
 
-For the versions in this book, install the 32-bit compilation target and build the DLL for it:
+For the versions in this book, install the 32-bit compilation target and build the D L L for it:
 
 Terminal window
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Pass the absolute DLL produced under target\i686-pc-windows-msvc\release\. A 64-bit injector may still need extra care to inspect a 32-bit target, so the simplest course setup builds the injector as 32-bit too.
+Pass the absolute D L L produced under target\i686-pc-windows-msvc\release\. A 64-bit injector may still need extra care to inspect a 32-bit target, so the simplest course setup builds the injector as 32-bit too.
 
 Section: Loader-lock reminder.
 
-When the DLL loads, Windows calls its DllMain under the loader lock. The course DLL does only one small thing there: DisableThreadLibraryCalls. The injector then finds the exported gha_start address by its DLL-relative offset and starts a second remote thread after LoadLibraryW has returned. That guarantees the real worker and hook installation happen outside DllMain and outside the loader lock.
-
-Diagram labels, in drawing order: Game process; Injector; loader lock held:; maps sections, resolves imports,; runs DllMain; outside the loader lock:; gha_start spawns the worker; CreateRemoteThread(LoadLibraryW, dll path); thread exit code equals DLL base; compute gha_start's RVA, relative virtual address,; from a local, unloaded copy; CreateRemoteThread(DLL base + RVA).
+When the D L L loads, Windows calls its DllMain under the loader lock. The course D L L does only one small thing there: DisableThreadLibraryCalls. The injector then finds the exported gha_start address by its D L L-relative offset and starts a second remote thread after LoadLibraryW has returned. That guarantees the real worker and hook installation happen outside DllMain and outside the loader lock.
 
 Section: Cleanup order.
 
@@ -142,24 +136,24 @@ RAII types make this happen during early returns.
 
 Section: Run the real game lab.
 
-Build both injector and DLL for i686-pc-windows-msvc.
+Build both injector and D L L for i686-pc-windows-msvc.
 
 Start one allowed game in the exact version and enter an offline/local match.
 
-Run the injector with the process name and absolute DLL path. The course code uses the locally resolved LoadLibraryW address under the shared-base assumption described above.
+Run the injector with the process name and absolute D L L path. The course code uses the locally resolved LoadLibraryW address under the shared-base assumption described above.
 
 Require a nonzero LoadLibraryW thread result and a zero gha_start thread result. If either check fails, stop instead of trying another address or retrying blindly.
 
-Inspect the target’s module list and confirm that the expected DLL actually loaded. Confirm its log prints the matched target profile and verified original bytes. These independent observations test the result; they do not make the shared-base assumption a general guarantee.
+Inspect the target’s module list and confirm that the expected D L L actually loaded. Confirm its log prints the matched target profile and verified original bytes. These independent observations test the result; they do not make the shared-base assumption a general guarantee.
 
 Trigger the visible result: Wesnoth gold becomes 999, AssaultCube recoil disappears, or Urban Terror renders the local wallhack.
 
 Toggle the feature off, verify the original bytes are restored, and exit the game normally.
 
-If the loader thread returns zero, inspect the target PID, process identifier,, both architectures, the canonical DLL path, and the Windows error. If the target exits or faults before a loader result is available, the remote start address may have been invalid; treat that as a failed experiment and do not rerun it unchanged. Do not suggest “run as administrator” until the earlier facts are correct.
+If the loader thread returns zero, inspect the target P I D, process identifier,, both architectures, the canonical D L L path, and the Windows error. If the target exits or faults before a loader result is available, the remote start address may have been invalid; treat that as a failed experiment and do not rerun it unchanged. Do not suggest “run as administrator” until the earlier facts are correct.
 
-The completed tool performs a real injection into the course games with exact target checks, owned handles, bounded waits, and cleanup. Its local-system-DLL address assumption remains a limitation of this version.
+The completed tool performs a real injection into the course games with exact target checks, owned handles, bounded waits, and cleanup. Its local-system-D L L address assumption remains a limitation of this version.
 
-The complete buildable source is injector.rs. It includes the allowlist, architecture check, UTF-16 conversion, allocation, both remote threads, gha_start RVA calculation under ASLR, address space layout randomization,, timeout handling, exit-code checks, and cleanup. Its shared process/handle wrappers are in process.rs and handle.rs.
+The complete buildable source is injector.rs. It includes the allowlist, architecture check, UTF-16 conversion, allocation, both remote threads, gha_start R V A, relative virtual address, calculation under A S L R, address space layout randomization,, timeout handling, exit-code checks, and cleanup. Its shared process/handle wrappers are in process.rs and handle.rs.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/8/02/

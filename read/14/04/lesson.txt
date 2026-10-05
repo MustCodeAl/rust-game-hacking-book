@@ -1,4 +1,4 @@
-Hardware Debugging with JTAG
+Hardware Debugging with J T A G
 
 Every debugger in this book so far has been a program asking other software for permission. The debugger of Lesson 5.7 asks Windows to pause a thread, and Windows agrees because the debugger holds the right access. Lesson 11.10 showed the processor enforcing a boundary between user mode and the kernel, and Lesson 14.1 put a hypervisor underneath the kernel. This lesson goes below all of them, to a debugger that asks no software at all, because it is wired into the chip.
 
@@ -10,11 +10,11 @@ A circuit board is a sheet of fibreglass with copper wires, called traces, print
 
 For decades the check was a bed of nails: a fixture of spring-loaded metal pins pressed onto test points all over the board, so a tester could drive a signal into one end of a trace and measure it at the other. That approach struggled in the 1980s as surface-mounted chips packed their pins closer together, and it became hopeless once packages hid their connections underneath. A ball grid array, for example, joins the board through a grid of solder balls on its underside, and once it is soldered down no probe can reach them.
 
-In 1985 a group of electronics companies formed the Joint Test Action Group to solve the problem. Their design was standardised in 1990 as IEEE 1149.1, and everyone calls it JTAG after the group. The idea was to stop probing the board from outside and build the probes into the chips.
+In 1985 a group of electronics companies formed the Joint Test Action Group to solve the problem. Their design was standardised in 1990 as IEEE 1149.1, and everyone calls it J T A G after the group. The idea was to stop probing the board from outside and build the probes into the chips.
 
 Section: Boundary scan: a probe on every pin.
 
-A chip that supports JTAG places a small circuit called a boundary-scan cell between each pin and the chip’s internal logic. In normal operation the cell is transparent: signals pass straight through, and the chip behaves as though the cell were not there. In test mode the cell can do two other things:
+A chip that supports J T A G places a small circuit called a boundary-scan cell between each pin and the chip’s internal logic. In normal operation the cell is transparent: signals pass straight through, and the chip behaves as though the cell were not there. In test mode the cell can do two other things:
 
 capture: record the level currently on its pin, 1 or 0;
 
@@ -26,23 +26,11 @@ Chips on the same board are linked the same way, the output wire of one chip fee
 
 Section: Four wires and a scan chain.
 
-The JTAG connection on each chip is called the Test Access Port, or TAP. It uses four signals:
-
-Table columns: Signal; Name; Direction; Job.
-
-Signal: TCK; Name: Test Clock; Direction: into the chip; Job: every action happens on a tick of this clock.
-
-Signal: TMS; Name: Test Mode Select; Direction: into the chip; Job: steers the port from one state to the next.
-
-Signal: TDI; Name: Test Data In; Direction: into the chip; Job: bits enter the chain here.
-
-Signal: TDO; Name: Test Data Out; Direction: out of the chip; Job: bits leave the chain here.
+The J T A G connection on each chip is called the Test Access Port, or TAP. It uses four signals:
 
 An optional fifth signal, TRST (Test Reset), resets the port directly.
 
 Every chip receives the same TCK and TMS, while the data runs in series, from the debugger’s TDI through each chip in turn and back from the last chip’s TDO:
-
-Diagram. From debugger to chip A: a cell on every pin. The connection is labelled: TDI. From chip A: a cell on every pin to chip B: a cell on every pin. The connection is labelled: A's TDO feeds B's TDI. From chip B: a cell on every pin to debugger. The connection is labelled: TDO. From debugger to chip A: a cell on every pin. The connection is labelled: TCK and TMS reach every chip. From debugger to chip B: a cell on every pin. From chip A: a cell on every pin to chip B: a cell on every pin. The connection is labelled: copper trace under test: A's output pin to B's input pin.
 
 Testing the thick trace takes two passes. Load a 1 into the cell on chip A’s pin and switch A’s cells to drive; switch chip B’s cells to capture; then shift everything out and look at the cell on B’s pin. A good joint reads 1. Then repeat with a 0, because a pin accidentally joined to the power supply would read 1 whatever A drove. The two patterns together catch a trace stuck at 1 and a trace stuck at 0. Test software computes patterns that check every trace on a board at once.
 
@@ -51,8 +39,6 @@ Section: The TAP controller: steering with one wire.
 The debugger has one wire, TMS, for giving orders, yet it needs to say “capture now”, “shift”, and “update”. The chip solves this with a small state machine called the TAP controller: a circuit that is always in exactly one of a fixed list of states. On every tick of TCK it moves to one of two next states, and the level of TMS, 0 or 1, picks which, so a sequence of levels on TMS walks the controller wherever the debugger needs it.
 
 Reading or loading a register follows the same main path every time:
-
-Diagram. From Test-Logic-Reset: test logic off, the chip works normally to Run-Test/Idle: resting between scans. From Run-Test/Idle: resting between scans to Capture: load the register. From Capture: load the register to Shift: move one bit per clock. From Shift: move one bit per clock to Shift: move one bit per clock. The connection is labelled: repeat until every bit has moved. From Shift: move one bit per clock to Update: copy the new pattern out. From Update: copy the new pattern out to Run-Test/Idle: resting between scans.
 
 Capture loads the register from its inputs: for the boundary-scan register, the levels on the pins.
 
@@ -86,23 +72,19 @@ single-step, running exactly one instruction and halting again;
 
 read and write the core’s registers, including the program counter;
 
-read and write memory, through a debug unit that issues reads and writes on the chip’s internal bus exactly as the CPU, central processing unit, does;
+read and write memory, through a debug unit that issues reads and writes on the chip’s internal bus exactly as the C P U, central processing unit, does;
 
 set hardware breakpoints and watchpoints, comparators that halt the core when it fetches from, or accesses, a chosen address. They work like the x86 debug registers of Lesson 2.4, except that they are programmed from outside the chip.
 
-The difference from Chapter 5 is where the request goes. A Windows debugger asks the operating system to pause one thread. A JTAG debugger stops the whole processor, and the operating system has no say, because it is no longer running.
+The difference from Chapter 5 is where the request goes. A Windows debugger asks the operating system to pause one thread. A J T A G debugger stops the whole processor, and the operating system has no say, because it is no longer running.
 
-Diagram. From debugger wired to the chip's test pins to debug logic inside the chip. The connection is labelled: four wires. From debug logic inside the chip to the whole core, kernel included. The connection is labelled: halts. From debugger program to Windows. The connection is labelled: asks. From Windows to one thread; everything else runs on. The connection is labelled: pauses.
-
-Arm’s Cortex-M processors, found in a great many microcontrollers, the single-chip computers inside things like keyboards and game controllers, show how ordinary the mechanism is. Their debug controls sit at fixed addresses in the memory map, and the debug logic includes a memory access port that performs bus reads and writes for the debugger. So halting the core takes one memory write: a value with its halt bit set, written into a debug control register, stops the core before its next instruction, and reading RAM, random access memory, afterwards takes one memory read. Lesson 14.6 builds that value bit by bit and follows the write to the core.
+Arm’s Cortex-M processors, found in a great many microcontrollers, the single-chip computers inside things like keyboards and game controllers, show how ordinary the mechanism is. Their debug controls sit at fixed addresses in the memory map, and the debug logic includes a memory access port that performs bus reads and writes for the debugger. So halting the core takes one memory write: a value with its halt bit set, written into a debug control register, stops the core before its next instruction, and reading R A M, random access memory, afterwards takes one memory read. Lesson 14.6 builds that value bit by bit and follows the write to the core.
 
 Section: SWD: the same debugger on two wires.
 
 Four signals, or five with TRST, are a lot for a small microcontroller with twenty pins. Arm designed Serial Wire Debug, SWD, which needs two: SWCLK, a clock, and SWDIO, a single data wire that the debugger and the chip take turns driving. Instead of walking a state machine, SWD sends packets.
 
 Every transaction begins with an 8-bit request that names a register and says whether it will be read or written. The wire then turns around, and the chip answers with a 3-bit acknowledgement: OK, WAIT, or FAULT. A read then delivers 32 data bits and a parity bit, an extra bit chosen to make the number of 1s even, so that a single bit damaged on the wire shows up as an odd count:
-
-Labelled memory diagram. request: 8 bits; cell 2: turnaround; ack: 3 bits; data: 32 bits; parity: 1 bit; cell 6: turnaround. Groups: sent by the debugger; sent by the chip. One SWD read on the single data wire, in time order from left to right. During each turnaround neither side drives the wire, so it can change hands.
 
 Many chips offer both protocols on shared pins, with SWDIO on the TMS pin and SWCLK on the TCK pin, and a special bit sequence switches the port from one to the other. Behind either protocol sits the same debug port, so halting, stepping, and memory access work the same way. Lesson 14.6 builds the first request a debugger usually sends, bit by bit.
 
@@ -122,14 +104,12 @@ Require authentication. The port stays present but locked until the debugger pro
 
 Secure debug authentication is a challenge and a signed answer:
 
-Diagram labels, in drawing order: Maker's signing service; Locked chip; Debugger in the maker's lab; check it with the public key; anchored in ROM or fuses; request debug access; challenge: a fresh random nonce and the chip's unique ID; nonce and chip ID, with the lab's credentials; signature over this nonce and this chip ID; the signature; debug enabled until the next reset.
-
 Each part closes a specific gap. The nonce, a number used once (Lesson 9.9), makes old answers useless, because a recorded signature covers a different number. The chip ID makes each answer good for one unit, so a signature leaked from a repair bench unlocks nothing else. The private key never leaves the maker, so knowing exactly how the protocol works, as you now do, does not help anyone forge an answer.
 
 The lock follows the chip through its life. Chips usually leave the chip factory open for manufacturing tests, are locked as the last step before a product ships, and may enter a return-for-analysis state, reachable only through authentication, if a unit comes back broken. Each step is a one-way fuse change. The hardware that reads those fuses is built to fail closed: designers assume someone will try to disturb the check itself, so any fuse reading other than a clean “open” leaves debug off.
 
 A product shipped with its debug port open is a well-known and often repeated mistake. Fixing it costs almost nothing at the factory and is nearly impossible once the devices are in customers’ hands. Development boards sold for learning embedded programming are the opposite case: they leave SWD open on purpose and document it, because their owners are the developers.
 
-The JTAG lab is in Lesson 14.6: a simulated two-chip scan chain that you drive one clock at a time.
+The J T A G lab is in Lesson 14.6: a simulated two-chip scan chain that you drive one clock at a time.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/14/04/

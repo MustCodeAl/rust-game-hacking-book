@@ -6,9 +6,7 @@ Section: From a device to an action.
 
 Input passes through three layers, and each one changes what the value means:
 
-Diagram. From device events key W goes down; left stick reads 0.8 up to input state W is down; stick axis is 0.8. From input state W is down; stick axis is 0.8 to bindings W or stick up means MoveForward. From bindings W or stick up means MoveForward to actions MoveForward equals 1.0 or 0.8. From actions MoveForward equals 1.0 or 0.8 to game rules move the player.
-
-The device layer is what the operating system reports: a key went down, the mouse moved 12 counts (Explanation: A count is the smallest step a mouse can report. A mouse set to 800 counts per inch reports 800 counts when it moves one inch, so 12 counts is 12 divided by 800 equals 0.015 inch.), a stick reads 0.8. The state layer is the engine’s own copy of those facts, refreshed once per frame. The action layer is what the game’s rules use, and it is the only layer that knows the player’s settings. That is why one game accepts a keyboard, a controller, and a remapped key for the same jump, and why the rules never mention a key.
+The device layer is what the operating system reports: a key went down, the mouse moved 12 counts, a stick reads 0.8. The state layer is the engine’s own copy of those facts, refreshed once per frame. The action layer is what the game’s rules use, and it is the only layer that knows the player’s settings. That is why one game accepts a keyboard, a controller, and a remapped key for the same jump, and why the rules never mention a key.
 
 Section: Buttons: down, just pressed, and just released.
 
@@ -28,16 +26,6 @@ ExampleA key held for 150 milliseconds at 60 frames a second
 
 A frame is 1000 divided by 60 equals 16.67 milliseconds, so frame 6 starts at 6 times 16.67 equals 100.0 milliseconds. The key goes down at 105 milliseconds, during frame 6, and comes up at 255 milliseconds, during frame 15:
 
-Table columns: Frame; Starts at; Down now; Just pressed; Just released.
-
-Frame: 6; Starts at: 100.0 milliseconds; Down now: no; Just pressed: no; Just released: no.
-
-Frame: 7; Starts at: 116.7 milliseconds; Down now: yes; Just pressed: yes; Just released: no.
-
-Frame: 8 to 15; Starts at: 133.3 to 250.0 milliseconds; Down now: yes; Just pressed: no; Just released: no.
-
-Frame: 16; Starts at: 266.7 milliseconds; Down now: no; Just pressed: no; Just released: yes.
-
 The game saw the press 116.7 minus 105 equals 11.7 milliseconds after it happened, and it saw the key down on frames 7 to 15, which is 9 frames and 9 times 16.67 equals 150 milliseconds, the time it was really held. The delay between the press and the game noticing is at most one frame.
 
 Holding a key also makes the operating system send repeated key-down events, which is how a text box types a held letter many times. Games ignore the repeats: the key is simply still down.
@@ -55,14 +43,6 @@ Lesson 4.2 showed that a fixed step is a slice of game time, so a frame can run 
 ExampleA press that no step sees
 
 The game draws at 144 frames a second, so a frame is 1000 divided by 144 equals 6.94 milliseconds, and runs its rules in 60 Hz steps, which are due every 16.67 milliseconds. The engine runs the steps that are owed at the start of each frame:
-
-Table columns: Frame; Starts at; Steps run; Just pressed in this frame.
-
-Frame: 3; Starts at: 20.8 milliseconds; Steps run: 1 (the one due at 16.7 milliseconds); Just pressed in this frame: no.
-
-Frame: 4; Starts at: 27.8 milliseconds; Steps run: 0; Just pressed in this frame: yes.
-
-Frame: 5; Starts at: 34.7 milliseconds; Steps run: 1 (the one due at 33.3 milliseconds); Just pressed in this frame: no.
 
 The press is visible on frame 4 only, and frame 4 runs no step. By frame 5 the edge is gone, and the step that runs there sees nothing. If instead two steps had run on frame 4, both would have seen the same press, and a jump would have happened twice.
 
@@ -106,14 +86,6 @@ Section: Keys: where a key is and what it types.
 
 A keyboard key has two identities. Its position is a fixed place on the board, reported as a scan code or key code. The character it types depends on the layout the player has selected. On a QWERTY keyboard the top letter row reads Q W E R T Y. On an AZERTY keyboard, the layout common in France, the same row reads A Z E R T Y, so the physical key where QWERTY has W types Z:
 
-Table columns: ; QWERTY; AZERTY.
-
-Column 1: Label on the key in the W position; QWERTY: W; AZERTY: Z.
-
-Column 1: Scan code of that physical key; QWERTY: hexadecimal 1 1; AZERTY: hexadecimal 1 1.
-
-Column 1: Windows virtual-key code it produces; QWERTY: hexadecimal 5 7 (W); AZERTY: hexadecimal 5 A (Z).
-
 Games bind movement to key positions, so the four keys under the left hand are forward, left, back, and right on any layout, with different letters printed on them. Text boxes want the opposite: they read characters, so a French player types French. A game that checks the virtual-key code for W breaks on the AZERTY keyboard, because the key that sends it is somewhere else.
 
 Languages with thousands of characters are typed through an input method editor, or IME. The player composes a word in a pending buffer, sees suggestions, and confirms one. The game receives the pending text, so it can show it underlined, and then the final text once the player confirms. While composing, the keys go to the IME rather than to the game as ordinary key events, which is why a text box needs to switch IME mode on, and gameplay must not.
@@ -156,7 +128,7 @@ A rebinding screen is a small loop on top of the same table: wait for the next p
 
 Section: Where input sits in memory.
 
-The state layer is usually a few small structures: an array with one entry per key, a second array holding last frame’s copy for the edge test, a pair of numbers for mouse motion, and the axis values as floats. A Windows game that indexes its key array by virtual-key code finds W at index hexadecimal 5 7, which is 87, the ASCII code of the letter W.
+The state layer is usually a few small structures: an array with one entry per key, a second array holding last frame’s copy for the edge test, a pair of numbers for mouse motion, and the axis values as floats. A Windows game that indexes its key array by virtual-key code finds W at index hexadecimal 5 7, which is 87, the A S C I I code of the letter W.
 
 You can find such an array with the same filtering idea as the gold scan in Lesson 1.9, except that the value is not shown on screen:
 
@@ -171,20 +143,6 @@ Repeat the hold and the release until a handful of addresses are left.
 Hold the key and read the survivors: the right one holds a non-zero value while the key is down and 0 when it is up. If the game keeps one entry per key, the neighbouring bytes belong to the neighbouring key codes.
 
 Input at a glance
-
-Table columns: Kind; What the game gets; When it changes; A common mistake.
-
-Kind: Button; What the game gets: down now, just pressed, just released; When it changes: on a press or a release; A common mistake: reading an edge in a step that did not run that frame.
-
-Kind: Axis; What the game gets: a number from minus 1 to 1; When it changes: continuously; A common mistake: no dead zone, so the character drifts.
-
-Kind: Key position; What the game gets: a scan code; When it changes: when that physical key moves; A common mistake: binding to a letter instead, which breaks on other layouts.
-
-Kind: Typed text; What the game gets: a string of characters; When it changes: after composing; A common mistake: using key codes for a text box.
-
-Kind: Cursor; What the game gets: window coordinates; When it changes: whenever the pointer moves; A common mistake: using it for looking around, where it runs out of room.
-
-Kind: Motion; What the game gets: counts since last report; When it changes: whenever the mouse moves; A common mistake: forgetting the sensitivity scale.
 
 Lesson 6.7 shows how Windows delivers these events to a program and how a local tool can read or send them.
 

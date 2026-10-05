@@ -14,8 +14,6 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Each exercise follows the same research loop:
 
-Diagram. From state the control's promise to find the unchecked assumption. From find the unchecked assumption to reproduce the gap in the toy. From reproduce the gap in the toy to move the check to the real effect. From move the check to the real effect to add a regression test.
-
 Section: Recipe 1: test a name-based rule with an equivalent command.
 
 The toy has three commands:
@@ -35,8 +33,6 @@ Ask the weak policy about WriteMemory; it says no.
 Ask about ApplyPatch; it says yes.
 
 Observe that the second spelling reaches the same kind of state-changing effect the policy claimed to prevent.
-
-Diagram. From WriteMemory to blocked. The connection is labelled: name matches the denylist. From ApplyPatch to allowed — but changes state too. The connection is labelled: name is not on the denylist.
 
 The weakness is coverage by spelling. Adding more forbidden names would become an endless denylist. Classify the effect instead:
 
@@ -66,8 +62,6 @@ In the supplied test hook, replace the build ID with 8.
 
 Observe that the weak function still writes hexadecimal C C because it uses an old decision.
 
-Diagram labels, in drawing order: target; weak_toctou_patch; between_check_and_use(target); changes build_id to 8; still writes hexadecimal C C,; using the now-stale build check; read build_id (7 equals expected_build); target.byte equals hexadecimal C C.
-
 This is a time-of-check/time-of-use gap. The repair validates the build and expected old byte immediately beside the side effect:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
@@ -90,8 +84,6 @@ Inspect the event list; it is empty.
 
 A reviewer looking only at the log cannot distinguish “nothing happened” from “a prohibited request was blocked.”
 
-Diagram. From command arrives to effect_based_policy?. From effect_based_policy? to events.push(allowed). The connection is labelled: allowed. From effect_based_policy? to return Denied, no event recorded. The connection is labelled: denied — old code. From effect_based_policy? to events.push(Denied). The connection is labelled: denied — fixed code.
-
 This is a telemetry gap, not a control bypass. It still matters because a denial that leaves no event hides repeated mistakes and makes the control difficult to test. The fix computes the decision first and then logs it, whichever way it went:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
@@ -102,35 +94,11 @@ Section: The anatomy of a bypass.
 
 Published evasion write-ups are usually operational recipes. Underneath the commands, each one describes the same parts, and this lab’s bypass contains every one of them:
 
-Table columns: Part; In this lab.
-
-Part: The promise the control made; In this lab: Read-only mode prevents state change.
-
-Part: What the control actually checked; In this lab: One command name.
-
-Part: The equivalent effect it missed; In this lab: Another command reached the same sink.
-
-Part: The observable result; In this lab: The weak policy returned true for ApplyPatch.
-
-Part: Where the invariant belongs; In this lab: At the shared state-changing boundary.
-
-Part: The regression test that keeps it fixed; In this lab: Every ChangesState variant is denied in read-only mode.
-
 Described by its parts, a bypass is a gap between what a control promised and what it checked. That is something a defender can close, and nothing in the description is a step that could be aimed at someone else’s machine.
 
 Section: A detector observes proxies, not intent.
 
 No program can directly read a person’s intent. A detector measures observable signals—for example a debug flag, an unusual timing gap, a changed byte, an unexpected handle, or a forbidden state transition—and applies a rule. That rule can be wrong in two directions:
-
-Table columns: Outcome; Plain-English meaning.
-
-Outcome: True positive; Plain-English meaning: The measured signal and prohibited condition are both present.
-
-Outcome: False positive; Plain-English meaning: A harmless tool or environment produces the same signal.
-
-Outcome: True negative; Plain-English meaning: Normal behavior is accepted.
-
-Outcome: False negative; Plain-English meaning: The prohibited effect occurs without the expected signal.
 
 This is why a strong repair protects the important effect boundary instead of trusting one environmental clue. In the toy lab, “state must not change in read-only mode” is an invariant. A process name, timing threshold, or single flag is only a signal that often accompanies a violation; it is not the invariant itself.
 

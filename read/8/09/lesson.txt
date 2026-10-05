@@ -4,7 +4,7 @@ Section: A third option between a window and an overlay.
 
 Lesson 6.8 put the menu in its own window, which is the right default: it cannot corrupt the game’s graphics state, and you can close the game without losing it.
 
-But you have already met a function that draws text inside the game. In Lesson 3.8 you traced Wesnoth’s print function; Lesson 6.4 then used its call site for a verified, reversible text hook. In Lesson 7.9 you called AssaultCube’s print function at hexadecimal 0 0 4 1 9 8 8 0 to label players. That function already knows the font, the scale, the screen size, and the right moment in the frame to draw. Calling it is the cheapest way to put a menu on screen, because the hard graphics work is done and you are only supplying strings.
+But you have already met a function that draws text inside the game. In Lesson 3.8 you traced Wesnoth’s print function; Lesson 6.4 then used its call site for a verified, reversible text hook. In Lesson 7.9 you called AssaultCube’s print function at this value to label players. That function already knows the font, the scale, the screen size, and the right moment in the frame to draw. Calling it is the cheapest way to put a menu on screen, because the hard graphics work is done and you are only supplying strings.
 
 The trade is that you are now running inside the game’s render path, so the hook must finish quickly. A file read, sleep, or blocking channel receive there delays the game’s next frame; Lesson 4.11 measures the same cost in a per-frame recorder.
 
@@ -34,15 +34,11 @@ Section: Hook a per-frame site, then call the text function.
 
 The obvious idea is to hook the text function itself. That is the one thing that cannot work:
 
-Diagram. From your hook runs to you want to draw a menu line. From you want to draw a menu line to you call the text function. From you call the text function to ...which is hooked. From ...which is hooked to your hook runs.
-
 The hook calls the text function, and the text function runs the hook again: recursion with no base case, the same failure as a wrapper that forwards to itself in Lesson 7.3. Every nested call adds a stack frame, so the stack overflows while the hook is still trying to draw its first menu line.
 
 Hook a site that runs once per frame instead, and call the text function from there as an ordinary function:
 
-Diagram. From Game draws its HUD to Your detour at a per-frame site. From Your detour at a per-frame site to Replay the displaced instructions. From Replay the displaced instructions to Call the text function once per menu line. From Call the text function once per menu line to Return to the game.
-
-Lesson 7.9 already identified such a site in AssaultCube: the final print hook at hexadecimal 0 0 4 0 B E 7 E, resuming at hexadecimal 0 0 4 0 B E 8 3. Drawing there puts your lines in the same pass as the game’s own HUD, so they inherit its ordering and never appear underneath the world.
+Lesson 7.9 already identified such a site in AssaultCube: the final print hook at this value, resuming at this value. Drawing there puts your lines in the same pass as the game’s own HUD, so they inherit its ordering and never appear underneath the world.
 
 Section: Reconstruct the contract before you call it.
 
@@ -50,7 +46,7 @@ Calling a function you found is Lesson 6.1’s problem, not a new one. Before th
 
 which arguments it takes, and in what order — typically a screen position and a string;
 
-where those arguments go, which for a 32-bit game usually means cdecl on the stack, or thiscall with the renderer object in ecx;
+where those arguments go, which for a 32-bit game usually means cdecl on the stack, or thiscall with the renderer object in e c x;
 
 what it returns, if anything;
 
@@ -58,19 +54,17 @@ whether it copies the string or merely stores the pointer.
 
 That last question is the one that bites. If the function keeps the pointer and draws later in the frame, a string you built on the stack is gone by then:
 
-Code example. The code’s comments explain: ❌ The buffer dies at the end of this function. If the game reads the// pointer later in the frame, it reads freed stack space.let line equals format!("radar [on]");draw_text(10, 10, line.as_ptr());
+Code example. The code’s comments explain: ❌ The buffer dies at the end of this function. If the game reads the pointer later in the frame, it reads freed stack space.
 
 Keep an owned buffer alive for at least as long as the frame, and give the function a pointer into that:
 
-Code example. The code’s comments explain: ✅ `lines` outlives the call, and the trailing zero is explicit because a// C-style text function reads until it finds one.struct MenuText { lines: Vec<std::ffi::CString>,}
+Code example. The code’s comments explain: ✅ `lines` outlives the call, and the trailing zero is explicit because a C-style text function reads until it finds one.
 
 CString is the same tool Lesson 3.8 used at the C boundary, and for the same reason: it guarantees the terminating zero and rejects interior zero bytes instead of silently truncating your text.
 
 Section: Colour is usually a marker inside the string.
 
 Many engines let a string carry its own formatting. The mechanism is nearly always the same: a marker byte the renderer watches for, followed by an index that selects a palette entry. AssaultCube uses the form feed character, hexadecimal 0 C, followed by a digit.
-
-Labelled memory diagram. cell 1: 0C; cell 2: 33; cell 3: 52; cell 4: 61; cell 5: 64; cell 6: 61; cell 7: 72. Groups: marker (form feed); palette index '3'; visible text: Radar. AssaultCube's colour marker in front of the string Radar. The marker and index are consumed by the renderer, not drawn, so these 7 bytes show only 5 visible characters.
 
 Two consequences follow, and both matter.
 
@@ -80,7 +74,7 @@ And the exact marker is a fact about one build. Confirm it by drawing a string c
 
 Section: The menu itself is a small state machine.
 
-Everything above is about getting characters on screen. The part that actually misbehaves is the bookkeeping, so text_menu_lab.rs models it in portable safe Rust with no graphics API, application programming interface, involved:
+Everything above is about getting characters on screen. The part that actually misbehaves is the bookkeeping, so text_menu_lab.rs models it in portable safe Rust with no graphics A P I, application programming interface, involved:
 
 Terminal window
 
@@ -95,10 +89,6 @@ Code example. The surrounding prose explains this example; the full lesson conta
 When cursor is 0, 0 - 1 on an unsigned integer panics in a debug build and produces usize::MAX in a release build, which then indexes far outside the list. Handle the boundary explicitly and the intent is visible:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-Labelled memory diagram. 0: item 0, highlighted; 1: item 1; 2: item 2; 3: item 3. For example, four menu rows with the cursor on the first. Pressing up should wrap to the last row, not compute 0 - 1 on an unsigned index.
-
-Labelled memory diagram. 0: item 0; 1: item 1; 2: item 2; 3: item 3, highlighted. After the explicit boundary check, the cursor wraps to the last row instead of underflowing.
 
 Section: GetAsyncKeyState reports a level, not a press.
 
@@ -118,9 +108,7 @@ The menu should also own only its own state. Keep the same split Lesson 6.8 used
 
 Section: Restore the site, not just the feature.
 
-Closing the menu is a display change. Unloading the tool is a lifetime change, and Lesson 7.12’s ordering applies without modification: stop the worker, wait for it to leave the hooked path, restore the displaced bytes, then release the DLL, dynamic link library,. While an in-flight frame is still executing the detour, the hook is draining: no new calls should enter, but the current call must finish before its code is removed. Lesson 6.10 established this lifetime rule for a general hook manager; the render hook is another application of it.
-
-Silent video demonstration: Combined tools running in AssaultCube. The original multihack recording combines features from the preceding AssaultCube lessons. Compare their visible effects with the independent settings a menu exposes: changing a setting and drawing that setting are separate responsibilities.
+Closing the menu is a display change. Unloading the tool is a lifetime change, and Lesson 7.12’s ordering applies without modification: stop the worker, wait for it to leave the hooked path, restore the displaced bytes, then release the D L L, dynamic link library. While an in-flight frame is still executing the detour, the hook is draining: no new calls should enter, but the current call must finish before its code is removed. Lesson 6.10 established this lifetime rule for a general hook manager; the render hook is another application of it.
 
 Section: Scope.
 

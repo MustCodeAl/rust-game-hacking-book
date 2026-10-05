@@ -2,21 +2,11 @@ Windows Input: Polling, Events, and Messages
 
 Section: “Send a key” can mean three different things.
 
-Our DLL, dynamic link library, now has a controlled lifecycle, and the scanner can do work off the game thread. A local tool also needs a deliberate way to start or stop a feature. Pressing a menu hotkey, sending a synthetic key to an offline game, and calling a window procedure solve different problems, even though all three sound like “input.” Lesson 6.6 explained what a game does with input once it has arrived: the three layers of device, state, and action, and why presses are edges. This lesson is about the ways Windows delivers that input and the ways a tool can read or send it.
+Our D L L, dynamic link library, now has a controlled lifecycle, and the scanner can do work off the game thread. A local tool also needs a deliberate way to start or stop a feature. Pressing a menu hotkey, sending a synthetic key to an offline game, and calling a window procedure solve different problems, even though all three sound like “input.” Lesson 6.6 explained what a game does with input once it has arrived: the three layers of device, state, and action, and why presses are edges. This lesson is about the ways Windows delivers that input and the ways a tool can read or send it.
 
 Windows has several input paths because programs receive interaction in different ways:
 
-Table columns: Path; What it really does; Good course use; Common surprise.
-
-Path: GetAsyncKeyState; What it really does: Samples the current physical key state; Good course use: Toggle a local tool menu; Common surprise: It does not wait for an event.
-
-Path: SendInput; What it really does: Inserts keyboard or mouse events into the system input stream; Good course use: Drive an offline game while its window is active; Common surprise: It does not target one HWND.
-
-Path: SendMessageW / PostMessageW; What it really does: Calls or queues a message for a window procedure; Good course use: Control a window you created or a documented local test window; Common surprise: Many games read Raw Input or device state instead.
-
 Each path lands on a different destination, which is the real reason to pick carefully:
-
-Diagram. From your code asks: is this key down right now? to desktop-wide physical key state. From your code inserts an event into the system input stream to whichever window currently has keyboard focus. From your code calls or queues a message for a window procedure to one specific HWND's window procedure.
 
 There is no general Win32 function named SendKey. .NET’s SendKeys is a separate convenience layer, while the old keybd_event function has been superseded by SendInput. Naming the path correctly prevents a lot of confused debugging. ⌨️
 
@@ -24,7 +14,7 @@ Section: State, events, and messages are not interchangeable.
 
 GetAsyncKeyState answers a state question: “is this key down at the instant I sample it?” SendInput submits input events to the desktop input pipeline. SendMessageW invokes a window-procedure message contract. Similar names do not put them on the same path.
 
-A game may combine several paths: Raw Input for aiming, ordinary window messages for menus, and polled key state for a developer console. Observe how the target consumes input before choosing an API, application programming interface,. Sending WM_KEYDOWN to a window that reads device state is not a failed keyboard event; it is the wrong abstraction.
+A game may combine several paths: Raw Input for aiming, ordinary window messages for menus, and polled key state for a developer console. Observe how the target consumes input before choosing an A P I, application programming interface. Sending WM_KEYDOWN to a window that reads device state is not a failed keyboard event; it is the wrong abstraction.
 
 Always pair a down transition with an up transition, including cancellation and error paths. A state machine should own which synthetic inputs are currently held so shutdown can release exactly those inputs.
 
@@ -40,15 +30,9 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 The waiting path and the continuously updating path look different:
 
-Diagram. From wait for a message: the thread sleeps to handle it. From handle it to wait for a message: the thread sleeps.
-
-Diagram. From handle waiting messages; continue at once if there are none to update the world. From update the world to draw the frame. From draw the frame to handle waiting messages; continue at once if there are none.
-
 TranslateMessage can post character messages derived from key messages; DispatchMessage sends a retrieved message to its window procedure. PeekMessage reports no available queued message without waiting, which is why the game-style loop can continue its own work. The exact handling of Raw Input and other message types varies by application; do not assume every game consumes WM_KEYDOWN as its gameplay input. See Microsoft’s GetMessageW and PeekMessageW references for their return and queue rules.
 
 The callback must also return promptly. While a window procedure is busy reading a large file or waiting on a network request, other messages for windows on that thread cannot be handled. The window may stop repainting or responding to input. Microsoft’s window-procedure guidance explains this bottleneck. The same concern appears when a hook adds work to a game’s time-sensitive path: move slow work elsewhere and make overload visible, as Lesson 4.11 does for a recorder.
-
-Labelled memory diagram. being handled: WM_KEYDOWN, reading a large file, highlighted; waiting: WM_MOUSEMOVE; waiting: WM_PAINT; waiting: WM_CLOSE. Groups: these messages wait until the first handler returns. One thread's message queue. A slow first handler delays movement, repainting, and close handling.
 
 Polling is the other side of this distinction. If no one sends your tool a message when the game’s gold changes, the tool can check the value on its own schedule. It does work even when nothing changed. Lesson 4.10 shows how to compare successive snapshots so many polls produce one meaningful event instead of many repeated actions.
 
@@ -74,17 +58,13 @@ Section: Read a hotkey with GetAsyncKeyState.
 
 The current windows crate exposes GetAsyncKeyState as an unsafe function taking a virtual-key number and returning an i16. Windows puts “down right now” in the most significant bit. Because that is the sign bit of an i16, a negative result means down:
 
-Labelled memory diagram. bit 15 (sign): 1 if down now, highlighted; bits 14-1: unused here; bit 0: stale “pressed since last call” flag. GetAsyncKeyState returns an i16. A negative result (bit 15 set) means the key is down right now. Bit 0 is kept for old compatibility, but another process's call can consume it first, which is why the edge detector below is built from bit 15 instead.
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: 🛡️ SAFETY: every VIRTUAL_KEY value is a valid integer query. This call only samples desktop input state and does not retain any borrowed pointer.
 
 Do not use result & 1 not equal to 0 as a reliable “pressed once” event. Microsoft keeps that low bit for old compatibility, but another process can observe it first. Build your own edge detector from the trustworthy high bit:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Diagram labels, in drawing order: key goes down, pressed_now returns true; key stays down, pressed_now returns false; key goes up; key stays up; Up; Down.
-
-Poll at a modest rate such as every 8–16 milliseconds. A tight loop wastes a CPU, central processing unit, core. A zero result can also mean the desktop is inactive or Windows integrity rules prevent the query; “zero” does not prove a keyboard is broken.
+Poll at a modest rate such as every 8–16 milliseconds. A tight loop wastes a C P U, central processing unit, core. A zero result can also mean the desktop is inactive or Windows integrity rules prevent the query; “zero” does not prove a keyboard is broken.
 
 Sampling can miss a very short press between polls. That is a property of polling, not a reason to trust the ambiguous low bit. For a tool hotkey, choose a comfortable key and polling interval, then test focus changes, key repeat, and shutdown while held.
 
@@ -92,11 +72,11 @@ Section: Gate synthetic input to the intended window.
 
 SendInput writes to the system input stream. It does not accept an HWND, so check that the target owns the foreground window before sending:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: 🛡️ These calls return copied identifiers; neither keeps our pointers.
 
 Then send a balanced key-down/key-up pair:
 
-Code example. The code’s comments explain: 🛡️ SAFETY: `events` is initialized and its element size matches INPUT. let sent equals unsafe { SendInput(&events, input_size) }; anyhow::ensure!(sent equals events.len() as u32, "sent {sent} of 2 events"); Ok(())}
+Code example. The code’s comments explain: 🛡️ SAFETY: `events` is initialized and its element size matches INPUT.
 
 A key event is an INPUT whose type says “keyboard” and whose union holds a KEYBDINPUT. The code above sets two of its fields and leaves the rest at zero:
 
@@ -111,16 +91,6 @@ dwFlagsflagsdefault 0
 Zero means the key goes down. KEYEVENTF_KEYUP means it is released, which is why the code sends one of each. KEYEVENTF_SCANCODE switches the event to the hardware scan code in wScan instead.
 
 Additional detail: The four flags and how they combine.
-
-Table columns: Flag; Value; Meaning.
-
-Flag: KEYEVENTF_EXTENDEDKEY; Value: hexadecimal 0 0 0 1; Meaning: the scan code carries the hexadecimal E 0 prefix that extended keys use, such as the arrow keys in their own cluster and the right-hand Ctrl and Alt.
-
-Flag: KEYEVENTF_KEYUP; Value: hexadecimal 0 0 0 2; Meaning: the key is released.
-
-Flag: KEYEVENTF_UNICODE; Value: hexadecimal 0 0 0 4; Meaning: wScan holds a Unicode character instead of a key, and wVk must be zero.
-
-Flag: KEYEVENTF_SCANCODE; Value: hexadecimal 0 0 0 8; Meaning: wScan identifies the key, and wVk is ignored.
 
 Flags are bits, so they combine with OR. Releasing a key by scan code sets two of them: hexadecimal 0 0 0 8 | hexadecimal 0 0 0 2 equals hexadecimal 0 0 0 A, which is 8 + 2 equals 10.
 
@@ -138,15 +108,13 @@ An extra value the receiving window can read back. Almost nothing uses it.
 
 Always release a key or mouse button during shutdown, even if a feature fails. SendInput is subject to User Interface Privilege Isolation (UIPI): Windows blocks input from a lower-integrity process into a window owned by a higher-integrity one, such as a game running as administrator while your tool does not. Windows does not tell you why: neither SendInput’s return value nor GetLastError identifies UIPI as the cause, and the target window simply never reacts, which looks identical to a wrong virtual-key code or an unfocused window.
 
-Diagram. From SendInput(events) to target window's integrity level vs. your process's integrity level. From target window's integrity level vs. your process's integrity level to event reaches the window normally. The connection is labelled: equal or lower. From target window's integrity level vs. your process's integrity level to UIPI blocks the event. The connection is labelled: higher, e.g. game runs as admin. From UIPI blocks the event to nothing says UIPI was the cause: the window simply never reacts.
-
 If synthetic input silently does nothing, check whether the target is elevated before suspecting your own code. Some games also intentionally use Raw Input or device APIs that do not behave like a normal text box. Do not respond by repeatedly flooding input.
 
 Section: SendMessageW is not simulated keyboard input.
 
 Every Win32 window has a window procedure that receives numbered messages. SendMessageW invokes that procedure synchronously and waits for it to finish. PostMessageW puts a message on the owning thread’s queue and returns. For a window outside your process, a bounded wait is usually safer than an unlimited one:
 
-Code example. The code’s comments explain: 🛡️ This custom message belongs to our own lab window. It carries only // integer values—never a pointer into this process. let delivered equals unsafe { SendMessageTimeoutW( window, WM_LAB_REFRESH, WPARAM(0), LPARAM(0), SMTO_ABORTIFHUNG, 100, Some(&mut message_result), ) }; anyhow::ensure!(delivered.0 not equal to 0, "lab window did not answer in 100 milliseconds"); Ok(message_result)}
+Code example. The code’s comments explain: 🛡️ This custom message belongs to our own lab window. It carries only integer values—never a pointer into this process.
 
 Use PostMessageW when the receiver’s documented contract says queuing is correct and no immediate result is required. Never pass a local pointer in LPARAM to an unrelated process: Windows automatically marshals only certain system messages below WM_USER. A custom WM_APP message is appropriate when both sides share a pointer-free contract.
 
@@ -158,33 +126,13 @@ Choose by question instead of memorizing a giant list:
 
 Other input and window APIs
 
-Table columns: Question; Relevant APIs; Lesson rule.
-
-Question: Which top-level window belongs to my PID, process identifier,?; Relevant APIs: EnumWindows, GetWindowThreadProcessId; Lesson rule: Match the process, not a changeable title.
-
-Question: Where is the drawable client area on screen?; Relevant APIs: GetClientRect, ClientToScreen, GetDpiForWindow; Lesson rule: Recalculate after move, resize, or DPI change.
-
-Question: Is the target active?; Relevant APIs: GetForegroundWindow; Lesson rule: Pause synthetic input when it is not.
-
-Question: Which process/module build is this?; Relevant APIs: CreateToolhelp32Snapshot, Process32FirstW, Module32FirstW; Lesson rule: Verify identity before using offsets.
-
-Question: What access does the tool truly need?; Relevant APIs: OpenProcess; Lesson rule: Ask for read/query rights before write rights.
-
-Question: Can this remote range be read?; Relevant APIs: VirtualQueryEx, ReadProcessMemory; Lesson rule: Inspect the region, then copy bounded bytes.
-
-Question: Did patched code become executable correctly?; Relevant APIs: VirtualProtectEx, FlushInstructionCache; Lesson rule: Save/restore protection and verify every byte.
-
-Question: How do I observe execution?; Relevant APIs: DebugActiveProcess, WaitForDebugEvent, ContinueDebugEvent; Lesson rule: Continue every event exactly once.
-
-Question: How do two local components exchange data?; Relevant APIs: named pipes, file mappings, events; Lesson rule: Frame, authenticate, bound, and close resources.
-
-An HWND is also called a handle, but it is owned by the window manager and is not closed with CloseHandle. This is why “wrap every H... value in the same RAII type” is wrong. Learn the creation, borrowing, and destruction contract for each API family.
+An HWND is also called a handle, but it is owned by the window manager and is not closed with CloseHandle. This is why “wrap every H... value in the same RAII type” is wrong. Learn the creation, borrowing, and destruction contract for each A P I family.
 
 Section: A controlled lab checklist.
 
 Start only the course’s local/offline target.
 
-Discover its window by PID and confirm it is foreground.
+Discover its window by P I D, process identifier, and confirm it is foreground.
 
 Use Insert only to toggle your menu; detect the rising edge yourself.
 

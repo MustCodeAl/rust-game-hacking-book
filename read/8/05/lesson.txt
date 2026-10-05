@@ -6,8 +6,6 @@ Section: Divide the scan into independent ranges.
 
 The simple pattern scanner is intentionally single-threaded. Its next advanced step is not “put every Windows call on a thread.” The safe boundary is:
 
-Diagram. From Windows process to Immutable local snapshots. The connection is labelled: one bounded copy per region. From Immutable local snapshots to Worker 1. From Immutable local snapshots to Worker 2. From Immutable local snapshots to Worker N. From Worker 1 to Merge. From Worker 2 to Merge. From Worker N to Merge. From Merge to Sort, deduplicate, require one.
-
 Only the capture phase touches the running Wesnoth process. Workers scan ordinary Vec<u8> buffers owned by the scanner.
 
 That separation improves more than speed:
@@ -32,20 +30,6 @@ progress asks, “What useful ending must eventually happen?”
 
 For this scanner:
 
-Table columns: Promise; Concrete game-tool rule.
-
-Promise: safety; Concrete game-tool rule: no worker reads changing remote memory.
-
-Promise: safety; Concrete game-tool rule: the global result cap is never exceeded.
-
-Promise: safety; Concrete game-tool rule: a found address stays inside its copied region.
-
-Promise: progress; Concrete game-tool rule: every worker eventually sees cancellation or an empty work queue.
-
-Promise: progress; Concrete game-tool rule: the main thread joins every worker before publishing results.
-
-Promise: progress; Concrete game-tool rule: one worker panic becomes an error instead of an endless wait.
-
 “Uses atomics” is not a complete concurrency argument. Name which safety fact each atomic protects and which condition lets each loop finish.
 
 Section: Copy only the intended code.
@@ -66,8 +50,6 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 No region is handed out twice. When the index passes the slice, the worker finishes.
 
-Diagram labels, in drawing order: next_region (AtomicUsize); Worker 2; Worker 1; Each index is handed out exactly once,; to whichever worker asks first.; fetch_add(1); 0; 1; 2.
-
 Fetching the next index when a worker becomes free is dynamic scheduling. It is better than permanently giving worker 1 the first quarter of regions and worker 2 the second quarter: a worker that receives several tiny regions can continue helping while another scans a large one.
 
 Region sizes can still be badly uneven. If measurement later justifies splitting one large snapshot into fixed-size chunks, adjacent chunks must overlap by pattern.len() - 1 bytes or a pattern crossing the boundary can disappear. The merge step must then remove duplicate addresses from the overlap. Faster scheduling is not correct if it creates blind spots.
@@ -85,8 +67,6 @@ The scanner reserves each result through one atomic counter:
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 fetch_update performs “check below cap and increment” as one atomic operation. When the cap is full, the worker sets a shared cancellation flag. Other workers notice and stop.
-
-Diagram. From worker finds a match to reserve_match: counter less than MAX_MATCHES?. From reserve_match: counter less than MAX_MATCHES? to record the address. The connection is labelled: yes, fetch_update succeeds. From reserve_match: counter less than MAX_MATCHES? to cancelled.store(true, Release). The connection is labelled: no, cap already reached. From cancelled.store(true, Release) to every worker checks cancelled.load(Acquire) and stops.
 
 The memory ordering communicates two small state transitions:
 
@@ -116,7 +96,7 @@ Section: Complete buildable tool.
 
 Additional detail: Complete lab source: parallel_pattern_scanner.rs.
 
-Code example. The code’s comments explain: 🔀 Remote memory is copied before parallel work begins. Workers receive // immutable local slices, so no process handle or changing page is shared. let mut matches equals thread::scope(|scope| to anyhow::Result<Vec<usize>> { let mut workers equals Vec::new(); for _ in 0..worker_count { let snapshots equals &snapshots; let next_region equals &next_region; let match_count equals &match_count; let cancelled equals &cancelled; workers.push(scope.spawn(move || to anyhow::Result<Vec<usize>> { let mut local equals Vec::new(); loop { if cancelled.load(Ordering::Acquire) { break; } let index equals next_region.fetch_add(1, Ordering::AcqRel); let Some(region) equals snapshots.get(index) else { break; };
+Code example. The code’s comments explain: 📏 VirtualQueryEx can return a run wider than the module; clip it. ⚠️ The process can change a page between query and copy. Skip that observation rather than feeding a partial buffer to worker threads. 🔀 Remote memory is copied before parallel work begins. Workers receive immutable local slices, so no process handle or changing page is shared. ✅ Parallel completion order is nondeterministic; sorting makes output and later uniqueness checks repeatable.
 
 The source is also available as parallel_pattern_scanner.rs.
 
@@ -188,6 +168,6 @@ sorting makes the returned address order reproducible;
 
 one unique match still needs semantic verification before use, however fast the scan ran.
 
-Chapter 6 starts from that verified site and asks how a small DLL, dynamic link library, can enter a supported process, redirect one call, and restore the original path.
+Chapter 6 starts from that verified site and asks how a small D L L, dynamic link library, can enter a supported process, redirect one call, and restore the original path.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/8/05/

@@ -8,8 +8,6 @@ The processor keeps the current privilege level in the lowest two bits of the cs
 
 Open any 64-bit program in x64dbg and the register panel shows cs as 0033:
 
-Labelled memory diagram. bit 7: 0; bit 6: 0; bit 5: 1; bit 4: 1; bit 3: 0; bit 2: 0; bit 1: 1, highlighted; bit 0: 1, highlighted. Groups: hex 3; hex 3; which code segment; level 11 equals 3. cs equals hexadecimal 3 3 in a 64-bit program. The upper bits choose a code segment; the lowest two bits are the current privilege level.
-
 hexadecimal 3 3 is 3 times 16 + 3 equals 51. Each hex digit stands for four bits, so hexadecimal 3 3 is 0011 0011. Its lowest two bits are 11, which is 2 + 1 equals 3: ring 3, user mode. The kernel’s own code segment is hexadecimal 1 0, which is 0001 0000; its lowest two bits are 00, ring 0.
 
 A program cannot promote itself by loading hexadecimal 1 0 into cs. The processor refuses any change of code segment that would raise the privilege level, except through a few entry points that the kernel prepared in advance. The most important of them is the syscall instruction, and the rest of this lesson follows one trip through it.
@@ -18,19 +16,15 @@ Section: One bit marks a page as the kernel’s.
 
 Lesson 11.10 said that a page-table entry’s user/supervisor bit, bit 2, decides whether ring 3 may touch the page. An entry combines the address of a physical page with flags describing that mapping. For the ordinary 4 KiB pages used here, the page address is aligned on a 4,096-byte boundary, leaving the low twelve bits available for flags. Chapter 12’s address-translation lesson will follow a complete walk; here we need only the permission flags in the lowest byte:
 
-Labelled memory diagram. bit 7: 0; bit 6: 1; bit 5: 1; bit 4: 0; bit 3: 0; bit 2: 1, highlighted; bit 1: 1; bit 0: 1. Groups: dirty; accessed; user; write; present. The lowest byte of a page-table entry for a user page, hexadecimal 6 7.
-
 hexadecimal 6 7 is 6 times 16 + 7 equals 103, and 103 equals 64 + 32 + 4 + 2 + 1, so bits 6, 5, 2, 1, and 0 are set. Bit 0 says the page is present, bit 1 that it may be written, and bit 2 that ring 3 may use it. The processor itself sets bit 5, accessed, the first time the page is used, and bit 6, dirty, the first time it is written. Bits 3, 4, and 7 control caching and are 0 here.
 
 A page that holds kernel data looks almost the same:
-
-Labelled memory diagram. bit 7: 0; bit 6: 1; bit 5: 1; bit 4: 0; bit 3: 0; bit 2: 0, highlighted; bit 1: 1; bit 0: 1. Groups: dirty; accessed; user equals 0; write; present. The same byte for a kernel page, hexadecimal 6 3. Only bit 2 differs, so ring 3 is refused.
 
 hexadecimal 6 7 minus hexadecimal 6 3 equals 4, and 4 equals 2 to the power of 2, so exactly one bit differs between these two example leaf entries: bit 2. A kernel page can be present, writable, and recently used, and still refuse access from ring 3. In a real page-table walk, the processor also considers permissions in the entries at higher levels; a single leaf byte is a teaching example, not a complete access decision.
 
 Section: The same call, one layer at a time.
 
-Take a read like the ones in Lesson 11.5: a handle to the game opened with only query and read rights, and a request for 4 bytes at address hexadecimal 0 0 5 0 1 0 0 0. Lesson 11.10 drew the whole round trip as one sequence diagram, from your tool through kernel32.dll, kernelbase.dll, and ntdll.dll to the processor and the kernel, and back. This section follows that diagram one participant at a time.
+Take a read like the ones in Lesson 11.5: a handle to the game opened with only query and read rights, and a request for 4 bytes at address shown here. Lesson 11.10 drew the whole round trip as one sequence diagram, from your tool through kernel32.dll, kernelbase.dll, and ntdll.dll to the processor and the kernel, and back. This section follows that diagram one participant at a time.
 
 Section: Inside your process.
 
@@ -38,9 +32,9 @@ ReadProcessMemory in kernel32.dll forwards to kernelbase.dll (Lesson 11.9), whic
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The first line exists because of the first thing syscall does. The Windows x64 calling convention passes a function’s first argument in rcx, but syscall overwrites rcx with the return address, so the stub moves the argument to r10 first, and the kernel knows to look for it there.
+The first line exists because of the first thing syscall does. The Windows x64 calling convention passes a function’s first argument in r c x, but syscall overwrites r c x with the return address, so the stub moves the argument to r 1 0 first, and the kernel knows to look for it there.
 
-The number in eax is a system service number, an index into the kernel’s table of routines. The numbers are internal to Windows and change between builds, which is why this book never copies one into a program. In a debugger the stub also shows a test and a jump to an older entry instruction, int 2Eh, that some configurations use; either way, the processor arrives at an address the kernel chose.
+The number in e a x is a system service number, an index into the kernel’s table of routines. The numbers are internal to Windows and change between builds, which is why this book never copies one into a program. In a debugger the stub also shows a test and a jump to an older entry instruction, int 2Eh, that some configurations use; either way, the processor arrives at an address the kernel chose.
 
 Section: Crossing over.
 
@@ -50,32 +44,26 @@ Section: Inside the kernel.
 
 Most of the kernel’s work is checking.
 
-The address ranges must lie inside user space. The request covers hexadecimal 0 0 5 0 1 0 0 0 up to hexadecimal 0 0 5 0 1 0 0 0 + 4 equals hexadecimal 0 0 5 0 1 0 0 4, and the tool’s buffer is also a user address. Both are far below the top of user space, which is a little under hexadecimal 0 0 0 0 8 0 0 0 0 0 0 0 0 0 0 0 on 64-bit Windows. A range that reached into the kernel’s half, or one long enough to run past the largest 64-bit number and wrap around to a small address, would be rejected here. The user/supervisor bit cannot do this job for the kernel: the copy runs in ring 0, and ring 0 may touch supervisor pages. So the kernel checks every range itself, and that check is why ReadProcessMemory cannot read kernel memory, whatever handle you hold.
+The address ranges must lie inside user space. The request covers this value up to this value + 4 equals this value, and the tool’s buffer is also a user address. Both are far below the top of user space, which is a little under this value on 64-bit Windows. A range that reached into the kernel’s half, or one long enough to run past the largest 64-bit number and wrap around to a small address, would be rejected here. The user/supervisor bit cannot do this job for the kernel: the copy runs in ring 0, and ring 0 may touch supervisor pages. So the kernel checks every range itself, and that check is why ReadProcessMemory cannot read kernel memory, whatever handle you hold.
 
 The handle must carry the right the operation needs. The kernel finds the handle in the tool’s handle table and reads the rights granted when the handle was opened. Reading needs PROCESS_VM_READ, which is hexadecimal 0 0 1 0. This handle was opened with PROCESS_QUERY_LIMITED_INFORMATION and PROCESS_VM_READ, so its rights are hexadecimal 1 0 0 0 + hexadecimal 0 0 1 0 equals hexadecimal 1 0 1 0. Written as bits, one byte at a time:
-
-Labelled memory diagram. 15: 0; 14: 0; 13: 0; 12: 1, highlighted; 11: 0; 10: 0; 9: 0; 8: 0. Groups: hex 1; hex 0; query. Bits 15 to 8 of the handle's rights, hexadecimal 1 0 1 0. hexadecimal 1 0 0 0 is 16 to the power of 3 equals 4,096 equals 2 to the power of 12, so it is bit 12.
-
-Labelled memory diagram. 7: 0; 6: 0; 5: 0; 4: 1, highlighted; 3: 0; 2: 0; 1: 0; 0: 0. Groups: hex 1; hex 0; write; read. Bits 7 to 0. hexadecimal 0 0 1 0 is 16 equals 2 to the power of 4, bit 4, the read right. Bit 5, the write right, is 0.
 
 The test is a single AND. The kernel keeps only the bits that are set in both the handle’s rights and the rights it needs, and allows the operation only if every needed bit survived. hexadecimal 1 0 1 0 AND hexadecimal 0 0 1 0 equals hexadecimal 0 0 1 0, the whole requirement, so the read is allowed.
 
 WriteProcessMemory needs PROCESS_VM_WRITE, hexadecimal 0 0 2 0. That is 2 times 16 equals 32 equals 2 to the power of 5, bit 5, and bit 5 of hexadecimal 1 0 1 0 is 0, so hexadecimal 1 0 1 0 AND hexadecimal 0 0 2 0 equals 0: denied, whatever the tool’s author intended. The rights were fixed when the handle was created, and nothing done with the handle afterward can add to them.
 
-Only then does it copy. The source address belongs to the game’s address space and the destination buffer belongs to the tool’s. The kernel must interpret each in the correct process context while copying; the exact internal mapping and copy strategy is a Windows implementation detail. If a page becomes unavailable during the operation, the API, application programming interface, may report a failed or partial read. The caller must check the returned byte count instead of assuming that asking for four bytes means four arrived.
+Only then does it copy. The source address belongs to the game’s address space and the destination buffer belongs to the tool’s. The kernel must interpret each in the correct process context while copying; the exact internal mapping and copy strategy is a Windows implementation detail. If a page becomes unavailable during the operation, the A P I, application programming interface, may report a failed or partial read. The caller must check the returned byte count instead of assuming that asking for four bytes means four arrived.
 
 Section: Returning.
 
-The kernel places a status code in rax and executes sysret, the reverse of syscall: the level drops back to 3, and execution resumes at the address saved in rcx, which is the ret right after syscall in the stub.
+The kernel places a status code in r a x and executes sysret, the reverse of syscall: the level drops back to 3, and execution resumes at the address saved in r c x, which is the ret right after syscall in the stub.
 
-The status is an NTSTATUS, a 32-bit code whose top two bits give its severity: 00 success, 01 information, 10 warning, 11 error. STATUS_SUCCESS is 0. STATUS_ACCESS_DENIED is hexadecimal C 0 0 0 0 0 2 2; hex C is binary 1100, so its top two bits are 11, an error. STATUS_PARTIAL_COPY is hexadecimal 8 0 0 0 0 0 0 D; hex 8 is 1000, so its top two bits are 10, a warning, because some of the bytes did arrive. kernelbase.dll translates the status into a Win32 error code for GetLastError, 5 for access denied and 299 for a partial copy, and reports success or failure to your tool.
+The status is an NTSTATUS, a 32-bit code whose top two bits give its severity: 00 success, 01 information, 10 warning, 11 error. STATUS_SUCCESS is 0. STATUS_ACCESS_DENIED is this value; hex C is binary 1100, so its top two bits are 11, an error. STATUS_PARTIAL_COPY is this value; hex 8 is 1000, so its top two bits are 10, a warning, because some of the bytes did arrive. kernelbase.dll translates the status into a Win32 error code for GetLastError, 5 for access denied and 299 for a partial copy, and reports success or failure to your tool.
 
 The book’s Windows labs are 32-bit programs. A 32-bit process on 64-bit Windows uses WoW64 (“Windows 32-bit on Windows 64-bit”) to translate the call into the native 64-bit service path. That may require converting pointer-sized arguments and structures; it is not a blind widening of every number. The two modes use different code segments, which is why cs reads 0023 in a 32-bit program and 0033 in a 64-bit one. The four-instruction stub above illustrates the native 64-bit path, not every instruction a 32-bit caller runs.
 
-Diagram walkthrough: A four-byte read crosses the privilege boundary. Step 1: Submit the user-mode request. State: 4 bytes at hexadecimal 0 0 5 0 1 0 0 0. The tool requests four bytes from game address hexadecimal 0 0 5 0 1 0 0 0 into its own buffer. Its process handle carries rights hexadecimal 1 0 1 0: limited query plus memory read. Step 2: Follow the application wrappers. State: ring 3; NtReadVirtualMemory. ReadProcessMemory passes through kernel32 and kernelbase to the ntdll stub. This remains user-mode code. The stub preserves the first argument in r10 and selects the current build’s system service number. Step 3: Enter the prepared kernel path. State: ring 0; kernel dispatch. syscall enters the address the kernel prepared. Entry code saves the user context, switches to the thread’s kernel stack, validates the service number, and dispatches the request. Step 4: Validate ranges and authority. State: hexadecimal 1 0 1 0 & hexadecimal 0 0 1 0 equals hexadecimal 0 0 1 0. The kernel checks the source range ending at hexadecimal 0 0 5 0 1 0 0 4 and the destination buffer, then checks the handle’s read right. Every needed bit survives the AND, so this handle authorizes a read; its missing write bit would still prevent a write. Step 5: Copy in the correct address spaces. State: game memory to tool buffer. The source belongs to the game and the destination to the tool. The kernel interprets both in their proper process context while copying. A page becoming unavailable can still cause a failed or partial read. Step 6: Return and check the result. State: ring 3; check bytes read. sysret resumes the user-mode stub with an NTSTATUS result. kernelbase translates failures into the Win32 interface. The tool checks success and the returned byte count before treating its buffer as four valid bytes. This follows the native 64-bit route explained above. A 32-bit caller adds the WoW64 translation stage. Crossing into ring 0 gives Windows the authority to check and copy; it does not add rights to the caller’s handle.
-
 References: process security and access rights, using NTSTATUS values, and the Intel Software Developer Manuals for syscall, privilege levels, and page-table bits.
 
-The process handle in this example authorized a copy between two processes. The processor supplied a controlled entrance; Windows checked the request inside it. The next lesson returns to the process view and saves a debugging snapshot of threads, modules, and registers in a dump. Chapter 12 then follows requests across DLL, dynamic link library, and driver boundaries, where the same checks on authority, arguments, and returned results still apply.
+The process handle in this example authorized a copy between two processes. The processor supplied a controlled entrance; Windows checked the request inside it. The next lesson returns to the process view and saves a debugging snapshot of threads, modules, and registers in a dump. Chapter 12 then follows requests across D L L, dynamic link library, and driver boundaries, where the same checks on authority, arguments, and returned results still apply.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/14/07/

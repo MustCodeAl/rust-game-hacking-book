@@ -1,6 +1,6 @@
 Virtual-to-Physical Address Translation
 
-Lesson 12.7 left us with a concrete mismatch: a debugger reports a game’s virtual address, while an offline RAM, random access memory, capture is indexed by physical address. We need the captured page tables to connect the two. If we mix them up, a read may return plausible bytes from the wrong place, so the types and bounds in this tool are part of the explanation, not just coding style.
+Lesson 12.7 left us with a concrete mismatch: a debugger reports a game’s virtual address, while an offline R A M, random access memory, capture is indexed by physical address. We need the captured page tables to connect the two. If we mix them up, a read may return plausible bytes from the wrong place, so the types and bounds in this tool are part of the explanation, not just coding style.
 
 Section: Give address spaces different types.
 
@@ -28,9 +28,9 @@ The error includes the failed level and physical entry address. That context is 
 
 Here is one real entry: the first PML4 entry of the synthetic capture used in the tests later in this lesson, stored at physical address hexadecimal 1 0 0 0:
 
-Labelled memory diagram. hexadecimal 1 0 0 0: 01, highlighted; hexadecimal 1 0 0 1: 20, highlighted; hexadecimal 1 0 0 2: 00; hexadecimal 1 0 0 3: 00; hexadecimal 1 0 0 4: 00; hexadecimal 1 0 0 5: 00; hexadecimal 1 0 0 6: 00; hexadecimal 1 0 0 7: 00. Groups: present bit set; bit 13 set; higher bits, all 0; one little-endian u64, value hexadecimal 0 0 0 0 0 0 0 0 0 0 0 0 2 0 0 1. Little-endian means the lowest byte comes first, so byte hexadecimal 0 1 is bits 0–7 and byte hexadecimal 2 0 is bits 8–15. hexadecimal 2 0 is binary 0010 0000, bit 5 of its byte, which is bit 8 + 5 equals 13 of the entry, worth 2^13 equals 8,192 equals hexadecimal 2 0 0 0. So the entry is hexadecimal 2 0 0 0 + 1 equals hexadecimal 2 0 0 1: entry & 1 is 1, so it is present, and clearing the flag bits leaves hexadecimal 2 0 0 0, the physical address of the next table.
-
 Section: Walk all four levels.
+
+In brief: Each index selects one entry. Its address bits lead to the next table. Only the last entry supplies the data page.
 
 Before reading the code, it pays to see where its constants come from, because none of them are arbitrary. A 64-bit virtual address is cut into six fields, and two sizes fix every boundary:
 
@@ -40,13 +40,11 @@ A table holds 512 entries, and 512 equals 2^9, so each table index takes 9 bits.
 
 That accounts for 12 + 4 times 9 equals 48 bits. The remaining 16 bits, 48–63, carry no information of their own: they must repeat bit 47, which is what makes an address canonical.
 
-Take the address from the page-crossing example later in this lesson, hexadecimal 0 0 0 0 7 F F 6 1 2 3 4 0 F F 8. Every hex digit is exactly four bits, so its low twelve digits spell out bits 47 down to 0:
+Take the address from the page-crossing example later in this lesson, this value. Every hex digit is exactly four bits, so its low twelve digits spell out bits 47 down to 0:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 Cutting those 48 bits at the boundaries above, working from the right (12 bits, then four groups of 9), gives the six fields:
-
-Labelled memory diagram. bits 63–48: 0000 0000 0000 0000; bits 47–39: 0 1111 1111; bits 38–30: 1 1101 1000; bits 29–21: 0 1001 0001; bits 20–12: 1 0100 0000; bits 11–0: 1111 1111 1000. Groups: sign extension; PML4 index; PDPT index; PD index; PT index; page offset; all 0, like bit 47; hexadecimal 0 F F, 255; hexadecimal 1 D 8, 472; hexadecimal 0 9 1, 145; hexadecimal 1 4 0, 320; hexadecimal F F 8, 4,088. hexadecimal 0 0 0 0 7 F F 6 1 2 3 4 0 F F 8 split into its fields. Each field is written in groups of four bits counted from the right, so it reads straight off as hex.
 
 Converting each field to decimal is ordinary place value: hexadecimal 0 F F equals 15 times 16 + 15 equals 255; hexadecimal 1 D 8 equals 1 times 256 + 13 times 16 + 8 equals 472; hexadecimal 0 9 1 equals 9 times 16 + 1 equals 145; hexadecimal 1 4 0 equals 1 times 256 + 4 times 16 equals 320; and hexadecimal F F 8 equals 15 times 256 + 15 times 16 + 8 equals 4,088. This address therefore uses PML4 entry 255, PDPT entry 472, page-directory entry 145, page-table entry 320, and byte 4,088 of the final page.
 
@@ -58,19 +56,19 @@ The shifts of 39, 30, 21, and 12 slide each index field down to bit zero so it c
 
 & hexadecimal F F F keeps twelve bits — the offset within a 4 KiB page, since hexadecimal F F F is 4,095.
 
-& hexadecimal 0 0 0 F F F F F F F F F F 0 0 0 keeps bits 12 through 51 of an entry. The low twelve bits are cleared because an entry stores flags there (present, writable, user-accessible, large-page), and the high bits are cleared because they hold further flags rather than address. What remains is the physical address of the next table — which is page-aligned, and therefore always had twelve spare zero bits for those flags to live in.
+& this value keeps bits 12 through 51 of an entry. The low twelve bits are cleared because an entry stores flags there (present, writable, user-accessible, large-page), and the high bits are cleared because they hold further flags rather than address. What remains is the physical address of the next table — which is page-aligned, and therefore always had twelve spare zero bits for those flags to live in.
 
 The complete implementation masks flag bits from each next-table address:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The real file also checks the large-page bit, bit 7 of an entry (1 << 7 equals hexadecimal 8 0), at the PDPT and page-directory levels. When it is set, the walk stops early, and the index fields it skipped become part of the offset. A 1 GiB page is 2^30 bytes, so its offset is the low 30 bits, value & hexadecimal 3 F F F F F F F. A 2 MiB page is 2^21 bytes, so its offset is the low 21 bits, value & hexadecimal 1 F F F F F. Each mask is one less than its page size: hexadecimal 4 0 0 0 0 0 0 0 equals 4 times 16^7 equals 2^2 times 2^28 equals 2^30, and hexadecimal 2 0 0 0 0 0 equals 2 times 16^5 equals 2 times 2^20 equals 2^21.
-
-Diagram. From virtual address and CR3 to bits 63–48 repeat bit 47?. From bits 63–48 repeat bit 47? to NonCanonical error. The connection is labelled: no. From bits 63–48 repeat bit 47? to PML4 entry at CR3 table + index times 8. The connection is labelled: yes. From PML4 entry at CR3 table + index times 8 to PDPT entry at next table + index times 8. From PDPT entry at next table + index times 8 to 1 GiB page, offset is bits 0–29. The connection is labelled: bit 7 set. From PDPT entry at next table + index times 8 to page-directory entry at next table + index times 8. The connection is labelled: bit 7 clear. From page-directory entry at next table + index times 8 to 2 MiB page, offset is bits 0–20. The connection is labelled: bit 7 set. From page-directory entry at next table + index times 8 to page-table entry at next table + index times 8. The connection is labelled: bit 7 clear. From page-table entry at next table + index times 8 to 4 KiB page, offset is bits 0–11. From PML4 entry at CR3 table + index times 8 to NotPresent error naming the level. The connection is labelled: present bit clear. From PDPT entry at next table + index times 8 to NotPresent error naming the level. The connection is labelled: present bit clear. From page-directory entry at next table + index times 8 to NotPresent error naming the level. The connection is labelled: present bit clear. From page-table entry at next table + index times 8 to NotPresent error naming the level. The connection is labelled: present bit clear.
+The real file also checks the large-page bit, bit 7 of an entry (1 << 7 equals hexadecimal 8 0), at the PDPT and page-directory levels. When it is set, the walk stops early, and the index fields it skipped become part of the offset. A 1 GiB page is 2^30 bytes, so its offset is the low 30 bits, value & this value. A 2 MiB page is 2^21 bytes, so its offset is the low 21 bits, value & hexadecimal 1 F F F F F. Each mask is one less than its page size: this value equals 4 times 16^7 equals 2^2 times 2^28 equals 2^30, and hexadecimal 2 0 0 0 0 0 equals 2 times 16^5 equals 2 times 2^20 equals 2^21.
 
 Every entry in the chart is read through read_physical, so an entry address beyond the end of the file stops the walk with OutOfRange at whichever level it occurs.
 
 Section: A read can cross a page boundary.
+
+Narration: A neighboring virtual page can lead somewhere else in physical memory. Translate again at the boundary.
 
 Translating only the starting address is a subtle bug. Virtual memory looks contiguous; the physical memory behind it is not. Two virtual pages sitting side by side can be backed by physical pages nowhere near each other.
 
@@ -78,7 +76,7 @@ Suppose a 32-byte read begins 8 bytes before the end of a page:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-This is the worked address from the walk above. Its page offset is hexadecimal F F 8, and the page ends at offset hexadecimal 1 0 0 0, so hexadecimal 1 0 0 0 minus hexadecimal F F 8 equals 4,096 minus 4,088 equals 8 bytes remain in the first page. Byte 9 sits at hexadecimal 0 0 0 0 7 F F 6 1 2 3 4 1 0 0 0, where the page-table index is hexadecimal 1 4 1 equals 321 instead of 320 and the offset is 0. The two halves of the read are translated by neighbouring entries of the same page table, at byte offsets 320 times 8 equals 2,560 and 321 times 8 equals 2,568, and nothing requires those two entries to hold neighbouring physical addresses.
+This is the worked address from the walk above. Its page offset is hexadecimal F F 8, and the page ends at offset hexadecimal 1 0 0 0, so hexadecimal 1 0 0 0 minus hexadecimal F F 8 equals 4,096 minus 4,088 equals 8 bytes remain in the first page. Byte 9 sits at this value, where the page-table index is hexadecimal 1 4 1 equals 321 instead of 320 and the offset is 0. The two halves of the read are translated by neighbouring entries of the same page table, at byte offsets 320 times 8 equals 2,560 and 321 times 8 equals 2,568, and nothing requires those two entries to hold neighbouring physical addresses.
 
 Nothing warns you when this happens. Translating once and then reading 32 consecutive physical bytes quietly returns 24 bytes belonging to whatever follows the first page in physical memory — a completely unrelated allocation, another process’s data, or nothing mapped at all. The bytes come back looking perfectly ordinary.
 
@@ -102,11 +100,7 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 The fixture is hexadecimal 7 0 0 0 bytes: 7 times hexadecimal 1 0 0 0 equals 7 times 4,096 equals 28,672 bytes, or seven 4 KiB pages. The lab’s capture format has no header. File offset N holds physical address N, so each page of the file is one physical page:
 
-Labelled memory diagram. hexadecimal 0 0 0 0: zeros; hexadecimal 1 0 0 0: PML4 table; hexadecimal 2 0 0 0: PDPT; hexadecimal 3 0 0 0: page directory; hexadecimal 4 0 0 0: page table; hexadecimal 5 0 0 0: data page, highlighted; hexadecimal 6 0 0 0: zeros. Groups: entry 0 holds hexadecimal 2 0 0 1; entry 0 holds hexadecimal 3 0 0 1; entry 0 holds hexadecimal 4 0 0 1; entry 0 holds hexadecimal 5 0 0 1; GHA DMA, direct memory access, at hexadecimal 5 1 2 3. The synthetic capture, one box per 4 KiB page. Virtual hexadecimal 0 1 2 3 is less than hexadecimal 1 0 0 0, so bits 12–47 are all 0 and every table index is 0. The walk therefore reads entry 0 of each table, which is the table's first 8 bytes, and follows hexadecimal 2 0 0 0, hexadecimal 3 0 0 0, hexadecimal 4 0 0 0, then hexadecimal 5 0 0 0. The offset hexadecimal 1 2 3 then selects physical address hexadecimal 5 0 0 0 + hexadecimal 1 2 3 equals hexadecimal 5 1 2 3.
-
-With CR3 equals hexadecimal 1 0 0 0, virtual address hexadecimal 0 1 2 3 should translate to physical hexadecimal 5 1 2 3. Tests also cover a missing present bit and a noncanonical virtual address.
-
-Diagram walkthrough: Follow virtual hexadecimal 0 1 2 3 through the synthetic capture. Step 1: Choose the address space. State: CR3 hexadecimal 1 0 0 0; virtual hexadecimal 0 1 2 3. CR3 supplies the physical root hexadecimal 1 0 0 0. Virtual address hexadecimal 0 1 2 3 has four zero table indices and a page offset of hexadecimal 1 2 3. The root and address must describe the same process mapping. Step 2: Read PML4 entry 0. State: PML4[0] equals hexadecimal 2 0 0 1. Read eight bytes at physical hexadecimal 1 0 0 0. Entry hexadecimal 2 0 0 1 has its present bit set; masking the flag bits leaves hexadecimal 2 0 0 0, the physical base of the PDPT. Step 3: Read PDPT entry 0. State: PDPT[0] equals hexadecimal 3 0 0 1. At physical hexadecimal 2 0 0 0, entry hexadecimal 3 0 0 1 points to the page directory at hexadecimal 3 0 0 0. Its large-page bit is clear, so the walk continues rather than selecting a 1 GiB page. Step 4: Read page-directory entry 0. State: PD[0] equals hexadecimal 4 0 0 1. At physical hexadecimal 3 0 0 0, entry hexadecimal 4 0 0 1 points to the page table at hexadecimal 4 0 0 0. Its large-page bit is also clear, so the walk continues to a 4 KiB-page entry. Step 5: Select the data page. State: PT[0] equals hexadecimal 5 0 0 1. Read page-table entry 0 at physical hexadecimal 4 0 0 0. Entry hexadecimal 5 0 0 1 is present, and masking its flags leaves the data-page base hexadecimal 5 0 0 0. The table walk now has the page, but still needs the byte offset. Step 6: Produce the physical address. State: physical equals hexadecimal 5 1 2 3. Combine aligned page base hexadecimal 5 0 0 0 with offset hexadecimal 1 2 3 to obtain physical hexadecimal 5 1 2 3. The capture stores GHA DMA beginning there. A data read must still check that its complete requested range fits in the file. Each arrow depends on a valid eight-byte entry read: an out-of-range address or a clear present bit stops the walk at that level. This fixture follows the four-level, 4 KiB-page path; the earlier flowchart also covers the large-page exits.
+With c r 3 equals hexadecimal 1 0 0 0, virtual address hexadecimal 0 1 2 3 should translate to physical hexadecimal 5 1 2 3. Tests also cover a missing present bit and a noncanonical virtual address.
 
 Synthetic tests are powerful because every byte is known. A failure means the translator is wrong, not that an unknown capture changed.
 
@@ -122,7 +116,7 @@ Arguments are:
 
 path to an offline physical capture with recorded provenance;
 
-physical CR3 value in hexadecimal;
+physical c r 3 value in hexadecimal;
 
 virtual address in hexadecimal;
 
@@ -130,19 +124,9 @@ byte count from 1 through 4096.
 
 The maximum is deliberately small. A learning tool should make unexpectedly huge reads impossible by default.
 
-The output says which bytes an offline page-table mapping points to. It does not certify that a live user-mode read or write would pass CPU, central processing unit, and Windows permission checks. The present bit and the file bounds are necessary for this walk; effective access also depends on flags at multiple table levels and on the kind of access requested.
+The output says which bytes an offline page-table mapping points to. It does not certify that a live user-mode read or write would pass C P U, central processing unit, and Windows permission checks. The present bit and the file bounds are necessary for this walk; effective access also depends on flags at multiple table levels and on the kind of access requested.
 
 Section: Why a translation may fail.
-
-Table columns: Error; Likely meaning.
-
-Error: noncanonical virtual address; Likely meaning: typo or wrong architecture assumption.
-
-Error: PML4/PDPT/PD/PT not present; Likely meaning: page absent, wrong CR3, or incomplete capture.
-
-Error: physical range outside capture; Likely meaning: corrupt entry or capture omitted that RAM range.
-
-Error: plausible bytes but wrong object; Likely meaning: wrong address space, stale pointer, or wrong build model.
 
 Never “fix” an error by masking more bits until output appears. Compare the entry format with the architecture manual, confirm the capture layout, and keep the failure visible.
 

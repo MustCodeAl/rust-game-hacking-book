@@ -1,10 +1,10 @@
-Dynamic Windows API, application programming interface, Resolution
+Dynamic Windows A P I, application programming interface, Resolution
 
-Section: Import tables are not the only way to call an API.
+Section: Import tables are not the only way to call an A P I.
 
-Normally the Windows loader resolves a program’s imports before main. Sometimes a tool supports several Windows versions and wants to use a newer API only when it exists. Then it can:
+Normally the Windows loader resolves a program’s imports before main. Sometimes a tool supports several Windows versions and wants to use a newer A P I only when it exists. Then it can:
 
-obtain a handle to the system DLL, dynamic link library,;
+obtain a handle to the system D L L, dynamic link library;
 
 look up the named export;
 
@@ -16,35 +16,31 @@ This is useful compatibility work. It is not a reason to hide imports or replace
 
 Section: Detect the capability you need.
 
-Do not infer one API’s presence only from a Windows version string. Compatibility settings, servicing changes, and alternative implementations can make version checks lie about the capability that matters. Look up the documented export, validate the result, and take the fallback when it is absent.
+Do not infer one A P I’s presence only from a Windows version string. Compatibility settings, servicing changes, and alternative implementations can make version checks lie about the capability that matters. Look up the documented export, validate the result, and take the fallback when it is absent.
 
 Presence still does not guarantee that one call will succeed. The handle may lack rights, the buffer may be too small, or the target may exit. Feature detection chooses a code path; normal error handling still applies inside that path.
 
 Section: Define the contract from documentation and assembly.
 
-For a known API, the Windows SDK declaration is the primary contract. Static analysis can confirm what the compiled caller does: argument registers, stack space, result checks, and error handling.
+For a known A P I, the Windows SDK declaration is the primary contract. Static analysis can confirm what the compiled caller does: argument registers, stack space, result checks, and error handling.
 
 Keep the type alias beside the resolver:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The pointer type says more than “address of a function.” It records ABI, application binary interface,, argument order, mutability, and result width.
+The pointer type says more than “address of a function.” It records A B I, application binary interface,, argument order, mutability, and result width.
 
 extern "system" names a different calling convention on each of the two targets this course builds, so the same alias arranges the same four values in two different ways. On 32-bit x86 it means stdcall: the caller pushes the arguments from last to first, so when the function starts they sit just above the return address, one per 4-byte stack slot, and the function removes them itself before returning.
 
-Labelled memory diagram. [esp]: return address; [esp+hexadecimal 0 4]: process, highlighted; [esp+hexadecimal 0 8]: flags, highlighted; [esp+hexadecimal 0 C]: name, highlighted; [esp+hexadecimal 1 0]: size, highlighted. Groups: 4 arguments times 4 bytes equals 16 equals hexadecimal 1 0 bytes, removed by ret hexadecimal 1 0. 32-bit stdcall: the stack as QueryFullProcessImageNameW begins. Each argument slot is 4 bytes above the previous one, so the offsets run hexadecimal 0 4, hexadecimal 0 8, hexadecimal 0 C (12), hexadecimal 1 0 (16).
+On x86-64, Windows passes the first four integer or pointer arguments in registers, in order, and returns an integer result in e a x, the low 32 bits of r a x:
 
-On x86-64, Windows passes the first four integer or pointer arguments in registers, in order, and returns an integer result in EAX, the low 32 bits of RAX:
-
-Labelled memory diagram. RCX: process; RDX: flags; R8: name; R9: size; EAX: BOOL result, highlighted. Groups: arguments, first to fourth; return value. The x86-64 Windows calling convention: four arguments, four registers. BOOL is a 32-bit integer, so EAX is enough to carry it.
-
-That is why a “close enough” signature fails in ways that have nothing to do with pointer size. Declare three parameters instead of four, and a 32-bit caller pushes 12 bytes while the function still removes 16 with ret hexadecimal 1 0, leaving the stack pointer 4 bytes away from where the caller expects it. On x86-64 the function reads a fourth argument from R9 anyway, whatever that register happens to hold, and writes the result length through it as if it were a pointer.
+That is why a “close enough” signature fails in ways that have nothing to do with pointer size. Declare three parameters instead of four, and a 32-bit caller pushes 12 bytes while the function still removes 16 with ret hexadecimal 1 0, leaving the stack pointer 4 bytes away from where the caller expects it. On x86-64 the function reads a fourth argument from r 9 anyway, whatever that register happens to hold, and writes the result length through it as if it were a pointer.
 
 Section: Resolve from an already loaded system module.
 
-The resolver starts with kernel32.dll in the current process. It looks up QueryFullProcessImageNameW by its exported name, returns None if that name is absent, and otherwise converts the address to the ABI-checked function type established above. The caller can then choose the fallback rather than calling an unknown address.
+The resolver starts with kernel32.dll in the current process. It looks up QueryFullProcessImageNameW by its exported name, returns None if that name is absent, and otherwise converts the address to the A B I-checked function type established above. The caller can then choose the fallback rather than calling an unknown address.
 
-Code example. The code’s comments explain: SAFETY: the SDK declaration and export name establish this system ABI. let typed equals unsafe { core::mem::transmute::<unsafe extern "system" fn() to isize, QueryFullProcessImageNameW>(raw) }; Ok(Some(typed))}
+Code example. The code’s comments explain: SAFETY: kernel32.dll is a NUL-terminated static string. 🔎 SAFETY: the export name is a NUL-terminated static byte string. SAFETY: the SDK declaration and export name establish this system A B I.
 
 The Option is intentional. “Export absent” is a supported compatibility state, not necessarily a fatal error.
 
@@ -54,25 +50,21 @@ Section: Call with a retryable buffer.
 
 Windows text APIs often accept a buffer plus an in/out length. Treat the length as untrusted after every call:
 
-Code example. The code’s comments explain: SAFETY: the buffer is writable for `length` UTF-16 units, and the handle // remains valid for the call. Windows writes the resulting unit count. let ok equals unsafe { function( process, 0, windows::core::PWSTR(buffer.as_mut_ptr()), &mut length, ) }; anyhow::ensure!(ok.as_bool(), "QueryFullProcessImageNameW failed");
+Code example. The code’s comments explain: SAFETY: the buffer is writable for `length` UTF-16 units, and the handle remains valid for the call. Windows writes the resulting unit count.
 
 length means two different things on the two sides of the call. Suppose the process is Wesnoth at C:\Games\Wesnoth 1.14.9\wesnoth.exe, a 35-character path:
-
-Labelled memory diagram. [0]: C, highlighted; [1]: :, highlighted; cell 3: dot dot dot , highlighted; [33]: x, highlighted; [34]: e, highlighted; [35]: NUL; cell 7: dot dot dot ; [32767]: 0. Groups: 35 units of text, so length comes back as 35; not counted; never read. The buffer after a successful call. Going in, length was 32,768, the vector's full size: 2^15 units, room for the longest extended-length Windows path of 32,767 characters plus its terminator. Coming back, it is the number of units written without the terminator, so buffer[..35] is exactly the path. The ensure! rejects a returned length larger than the buffer, because slicing past the end would panic.
 
 Use an RAII-owned process handle from the earlier Windows chapters. The dynamic call does not change ownership rules.
 
 Section: Design the fallback before lookup.
 
-An optional API is useful only if the missing case has a defined behavior:
+An optional A P I is useful only if the missing case has a defined behavior:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-If the full-path API is unavailable, a ToolHelp module snapshot may supply the main module’s path through MODULEENTRY32W.szExePath. It is a different observation: enumeration can fail across architecture or protection boundaries, and the module can change after the snapshot. Label the source and its limits instead of claiming that every fallback is simply a shorter path.
+If the full-path A P I is unavailable, a ToolHelp module snapshot may supply the main module’s path through MODULEENTRY32W.szExePath. It is a different observation: enumeration can fail across architecture or protection boundaries, and the module can change after the snapshot. Label the source and its limits instead of claiming that every fallback is simply a shorter path.
 
-Diagram. From Need an optional Windows capability to Find the documented export in an already-loaded module. From Find the documented export in an already-loaded module to Export present?. From Export present? to Try the documented fallback; label its source and limits. The connection is labelled: No. From Export present? to Convert the address to the exact documented function type. The connection is labelled: Yes. From Convert the address to the exact documented function type to Call succeeds?. From Call succeeds? to Return the full result labelled with its source. The connection is labelled: Yes. From Call succeeds? to Handle the call error or documented retry case. The connection is labelled: No.
-
-Notice that a failed call does not automatically choose the fallback. The API can exist while the handle, buffer, or target state is invalid. Preserve that difference so compatibility logic does not hide an ordinary error.
+Notice that a failed call does not automatically choose the fallback. The A P I can exist while the handle, buffer, or target state is invalid. Preserve that difference so compatibility logic does not hide an ordinary error.
 
 Section: Detect bad assumptions.
 
@@ -94,8 +86,8 @@ Never call an unresolved address. Never replace None with address zero. Never ch
 
 Section: Why this belongs in reversing.
 
-When you inspect a game or tool, dynamic resolution explains a common pattern: a string names an API, GetProcAddress returns a pointer, and a later indirect call uses it. Reconstructing that chain turns anonymous control flow into a documented contract.
+When you inspect a game or tool, dynamic resolution explains a common pattern: a string names an A P I, GetProcAddress returns a pointer, and a later indirect call uses it. Reconstructing that chain turns anonymous control flow into a documented contract.
 
-The responsible end state is clear: one typed resolver, one fallback, visible errors, and no hidden capability. That completes the DLL and API path. The next lesson follows a device request through the driver stack: which kernel component receives it, which device owns the work, and where the result returns.
+The responsible end state is clear: one typed resolver, one fallback, visible errors, and no hidden capability. That completes the D L L and A P I path. The next lesson follows a device request through the driver stack: which kernel component receives it, which device owns the work, and where the result returns.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/11/03/

@@ -12,10 +12,6 @@ Action — where and when should the verified view-angle update happen?
 
 Keep these layers separate. Most of the interesting work belongs in safe, testable code.
 
-Image description: A 3D target and camera relationship
-
-Diagram. From Coherent world snapshot to Validate candidates. From Validate candidates to Compute desired direction / angles. From Compute desired direction / angles to Reject outside FOV or occluded. From Reject outside FOV or occluded to Rank with an explicit score. From Rank with an explicit score to Publish chosen ID + aim point.
-
 Each arrow has to hold up its end of the deal, and the arrows before the maths are the ones that quietly break.
 
 If the snapshot mixed two frames together, flawless trigonometry will aim confidently at where something used to be. If validation mistook a reused entity slot for a live one, the ranking step will happily pick a target that no longer exists. Neither failure looks like a maths error — the numbers are all beautifully computed — which is what makes them hard to find.
@@ -25,8 +21,6 @@ Maths cannot repair a bad snapshot. It can only give the wrong answer more decim
 Section: Confirm the view angles.
 
 Use AssaultCube’s local debug commands and memory scanning to find yaw and pitch. Rotate only horizontally while searching for yaw, then only vertically for pitch.
-
-Image description: A yaw candidate in memory
 
 Validate:
 
@@ -130,16 +124,6 @@ This is an iterator pipeline: filter invalid players, calculate candidates, enfo
 
 Be precise about the score. Nearest world distance, smallest angular error, and smallest screen-pixel distance answer different questions:
 
-Table columns: Score; Favors; Important limitation.
-
-Score: world distance; Favors: physically nearest target; Important limitation: may be far from crosshair.
-
-Score: angular error; Favors: smallest camera rotation; Important limitation: ignores viewport aspect/FOV shape.
-
-Score: pixel distance; Favors: nearest rendered marker; Important limitation: depends on current projection and resolution.
-
-Score: weighted score; Favors: chosen trade-off; Important limitation: weights need units and testing.
-
 Do not compare mixed units directly. If a score is angle_degrees + distance_metres, its weights silently claim that one degree is worth one metre. Normalize each term or state the conversion intentionally.
 
 Tie-breaking must also be stable. If two scores differ only by floating-point noise, prefer the current target or a stable entity ID. Otherwise the choice can oscillate every frame.
@@ -202,45 +186,25 @@ Section: Visualization before action.
 
 For the offline lab, first print the chosen ID and desired angles or draw a separate indicator. Confirm that the selected target matches what you see.
 
-Image description: The player layout in a later frame
-
 Section: Write the working offline aimbot.
 
-The validated snapshots, angle calculations, and synthetic tests above are the core of this lesson. The pinned AssaultCube implementation below puts those calculations inside the DLL, dynamic link library, and hook boundary from Lesson 6.4. Keep the target check, worker lifetime, and restoration rules from that lesson around this game-specific code.
+The validated snapshots, angle calculations, and synthetic tests above are the core of this lesson. The pinned AssaultCube implementation below puts those calculations inside the D L L, dynamic link library, and hook boundary from Lesson 6.4. Keep the target check, worker lifetime, and restoration rules from that lesson around this game-specific code.
 
 The in-process update resolves the list, chooses the nearest live entity, and writes the calculated angles:
 
-Code example. The code’s comments explain: / # Safety/// Call only in AssaultCube 1.2.0.2 while a local bot match is active.unsafe fn update_aimbot() to anyhow::Result<()> { // 🛡️ SAFETY: exact-build globals verified before the feature was enabled. let local equals unsafe { LOCAL_PLAYER.read() }; anyhow::ensure!(!local.is_null(), "local player is unavailable"); 📏 SAFETY: exact-build entity globals; count is bounded before iteration. let list equals unsafe { ENTITY_LIST.read() }; let count equals unsafe { PLAYER_COUNT.read() }; anyhow::ensure!(!list.is_null() && (1..=32).contains(&count), "bad entity list"); 🔍 Copy the three coordinates while the pointer is known-good. The math // below then works on ordinary copied values instead of repeated raw reads. let local_position equals unsafe { Vec3 { x: (*local).x, y: (*local).y, z: (*local).z, }}; 🎯 Keep both the comparison score and its angles together so a later // candidate cannot accidentally update only half of the chosen target. if best.is_none_or(|(best_distance, _)| distance less than best_distance) { best equals Some((distance, desired)); } }
+Code example. The code’s comments explain: / # Safety / Call only in AssaultCube 1.2.0.2 while a local bot match is active. 🛡️ SAFETY: exact-build globals verified before the feature was enabled. 📏 SAFETY: exact-build entity globals; count is bounded before iteration. 🔍 Copy the three coordinates while the pointer is known-good. The math below then works on ordinary copied values instead of repeated raw reads. ✅ SAFETY: `index` is inside the verified 32-entry list bound. ⚠️ Coincident points have no useful direction; skip them instead of allowing a divide-by-zero/NaN to reach the game's camera. 🎯 Keep both the comparison score and its angles together so a later candidate cannot accidentally update only half of the chosen target. 🎯 SAFETY: `local` is the verified live player object for this tick.
 
 Run it every few milliseconds in the injected worker. In a local match with idle bots, the view should lock to the nearest live player and switch after that bot dies. The +90 degrees correction is target-specific and comes from AssaultCube starting forward at 90 degrees.
 
 Notice that this exact implementation ranks horizontal world distance, while best_target above ranks angular error. That is an intentional contrast, not two names for the same rule. Replace the score only after deciding which behavior the tool should implement.
 
-Silent video demonstration: Aim following a selected AssaultCube target. The original aim demonstration shows the camera turning toward a selected player. Compare that visible turn with the position difference, desired yaw and pitch, and live angle update explained above.
-
 Section: Diagnose aim errors geometrically.
 
 Aim errors, read geometrically
 
-Table columns: Symptom; Likely assumption.
-
-Symptom: constant 90 degrees horizontal error; Likely assumption: zero-forward convention.
-
-Symptom: correct yaw, inverted pitch; Likely assumption: pitch sign or screen/axis orientation.
-
-Symptom: accurate nearby, trails moving targets; Likely assumption: stale snapshots or missing motion model.
-
-Symptom: selects targets behind camera; Likely assumption: unwrapped angle or missing dot/FOV test.
-
-Symptom: snaps when target is straight above; Likely assumption: undefined yaw at zero horizontal distance.
-
-Symptom: switches rapidly between two targets; Likely assumption: unstable tie-breaking or noisy positions.
-
-Symptom: points at feet while model animates; Likely assumption: entity origin used instead of aim point/bone.
-
 This is the complete path for the exact build: static globals to reversed player struct to target math to live yaw/pitch write.
 
-The course DLL already runs that loop. Build and inject it into ac_client.exe, start a local bot match, and press F4 to toggle the aimbot:
+The course D L L already runs that loop. Build and inject it into ac_client.exe, start a local bot match, and press F4 to toggle the aimbot:
 
 Terminal window
 

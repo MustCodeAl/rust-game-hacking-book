@@ -16,21 +16,9 @@ Every guarded operation leaves behind enough evidence to reconstruct four things
 
 Those four are worth naming separately, because a log missing any one of them cannot answer the question you will eventually put to it:
 
-Table columns: What it records; The question it answers later.
-
-What it records: identity; The question it answers later: which process, build, and object was this?.
-
-What it records: decision; The question it answers later: was it allowed or denied?.
-
-What it records: reason; The question it answers later: which specific check produced that answer?.
-
-What it records: outcome; The question it answers later: did the effect actually happen?.
-
 Drop the reason and you can see that something was refused but never why. Drop the outcome and you cannot tell an allowed operation from a completed one.
 
 Design events around the decision pipeline:
-
-Diagram labels, in drawing order: Game effect; Validator; Snapshot builder; Observer; alt; [allowed]; [denied]; input event + correlation ID; versioned snapshot; allow/deny + reason; validated command; postcondition + generation; refusal recorded.
 
 The same correlation ID connects the stages without pretending they happened on one thread.
 
@@ -42,13 +30,9 @@ Read that stream the obvious way — pair each effect with the decision just bef
 
 Now pair by correlation ID instead. The effect at 43 belongs to action 7, and action 7 was denied. Something changed state after a refusal, which is the exact contradiction this lesson exists to catch, and the naive reading walked straight past it.
 
-Diagram. From Decision seq 41, corr 7: denied, ValueOutOfRange to EffectFinished seq 43, corr 7: changed equals true. The connection is labelled: same corr_id. From Decision seq 42, corr 8: allowed to EffectFinished seq 44, corr 8: changed equals true. The connection is labelled: same corr_id.
-
 Nothing was missing from the log. The evidence was complete, and ordering alone was still enough to reach the wrong conclusion, because two actions interleaved and the reader assumed they had not. This is why the join in a detection rule is written on the correlation ID rather than on adjacency.
 
 Section: Give each event a stable schema.
-
-Diagram. From GameEvent to schema_version. From GameEvent to sequence. From GameEvent to monotonic_micros. From GameEvent to correlation_id. From GameEvent to build_id. From GameEvent to entity_id (optional u32). From GameEvent to kind: EventKind. From kind: EventKind to SnapshotBuilt { generation }. From kind: EventKind to Decision { allowed, reason }. From kind: EventKind to EffectFinished { changed, generation }. From kind: EventKind to EventsDropped { count }.
 
 The diagram becomes two Rust types below. GameEvent stores the fields common to every observation; EventKind carries the data specific to a snapshot, decision, effect, or dropped-event report. A consumer can order events by sequence and join one request’s path by correlation_id.
 
@@ -59,22 +43,6 @@ Use a monotonic clock for duration and ordering inside one run. Wall-clock time 
 Section: Record decisions on every branch.
 
 Logging only successful operations creates a blind spot. At minimum, record:
-
-Table columns: Field; Why it matters.
-
-Field: Operation category; Why it matters: Which boundary made the decision.
-
-Field: Target identity; Why it matters: Which build and entity were involved.
-
-Field: Snapshot generation; Why it matters: Whether evidence was fresh.
-
-Field: Allow/deny result; Why it matters: The decision itself.
-
-Field: Bounded reason code; Why it matters: Why the branch was taken.
-
-Field: Postcondition; Why it matters: Whether the intended effect occurred.
-
-Field: Drop counter; Why it matters: Whether evidence was lost.
 
 Avoid raw pointers as durable identity: allocations move and addresses can be reused. Prefer build ID plus entity ID and generation.
 
@@ -119,18 +87,6 @@ Keep raw evidence available for inspection, but use normalized summaries to find
 Section: Measure detector quality.
 
 Build a labeled fixture table:
-
-Table columns: Fixture; Invariant actually fails?; Rule fires?; Classification.
-
-Fixture: Valid command; Invariant actually fails?: No; Rule fires?: No; Classification: True negative.
-
-Fixture: Denied command, no effect; Invariant actually fails?: No; Rule fires?: No; Classification: True negative.
-
-Fixture: Denied command, effect changes; Invariant actually fails?: Yes; Rule fires?: Yes; Classification: True positive.
-
-Fixture: Allowed command, delayed event; Invariant actually fails?: No; Rule fires?: Yes; Classification: False positive.
-
-Fixture: Effect changes but decision event was dropped; Invariant actually fails?: Yes; Rule fires?: No; Classification: False negative / insufficient evidence.
 
 Report counts and the exact fixture set. “Detected 100 percent” is meaningless without knowing what was tested.
 

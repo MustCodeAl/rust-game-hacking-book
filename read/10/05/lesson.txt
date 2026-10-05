@@ -14,25 +14,21 @@ This matters to every scanner and patcher in the course. An address can be a per
 
 Section: A virtual address is part of a process’s map.
 
-The address printed by a debugger is a virtual address. It names a location inside one process’s address space; it does not directly name a RAM, random access memory, chip cell. Windows and the CPU, central processing unit, use page tables to translate the virtual page into a physical frame when the page is present.
+The address printed by a debugger is a virtual address. It names a location inside one process’s address space; it does not directly name a R A M, random access memory, chip cell. Windows and the C P U, central processing unit, use page tables to translate the virtual page into a physical frame when the page is present.
 
 For any page size, an address can be split into two pieces:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-With a 4 KiB page, address hexadecimal 1 2 3 4 5 A B C has offset hexadecimal A B C inside its page. The remaining upper part identifies the virtual page. The translation changes the page part; the offset stays the same because it selects one byte inside that page.
+With a 4 KiB page, address shown here has offset hexadecimal A B C inside its page. The remaining upper part identifies the virtual page. The translation changes the page part; the offset stays the same because it selects one byte inside that page.
 
-Labelled memory diagram. cell 1: 1; cell 2: 2; cell 3: 3; cell 4: 4; cell 5: 5; cell 6: A; cell 7: B; cell 8: C. Groups: virtual page number: hexadecimal 1 2 3 4 5; offset inside the page: hexadecimal A B C. Splitting the hex digits of hexadecimal 1 2 3 4 5 A B C at a 4 KiB (3 hex digit) boundary. Translation changes the page-number part; the offset is untouched.
+Two games can both use virtual address shown here while those addresses map to different physical memory. One process can also have no mapping there at all. ReadProcessMemory takes a process handle precisely so Windows knows which process map should interpret the address.
 
-Two games can both use virtual address hexadecimal 0 0 4 0 0 0 0 0 while those addresses map to different physical memory. One process can also have no mapping there at all. ReadProcessMemory takes a process handle precisely so Windows knows which process map should interpret the address.
-
-Committed also does not mean “currently sitting in physical RAM.” Windows may bring a committed page back from its backing storage when accessed. That event is a page fault handled by the operating system; it is not automatically a bug in the game or scanner.
+Committed also does not mean “currently sitting in physical R A M.” Windows may bring a committed page back from its backing storage when accessed. That event is a page fault handled by the operating system; it is not automatically a bug in the game or scanner.
 
 Section: State, type, and protection answer different questions.
 
 Windows describes a region using three groups of facts — and they are independent axes, not a hierarchy:
-
-Diagram. From One memory region to State: MEM_FREE / MEM_RESERVE / MEM_COMMIT. From One memory region to Type: MEM_IMAGE / MEM_MAPPED / MEM_PRIVATE. From One memory region to Protection: R / W / X, plus PAGE_GUARD.
 
 State says whether storage is ready:
 
@@ -44,25 +40,13 @@ MEM_COMMIT: Windows has committed storage and the process may use it according t
 
 Type says where committed pages came from:
 
-MEM_IMAGE: a mapped PE, portable executable, image such as an EXE or DLL, dynamic link library,;
+MEM_IMAGE: a mapped P E, portable executable, image such as an EXE or D L L, dynamic link library;
 
 MEM_MAPPED: a mapped file or shared section;
 
 MEM_PRIVATE: private process memory such as many heap allocations.
 
 Protection says which operations are allowed. The course prints the three permissions as R, W, and X:
-
-Table columns: Display; Meaning.
-
-Display: R--; Meaning: Data can be read but not written or executed..
-
-Display: RW-; Meaning: Data can be read and written but not executed..
-
-Display: R-X; Meaning: Instructions can be read and executed but not normally edited..
-
-Display: RWX; Meaning: The same page can be read, written, and executed..
-
-Display: ---; Meaning: The wrapper considers the region inaccessible..
 
 PAGE_GUARD is an extra flag. The first access raises an exception and clears the guard flag. Windows uses guard pages for mechanisms such as growing thread stacks. A scanner should skip them instead of treating the exception as ordinary data.
 
@@ -86,9 +70,7 @@ Section: VirtualQueryEx returns one matching run.
 
 The shared Process::regions wrapper begins at an address, calls VirtualQueryEx, records the returned MEMORY_BASIC_INFORMATION, and advances by RegionSize:
 
-Diagram. From VirtualQueryEx(current) to returned equals 0?. From returned equals 0? to break: walk is done. The connection is labelled: yes. From returned equals 0? to next equals BaseAddress + RegionSize (checked_add). The connection is labelled: no. From next equals BaseAddress + RegionSize (checked_add) to ensure next greater than current. From ensure next greater than current to current equals next. From current equals next to VirtualQueryEx(current).
-
-Code example. The code’s comments explain: 📏 Move from the returned base—not merely from `current`—to the first address// after this entire run of pages with identical attributes.let next equals (information.BaseAddress as usize) .checked_add(information.RegionSize) .context("memory map overflowed")?;anyhow::ensure!(next greater than current, "memory map did not advance");current equals next;
+Code example. The code’s comments explain: 🔍 Ask about the run containing `current`; this describes pages but does not copy bytes from them or grant permission to read/write them. ✅ Zero ends the walk. No stale MEMORY_BASIC_INFORMATION is consumed. 📏 Move from the returned base—not merely from `current`—to the first address after this entire run of pages with identical attributes.
 
 The checked addition prevents an invalid region from wrapping to a low address. The progress check prevents an endless loop if the reported range does not move forward.
 
@@ -110,7 +92,7 @@ Whether storage is ready. Only committed pages can hold bytes a scanner may read
 
 TypeMEM_IMAGE, MEM_MAPPED, or MEM_PRIVATE
 
-Where committed pages came from: a PE image, a mapped file or shared section, or private process memory.
+Where committed pages came from: a P E image, a mapped file or shared section, or private process memory.
 
 ProtectPAGE_* flags
 
@@ -144,21 +126,11 @@ Terminal window
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Compare the regions with the PE section flags printed by pe_inspector. The on-disk section table describes intended mapping characteristics; VirtualQueryEx describes the live pages in this run.
+Compare the regions with the P E section flags printed by pe_inspector. The on-disk section table describes intended mapping characteristics; VirtualQueryEx describes the live pages in this run.
 
 Keep these address ideas separate:
 
-Table columns: Name; Meaning in this course.
-
-Name: file offset; Meaning in this course: byte position inside the EXE or DLL file.
-
-Name: RVA, relative virtual address,; Meaning in this course: position relative to the image base.
-
-Name: virtual address; Meaning in this course: live address inside one process.
-
-Name: physical address; Meaning in this course: hardware-memory location after page translation.
-
-A normal user-mode pattern scanner needs the live virtual address and lets Windows perform translation. It should not guess physical addresses. The offline DMA, direct memory access, chapter introduces page-table translation separately because a raw capture file has no running Windows process to translate addresses for it.
+A normal user-mode pattern scanner needs the live virtual address and lets Windows perform translation. It should not guess physical addresses. The offline D M A, direct memory access, chapter introduces page-table translation separately because a raw capture file has no running Windows process to translate addresses for it.
 
 Section: Why a scanner skips some pages.
 

@@ -4,11 +4,7 @@ Section: Locate the save by behavior.
 
 Lesson 9.1 followed one Flare character’s Physical value from running state into avatar.txt. Now we will prove the exact path, change that file once, and ask Flare to load it. Use Flare 1.12 with a disposable character. Start Process Monitor and filter to the game process.
 
-Image description: Filtering Process Monitor to the target
-
 Save the game once, then look for file writes near that timestamp.
-
-Image description: A likely save-data path
 
 Close the game before editing. Many games keep state in memory and overwrite the save during shutdown.
 
@@ -92,21 +88,9 @@ The property we are designing is crash consistency: after interruption, the file
 
 Design the on-disk states so each one has an obvious response:
 
-Table columns: Files present; Meaning; Safe response.
-
-Files present: original only; Meaning: no edit in progress; Safe response: open normally.
-
-Files present: original + temporary; Meaning: preparation was interrupted; Safe response: validate or remove only the temporary.
-
-Files present: new original + backup; Meaning: replacement completed; Safe response: test the new save; retain backup.
-
-Files present: missing original + backup; Meaning: recovery is needed; Safe response: restore backup before launching.
-
 Do not choose by modification time alone. Validate the expected filename, format, and contents, then ask the user before replacing the only known-good copy.
 
 Section: Run the complete save editor.
-
-Diagram walkthrough: Follow the Flare save through a recoverable edit. Step 1: Read the closed-game save. State: build=5,1,1,2. Close Flare and read the known avatar.txt save. Keep the original bytes available while preparing the replacement; do not edit the only copy in place. Step 2: Validate the target field. State: exactly one build= line. Require one target field and check the intended complete value. Preserve every other line and the original LF or CRLF newline style. Step 3: Construct the replacement. State: build=30,30,30,30. Build new bytes separately, changing the four named attributes together. At this point the original path still contains the untouched save. Step 4: Flush the temporary sibling. State: complete temporary file. Write all replacement bytes to a sibling temporary file, flush it, and close its handle. Interrupted preparation leaves the original save available. Step 5: Replace and keep the backup. State: new original + backup. The complete Windows lab uses ReplaceFileW to install the new save and preserve the old one at avatar.txt.gha-backup. An existing backup causes refusal. Step 6: Verify through the game. State: four attributes equals 30. Reload the disposable character, check the four visible values, and let Flare save normally. Keep the backup until the loader and serializer have accepted the edit. This is the successful route through prepare, validate, commit, and recover. The temporary file and backup make interruptions distinguishable; atomic replacement does not make every possible failure durable.
 
 Close Flare, build the Windows lab workspace, and pass the exact save path and new build value:
 
@@ -122,7 +106,7 @@ The complete program is flare_save_editor.rs; the reusable Windows replacement b
 
 Additional detail: Complete lab source: flare_save_editor.rs.
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: 🛡️ A newline would create a second field and turn a value edit into a structural save-file injection. 📦 Preserve the file's existing Windows/Unix line convention and whether it ended with a newline; unrelated formatting should not become a diff. 🎯 Zero means the requested field is absent; several means the edit is ambiguous. In both cases the original must remain untouched. 🧹 Flush and close the complete sibling file before asking Windows to atomically swap names. The original is never used as scratch space. 🔁 Replacement failed, so remove only our disposable temporary file; `path` still names the untouched original.
 
 Read it in five chunks: validate the three arguments, locate exactly one field, preserve the file’s newline style, flush a temporary file, then ask Windows to install it while keeping a backup. If any earlier chunk fails, the original save is untouched.
 
@@ -147,8 +131,6 @@ If the format is cryptographically signed, use supported modding tools instead o
 Section: Debug the loader only if needed.
 
 Process Monitor can show the file read, and a debugger breakpoint on file APIs can show the buffer passed into parsing.
-
-Image description: A file read observed in the debugger
 
 In 32-bit Flare on Windows, open x64dbg’s Symbols tab, choose kernelbase.dll, find CreateFileA, and break at its first instruction. Saving the game puts the same avatar.txt path on the stack, independently confirming the location found with Process Monitor.
 

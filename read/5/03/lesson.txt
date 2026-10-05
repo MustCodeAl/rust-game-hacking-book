@@ -6,21 +6,11 @@ Lesson 7.2 showed that a draw submission combines geometry with the graphics sta
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-If the game makes a draw with count equals 9, the wrapper records that value and then passes the same arguments to OpenGL. The picture should remain identical; only the separate observation log changes. The wrapper must preserve the exact ABI, application binary interface, and forward every normal call. The pinned Urban Terror implementation later in this lesson instead detours an instruction inside glDrawElements, so it has a narrower restoration opportunity. Keep that difference visible when comparing the two designs.
+If the game makes a draw with count equals 9, the wrapper records that value and then passes the same arguments to OpenGL. The picture should remain identical; only the separate observation log changes. The wrapper must preserve the exact A B I, application binary interface, and forward every normal call. The pinned Urban Terror implementation later in this lesson instead detours an instruction inside glDrawElements, so it has a narrower restoration opportunity. Keep that difference visible when comparing the two designs.
 
 Section: What an indexed draw actually requests.
 
 glDrawElements(mode, count, element_type, indices) asks OpenGL to consume an ordered sequence of vertex indices:
-
-Table columns: Argument; Meaning.
-
-Argument: mode; Meaning: how index results form primitives, such as triangles or lines.
-
-Argument: count; Meaning: number of indices to read.
-
-Argument: element_type; Meaning: width/format of each index, such as 16- or 32-bit unsigned.
-
-Argument: indices; Meaning: byte offset into a bound index buffer, or an address in old client-memory mode.
 
 The call does not directly identify a model. OpenGL combines those indices with the currently bound vertex attributes, textures, transforms, and other state. One character may require several draws—body, head, weapon, shadow—and one draw may contain many instances or a batch of unrelated objects.
 
@@ -30,13 +20,11 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 For example, this index buffer holds nine indices, so a call with count equals 9 submits 9 divided by 3 equals 3 triangles:
 
-Labelled memory diagram. 0: 0; 1: 1; 2: 2; 3: 2; 4: 1; 5: 3; 6: 2; 7: 3; 8: 4. Groups: triangle 0; triangle 1; triangle 2; nine indices, but only five different vertices: 0, 1, 2, 3, 4. Each box holds one index, and the label above it is its position in the buffer. Triangles 0 and 1 share the edge from vertex 1 to vertex 2, and triangles 1 and 2 share the edge from vertex 2 to vertex 3, so count (9) is not the number of vertices (5).
+The indices parameter is especially easy to misread. If an element-array buffer is bound, a small value such as hexadecimal 1 2 0 is an offset into G P U, graphics processing unit,-managed buffer state, not a process pointer that should be dereferenced.
 
-The indices parameter is especially easy to misread. If an element-array buffer is bound, a small value such as hexadecimal 1 2 0 is an offset into GPU, graphics processing unit,-managed buffer state, not a process pointer that should be dereferenced.
+Section: C P U, central processing unit, submission and G P U execution overlap.
 
-Section: CPU, central processing unit, submission and GPU execution overlap.
-
-The CPU usually records commands faster than the GPU completes them. A draw call returning does not mean its pixels are finished. Reads that force the GPU to catch up can stall both processors. The hook sees submitted work: it runs when the CPU queues a draw, not when the GPU finishes its pixels.
+The C P U usually records commands faster than the G P U completes them. A draw call returning does not mean its pixels are finished. Reads that force the G P U to catch up can stall both processors. The hook sees submitted work: it runs when the C P U queues a draw, not when the G P U finishes its pixels.
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -52,11 +40,7 @@ the capture path copies a tiny fixed-size sample and returns immediately;
 
 the analysis path runs later on a worker and may aggregate, label, or save bounded results.
 
-Diagram labels, in drawing order: Worker thread; Bounded channel; Render thread, inside the hook; If the channel is full, the sample is dropped and a counter goes up. The hook never waits.; copy mode, count, and type into a DrawSample; try_send the sample; call the real glDrawElements and return; the worker takes samples whenever it runs; aggregate, label, and save.
-
 The render thread’s work ends at try_send; everything slow happens on the worker’s schedule. Measure both dropped samples and time spent in the hook. A dropped sample leaves a gap in the log, while blocking slows the very frames you are trying to measure.
-
-Image description: Locating glDrawElements in the debugger
 
 Section: Write the function type.
 
@@ -64,9 +48,9 @@ For a 32-bit Windows OpenGL 1.x target, the calling convention is significant:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The exact signature comes from the OpenGL API, application programming interface,, not from guessing registers.
+The exact signature comes from the OpenGL A P I, application programming interface,, not from guessing registers.
 
-In an older fixed-function renderer, transforms and arrays may be ordinary OpenGL state. In a modern renderer, shader programs and buffer objects carry the same roles. Hooking the draw call still works, but the state needed to explain a draw changes with the API version and engine.
+In an older fixed-function renderer, transforms and arrays may be ordinary OpenGL state. In a modern renderer, shader programs and buffer objects carry the same roles. Hooking the draw call still works, but the state needed to explain a draw changes with the A P I version and engine.
 
 Section: Keep the original function.
 
@@ -86,7 +70,7 @@ Section: Forward first.
 
 Begin with a transparent wrapper:
 
-Code example. The code’s comments explain: 🔁 SAFETY: the wrapper preserves the API signature and forwards the exact // arguments supplied by the original caller. unsafe { original(mode, count, element_type, indices) };}
+Code example. The code’s comments explain: 🔁 SAFETY: the wrapper preserves the A P I signature and forwards the exact arguments supplied by the original caller.
 
 Run the game and verify that rendering is unchanged. Only then add the code that copies samples.
 
@@ -96,15 +80,13 @@ Draw calls can occur thousands of times per frame. Synchronous file output insid
 
 Use a bounded channel and allow drops:
 
-Code example. The code’s comments explain: 🎯 In the hook, observe the state immediately before forwarding the call:let _ equals sender.try_send(DrawSample { mode, count, element_type });
+Code example. The code’s comments explain: 🎯 In the hook, observe the state immediately before forwarding the call:
 
 A worker thread can aggregate samples later. If the channel is full, losing a sample is better than blocking the render thread.
 
 Section: Classify with experiments.
 
 The count argument may correlate with a model in one exact build:
-
-Image description: Filtering draw calls by count
 
 But count alone is fragile. Different objects can share a vertex count, and model updates can change it.
 
@@ -132,7 +114,7 @@ call_site distinguishes engine submission paths, but compiler inlining and updat
 
 Section: Shaders turn vertex records into pixels.
 
-A shader is a small GPU program invoked many times in parallel. Two stages are central here:
+A shader is a small G P U program invoked many times in parallel. Two stages are central here:
 
 a vertex shader reads one vertex (and often matrices) and produces clip-space position plus values to interpolate;
 
@@ -154,11 +136,11 @@ Textures and buffers, images it can sample at a (u, v) position and arrays of da
 
 A small fragment shader that turns a texture grey shows how little a shader can be. It weights the red, green, and blue of the pixel by how bright the eye finds each:
 
-Code example. The code’s comments explain: Fragment shader, in GLSL: turn the texture's colour into grey.vec3 colour equals texture(image, uv).rgb;float grey equals dot(colour, vec3(0.299, 0.587, 0.114));out_colour equals vec4(vec3(grey), 1.0);
+Code example. The code’s comments explain: Fragment shader, in GLSL: turn the texture's colour into grey.
 
 For a pixel of (200, 100, 50), the grey is 0.299 times 200 + 0.587 times 100 + 0.114 times 50 equals 59.8 + 58.7 + 5.7 equals 124.2, so the pixel becomes about (124, 124, 124). A shader that reads the time as a uniform can animate: a brightness of 0.5 + 0.5 times sin(time) is 0.5 at time 0 and 1.0 at time 1.5708 (a quarter of a turn in radians), and it repeats.
 
-Shaders are written in a shading language: GLSL for OpenGL, HLSL for Direct3D, WGSL for WebGPU. A driver, or the engine ahead of time, compiles them to the GPU’s own instructions. Engines that support several graphics APIs often write a shader once and translate it for each.
+Shaders are written in a shading language: GLSL for OpenGL, HLSL for Direct3D, WGSL for WebGPU. A driver, or the engine ahead of time, compiles them to the G P U’s own instructions. Engines that support several graphics APIs often write a shader once and translate it for each.
 
 Section: Variants, instancing, and shaders that do not draw.
 
@@ -166,7 +148,7 @@ Variants. One shader source can have switches, written as #ifdef lines, such as 
 
 Instancing. To draw 1,000 copies of one tree mesh, the game makes one draw call with 1,000 instances. A buffer holds each copy’s transform, a 4 times 4 matrix of 16 four-byte floats, which is 64 bytes, so 1,000 copies take 64,000 bytes. Earlier we saw that one draw can contain many objects; instancing is the deliberate version of it.
 
-Compute shaders. A compute shader is not part of drawing. It is a general GPU program that runs once for each item in a grid of work, reading and writing buffers. Engines use it for particles, culling, mesh deformation, and post-processing.
+Compute shaders. A compute shader is not part of drawing. It is a general G P U program that runs once for each item in a grid of work, reading and writing buffers. Engines use it for particles, culling, mesh deformation, and post-processing.
 
 Post-processing shaders. A fragment shader run over a full-screen rectangle, reading the finished picture as a texture, produces effects such as bloom and colour grading (Lesson 7.2).
 
@@ -174,17 +156,17 @@ Extending the standard material. Engines let a game add its own shader code and 
 
 Section: Why many small draws cost frame time.
 
-Each draw call costs the CPU something even if the GPU’s share is tiny, because the driver checks the bound state and builds the commands. Suppose, as an illustration, one draw costs 5 microseconds of CPU time. Then 10,000 draws cost 10,000 times 5 equals 50,000 microseconds, which is 50 milliseconds, three frames of the 16.67 milliseconds budget from Lesson 4.1, with the GPU waiting. Instancing, merging meshes that share a material, texture atlases, and culling (Lesson 7.2) all exist to cut the number of draws.
+Each draw call costs the C P U something even if the G P U’s share is tiny, because the driver checks the bound state and builds the commands. Suppose, as an illustration, one draw costs 5 microseconds of C P U time. Then 10,000 draws cost 10,000 times 5 equals 50,000 microseconds, which is 50 milliseconds, three frames of the 16.67 milliseconds budget from Lesson 4.1, with the G P U waiting. Instancing, merging meshes that share a material, texture atlases, and culling (Lesson 7.2) all exist to cut the number of draws.
 
-A stress test finds the limit by multiplying one thing, such as cubes, sprites, lights, animated characters, or text, and watching the frame time. If 1,000 cubes take 4 milliseconds and 4,000 take 16 milliseconds, each costs 0.004 milliseconds and the 16.67 milliseconds budget runs out at about 16.67 divided by 0.004 equals 4,167 cubes. Halving the window’s pixel count tells you which processor is the limit: if the frame time does not change, the CPU, not the GPU, is the bottleneck.
+A stress test finds the limit by multiplying one thing, such as cubes, sprites, lights, animated characters, or text, and watching the frame time. If 1,000 cubes take 4 milliseconds and 4,000 take 16 milliseconds, each costs 0.004 milliseconds and the 16.67 milliseconds budget runs out at about 16.67 divided by 0.004 equals 4,167 cubes. Halving the window’s pixel count tells you which processor is the limit: if the frame time does not change, the C P U, not the G P U, is the bottleneck.
 
 This is a classification problem. A threshold such as count greater than 500 separates the examples you observed, not necessarily the concept “player.” Test it against weapons, detailed scenery, menus, different models, and different graphics settings. Report false positives (something your rule caught that is not a player) and false negatives (a player your rule missed) instead of quietly turning a correlation into a definition.
 
 Section: Turn the wrapper into the actual Urban Terror wallhack.
 
-The API signature, draw-count interpretation, and sampling design above stand on their own. The exact-build detour below applies the DLL, dynamic link library, and patch lifecycle from Lesson 6.4 to one verified OpenGL instruction. Recheck the displaced instruction span and restoration path before running it.
+The A P I signature, draw-count interpretation, and sampling design above stand on their own. The exact-build detour below applies the D L L, dynamic link library, and patch lifecycle from Lesson 6.4 to one verified OpenGL instruction. Recheck the displaced instruction span and restoration path before running it.
 
-In Urban Terror 4.3.4, resolve glDrawElements from opengl32.dll. The historical build hooks the instruction at glDrawElements + hexadecimal 1 6 and resumes six bytes later. This is not a function-entry wrapper: it is a real code cave in the middle of the OpenGL function. At this point in this 32-bit build, EBX holds count.
+In Urban Terror 4.3.4, resolve glDrawElements from opengl32.dll. The historical build hooks the instruction at glDrawElements + hexadecimal 1 6 and resumes six bytes later. This is not a function-entry wrapper: it is a real code cave in the middle of the OpenGL function. At this point in this 32-bit build, e b x holds count.
 
 Resolve these two OpenGL functions with GetProcAddress:
 
@@ -198,15 +180,11 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Before and after the patch, the six bytes at glDrawElements + hexadecimal 1 6 look like this:
 
-Labelled memory diagram. +hexadecimal 1 6: 8B; +hexadecimal 1 7: B6; +hexadecimal 1 8: 18; +hexadecimal 1 9: 0A; +hexadecimal 1 A: 00; +hexadecimal 1 B: 00. Groups: mov into esi from [esi + displacement]; displacement hexadecimal A 1 8, lowest byte first. Before: one whole instruction. Read lowest byte first, 18 0A 00 00 is hexadecimal 1 8 + hexadecimal 0 A times 256 equals 24 + 2,560 equals 2,584, which is hexadecimal A 1 8.
-
-Labelled memory diagram. +hexadecimal 1 6: E9, highlighted; +hexadecimal 1 7: ??, highlighted; +hexadecimal 1 8: ??, highlighted; +hexadecimal 1 9: ??, highlighted; +hexadecimal 1 A: ??, highlighted; +hexadecimal 1 B: 90. Groups: jmp to the cave: E9 plus a 4-byte distance; nop. After: the four ?? bytes hold the distance from +hexadecimal 1 B, the byte right after the jump (hexadecimal 1 6 + 5 equals hexadecimal 1 B), to the cave, so they depend on where the DLL loaded. The cave returns to +hexadecimal 1 C (hexadecimal 1 6 + 6 equals 22 + 6 equals 28 equals hexadecimal 1 C), so the nop never runs; it only fills the sixth byte so no fragment of the old instruction is left behind.
-
 The installer refuses to patch if those bytes do not match. It writes a five-byte near jump plus one NOP, and LocalPatch owns the saved bytes so dropping the patch restores them:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The cave saves the CPU flags and all general-purpose registers, passes the live EBX value to an ordinary helper, replays the displaced instruction, and returns to the byte immediately after it:
+The cave saves the C P U flags and all general-purpose registers, passes the live e b x value to an ordinary helper, replays the displaced instruction, and returns to the byte immediately after it:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -214,17 +192,15 @@ Why save everything? The original OpenGL function expects its registers and flag
 
 The helper changes the live OpenGL state. A later non-highlighted draw restores normal depth state:
 
-Code example. The code’s comments explain: 🛡️ SAFETY: these pointers were resolved from this process's opengl32.dll, // and the game reached the cave on its OpenGL render thread. unsafe { if highlighted { depth_range(0.0, 0.0); depth_func(GL_ALWAYS); } else { depth_range(0.0, 1.0); depth_func(GL_LEQUAL); } }}
+Code example. The code’s comments explain: 🛡️ SAFETY: these pointers were resolved from this process's opengl32.dll, and the game reached the cave on its OpenGL render thread.
 
-Build the DLL for 32-bit Windows, inject it into Quake3-UrT.exe, enter a local match, and press F2. Geometry with count greater than 500 is forced to the near plane and uses GL_ALWAYS, producing the player/weapon-through-wall result shown below. Press F2 again or End to restore normal state and the original six code bytes.
+Build the D L L for 32-bit Windows, inject it into Quake3-UrT.exe, enter a local match, and press F2. Geometry with count greater than 500 is forced to the near plane and uses GL_ALWAYS, producing the player/weapon-through-wall result shown below. Press F2 again or End to restore normal state and the original six code bytes.
 
 Terminal window
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 The complete compiled implementation—including export lookup, the naked cave, exact-byte verification, both graphics modes, and restoration—is in opengl_hooks.rs. The hotkey worker is in dll.rs.
-
-Image description: Urban Terror wallhack after count filtering
 
 The threshold is a confirmed property of this lesson build, not a universal player detector. Log counts while toggling third-person and adding/removing bots so you can see exactly which models it includes.
 
@@ -237,18 +213,6 @@ State restoration must match what was changed. A robust typed wrapper queries or
 Section: Diagnose common failures.
 
 Common draw-call failures
-
-Table columns: Result; Check.
-
-Result: Immediate crash; Check: Signature, calling convention, or original pointer.
-
-Result: Infinite recursion; Check: Original resolved to wrapper.
-
-Result: Missing geometry; Check: Parameters were not forwarded exactly.
-
-Result: Broken later draws; Check: Graphics state not restored.
-
-Result: Huge slowdown; Check: Blocking or allocation inside the hook.
 
 The first success is not a visual effect. It is a transparent wrapper that produces a bounded stream of samples while the game draws normally.
 

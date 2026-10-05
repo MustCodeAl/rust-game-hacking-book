@@ -6,13 +6,13 @@ The memory map says which pages existed when the tool asked. It cannot tell whet
 
 A process supplies the address space, handles, modules, and security boundary. A thread is a path of execution inside that process.
 
-Every process begins with at least one thread. Games commonly add threads for rendering, audio, networking, asset loading, input, and background work. Those names describe roles chosen by the program; Windows fundamentally schedules thread IDs, priorities, and CPU, central processing unit, state.
+Every process begins with at least one thread. Games commonly add threads for rendering, audio, networking, asset loading, input, and background work. Those names describe roles chosen by the program; Windows fundamentally schedules thread IDs, priorities, and C P U, central processing unit, state.
 
 Threads in the same process share code and most data, but each thread has its own:
 
 thread ID, or TID;
 
-instruction pointer and general CPU registers;
+instruction pointer and general C P U registers;
 
 stack and stack pointer;
 
@@ -24,19 +24,15 @@ TEB, introduced in the PEB/TEB lesson.
 
 Two threads can access the same object at nearly the same time. That is why games use mutexes, events, atomics, queues, and other synchronization tools.
 
-The process supplies shared resources, while each execution path keeps its own paused CPU state and call history:
-
-Diagram. From Game process to Shared memory, modules, handles. From Game process to Thread A. From Game process to Thread B. From Thread A to Context and stack A. From Thread B to Context and stack B.
+The process supplies shared resources, while each execution path keeps its own paused C P U state and call history:
 
 This shared-versus-private split explains both communication between threads and the races that communication can create.
 
 Section: Scheduling is not the same as parallel execution.
 
-Windows schedules runnable threads by giving them turns on CPU cores. On one core, threads can interleave: one runs, pauses, and another runs. On several cores, some threads can also run truly in parallel. The program must be correct under both possibilities.
+Windows schedules runnable threads by giving them turns on C P U cores. On one core, threads can interleave: one runs, pauses, and another runs. On several cores, some threads can also run truly in parallel. The program must be correct under both possibilities.
 
 Suppose the update thread changes a player record in two steps while an overlay thread reads between them:
-
-Diagram labels, in drawing order: overlay thread; player record; update thread; sees the new x with the old; y and health — a state that; never existed; write x position; read x, y, and health; write y position.
 
 The overlay may observe a combination that was never a complete game state. This is an interleaving problem. “It worked ten times” does not prove it is safe, because the scheduler may choose a different order on the next run.
 
@@ -44,21 +40,7 @@ Section: A race that loses an update.
 
 A bug whose result depends on which thread happens to run first is a race condition. The torn read above is one. The most common kind loses a write.
 
-“Add 500 gold” is one line of source code, but the CPU does it in three steps: read the value into a register, add, and write the result back. Put two threads on the same gold field, one adding a 500-gold quest reward and one taking 300 for a purchase, and let the scheduler interleave them:
-
-Table columns: Step; Reward thread; Purchase thread; gold in memory.
-
-Step: 1; Reward thread: reads 1,000; Purchase thread: ; gold in memory: 1,000.
-
-Step: 2; Reward thread: ; Purchase thread: reads 1,000; gold in memory: 1,000.
-
-Step: 3; Reward thread: 1,000 + 500 equals 1,500; Purchase thread: 1,000 minus 300 equals 700; gold in memory: 1,000.
-
-Step: 4; Reward thread: writes 1,500; Purchase thread: ; gold in memory: 1,500.
-
-Step: 5; Reward thread: ; Purchase thread: writes 700; gold in memory: 700.
-
-Diagram walkthrough: Two correct calculations, one lost reward. Step 1: Reward thread reads gold. State: gold equals 1000. The reward thread reads the shared gold field as 1,000. It now has a local copy to which it will add the 500-gold reward; memory still holds 1,000. Step 2: Purchase thread reads gold. State: purchase reads 1000. Before the reward is written back, the purchase thread also reads 1,000. Both threads now calculate from the same old value, even though their changes should accumulate. Step 3: Calculate in separate registers. State: reward 1500; purchase 700. The reward thread computes 1,000 + 500 equals 1,500. The purchase thread computes 1,000 minus 300 equals 700. Neither result has reached the shared field, which still contains 1,000. Step 4: Publish the reward result. State: gold equals 1500. The reward thread writes 1,500 to gold. This write completes its work, but it does not update the purchase thread’s local result of 700. Step 5: Overwrite with the stale result. State: gold equals 700; expected 1200. The purchase thread writes 700 last. The shared field loses the reward, although both arithmetic operations were correct. The intended combined result was 1,000 + 500 minus 300 equals 1,200. The changing memory value makes this particular interleaving visible. The mutex described below makes the purchase wait, then read 1,500 and write 1,200, preserving both changes.
+“Add 500 gold” is one line of source code, but the C P U does it in three steps: read the value into a register, add, and write the result back. Put two threads on the same gold field, one adding a 500-gold quest reward and one taking 300 for a purchase, and let the scheduler interleave them:
 
 The player should have 1,000 + 500 minus 300 equals 1,200 and has 700. The reward vanished, because the purchase thread wrote a result computed from a value that was already out of date. Most runs interleave harmlessly, with one thread finishing before the other starts, which is why a race can pass every test and still fail for a player.
 
@@ -77,8 +59,6 @@ An atomicity violation happens when several operations must behave as one unit, 
 An order violation happens when one action assumes another action already occurred, but no synchronization enforces that order. A render worker reading a snapshot before initialization finishes is one example.
 
 Here is the pointer version of the first problem. A true check does not reserve the object for the next line:
-
-Diagram labels, in drawing order: The game; Your tool; The enemy dies and its memory is freed; Is the enemy pointer non-null?; Yes; Read health through that pointer; Bytes from whatever occupies that memory now.
 
 The fix must enforce the required relationship, not merely make the timing less likely. A lock can protect one compound state change. An event, condition variable, or channel can establish that initialization completed before consumption begins.
 
@@ -104,33 +84,31 @@ ready: able to run, waiting for the scheduler to choose it;
 
 waiting: blocked until I/O, a timer, lock, event, or another condition changes.
 
-Windows transitions threads between these states. A network thread may spend most of its life waiting and still be perfectly healthy. A CPU profiler mainly samples running work; wait analysis explains why a thread is not running. Use the tool that matches the question.
+Windows transitions threads between these states. A network thread may spend most of its life waiting and still be perfectly healthy. A C P U profiler mainly samples running work; wait analysis explains why a thread is not running. Use the tool that matches the question.
 
 Section: A thread context stores paused register values.
 
 A thread context is a structure containing register state for a particular architecture. On 32-bit x86, useful fields include:
 
-Eip: the next instruction address;
+e i p: the next instruction address;
 
-Esp: the top of the current stack;
+e s p: the top of the current stack;
 
-Ebp: a frame pointer when the compiler uses one;
+e b p: a frame pointer when the compiler uses one;
 
-Eax, Ebx, Ecx, Edx, Esi, and Edi: general-purpose registers;
+e a x, e b x, e c x, e d x, e s i, and e d i: general-purpose registers;
 
-EFlags: condition and control bits, including the trap flag used for single-stepping.
+e f l a g s: condition and control bits, including the trap flag used for single-stepping.
 
-On x86-64, those names become Rip, Rsp, Rbp, Rax, and so on, with additional registers.
+On x86-64, those names become r i p, r s p, r b p, r a x, and so on, with additional registers.
 
-The context is meaningful only at a controlled instant. Reading or writing a running thread’s registers while it continues executing would race with the CPU. A debugger receives an event while Windows has stopped the relevant threads, or a tool explicitly suspends a thread and must later resume it.
+The context is meaningful only at a controlled instant. Reading or writing a running thread’s registers while it continues executing would race with the C P U. A debugger receives an event while Windows has stopped the relevant threads, or a tool explicitly suspends a thread and must later resume it.
 
 This course’s debugger uses the debugger event model. It does not randomly freeze a game thread and hope cleanup succeeds.
 
 Section: A stack records nested work.
 
 When function A calls function B, the program must remember where B should return. Arguments, saved registers, local variables, and return information may be stored in a stack frame.
-
-Labelled memory diagram. newest frame: spend_gold(), highlighted; cell 2: end_turn(); cell 3: process_player_action(); oldest shown: game_loop(). A stack trace lists frames newest first: spend_gold was called from inside end_turn, called from inside process_player_action, called from game_loop.
 
 A stack trace walks from the current frame toward older callers. Optimized code can inline functions, omit frame pointers, move values into registers, or reuse stack slots, so the neat classroom picture is a guide rather than a promise.
 
@@ -150,13 +128,11 @@ For an observer, a pool shows up as several threads that start at the same addre
 
 Section: Start with a read-only thread inventory.
 
-Before opening a thread or asking for its context, identify which threads belong to the target process. TH32CS_SNAPTHREAD creates a system-wide snapshot, even when a PID, process identifier, is supplied. The program must filter th32OwnerProcessID itself:
-
-Diagram. From CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD) to OwnedHandle::from_raw. From OwnedHandle::from_raw to Thread32First. From Thread32First to th32OwnerProcessID equals process.id?. From th32OwnerProcessID equals process.id? to record TID, base priority. The connection is labelled: yes. From th32OwnerProcessID equals process.id? to skip. The connection is labelled: no. From record TID, base priority to Thread32Next. From skip to Thread32Next. From Thread32Next to th32OwnerProcessID equals process.id?. The connection is labelled: Ok(()). From Thread32Next to sort and print threads. The connection is labelled: no more files.
+Before opening a thread or asking for its context, identify which threads belong to the target process. TH32CS_SNAPTHREAD creates a system-wide snapshot, even when a P I D, process identifier, is supplied. The program must filter th32OwnerProcessID itself:
 
 Additional detail: Complete lab source: thread_inventory.rs.
 
-Code example. The code’s comments explain: 🔍 The thread snapshot is system-wide; filter by owner PID below. // 🧹 SAFETY: OwnedHandle owns the returned snapshot. let snapshot equals unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) }?; let snapshot equals OwnedHandle::from_raw(snapshot)?; let mut entry equals THREADENTRY32 { dwSize: size_of::<THREADENTRY32>() as u32, ..Default::default() }; 📏 SAFETY: entry has the required size and is writable. unsafe { Thread32First(snapshot.raw(), &mut entry) }?; let mut threads equals Vec::new(); loop { if entry.th32OwnerProcessID equals process.id { threads.push((entry.th32ThreadID, entry.tpBasePri)); } // 🔁 SAFETY: entry remains a valid output structure. match unsafe { Thread32Next(snapshot.raw(), &mut entry) } { Ok(()) leads to {} Err(error) if no_more_files(&error) leads to break, Err(error) leads to return Err(error.into()), } }
+Code example. The code’s comments explain: 🔍 The thread snapshot is system-wide; filter by owner P I D below. 🧹 SAFETY: OwnedHandle owns the returned snapshot. 📏 SAFETY: entry has the required size and is writable. 🔁 SAFETY: entry remains a valid output structure.
 
 dwSize tells Windows how large a THREADENTRY32 the caller prepared. The final ERROR_NO_MORE_FILES is not a failure; it is the documented end of enumeration.
 
@@ -170,9 +146,9 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 The count may change between runs because games create and retire worker threads. A TID is temporary and can eventually be reused. Do not store it as a version-specific constant.
 
-Base priority is scheduling input, not “importance.” The currently busy rendering thread might have the same base priority as an idle worker. ETW, Event Tracing for Windows, CPU samples and debugger stacks show which threads are actually doing work.
+Base priority is scheduling input, not “importance.” The currently busy rendering thread might have the same base priority as an idle worker. E T W, Event Tracing for Windows, C P U samples and debugger stacks show which threads are actually doing work.
 
-Likewise, a TID does not identify a permanent role. A thread’s role shows up in several places: its start address or module, its stack sampled over time, its CPU and wait activity, its thread description when the game sets one, and which game events line up with that activity. One paused stack shows only what the thread was doing at that instant. In an engine with a job system, the same worker thread can be mixing audio in one sample and decompressing a texture in the next.
+Likewise, a TID does not identify a permanent role. A thread’s role shows up in several places: its start address or module, its stack sampled over time, its C P U and wait activity, its thread description when the game sets one, and which game events line up with that activity. One paused stack shows only what the thread was doing at that instant. In an engine with a job system, the same worker thread can be mixing audio in one sample and decompressing a texture in the next.
 
 Section: How the Wesnoth debugger uses a context safely.
 
@@ -182,9 +158,9 @@ opens that exact event thread with context rights;
 
 reads its x86 CONTEXT;
 
-moves Eip back over the one-byte int3;
+moves e i p back over the one-byte int3;
 
-sets the trap flag in EFlags;
+sets the trap flag in e f l a g s;
 
 continues the event so one original instruction runs;
 

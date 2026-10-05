@@ -26,8 +26,6 @@ Inside, a Lua table has two parts: an array part for the keys 1, 2, 3, … of a 
 
 Suppose the hash part has 4 slots, numbered 0 to 3, and the string "y" hashes to 22. Lua keeps the remainder after dividing by the slot count: 22 divided by 4 is 5 remainder 2, so y goes in slot 2. Slot counts are powers of two, so that remainder is simply the hash’s lowest bits: 22 is 10110 in binary, and its last two bits, 10, are 2.
 
-Labelled memory diagram. slot 0: z dot 2.0; slot 1: empty; slot 2: y dot 5.5, highlighted; slot 3: x dot 10.0. Groups: 22 divided by 4 leaves 2. A collision-free illustration of the hash part of position with 4 slots, assuming the key y hashes to 22. A real collision can place a key in another slot and link it from its starting slot.
-
 Two things follow. The Lua language promises no useful order from pairs; it does not reproduce the order in which the script wrote fields. Lua 5.4’s implementation traverses its storage, and a table resize can change that order. Two keys can also hash to the same starting slot, a collision; Lua links the displaced key so lookups still work, though long collision chains cost extra comparisons. Lesson 3.6 shows what the same idea looks like in a compiled C++ program.
 
 Section: Iterate according to the shape.
@@ -39,8 +37,6 @@ Code example. The surrounding prose explains this example; the full lesson conta
 ipairs starts at key 1 and stops at the first missing key. A hole, a missing key in the middle of a sequence, therefore ends the loop early:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-Labelled memory diagram. 1: sword; 2: nil, highlighted; 3: potion; 4: nil. Groups: visited by ipairs; ipairs stops here; never reached. After list[2] equals nil, ipairs never sees potion. The length operator is no safer: #list may return 1 or 3, because each is a border, a key whose value is present while the next key's value is missing, and Lua promises only that # returns some border.
 
 Use pairs when keys are not a simple sequence:
 
@@ -70,8 +66,6 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Following attack_ready(true) through five calls in a row shows the private remaining at work. The first call finds remaining at 0, so it fires and sets remaining to 3; each later call finds it above 0, subtracts 1, and refuses, until it is back at 0 and the next call fires again:
 
-Labelled memory diagram. call 1: fires, 3, highlighted; call 2: blocked, 2; call 3: blocked, 1; call 4: blocked, 0; call 5: fires, 3, highlighted. The result of each attack_ready(true) call and the value remaining holds afterward. heal_ready owns a different remaining, so none of these calls moves its countdown.
-
 That is why closures suit bot code so well: each piece of timed behavior can own its own state without the rest of the script being able to reach in and disturb it.
 
 Section: The colon supplies self.
@@ -98,15 +92,11 @@ So setmetatable(instance, Bot) says “if a key is missing from this instance, a
 
 Drawn out, the whole arrangement is two references. scout’s metatable is Bot, and Bot.__index points back at Bot itself:
 
-Diagram. From scout name equals "scout" state equals "plan" to Bot __index equals Bot new equals function set_state equals function. The connection is labelled: metatable. From Bot __index equals Bot new equals function set_state equals function to Bot __index equals Bot new equals function set_state equals function. The connection is labelled: __index.
-
 set_state appears only in the right-hand box. A lookup that misses in scout follows the metatable arrow, finds __index, and follows the loop to search Bot, where the key exists.
 
 When scout has no set_state key, its metatable’s __index points to Bot, so Lua looks there. This resembles method lookup, but it is not a compiled C++ vtable. It is a runtime table rule that scripts can inspect and change.
 
 Read the expression scout:set_state("plan") in two stages. Colon syntax first supplies scout as the hidden first argument. Normal table lookup then searches scout for set_state and follows the __index rule to Bot when the key is absent. Keeping argument passing separate from lookup makes metatable behavior much less mysterious.
-
-Diagram. From scout:set_state("plan") to Colon syntax supplies scout as self. From Colon syntax supplies scout as self to Look for set_state in scout. From Look for set_state in scout to Key found?. From Key found? to Call that value with scout as self. The connection is labelled: Yes. From Key found? to Read scout's metatable. The connection is labelled: No. From Read scout's metatable to __index available?. From __index available? to Lookup produces nil. The connection is labelled: No. From __index available? to Follow __index to Bot. The connection is labelled: Yes. From Follow __index to Bot to Find Bot.set_state. From Find Bot.set_state to Call that value with scout as self.
 
 The left side of the process chooses the first argument. The right side finds the function value. They cooperate, but they are separate rules.
 

@@ -14,8 +14,6 @@ How does everything return to normal during shutdown?
 
 The menu should not own a process handle, execute pointer chains while painting a checkbox, or patch memory sixty times per second. Its job is to edit ordinary settings and send deliberate commands to a worker. That separation makes the interface responsive and the low-level code reviewable. 🎛️
 
-Diagram. From egui widgets to owned Settings. From owned Settings to channel. From channel to tool worker. From tool worker to handles, reads, writes, cleanup.
-
 This tutorial builds a separate desktop window. That is the best first menu: it is easy to debug, does not run under loader lock, and can stay open beside Wesnoth, AssaultCube, or another local course target. Integrating the same widgets into an injected renderer is a later graphics-backend problem.
 
 Section: Create the project.
@@ -60,16 +58,6 @@ Section: Design the event before drawing the widget.
 
 An event-driven tool waits for something meaningful to happen, then runs the small handler that owns that event. Describe each interaction before choosing colors, icons, or panel layouts:
 
-Table columns: User event; UI command; Worker result; Visible feedback.
-
-User event: clicks Apply changes; UI command: Apply(settings); Worker result: accepted or rejected; Visible feedback: exact status and reason.
-
-User event: clicks Restore defaults; UI command: RestoreDefaults; Worker result: features disabled and state restored; Visible feedback: “Restored” only after acknowledgement.
-
-User event: presses Escape; UI command: close the menu; Worker result: no game-state change; Visible feedback: menu disappears.
-
-User event: closes the app; UI command: Shutdown; Worker result: keys released, patches restored, handles closed; Visible feedback: window exits after worker joins.
-
 This table prevents a common UI logic bug: the button changes its label or color, but no one can say whether the worker completed the requested action. The worker owns the game-hacking side effect; the menu owns the request and the truthful report of its result.
 
 Section: Give the worker commands, not widget references.
@@ -89,8 +77,6 @@ Replace only that adapter with a version-checked game bridge. The UI architectur
 Section: Do not resend unchanged settings.
 
 Keep both the currently edited value and the last value sent:
-
-Diagram. From user edits a widget to self.settings changes. From self.settings changes to settings equals last_applied?. From settings equals last_applied? to status: “Nothing changed.”. The connection is labelled: yes. From settings equals last_applied? to send Command::Apply(settings.clone()). The connection is labelled: no. From send Command::Apply(settings.clone()) to last_applied equals settings.clone(). From last_applied equals settings.clone() to status: “Settings sent to the tool worker.”.
 
 The method below implements the decision in that diagram. It sends a command only when settings differ from the last sent values; a successful send updates the remembered copy and the message the user sees. The worker still has to report whether it actually applied the command.
 
@@ -157,8 +143,6 @@ unhook only hooks it installed;
 close its owned handles;
 
 report completion and exit.
-
-Diagram. From MenuApp::on_exit sends Command::Shutdown to stop accepting new feature commands. From stop accepting new feature commands to release held keys and mouse buttons. From release held keys and mouse buttons to restore bytes or graphics state changed. From restore bytes or graphics state changed to unhook only hooks this tool installed. From unhook only hooks this tool installed to close owned handles. From close owned handles to report completion; main thread joins worker.
 
 The main thread joins the worker before returning. A window disappearing is not proof that cleanup finished; joining turns cleanup into something the program actually waits for.
 

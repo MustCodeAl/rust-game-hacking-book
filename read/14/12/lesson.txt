@@ -8,63 +8,31 @@ Section: Firmware is a role, not a file extension.
 
 Firmware is software that operates a device, usually stored in nonvolatile memory: memory that keeps its contents without power. Flash is a common example and can be erased and programmed again. The word does not mean that the code is permanently unchangeable, nor that it must be written in assembly.
 
-Consider a USB controller plugged into a PC:
-
-Table columns: Software; Where it runs; What it does.
-
-Software: Game application; Where it runs: The PC’s processor; What it does: Turns a recognised button action into a game action.
-
-Software: Device driver; Where it runs: The PC’s processor, as part of its OS, operating system,; What it does: Exchanges requests and reports with the controller.
-
-Software: Controller firmware; Where it runs: The controller’s own processor; What it does: Samples its buttons and prepares the reports.
+Consider a U S B controller plugged into a PC:
 
 The driver and firmware cooperate across a device boundary. Updating the game does not necessarily update either one. A firmware update replaces code in the device; its format and programming procedure belong to that particular device.
 
-Firmware can include a real-time operating system, or RTOS, which schedules tasks and provides services suited to embedded devices. It can also use no OS at all. The latter arrangement is called bare-metal programming, and it is the arrangement used by this lesson. An embedded Linux application is another possibility; being physically inside a device does not make every program bare-metal firmware.
+Firmware can include a real-time operating system, or RTOS, which schedules tasks and provides services suited to embedded devices. It can also use no O S, operating system, at all. The latter arrangement is called bare-metal programming, and it is the arrangement used by this lesson. An embedded Linux application is another possibility; being physically inside a device does not make every program bare-metal firmware.
 
 Section: One chip, several kinds of memory.
 
 A microcontroller combines a processor core, memory, and peripheral devices on one chip. Peripherals include timers, serial interfaces, and GPIO (general-purpose input/output) pins. A GPIO pin can sense a button’s electrical level or drive an output, with the appropriate circuit and configuration.
 
-Our target is QEMU’s model of the LM3S6965EVB evaluation board. QEMU is an emulator: a program that reproduces a machine’s behaviour so its software can run on another computer. This model has a Cortex-M3 core, 256 KiB of flash, and 64 KiB of SRAM. A KiB is 1,024 bytes; SRAM is the chip’s working RAM, random access memory,, whose contents are not retained without power. These capacities are listed in the QEMU board documentation. The address map is shown in the Cortex-M memory-layout walkthrough.
-
-Table columns: Region in this model; Address range; Purpose.
-
-Region in this model: Flash, 256 KiB; Address range: hexadecimal 0 0 0 0 0 0 0 0–hexadecimal 0 0 0 3 F F F F; Purpose: Startup information, instructions, and stored constants.
-
-Region in this model: SRAM, 64 KiB; Address range: hexadecimal 2 0 0 0 0 0 0 0–hexadecimal 2 0 0 0 F F F F; Purpose: Writable state and the call stack.
-
-Region in this model: Peripheral registers; Address range: Device-specific addresses; Purpose: Configure hardware and exchange input/output.
+Our target is QEMU’s model of the LM3S6965EVB evaluation board. QEMU is an emulator: a program that reproduces a machine’s behaviour so its software can run on another computer. This model has a Cortex-M3 core, 256 KiB of flash, and 64 KiB of SRAM. A KiB is 1,024 bytes; SRAM is the chip’s working R A M, random access memory,, whose contents are not retained without power. These capacities are listed in the QEMU board documentation. The address map is shown in the Cortex-M memory-layout walkthrough.
 
 These are addresses in the emulated device, not addresses in the PC process running QEMU. The model can load an image into its flash region, but that does not reproduce the electrical procedure for programming a physical flash chip.
 
-For the lamp controller, the instructions survive a power cycle in flash. The current lamp state is working state: the program starts it again at each boot. Retaining the last setting across power loss would require an explicit storage design. Writing flash every time the main loop runs would be a poor substitute: flash has erase/program constraints and finite endurance that RAM does not.
+For the lamp controller, the instructions survive a power cycle in flash. The current lamp state is working state: the program starts it again at each boot. Retaining the last setting across power loss would require an explicit storage design. Writing flash every time the main loop runs would be a poor substitute: flash has erase/program constraints and finite endurance that R A M does not.
 
 Section: Reset comes before the Rust entry point.
 
 On this Cortex-M system, reset does not mean “call whichever function happens to be named main.” The core obtains startup values from a vector table. Its first entry contains the initial stack pointer; its second contains the reset-handler address. Later entries describe exception and interrupt handlers. The table contains values and addresses, rather than a sequence of application instructions. The Cortex-M memory-layout walkthrough shows how these entries fit into an image.
 
-Labelled memory diagram. hexadecimal 0 0 0 0 0 0 0 0: initial SP: hexadecimal 2 0 0 1 0 0 0 0; hexadecimal 0 0 0 0 0 0 0 4: reset-handler address; hexadecimal 0 0 0 0 0 0 0 8: next handler address. The beginning of this image's Cortex-M vector table. The initial stack pointer is just above the 64 KiB RAM region; the stack grows toward lower addresses. The reset address is supplied by the runtime, rather than guessed in application code.
-
 The reset handler runs startup code. Among its jobs is preparing writable static data so Rust can safely use it. The linker groups program contents into sections. Placement in the image happens before execution; reset-time initialization then prepares particular writable ranges:
 
-Table columns: Section; What belongs there; Who arranges it.
-
-Section: .vector_table; What belongs there: Initial stack value and handler addresses; Who arranges it: The linker places it; the loader or programmer supplies the image.
-
-Section: .text; What belongs there: Machine instructions; Who arranges it: The linker places executable code in flash for this image.
-
-Section: .rodata; What belongs there: Read-only data, such as message strings; Who arranges it: The linker places stored constants in flash.
-
-Section: .data; What belongs there: Writable statics with stored initial values; Who arranges it: The linker describes both ranges; reset startup copies initial contents from flash to RAM.
-
-Section: .bss; What belongs there: Writable statics initially filled with zero; Who arranges it: The linker reserves the range; reset startup fills it with zero.
-
-For example, a writable counter that must start at 7 needs both a working location in RAM and an initial value in the image. Startup copies the 7 before the application uses the counter. A counter starting at zero needs a reserved RAM range, but the image need not carry a long run of zero bytes: startup can write the zeros. The linker and runtime agree on where these ranges begin and end. Local variables are separate; a compiler can keep them in registers or on the stack as the program executes.
+For example, a writable counter that must start at 7 needs both a working location in R A M and an initial value in the image. Startup copies the 7 before the application uses the counter. A counter starting at zero needs a reserved R A M range, but the image need not carry a long run of zero bytes: startup can write the zeros. The linker and runtime agree on where these ranges begin and end. Local variables are separate; a compiler can keep them in registers or on the stack as the program executes.
 
 The cortex-m-rt runtime provides the Cortex-M startup and vector arrangement used here. Our application supplies its memory map and Rust entry function. The runtime prepares static data, then calls that function. These responsibilities are why a source file containing fn main() alone is not a complete firmware image.
-
-Diagram walkthrough: From reset to the lamp controller. Step 1: Read the vectors. State: initial SP | reset address. The core obtains the initial stack pointer and the reset-handler address from the image. Step 2: Prepare working memory. State: .data copied; .bss equals 0. Runtime startup copies initialized static data into RAM and zeroes the .bss range. Step 3: Enter Rust. State: #[entry] begins. The runtime calls the function marked #[entry]. Application logic can now use its initialized state. Step 4: Process button samples. State: released to pressed: toggle lamp. The controller changes its lamp state only when a released button becomes pressed. Step 5: Report the trace. State: trace to QEMU; emulator exit. Semihosting sends the results to QEMU. This test image then requests an emulator exit. Step through the order. Printing results depends on reaching application code; it cannot replace the earlier startup work.
 
 Section: A bootloader is an additional stage.
 
@@ -80,27 +48,13 @@ The logical change false to true is a rising edge. We detect it by remembering t
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Here is that complete control rule in Rust. It requires neither an OS nor a hardware register address:
+Here is that complete control rule in Rust. It requires neither an O S nor a hardware register address:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: Holding the button is not a new edge.
 
 &mut self lets the method update this controller’s remembered state. ! negates a boolean: it switches false to true or true to false. The last expression returns the new lamp state. No heap allocation is needed; the controller stores just its two boolean fields.
 
 The input deliberately means a recognised, stable press. A physical switch can bounce, briefly making and breaking contact several times. Rising-edge detection alone does not remove that bounce. Physical firmware would first use a suitable debounce policy, often based on several stable samples over time, then pass the resulting logical state to this controller.
-
-Table columns: Sample; Input pressed?; New press?; Lamp after the sample.
-
-Sample: 1; Input pressed?: false; New press?: No; Lamp after the sample: Off.
-
-Sample: 2; Input pressed?: true; New press?: Yes; Lamp after the sample: On.
-
-Sample: 3; Input pressed?: true; New press?: No: still held; Lamp after the sample: On.
-
-Sample: 4; Input pressed?: false; New press?: No: released; Lamp after the sample: On.
-
-Sample: 5; Input pressed?: true; New press?: Yes; Lamp after the sample: Off.
-
-Sample: 6; Input pressed?: false; New press?: No; Lamp after the sample: Off.
 
 This separation lets us test the rule on the PC and then reuse it inside a firmware image. It also keeps a logic bug distinguishable from a pin-wiring or clock-configuration bug.
 
@@ -134,19 +88,19 @@ lib.rs
 
 main.rs
 
-src/lib.rs contains the controller and its tests. Cargo.toml declares the project and its runtime dependencies; Cargo.lock pins the full dependency set. build.rs is a small helper that makes the memory map available to the linker. It runs on your computer during the build, so its use of std does not require an OS on the microcontroller.
+src/lib.rs contains the controller and its tests. Cargo.toml declares the project and its runtime dependencies; Cargo.lock pins the full dependency set. build.rs is a small helper that makes the memory map available to the linker. It runs on your computer during the build, so its use of std does not require an O S on the microcontroller.
 
 You can obtain the source files from those links and the configuration link below, or use the authored project folder. The project uses Rust 2024 and requires Rust 1.85 or later.
 
 Section: The target and the layout answer different questions.
 
-The Rust target is thumbv7m-none-eabi. It describes the Armv7-M architecture, bare-metal environment, and calling convention suitable for this Cortex-M3. It does not identify which pins the board wires to an LED or where a different chip keeps its flash. The Rust target documentation describes the CPU, central processing unit, requirements.
+The Rust target is thumbv7m-none-eabi. It describes the Armv7-M architecture, bare-metal environment, and calling convention suitable for this Cortex-M3. It does not identify which pins the board wires to an LED or where a different chip keeps its flash. The Rust target documentation describes the C P U, central processing unit, requirements.
 
 The memory.x linker configuration supplies our board model’s layout:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-ORIGIN is a region’s starting address; LENGTH is its capacity. The linker places the program into these regions using the runtime’s link.x script. A matching CPU instruction set with the wrong memory map still produces the wrong firmware for a board.
+ORIGIN is a region’s starting address; LENGTH is its capacity. The linker places the program into these regions using the runtime’s link.x script. A matching C P U instruction set with the wrong memory map still produces the wrong firmware for a board.
 
 The project’s .cargo/config.toml selects the target, passes -Tlink.x to the linker, and tells Cargo how to run the image:
 
@@ -154,9 +108,9 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Cargo appends the built executable’s path after -kernel. QEMU creates the selected machine and loads that image. -nographic uses terminal output; the semihosting option enables the reporting mechanism described next. This configuration follows the Embedded Rust QEMU setup.
 
-Section: no_std keeps Rust without assuming an OS.
+Section: no_std keeps Rust without assuming an O S.
 
-The binary begins with #![no_std] and #![no_main]. no_std uses Rust’s core library without automatically linking the OS-oriented standard library. Arithmetic, structs, borrowing, arrays, slices, Option, and Result still work. File access, OS threads, and ordinary terminal printing do not appear automatically. Dynamic collections such as Vec require additional allocation support; our controller does not need them.
+The binary begins with #![no_std] and #![no_main]. no_std uses Rust’s core library without automatically linking the O S-oriented standard library. Arithmetic, structs, borrowing, arrays, slices, Option, and Result still work. File access, O S threads, and ordinary terminal printing do not appear automatically. Dynamic collections such as Vec require additional allocation support; our controller does not need them.
 
 no_main disables the normal application entry arrangement. The #[entry] attribute from cortex-m-rt marks the function that startup calls. Its to ! means it never returns: there is no desktop caller waiting for a return value.
 
@@ -166,7 +120,7 @@ Semihosting lets target code ask a supporting debugger or emulator to perform ho
 
 This is the full src/main.rs:
 
-Code example. The code’s comments explain: These are logical input samples, not GPIO reads. for (index, pressed) in [false, true, true, false, true, false] .into_iter() .enumerate() { let on equals lamp.sample(pressed); writeln!(output, "sample {}: pressed={pressed}, lamp={on}", index + 1)?; } Ok(())}
+Code example. The code’s comments explain: These are logical input samples, not GPIO reads.
 
 fmt::Write supplies the writing operation used by writeln!. Opening the stream or writing can fail, so run_trace returns a Result and ? propagates an error. The entry function converts that result into an emulator success or failure request. Formatting uses the fixed samples and controller state; it needs no growing string buffer.
 
@@ -180,7 +134,7 @@ Open a terminal inside firmware-labs/, so Cargo reads this project’s configura
 
 Terminal window
 
-Code example. The code’s comments explain: Install Rust's libraries for the Cortex-M3 target.rustup target add thumbv7m-none-eabi Compile and link the image using the supplied dependency versions.cargo build --locked --bin lamp-firmware Start the same image using the QEMU runner in .cargo/config.toml.cargo run --locked --bin lamp-firmware
+Code example. The code’s comments explain: Install Rust's libraries for the Cortex-M3 target. Compile and link the image using the supplied dependency versions. Start the same image using the QEMU runner in .cargo/config.toml.
 
 The image is an ELF executable at target/thumbv7m-none-eabi/debug/lamp-firmware. ELF carries sections, addresses, and other information a loader or debugger can use. The file’s total size is not the flash usage: debug metadata can occupy space in the file without being loaded into the microcontroller’s flash.
 
@@ -190,7 +144,7 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 QEMU then exits successfully. The two consecutive true inputs leave the lamp on, which is the essential difference from toggling on every held sample. Some QEMU versions also print Timer with period zero, disabling; that model message is separate from the firmware trace.
 
-The computer’s OS runs Cargo and QEMU. The emulated firmware has no guest OS. Its startup, control logic, and output requests all execute as part of the loaded image.
+The computer’s O S runs Cargo and QEMU. The emulated firmware has no guest O S. Its startup, control logic, and output requests all execute as part of the loaded image.
 
 Section: Take the same rule to a physical board.
 
@@ -198,7 +152,7 @@ The control rule is reusable; the board configuration is specific. Start with th
 
 Adapt the project in this order:
 
-Identify the actual chip and board. Select their CPU target, memory map, pin assignments, and supported programming interface. Two Cortex-M boards can require different targets, flash addresses, clocks, and peripherals.
+Identify the actual chip and board. Select their C P U target, memory map, pin assignments, and supported programming interface. Two Cortex-M boards can require different targets, flash addresses, clocks, and peripherals.
 
 Initialize the hardware. Configure clocks, an input pin with the right pull resistor, and a suitable output. A pull-up or pull-down resistor gives an unpressed input a defined electrical level instead of leaving it floating. Convert high/low into logical pressed/released meaning: active-low means a low electrical level represents a press. Its logical false to true press can therefore correspond to an electrical high-to-low transition.
 
@@ -208,7 +162,7 @@ Replace emulator-only behaviour. Remove the QEMU runner and both semihosting exi
 
 Rebuild, program, verify, reset, and observe. Use the board’s supported bootloader or a compatible debug probe. A flashing tool erases/programs the required regions; verification checks the written image. Reset tests the startup path, and the real output tests pin configuration and behaviour.
 
-probe-rs is one programming and debugging tool for supported chips and probes. A board can instead document a vendor tool, a USB bootloader, or OpenOCD. Use its exact target configuration; the QEMU build above is not an image for arbitrary boards.
+probe-rs is one programming and debugging tool for supported chips and probes. A board can instead document a vendor tool, a U S B bootloader, or OpenOCD. Use its exact target configuration; the QEMU build above is not an image for arbitrary boards.
 
 Polling checks an input repeatedly; an interrupt runs a handler when a configured event occurs. Either design can work. If an interrupt and the main loop both touch controller state, they need an explicit synchronization policy. The simple controller above has one owner and introduces no such shared access. A watchdog is a timer that can reset a stalled device unless firmware services it correctly; its configuration and recovery policy matter on real hardware, rather than being a cure for an unexplained bug.
 
@@ -220,16 +174,8 @@ When a real device behaves differently, record the chip, board revision, toolcha
 
 Breakpoints stop the processor, while external devices can keep running; timers, incoming messages, and watchdogs may therefore behave differently. Printing can also slow a loop. Semihosting is convenient for this short trace but unsuitable as a measurement of normal execution speed. Other transports have different requirements:
 
-Table columns: Logging method; How output leaves the device.
-
-Logging method: UART (universal asynchronous receiver/transmitter); How output leaves the device: A serial peripheral sends bytes through configured pins to a compatible receiver or adapter.
-
-Logging method: RTT (Real Time Transfer); How output leaves the device: The target writes a RAM buffer that a supporting debug probe reads.
-
-Logging method: ITM/SWO tracing; How output leaves the device: A supported Cortex-M Instrumentation Trace Macrocell emits trace events through Serial Wire Output to a compatible probe; CMSIS documents this debug path.
-
 RTT’s buffer policy matters too: a full blocking buffer can pause the program, while a nonblocking mode can discard output. Buffering or deferring text formatting reduces work on a time-sensitive path but does not make it free. Record only the events needed to distinguish the competing explanations, and compare behaviour with logging disabled when investigating a timing problem.
 
-You have now built the software that runs after reset, rather than just a program launched by an OS. The next lesson uses these startup responsibilities to explain a console’s larger boot chain; the hardware debugging lessons show how a probe can inspect a core below the application interface.
+You have now built the software that runs after reset, rather than just a program launched by an O S. The next lesson uses these startup responsibilities to explain a console’s larger boot chain; the hardware debugging lessons show how a probe can inspect a core below the application interface.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/14/12/

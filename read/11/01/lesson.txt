@@ -1,16 +1,16 @@
-DLL, dynamic link library, Identity and Search Order
+D L L, dynamic link library, Identity and Search Order
 
-The previous chapter treated the game as a running process. A process dump or module snapshot can list its DLLs, but a familiar DLL name alone does not prove which file supplied the code. Module identity is the next layer of evidence. We will follow that identity through loading and API, application programming interface, resolution, then ask which privileges protect the kernel boundary and how a physical-memory capture relates to a process address. At each stage, the practical question is the same: what did the tool actually observe and trust?
+The previous chapter treated the game as a running process. A process dump or module snapshot can list its DLLs, but a familiar D L L name alone does not prove which file supplied the code. Module identity is the next layer of evidence. We will follow that identity through loading and A P I, application programming interface, resolution, then ask which privileges protect the kernel boundary and how a physical-memory capture relates to a process address. At each stage, the practical question is the same: what did the tool actually observe and trust?
 
 Section: A module name is not a full identity.
 
 A game may report that it loaded opengl32.dll, zlib1.dll, or another familiar name. The name alone does not say which file supplied the bytes. The full path, file hash, signer, architecture, and loaded range provide stronger identity.
 
-That matters for debugging as well as defense. Loading the wrong version of a legitimate DLL can cause missing exports, crashes, changed structure layouts, or code patterns that no longer match the ones this course uses.
+That matters for debugging as well as defense. Loading the wrong version of a legitimate D L L can cause missing exports, crashes, changed structure layouts, or code patterns that no longer match the ones this course uses.
 
 Section: Imports begin a dependency graph.
 
-The PE, portable executable, import table names DLLs and functions the image expects. The Windows loader must locate suitable DLL files, map them, resolve imported function addresses, and repeat the process for those DLLs’ dependencies.
+The P E, portable executable, import table names DLLs and functions the image expects. The Windows loader must locate suitable D L L files, map them, resolve imported function addresses, and repeat the process for those DLLs’ dependencies.
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -18,21 +18,17 @@ The final loaded set can also include modules requested later with LoadLibrary, 
 
 The loader owns the transition from a requested dependency name to a mapped, registered module in the process:
 
-Diagram. From EXE requests a dependency to Resolve a file identity. From Resolve a file identity to Create the image mapping. From Create the image mapping to Map sections into memory. From Map sections into memory to Apply relocations. From Apply relocations to Resolve imported functions. From Resolve imported functions to Publish the loaded module record.
-
 A module snapshot observes the published records after these steps. It does not own the mappings and must not treat a snapshot entry as permission to unload one.
 
 Section: Search order is a compatibility and security boundary.
 
-When code supplies only a DLL name instead of a full path, Windows follows documented resolution rules. Those rules depend on factors such as packaged-app identity, API sets (virtual DLL names that Windows redirects to whichever real DLL implements them on that build), side-by-side manifests, already loaded modules, the KnownDLLs list (a fixed set of core system DLLs, recorded in the registry, that Windows always loads from the trusted system directory instead of searching for them), safe DLL search mode (a per-process setting that moves the current working directory later in the search order, so a file planted there is less likely to be picked over the real system DLL), the executable directory, system directories, and configured search paths.
+When code supplies only a D L L name instead of a full path, Windows follows documented resolution rules. Those rules depend on factors such as packaged-app identity, A P I sets (virtual D L L names that Windows redirects to whichever real D L L implements them on that build), side-by-side manifests, already loaded modules, the KnownDLLs list (a fixed set of core system DLLs, recorded in the registry, that Windows always loads from the trusted system directory instead of searching for them), safe D L L search mode (a per-process setting that moves the current working directory later in the search order, so a file planted there is less likely to be picked over the real system D L L), the executable directory, system directories, and configured search paths.
 
 Do not reduce that to “Windows always checks this one folder first.” The precise order depends on how the load was requested and the Windows environment.
 
-For the most common case, an unpackaged desktop program that calls LoadLibrary with a bare name while safe DLL search mode is on (the default), Microsoft documents this order:
+For the most common case, an unpackaged desktop program that calls LoadLibrary with a bare name while safe D L L search mode is on (the default), Microsoft documents this order:
 
-Diagram. From LoadLibrary with a bare DLL name to DLL redirection, an API set, or a side-by-side manifest?. From DLL redirection, an API set, or a side-by-side manifest? to load the DLL it points to. The connection is labelled: yes. From DLL redirection, an API set, or a side-by-side manifest? to a module with that name already loaded?. The connection is labelled: no. From a module with that name already loaded? to reuse the loaded module. The connection is labelled: yes. From a module with that name already loaded? to listed in KnownDLLs?. The connection is labelled: no. From listed in KnownDLLs? to load the trusted system copy. The connection is labelled: yes. From listed in KnownDLLs? to search 1: the application's directory. The connection is labelled: no. From search 1: the application's directory to search 2: the system directory. From search 2: the system directory to search 3: the 16-bit system directory. From search 3: the 16-bit system directory to search 4: the Windows directory. From search 4: the Windows directory to search 5: the current directory. From search 5: the current directory to search 6: the directories on PATH.
-
-The first searched folder that contains a file with that name supplies the DLL. Every check above the numbered searches happens before any folder is searched, which is why a planted file cannot stand in for a KnownDLL. With safe DLL search mode off, the current directory moves up to second place, right after the application’s directory; holding it back at fifth place, behind the system directories, is what the setting does. Packaged apps and a few redirection features add steps that the diagram leaves out.
+The first searched folder that contains a file with that name supplies the D L L. Every check above the numbered searches happens before any folder is searched, which is why a planted file cannot stand in for a KnownDLL. With safe D L L search mode off, the current directory moves up to second place, right after the application’s directory; holding it back at fifth place, behind the system directories, is what the setting does. Packaged apps and a few redirection features add steps that the diagram leaves out.
 
 Safer application design uses:
 
@@ -62,15 +58,13 @@ szModule: short module name;
 
 szExePath: full file path;
 
-the owner PID, process identifier, and module handles used by Windows.
+the owner P I D, process identifier, and module handles used by Windows.
 
 The structure has a fixed layout, and the caller must set dwSize first because that layout’s size differs between 32-bit and 64-bit builds. In the 32-bit build this course uses, it looks like this:
 
-Labelled memory diagram. +hexadecimal 0 0 0: dwSize; +hexadecimal 0 0 4: th32ModuleID; +hexadecimal 0 0 8: th32ProcessID; +hexadecimal 0 0 C: GlblcntUsage; +hexadecimal 0 1 0: ProccntUsage; +hexadecimal 0 1 4: modBaseAddr, highlighted; +hexadecimal 0 1 8: modBaseSize, highlighted; +hexadecimal 0 1 C: hModule; +hexadecimal 0 2 0: szModule, 256 UTF-16 units, highlighted; +hexadecimal 2 2 0: szExePath, 260 UTF-16 units, highlighted. Groups: the caller sets this; the module's loaded range; NUL-terminated names. MODULEENTRY32W in a 32-bit build. The first eight fields are 4 bytes each, so they fill 8 times 4 equals 32 equals 2 times 16 equals hexadecimal 2 0 bytes. szModule holds 256 UTF-16 units of 2 bytes each: 512 equals 2 times 256 equals hexadecimal 2 0 0 bytes, so szExePath starts at hexadecimal 2 0 + hexadecimal 2 0 0 equals hexadecimal 2 2 0. It holds 260 units: 520 equals 512 + 8 equals hexadecimal 2 0 8 bytes, so the structure ends at hexadecimal 2 2 0 + hexadecimal 2 0 8 equals hexadecimal 4 2 8, which is 4 times 256 + 2 times 16 + 8 equals 1,064 bytes. That is the size Rust's size_of reports for the structure, and so the value the lab puts in dwSize for this build. A 64-bit build widens the two pointer fields to 8 bytes and aligns them, so its size is different.
-
 Additional detail: Complete lab source: module_inventory.rs.
 
-Code example. The code’s comments explain: SAFETY: entry has the required size and is writable. unsafe { Module32FirstW(snapshot.raw(), &mut entry) }?; let mut modules equals Vec::new(); loop { modules.push(( entry.modBaseAddr as usize, entry.modBaseSize as usize, wide_text(&entry.szModule), wide_text(&entry.szExePath), )); // SAFETY: entry remains a valid output structure. match unsafe { Module32NextW(snapshot.raw(), &mut entry) } { Ok(()) leads to {} Err(error) if no_more_files(&error) leads to break, Err(error) leads to return Err(error.into()), } }
+Code example. The code’s comments explain: SAFETY: the P I D is a value and OwnedHandle owns the snapshot. SAFETY: entry has the required size and is writable. SAFETY: entry remains a valid output structure.
 
 Section: Run a clean baseline.
 
@@ -108,23 +102,21 @@ A different module is not automatically malicious. It may be a graphics capture 
 
 Section: Snapshot limitations.
 
-The module list is a moment-in-time view. A DLL may load or unload immediately afterward. A module manually mapped without normal loader registration may not appear in the ToolHelp loader list. A protected or cross-architecture target may restrict enumeration.
+The module list is a moment-in-time view. A D L L may load or unload immediately afterward. A module manually mapped without normal loader registration may not appear in the ToolHelp loader list. A protected or cross-architecture target may restrict enumeration.
 
-A DLL that loads and unloads between two snapshots appears in neither list, even though its code ran inside the game:
-
-Diagram labels, in drawing order: ETW, Event Tracing for Windows, trace session; game process; module_inventory; both snapshots miss helper.dll,; while the trace shows it came and went; snapshot 1; module list A; LoadLibrary maps helper.dll; image-load event, helper.dll; FreeLibrary unmaps helper.dll; image-unload event, helper.dll; snapshot 2; module list A again.
+A D L L that loads and unloads between two snapshots appears in neither list, even though its code ran inside the game:
 
 Each of these sources sees module loading from a different place, so each one covers something another misses:
 
 ToolHelp module list: the modules the loader has registered, at one instant;
 
-ETW image-load events: every image mapping and unmapping over time, including DLLs that came and went between snapshots;
+E T W, Event Tracing for Windows, image-load events: every image mapping and unmapping over time, including DLLs that came and went between snapshots;
 
 file hashes and signatures: which bytes are on disk, and who signed them;
 
 the process memory map: every committed region, including executable memory that no module in the list accounts for;
 
-the PE import table: which DLLs the executable declares it needs before it runs;
+the P E import table: which DLLs the executable declares it needs before it runs;
 
 debugger module events: load and unload notifications as they happen.
 

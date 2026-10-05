@@ -2,13 +2,11 @@ World-to-Screen Projection and Overlays
 
 Section: World-to-screen uses the view-projection transform.
 
-An ESP-style observer needs to answer:
+An e s p-style observer needs to answer:
 
 Where would this 3D point appear on the 2D screen?
 
 The reliable answer uses the game’s view-projection matrix. Hand-tuned angle formulas can teach geometry, but a matrix handles camera rotation, field of view, aspect ratio, and perspective together.
-
-Image description: A simple viewport diagram
 
 The matrix is not magic screen-coordinate data. It is a compact composition of specific coordinate changes. If its convention, snapshot time, or viewport does not match the rendered frame, the resulting pixels can be precise arithmetic and still describe the wrong image.
 
@@ -18,13 +16,9 @@ Section: Name every coordinate space.
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Diagram. From Local vertex (x,y,z,1) to World. The connection is labelled: model. From World to Camera. The connection is labelled: view. From Camera to Clip (x,y,z,w). The connection is labelled: projection. From Clip (x,y,z,w) to NDC. The connection is labelled: clip, then divide by w. From NDC to Pixels. The connection is labelled: viewport.
-
-Diagram walkthrough: Follow one label anchor from the world to the screen. Step 1: World point. State: world (x, y, z, 1). Begin with one entity position and the camera from the same frame. These coordinates describe a place in the game world, not a pixel. Step 2: View transform. State: camera coordinates. Apply the inverse camera pose. The point is now measured from the camera along its right, up, and forward or back directions. Step 3: Projection transform. State: clip (x, y, z, w). Apply the declared projection matrix to obtain clip x, y, z, and w. Its field of view, aspect ratio, handedness, and depth convention must match the game. Step 4: Visibility check. State: point inside clip bounds. Check finite coordinates, usable w, and the clip bounds for this API, application programming interface,. A label anchor behind the camera or outside those bounds does not continue to drawing. Step 5: Perspective divide. State: NDC (x/w, y/w, z/w). For an accepted point, divide x, y, and z by w to obtain normalized device coordinates. This is where perspective makes distant displacements occupy less screen space. Step 6: Viewport pixels. State: screen (pixel_x, pixel_y). Map normalized x and y into the current viewport dimensions and its vertical-axis convention. Only this final pixel position belongs to the overlay. Step through one point, then replay the path. A rejected label anchor produces no pixel; clipping a triangle can instead preserve its visible portion.
-
 Naming the stages makes bugs easier to locate. A marker that rotates the wrong way usually points to the view transform. A marker that stretches after a resolution change points to the viewport or aspect ratio. A point behind the camera that appears mirrored points to the perspective divide or clipping.
 
-The w value is not another world direction. It carries information needed for perspective: after division, distant points become closer together on screen. Reject unusable w values before dividing, then reject points outside the target API’s depth interval. OpenGL commonly uses -1..=1 after projection; Direct3D commonly uses 0..=1. The matrix and convention must come from the same game pipeline.
+The w value is not another world direction. It carries information needed for perspective: after division, distant points become closer together on screen. Reject unusable w values before dividing, then reject points outside the target A P I, application programming interface,’s depth interval. OpenGL commonly uses -1..=1 after projection; Direct3D commonly uses 0..=1. The matrix and convention must come from the same game pipeline.
 
 Section: The view matrix is the inverse camera pose.
 
@@ -100,7 +94,7 @@ Section: Transform a point.
 
 One row-major form looks like:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: 🗺️ Convert normalized coordinates from -1..1 into screen pixels. `midpoint` expresses the halfway step without overflowing the sum.
 
 The positive-w rule belongs to the projection convention described above. Some pipelines use a different sign. Determine the front-facing half-space with a point known to be directly ahead. The small epsilon avoids enormous coordinates near the camera plane, but it is a policy threshold in clip-space units, not a universal constant.
 
@@ -176,11 +170,9 @@ The overlay should ignore mouse input, match the target’s client area, and sto
 
 Match the client area, not the outer window rectangle. Borders and title bars shift the origin. DPI scaling can make logical UI units differ from physical pixels, and borderless/fullscreen modes may change which coordinate system the compositor uses. Recalculate when the window moves, resizes, changes monitor, or changes DPI.
 
-Image description: A basic offline overlay experiment
+Section: Reproduce the original in-game AssaultCube e s p.
 
-Section: Reproduce the original in-game AssaultCube ESP.
-
-The world-to-screen function and separate overlay already let you test the geometry. This exact-build in-game implementation applies the detours and DLL, dynamic link library, lifecycle from Lesson 6.4 to the game’s own print path.
+The world-to-screen function and separate overlay already let you test the geometry. This exact-build in-game implementation applies the detours and D L L, dynamic link library, lifecycle from Lesson 6.4 to the game’s own print path.
 
 The original 1.2.0.2 lab uses the same globals and player layout as the aimbot, plus these confirmed facts:
 
@@ -190,27 +182,23 @@ For this specific virtual viewport, the experimentally calibrated projection is:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Iterate players 1..count, calculate each desired angle, and publish the projected position and name pointer into fixed atomic slots. The render hook reads those slots and calls hexadecimal 0 0 4 1 9 8 8 0 with the confirmed x, y, and text arguments. The player object owns the fixed 16-byte name field for the frame; the code never scans past that verified field while calculating its address.
+Iterate players 1..count, calculate each desired angle, and publish the projected position and name pointer into fixed atomic slots. The render hook reads those slots and calls this value with the confirmed x, y, and text arguments. The player object owns the fixed 16-byte name field for the frame; the code never scans past that verified field while calculating its address.
 
-The overwritten bytes at hexadecimal 0 0 4 0 B E 7 E are themselves a five-byte near call to hexadecimal 0 0 4 1 9 8 8 0. The installer calculates those expected bytes, refuses an unknown build, and replaces the call with a near jump to this compiled cave:
+The overwritten bytes at this value are themselves a five-byte near call to this value. The installer calculates those expected bytes, refuses an unknown build, and replaces the call with a near jump to this compiled cave:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: Replay the original print call with an empty string, then add labels.
 
-Start with the literal text Enemy at (hexadecimal 1 0 0, hexadecimal 1 0 0) to prove the print call. Then use one bot, calibrate left/center/right, add pitch, add its name, and finally loop through all players. The finished result is the named ESP shown below.
-
-Image description: AssaultCube ESP with player name
+Start with the literal text Enemy at (hexadecimal 1 0 0, hexadecimal 1 0 0) to prove the print call. Then use one bot, calibrate left/center/right, add pitch, add its name, and finally loop through all players. The finished result is the named e s p shown below.
 
 The matrix-based overlay earlier in this lesson is the more general technique. This target-specific section keeps the exact reverse-engineered internal print route so readers can reproduce the original game hack.
 
-Build and inject the course DLL, enter a local AssaultCube bot match, and press F5. Press F5 again or End to drop LocalPatch and restore the exact original call:
+Build and inject the course D L L, enter a local AssaultCube bot match, and press F5. Press F5 again or End to drop LocalPatch and restore the exact original call:
 
 Terminal window
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 The entire working update loop, projection, internal x86 calling convention, cave, and installer are in assaultcube_tools.rs. The F5 worker logic is in dll.rs.
-
-Silent video demonstration: Player labels following the AssaultCube view. The original ESP recording shows labels moving with the view. Follow one label while the camera turns: a stable label requires the player position, camera state, projection, and draw location to agree each frame.
 
 Section: Debug the transform visually.
 
@@ -253,26 +241,6 @@ This is why a gizmo is a useful check on your own work. If the axes drawn at a p
 Section: Diagnose world-to-screen failures.
 
 World-to-screen failures
-
-Table columns: Symptom; First check.
-
-Symptom: every point mirrored horizontally; First check: x basis/handedness.
-
-Symptom: markers rotate opposite the camera; First check: view transform/inverse.
-
-Symptom: correct in center, wrong near edges; First check: projection FOV or aspect ratio.
-
-Symptom: correct at one resolution only; First check: viewport dimensions or stale aspect ratio.
-
-Symptom: fixed offset from every object; First check: client-area origin/DPI/window border.
-
-Symptom: jitter while camera or entities move; First check: incoherent snapshots.
-
-Symptom: behind-camera labels flip onto screen; First check: w sign/rejection.
-
-Symptom: labels vanish too early in depth; First check: wrong OpenGL/Direct3D depth convention.
-
-Symptom: box jumps near the camera; First check: no near-plane edge clipping.
 
 Section: Scope.
 

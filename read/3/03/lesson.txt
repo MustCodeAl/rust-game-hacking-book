@@ -16,41 +16,11 @@ Section: From changing bytes to a class.
 
 Recovering a class works upward through several levels, and each level is shown by a different technique:
 
-Table columns: Level; Example; What shows it.
-
-Level: Bytes; Example: Four bytes at this address changed.; What shows it: Reading the memory before and after..
-
-Level: Instruction; Example: movss read those four bytes.; What shows it: Decoded machine code..
-
-Level: Data flow; Example: The value reaches the view-angle calculation.; What shows it: Register and memory tracing..
-
-Level: Field; Example: Offset +hexadecimal 4 0 behaves like yaw.; What shows it: Controlled turns across many instances..
-
-Level: Object; Example: Several fields share one stable base address.; What shows it: Repeated base + offset accesses..
-
-Level: Class behavior; Example: Objects sharing one table dispatch related methods.; What shows it: Checked indirect calls and object lifetimes..
-
-Level: Game meaning; Example: This is the active player entity.; What shows it: Behavior, call context, and lifecycle tests..
-
-Diagram. From bytes changed to an instruction read them. From an instruction read them to the value flows somewhere. From the value flows somewhere to one field behaves like yaw. From one field behaves like yaw to several fields share a base. From several fields share a base to objects share methods. From objects share methods to this is the active player.
-
 Each level rests on the ones below it. If +hexadecimal 4 0 turns out not to be yaw, the object and class levels built on that field have to be checked again, which is why a jump from “bytes changed” straight to “this is a Player class” is so easy to get wrong.
 
 Section: Separate five object-layout terms.
 
-Table columns: Word; Plain-English meaning.
-
-Word: Class; Plain-English meaning: A source-code recipe that combines data with functions..
-
-Word: Object or instance; Plain-English meaning: One real player, weapon, or entity created from that recipe..
-
-Word: Field or member; Plain-English meaning: One piece of data inside an object, such as health or yaw..
-
-Word: Method; Plain-English meaning: A function that operates on an object..
-
-Word: Structure layout; Plain-English meaning: The byte distance, size, type, and alignment of each field..
-
-Suppose one player object begins at address hexadecimal 1 2 3 4 0 0 0 0, and its yaw is at offset hexadecimal 4 0. The yaw address is:
+Suppose one player object begins at address shown here, and its yaw is at offset hexadecimal 4 0. The yaw address is:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -60,29 +30,9 @@ Section: What an object looks like in memory.
 
 For the course build of AssaultCube, our recovered player model contains these useful landmarks:
 
-Table columns: Offset from player base; Candidate field; How to test it.
-
-Offset from player base: +hexadecimal 0 4; Candidate field: X position (f32); How to test it: Move east/west and watch a smooth finite value change..
-
-Offset from player base: +hexadecimal 0 8; Candidate field: Y position (f32); How to test it: Move north/south while X stays mostly steady..
-
-Offset from player base: +hexadecimal 0 C; Candidate field: Z position (f32); How to test it: Jump or change elevation..
-
-Offset from player base: +hexadecimal 4 0; Candidate field: Yaw (f32); How to test it: Turn left/right; expect an angle-like value..
-
-Offset from player base: +hexadecimal 4 4; Candidate field: Pitch (f32); How to test it: Look up/down..
-
-Offset from player base: +hexadecimal 2 2 5; Candidate field: Name bytes; How to test it: Compare several bots with different names..
-
-Offset from player base: +hexadecimal 3 3 8; Candidate field: Dead flag (u32); How to test it: Observe zero while alive and a changed flag after death..
-
-Labelled memory diagram. +hexadecimal 0 4: x; +hexadecimal 0 8: y; +hexadecimal 0 C: z; cell 4: unknown; +hexadecimal 4 0: yaw; +hexadecimal 4 4: pitch; cell 7: unknown; +hexadecimal 2 2 5: name; cell 9: unknown; +hexadecimal 3 3 8: dead. Groups: position; view angles. The confirmed landmarks, drawn in order but not to scale. Each unknown box stands for bytes nobody has tested yet.
-
 Notice the gaps. We have not claimed that every byte between hexadecimal 0 C and hexadecimal 4 0 is useless. Those bytes may contain velocity, dimensions, pointers, flags, or padding. Unknown means unproven, not empty.
 
 Padding is especially easy to miss. CPUs and compilers often place a field at an aligned address — usually a multiple of that field’s own size — leaving unused bytes in between. Three fields declared in this order produce a layout with a hole in it:
-
-Labelled memory diagram. +hexadecimal 0 0: 00; cell 2: ??, highlighted; cell 3: ??, highlighted; cell 4: ??, highlighted; +hexadecimal 0 4: 64; cell 6: 00; cell 7: 00; cell 8: 00; +hexadecimal 0 8: 00; cell 10: 00; cell 11: B4; cell 12: 42. Groups: dead; padding; health equals 100; yaw equals 90.0; assume no padding and “health” at +hexadecimal 0 1 reads three padding bytes and one byte of the real health. A dead flag, a u32, and an f32, with the padding the compiler inserts after the one-byte flag.
 
 The three bytes at +hexadecimal 0 1, +hexadecimal 0 2, and +hexadecimal 0 3 hold nothing meaningful. They exist only so that health begins at a multiple of four. If you assume fields sit back to back and put health at +hexadecimal 0 1, then every offset after it is wrong by three bytes, and each read returns a value stitched together from pieces of two neighboring fields. ❌
 
@@ -102,13 +52,11 @@ You may find an instruction shaped like this:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Read it as: “copy the 32-bit float located hexadecimal 4 0 bytes after the object in ecx into xmm0.” If the stopped yaw address is hexadecimal 1 2 3 4 0 0 4 0, then ecx should be hexadecimal 1 2 3 4 0 0 0 0.
+Read it as: “copy the 32-bit float located hexadecimal 4 0 bytes after the object in e c x into x m m 0.” If the stopped yaw address is this value, then e c x should be this value.
 
 Verify the arithmetic in the debugger:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-Labelled memory diagram. hexadecimal 1 2 3 4 0 0 0 0: object base; cell 2: dot dot dot ; hexadecimal 1 2 3 4 0 0 4 0: yaw, highlighted. Groups: the instruction's offset, 40h. The breakpoint stopped on movss xmm0, dword ptr [ecx+40h] at yaw's address, so ecx should hold hexadecimal 1 2 3 4 0 0 0 0.
 
 One matching subtraction is a clue, not proof. Repeat it while turning, respawning, and starting a new match.
 
@@ -118,13 +66,11 @@ A C++ call such as player.update() looks as if it passes no player argument. A n
 
 Section: The call’s frame and the object’s lifetime.
 
-That argument belongs to one call’s working state. Each thread has a stack region for return addresses and temporary call data. On 32-bit x86, esp marks its current top. Calling another function claims a new stack frame; returning releases that frame. The object that this points to can live much longer on the heap. The pointer in a call frame and the object it names have different lifetimes:
-
-Labelled memory diagram. hexadecimal 0 0 1 9 F F 8 0: main: return address and locals; hexadecimal 0 0 1 9 F F 5 0: update_world: return address and locals; hexadecimal 0 0 1 9 F F 3 0: apply_damage: return address and locals, highlighted; esp to : scratch: the next call writes here. Groups: in use, released newest first; free. One thread's stack on 32-bit x86. Each call claims a frame below the previous one. When apply_damage returns, esp moves back up; a later call can reuse those bytes. The player object reached through this need not disappear with this frame.
+That argument belongs to one call’s working state. Each thread has a stack region for return addresses and temporary call data. On 32-bit x86, e s p marks its current top. Calling another function claims a new stack frame; returning releases that frame. The object that this points to can live much longer on the heap. The pointer in a call frame and the object it names have different lifetimes:
 
 This explains why a debugger’s call stack can lead you to the caller but a saved address of one of its temporary values cannot be assumed valid after the call returns. Lesson 3.6 will trace the longer lifetimes of heap objects.
 
-For the 32-bit Microsoft C++ convention commonly called __thiscall, this usually arrives in ecx:
+For the 32-bit Microsoft C++ convention commonly called __thiscall, this usually arrives in e c x:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -132,7 +78,7 @@ Inside the method, reads often use that same base register:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-On 64-bit Windows, the first integer or pointer argument normally arrives in rcx, so this is commonly in rcx. This is a calling-convention rule, not a promise that the compiler keeps the value in that register for the whole method. It may copy the pointer into rbx, rsi, or a stack slot.
+On 64-bit Windows, the first integer or pointer argument normally arrives in r c x, so this is commonly in r c x. This is a calling-convention rule, not a promise that the compiler keeps the value in that register for the whole method. It may copy the pointer into r b x, r s i, or a stack slot.
 
 The practical question is: which value stays constant while several member offsets are read from it? That value is a strong object-base candidate.
 
@@ -154,11 +100,7 @@ That is two lookups before any game code runs. Followed with real numbers:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Labelled memory diagram. hexadecimal 0 0 A 1 B 2 0 0: slot 0; hexadecimal 0 0 A 1 B 2 0 4: slot 1; hexadecimal 0 0 A 1 B 2 0 8: slot 2; hexadecimal 0 0 A 1 B 2 0 C: hexadecimal 0 0 4 C 7 7 1 0, highlighted. Groups: slot 3. The vtable the object's vptr points at: a row of function addresses, four bytes each.
-
 The offset hexadecimal 0 C is 12, and a pointer in a 32-bit process is four bytes, so 12 / 4 equals 3: this is the fourth entry counting from zero, which is why it is called slot 3. Two objects of different classes executing this identical instruction end up in different functions, because the second step read a different table.
-
-Diagram. From one call site: mov eax, [ecx] call dword ptr [eax+0Ch] to the player class's vtable, slot 3. The connection is labelled: ecx holds a player. From the player class's vtable, slot 3 to the player's update. From one call site: mov eax, [ecx] call dword ptr [eax+0Ch] to the bot class's vtable, slot 3. The connection is labelled: ecx holds a bot. From the bot class's vtable, slot 3 to the bot's update.
 
 Do not label every first pointer a vptr. Test it:
 
@@ -177,8 +119,6 @@ This pattern is common, but the C++ language does not require one universal obje
 Section: Inheritance makes the map less tidy.
 
 With single inheritance, the base-class part is often placed at the beginning of the derived object. A BotPlayer may therefore begin with all fields needed by Player, followed by bot-specific state.
-
-Labelled memory diagram. +hexadecimal 0 0: vptr for base A; cell 2: A's fields; +hexadecimal 1 0: vptr for base B; cell 4: B's fields; cell 5: derived fields. Groups: one allocation, one complete object; what a pointer typed as B points at: hexadecimal 1 0 bytes in. Multiple inheritance, with an example offset. A method of B receives the object as a pointer to the B part, not to the start.
 
 Multiple inheritance can add more than one base subobject and more than one vptr. A method may even adjust this before using it. If two methods appear to use bases a fixed distance apart, do not immediately declare one of them wrong. You may be looking at two views of the same larger object.
 
@@ -216,8 +156,6 @@ writes one or more vptr candidates, sometimes replacing an earlier base vptr;
 
 returns the same object or passes it into a registration system.
 
-Diagram. From allocate the block to base constructor: vptr equals base table, base fields equals defaults. From base constructor: vptr equals base table, base fields equals defaults to derived constructor: vptr equals derived table, derived fields equals defaults. From derived constructor: vptr equals derived table, derived fields equals defaults to registered and used by the game. From registered and used by the game to destructor: unregister, release children. From destructor: unregister, release children to block freed: every cached address to it is stale.
-
 None of those clues identifies a constructor alone, because an ordinary reset function can also fill fields with defaults. What a reset function does not do is run right after an allocation, call base constructors first, and switch the vptr from the base table to the derived table.
 
 Destructors provide the other half: they reveal child cleanup, unregistering, reference releases, pool returns, and the point after which a cached address is stale. For a memory tool, this lifetime boundary matters more than recovering the original C++ class name.
@@ -228,9 +166,9 @@ One memory window is not enough to recover a structure. A repeatable sequence is
 
 Anchor one field. Find a value with an obvious controlled behavior, such as yaw, health, or ammunition.
 
-Find code that uses it. Break on access. The instruction’s base register and displacement give the field’s offset: [ecx+40h] means the field sits hexadecimal 4 0 bytes (4 times 16 equals 64) past the address in ecx.
+Find code that uses it. Break on access. The instruction’s base register and displacement give the field’s offset: [e c x+40h] means the field sits hexadecimal 4 0 bytes (4 times 16 equals 64) past the address in e c x.
 
-Propose an object base. Subtract the displacement from the known field address: a yaw at hexadecimal 1 2 3 4 0 0 4 0 read through [ecx+40h] gives a base of hexadecimal 1 2 3 4 0 0 4 0 minus hexadecimal 4 0 equals hexadecimal 1 2 3 4 0 0 0 0.
+Propose an object base. Subtract the displacement from the known field address: a yaw at this value read through [e c x+40h] gives a base of this value minus hexadecimal 4 0 equals this value.
 
 Collect nearby candidates. Watch adjacent aligned values as position, view, health, and state change.
 
@@ -248,13 +186,13 @@ Section: Do not turn a remote address into a reference.
 
 This is tempting but incorrect for an external tool:
 
-Code example. The code’s comments explain: ❌ `remote_address` belongs to another process, not this tool process.let player equals unsafe { &*(remote_address as *const Player) };println!("{}", player.yaw);
+Code example. The code’s comments explain: ❌ `remote_address` belongs to another process, not this tool process.
 
 A reference promises that valid, correctly aligned local memory exists for a lifetime. A number copied from another process cannot keep those promises.
 
 Copy each field through ReadProcessMemory instead:
 
-Code example. The code’s comments explain: ✅ The process boundary and the fallible read remain visible.let yaw equals process.read_f32(player_base + hexadecimal 4 0)?;
+Code example. The code’s comments explain: ✅ The process boundary and the fallible read remain visible.
 
 Reading fields separately is also friendlier to an incomplete layout. You do not need to invent hundreds of padding bytes just to inspect three confirmed values.
 
@@ -264,11 +202,9 @@ The lab implementation is windows-labs/src/bin/object_layout_probe.rs. It opens 
 
 Here is the path a pointer takes through the probe before anything is printed:
 
-Diagram. From a pointer read from the game to ObjectAddress. The connection is labelled: ObjectAddress::new refuses null. From ObjectAddress to field address. The connection is labelled: field(offset) checked_add. From field address to raw values. The connection is labelled: read_f32, read_u32: bytes copied across the process boundary. From raw values to PlayerSnapshot, a local copy. The connection is labelled: plausibility checks.
-
 The most important types are deliberately small:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: ✅ Once constructed, an ObjectAddress can never contain null.
 
 ObjectAddress and FieldOffset are both numbers underneath, but they mean different things. The wrappers make it harder to accidentally treat a distance as a complete address. NonZeroUsize also moves the null check into construction. After ObjectAddress::new succeeds, every later function can rely on that invariant instead of asking “is this zero?” again. This is what a strong type does: it stores both a value and a rule about what that value is allowed to mean.
 
@@ -312,7 +248,7 @@ Section: Common false conclusions.
 
 “The first pointer proves a vtable.” Follow several entries and verify they point to executable methods.
 
-“The debugger showed ecx, so it must always be this.” Confirm the calling convention and watch how the method uses the value.
+“The debugger showed e c x, so it must always be this.” Confirm the calling convention and watch how the method uses the value.
 
 “The structure worked once, so it is finished.” Compare instances and repeat after object destruction, respawn, and clean launches.
 

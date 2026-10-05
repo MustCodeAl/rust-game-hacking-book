@@ -14,8 +14,6 @@ Named pipes are useful when a supported game plug-in, launcher, capture helper, 
 
 One bounded exchange has a clear beginning, two validated messages, and a clear end:
 
-Diagram. From Server creates local pipe to Client opens the pipe. From Client opens the pipe to Connection completes. From Connection completes to Client sends framed request. From Client sends framed request to Server validates request. From Server validates request to Server sends framed reply. From Server sends framed reply to Both sides close handles.
-
 The pipe transports bytes; the frame format supplies the length and validation rules that make those bytes meaningful to both programs.
 
 🔌 IPC idea: define a small message format instead of sharing addresses. Each process keeps ownership of its own memory and exchanges bounded copies.
@@ -32,8 +30,6 @@ The lab selects PIPE_TYPE_MESSAGE when creating the server and PIPE_READMODE_MES
 
 It still adds a four-byte length header. Why use both? Message mode keeps transport boundaries, while the length header validates the application protocol. The receiver can reject a damaged or unexpected frame instead of trusting every byte Windows delivered.
 
-Labelled memory diagram. byte 0-3: `u32` length, little-endian; byte 4..: UTF-8 text, up to 1024 bytes. The pipe frame read_frame validates below. FRAME_BYTES (1028) reserves room for the header plus the maximum payload.
-
 Section: Treat IPC data like untrusted input.
 
 “Local” does not mean “automatically trustworthy.” Another program in the same account or session might know or guess the pipe name.
@@ -48,15 +44,13 @@ The received frame size equals 4 + declared length.
 
 The text bytes are valid UTF-8.
 
-Diagram. From bytes_read greater than or equal to 4? to reject: no header. The connection is labelled: no. From bytes_read greater than or equal to 4? to declared less than or equal to MAX_TEXT_BYTES?. The connection is labelled: yes. From declared less than or equal to MAX_TEXT_BYTES? to reject: header too large. The connection is labelled: no. From declared less than or equal to MAX_TEXT_BYTES? to bytes_read equals declared + 4?. The connection is labelled: yes. From bytes_read equals declared + 4? to reject: length mismatch. The connection is labelled: no. From bytes_read equals declared + 4? to valid UTF-8?. The connection is labelled: yes. From valid UTF-8? to reject: bad UTF-8. The connection is labelled: no. From valid UTF-8? to return the text. The connection is labelled: yes.
-
 The server accepts one client, handles one request, sends one fixed reply, and exits. Small limits make the behavior easy to reason about.
 
 Section: Keep the pipe local and never impersonate.
 
 Named pipes can support remote clients. This lab includes PIPE_REJECT_REMOTE_CLIENTS, so Windows rejects them automatically.
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: Continue by accepting this one local client and reading a framed message.
 
 The program does not call ImpersonateNamedPipeClient, duplicate tokens, start a process as another identity, or change privileges. Those operations solve different identity and access-control problems; they are not part of this message channel.
 
@@ -64,15 +58,13 @@ Section: Build both modes in one program.
 
 Additional detail: Complete lab source: named_pipe_lab.rs.
 
-Code example. The code’s comments explain: ⚠️ A client can connect between CreateNamedPipeW and ConnectNamedPipe. // In that harmless race, Windows reports ERROR_PIPE_CONNECTED. // 🛡️ SAFETY: pipe owns a valid server-pipe handle and this synchronous // call deliberately supplies no OVERLAPPED structure. match unsafe { ConnectNamedPipe(pipe.raw(), None) } { Ok(()) leads to {} Err(error) if error.code() equals ERROR_PIPE_CONNECTED.to_hresult() leads to {} Err(error) leads to return Err(error.into()), }
+Code example. The code’s comments explain: 📏 `str::len` is UTF-8 bytes, exactly what the wire header measures; visible character count would be wrong for emoji or accented text. 📦 Prefixing the length makes the receiver reject truncated or joined data instead of guessing where the message ends. 🛡️ SAFETY: buffer is writable, bytes_read is a valid output pointer, and this synchronous lab does not supply an OVERLAPPED structure. 🛡️ Validate in dependency order: header exists, declared payload fits, and the one message-mode read agrees exactly with that declaration. ✅ Only the declared, completely received payload is decoded as UTF-8. 📦 SAFETY: bytes remains readable during the synchronous call and bytes_written is a valid output pointer. ⚠️ A successful synchronous call still reports how much it wrote; accepting a short write would send a frame whose header lies. 🔒 SAFETY: the pipe name is static. The server allows one synchronous, message-mode connection and supplies no custom security pointer. ⚠️ A client can connect between CreateNamedPipeW and ConnectNamedPipe. In that harmless race, Windows reports ERROR_PIPE_CONNECTED. 🛡️ SAFETY: pipe owns a valid server-pipe handle and this synchronous call deliberately supplies no OVERLAPPED structure. 🧭 SAFETY: the path is static. This opens only the local course pipe, requests read/write data access, and does not inherit the handle. ✅ SAFETY: pipe is a connected named-pipe handle and read_mode remains valid for the duration of the call.
 
 Section: Understand the connection race.
 
 A client can open the pipe after CreateNamedPipeW creates it but just before the server calls ConnectNamedPipe. Windows then returns ERROR_PIPE_CONNECTED. That does not mean the connection failed—it means the client already won the race.
 
 The match arm accepts only that documented condition and returns every other error:
-
-Diagram labels, in drawing order: Client; Server; the client connects here,; before ConnectNamedPipe runs; CreateNamedPipeW; CreateFileW opens the pipe; ConnectNamedPipe; returns ERROR_PIPE_CONNECTED.
 
 The client may connect in the narrow interval before the server calls ConnectNamedPipe. In that case Windows reports ERROR_PIPE_CONNECTED, which means the connection already exists rather than that it failed. The match below accepts both successful outcomes and propagates other errors:
 

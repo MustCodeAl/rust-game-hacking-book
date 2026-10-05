@@ -16,23 +16,9 @@ cleanup in Drop;
 
 clear errors.
 
-Image description: The Wesnoth debugger-only detour introduced in Lesson 2.10
-
 Section: Define the patch’s safety model first.
 
 In an offline game, the main danger is self-inflicted: patching the wrong build, splitting an instruction, losing restoration bytes, or unloading while the cave still runs. Write the safety model before writing the jump:
-
-Table columns: Question; Wesnoth detour answer.
-
-Question: What are we protecting?; Wesnoth detour answer: the original instructions and a recoverable local match.
-
-Question: What change is allowed?; Wesnoth detour answer: one verified hook span in the exact supported build.
-
-Question: What checks validate it?; Wesnoth detour answer: executable fingerprint, architecture, decoded whole instructions, and exact current bytes.
-
-Question: When must it refuse?; Wesnoth detour answer: any mismatch, unreachable cave, bad length, or failed protection change.
-
-Question: How does it recover?; Wesnoth detour answer: stop users, restore captured bytes, flush the instruction cache, restore page protection, then unload.
 
 This is a game-hacking safety contract, not an enterprise threat model. Its job is to prevent an experiment from turning uncertainty into a write.
 
@@ -54,7 +40,7 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Do not turn a mismatch into a force option:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: Keep `applied` alive for the entire period when the detour is enabled.
 
 The expected bytes are a tiny build fingerprint. If they differ, the planned jump may split a different instruction or replay the wrong behavior. Equal lengths keep the resume address stable. Finally, the AppliedPatch value represents the fact that the process is currently changed; when that value is restored or dropped, it still has the original bytes needed to undo the patch.
 
@@ -64,7 +50,7 @@ Section: Own the applied state.
 
 Once the replacement is installed, cleanup needs the original bytes even if the caller returns early. AppliedPatch owns that restoration record. An explicit restore can report an error, while Drop makes one final best-effort attempt when the guard leaves scope:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: 🔁 Restore bytes before clearing the flag. If the write fails, `active` stays true so Drop can make one final best-effort attempt. 🧹 `restore` is idempotent: explicit cleanup sets active=false, so this fallback cannot accidentally write the original bytes twice.
 
 Drop is a final safety net, not the only cleanup path. Call restore explicitly and report failures while the program can still react.
 
@@ -72,21 +58,19 @@ Section: Calculate jumps carefully.
 
 A 5-byte relative jump stores a signed 32-bit displacement measured from the end of the jump:
 
-Diagram. From from (the jump's own address) to next_instruction (first byte after the jump). The connection is labelled: + 5 (the jump's own length). From next_instruction (first byte after the jump) to to (the cave's address). The connection is labelled: rel32 equals to minus next_instruction.
-
 This helper turns the diagram into five instruction bytes. It checks that the destination fits the jump’s signed 32-bit displacement instead of truncating an out-of-range address.
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: 🧭 The C P U, central processing unit, measures a near jump from the address *after* its five bytes. 📏 Use a wider signed type for subtraction so targets below `from` work without unsigned wraparound; the final conversion enforces rel32 range.
 
 If the destination is too far away, rel32 returns None. Do not truncate the number.
 
 Section: Architecture matters.
 
-The target, DLL, dynamic link library,, pointer size, instruction decoder, and calling convention must agree:
+The target, D L L, dynamic link library,, pointer size, instruction decoder, and calling convention must agree:
 
-a 32-bit DLL loads into a 32-bit process;
+a 32-bit D L L loads into a 32-bit process;
 
-a 64-bit DLL loads into a 64-bit process;
+a 64-bit D L L loads into a 64-bit process;
 
 saved instructions may use instruction-pointer-relative addressing;
 
@@ -118,7 +102,7 @@ After the practice target works, reproduce the original Wesnoth terrain-descript
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-At hexadecimal 0 0 C C A F 8 A, the supported 1.14.9 profile expects these exact six bytes:
+At this value, the supported 1.14.9 profile expects these exact six bytes:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -126,37 +110,29 @@ They contain the instructions represented as:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Labelled memory diagram. hexadecimal 0 0 C C A F 8 A: 8B; hexadecimal 0 0 C C A F 8 B: 01; hexadecimal 0 0 C C A F 8 C: 8D; hexadecimal 0 0 C C A F 8 D: 74; hexadecimal 0 0 C C A F 8 E: 26; hexadecimal 0 0 C C A F 8 F: 00. Groups: mov eax, dword ptr [ecx]; lea esi, [esi]. The six original bytes at the hook site. hexadecimal 0 0 C C A F 8 A plus this 6-byte span lands exactly on the resume address, hexadecimal 0 0 C C A F 9 0.
-
 The replacement has to fit in that same six-byte span:
 
-Labelled memory diagram. hexadecimal 0 0 C C A F 8 A: E9; cell 2: rel32 to the cave, 4 bytes; hexadecimal 0 0 C C A F 8 F: 90. Groups: opcode; computed at install time; filler. The patched bytes, still six bytes long. rel32 is not written here because it depends on where the DLL happens to load; near_jump computes it once the cave's real address is known.
+Section: Trace the jump and saved C P U state.
 
-Section: Trace the jump and saved CPU, central processing unit, state.
-
-Suppose the DLL placed terrain_cave at hexadecimal 6 F 2 0 1 0 0 0. Then:
+Suppose the D L L placed terrain_cave at this value. Then:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Labelled memory diagram. hexadecimal 0 0 C C A F 8 A: E9; cell 2: 71; cell 3: 60; cell 4: 53; cell 5: 6E; cell 6: 90. Groups: jmp; hexadecimal 6 E 5 3 6 0 7 1, little endian; nop.
-
 Two things follow from that. Because the value is relative, the same five bytes mean different destinations at different addresses, so a working jump cannot be copied to another location and still land anywhere sensible. And because the value is signed, jumping backward is perfectly ordinary: a cave at a lower address simply produces a negative displacement.
 
-The CPU therefore goes to our DLL instead. Our cave borrows control, preserves the interrupted computation, changes gold, performs the behavior we removed, and gives control back at hexadecimal 0 0 C C A F 9 0. The original function never returns to the hook address, so there is no loop.
+The C P U therefore goes to our D L L instead. Our cave borrows control, preserves the interrupted computation, changes gold, performs the behavior we removed, and gives control back at this value. The original function never returns to the hook address, so there is no loop.
 
 This is a tiny example of control-flow redirection, a computer-science idea used by debuggers, profilers, hot-patching systems, instrumentation tools, and game hooks.
 
 The cave interrupts a function in the middle of its work. That function had values sitting in registers and a comparison result sitting in the flags, and it expects to find all of them untouched when execution resumes. Everything the cave does — including the ordinary Rust inside cave_body — is free to overwrite them. pushad copies all eight general-purpose registers onto the stack and pushfd copies the flags; popfd and popad restore them in the opposite order, so the interrupted function never notices that anything happened.
 
-Labelled memory diagram. esp+32: flags, from pushfd; esp+28: eax; esp+24: ecx; esp+20: edx; esp+16: ebx; esp+12: esp as it was before pushad; esp+8: ebp; esp+4: esi; esp to : edi, highlighted. Groups: pushfd; pushad, in the order it pushes them. The cave's stack after pushfd and pushad, with esp at the bottom. popad then popfd take everything back in the opposite order.
-
 There is no universal “save every register” rule. pushfd/pushad is easy to understand for this small 32-bit teaching cave. In a performance-sensitive hook, inspect which values are live and preserve exactly what the inserted code may change. The stack must also be balanced: every push needs a matching pop, and the called function’s convention must agree with the cave.
 
-The cave now needs a complete owner: one function changes the gold field, one preserves and restores the interrupted CPU state, and one installs a verified, reversible jump.
+The cave now needs a complete owner: one function changes the gold field, one preserves and restores the interrupted C P U state, and one installs a verified, reversible jump.
 
 This is the actual cave from the build-checked Windows project:
 
-Code example. The code’s comments explain: / Follow Wesnoth's real pointer path and change the live gold field.////// # Safety/// Run only inside the documented 32-bit Wesnoth build with a local match open.unsafe fn set_gold(amount: u32) to Result<()> { // 🛡️ SAFETY: the supported-game profile identifies this pointer root. let player equals unsafe { ptr::read_volatile(PLAYER_ROOT as *const u32) } as usize; anyhow::ensure!(player not equal to 0, "start a local match first"); 🛡️ The helper performs the pointer checks and gold write. "call {body}", 🔁 Put the interrupted thread back exactly as we found it. "popad", "popfd", ✅ Replay the behavior of all instructions replaced at the hook. "mov eax, dword ptr [ecx]", "lea esi, [esi]", 🧭 Continue at the first untouched Wesnoth instruction. "jmp {resume}", body equals sym cave_body, resume equals const RESUME, );} 🧹 LocalPatch refuses a different build, makes the code page writable, // writes all six bytes, flushes the instruction cache, restores the page // protection, and owns ORIGINAL so Drop can restore it later. LocalPatch::apply(HOOK, &ORIGINAL, &detour)}
+Code example. The code’s comments explain: / Follow Wesnoth's real pointer path and change the live gold field. / # Safety / Run only inside the documented 32-bit Wesnoth build with a local match open. 🛡️ SAFETY: the supported-game profile identifies this pointer root. 🛡️ SAFETY: the verified player record stores a 32-bit side pointer here. 🛡️ SAFETY: the current side record stores its four-byte gold value at +4. ⚠️ A naked assembly function cannot return Result. A missing match simply leaves gold unchanged; startup already verified the game executable. 📦 Save the flags and eight general-purpose 32-bit registers. 🛡️ The helper performs the pointer checks and gold write. 🔁 Put the interrupted thread back exactly as we found it. ✅ Replay the behavior of all instructions replaced at the hook. 🧭 Continue at the first untouched Wesnoth instruction. 🧹 LocalPatch refuses a different build, makes the code page writable, writes all six bytes, flushes the instruction cache, restores the page protection, and owns ORIGINAL so Drop can restore it later.
 
 Here is the important difference between “the address worked once” and a hook whose assumptions are visible:
 
@@ -172,7 +148,7 @@ Terminal window
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Inject the resulting DLL with the course injector:
+Inject the resulting D L L with the course injector:
 
 Terminal window
 
@@ -184,11 +160,11 @@ Section: Reuse the same detour for a live text field.
 
 The first hook changes a game value at a terrain-description event. The next case starts from a different observation: the game passes a live text pointer to its print function. The patch manager, checked relative jump, saved bytes, and restoration rule stay the same; the cave changes what it reads and writes.
 
-Now use the real target. On the Den of Onis map, right-click a Ford tile and open Terrain Description. Search for a distinctive part of the description, then change the first letter of each candidate until the displayed text changes. In the book’s run, the live string began at hexadecimal 1 0 C E 9 9 6 B.
+Now use the real target. On the Den of Onis map, right-click a Ford tile and open Terrain Description. Search for a distinctive part of the description, then change the first letter of each candidate until the displayed text changes. In the book’s run, the live string began at this value.
 
-Set a read breakpoint on one byte of that string and open the description again. Step out until you reach hexadecimal 0 0 5 E D 1 1 4. Here edx leads to the text object, and the call at hexadecimal 0 0 5 E D 1 2 9 prints it. The original print target is hexadecimal 0 0 5 E 9 6 3 0; execution continues at hexadecimal 0 0 5 E D 1 2 E.
+Set a read breakpoint on one byte of that string and open the description again. Step out until you reach this value. Here e d x leads to the text object, and the call at this value prints it. The original print target is this value; execution continues at this value.
 
-For the debugger-only experiment, place a cave at hexadecimal 0 1 3 4 3 E 1 B, replace the five-byte call at hexadecimal 0 0 5 E D 1 2 9 with a relative jump, and assemble:
+For the debugger-only experiment, place a cave at this value, replace the five-byte call at this value with a relative jump, and assemble:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -204,11 +180,11 @@ The finished hook keeps the same five-byte patch point, original print call, and
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The helper checks every pointer, caps the displayed value at 999, converts it into at most three ASCII digits, and copies exactly three bytes into the existing buffer. The naked cave supplies the live EDX, preserves flags and registers, replays the original print call, and resumes the game:
+The helper checks every pointer, caps the displayed value at 999, converts it into at most three A S C I I digits, and copies exactly three bytes into the existing buffer. The naked cave supplies the live e d x, preserves flags and registers, replays the original print call, and resumes the game:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Inject the 32-bit DLL into wesnoth.exe, open the terrain description during the two-player local scenario, and press F2. The first three characters change to the other player’s live gold. Press F2 again or End to restore the original call bytes.
+Inject the 32-bit D L L into wesnoth.exe, open the terrain description during the two-player local scenario, and press F2. The first three characters change to the other player’s live gold. Press F2 again or End to restore the original call bytes.
 
 The complete helper, decimal conversion, cave, and installer are in wesnoth_hooks.rs. The hotkey and patch lifetime are in dll.rs.
 

@@ -20,9 +20,7 @@ repeatedly requesting an action the host rejects.
 
 An embedded interpreter must treat failure as a normal result. One script error should not crash the game, leak resources, or leave input stuck.
 
-Before setting limits, locate where the failure occurred. A syntax error means the source never became a runnable function. A runtime type error means execution reached unsuitable values. A host-API, application programming interface, error means the script called the engine but violated that function’s contract. A gameplay error may raise no exception at all: every layer ran, but the requested action was wrong.
-
-Diagram. From Source text to Syntax check. From Syntax check to Syntax error: no runnable function. The connection is labelled: stops here. From Syntax check to Lua runtime executes. From Lua runtime executes to Runtime type error: unsuitable values. The connection is labelled: stops here. From Lua runtime executes to Host function. From Host function to Host-API error: contract violated. The connection is labelled: stops here. From Host function to Game state changes. From Game state changes to Gameplay error: nothing is raised. The connection is labelled: wrong result.
+Before setting limits, locate where the failure occurred. A syntax error means the source never became a runnable function. A runtime type error means execution reached unsuitable values. A host-A P I, application programming interface, error means the script called the engine but violated that function’s contract. A gameplay error may raise no exception at all: every layer ran, but the requested action was wrong.
 
 The first three can produce diagnostic errors; the fourth needs an assertion about expected behavior. Keep that distinction when choosing what to log and what to test.
 
@@ -34,7 +32,7 @@ source and bytecode size;
 
 Lua-managed memory;
 
-VM, virtual machine, instructions per update;
+V M, virtual machine, instructions per update;
 
 call-frame depth;
 
@@ -45,22 +43,6 @@ wall-clock deadline for work outside instruction counting;
 queued actions and log output.
 
 Choose whether a budget resets per callback, per frame, or per whole script session. A limit with no time window is ambiguous. Record which budget stopped execution so a learner can distinguish an infinite loop from memory growth or excessive host calls.
-
-Table columns: Resource; Guard; Reset window.
-
-Resource: Source and bytecode; Guard: Maximum input bytes; Reset window: Script load.
-
-Resource: Lua-managed memory; Guard: Allocator limit; Reset window: Script session.
-
-Resource: VM instructions; Guard: Hook counter; Reset window: One update.
-
-Resource: Call frames; Guard: Maximum depth; Reset window: One call chain.
-
-Resource: Host callbacks; Guard: Call and returned-byte caps; Reset window: One update.
-
-Resource: Wall-clock work; Guard: Host deadline or cancellation; Reset window: One update.
-
-Resource: Actions and logs; Guard: Queue and output-byte caps; Reset window: One update.
 
 When a limit is crossed, stop that update, discard its uncommitted actions, and report the exact budget. Do not quietly continue with half-produced output.
 
@@ -76,13 +58,11 @@ The limit covers Lua-managed allocations, not every resource a host callback mig
 
 Section: Limit instructions.
 
-mlua can call a host hook after a chosen number of VM instructions. The hook may run while Lua is executing, so its counter has to be shared safely with the Rust closure: Arc shares ownership of the counter, and Mutex protects one update to it at a time. The clone shares the same counter; it does not reset the budget.
+mlua can call a host hook after a chosen number of V M instructions. The hook may run while Lua is executing, so its counter has to be shared safely with the Rust closure: Arc shares ownership of the counter, and Mutex protects one update to it at a time. The clone shares the same counter; it does not reset the budget.
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Diagram. From VM executes 1,000 instructions to host hook fires. From host hook fires to calls += 1. From calls += 1 to calls greater than 100?. From calls greater than 100? to VmState::Continue. The connection is labelled: no. From VmState::Continue to VM executes 1,000 instructions. From calls greater than 100? to RuntimeError: instruction budget exceeded. The connection is labelled: yes.
-
-Since the hook fires every 1,000 instructions and allows at most 100 calls, a script gets roughly 100,000 VM instructions per update before this particular budget stops it.
+Since the hook fires every 1,000 instructions and allows at most 100 calls, a script gets roughly 100,000 V M instructions per update before this particular budget stops it.
 
 The hook is not a stopwatch. Different instructions cost different amounts of real time, and host callbacks can do work between hooks. It is one defense against runaway Lua bytecode.
 
@@ -128,7 +108,7 @@ script path or stable identifier;
 
 line and traceback when available;
 
-host API function involved;
+host A P I function involved;
 
 which validation rule failed;
 
@@ -139,8 +119,6 @@ Do not dump process memory, account tokens, full private chat logs, or arbitrary
 Section: Use a failure policy.
 
 One practical policy is:
-
-Diagram. From first error to stop this update, report it. From stop this update, report it to reset script state; retry only on user request. The connection is labelled: second error. From reset script state; retry only on user request to disable the script for the session. The connection is labelled: repeated error. From host invariant failure to stop all scripted actions immediately.
 
 Do not catch an error and continue from half-mutated host state. Lua requests should be queued and committed only after the script returns successfully.
 
@@ -174,7 +152,7 @@ a limited standard library;
 
 no arbitrary native module loading;
 
-a narrow host API;
+a narrow host A P I;
 
 copied snapshots;
 

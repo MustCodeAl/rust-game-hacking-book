@@ -2,9 +2,11 @@ Emulator Timing and State
 
 Lesson 14.7 explained how an emulator works and ran one instruction of a made-up 8-bit console through the fetch–decode–execute loop. This lesson builds the whole console, follows a complete program through it cycle by cycle, and ends with a lab that runs it.
 
-Section: A toy 8-bit CPU, central processing unit,.
+Section: A toy 8-bit C P U, central processing unit.
 
-The CPU is made up, but it is built like the 8-bit processors in 1980s consoles. It has four registers:
+In brief: The opcode chooses the operation. The operand supplies a number or an address. An address operand needs another memory read.
+
+The C P U is made up, but it is built like the 8-bit processors in 1980s consoles. It has four registers:
 
 PC, 8 bits, the program counter. Eight bits can name 2 to the power of 8 equals 256 addresses, hexadecimal 0 0 to hexadecimal F F, so the whole machine has 256 addresses.
 
@@ -16,27 +18,11 @@ Z, 1 bit, the zero flag: 1 when the last result was zero, 0 otherwise.
 
 It understands seven instructions. Each begins with its opcode, and some carry an operand byte:
 
-The toy CPU's instructions
+The toy C P U’s instructions
 
-Table columns: Bytes; Written as; Length; What it does; Cycles.
+A # marks an immediate: #5 means the number 5 itself, while an operand without # is an address, and the instruction uses the byte stored there. STA and J N Z leave Z alone. Every other byte value is not an instruction, and the lab reports it as an error instead of guessing.
 
-Bytes: 01 n; Written as: LDX #n; Length: 2; What it does: X equals n; Z equals 1 if X is 0; Cycles: 2.
-
-Bytes: 02 a; Written as: LDA a; Length: 2; What it does: A equals the byte at address a; Z equals 1 if A is 0; Cycles: 3.
-
-Bytes: 03 n; Written as: ADD #n; Length: 2; What it does: A equals A + n, wrapping past 255 back to 0; Z equals 1 if A is 0; Cycles: 2.
-
-Bytes: 04 a; Written as: STA a; Length: 2; What it does: store A at address a; Cycles: 3.
-
-Bytes: 05; Written as: DEX; Length: 1; What it does: X equals X minus 1, wrapping below 0 to 255; Z equals 1 if X is 0; Cycles: 1.
-
-Bytes: 06 a; Written as: JNZ a; Length: 2; What it does: if Z is 0, jump: PC equals a; Cycles: 2, or 3 if it jumps.
-
-Bytes: FF; Written as: HLT; Length: 1; What it does: stop; Cycles: 1.
-
-A # marks an immediate: #5 means the number 5 itself, while an operand without # is an address, and the instruction uses the byte stored there. STA and JNZ leave Z alone. Every other byte value is not an instruction, and the lab reports it as an error instead of guessing.
-
-Every number in the last column comes from one rule: the CPU spends one cycle on each memory access, meaning each instruction byte it fetches and each data byte it reads or writes, plus one extra cycle when a jump is taken, to load the new address into PC. So LDX #n and ADD #n each fetch 2 bytes, 2 cycles; LDA a fetches 2 and reads 1, 3 cycles; STA a fetches 2 and writes 1, 3 cycles; DEX and HLT each fetch 1, 1 cycle; and JNZ a fetches 2, plus 1 if it jumps. Real 8-bit CPUs, such as the 6502 inside the NES, have similar costs for similar reasons.
+Every number in the last column comes from one rule: the C P U spends one cycle on each memory access, meaning each instruction byte it fetches and each data byte it reads or writes, plus one extra cycle when a jump is taken, to load the new address into PC. So L D X #n and ADD #n each fetch 2 bytes, 2 cycles; L D A a fetches 2 and reads 1, 3 cycles; STA a fetches 2 and writes 1, 3 cycles; D E X and H L T each fetch 1, 1 cycle; and J N Z a fetches 2, plus 1 if it jumps. Real 8-bit CPUs, such as the 6502 inside the NES, have similar costs for similar reasons.
 
 Section: The program in memory.
 
@@ -46,81 +32,47 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Each address is the one before it plus that instruction’s length: hexadecimal 0 0 + 2 equals hexadecimal 0 2, and so on down to hexadecimal 0 8 + 1 equals hexadecimal 0 9, hexadecimal 0 9 + 2 equals hexadecimal 0 B, and hexadecimal 0 B + 2 equals hexadecimal 0 D. The last byte sits at hexadecimal 0 D, which is 13, so the program fills addresses 0 to 13, which is 14 bytes:
 
-Labelled memory diagram. hexadecimal 0 0: 01; cell 2: 02; hexadecimal 0 2: 02; cell 4: 80; hexadecimal 0 4: 03; cell 6: 05; hexadecimal 0 6: 04; cell 8: 80. Groups: LDX #2; LDA hexadecimal 8 0; ADD #5; STA hexadecimal 8 0. Addresses hexadecimal 0 0 to hexadecimal 0 7, one byte per box: the first four instructions.
-
-Labelled memory diagram. hexadecimal 0 8: 05; hexadecimal 0 9: 06; cell 3: 02; hexadecimal 0 B: 04; cell 5: F0; hexadecimal 0 D: FF. Groups: DEX; JNZ hexadecimal 0 2; STA hexadecimal F 0; HLT. Addresses hexadecimal 0 8 to hexadecimal 0 D: the last four. The earlier ADD #5 at hexadecimal 0 4 adds five to the accumulator on each loop pass.
-
 The program and its data share one memory, as they do in every stored-program computer. At power-on the machine looks like this:
-
-Labelled memory diagram. PC: hexadecimal 0 0; A: 0; X: 0; Z: 0; hexadecimal 8 0 dot gold: 10. Groups: CPU registers; RAM, random access memory,. Before step 1: every register is 0, and gold at hexadecimal 8 0 holds 10, which is hexadecimal 0 A.
 
 Section: Trace the program.
 
 The first pass goes from power-on through the jump back:
 
-Table columns: Step; PC; Instruction; What happens; A; X; Z; Gold; Cycles.
-
-Step: 1; PC: hexadecimal 0 0; Instruction: LDX #2; What happens: X equals 2, not 0, so Z equals 0; A: 0; X: 2; Z: 0; Gold: 10; Cycles: 0 + 2 equals 2.
-
-Step: 2; PC: hexadecimal 0 2; Instruction: LDA hexadecimal 8 0; What happens: A equals the byte at hexadecimal 8 0, 10; A: 10; X: 2; Z: 0; Gold: 10; Cycles: 2 + 3 equals 5.
-
-Step: 3; PC: hexadecimal 0 4; Instruction: ADD #5; What happens: A equals 10 + 5 equals 15; A: 15; X: 2; Z: 0; Gold: 10; Cycles: 5 + 2 equals 7.
-
-Step: 4; PC: hexadecimal 0 6; Instruction: STA hexadecimal 8 0; What happens: gold equals A equals 15; A: 15; X: 2; Z: 0; Gold: 15; Cycles: 7 + 3 equals 10.
-
-Step: 5; PC: hexadecimal 0 8; Instruction: DEX; What happens: X equals 2 minus 1 equals 1, not 0, so Z equals 0; A: 15; X: 1; Z: 0; Gold: 15; Cycles: 10 + 1 equals 11.
-
-Step: 6; PC: hexadecimal 0 9; Instruction: JNZ hexadecimal 0 2; What happens: Z is 0, so PC equals hexadecimal 0 2; A: 15; X: 1; Z: 0; Gold: 15; Cycles: 11 + 3 equals 14.
-
 The second pass repeats the loop body, and this time the counter runs out:
 
-Table columns: Step; PC; Instruction; What happens; A; X; Z; Gold; Cycles.
+In hex, 15 is hexadecimal 0 F and 20 is 1 times 16 + 4 equals hexadecimal 1 4. At step 11, fetching J N Z and its operand has already moved PC from hexadecimal 0 9 to hexadecimal 0 9 + 2 equals hexadecimal 0 B, so not jumping needs no extra work: the next instruction is simply the next one.
 
-Step: 7; PC: hexadecimal 0 2; Instruction: LDA hexadecimal 8 0; What happens: A equals the byte at hexadecimal 8 0, 15; A: 15; X: 1; Z: 0; Gold: 15; Cycles: 14 + 3 equals 17.
-
-Step: 8; PC: hexadecimal 0 4; Instruction: ADD #5; What happens: A equals 15 + 5 equals 20; A: 20; X: 1; Z: 0; Gold: 15; Cycles: 17 + 2 equals 19.
-
-Step: 9; PC: hexadecimal 0 6; Instruction: STA hexadecimal 8 0; What happens: gold equals A equals 20; A: 20; X: 1; Z: 0; Gold: 20; Cycles: 19 + 3 equals 22.
-
-Step: 10; PC: hexadecimal 0 8; Instruction: DEX; What happens: X equals 1 minus 1 equals 0, so Z equals 1; A: 20; X: 0; Z: 1; Gold: 20; Cycles: 22 + 1 equals 23.
-
-Step: 11; PC: hexadecimal 0 9; Instruction: JNZ hexadecimal 0 2; What happens: Z is 1, no jump; A: 20; X: 0; Z: 1; Gold: 20; Cycles: 23 + 2 equals 25.
-
-Step: 12; PC: hexadecimal 0 B; Instruction: STA hexadecimal F 0; What happens: the display shows 20; A: 20; X: 0; Z: 1; Gold: 20; Cycles: 25 + 3 equals 28.
-
-Step: 13; PC: hexadecimal 0 D; Instruction: HLT; What happens: stop; A: 20; X: 0; Z: 1; Gold: 20; Cycles: 28 + 1 equals 29.
-
-In hex, 15 is hexadecimal 0 F and 20 is 1 times 16 + 4 equals hexadecimal 1 4. At step 11, fetching JNZ and its operand has already moved PC from hexadecimal 0 9 to hexadecimal 0 9 + 2 equals hexadecimal 0 B, so not jumping needs no extra work: the next instruction is simply the next one.
-
-The whole run takes 29 cycles: 2 for LDX, then 3 + 2 + 3 + 1 + 3 equals 12 for the first pass, 3 + 2 + 3 + 1 + 2 equals 11 for the second, and 3 + 1 equals 4 for the ending. 2 + 12 + 11 + 4 equals 29. When the machine stops, it looks like this:
-
-Labelled memory diagram. PC: hexadecimal 0 E; A: 20; X: 0; Z: 1; hexadecimal 8 0 dot gold: 20; hexadecimal F 0 dot display: 20. Groups: CPU registers; RAM; I/O. After HLT. PC is hexadecimal 0 E, one past the HLT at hexadecimal 0 D, because fetching the opcode moved it on.
+The whole run takes 29 cycles: 2 for L D X, then 3 + 2 + 3 + 1 + 3 equals 12 for the first pass, 3 + 2 + 3 + 1 + 2 equals 11 for the second, and 3 + 1 equals 4 for the ending. 2 + 12 + 11 + 4 equals 29. When the machine stops, it looks like this:
 
 Section: The interpreter in Rust.
 
 The lab’s step function is that trace, as code. It fetches the opcode, decodes it, and runs one arm of a match. Each arm’s last value is the instruction’s cost in cycles:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: The other five arms follow the same pattern.
 
-fetch reads the byte at PC and adds 1 to PC, so each call consumes one byte of the instruction. Opcode::decode is a match on the byte that returns None for anything that is not an instruction, and the ? turns that into an IllegalOpcode error that names the address. A real CPU meeting an unknown opcode might raise an exception, as x86 does, or do something undocumented. An emulator that guessed would hide bugs in the guest program and in itself.
+fetch reads the byte at PC and adds 1 to PC, so each call consumes one byte of the instruction. Opcode::decode is a match on the byte that returns None for anything that is not an instruction, and the ? turns that into an IllegalOpcode error that names the address. A real C P U meeting an unknown opcode might raise an exception, as x86 does, or do something undocumented. An emulator that guessed would hide bugs in the guest program and in itself.
 
-Diagram walkthrough: One LDA instruction: bytes become CPU state. Step 1: Start at step 2 of the trace. State: PC=02 A=0 X=2 Z=0 cycles=2. The earlier LDX has finished: PC equals hexadecimal 0 2, A equals 0, X equals 2, Z equals 0, and the cycle count is 2. RAM at hexadecimal 8 0 contains gold equals 10. The next instruction bytes are 02 80. Step 2: Fetch the opcode. State: opcode=02 PC=03. fetch reads byte hexadecimal 0 2 at PC equals hexadecimal 0 2, then advances PC to hexadecimal 0 3. This byte identifies the operation; it has not loaded the gold value into A. Step 3: Decode the operation. State: 02 to LDA. Opcode::decode maps hexadecimal 0 2 to LDA. The LDA arm requires one address operand followed by a data read. An unrecognized opcode would return IllegalOpcode before this arm runs. Step 4: Fetch the address operand. State: operand=80 PC=04. The second fetch reads byte hexadecimal 8 0 at PC equals hexadecimal 0 3 and advances PC to hexadecimal 0 4. The operand names RAM address hexadecimal 8 0, whose stored byte is the value the instruction will load. Step 5: Update A and the zero flag. State: A=10 Z=0 X=2 RAM[80]=10. read(hexadecimal 8 0) returns 10, so A becomes 10. Because A is nonzero, Z remains 0. X remains 2, and RAM still holds gold equals 10 because LDA only reads it. Step 6: Finish the instruction. State: PC=04 cycles=2+3=5. The arm returns a cost of 3 cycles: opcode fetch, operand fetch, and data read. The total becomes 2 + 3 equals 5. PC equals hexadecimal 0 4 now selects ADD #5, matching step 2 of the trace. An instruction can use several emulated cycles. The later ADD changes A, and STA writes that result back to RAM; following those separate changes explains why a saved register and a saved memory byte can disagree.
+Narration: The number travels from R A M, random access memory, into A. R A M keeps its copy. Later arithmetic can change A before a store changes R A M.
+
+The same instruction can load a different value. Change the memory byte below, then step through the fetches and the data read. Try zero: the loaded value also changes the zero flag. Each memory read costs one cycle in this toy C P U.
 
 Because step decodes every instruction each time it runs, the loop body from hexadecimal 0 2 to hexadecimal 0 A is decoded afresh on both passes. That repetition is what the dynamic recompilers of Lesson 14.7 remove.
 
 Section: The memory map as code.
 
-The toy console maps RAM from hexadecimal 0 0 to hexadecimal E F, the display at hexadecimal F 0, the buttons at hexadecimal F 1, and nothing from hexadecimal F 2 to hexadecimal F F. In the lab, the map is two functions. Every read the CPU makes, including every fetch, goes through read, and every store goes through write:
+The toy console maps R A M from hexadecimal 0 0 to hexadecimal E F, the display at hexadecimal F 0, the buttons at hexadecimal F 1, and nothing from hexadecimal F 2 to hexadecimal F F. In the lab, the map is two functions. Every read the C P U makes, including every fetch, goes through read, and every store goes through write:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-hexadecimal 0 0..=hexadecimal E F is Rust’s range from hexadecimal 0 0 to hexadecimal E F with both ends included. That is hexadecimal F 0 equals 15 times 16 equals 240 addresses, exactly the length of the ram array. DISPLAY and BUTTONS are constants holding hexadecimal F 0 and hexadecimal F 1. So step 12’s STA hexadecimal F 0 calls write with address hexadecimal F 0 and value 20, the second arm stores 20 in the display register, and nothing in step has to know that hexadecimal F 0 is not RAM.
+hexadecimal 0 0..=hexadecimal E F is Rust’s range from hexadecimal 0 0 to hexadecimal E F with both ends included. That is hexadecimal F 0 equals 15 times 16 equals 240 addresses, exactly the length of the ram array. DISPLAY and BUTTONS are constants holding hexadecimal F 0 and hexadecimal F 1. So step 12’s STA hexadecimal F 0 calls write with address hexadecimal F 0 and value 20, the second arm stores 20 in the display register, and nothing in step has to know that hexadecimal F 0 is not R A M.
 
-Real consoles work the same way on a larger scale. The NES has 2 KiB of RAM at hexadecimal 0 0 0 0 to hexadecimal 0 7 F F; hexadecimal 0 8 0 0 is 8 times 256 equals 2,048 bytes. Its address decoder ignores the top address bits for RAM, so the same 2,048 bytes answer again at hexadecimal 0 8 0 0, hexadecimal 1 0 0 0, and hexadecimal 1 8 0 0: the range up to hexadecimal 2 0 0 0, which is 2 times 16 to the power of 3 equals 2 times 4,096 equals 8,192 bytes, holds 8,192 divided by 2,048 equals 4 copies. This is called mirroring. The picture chip’s registers start at hexadecimal 2 0 0 0, and the controllers answer at hexadecimal 4 0 1 6 and hexadecimal 4 0 1 7. An NES emulator’s read is a bigger version of the one above.
+Real consoles work the same way on a larger scale. The NES has 2 KiB of R A M at hexadecimal 0 0 0 0 to hexadecimal 0 7 F F; hexadecimal 0 8 0 0 is 8 times 256 equals 2,048 bytes. Its address decoder ignores the top address bits for R A M, so the same 2,048 bytes answer again at hexadecimal 0 8 0 0, hexadecimal 1 0 0 0, and hexadecimal 1 8 0 0: the range up to hexadecimal 2 0 0 0, which is 2 times 16 to the power of 3 equals 2 times 4,096 equals 8,192 bytes, holds 8,192 divided by 2,048 equals 4 copies. This is called mirroring. The picture chip’s registers start at hexadecimal 2 0 0 0, and the controllers answer at hexadecimal 4 0 1 6 and hexadecimal 4 0 1 7. An NES emulator’s read is a bigger version of the one above.
 
 Section: Frame budgets and overshoot.
 
-A real frame’s budget, like the one in Lesson 14.7, runs to thousands of cycles, while the whole traced program takes only 29. So the lab uses a tiny budget of 18 cycles, which ends a frame partway through the program. Its run loop steps whole instructions until the budget is used or the CPU halts:
+In brief: An instruction finishes as a whole. A frame budget can be exceeded by the final instruction’s cost.
+
+A real frame’s budget, like the one in Lesson 14.7, runs to thousands of cycles, while the whole traced program takes only 29. So the lab uses a tiny budget of 18 cycles, which ends a frame partway through the program. Its run loop steps whole instructions until the budget is used or the C P U halts:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -128,33 +80,29 @@ The check used less than budget happens before each instruction, never during on
 
 Here is the machine at that frame boundary:
 
-Labelled memory diagram. PC: hexadecimal 0 6; A: 20, highlighted; X: 1; Z: 0; hexadecimal 8 0 dot gold: 15, highlighted. Groups: CPU registers; RAM. Where the 18-cycle budget stops. The new total, 20, exists only in A; gold in RAM still says 15 until STA at hexadecimal 0 6 runs.
-
 Section: A save state, byte by byte.
 
-At that frame boundary the new gold total exists only in A, so a snapshot of RAM alone would restore gold equals 15 and lose the 20. The lab’s SaveState copies every part of the machine and converts it to a row of bytes:
+Alternative: Saving R A M alone suits a data backup. Resuming this emulator also needs the registers, flags, counters, and device state.
 
-Labelled memory diagram. PC: hexadecimal 0 6; A: 20; X: 1; Z: 0; halted: 0; cycles: 19. Groups: CPU registers; emulator bookkeeping. The first 13 bytes. PC, A, X, Z, and the halted flag take 1 byte each; the cycle count is a 64-bit number, and 64 divided by 8 equals 8 bytes. So 5 + 8 equals 13.
+At that frame boundary the new gold total exists only in A, so a snapshot of R A M alone would restore gold equals 15 and lose the 20. The lab’s SaveState copies every part of the machine and converts it to a row of bytes:
 
-Labelled memory diagram. RAM: 240 bytes; display: 0; buttons: 0. Groups: all of RAM; I/O registers. The other 242 bytes: 240 for RAM and 1 each for the two I/O registers. In all, 13 + 240 + 2 equals 255 bytes.
-
-The halted flag records whether HLT has run, and the cycle count is the emulator’s position in time, so a loaded state resumes at the same point in the frame. Reading a state back refuses anything that is not exactly 255 bytes long, and refuses a Z or halted byte that holds anything other than 0 or 1, because no real run of the machine could have produced it.
+The halted flag records whether H L T has run, and the cycle count is the emulator’s position in time, so a loaded state resumes at the same point in the frame. Reading a state back refuses anything that is not exactly 255 bytes long, and refuses a Z or halted byte that holds anything other than 0 or 1, because no real run of the machine could have produced it.
 
 Section: A cheat code racing a register.
+
+Narration: There are two copies to follow here. A frame-end R A M write can be replaced by the value still waiting in A.
 
 The lab’s run_frame runs one frame and then applies every cheat, the way a cheat cartridge wrote its values once per frame:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-It returns the overshoot, which the caller takes off the next frame’s budget. saturating_sub subtracts but stops at 0 instead of wrapping around, so a frame that ends early because the CPU halted reports no overshoot.
+It returns the overshoot, which the caller takes off the next frame’s budget. saturating_sub subtracts but stops at 0 instead of wrapping around, so a frame that ends early because the C P U halted reports no overshoot.
 
 Give it the 18-cycle frames and one cheat: write 99 to gold. Frame 1 runs steps 1 to 8, and then the cheat writes 99 to hexadecimal 8 0. But the game had already copied gold into A and added 5. Frame 2, with its budget of 17, starts with step 9, which stores A’s 20 over the 99, and steps 9 to 13 finish the program in 3 + 1 + 2 + 3 + 1 equals 10 cycles, well inside the budget. Step 12 shows 20 on the display, and at the end of frame 2 the cheat writes 99 again:
 
-Labelled memory diagram. A: 20; hexadecimal 8 0 dot gold: 99, highlighted; hexadecimal F 0 dot display: 20. Groups: CPU register; RAM; I/O. After frame 2. RAM holds the cheat's 99, but the game stored and displayed the 20 it had already computed in A.
-
 Section: Run the toy console.
 
-The portable lab toy_emulator_lab.rs is the console from this lesson: the CPU, the 240 bytes of RAM, the display and buttons registers, the step interpreter, a run loop with a cycle budget, frames with constant-write cheats, and a SaveState that copies the registers and memory and converts them to and from 255 bytes.
+The portable lab toy_emulator_lab.rs is the console from this lesson: the C P U, the 240 bytes of R A M, the display and buttons registers, the step interpreter, a run loop with a cycle budget, frames with constant-write cheats, and a SaveState that copies the registers and memory and converts them to and from 255 bytes.
 
 Build it, then run it from the rust-labs folder:
 
@@ -162,7 +110,7 @@ Terminal window
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The lab first runs the traced program one instruction at a time and prints the same numbers as the tables above. Then it stops a run at the 18-cycle boundary, takes a save state, runs to the end, loads the state, and runs again, arriving at an identical machine. Finally, it runs two frames with the gold cheat and shows RAM at 99 while the display says 20. The tests check every one of the 13 trace steps, both costs of JNZ, wrapping at 255, the budget stop, the save state’s round trip through 255 bytes, the rejection of damaged save states and unknown opcodes, and the cheat’s race with register A.
+The lab first runs the traced program one instruction at a time and prints the same numbers as the tables above. Then it stops a run at the 18-cycle boundary, takes a save state, runs to the end, loads the state, and runs again, arriving at an identical machine. Finally, it runs two frames with the gold cheat and shows R A M at 99 while the display says 20. The tests check every one of the 13 trace steps, both costs of J N Z, wrapping at 255, the budget stop, the save state’s round trip through 255 bytes, the rejection of damaged save states and unknown opcodes, and the cheat’s race with register A.
 
 Then give the console a watchpoint: a watch: Option<u8> field, and an if in write that records self.cpu.pc whenever the watched address is written. Before you run the traced program with gold watched, predict which PC values it records and why they are not hexadecimal 0 6, the address of the STA.
 

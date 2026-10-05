@@ -10,8 +10,6 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Section: The shape every one of these shares.
 
-Diagram. From A control promises something to It checks a proxy for that thing. From It checks a proxy for that thing to The proxy and the thing come apart. From The proxy and the thing come apart to The effect happens anyway. From The effect happens anyway to Move the check to the effect.
-
 The interesting question is never “what was the trick?” It is always “what did the control measure, and how did that stop matching what it promised?” Each section below names the promise first, because a control with no stated promise cannot be bypassed — only surprised.
 
 Section: Pattern 4: arithmetic that wraps inside the bound check.
@@ -27,8 +25,6 @@ On a 64-bit machine that sum is computed modulo 2^64. Choose an offset near the 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 Nothing overflowed visibly. In a release build there is no panic, no warning, and the comparison is perfectly true. The read then starts at an address near the top of the address space.
-
-Diagram walkthrough: See a bound check fooled by overflow. Step 1: Start near the limit. State: MAX minus 3. The requested offset is only three below usize::MAX. Step 2: Add the length. State: end becomes 12. Unchecked addition wraps the end of the range to 12. Step 3: Compare the wrong end. State: 12 less than or equal to region size?. The bound check sees only the wrapped small number. Step 4: Allow a bad read. State: false acceptance. This tour follows the yes branch despite the invalid start. The yes branch is the failure: a wrapped end looks small enough, although the requested range began near the address-space limit.
 
 The repair is not a bigger integer. It is refusing to answer a question that has no answer:
 
@@ -76,13 +72,9 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 The guard was never removed or weakened. It was simply routed around. Worse, the batch path records no decisions at all, so the audit log shows nothing happened while the bytes changed.
 
-Diagram. From apply_patch(...) to policy check. From policy check to self.write(...). From weak_apply_batch(...) to self.write(...). The connection is labelled: skips the guard.
-
 The repair is structural rather than additional. Do not add a second copy of the check to the batch helper; make the batch helper call the guarded entry point. One way in means one place to be correct:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-Diagram. From apply_patch(...) to policy check. From policy check to self.write(...). From apply_batch(...) to apply_patch(...).
 
 When you review a control, count the routes to the effect before reading the check. A guard on three of four paths is not a guard.
 
@@ -146,43 +138,11 @@ The repair is two phases: validate every item, then apply every item. Nothing is
 
 Section: Compare all eight.
 
-Table columns: Pattern; What was checked; What actually mattered; Where the repair belongs.
-
-Pattern: Wrapping bound; What was checked: a sum that wrapped; What actually mattered: whether the range exists; Where the repair belongs: the slice that owns the bytes.
-
-Pattern: Path prefix; What was checked: the requested text; What actually mattered: the resolved location; Where the repair belongs: after resolution.
-
-Pattern: Fail-open; What was checked: two outcomes; What actually mattered: three outcomes; Where the repair belongs: the error branch.
-
-Pattern: Second route; What was checked: one entry point; What actually mattered: every route to the effect; Where the repair belongs: the single choke point.
-
-Pattern: Replay; What was checked: integrity; What actually mattered: integrity and freshness; Where the repair belongs: a sequence the receiver remembers.
-
-Pattern: Cached decision; What was checked: state at start-up; What actually mattered: state at the effect; Where the repair belongs: the write itself.
-
-Pattern: Tolerance drift; What was checked: one tick; What actually mattered: accumulated excess; Where the repair belongs: a budget over a window.
-
-Pattern: Partial batch; What was checked: each item in turn; What actually mattered: the request as a unit; Where the repair belongs: validate-then-apply.
-
 Read the middle two columns together. In every row the control measured something true, and something true was not the same as the thing promised. That gap is the whole subject.
 
 Section: Place a bypass claim in the table.
 
 When you meet an evasion claim in the wild, the useful response is not to run it. It is to work out which row of that table it belongs to:
-
-Table columns: Question; Where the answer comes from.
-
-Question: What did the control promise?; Where the answer comes from: documentation, or the check’s own comment.
-
-Question: What does it actually measure?; Where the answer comes from: the code at the branch.
-
-Question: How can the two come apart?; Where the answer comes from: the pattern table above.
-
-Question: What shows the gap in practice?; Where the answer comes from: a decision that contradicts the promise.
-
-Question: Where does the invariant belong?; Where the answer comes from: the shared point where the effect becomes real.
-
-Question: What test keeps it fixed?; Where the answer comes from: one negative case and one positive case.
 
 The last row is the one people skip. A repair with only a negative test tends to be over-tightened until ordinary behavior breaks; a repair with only a positive test tends to drift back. Both, or it will not hold.
 

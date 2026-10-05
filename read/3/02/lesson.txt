@@ -6,8 +6,6 @@ Our tool runs beside the game, not inside it. Windows must grant a process handl
 
 An address makes sense only in a process’s address space. The number hexadecimal 5 0 0 0 can exist in both processes without naming the same bytes. The process matters as much as the numeric address:
 
-Diagram. From address hexadecimal 5 0 0 0 to physical RAM, random access memory,: the game's player object. The connection is labelled: the game's address map. From address hexadecimal 5 0 0 0 to physical RAM: the tool's own data. The connection is labelled: the tool's address map.
-
 Windows maps virtual addresses separately for each process. Reading a local pointer with the same number would inspect the tool’s own memory. A process handle names the target and carries the rights granted for this opening; the Windows read uses that handle with the target address and a byte count. Lesson 11.6 later examines handles in more depth.
 
 That read is the Windows function ReadProcessMemory. Its arguments split cleanly into what belongs to the game and what belongs to the tool:
@@ -38,21 +36,15 @@ return valuenonzero on success
 
 Zero means the read failed. GetLastError then says why, such as ERROR_PARTIAL_COPY (299) when only part of the range could be read.
 
-For this lab, the program discovers wesnoth.exe with the Windows ToolHelp API, application programming interface,, opens it, resolves the verified pointer chain, and performs the guarded write. There is no PID, process identifier, or raw-address placeholder for the reader to fill in.
+For this lab, the program discovers wesnoth.exe with the Windows ToolHelp A P I, application programming interface,, opens it, resolves the verified pointer chain, and performs the guarded write. There is no P I D, process identifier, or raw-address placeholder for the reader to fill in.
 
 An external tool cannot dereference a target-process pointer directly. Windows mediates the boundary, and the handle represents the particular access the observer was granted:
-
-Diagram. From Observer address space to Process handle a capability. From Process handle a capability to Windows checks rights and address range. From Windows checks rights and address range to Target address space. From Target address space to Copied bytes. From Copied bytes to Decode with a proven layout. From Decode with a proven layout to Owned typed snapshot.
 
 The returned bytes belong to the observer, but their interpretation is valid only for the target build and moment that justified the layout. A write is a separate, stronger capability and needs its own expected-value check.
 
 Even two successful reads can describe different moments. Suppose the tool follows a player pointer, the game removes that player and reuses the same allocation, and the tool then reads health. Both requests can succeed while the combined result describes no real player:
 
-Diagram labels, in drawing order: The game; Your tool; removes enemy A and; reuses hexadecimal 5 0 0 0 for enemy B; reports enemy A; with enemy B's health; read the pointer at hexadecimal 2 0 0 0; hexadecimal 5 0 0 0, which is enemy A; read health at hexadecimal 5 0 0 0 + hexadecimal 3 0; 87, which is enemy B's health.
-
 Watch that race. Each read can succeed while the pair of observations becomes inconsistent:
-
-Animated diagram: Two successful reads, two different objects. A tool and a game exchange messages. The tool reads a pointer and gets hexadecimal 5 0 0 0, which holds enemy A. The game then reuses hexadecimal 5 0 0 0 for enemy B. The tool reads health at hexadecimal 5 0 3 0 and gets 87, which is enemy B’s health, and wrongly reports enemy A with health 87. Step 1: The tool wants enemy A’s health. First it asks Windows to read the pointer stored at hexadecimal 2 0 0 0 in the game. That request names a location, not a permanent object. Step 2: The game answers hexadecimal 5 0 0 0, which names enemy A at this moment. The tool keeps that address for its next read. Step 3: Before the tool’s next request, the game removes enemy A and reuses the allocation at hexadecimal 5 0 0 0 for enemy B. The number hexadecimal 5 0 0 0 has not changed, but who lives there has. Step 4: The tool adds the health offset hexadecimal 3 0 to the hexadecimal 5 0 0 0 it kept and reads at hexadecimal 5 0 3 0. That location now belongs to enemy B. Step 5: Windows reads it successfully and returns 87. Those bytes are enemy B’s health. Step 6: Combining the two results reports enemy A with health taken from enemy B. Each copy succeeded, yet the pair describes no real player. This is an illustrated failure, not a valid snapshot. Copy checks and object-path revalidation help detect uncertainty; they do not make separate reads atomic.
 
 Check the returned byte count and revalidate the object path after a multi-step read. That reduces stale observations; it does not turn several Windows calls into one atomic snapshot. Lesson 4.4 builds a bounded double-capture check for that remaining uncertainty.
 
@@ -60,9 +52,7 @@ Section: Hands-on target: Wesnoth 1.14.9.
 
 For the exact 32-bit Windows build used by this book, the verified gold path is:
 
-Diagram. From read u32 at hexadecimal 0 1 7 E E D 1 8 to read u32 at that address. The connection is labelled: + hexadecimal A 9 0. From read u32 at that address to player one's gold. The connection is labelled: + hexadecimal 4.
-
-This is the practical result from Lesson 2.8. Confirm it in Cheat Engine before running the tool: add a pointer manually, use hexadecimal 0 1 7 E E D 1 8 as the base, then add offsets hexadecimal A 9 0 and hexadecimal 4. Start three fresh local matches and verify that it resolves to the gold shown in the game each time.
+This is the practical result from Lesson 2.8. Confirm it in Cheat Engine before running the tool: add a pointer manually, use this value as the base, then add offsets hexadecimal A 9 0 and hexadecimal 4. Start three fresh local matches and verify that it resolves to the gold shown in the game each time.
 
 These constants belong to Wesnoth 1.14.9, 32-bit Windows. They are intentionally concrete so you can reproduce the hack. On any other build these addresses can point somewhere else, so stop before reading or writing.
 
@@ -74,7 +64,7 @@ That gives a handle four rules:
 
 Scope: a handle value is normally meaningful only in the process whose handle table contains it. DuplicateHandle can deliberately create another.
 
-Rights: OpenProcess(PROCESS_VM_READ, ...) asks for a capability. The returned handle carries only the rights Windows granted for that opening.
+Rights: OpenProcess(PROCESS_VM_READ...) asks for a capability. The returned handle carries only the rights Windows granted for that opening.
 
 Lifetime: the handle stays valid until its owner closes it. Closing the last handle to many kernel objects lets Windows destroy that object.
 
@@ -82,7 +72,7 @@ Correct closer: many kernel-object handles use CloseHandle, but not every Window
 
 The HANDLE type is intentionally opaque. The Drop trait gives an owned handle an automatic cleanup path:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: 👀 Borrow the ticket for one A P I call; ownership stays in `self`. 🧹 SAFETY: this instance owns the live handle and closes it exactly once.
 
 The wrapper itself is not magic. Its constructor must accept only a valid, owned handle; it must not wrap pseudo-handles such as GetCurrentProcess() as though they need closing; and its raw value should be borrowed briefly instead of copied into long-lived state. In larger tools, std::os::windows::io types such as OwnedHandle and BorrowedHandle can express the same ownership split for compatible handle families.
 
@@ -102,7 +92,7 @@ Section: Read into a byte buffer.
 
 Put ReadProcessMemory behind a method:
 
-Code example. The code’s comments explain: 🛡️ SAFETY: // - `buffer` is valid for exactly `buffer.len()` writable bytes. // - Windows validates the remote address against the target process. // - `self.handle` remains open for this call. unsafe { ReadProcessMemory( self.handle, address as *const c_void, buffer.as_mut_ptr().cast(), buffer.len(), Some(&mut bytes_read), )?; } ✅ A successful API call may still report a short copy. Callers asked // for an exact value, so returning partly old buffer data would be a bug. if bytes_read not equal to buffer.len() { return Err(windows::core::Error::from_win32()); } Ok(()) }
+Code example. The code’s comments explain: - `buffer` is valid for exactly `buffer.len()` writable bytes. - Windows validates the remote address against the target process. - `self.handle` remains open for this call. ✅ A successful A P I call may still report a short copy. Callers asked for an exact value, so returning partly old buffer data would be a bug. 🧭 These Windows/x86 course targets store integers least-significant byte first; the conversion documents that byte-order agreement.
 
 The public method returns a normal u32. Raw pointers never escape the wrapper.
 
@@ -112,17 +102,15 @@ The wrapper now returns ordinary values, so the caller can follow the previously
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Run the tool from an ordinary terminal in the VM, virtual machine,. If Windows denies access, report the error; do not automatically demand more privileges.
+Run the tool from an ordinary terminal in the V M, virtual machine. If Windows denies access, report the error; do not automatically demand more privileges.
 
 Section: Add a guarded write.
 
 Writing should be opt-in and should verify the expected old value first:
 
-Diagram. From read the current value to equals expected?. From equals expected? to return false; write nothing. The connection is labelled: no. From equals expected? to WriteProcessMemory the new bytes. The connection is labelled: yes. From WriteProcessMemory the new bytes to bytes written equals bytes.len()?. From bytes written equals bytes.len()? to return false. The connection is labelled: no. From bytes written equals bytes.len()? to return true. The connection is labelled: yes.
-
 The method below turns the diagram into a checked write. Given an address, the value we expect there, and a replacement, it returns Ok(false) without writing if the value has changed. A matching value permits one four-byte write, and the result is true only when Windows reports all four bytes written. Another game thread can still race this check, so the caller must treat the result as evidence for this attempt, not a permanent guarantee.
 
-Code example. The code’s comments explain: 🛡️ SAFETY: `bytes` is a live readable buffer; Windows validates the // destination; the handle was opened with write and operation rights. unsafe { WriteProcessMemory( self.handle, address as *const c_void, bytes.as_ptr().cast(), bytes.len(), Some(&mut written), )?; } ✅ Do not claim success when Windows copied only part of the value. Ok(written equals bytes.len()) }}
+Code example. The code’s comments explain: ⚠️ Re-read immediately before writing. A scan result is only an old observation, and the running game may have changed this value since. 🛡️ SAFETY: `bytes` is a live readable buffer; Windows validates the destination; the handle was opened with write and operation rights. ✅ Do not claim success when Windows copied only part of the value.
 
 Open the handle with allow_write: true only when the user explicitly requests a lab change.
 
@@ -130,9 +118,7 @@ Section: Defeat the moving-address problem.
 
 Wesnoth 1.14.9 is a 32-bit target, so a 64-bit tool must read its pointers as four-byte u32 values, not as the tool’s native usize:
 
-Labelled memory diagram. cell 1: b0, highlighted; cell 2: b1, highlighted; cell 3: b2, highlighted; cell 4: b3, highlighted; cell 5: b4; cell 6: b5; cell 7: b6; cell 8: b7. Groups: the actual 32-bit pointer: read_u32 takes exactly these 4 bytes; a native 64-bit usize read would consume all 8 bytes here. For example: reading a native usize on a 64-bit tool silently absorbs the next field's 4 bytes into the pointer value.
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: 📏 Pointer width belongs to the target process, not to this tool. Reading a native usize here would consume eight bytes in a 64-bit build.
 
 Now perform the actual hack:
 
@@ -152,7 +138,7 @@ Section: Make failure useful.
 
 Test these cases:
 
-wrong PID;
+wrong P I D;
 
 target closed;
 

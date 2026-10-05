@@ -1,18 +1,16 @@
 Call Frames, Closures, and Upvalues
 
-Section: A VM, virtual machine, call needs bookkeeping.
+Section: A V M, virtual machine, call needs bookkeeping.
 
 When one Lua function calls another, the interpreter must remember where the caller continues, where its local values live, which function is running, and where results should go. That record is a call frame.
 
-This is the virtual machine’s version of the call-stack idea from the assembly chapter. The CPU, central processing unit, still has a real native stack underneath, but Lua call frames describe Lua execution.
+This is the virtual machine’s version of the call-stack idea from the assembly chapter. The C P U, central processing unit, still has a real native stack underneath, but Lua call frames describe Lua execution.
 
 Section: One value stack can hold many frames.
 
-A VM can keep values in one vector and let each frame own a range:
+A V M can keep values in one vector and let each frame own a range:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-Labelled memory diagram. index 0: caller's local 0; index 1: caller's local 1; base 2 to : callee's local 0, highlighted; index 3: callee's local 1 (top), highlighted. Groups: caller's frame, base equals 0; callee's frame, base equals 2. For example, one shared value stack holding two frames. base marks where each frame's locals start, so a bytecode operand like local slot 1 means base + 1 in this one vector, never a raw index into another frame.
 
 base says where this function’s local area begins. Bytecode operands can refer to base + local_index rather than carrying raw pointers into the vector.
 
@@ -46,13 +44,11 @@ That distinction predicts a specific bug. Hand the same count to two closures, t
 
 The captured value changes location without changing its identity:
 
-Diagram. From make_counter() frame, base equals 3 to stack slot 3 equals 0 (count). From stack slot 3 equals 0 (count) to upvalue equals Open { stack_index: 3 }. From upvalue equals Open { stack_index: 3 } to make_counter() returns. From make_counter() returns to upvalue equals Closed(0) (count now lives in its own cell). From upvalue equals Closed(0) (count now lives in its own cell) to Closure A reads/writes the cell. From upvalue equals Closed(0) (count now lives in its own cell) to Closure B reads/writes the same cell.
-
 Both closures keep referring to one shared cell after the original stack frame is gone.
 
 This is a useful ownership lesson: the local starts inside one frame, escapes, becomes shared state, and outlives its original scope.
 
-Section: Host callbacks look like VM functions at the boundary.
+Section: Host callbacks look like V M functions at the boundary.
 
 When mlua registers game.log, it builds a callable Lua value backed by a host closure. The boundary must:
 
@@ -70,17 +66,15 @@ avoid letting a panic cross the language boundary.
 
 The callback should be short and bounded. A Lua instruction budget cannot interrupt arbitrary blocking work performed inside native host code.
 
-The Lua C API, application programming interface, makes this boundary concrete with an indexed value stack. A native callback reads arguments from stack slots, validates them, pushes return values, and reports how many it returned. mlua wraps much of that protocol, but stack balance and error conversion still exist underneath:
+The Lua C A P I, application programming interface, makes this boundary concrete with an indexed value stack. A native callback reads arguments from stack slots, validates them, pushes return values, and reports how many it returned. mlua wraps much of that protocol, but stack balance and error conversion still exist underneath:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Treat a host callback like a small parser. Specify accepted types and ranges, reject invalid input before side effects, and return an error in the form the runtime expects. A panic or native exception must not cross a C ABI, application binary interface, boundary uncontrolled.
+Treat a host callback like a small parser. Specify accepted types and ranges, reject invalid input before side effects, and return an error in the form the runtime expects. A panic or native exception must not cross a C A B I, application binary interface, boundary uncontrolled.
 
-Section: Re-entrancy adds nested host and VM call frames.
+Section: Re-entrancy adds nested host and V M call frames.
 
 A host callback may call Lua again, which may call another host function. This is re-entrancy. The host needs a clear policy for locks and mutable game state.
-
-Diagram labels, in drawing order: Host callback B; Lua (frame 2); Host callback A; Lua (frame 1); calls a host function; calls back into Lua; calls another host function; returns.
 
 Avoid holding a mutable engine lock while executing unknown script code. Give Lua a copied snapshot, collect typed requests, return to the host, and then validate and apply them. That architecture from earlier lessons also prevents complicated nested borrows.
 
@@ -88,7 +82,7 @@ Section: Debug a function call in layers.
 
 When a script call behaves incorrectly, record:
 
-bytecode instruction and VM instruction pointer;
+bytecode instruction and V M instruction pointer;
 
 active function and call-frame base;
 
@@ -126,10 +120,10 @@ share one mutable upvalue between two closures;
 
 add recursion and enforce a maximum frame depth.
 
-Each stage should have a failing test before it gets more features. A small verified interpreter teaches more than a large VM whose stack rules are guesses.
+Each stage should have a failing test before it gets more features. A small verified interpreter teaches more than a large V M whose stack rules are guesses.
 
 The detailed implementation path in Build a Lua Interpreter in Rust is useful further reading for functions and closure escape. Keep your own code original, compare observable behavior with the official Lua manual, and treat the reference implementation as a guide to questions—not a source to paste from.
 
-The VM explains how a script keeps state and reaches a host callback. It does not decide whether that callback’s requested game action is valid. A copied snapshot can grow stale while Lua runs; another script or input path may reach the same effect. Chapter 11 returns to the Windows process that hosts both the game and its scripts, identifying its build, modules, memory regions, and thread state before later chapters inspect deeper trust boundaries.
+The V M explains how a script keeps state and reaches a host callback. It does not decide whether that callback’s requested game action is valid. A copied snapshot can grow stale while Lua runs; another script or input path may reach the same effect. Chapter 11 returns to the Windows process that hosts both the game and its scripts, identifying its build, modules, memory regions, and thread state before later chapters inspect deeper trust boundaries.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/12/09/

@@ -1,12 +1,12 @@
-What a DLL, dynamic link library, Function Promises Its Caller
+What a D L L, dynamic link library, Function Promises Its Caller
 
-The executable-analysis chapter showed how a DLL export name leads to a function address. Finding that address does not tell us how to call the function. Before our code becomes a library inside another process, we need the agreement between caller and callee: what values cross the boundary, where they arrive, and who owns any memory they refer to.
+The executable-analysis chapter showed how a D L L export name leads to a function address. Finding that address does not tell us how to call the function. Before our code becomes a library inside another process, we need the agreement between caller and callee: what values cross the boundary, where they arrive, and who owns any memory they refer to.
 
-The earlier text lesson supplied one part of this agreement: a string pointer had to refer to the right encoding and remain valid for the call. A DLL export requires the same care even when its name is visible.
+The earlier text lesson supplied one part of this agreement: a string pointer had to refer to the right encoding and remain valid for the call. A D L L export requires the same care even when its name is visible.
 
 Section: A function name is not a contract.
 
-A DLL export table may reveal a name such as gha_start, GetPlayer, or FormatMessage. That name only tells you that other code can locate the function. It does not fully explain:
+A D L L export table may reveal a name such as gha_start, GetPlayer, or FormatMessage. That name only tells you that other code can locate the function. It does not fully explain:
 
 which arguments the caller passes;
 
@@ -20,7 +20,7 @@ whether the call changes global state;
 
 whether it is safe to call more than once.
 
-Reconstructing those rules is interface reversing. We will practice on this book’s own Windows DLL, where the source is available afterward for checking our conclusions.
+Reconstructing those rules is interface reversing. We will practice on this book’s own Windows D L L, where the source is available afterward for checking our conclusions.
 
 Section: Reconstruct four parts of every boundary.
 
@@ -34,19 +34,17 @@ Ownership: Who allocates, may mutate, and eventually releases pointed-to data?
 
 Lifetime: For how long do those addresses and returned views remain valid?
 
-Calling conventions mainly answer transport. They do not answer ownership or lifetime. A function can correctly receive a pointer in rcx and still crash later because the caller freed the buffer too early. Likewise, a return value in rax might be a borrowed pointer, an owned allocation, a handle, or merely a status code.
+Calling conventions mainly answer transport. They do not answer ownership or lifetime. A function can correctly receive a pointer in r c x and still crash later because the caller freed the buffer too early. Likewise, a return value in r a x might be a borrowed pointer, an owned allocation, a handle, or merely a status code.
 
 Each part of the contract follows from something the machine code does. A callee that reads four bytes through the pointer and never stores it needs only a short read-only borrow. A callee that saves the pointer in a global needs the data to outlive the call.
 
 Section: Begin with the caller.
 
-On 64-bit Windows, the first four integer or pointer arguments normally arrive in rcx, rdx, r8, and r9. A return value normally leaves in rax. On 32-bit Windows, several calling conventions exist, so also inspect stack cleanup and decorated export names.
+On 64-bit Windows, the first four integer or pointer arguments normally arrive in r c x, r d x, r 8, and r 9. A return value normally leaves in r a x. On 32-bit Windows, several calling conventions exist, so also inspect stack cleanup and decorated export names.
 
 Suppose a call site looks like this:
 
-Diagram. From ecx equals 0 to call gha_start. From call gha_start to eax equals 0?. From eax equals 0? to success path. The connection is labelled: yes. From eax equals 0? to start_failed. The connection is labelled: no.
-
-These instructions are the machine-level version of that path. Read them in order: clear ecx, call the export through its import slot, test the returned eax, and branch on a nonzero result.
+These instructions are the machine-level version of that path. Read them in order: clear e c x, call the export through its import slot, test the returned e a x, and branch on a nonzero result.
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -64,7 +62,7 @@ That supports a tentative contract:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-extern "system" selects the platform’s Windows ABI, application binary interface,—application binary interface, the complete machine-level agreement between compiled pieces: which registers or stack slots carry arguments, who cleans up the stack, and where the return value lands. It is the compiled counterpart to a source-level API, application programming interface,. unsafe is honest: the compiler cannot prove that a raw address really points to a function with this exact contract.
+extern "system" selects the platform’s Windows A B I, application binary interface,—application binary interface, the complete machine-level agreement between compiled pieces: which registers or stack slots carry arguments, who cleans up the stack, and where the return value lands. It is the compiled counterpart to a source-level A P I, application programming interface. unsafe is honest: the compiler cannot prove that a raw address really points to a function with this exact contract.
 
 Section: Where each part of the contract shows up.
 
@@ -72,37 +70,21 @@ A decompiler’s guessed types are only a starting point. Each question about th
 
 Where each part of the contract shows up
 
-Table columns: Question; Where the answer shows up.
-
-Question: Argument count; Where the answer shows up: Registers or stack slots prepared at several call sites.
-
-Question: Argument type; Where the answer shows up: How the callee reads it: dereference, arithmetic, comparison, or API pass-through.
-
-Question: Result meaning; Where the answer shows up: Branches and messages immediately after the call.
-
-Question: Buffer length; Where the answer shows up: Bounds checks, loop limits, and paired size arguments.
-
-Question: Ownership; Where the answer shows up: Allocation/free calls and whether the caller stores the pointer.
-
-Question: Repeatability; Where the answer shows up: Global flags, reference counts, or “already started” branches.
-
 One call with a null argument does not prove the argument must always be null. Find a second caller or change the controlled test program.
 
 Section: Separate lookup from calling.
 
 GetProcAddress returns an untyped address. Keep the dangerous conversion in one function:
 
-Diagram. From GetProcAddress to untyped address. From untyped address to resolve_gha_start, the only transmute. From resolve_gha_start, the only transmute to typed GhaStart function pointer. From typed GhaStart function pointer to the rest of the program calls it safely.
+The resolver below takes the loaded module handle, asks for the exact gha_start export, and converts the returned address to one typed function pointer. A missing export must return an error; a found address is still safe to call only if the contract inferred above is correct for this D L L build.
 
-The resolver below takes the loaded module handle, asks for the exact gha_start export, and converts the returned address to one typed function pointer. A missing export must return an error; a found address is still safe to call only if the contract inferred above is correct for this DLL build.
+Code example. The code’s comments explain: SAFETY: the byte string is NUL-terminated and lives for this call. 🔎 SAFETY: our debugger evidence and matching test D L L establish this A B I.
 
-Code example. The code’s comments explain: SAFETY: our debugger evidence and matching test DLL establish this ABI. Ok(unsafe { core::mem::transmute::<unsafe extern "system" fn() to isize, GhaStart>(raw) })}
-
-Why not scatter transmute through the program? Because every conversion is a promise about ABI and types. One narrow boundary gives reviewers one place to check that promise.
+Why not scatter transmute through the program? Because every conversion is a promise about A B I and types. One narrow boundary gives reviewers one place to check that promise.
 
 Section: Wrap machine results in named variants.
 
-The course DLL returns:
+The course D L L returns:
 
 0 when the worker started;
 
@@ -114,17 +96,15 @@ Give those numbers names:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Keep Unknown. A future DLL can add a status without making your wrapper silently call it success.
+Keep Unknown. A future D L L can add a status without making your wrapper silently call it success.
 
 Section: Prove the calling convention.
 
-A source-level API can say that a function accepts one address and returns a number. The ABI answers the machine-level question of where that address arrives. On a 32-bit build, one convention might put it in a register while another expects it on the stack. The functions can look identical at the source level, yet the callee reads the wrong location if caller and callee disagree.
+A source-level A P I can say that a function accepts one address and returns a number. The A B I answers the machine-level question of where that address arrives. On a 32-bit build, one convention might put it in a register while another expects it on the stack. The functions can look identical at the source level, yet the callee reads the wrong location if caller and callee disagree.
 
-Diagram. From one source API: read_u32(address) to ABI 1: address arrives in ecx. From one source API: read_u32(address) to ABI 2: address arrives on the stack at esp+4. From ABI 2: address arrives on the stack at esp+4 to callee reads ecx and gets an unrelated value. The connection is labelled: caller follows ABI 2, callee expects ABI 1.
+A wrong A B I can appear to work in one small test and still corrupt registers or the stack. The call itself may return without crashing; the damage shows up later, when an unrelated function reads garbage from a register it expected the callee to preserve, or when a mismatched stack-cleanup convention leaves e s p off by a few bytes and a later ret lands somewhere nonsensical. Check:
 
-A wrong ABI can appear to work in one small test and still corrupt registers or the stack. The call itself may return without crashing; the damage shows up later, when an unrelated function reads garbage from a register it expected the callee to preserve, or when a mismatched stack-cleanup convention leaves esp off by a few bytes and a later ret lands somewhere nonsensical. Check:
-
-Which architecture is the caller and DLL?
+Which architecture is the caller and D L L?
 
 Who removes stack arguments on 32-bit builds?
 
@@ -138,23 +118,11 @@ For x64 Windows there is one main user-mode convention, but argument type and ow
 
 Section: Test with a contract matrix.
 
-Test against the DLL from windows-labs rather than an unknown third-party export. Each test has an expected result:
-
-Table columns: Test; Expected result.
-
-Test: First call with null; Expected result: Returns Started.
-
-Test: Second call; Expected result: Returns AlreadyRunning.
-
-Test: Unknown export name; Expected result: Resolver returns an error; no call occurs.
-
-Test: Wrong architecture; Expected result: Windows refuses to load the DLL.
-
-Test: Stop after start; Expected result: Export returns and worker observes the stop flag.
+Test against the D L L from windows-labs rather than an unknown third-party export. Each test has an expected result:
 
 The source in windows-labs/src/windows_impl/dll.rs then shows the real contract, and any difference from the recovered one points at the exact part of the machine code that was misread.
 
-Section: Working practices for an undocumented DLL.
+Section: Working practices for an undocumented D L L.
 
 Never guess a function pointer type and “try it” in an important process.
 
@@ -168,6 +136,6 @@ Keep loading, resolving, converting, calling, and unloading as visible stages.
 
 This same method works for undocumented game plug-ins, supported mod SDKs, and old middleware. The goal is not merely to make one call succeed. The goal is to explain the interface well enough that a small wrapper can enforce it.
 
-The contract gives a function address meaning: it tells a caller which values are allowed and which obligations survive the call. In-Process DLLs and Loader Boundaries builds the small DLL used here. Its explicit start and stop functions turn the recovered agreement into an interface whose loading, work, and cleanup can be followed in order.
+The contract gives a function address meaning: it tells a caller which values are allowed and which obligations survive the call. In-Process DLLs and Loader Boundaries builds the small D L L used here. Its explicit start and stop functions turn the recovered agreement into an interface whose loading, work, and cleanup can be followed in order.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/3/08/

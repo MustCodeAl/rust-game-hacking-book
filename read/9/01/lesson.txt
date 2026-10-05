@@ -6,8 +6,6 @@ A live memory edit affects the current game session. What if a change should sti
 
 The chapter starts with readable saves, then opens a binary save byte by byte. The same care with formats carries into textures, unit definitions, and mod archives. Manifests, signatures, and encryption answer later questions: which files changed, who approved them, and who can read them?
 
-Diagram. From Character state in RAM, random access memory, Physical equals 5 to avatar.txt on storage build=5,1,1,2. The connection is labelled: Save & Exit. From avatar.txt on storage build=5,1,1,2 to New running game Physical equals 5. The connection is labelled: Load character. From avatar.txt on storage build=5,1,1,2 to Test a changed value and verify the result. The connection is labelled: Edit a copy, then load.
-
 The file is a durable representation of part of the running state. It is not the same bytes at the same memory address: the game writes a format it knows how to read later. We will locate and copy the real file before changing its contents.
 
 Saves are only one kind of game file. Games also load:
@@ -29,8 +27,6 @@ archives that bundle many files.
 If a supported mod file can express your idea, use it. File-based changes are easier to inspect, share, version, and undo than live memory patches.
 
 🗂️ Parser rule: copy the original, parse into named fields, validate every boundary, then write a new file. Keep the untouched source as your way back.
-
-Image description: A game world built from many resources
 
 Section: From a file to something on screen: loading an asset.
 
@@ -58,18 +54,6 @@ ExampleA 256 times 256 bullet texture with 40 bullets
 
 The level’s loader holds one strong handle, and every bullet that draws the texture holds another.
 
-Table columns: Moment; Strong handles; Texture in memory?.
-
-Moment: the level has loaded, no bullets yet; Strong handles: 1; Texture in memory?: yes, 349,525 bytes with its mipmaps.
-
-Moment: 40 bullets are fired; Strong handles: 1 + 40 equals 41; Texture in memory?: yes.
-
-Moment: all 40 bullets despawn; Strong handles: 1; Texture in memory?: yes.
-
-Moment: the level unloads and its loader lets go; Strong handles: 0; Texture in memory?: freed.
-
-Diagram. From not loaded to loading. The connection is labelled: first request. From loading to ready. The connection is labelled: decoded and uploaded. From loading to failed. The connection is labelled: file missing or invalid. From ready to loading. The connection is labelled: file changed on disk (hot reload). From ready to freed. The connection is labelled: last strong handle dropped.
-
 So a scan for the decoded pixels finds them only between the first request and the moment the last handle is dropped. After the level changes, the same address can hold something else, as entity addresses do (Lesson 4.1).
 
 One file can hold several assets. A 3D model file typically holds meshes, materials, textures, animations, and scenes, and the engine gives each part its own handle, named by the file’s path and a label, such as ship.glb#Mesh0. A model with 3 meshes, 2 materials, 1 texture, 2 animations, and 1 scene gives 3 + 2 + 1 + 2 + 1 equals 9 assets from one path, and the cache described above keeps one copy of each.
@@ -78,23 +62,13 @@ Section: Events and reloading.
 
 The engine announces changes to assets. When an asset is added, modified, or removed, it sends an asset event, and a system can react to the event instead of checking. A system that builds a collision shape when its mesh finishes loading then runs once, on the event. Checking every frame for the 5 seconds the mesh takes to load would run it 5 times 60 equals 300 times to learn the same thing.
 
-A game under development usually also supports hot reloading. It watches its asset folder, and when a file’s modification time (Explanation: Every file records when it was last changed, and the operating system updates that time on each save. A watcher only has to compare the time it saw last with the time now.) changes, it decodes the file again, replaces the data behind the same handle, and sends a “modified” event. Everything holding the handle shows the new version on its next draw, with no restart. A shipped game usually turns the watcher off and reads each file once, when the level loads. What a replaced file does depends on which of these the game does:
+A game under development usually also supports hot reloading. It watches its asset folder, and when a file’s modification time changes, it decodes the file again, replaces the data behind the same handle, and sends a “modified” event. Everything holding the handle shows the new version on its next draw, with no restart. A shipped game usually turns the watcher off and reads each file once, when the level loads. What a replaced file does depends on which of these the game does:
 
 When a replaced file shows up
 
-Table columns: How the game gets the asset; When your replacement shows.
-
-How the game gets the asset: it watches its folder, as a development build does; When your replacement shows: on the next frame.
-
-How the game gets the asset: it reads the file when a level loads; When your replacement shows: the next time that level loads.
-
-How the game gets the asset: it reads from an archive; When your replacement shows: after the archive is rebuilt and the level loads again.
-
-How the game gets the asset: it has the asset embedded in the executable; When your replacement shows: never, because no file is read.
-
 Section: Observe file access.
 
-We know the Flare attribute is saved, but a folder may contain several saves, backups, and shared stashes. Use Process Monitor (Reference: Microsoft Sysinternals' Process Monitor records file, registry, and process events on Windows as they happen. Download it from Microsoft's own page.) inside the VM, virtual machine, to see which paths the game opens when you:
+We know the Flare attribute is saved, but a folder may contain several saves, backups, and shared stashes. Use Process Monitor inside the V M, virtual machine, to see which paths the game opens when you:
 
 start the game;
 
@@ -106,7 +80,7 @@ change one setting;
 
 close the game.
 
-Filter by the target process (Tip: In Process Monitor, press Ctrl+L to open the filter dialog. Choose Process Name, is, and the game's executable name, then click Add. Add Operation, is, WriteFile to see only writes.) and operations such as CreateFile, ReadFile, and WriteFile.
+Filter by the target process and operations such as CreateFile, ReadFile, and WriteFile.
 
 For this experiment, create a disposable character and choose Save & Exit once. A write to avatar.txt near that action is a candidate; Lesson 9.2 confirms the path and the build= field before changing it.
 
@@ -114,7 +88,7 @@ Section: Copy before parsing.
 
 The candidate file is evidence as well as game data. Never experiment on the only copy:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: Preserve an existing backup rather than overwriting the way back.
 
 This helper takes the path of an existing file. With avatar.txt, it writes avatar.txt.gha-backup and returns success only if the copy succeeds. It uses the anyhow dependency for an error that includes the failed path; an existing backup is an error rather than a reason to overwrite it. Keep the original bytes and record a hash.
 
@@ -122,7 +96,7 @@ Section: Identify the kind of file.
 
 The extension is only a hint. Inspect the first bytes:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: Report only bytes actually read, not the buffer's unused zeroes.
 
 For first_bytes(path, 16), the buffer has room for 16 bytes and the returned vector contains the bytes obtained by that read. A read can return fewer; this is a quick identification helper, not validation of an entire header. Common “magic” bytes include:
 
@@ -160,11 +134,11 @@ Section: Parse, do not search-and-replace blindly.
 
 For text formats, prefer a real parser:
 
-serde_json for JSON;
+serde_json for J S O N;
 
 toml for TOML;
 
-quick-xml for XML;
+quick-xml for X M L;
 
 a format-specific library when available.
 
@@ -179,14 +153,6 @@ A data model specifies the values, relationships, and constraints that matter to
 The Flare line build=5,1,1,2 illustrates the separation. At the game level, the first value is the Physical attribute. At the format level, it is the first comma-separated number in a particular named field. At the byte level, the digit 5 occupies a position in encoded text. A raw byte search cannot by itself recover the attribute’s role or prove that an unrelated occurrence of the digit is the same field.
 
 Different storage models expose different relationships:
-
-Table columns: Model; A possible game use; What the structure makes explicit.
-
-Model: Nested document, such as JSON or XML; A possible game use: One save with a character and inventory entries; What the structure makes explicit: Containment and named fields.
-
-Model: Relational tables; A possible game use: Character rows and item rows linked by owner IDs; What the structure makes explicit: Records, keys, and relationships between tables.
-
-Model: Graph of nodes and edges; A possible game use: Map locations joined by traversable routes; What the structure makes explicit: Connections, and properties of each connection.
 
 These are options, not a claim that every game uses a database or every map needs a graph database. Choose a model for the questions and updates it must support. The storage implementation then chooses a byte representation and access structures. A parser or query interface hides some lower-level details, but its constraints still affect the layer above.
 

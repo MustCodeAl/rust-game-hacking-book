@@ -20,8 +20,6 @@ the weapon model’s animation.
 
 Those systems can produce similar movement while controlling different things. Removing a camera kick should not be assumed to remove projectile spread, and changing the weapon animation should not be assumed to change aim.
 
-Diagram. From Player input to Base aim orientation. From Weapon recoil impulse to Kick state. From Kick state to Camera orientation. From Base aim orientation to Camera orientation. From Camera shake to Camera orientation. From Base aim orientation to Shot direction. From Projectile spread to Shot direction. From Camera orientation to Rendered view. From Weapon-model animation to Rendered view.
-
 This diagram deliberately gives rendered view and shot direction separate paths. If two systems read the same base aim but add different offsets, changing one will not necessarily change the other.
 
 An angle describes rotation. Yaw usually turns left and right around a vertical axis. Pitch looks up and down. Games may store degrees, radians, fixed point units, or normalized values, so the number 90.0 has meaning only after measurement.
@@ -50,15 +48,11 @@ Section: Break on the angle write.
 
 Set a write breakpoint on the confirmed pitch field and fire once.
 
-Image description: A recoil-related function in the debugger
-
 Compare the call stack with an ordinary mouse movement. A path that appears only after firing is a useful lead.
 
 Step upward until you can explain the inputs:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-Image description: Tracing the recoil calculation
 
 Section: Model recoil separately.
 
@@ -112,33 +106,19 @@ Section: Test one instruction with a temporary patch.
 
 A temporary debugger patch can show whether one instruction contributes to recoil. Keep a copy of the original bytes so you can restore them, change one instruction, and compare the same controlled shot.
 
-Image description: A candidate recoil instruction
-
 If weapon animation still moves but the camera does not, you may have isolated view kick. If accuracy changes too, the instruction controls more than presentation.
 
 Compare at least these observables separately:
-
-Table columns: Observable; What it can tell you.
-
-Observable: stored base yaw/pitch; What it can tell you: player-input orientation.
-
-Observable: final camera matrix; What it can tell you: presentation actually rendered.
-
-Observable: shot direction or impact; What it can tell you: gameplay trajectory.
-
-Observable: weapon-model transform; What it can tell you: view-model animation.
-
-Observable: kick accumulator over time; What it can tell you: recovery state.
 
 Section: Apply the AssaultCube 1.2.0.2 no-recoil patch.
 
 The measured recoil layers above establish what the patch should change. The automated PatchPlan version below applies the verified patch lifecycle from Lesson 6.4. Its byte check, write, and restoration must all refer to the same pinned build.
 
-The firing path begins around hexadecimal 0 0 4 6 3 6 3 A; after breaking on the live pitch field while firing, the recoil store is found at hexadecimal 0 0 4 5 B A A D. Replace its complete three-byte instruction with:
+The firing path begins around this value; after breaking on the live pitch field while firing, the recoil store is found at this value. Replace its complete three-byte instruction with:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-These bytes pop the pending x87 value with fstp st(0) and pad the remaining byte, so the recoil value is discarded instead of being stored to [ebx+hexadecimal 4 4], the pitch field.
+These bytes pop the pending x87 value with fstp st(0) and pad the remaining byte, so the recoil value is discarded instead of being stored to [e b x+hexadecimal 4 4], the pitch field.
 
 The older x87 floating-point unit behaves like a small stack of number registers. The original store removes its top value after writing it. Merely NOPing the whole instruction would leave that value on the x87 stack and could break later calculations. fstp st(0) discards the value while preserving the original stack effect; nop fills the final byte so the patch length remains three.
 
@@ -147,8 +127,6 @@ Use a verified patch:
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 Fire a single shot before and after enabling it. Ammo and firing animation should still work, but the camera should no longer kick upward. Restore the original three bytes and confirm recoil returns.
-
-Silent video demonstration: Recoil behavior during AssaultCube firing. The original no-recoil demonstration shows firing with the camera effect altered. Watch camera motion separately from ammunition and firing animation; changing one recoil store does not establish that every weapon effect has changed.
 
 Section: Random spread: choosing a point in a circle.
 
@@ -189,18 +167,6 @@ Do not label the first changing float “recoil.” Trace when it is produced an
 Composition order matters for 3D rotations. Adding small yaw/pitch offsets is a common approximation, but full orientations may be matrices or quaternions. Large rotations do not generally commute: applying yaw then pitch can differ from pitch then yaw. Identify where the engine converts or combines its representation before assigning meaning to one component.
 
 Section: Common false conclusions.
-
-Table columns: What changed; What it does not prove.
-
-What changed: camera no longer rises; What it does not prove: projectile spread is gone.
-
-What changed: weapon model stops moving; What it does not prove: aim direction is unchanged.
-
-What changed: pitch write disappears; What it does not prove: no later camera transform adds kick.
-
-What changed: repeated shots look similar; What it does not prove: recoil is fully deterministic.
-
-What changed: one weapon uses an offset table; What it does not prove: every weapon uses that table.
 
 Keep this experiment offline. Its value is learning to separate a visible effect into measurable contributions.
 

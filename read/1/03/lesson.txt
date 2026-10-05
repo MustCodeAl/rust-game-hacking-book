@@ -1,6 +1,6 @@
 Game Fundamentals
 
-Lesson 1.2 followed a game action through the CPU, central processing unit, and a simple loop. To understand why a displayed number changes, we need a model of the game around it: what the player does, which rule runs, what the game remembers, and what it shows. The byte-level memory model comes just before our first scan in Lesson 1.9.
+Lesson 1.2 followed a game action through the C P U, central processing unit, and a simple loop. To understand why a displayed number changes, we need a model of the game around it: what the player does, which rule runs, what the game remembers, and what it shows. The byte-level memory model comes just before our first scan in Lesson 1.9.
 
 Our small game has players, coins, and a shop. Call one player Ada. We will follow her purchases and movement, then ask what the game must keep while she plays and what it must save when she leaves. The examples describe chosen rules for this game; another game can model the same activity differently.
 
@@ -8,11 +8,9 @@ Section: A game turns actions into a changing world.
 
 A player supplies input, such as buying an item or pressing a movement key. The game applies rules to its current state—the information it remembers about the world. It then draws or plays an output that the player can perceive. A common game loop repeats those steps as play continues:
 
-Diagram. From input: buy an item to update: can the player pay?. From update: can the player pay? to state: gold 100 to 75. From state: gold 100 to 75 to draw: show Gold: 75. From draw: show Gold: 75 to next input and update.
-
 The example takes the successful purchase path. If the player has only 10 gold and the item costs 25, the rule leaves gold unchanged. The screen reports what the game decided; it does not decide the purchase itself. Later in this lesson we will see why the screen may even hold a separate copy of that result.
 
-Games can also update enemies, timers, motion, or music without a fresh button press. The important cycle is that rules read the current world, change it, and produce something the player can observe. An engine is reusable software for common game jobs (Example: Unity, Unreal Engine, and Godot are engines, and so is Bevy, an open-source engine written in Rust. Each supplies the loop, the drawing, and the loading; the game supplies the rules.). It commonly supplies the repeating loop, drawing, and loading resources such as images and sounds; the game supplies particular rules such as the price of an item. Finding the right place to change a game starts by asking which side owns the behavior. Lesson 4.1 develops that boundary.
+Games can also update enemies, timers, motion, or music without a fresh button press. The important cycle is that rules read the current world, change it, and produce something the player can observe. An engine is reusable software for common game jobs. It commonly supplies the repeating loop, drawing, and loading resources such as images and sounds; the game supplies particular rules such as the price of an item. Finding the right place to change a game starts by asking which side owns the behavior. Lesson 4.1 develops that boundary.
 
 A game remembers more than one number. It might track one player’s gold, current health, and maximum health at the same time. How can it keep those values together and apply the same rule to many players?
 
@@ -26,8 +24,6 @@ The labels tell us what each value means. If the player buys an item for 25 gold
 
 A group of related named values is a record. Each value inside it is a field. The record lets the program talk about a player’s gold without confusing it with that player’s health. It also gives later memory work a question to ask: which nearby stored values belong to the same player?
 
-Labelled memory diagram. gold: 75; health: 60; max_health: 100. Groups: one player's related fields. After the purchase and the hit, three different values still belong to one player record.
-
 Section: Give things identities and responsibilities.
 
 Gold and health describe Ada, but the game also needs to distinguish Ada from another player, a coin, or the shop door. A thing the game treats as having its own identity is an entity. Depending on the game, entities can include characters, pickups, projectiles, doors, or even an invisible object that controls a round.
@@ -36,17 +32,7 @@ The game can assign Ada an identifier, such as player ID 17. The ID answers “w
 
 An entity can also need several kinds of information. Ada has health, money, a position, and a picture the game can draw. Games often group related information into components, each describing one responsibility:
 
-Table columns: Part of Ada’s model; Information it needs; Work that uses it.
-
-Part of Ada’s model: Health; Information it needs: Current health and maximum health; Work that uses it: Apply damage or healing.
-
-Part of Ada’s model: Wallet; Information it needs: Gold; Work that uses it: Check a purchase.
-
-Part of Ada’s model: Position; Information it needs: Location in the world; Work that uses it: Move Ada and test nearby objects.
-
-Part of Ada’s model: Appearance; Information it needs: Which image or model to use; Work that uses it: Draw Ada.
-
-A component here means a part of the game’s model, not necessarily one particular programming technique (Reference: Lesson 4.1 shows one such technique, called ECS, entity component system,: entities are identities, components are data, and systems are the code that runs over them.). One game might put all these fields in a single player record; another might keep separate component records associated with player ID 17. Both can implement the same gameplay. We need this distinction because the information visible on one character need not occupy one uninterrupted block of memory.
+A component here means a part of the game’s model, not necessarily one particular programming technique. One game might put all these fields in a single player record; another might keep separate component records associated with player ID 17. Both can implement the same gameplay. We need this distinction because the information visible on one character need not occupy one uninterrupted block of memory.
 
 An entity also has a lifetime: the interval from its creation to its removal. A coin entity stops being available after Ada picks it up. A later coin can reuse its storage without being the same coin. Some games reuse IDs too, so an ID is meaningful only within the identity rules of that game. Later memory lessons develop how to recognize a currently valid entity; the first question is already useful: does this information still belong to the thing we intended to observe?
 
@@ -62,21 +48,13 @@ Section: One record becomes several players.
 
 For the table below, add a second player called Bo. Bo has 40 gold and 50 health. Copying the first player’s field names into gold2, health2, and so on would work for two players, but every new player would demand more special-case code. Instead, the game can keep several player records in a collection:
 
-Table columns: Player; Gold; Health; Maximum health.
-
-Player: Ada; Gold: 75; Health: 60; Maximum health: 100.
-
-Player: Bo; Gold: 40; Health: 50; Maximum health: 80.
-
-The table is a picture of two records, not a claim that RAM, random access memory, stores a table with headings. A compiled game stores values as bytes; the labels here tell us what each value means. Lesson 1.8 will show how a type tells code how to read those bytes.
+The table is a picture of two records, not a claim that R A M, random access memory, stores a table with headings. A compiled game stores values as bytes; the labels here tell us what each value means. Lesson 1.8 will show how a type tells code how to read those bytes.
 
 Suppose both players collect one coin. We could write “Ada’s gold becomes 76; Bo’s gold becomes 41.” For many players, repeating a single rule is simpler:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 That repeated pass is a loop. One pass handles Ada (75 becomes 76); the next handles Bo (40 becomes 41). The rule stays the same when the collection grows. This is the reason to introduce a collection and a loop, rather than a list of data-structure names to memorize.
-
-Diagram. From add one coin to Ada: 75 to 76. From Ada: 75 to 76 to Bo: 40 to 41. From Bo: 40 to 41 to next player, if any.
 
 Section: The same idea in Rust.
 
@@ -116,7 +94,7 @@ Ada starts at (2, 3). Moving one unit right gives (3, 3): x changes from 2 to 3 
 
 Movement also takes time. Suppose Ada’s speed is 4 world units per second and she moves right for one quarter of a second. The distance is 4 times 0.25 equals 1 unit. Starting at (2, 3), she ends at (3, 3) if nothing blocks her. This explanatory pseudocode shows the calculation; it is not a complete program in a particular language:
 
-Code example. The code’s comments explain: Inputs: x equals 2, speed equals 4 units/second, elapsed_seconds equals 0.25.distance equals speed * elapsed_secondsx equals x + distance# Result: distance equals 1 unit and x equals 3; y stays 3.
+Code example. The code’s comments explain: Inputs: x equals 2, speed equals 4 units/second, elapsed_seconds equals 0.25. Result: distance equals 1 unit and x equals 3; y stays 3.
 
 The # lines describe the inputs and result. * means multiply, and the right side of the x equals x + distance calculation is evaluated before its result replaces x. The elapsed time tells the game how much movement to apply. Updating ten times does not tell us how far Ada should move until we know how much time those updates represent.
 
@@ -156,15 +134,13 @@ Section: The display can hold a copy.
 
 After Ada collects a coin, the game may store 76 as her current gold and also prepare the text "Gold: 76" for the screen. The text is derived from the number, but it is not necessarily the number that the purchase rule reads.
 
-Diagram. From Ada collects one coin to gameplay gold: 75 becomes 76. From gameplay gold: 75 becomes 76 to purchase rule reads 76. From gameplay gold: 75 becomes 76 to display text: Gold: 76.
-
 If someone changes only the display text to "Gold: 999", the screen may show 999 while the purchase rule still sees 76. Changing a displayed copy can affect appearance without changing gameplay. This is why observing a matching number in memory is only the start of an investigation. Later lessons compare what changes after a purchase with what the game actually uses to decide whether the purchase is allowed.
 
 Section: Which copy decides the result?.
 
 In our local example, the purchase rule reads Ada’s gameplay gold. That value is authoritative for the purchase: the rule accepts it as the amount Ada actually has. The display copy reports the result but does not decide it. Authority describes this role, not a special numeric type.
 
-In a multiplayer game, a client is the program a player uses to take part. A server is a program that coordinates the shared game (Reference: Lesson 8.1 follows a move from a game client to a server and back as framed bytes.). A common design lets the client send “Ada requests this item” while the server looks up the item’s price and checks its own gold value before accepting or rejecting the request. Different games divide responsibility differently, so the important question is which side has authority over this particular decision.
+In a multiplayer game, a client is the program a player uses to take part. A server is a program that coordinates the shared game. A common design lets the client send “Ada requests this item” while the server looks up the item’s price and checks its own gold value before accepting or rejecting the request. Different games divide responsibility differently, so the important question is which side has authority over this particular decision.
 
 Suppose the server has 76 gold for Ada and the client’s display shows 999. The server accepts one 25-gold purchase and updates its value to 51. It sends the accepted result back to the client, which can then show 51. The display’s 999 did not give the server more gold. A network delay can also leave a client temporarily showing an older result, even when neither program has a bug.
 
@@ -178,7 +154,7 @@ Consider the local version of our game, after Ada reaches 76 gold and 60 health.
 
 Saving selects state at a particular moment. If the file stores 76 gold and Ada later spends 25 without saving again, live gold becomes 51 while the file still records 76. Loading that file can restore the earlier state. A save file and live state can disagree simply because they describe different moments.
 
-Loading also creates new running records. A saved player ID can help the game reconnect related information, but a past RAM address does not give the new process a valid player record. Persistence keeps chosen meaning across runs; it does not promise the same memory locations. Chapter 9 develops save files and other game resources.
+Loading also creates new running records. A saved player ID can help the game reconnect related information, but a past R A M address does not give the new process a valid player record. Persistence keeps chosen meaning across runs; it does not promise the same memory locations. Chapter 9 develops save files and other game resources.
 
 Section: From a world idea to stored bytes.
 
@@ -188,13 +164,11 @@ To save that information or send it to another program, the game chooses a forma
 
 An encoding assigns byte patterns to the chosen values. Here is a small invented format for a player gold record. It accepts IDs and gold amounts from 0 to 255, writes the ID first, and uses one byte for each field. Given player ID 17 and gold 76, it produces two bytes:
 
-Code example. The code’s comments explain: Toy format: one byte of player ID, followed by one byte of gold.meaning: player_id equals 17 gold equals 76field order: player_id goldhex bytes: 11 4C
+Code example. The code’s comments explain: Toy format: one byte of player ID, followed by one byte of gold.
 
 Lesson 1.2 taught hexadecimal: hexadecimal 1 1 is 1 times 16 + 1 equals 17, and hexadecimal 4 C is 4 times 16 + 12 equals 76. The reader of this toy format knows the first byte means an ID and the second means gold because the format says so. The two bytes alone do not label their own meanings. Writing the text digits "76" or choosing a four-byte number would require a different encoding. Real formats can include additional fields, larger values, and checks; this example only shows how a declared format gives bytes meaning.
 
-Animated diagram: From an idea about coins to the two bytes 11 4C. A world idea, a character owning coins, becomes a game-data model with player ID 17 and gold 76. Each number is copied into a slot of a two-byte format, then converted to hexadecimal with the arithmetic shown, giving the saved bytes 11 4C. Step 1: A designer starts from an idea about a world: a character owns coins it can spend. Step 2: The game keeps only the parts its rules need. Here that is player ID 17 and 76 gold. This chosen representation is the game-data model. Step 3: To save or send this, the game picks a format: which fields to write, in what order. This toy format writes the player ID, then the gold, one byte each. Each number is copied into its slot. Step 4: An encoding turns each number into a byte pattern. In hexadecimal, 17 is 1 times 16 + 1 equals hexadecimal 1 1, and 76 is 4 times 16 + 12 equals hexadecimal 4 C, because C stands for 12. Step 5: The file now holds the two bytes 11 4C. Nothing in the bytes says which one is the player ID; the format does. Design chooses the model; a format and an encoding say how chosen information becomes saved or transmitted bytes.
-
-The animation follows the meaning through those design choices. Live fields in RAM are already represented by bytes too; a game does not have to turn its whole world into a save file on every tick. In memory, code uses a known layout and types. In a save or message, code uses that format’s rules. Lesson 1.8 develops the memory representation in detail.
+The animation follows the meaning through those design choices. Live fields in R A M are already represented by bytes too; a game does not have to turn its whole world into a save file on every tick. In memory, code uses a known layout and types. In a save or message, code uses that format’s rules. Lesson 1.8 develops the memory representation in detail.
 
 Keep two questions separate when investigating a value: how is it represented? and what role does it have? A number stored as four bytes could be current gameplay gold, a display copy, a saved value, or a server result. Its byte representation alone does not establish its authority or tell us when it was last updated.
 

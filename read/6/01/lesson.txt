@@ -8,17 +8,13 @@ A client collects your input, sends requests, receives state, and draws what you
 
 This chapter follows that message from intent to bytes, from captured bytes to a parsed event, and from one event to a legal session transition. A local chat client and proxy put the pieces together. The final lessons ask how two programs on one computer can exchange equally well-defined messages without using a network socket.
 
-Image description: A basic client/server model
-
-Diagram labels, in drawing order: Local test server; Game client; "I want to move north"; Validate the request; "Position is now (10, 14)"; Draw the new state.
-
 The client’s “move north” is an intent: a request for a change, not the final truth. The reply reports what the server actually accepted. If a wall blocked the move, the reply might still say (10, 15), and the client would correct its display.
 
 The client and server are not one program with a slow shared variable. The server may accept, reject, reorder, or combine requests according to its rules, while the client may predict a result before confirmation arrives. The next question is how the reply’s bytes become one complete message at the other end.
 
-Section: TCP, transmission control protocol, is a stream.
+Section: T C P, transmission control protocol, is a stream.
 
-TCP is a common transport for a connection between the two programs. It delivers an ordered stream of bytes. A program calls read to take some bytes that have arrived from that stream. TCP does not preserve the game’s message boundaries for that call.
+T C P is a common transport for a connection between the two programs. It delivers an ordered stream of bytes. A program calls read to take some bytes that have arrived from that stream. T C P does not preserve the game’s message boundaries for that call.
 
 One call to read may return:
 
@@ -34,29 +30,23 @@ Concretely: if the sender writes two length-prefixed messages back to back, the 
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Labelled memory diagram. 0: 00; 1: 00; 2: 00; 3: 02; 4: 41; 5: 42; 6: 00; 7: 00; 8: 00; 9: 03; 10: 43; 11: 44; 12: 45. Groups: length 2; AB; length 3; CDE; read #1: 8 bytes; read #2: 5 bytes. The 4 + 2 + 4 + 3 equals 13 bytes on the wire, numbered from 0. In ASCII, 41 42 is AB and 43 44 45 is CDE. Read #1 stops after box 7, halfway through the second length field, so the receiver must keep boxes 6 and 7 until read #2 brings boxes 8 and 9.
-
 Neither read lands on a message boundary. The receiver has to hold what it has in a buffer, remove complete messages when enough bytes have arrived, and keep the leftover for next time. A parser that assumes one read equals one message works flawlessly over a fast loopback connection while you are testing, then breaks the moment timing changes.
 
 This is why a protocol needs framing.
 
-Code example. The code’s comments explain: Check an untrusted size before allocating its payload buffer. if length greater than max_size { return Err(io::Error::new( io::ErrorKind::InvalidData, "frame is too large", )); }
+Code example. The code’s comments explain: Wait for the whole header, even if it arrives across several reads. Check an untrusted size before allocating its payload buffer. A successful result contains one complete payload, without the header.
 
 stream supplies incoming bytes and max_size is the caller’s permitted payload limit. A successful call returns one payload as a Vec<u8>; a truncated header or payload produces an I/O error through ?. For a header 00 00 00 02 followed by 41 42, the returned vector contains just 41 42. The maximum size prevents a bad length field from requesting absurd amounts of memory. This blocking helper also needs an appropriate timeout on a real socket so a peer cannot make it wait indefinitely.
 
-TCP reliability ends at delivering an ordered byte stream to the receiving socket. It does not prove the application parsed a complete message, accepted the request, saved the state, or sent a meaningful reply. Those guarantees belong to the application protocol. Define acknowledgments, request IDs, timeouts, and retry rules at that layer when the behavior needs them.
+T C P reliability ends at delivering an ordered byte stream to the receiving socket. It does not prove the application parsed a complete message, accepted the request, saved the state, or sent a meaningful reply. Those guarantees belong to the application protocol. Define acknowledgments, request IDs, timeouts, and retry rules at that layer when the behavior needs them.
 
 Section: Byte order is part of the protocol.
 
 The same integer has more than one possible byte order. Decimal 258 is 1 times 256 + 2, so as a four-byte number it has one byte worth 256 (01), one byte worth 1 (02), and two zero bytes. Wesnoth’s four-byte frame length is big endian, which puts the byte worth the most first:
 
-Labelled memory diagram. +0: 00; +1: 00; +2: 01; +3: 02. Groups: times 16,777,216; times 65,536; times 256; times 1; 1 times 256 + 2 times 1 equals 258. Big endian, the order Wesnoth sends on the wire.
-
 On little-endian x86 memory, a native u32 with the same value would usually appear in the opposite order:
 
-Labelled memory diagram. +0: 02; +1: 01; +2: 00; +3: 00. Groups: times 1; times 256; times 65,536; times 16,777,216; 2 times 1 + 1 times 256 equals 258. Little endian, the order of a native u32 in x86 memory: the same value with its four bytes reversed.
-
-Read with the wrong order, the wire bytes 00 00 01 02 become hexadecimal 0 2 0 1 0 0 0 0, which is 2 times 16,777,216 + 1 times 65,536 equals 33,619,968: a frame length of more than 33 million bytes. Network code must follow the protocol, not the host CPU, central processing unit,’s default. That is why the reader uses u32::from_be_bytes rather than a pointer cast.
+Read with the wrong order, the wire bytes 00 00 01 02 become this value, which is 2 times the large number shown + 1 times 65,536 equals the large number shown: a frame length of more than 33 million bytes. Network code must follow the protocol, not the host C P U, central processing unit,’s default. That is why the reader uses u32::from_be_bytes rather than a pointer cast.
 
 Section: Packets and protocols.
 
@@ -64,7 +54,7 @@ A packet is a chunk of bytes sent across a network. That part is straightforward
 
 “Protocol” is usually defined with words like rules or agreement, which sound reasonable and tell you nothing. Be concrete instead. A protocol is the set of specific questions both programs must already know the answers to before a single byte means anything. There are four:
 
-Where does one message end and the next begin? A TCP connection is one long stream of bytes with no natural gaps, so something has to mark the boundaries.
+Where does one message end and the next begin? A T C P connection is one long stream of bytes with no natural gaps, so something has to mark the boundaries.
 
 What is each part of a message? Which bytes are the length, which are the message type, which are the payload, and how each of those is encoded.
 
@@ -92,17 +82,13 @@ Several layers cooperate when the bot sends one chat message:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-WML, Wesnoth Markup Language, is Wesnoth’s own tagged text format for structured data — chat messages, maps, units, and more all get written as bracketed tags such as [message] and [/message] wrapping quoted key="value" fields. It is the serialization format this chapter keeps reversing.
+W M L, Wesnoth Markup Language, is Wesnoth’s own tagged text format for structured data — chat messages, maps, units, and more all get written as bracketed tags such as [message] and [/message] wrapping quoted key="value" fields. It is the serialization format this chapter keeps reversing.
 
-When something fails, ask which layer broke. A correct TCP connection does not prove the WML is valid. A valid gzip stream does not prove the length prefix used the right byte order.
+When something fails, ask which layer broke. A correct T C P connection does not prove the W M L is valid. A valid gzip stream does not prove the length prefix used the right byte order.
 
 The receiver undoes the layers in the opposite order, and each step has its own way to fail:
 
-Diagram. From Bytes arrive from the TCP stream to Framing: split off one frame using the big-endian length. From Framing: split off one frame using the big-endian length to Compression: gunzip the payload. From Compression: gunzip the payload to Serialization: parse the WML tags. From Serialization: parse the WML tags to Meaning: build a typed Message. From Framing: split off one frame using the big-endian length to Stop with an error that names the layer. The connection is labelled: length above the maximum. From Compression: gunzip the payload to Stop with an error that names the layer. The connection is labelled: not a valid gzip stream. From Serialization: parse the WML tags to Stop with an error that names the layer. The connection is labelled: unbalanced or unknown tags.
-
 Serialization turns structured values into bytes. Framing tells the receiver where one serialized message ends. Transport moves bytes between endpoints. Keeping those jobs separate makes both the explanation and the code easier to test.
-
-Diagram walkthrough: From received bytes to a game event. Step 1: Collect one frame. State: length + complete payload. Keep partial input until the length header and its complete payload are available. Reject a length above the limit. Step 2: Decompress the payload. State: gzip to WML bytes. For this Wesnoth message, decode the gzip payload. A valid frame is not necessarily valid compressed data. Step 3: Parse its fields. State: typed message. Interpret the WML tags and fields, then construct a typed message. Reject malformed or invalid fields. Step 4: Apply the session rules. State: accepted session transition. Check whether this message is permitted now. Only accepted messages can change the session or game state. The next stage depends on the preceding stage succeeding. Receiving bytes is not the same as accepting a game action.
 
 Section: Messages can feed a data pipeline.
 
@@ -112,15 +98,9 @@ Processing is asynchronous when the sender can continue before the work finishes
 
 There are also two common ways to process a sequence of events:
 
-Table columns: Processing style; Game-service example; What it must account for.
+“Stream processing” here means processing ongoing events; it does not mean the T C P byte stream discussed earlier. A service can obtain events from many connections, files, or queues. A batch deliberately waits for a group of data and processes that group together. Neither approach implies that a game can delay its immediate rules until a leaderboard job finishes.
 
-Processing style: Stream processing; Game-service example: Update a match’s statistics as accepted events arrive; What it must account for: Ordering, late events, duplicates, and how quickly the result is needed.
-
-Processing style: Batch processing; Game-service example: Recompute a leaderboard from a collected set of finished-match results; What it must account for: Which results belong to the batch, when it runs, and how to repeat it safely.
-
-“Stream processing” here means processing ongoing events; it does not mean the TCP byte stream discussed earlier. A service can obtain events from many connections, files, or queues. A batch deliberately waits for a group of data and processes that group together. Neither approach implies that a game can delay its immediate rules until a leaderboard job finishes.
-
-For example, a match event might carry match_id, event_id, and a score change. If a sender retries it after a lost acknowledgment, the receiver must recognise the same event rather than add the score twice. Event identity and retry behaviour belong to the model and protocol, not to whether TCP delivered the underlying bytes correctly.
+For example, a match event might carry match_id, event_id, and a score change. If a sender retries it after a lost acknowledgment, the receiver must recognise the same event rather than add the score twice. Event identity and retry behaviour belong to the model and protocol, not to whether T C P delivered the underlying bytes correctly.
 
 Section: Modularity and scaling follow the dependencies.
 
@@ -130,19 +110,19 @@ Several independent matches can often run on separate workers. Within one match,
 
 Bound queues as well as messages. If input arrives faster than it can be processed, an unbounded queue consumes memory and makes results increasingly stale. A newer position snapshot may replace an older one under a documented policy; a one-time item grant needs different handling. That is a decision about message meaning, not a universal “drop old data” rule.
 
-Section: UDP, user datagram protocol, is made of datagrams.
+Section: U D P, user datagram protocol, is made of datagrams.
 
-UDP preserves datagram boundaries but does not guarantee delivery, order, or uniqueness. Fast games often tolerate those tradeoffs for time-sensitive state.
+U D P preserves datagram boundaries but does not guarantee delivery, order, or uniqueness. Fast games often tolerate those tradeoffs for time-sensitive state.
 
 A later position update can make an older one useless, so freshness may matter more than retransmission. In contrast, a one-time inventory change may need explicit ordering and acknowledgment. Choose behavior per message kind instead of labeling an entire game “reliable” or “unreliable.”
 
-Do not assume a game uses only one protocol. It might use TCP for login/chat and UDP for movement.
+Do not assume a game uses only one protocol. It might use T C P for login/chat and U D P for movement.
 
 Section: Ports and sockets.
 
-A socket represents a network endpoint. This complete helper opens a TCP connection to our local test server, or returns an error:
+A socket represents a network endpoint. This complete helper opens a T C P connection to our local test server, or returns an error:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: This bounds connection establishment, not later read/write operations.
 
 127.0.0.1 means the same computer; 15000 selects the server’s listening port. We use loopback and a local test server for this section. A successful result is a connected stream; framing and protocol checks still remain.
 

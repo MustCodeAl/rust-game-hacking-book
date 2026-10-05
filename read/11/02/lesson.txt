@@ -1,8 +1,8 @@
-DLL, dynamic link library, Loading and the Loader Lock
+D L L, dynamic link library, Loading and the Loader Lock
 
-Section: Loading a DLL is a coordinated operation.
+Section: Loading a D L L is a coordinated operation.
 
-When Windows loads a DLL, it does more than copy bytes. The loader maps PE, portable executable, sections, applies relocations when needed, resolves imports, prepares thread-local storage, updates module bookkeeping, and calls initialization entry points.
+When Windows loads a D L L, it does more than copy bytes. The loader maps P E, portable executable, sections, applies relocations when needed, resolves imports, prepares thread-local storage, updates module bookkeeping, and calls initialization entry points.
 
 Other threads must not observe a half-initialized module. Windows serializes important parts of loading with a process-wide synchronization mechanism commonly called the loader lock.
 
@@ -13,8 +13,6 @@ Section: Initialization is a dependency-order problem.
 Each initialization step depends on other services already being ready. Import resolution depends on module loading; logging may depend on files, locks, or other DLLs; a hook may depend on the target module and worker state. DllMain runs inside the mechanism that is still satisfying some of those dependencies.
 
 Draw the order before writing startup code:
-
-Diagram. From Map the DLL to Finish loader notifications. From Finish loader notifications to Call explicit start. From Call explicit start to Verify target. From Verify target to Create worker resources. From Create worker resources to Install owned features.
 
 The arrows are dependency claims: a step may begin only after the step above it has completed.
 
@@ -28,13 +26,13 @@ Section: What DllMain notifications mean.
 
 The entry point can receive reasons such as:
 
-DLL_PROCESS_ATTACH: the DLL is being attached to the process;
+DLL_PROCESS_ATTACH: the D L L is being attached to the process;
 
 DLL_THREAD_ATTACH: a new thread is being announced to DLLs;
 
 DLL_THREAD_DETACH: a thread is ending;
 
-DLL_PROCESS_DETACH: the DLL or process is being unloaded.
+DLL_PROCESS_DETACH: the D L L or process is being unloaded.
 
 These are loader notifications, not general application events. The code is running in the context of whichever thread caused the load or unload, and notifications are serialized.
 
@@ -42,19 +40,15 @@ Section: Why ordinary-looking work can deadlock.
 
 Imagine two locks:
 
-Diagram. From Thread A holds game_lock to Thread B holds loader_lock in DllMain. The connection is labelled: wants loader_lock. From Thread B holds loader_lock in DllMain to Thread A holds game_lock. The connection is labelled: wants game_lock.
-
-Neither thread can continue. The dangerous second lock may be hidden inside a function that loads a DLL, initializes COM, sends a blocking cross-thread message, starts complex runtime work, or waits for another thread.
+Neither thread can continue. The dangerous second lock may be hidden inside a function that loads a D L L, initializes COM, sends a blocking cross-thread message, starts complex runtime work, or waits for another thread.
 
 The version that catches most game tools is subtler, because you never write the second lock yourself:
-
-Diagram labels, in drawing order: New thread; DllMain (holds loader lock); thread exists,; but must run DLL_THREAD_ATTACH first; D holds the loader lock and waits for T.; T needs the loader lock D holds. Deadlock.; CreateThread; WaitForSingleObject(thread); needs the loader lock to run; DLL_THREAD_ATTACH.
 
 CreateThread returns success, so nothing appears to have gone wrong. The new thread then blocks before executing a single line of your code, and the wait never finishes. This is precisely why the shutdown sequence above joins worker threads outside the loader lock, and why starting real work belongs in an explicit start() that the host calls once loading has completed.
 
 That is why DllMain should not:
 
-load another DLL;
+load another D L L;
 
 initialize COM;
 
@@ -74,23 +68,19 @@ A deadlock needs a cycle of waits. Write each lock edge as “while holding A, t
 
 Section: The course entry point stays tiny.
 
-The course DLL does one documented optimization during process attach: it disables per-thread attach/detach notifications that the library does not use.
+The course D L L does one documented optimization during process attach: it disables per-thread attach/detach notifications that the library does not use.
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: 🛡️ SAFETY: instance is the module Windows is attaching now. This A P I, application programming interface, only disables notifications; it does not allocate, wait, or scan while the loader lock is held.
 
 It does not start the game lab, read memory, scan modules, or wait.
 
 Section: Stage two begins after loading finishes.
 
-The DLL exports a separate function named gha_start. The injector waits for its LoadLibraryW thread to finish first. Only then does it call gha_start, after the initial loader work has returned.
+The D L L exports a separate function named gha_start. The injector waits for its LoadLibraryW thread to finish first. Only then does it call gha_start, after the initial loader work has returned.
 
-Diagram labels, in drawing order: gha_start; DllMain; Windows loader; Injector; LoadLibraryW; map DLL, call DllMain; (loader lock held); return (loader-safe work only); LoadLibraryW returns; call exported gha_start; spawn worker thread, return.
+The exported function uses the Windows thread-procedure A B I, application binary interface, because the course injector calls it as a separate thread entry:
 
-Diagram walkthrough: Finish loading before starting the worker. Step 1: Request the DLL load. State: LoadLibraryW requested. The injector calls LoadLibraryW. It must wait for that loading thread to finish before requesting the separate application startup export. Step 2: Prepare the module. State: sections mapped; imports resolved. Windows maps the DLL, applies required relocations, resolves imports, prepares thread-local storage, and updates loader records. These dependencies must be ready before application work begins. Step 3: Complete the loader notification. State: DllMain; loader lock held. Windows calls DllMain while holding the loader lock. The course callback disables unused thread notifications and returns; it does not start a worker or wait for one. Step 4: Finish the loading operation. State: LoadLibraryW returned. The loader completes its notifications and returns to the injector. The initial loader work has finished, so the injector can now call gha_start rather than running complex work inside DllMain. Step 5: Publish startup once. State: STARTED set; STOP equals false. On the first successful startup path, gha_start records STARTED, publishes STOP equals false, and spawns the worker. A duplicate call or failed spawn returns its explicit error result instead. Step 6: Run outside the loader callback. State: worker outside loader lock. The worker runs run_lab from ordinary thread execution after the initial loading operation. Startup and later cleanup have an explicit owner, and a loader callback never waits for that worker. The moving handoff follows the successful lifecycle in the sequence diagram. Loader completion is a dependency for explicit startup, while stop requests and worker joining remain separate operations.
-
-The exported function uses the Windows thread-procedure ABI, application binary interface, because the course injector calls it as a separate thread entry:
-
-Code example. The code’s comments explain: 🧭 Complex work begins on this ordinary worker only after LoadLibraryW // and DllMain have returned, so it is outside the loader-lock boundary. let started equals thread::Builder::new() .name("gha-tool-worker".into()) .spawn(|| { if let Err(error) equals run_lab() { eprintln!("game lab stopped: {error:#}"); } }); if started.is_err() { return 2; } 0}
+Code example. The code’s comments explain: 🔒 Publish startup exactly once. A second injector call must not create a second worker that races over the same hooks and cleanup state. 🔁 Release ordering publishes the new run state before the worker observes it. 🧭 Complex work begins on this ordinary worker only after LoadLibraryW and DllMain have returned, so it is outside the loader-lock boundary.
 
 OnceLock prevents duplicate startup. AtomicBool lets the exported stop function ask the worker loop to finish without blocking inside DllMain.
 
@@ -98,17 +88,17 @@ Section: Separate “request stop” from “wait until stopped”.
 
 The stop export sets a flag and returns:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: 🧹 Request-only A P I: the worker owns restoration and exits at its next safe checkpoint. Waiting here could recreate the loader-lock deadlock.
 
 The worker notices the flag, leaves its loop, releases any pressed input, and drops owned patches so their original bytes are restored. A loader callback should not wait for that worker while holding the loader lock.
 
 Section: Why creating a thread in DllMain is still the wrong design here.
 
-You may see examples that call CreateThread directly from DLL_PROCESS_ATTACH. The new thread cannot safely finish DLL-dependent initialization until loader notifications are complete. Waiting for it inside DllMain can deadlock, and returning immediately creates a fragile ordering problem.
+You may see examples that call CreateThread directly from DLL_PROCESS_ATTACH. The new thread cannot safely finish D L L-dependent initialization until loader notifications are complete. Waiting for it inside DllMain can deadlock, and returning immediately creates a fragile ordering problem.
 
 The explicit gha_start contract is easier to reason about and test:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: The injector calls this only after its LoadLibraryW thread has finished.
 
 Section: Why this version?.
 
@@ -116,7 +106,7 @@ The boundary is visible. A failure in LoadLibraryW is different from a failure i
 
 Section: Test the lifecycle, not just startup.
 
-For each exact game DLL profile:
+For each exact game D L L profile:
 
 inject the exact 32-bit build;
 

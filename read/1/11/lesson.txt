@@ -38,8 +38,6 @@ This is a way to reason about control flow, not a rigid test for what a project 
 
 Outside games, software that works this way is called a framework. A web framework owns the loop that waits for requests and calls the handler you registered for each address, so the same question — who calls whom — sorts those tools too.
 
-Diagram. From Engine owns the loop to Game update code. The connection is labelled: every frame, calls. From Engine owns the loop to Game draw code. The connection is labelled: every frame, calls. From Game update code to Libraries: window, input, audio. The connection is labelled: calls when needed. From Game draw code to Libraries: window, input, audio. The connection is labelled: calls when needed.
-
 This matters later in a practical way. A repeated call near frame presentation can be a useful meeting point when you verify that the game actually reaches it. That is why Lesson 7.10 hooks Present: this game’s rendering path calls it to show finished frames, making it a good place to observe them.
 
 Section: Starting up: plugins and settings.
@@ -58,8 +56,6 @@ Draw. Build the picture of the world as it is now.
 
 Present. Hand the finished picture to the display, and, with vertical sync on, wait for the display’s next refresh.
 
-Diagram. From input keys, mouse, pad to update rules, physics, timers. From update rules, physics, timers to render draw the world. From render draw the world to present show the frame. From present show the frame to input keys, mouse, pad.
-
 Frame time and frame rate are reciprocals of each other:
 
 A display that refreshes 60 times each second takes a new picture every 1 divided by 60 equals 0.01667 seconds, which is 16.67 milliseconds. All four jobs must fit in that frame budget, or the display refreshes before the new picture is ready and shows the old one again. A frame that takes 25 milliseconds gives 1 divided by 0.025 equals 40 frames per second; one that takes 8.33 milliseconds gives 120. This is why tools report frame time, in milliseconds, as well as frames per second. Frame times add up, so a 4 milliseconds update plus a 10 milliseconds draw is a 14 milliseconds frame, but frame rates do not add.
@@ -69,14 +65,6 @@ Section: Time inside the update.
 Lesson 1.3 showed that movement needs elapsed time: distance equals speed times time. An engine measures the delta time, the seconds since the previous frame, and hands it to every update. Physics prefers steady steps, though. If one frame moves a fast ball 3 pixels and the next moves it 30, a contact test that looks only at positions can jump the ball clean over a wall 10 pixels thick. So many engines run physics in a fixed timestep, such as 1/60 second, and carry the leftover real time into the next frame:
 
 ExampleThree frames of fixed steps
-
-Table columns: Frame; Real time since the last frame (ms); Time waiting to be simulated (ms); Fixed steps run (16.67 milliseconds each); Left over (ms).
-
-Frame: 1; Real time since the last frame (ms): 20.00; Time waiting to be simulated (ms): 0 + 20.00 equals 20.00; Fixed steps run (16.67 milliseconds each): 1; Left over (ms): 20.00 minus 16.67 equals 3.33.
-
-Frame: 2; Real time since the last frame (ms): 20.00; Time waiting to be simulated (ms): 3.33 + 20.00 equals 23.33; Fixed steps run (16.67 milliseconds each): 1; Left over (ms): 23.33 minus 16.67 equals 6.67.
-
-Frame: 3; Real time since the last frame (ms): 30.00; Time waiting to be simulated (ms): 6.67 + 30.00 equals 36.67; Fixed steps run (16.67 milliseconds each): 2; Left over (ms): 36.67 minus 33.33 equals 3.33.
 
 After 70 milliseconds of real time the game has run 4 steps, which is 4 times 16.67 equals 66.67 milliseconds of game time, and 3.33 milliseconds is waiting. The two add back to 70 milliseconds, so no time was lost. A slow frame runs several steps to catch up, and a quick one runs none.
 
@@ -88,25 +76,13 @@ A cooldown is a timer built the same way. When an ability is used, the game stor
 
 Section: Real time, game time, and the clamp.
 
-The delta time an update receives is not always the time that really passed. Engines keep two clocks. Real time is the wall clock (Explanation: The time a clock on a wall shows. It keeps running whatever the game does, so pausing the game cannot stop it.): it never stops, and a loading spinner or a menu animation uses it. Game time is what the rules use. Each frame the engine takes the real time since the last frame, limits it to a maximum, and multiplies it by a time scale:
+The delta time an update receives is not always the time that really passed. Engines keep two clocks. Real time is the wall clock: it never stops, and a loading spinner or a menu animation uses it. Game time is what the rules use. Each frame the engine takes the real time since the last frame, limits it to a maximum, and multiplies it by a time scale:
 
 A scale of 1 is normal speed, 0.5 is slow motion, 2 is fast forward, and 0 is a pause. A pause stops game time but not real time, which is why a paused game still draws its menu and answers the mouse. The scale also stretches every timer that counts game time:
 
 ExampleOne 16.67 milliseconds frame at four time scales
 
-Table columns: Time scale; Game time added by the frame; A 5.0 s cooldown ends after.
-
-Time scale: 1 (normal); Game time added by the frame: 16.67 milliseconds; A 5.0 s cooldown ends after: 5.0 divided by 1 equals 5.0 s of real time.
-
-Time scale: 0.5 (slow motion); Game time added by the frame: 16.67 times 0.5 equals 8.33 milliseconds; A 5.0 s cooldown ends after: 5.0 divided by 0.5 equals 10.0 s.
-
-Time scale: 2 (fast forward); Game time added by the frame: 16.67 times 2 equals 33.33 milliseconds; A 5.0 s cooldown ends after: 5.0 divided by 2 equals 2.5 s.
-
-Time scale: 0 (paused); Game time added by the frame: 0 milliseconds; A 5.0 s cooldown ends after: never, while paused.
-
 The limit protects the rules from a frame that stalled. A laptop that sleeps, or a window held still by the mouse for 3 seconds, would otherwise hand the next update a delta of 3.0 s. A ball moving 150 pixels a second would jump 150 times 3.0 equals 450 pixels at once, straight through any wall, and a fixed-step loop would owe 3.0 divided by (1/60) equals 180 steps. Bevy’s default limit is 250 milliseconds, so the longest delta any frame can add is 0.25 s, and at 60 steps a second the loop owes at most 0.25 divided by (1/60) equals 15 steps.
-
-Diagram. From real time since the last frame to limit to a maximum (250 milliseconds in Bevy). From limit to a maximum (250 milliseconds in Bevy) to multiply by the time scale (0 equals paused). From multiply by the time scale (0 equals paused) to game time added this frame. From game time added this frame to fixed steps owed: game time divided by step length.
 
 The limit also ends a failure called the spiral of death. Suppose each fixed step takes 20 milliseconds of real time to compute but advances game time by only 16.67 milliseconds. While the engine computes one step, the real clock moves 20 milliseconds, so the next frame owes 20 milliseconds of game time, which is 20 divided by 16.67 equals 1.2 times as much as the step paid off. The frame after that owes 1.2 times as much again. Each step leaves the game 20 minus 16.67 equals 3.33 milliseconds further behind real time, so after 60 steps it is 60 times 3.33 equals 200 milliseconds behind, and running more steps to catch up only adds more debt. The clamp throws the excess away, so the game falls behind real time and runs in slow motion instead of freezing.
 
@@ -115,8 +91,6 @@ Scanning memory is easier with this in mind. A game’s elapsed time may exist t
 Section: Slow work leaves the frame.
 
 Reading a 3 MB file can take 30 milliseconds. If the update waited for it, the game would miss 30 divided by 16.67 equals 1.8, so two, refreshes. Engines give slow jobs, such as loading files, decoding sound, or planning a path across a big map, to worker threads (Lesson 11.8) as tasks. The main loop starts a task and keeps running frames. When the task finishes, it sends its result through a channel, a queue that one thread fills and another empties, and the main loop checks the channel once per frame.
-
-Diagram labels, in drawing order: Worker thread; Main loop; frames 1, 2, and 3 keep running; start the task "load level"; result, sent through a channel; frame 4 checks the channel and uses the result.
 
 The result arrives on a frame nobody can predict, so the game has to handle “not ready yet” with a loading screen or a stand-in. Lesson 4.11 uses the same channel to move records from a game to a recorder without stalling it.
 
@@ -130,7 +104,7 @@ The build changes the measurement as much as the code does. A debug build leaves
 
 Section: Entities, components, and systems.
 
-Lesson 1.3 gave things identities, and Lesson 3.6 showed an engine keeping each kind of field in its own collection. Many engines make that the whole design. In an entity component system (ECS):
+Lesson 1.3 gave things identities, and Lesson 3.6 showed an engine keeping each kind of field in its own collection. Many engines make that the whole design. In an entity component system (E C S):
 
 an entity is only an identity, a number (with a generation, so a reused number is told apart from the old one, as Lesson 3.6 explained);
 
@@ -139,16 +113,6 @@ a component is a plain bundle of data attached to an entity, such as Position, V
 a system is a function that runs on every update for all the entities that have a particular set of components.
 
 A movement system says: for every entity with both Position and Velocity, add velocity times delta time to position. A wall has a Position but no Velocity, so the movement system never touches it, and nobody wrote an “if wall” test. What an entity does comes from which components it has, not from what kind of object it is.
-
-Table columns: Entity; Components; Movement system; Collision system; Draw system.
-
-Entity: tank; Components: Position, Velocity, Size, Sprite; Movement system: runs; Collision system: runs; Draw system: runs.
-
-Entity: wall; Components: Position, Size, Sprite; Movement system: skips; Collision system: runs; Draw system: runs.
-
-Entity: coin; Components: Position, Size, Sprite, Pickup; Movement system: skips; Collision system: runs; Draw system: runs.
-
-Entity: hidden trigger; Components: Position, Size; Movement system: skips; Collision system: runs; Draw system: skips.
 
 In memory, each kind of component sits in its own run. Ten thousand Position components of two 4-byte floats each take 10,000 times 8 equals 80,000 bytes in one stretch, which is what Lesson 3.6 called a component pool. A system walks that stretch from start to end, and a scan finds the whole run at once.
 
@@ -174,18 +138,6 @@ Section: The five course games, sorted by engine.
 
 The games in this book cover most of the ways a game can relate to its engine:
 
-Table columns: Game; Engine; Where most of its rules live.
-
-Game: Wesnoth 1.14.9; Engine: its own engine, written for this game; Where most of its rules live: C++ engine code, WML data files, Lua scripts.
-
-Game: AssaultCube 1.2.0.2; Engine: Cube, an open-source engine; Where most of its rules live: C++ engine code.
-
-Game: Urban Terror 4.3.4; Engine: ioquake3, the continuation of the open-sourced Quake III engine; Where most of its rules live: C++ engine code.
-
-Game: Flare 1.12; Engine: Flare, an engine built to run content packages; Where most of its rules live: text data files.
-
-Game: Wyrmsun 5.0.1; Engine: Wyrmgus, a fork of the Stratagus strategy engine; Where most of its rules live: Lua scripts and data.
-
 Flare shows the split most clearly. Flare is the engine; a campaign such as the Empyrean Campaign from Lesson 9.2 is a content package the engine loads. Swap the content package and the same executable runs a different game.
 
 Section: Where a rule lives decides how you change it.
@@ -200,21 +152,9 @@ A number in memory, updated by native engine code. Change it with the scan from 
 
 A unit's hit points
 
-They come from a unit definition in a WML data file. Change one unit’s hit points in memory and that single unit changes. Recruit another of the same type and it arrives with the file’s value, because every new unit is built from the definition on disk. Change the file instead, and every unit of that type created afterwards has the new value.
-
-Diagram. From your file edit to unit type in a WML file: defines its hit points. The connection is labelled: changes every unit created afterwards. From unit type in a WML file: defines its hit points to unit in memory. The connection is labelled: each recruit is built from it. From unit type in a WML file: defines its hit points to unit in memory. From unit type in a WML file: defines its hit points to the next recruit. From your memory edit to unit in memory. The connection is labelled: changes only this unit.
+They come from a unit definition in a W M L data file. Change one unit’s hit points in memory and that single unit changes. Recruit another of the same type and it arrives with the file’s value, because every new unit is built from the definition on disk. Change the file instead, and every unit of that type created afterwards has the new value.
 
 Neither change is wrong. They answer different questions, and knowing which one you are making saves an afternoon of wondering why a change “didn’t stick.”
-
-Table columns: Where the rule lives; What you change; Where this book covers it.
-
-Where the rule lives: a data file; What you change: the file, before the game loads it; Where this book covers it: Chapter 9.
-
-Where the rule lives: a script; What you change: the script, or what the host lets it do; Where this book covers it: Chapter 10.
-
-Where the rule lives: native engine code; What you change: values in memory, or the instructions themselves; Where this book covers it: Chapters 2, 3, 5, and 6.
-
-Where the rule lives: managed code, such as C# in Unity; What you change: often readable by decompiling it; Where this book covers it: Lesson 11.2.
 
 The data-file row deserves special attention. When a game exposes a file for customization, editing it may be the simplest route. Keep a copy of the original: a game update can still replace a file or change its format. Chapter 9 opens with this decision.
 
@@ -258,31 +198,7 @@ Nothing in that step names Breakout. It is the movement and contact rules of Les
 
 Section: Where each engine part is explained.
 
-This lesson names the parts. The lessons below explain how each one works, and the small runnable examples of an open-source engine such as Bevy (Reference: The example gallery of the Bevy engine: small programs that each show one engine part, such as sprites, lighting, audio, UI, or picking.) show nearly every one in a few dozen lines.
-
-Table columns: Engine part; What it does; Explained in.
-
-Engine part: Application, window; What it does: starts the program, opens a window, owns the loop; Explained in: this lesson; Windows Input.
-
-Engine part: Entities, components, scenes; What it does: organize the world and load it; Explained in: this lesson; Collections.
-
-Engine part: Resources, events, schedules, change detection; What it does: how systems share data, in what order they run, and what they skip; Explained in: Ordering and Sharing Work.
-
-Engine part: Input; What it does: turns key, stick, and mouse events into actions; Explained in: How a Game Reads Input; Windows Input.
-
-Engine part: Math, transforms; What it does: positions, directions, turning, blending; Explained in: Coordinates and Vectors; Camera Frames.
-
-Engine part: Camera, picking; What it does: what is seen, and what is under the cursor; Explained in: Camera Frames; Camera Rays.
-
-Engine part: 2D and 3D rendering, shaders; What it does: turn the world into pixels; Explained in: Rendering Pipeline; Draw Calls.
-
-Engine part: Animation; What it does: change a pose over time; Explained in: Aim Geometry.
-
-Engine part: Assets, glTF, audio; What it does: files the game loads and plays; Explained in: Game Files.
-
-Engine part: UI, text; What it does: menus and on-screen controls; Explained in: Menus and Text.
-
-Engine part: Gizmos, diagnostics, tools; What it does: developer views of the running game; Explained in: this lesson; Overlays.
+This lesson names the parts. The lessons below explain how each one works, and the small runnable examples of an open-source engine such as Bevy show nearly every one in a few dozen lines.
 
 Section: Recognizing an engine outside this book.
 

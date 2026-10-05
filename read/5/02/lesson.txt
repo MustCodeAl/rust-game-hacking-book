@@ -4,8 +4,6 @@ Section: Use a setting as an anchor.
 
 Urban Terror 4.3.4 has console variables that visibly affect rendering. In an offline local session, toggling entity drawing gives us a clean experiment.
 
-Image description: A console command changing entity drawing
-
 When entities disappear, the game is likely checking a flag before submitting their draw work.
 
 Section: Follow state through the rendering pipeline.
@@ -14,11 +12,9 @@ A frame crosses several representations before pixels appear:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-A CPU, central processing unit,-side flag can stop an entity before a draw call exists. Graphics state can change how an existing draw is tested. A shader can change the final color. Similar screenshots can therefore come from very different layers.
+A C P U, central processing unit,-side flag can stop an entity before a draw call exists. Graphics state can change how an existing draw is tested. A shader can change the final color. Similar screenshots can therefore come from very different layers.
 
 Find the earliest stage where the output first goes wrong. If no call is submitted, inspect culling or entity selection. If the call exists but pixels disappear, inspect transforms, clipping, depth, and blending. Keeping those stages separate prevents the vague conclusion that “rendering is broken.”
-
-Diagram. From Game objects to Visible set. From Visible set to Draw submissions. From Draw submissions to Vertex shader. From Vertex shader to Primitive assembly + clipping. From Primitive assembly + clipping to Rasterization. From Rasterization to Fragment shader. From Fragment shader to Depth / stencil / blend tests. From Depth / stencil / blend tests to Framebuffer.
 
 The names differ between graphics APIs, but the responsibilities remain useful:
 
@@ -44,18 +40,6 @@ Section: Geometry is vertices plus an interpretation.
 
 A mesh is usually a collection of vertices plus enough information to connect them into primitives. A vertex is a record, not merely a position:
 
-Table columns: Attribute; What it commonly represents.
-
-Attribute: position; What it commonly represents: model-space location.
-
-Attribute: normal; What it commonly represents: local surface direction used for lighting.
-
-Attribute: texture coordinate; What it commonly represents: location in a 2D image.
-
-Attribute: color; What it commonly represents: per-vertex tint or data.
-
-Attribute: bone indices/weights; What it commonly represents: how an animation skeleton moves the vertex.
-
 An index buffer stores integer vertex references. For example, two triangles forming a square can share four vertices instead of duplicating six. In an indexed draw, count usually says how many indices to consume—not how many unique vertices, triangles, or objects exist. With triangle topology and no primitive restart, count / 3 is the submitted triangle count, but clipping and degenerate triangles mean it is still not the number of visible triangles.
 
 Section: Materials, textures, and light.
@@ -76,13 +60,9 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Important state includes face culling, depth comparison, depth writes, stencil operations, blending, scissor rectangles, color masks, and the current framebuffer. Changing depth_test_enabled is different from changing the depth comparison from LESS to ALWAYS, and both are different from leaving the test on while disabling depth writes.
 
-Image description: Entities no longer being drawn
-
 Section: Search for the flag.
 
 Scan for the flag’s current integer value. Toggle it, filter, and repeat. Then set a read breakpoint on a confirmed candidate and render one frame.
-
-Image description: A render flag in the debugger
 
 Look for a conditional pattern:
 
@@ -110,8 +90,6 @@ a weapon;
 
 a map object.
 
-Image description: Inspecting a possible entity structure
-
 Put only confirmed fields into the layout type:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
@@ -135,8 +113,6 @@ Transparent objects often keep the depth test but disable depth writes and rende
 Perspective depth is normally nonlinear. More of the depth buffer’s numeric precision is concentrated near the camera. With the traditional mapping, making the near plane extremely small compared with the far plane wastes precision and can cause two nearby surfaces to alternate visibility, called z-fighting. Modern engines may use a floating-point reversed-z buffer, where farther values and the comparison direction are reversed to improve precision. Never hard-code “small depth means near” until the projection and comparison convention are confirmed.
 
 The depth buffer answers “which submitted fragment wins at this sample?” It does not answer whether an object is logically visible to gameplay. Collision queries, portals, fog-of-war systems, and server state may use entirely different data.
-
-Image description: A depth-test experiment in an offline target
 
 That visual result proves a rendering rule changed; it does not prove which objects a call represents. You still need classification tests.
 
@@ -164,7 +140,7 @@ Occlusion culling skips objects hidden behind others.
 
 Levels of detail swap a model for a cheaper one as it gets far away, and a visibility range hides an object past a set distance.
 
-All of this happens before any draw call exists, which is why the symptom “an object is absent from the visible list” in the table below points at the game, not the GPU, graphics processing unit,.
+All of this happens before any draw call exists, which is why the symptom “an object is absent from the visible list” in the table below points at the game, not the G P U, graphics processing unit.
 
 Section: Who decides whether an object is drawn.
 
@@ -182,41 +158,15 @@ ExampleWhich camera draws which object
 
 The main camera’s mask is 1 + 2 equals 3, which is 011 in binary, and the minimap camera’s mask is 1 + 4 equals 5, which is 101.
 
-Table columns: Object; Mask; Main camera: 3 AND mask; Minimap camera: 5 AND mask.
-
-Object: tree; Mask: 1 (001); Main camera: 3 AND mask: 1, drawn; Minimap camera: 5 AND mask: 1, drawn.
-
-Object: weapon; Mask: 2 (010); Main camera: 3 AND mask: 2, drawn; Minimap camera: 5 AND mask: 0, not drawn.
-
-Object: icon; Mask: 4 (100); Main camera: 3 AND mask: 0, not drawn; Minimap camera: 5 AND mask: 4, drawn.
-
 The weapon is drawn by the main camera only and the icon by the minimap only, although all three objects live in the same world. An object that fails one of these three questions never reaches a draw call, so it is absent from the visible list, which is the first row of the table at the end of this lesson.
 
 When an object that should appear does not, the cause is usually one of these, and each leaves a different trace:
 
 An object that should appear does not
 
-Table columns: Cause; What it looks like.
-
-Cause: Its own setting, or a parent’s, is hidden; What it looks like: gone from every camera at every distance.
-
-Cause: It shares no render layer with the camera; What it looks like: drawn by one camera and absent from another.
-
-Cause: It is behind the camera or past the camera’s far limit; What it looks like: appears when the camera turns round or moves closer; an object 1,500 units away is never drawn by a camera whose far limit is 1,000.
-
-Cause: Its scale is 0 on every axis; What it looks like: everything collapses to one point, which has no area to draw; a scale of 0 on one axis flattens it into a sheet that vanishes when seen edge-on.
-
-Cause: Its triangles are wound the wrong way (Explanation: A triangle lists its three corners in an order, clockwise or anticlockwise as seen from one side. The renderer treats one direction, usually anticlockwise, as the front, so a mesh whose corners are listed the other way has its outside counted as the back.) for back-face culling; What it looks like: the outside is invisible and the inside shows.
-
-Cause: A lit material has no light; What it looks like: drawn, but dark or black, so against a dark background it looks absent.
-
-Cause: In 2D, its depth lies outside the camera’s depth range; What it looks like: a camera that sees depths from minus 1,000 to 0 never draws a sprite at depth 5.
-
 Section: A frame is several passes.
 
 Most frames are not drawn in one sweep. The engine renders the scene several times for different purposes, in order, and each sweep is a pass. A pass starts by clearing its target to a clear colour, and clearing depth to its farthest value, so the last frame’s picture is not left behind:
-
-Diagram. From Shadow pass depth seen from the light to Opaque pass solid objects. From Opaque pass solid objects to Sky. From Sky to Transparent pass far to near. From Transparent pass far to near to Post-processing full-screen effects. From Post-processing full-screen effects to UI pass menus and text. From UI pass menus and text to Present.
 
 Shadows. The shadow pass draws the scene’s depth as seen from the light into a texture called a shadow map. In the main pass, each pixel’s position is converted to the light’s view and compared with the stored depth: if something nearer was stored, the pixel is in shadow. A surface point 7.50 away from the light would be compared with its own stored depth, 7.50, and rounding could make it shadow itself, so the test uses a small bias: shadowed only if the stored depth is less than 7.50 minus 0.05 equals 7.45. It is not, so the point is lit.
 
@@ -236,7 +186,7 @@ Section: HDR needs wider pixels.
 
 An ordinary picture keeps each colour channel in 8 bits, which is 256 levels from 0 to 1, so nothing can be brighter than 1.0. Lighting can produce more. Say a sunlit wall comes out at 1.4 and a lamp at 12.0. In an 8-bit picture both are cut off at 1.0 and look equally bright. HDR rendering draws into a texture whose channels are wider and floating-point, commonly 16 bits each, so the difference survives until the tone-mapping step at the end compresses the result into the 0 to 1 range of the display. With the c divided by (1 + c) rule from above, the wall becomes 1.4 divided by 2.4 equals 0.58 and the lamp 12 divided by 13 equals 0.92: still different, and both displayable.
 
-The wider pixels cost memory. A 1920 times 1080 picture has 1920 times 1080 equals 2,073,600 pixels. With 4 channels of 1 byte it takes 2,073,600 times 4 equals 8,294,400 bytes, about 8.3 MB. With 4 channels of 2 bytes it takes 2,073,600 times 8 equals 16,588,800 bytes, about 16.6 MB.
+The wider pixels cost memory. A 1920 times 1080 picture has 1920 times 1080 equals the large number shown pixels. With 4 channels of 1 byte it takes the large number shown times 4 equals the large number shown bytes, about 8.3 MB. With 4 channels of 2 bytes it takes the large number shown times 8 equals the large number shown bytes, about 16.6 MB.
 
 HDR is also what makes bloom mean something. Bloom blurs only the part of each pixel above a threshold, here 1.0. The wall has 1.4 minus 1.0 equals 0.4 above it and the lamp has 12.0 minus 1.0 equals 11.0, so the lamp glows 11.0 divided by 0.4 equals 27.5 times as strongly. In the 8-bit picture both had 0 above the threshold, and nothing could glow.
 
@@ -248,11 +198,11 @@ MSAA
 
 Multisample anti-aliasing tests coverage at several points inside each pixel. With 4 sample points per pixel, written 4 times , a triangle that covers 3 of the 4 points of an edge pixel contributes 3 divided by 4 equals 0.75 of its colour. Over a blue background rgb(0, 0, 200), a red triangle rgb(255, 0, 0) covering 3 of 4 points gives 0.75 times (255, 0, 0) + 0.25 times (0, 0, 200) equals (191.25, 0, 50), drawn as rgb(191, 0, 50).
 
-The shader still runs once per pixel, so the extra cost is memory: colour and depth are stored for every sample. The colour samples alone take 2,073,600 pixels times 4 samples times 4 bytes equals 33,177,600 bytes, about 33.2 MB, which is four times the 8.3 MB of one sample per pixel. MSAA smooths the edges of triangles but not sharp patterns that a shader or a texture draws inside a triangle.
+The shader still runs once per pixel, so the extra cost is memory: colour and depth are stored for every sample. The colour samples alone take the large number shown pixels times 4 samples times 4 bytes equals the large number shown bytes, about 33.2 MB, which is four times the 8.3 MB of one sample per pixel. MSAA smooths the edges of triangles but not sharp patterns that a shader or a texture draws inside a triangle.
 
 FXAA
 
-Fast approximate anti-aliasing works on the finished picture. It looks for pixels where the brightness changes sharply from one neighbour to the next and blurs across those edges. It stores no extra samples and costs one full-screen pass over the 2,073,600 pixels, so it is cheap, and it also smooths edges drawn by shaders and textures. Its price is that it blurs text and fine texture detail too, because it cannot tell the edge of a shape from a sharp line in a picture.
+Fast approximate anti-aliasing works on the finished picture. It looks for pixels where the brightness changes sharply from one neighbour to the next and blurs across those edges. It stores no extra samples and costs one full-screen pass over the the large number shown pixels, so it is cheap, and it also smooths edges drawn by shaders and textures. Its price is that it blurs text and fine texture detail too, because it cannot tell the edge of a shape from a sharp line in a picture.
 
 TAA
 
@@ -262,15 +212,7 @@ Section: The renderer works from its own copy.
 
 Many engines keep two worlds. The main world holds the game: positions, health, and what is hidden. The render world holds what drawing needs: meshes, materials, lights, and the final transforms. Once per frame an extract step copies the data that drawing needs from the first into the second. The renderer then works only from its copy, so the game can start simulating the next frame while the renderer is still drawing this one. That overlap is called pipelined rendering.
 
-Diagram. From simulate 1 to simulate 2. From simulate 2 to simulate 3. From draw 1 to draw 2. From simulate 1 to draw 1. The connection is labelled: extract 1. From simulate 2 to draw 2. The connection is labelled: extract 2.
-
 Suppose simulating a frame takes 6 milliseconds and drawing it takes 8 milliseconds. The extract copy takes a little time of its own, which the figures ignore:
-
-Table columns: Arrangement; Time per frame; Frames per second.
-
-Arrangement: one stage after the other; Time per frame: 6 + 8 equals 14 milliseconds; Frames per second: 1000 divided by 14 equals 71.
-
-Arrangement: overlapped; Time per frame: the slower stage, 8 milliseconds; Frames per second: 1000 divided by 8 equals 125.
 
 Overlapping has a price. What is drawn comes from the state copied at extract, so it is one frame behind the simulation that is already working on the next one.
 
@@ -284,7 +226,7 @@ Many small pictures are packed into one large image, a sprite sheet or texture a
 
 Scaling a sprite into a box while keeping its shape uses the smaller of the two ratios. A 64 times 32 sprite fitted into a 100 times 100 box has ratios 100 divided by 64 equals 1.5625 and 100 divided by 32 equals 3.125, so it is scaled by 1.5625 and ends up 100 times 50.
 
-A tilemap is a grid of tile numbers. Drawing it means turning each number into a quad that points at the right part of the atlas. A screen of 20 times 15 tiles is 300 quads, which is 600 triangles, and the engine can send all of them to the GPU as one draw call from one atlas instead of 300 separate calls. This is the same grid Lesson 4.5 reads as game state, now seen as pictures.
+A tilemap is a grid of tile numbers. Drawing it means turning each number into a quad that points at the right part of the atlas. A screen of 20 times 15 tiles is 300 quads, which is 600 triangles, and the engine can send all of them to the G P U as one draw call from one atlas instead of 300 separate calls. This is the same grid Lesson 4.5 reads as game state, now seen as pictures.
 
 Pixel-art games often draw the whole scene into a small texture, such as 320 times 180, and then enlarge it by a whole number, 4, to 1280 times 720. Whole-number scaling keeps every pixel a crisp square, which is called pixel snapping.
 
@@ -306,7 +248,7 @@ A restore guard makes the cleanup rule explicit:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The actual graphics calls may need FFI, foreign function interface,, but the “restore no matter how this scope exits” pattern stays in ordinary safe code.
+The actual graphics calls may need F F I, foreign function interface,, but the “restore no matter how this scope exits” pattern stays in ordinary safe code.
 
 Older OpenGL behaves like a state machine: many calls change context state that later draw calls inherit. Treat each temporary change as a scoped transaction. Capture the exact old value, apply the experiment, perform the intended draw, and restore even on early return. “Set it back to the usual default” is weaker than restoring the value that was actually present.
 
@@ -318,27 +260,13 @@ Use the earliest observable difference to narrow the cause:
 
 Visibility failures by stage
 
-Table columns: Symptom; Likely stage.
-
-Symptom: object absent from visible list; Likely stage: game filtering or CPU culling.
-
-Symptom: draw call absent; Likely stage: submission/batching path.
-
-Symptom: vertices leave clip volume; Likely stage: transform, camera, or clipping.
-
-Symptom: fragments exist but fail depth; Likely stage: depth state or existing occluder.
-
-Symptom: fragments pass but write no color; Likely stage: color mask, shader discard, stencil.
-
-Symptom: color appears but looks wrong; Likely stage: shader inputs, texture, lighting, blend, color space.
-
-This table is a diagnostic order, not proof. Some engines merge or reorder stages, and GPU-driven pipelines can construct visible lists on the GPU.
+This table is a diagnostic order, not proof. Some engines merge or reorder stages, and G P U-driven pipelines can construct visible lists on the G P U.
 
 Section: Build the Urban Terror 4.3.4 memory wallhack.
 
-The flag trace and frame-local state model above can be understood with the debugger alone. This pinned in-process implementation applies the verified detour and DLL, dynamic link library, lifecycle from Lesson 6.4 to the rendering boundary. Keep those ownership and restoration steps intact while following the exact build-specific addresses below.
+The flag trace and frame-local state model above can be understood with the debugger alone. This pinned in-process implementation applies the verified detour and D L L, dynamic link library, lifecycle from Lesson 6.4 to the rendering boundary. Keep those ownership and restoration steps intact while following the exact build-specific addresses below.
 
-The r_drawentities trace in this exact build leads through the call at hexadecimal 0 0 5 2 F 7 1 F. Inside the entity loop, ebx holds the current render entity at hexadecimal 0 0 5 2 D 2 F D. The field at [ebx+4] cycles through values such as hexadecimal 0 D, hexadecimal 4 0, hexadecimal 8 2, and hexadecimal 8 3.
+The r_drawentities trace in this exact build leads through the call at this value. Inside the entity loop, e b x holds the current render entity at this value. The field at [e b x+4] cycles through values such as hexadecimal 0 D, hexadecimal 4 0, hexadecimal 8 2, and hexadecimal 8 3.
 
 Hook this exact point:
 
@@ -348,14 +276,14 @@ A 32-bit detour cave has the same shape as the Wesnoth cave:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Install a six-byte verified detour at hexadecimal 0 0 5 2 D 2 F D, enter a local game, enable cg_thirdperson, and add bots. The local player and bots should render through walls exactly as in the screenshot. Values hexadecimal 8 3 and hexadecimal 4 0 should not create the same effect; that comparison is how you prove hexadecimal 0 D is the relevant render state.
+Install a six-byte verified detour at this value, enter a local game, enable cg_thirdperson, and add bots. The local player and bots should render through walls exactly as in the screenshot. Values hexadecimal 8 3 and hexadecimal 4 0 should not create the same effect; that comparison is how you prove hexadecimal 0 D is the relevant render state.
 
 Restore the original six hook bytes when the feature is disabled. This memory-based wallhack is intentionally kept as a full target-specific lab before the more general OpenGL approach.
 
-The DLL already contains the complete verified implementation. Build and inject it into Quake3-UrT.exe, enter a local bot match, and press F1 to toggle this memory wallhook. Press End to stop and restore all six bytes. See install_urban_terror_memory_wallhook and the Urban Terror hotkey worker in dll.rs.
+The D L L already contains the complete verified implementation. Build and inject it into Quake3-UrT.exe, enter a local bot match, and press F1 to toggle this memory wallhook. Press End to stop and restore all six bytes. See install_urban_terror_memory_wallhook and the Urban Terror hotkey worker in dll.rs.
 
 Section: What the experiment proves.
 
-The comparison isolates how one CPU-side flag changes GPU behavior. It does not prove that every build uses the same flag, address, or rendering path, so keep the executable fingerprint and original bytes beside the result.
+The comparison isolates how one C P U-side flag changes G P U behavior. It does not prove that every build uses the same flag, address, or rendering path, so keep the executable fingerprint and original bytes beside the result.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/5/02/

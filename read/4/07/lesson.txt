@@ -16,8 +16,6 @@ The event says what changed, while a snapshot says what is true now. Keeping bot
 
 A responsive loop should turn noisy polls into one deliberate action in stages, rather than connecting every poll directly to a click:
 
-Diagram. From Poll a snapshot to Validate its fields. From Validate its fields to Compare with accepted state. From Compare with accepted state to Wait for a stable change. From Wait for a stable change to Emit one event. From Emit one event to Check safety and cooldown. From Check safety and cooldown to Perform one action.
-
 Validation protects the model, debouncing protects it from flicker, and the cooldown prevents a valid event from producing frantic repeated input.
 
 Section: Level facts and edge facts answer different questions.
@@ -34,8 +32,6 @@ use both when an action needs a starting event and an ongoing confirmation.
 
 Here are six polls of menu_open and what each kind of rule does with them:
 
-Labelled memory diagram. poll 1: false; poll 2: false; poll 3: true, highlighted; poll 4: true; poll 5: true; poll 6: false, highlighted. Groups: level rule: clicks on 3 polls; edge: MenuOpened; edge: MenuClosed. The level rule fires on every poll where the menu is open, so one opening produces three clicks. The edge rule compares each poll with the one before and fires only at the two highlighted polls, where the value changed.
-
 Events are interpretations, not raw truth. If the observer misses snapshots, 120 to 145 proves the endpoints but not whether the game passed through 130. Name an event GoldChanged, not GoldEarned, unless something else shows why it changed.
 
 Section: Diff two validated snapshots.
@@ -48,8 +44,6 @@ Why use an enum? Each variant defines exactly which data belongs to that event. 
 
 Follow the two accepted snapshots through diff, then compare an unchanged poll. The endpoints reveal changes, not the reason gold changed:
 
-Animated diagram: A value becomes an event only at its edge. A baseline snapshot of 120 gold and a closed menu is compared with a new snapshot of 145 gold and an open menu. The two differences become the events GoldChanged and MenuOpened, the new snapshot becomes the baseline, and an identical next snapshot produces an empty list of events. Step 1: The accepted baseline is the last validated snapshot: 120 gold, menu closed. Its identity and read checks have passed. Step 2: The next validated snapshot arrives: 145 gold, menu open. In this example nothing else has changed. Step 3: diff compares the fields. Gold differs, from 120 to 145, a change of 25. The menu went from false to true. It compares endpoints only, so it cannot say why gold changed. Step 4: Each difference becomes a named event. The variant carries the data the action layer needs, such as the before and after gold. Step 5: The accepted snapshot becomes the new baseline: 145 gold, menu open. That opening has already been reported once. Step 6: If the next accepted snapshot is identical, diff returns an empty list. The menu is still open, but that is a level, not a new edge, so there is no second MenuOpened. Level state remains true across polls; an edge event describes the transition between accepted states.
-
 Section: Debouncing asks for stability.
 
 Some values flicker while a game changes scenes. Debouncing waits for the same candidate value to appear several times before accepting it.
@@ -58,13 +52,11 @@ It helps to know why a value flickers, because that tells you how long to wait. 
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The strange value on poll 4 is the byte hexadecimal C D, which Microsoft’s debug heap writes into every fresh allocation, repeated four times. One hexadecimal C D is 12 times 16 + 13 equals 205, so the four bytes read as 205 times 256 to the power of 3 + 205 times 256 to the power of 2 + 205 times 256 + 205 equals 3,452,816,845.
+The strange value on poll 4 is the byte hexadecimal C D, which Microsoft’s debug heap writes into every fresh allocation, repeated four times. One hexadecimal C D is 12 times 16 + 13 equals 205, so the four bytes read as 205 times 256 to the power of 3 + 205 times 256 to the power of 2 + 205 times 256 + 205 equals the large number shown.
 
 A debouncer keeps two things: the last accepted value, and a candidate value with a count. Each poll does one of three things. A poll equal to the accepted value clears the candidate. A poll equal to the candidate adds one to its count. Any other value becomes a new candidate with a count of 1. When the candidate’s count reaches the required number, it becomes the accepted value and the debouncer reports one change.
 
 With three required polls, here is the trace above, followed by 20 points of real damage that take health from 100 to 100 minus 20 equals 80:
-
-Labelled memory diagram. poll 1: 100; poll 2: 0; poll 3: 0; poll 4: hexadecimal C D C D C D C D; poll 5: 100; poll 6: 80; poll 7: 80; poll 8: 80, highlighted. Groups: candidate 0: count 1, 2; new candidate: 1; candidate 80: count 1, 2, 3; accepted stays 100: no event; accepted becomes 80. No glitch value lasts three polls in a row, so none of them reaches the bot, and poll 5 clears the candidate by matching the accepted 100. The real change is accepted on its third matching poll, poll 8, and produces exactly one event.
 
 The code follows those three cases:
 
@@ -91,8 +83,6 @@ a timeout;
 a cancellation reason.
 
 The pending action is a small state machine of its own. While it exists, the bot sends nothing, and each poll either confirms it, counts it down, or times it out:
-
-Diagram labels, in drawing order: bot sends end turn once; old turn and polls_left above 0, count down by 1; turn changed, confirmed; old turn and polls_left is 0, timed out; Idle; Pending.
 
 The timeout is a number of polls, so it becomes a time through the polling rate: starting from polls_left: 20 at one poll every 50 milliseconds gives the game 20 times 50 equals 1000 milliseconds, one second, to show the new turn.
 

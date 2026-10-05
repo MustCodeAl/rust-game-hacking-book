@@ -4,9 +4,9 @@ Section: What a disassembler is for.
 
 Lesson 5.5 followed changing gold through data addresses. The next question is which machine instruction reads or writes that field. We can copy a bounded code range, but raw bytes alone do not show where one instruction ends or what operation it performs.
 
-The CPU, central processing unit, executes machine-code bytes. Humans prefer names such as mov, call, and jne. A disassembler decodes bytes into instruction records and then formats those records as assembly text.
+The C P U, central processing unit, executes machine-code bytes. Humans prefer names such as mov, call, and jne. A disassembler decodes bytes into instruction records and then formats those records as assembly text.
 
-It does not recover the original source. Compiler variable names, comments, generic types, and most high-level structure are normally gone. A disassembler can show that four bytes at [ebx+hexadecimal 3 0] are subtracted, but it cannot say that ebx points at a side’s data and hexadecimal 3 0 is the offset of its gold. That link comes from the running game: the instruction runs exactly when that side’s gold drops.
+It does not recover the original source. Compiler variable names, comments, generic types, and most high-level structure are normally gone. A disassembler can show that four bytes at [e b x+hexadecimal 3 0] are subtracted, but it cannot say that e b x points at a side’s data and hexadecimal 3 0 is the offset of its gold. That link comes from the running game: the instruction runs exactly when that side’s gold drops.
 
 Machine code preserves operations more reliably than it preserves intent. Two different source programs can compile to similar instructions, and one source construct can compile differently across optimization levels. Assembly shows exactly what the machine does, not why the programmer wrote it.
 
@@ -21,8 +21,6 @@ program meaning: which game behavior it implements.
 The decoder answers the first. Control-flow and data-flow analysis answer the second. Only the running target can establish the third.
 
 A decoder answers structural questions: instruction length, operands, registers, immediate values, memory addressing, and flow control. A formatter chooses spelling and style, such as NASM or Intel syntax. Tooling should use decoded fields for logic rather than parsing the displayed string back into facts.
-
-Diagram. From raw bytes 48 89 D8 to Decoder::decode_out makes an Instruction. From Decoder::decode_out makes an Instruction to NasmFormatter::format makes the text mov rax, rbx. From Decoder::decode_out makes an Instruction to instruction.flow_control(), instruction.ip() use these for logic, not the formatted text.
 
 Section: Decoding is harder than formatting.
 
@@ -50,17 +48,15 @@ an immediate is a value stored directly in the instruction.
 
 Not every instruction contains every piece. Their variable length is why a detour must decode whole instructions before deciding how many bytes to replace.
 
-Labelled memory diagram. cell 1: 48; cell 2: 89; cell 3: D8; cell 4: C3. Groups: mov rax, rbx — REX prefix + opcode + ModR/M; ret — opcode only. The test bytes from decodes_simple_64_bit_function later in this lesson. Here 48 89 D8 encodes mov rax, rbx in 64-bit mode, followed by C3 for ret. For comparison, Lesson 2.3's B8 19 00 00 00 encoded mov eax, 25 in 32-bit mode. An opcode selects an operation; a prefix or ModR/M byte appears only when that instruction needs it.
-
 For our tool, use iced-x86.
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 Section: Decode a byte slice.
 
-The decoder needs the byte slice, the target’s CPU bitness, and the address where those bytes execute. That address lets it print meaningful destinations for relative branches; it does not change the copied bytes. The function below returns one formatted line per decoded instruction:
+The decoder needs the byte slice, the target’s C P U bitness, and the address where those bytes execute. That address lets it print meaningful destinations for relative branches; it does not change the copied bytes. The function below returns one formatted line per decoded instruction:
 
-Code example. The code’s comments explain: 🧭 `start_ip` gives relative branches their real live destination; it does // not say where this local byte slice is stored in the analysis tool. let mut decoder equals Decoder::with_ip( bitness, bytes, start_ip, DecoderOptions::NONE, ); let mut formatter equals NasmFormatter::new(); formatter.options_mut().set_digit_separator("`"); formatter.options_mut().set_first_operand_char_index(10); ♻️ Reuse these allocations inside the loop; a large code section may // contain thousands of instructions. let mut instruction equals Instruction::default(); let mut formatted equals String::new(); let mut lines equals Vec::new(); 📏 Convert the decoder's virtual IP back into an index only after the // decoder has advanced, then validate the complete instruction range. let offset equals usize::try_from(instruction.ip() - start_ip)?; let end equals offset.checked_add(instruction.len()) .context("instruction range overflowed")?; let raw equals bytes.get(offset..end) .context("decoder produced an out-of-range instruction")?; let raw_hex equals raw.iter() .map(|byte| format!("{byte:02X}")) .collect::<String>();
+Code example. The code’s comments explain: 🛡️ The same bytes decode differently in different C P U modes. Refuse a guessed value before the decoder can produce convincing nonsense. 🧭 `start_ip` gives relative branches their real live destination; it does not say where this local byte slice is stored in the analysis tool. ♻️ Reuse these allocations inside the loop; a large code section may contain thousands of instructions. 📏 Convert the decoder's virtual i p back into an index only after the decoder has advanced, then validate the complete instruction range.
 
 Decoder::with_ip makes relative branches and instruction addresses meaningful.
 
@@ -74,7 +70,7 @@ Bitness changes default operand/address sizes and which encodings are valid. It 
 
 Section: Read an executable section.
 
-Use your process wrapper and PE, portable executable, parser to:
+Use your process wrapper and P E, portable executable, parser to:
 
 find the target module;
 
@@ -83,8 +79,6 @@ locate an executable section such as .text;
 copy a bounded byte range;
 
 pass its real virtual start address as start_ip.
-
-Image description: A small disassembly listing
 
 Do not decode unreadable gaps as though they were code.
 
@@ -99,8 +93,6 @@ This is more reliable than searching formatted strings for jmp.
 Section: Linear sweep versus control flow.
 
 The loop above is a linear sweep: decode one instruction after another. It may decode data embedded in a code section as nonsense instructions.
-
-Diagram. From decode at ip to decode at ip + len. From decode at ip + len to decode at ip + len + len. From decode at ip + len + len to ... continue byte after byte.
 
 A control-flow disassembler begins at a known entry point and follows reachable branches and calls. That needs:
 
@@ -118,8 +110,6 @@ Start linear. Add control flow only after the basic decoder and bounds are solid
 
 A basic block is a straight-line run of instructions with one entry and a control transfer at the end. Connecting blocks by possible jumps creates a control-flow graph. Loops appear as edges that return to an earlier block; if statements often appear as a branch whose paths later meet.
 
-Diagram. From entry point to basic block 1. From basic block 1 to conditional branch. From conditional branch to basic block 3. The connection is labelled: taken. From conditional branch to basic block 4. The connection is labelled: not taken. From basic block 3 to basic block 1. From basic block 4 to return.
-
 The graph still contains uncertainty. An indirect jump may obtain its destination from a table or register, exception handling can create non-obvious edges, and code may be reached only through callbacks. Mark unknown successors instead of pretending the graph is complete.
 
 Section: Invalid bytes.
@@ -130,7 +120,7 @@ Never enter an infinite loop at one bad byte.
 
 Section: Test known examples.
 
-These four bytes have a known 64-bit interpretation: mov rax, rbx followed by ret. Passing them with start address hexadecimal 1 0 0 0 should produce two formatted instructions in that order, so the test checks both instruction boundaries and basic decoding:
+These four bytes have a known 64-bit interpretation: mov r a x, r b x followed by ret. Passing them with start address hexadecimal 1 0 0 0 should produce two formatted instructions in that order, so the test checks both instruction boundaries and basic decoding:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -142,7 +132,7 @@ Use a mature decoder for instruction truth. Spend your effort on the tool around
 
 Section: Disassemble the real Wesnoth function.
 
-The completed binary opens the live 32-bit Wesnoth process, reads hexadecimal 5 0 bytes beginning at the verified lesson address hexadecimal 0 0 7 C C D 9 1, decodes with a 32-bit iced-x86 decoder, and prints the real address, raw bytes, and NASM-style instruction text:
+The completed binary opens the live 32-bit Wesnoth process, reads hexadecimal 5 0 bytes beginning at the verified lesson address shown here, decodes with a 32-bit iced-x86 decoder, and prints the real address, raw bytes, and NASM-style instruction text:
 
 Terminal window
 

@@ -2,31 +2,29 @@ From Win32 Calls to Kernel Services
 
 Section: One function call can cross several layers.
 
-The course tool can now name a process, open and own a limited handle, inspect page metadata, and observe threads. Each operation was a call to a Windows API, application programming interface,. The remaining question is where such a call goes when the tool asks the operating system to do something it cannot do directly.
+The course tool can now name a process, open and own a limited handle, inspect page metadata, and observe threads. Each operation was a call to a Windows A P I, application programming interface. The remaining question is where such a call goes when the tool asks the operating system to do something it cannot do directly.
 
 A call to a Windows function such as VirtualQueryEx does not instantly jump into the deepest part of Windows. It usually passes through layers.
 
-Diagram. From Application caller to Documented Win32 contract. From Documented Win32 contract to User-mode DLL, dynamic link library, implementation. From User-mode DLL implementation to Native service stub. From Native service stub to System-call privilege gate. From System-call privilege gate to Kernel validates the request. From Kernel validates the request to Result returns to the caller.
-
-Use three separate ideas: contract, implementation path, and privilege transition. Win32 documents the contract application code may rely on. User-mode DLLs implement or forward that contract. A system-call instruction performs the controlled CPU, central processing unit, transition for work that requires kernel privilege.
+Use three separate ideas: contract, implementation path, and privilege transition. Win32 documents the contract application code may rely on. User-mode DLLs implement or forward that contract. A system-call instruction performs the controlled C P U, central processing unit, transition for work that requires kernel privilege.
 
 The boxes are software layers, not necessarily four separate processes. kernel32.dll and ntdll.dll are mapped into the same user-mode process as our program. Microsoft may change the implementation path while preserving the Win32 contract, which is why “calling a deeper layer” is usually less stable rather than more capable.
 
 Section: User mode and kernel mode are permission levels.
 
-Most game code, application code, and Windows DLL code runs in user mode. A user-mode mistake should not be able to overwrite the kernel or another process merely by using a bad pointer.
+Most game code, application code, and Windows D L L, dynamic link library, code runs in user mode. A user-mode mistake should not be able to overwrite the kernel or another process merely by using a bad pointer.
 
 The Windows kernel and drivers run in kernel mode, where code can manage page tables, devices, scheduling, and other system-wide resources. A bug there can affect the whole computer. That is why the course does not turn ordinary game experiments into kernel-driver experiments.
 
-The CPU enforces this border. A system call changes privilege through a defined entry point; it is not a magic function name and it is not the same thing as calling a normal function.
+The C P U enforces this border. A system call changes privilege through a defined entry point; it is not a magic function name and it is not the same thing as calling a normal function.
 
-This design is often described as limited direct execution. The game normally runs directly on the CPU for speed, but in user mode and inside its address-space rules. Timers and interrupts let Windows regain control for scheduling. A system call lets the game request a restricted operation through a validated entry path.
+This design is often described as limited direct execution. The game normally runs directly on the C P U for speed, but in user mode and inside its address-space rules. Timers and interrupts let Windows regain control for scheduling. A system call lets the game request a restricted operation through a validated entry path.
 
-The model resolves a common confusion: Windows is not interpreting every ordinary game instruction. Most instructions execute natively. Hardware privilege, address translation, interrupts, and controlled entries provide the limits that let the OS, operating system, remain in control.
+The model resolves a common confusion: Windows is not interpreting every ordinary game instruction. Most instructions execute natively. Hardware privilege, address translation, interrupts, and controlled entries provide the limits that let the O S, operating system, remain in control.
 
 Section: Win32 is the documented application interface.
 
-The documented Win32 API is the part application developers are normally expected to call. Examples from this course include:
+The documented Win32 A P I is the part application developers are normally expected to call. Examples from this course include:
 
 ReadProcessMemory for a read-only inspector with query-and-read rights;
 
@@ -36,11 +34,9 @@ CreateFileW for files and local named pipes;
 
 CreateFileMappingW for a shared-memory object.
 
-Microsoft can change how a supported function is implemented while keeping its documented behavior. On modern Windows, an export in kernel32.dll may forward to another DLL such as KernelBase.dll. Your source code still calls the stable Win32 name.
+Microsoft can change how a supported function is implemented while keeping its documented behavior. On modern Windows, an export in kernel32.dll may forward to another D L L such as KernelBase.dll. Your source code still calls the stable Win32 name.
 
-A forwarded export is not a jump instruction the loader inserts. The export table entry itself can hold a string such as KERNELBASE.CreateFileW in place of a code address. When GetProcAddress resolves that entry, it reads the string, locates the named DLL, and looks up the function there instead — following another forward if that entry also happens to be one. Whoever asked for kernel32!CreateFileW never sees this redirection; they get back a usable address in KernelBase.dll either way, which is exactly why Microsoft can move an implementation between DLLs across Windows versions without breaking the caller’s import:
-
-Diagram. From GetProcAddress(kernel32, 'CreateFileW') to kernel32's export table entry: the string 'KERNELBASE.CreateFileW', not a code address. From kernel32's export table entry: the string 'KERNELBASE.CreateFileW', not a code address to loader locates KernelBase.dll and looks up CreateFileW there. From loader locates KernelBase.dll and looks up CreateFileW there to returns a usable address in KernelBase.dll.
+A forwarded export is not a jump instruction the loader inserts. The export table entry itself can hold a string such as KERNELBASE.CreateFileW in place of a code address. When GetProcAddress resolves that entry, it reads the string, locates the named D L L, and looks up the function there instead — following another forward if that entry also happens to be one. Whoever asked for kernel32!CreateFileW never sees this redirection; they get back a usable address in KernelBase.dll either way, which is exactly why Microsoft can move an implementation between DLLs across Windows versions without breaking the caller’s import:
 
 Section: Native APIs sit closer to the system call.
 
@@ -52,29 +48,27 @@ This is the important rule:
 
 Calling an undocumented entry point or copying a system-call number from one Windows build can make a tool fragile. Numbers and internal structures can change. The course resolves one native export so you can see the layer, but it deliberately does not call it or build a direct-syscall bypass.
 
-Section: DLL exports are names offered to other code.
+Section: D L L exports are names offered to other code.
 
-A DLL can publish an export table. Each exported name maps to an entry that the loader can resolve. GetProcAddress asks a loaded module for one of those exports.
+A D L L can publish an export table. Each exported name maps to an entry that the loader can resolve. GetProcAddress asks a loaded module for one of those exports.
 
-The returned address is a virtual address in the current process. Address Space Layout Randomization, or ASLR, address space layout randomization,, means the same DLL can be mapped at a different base address in another process or after a reboot. Store the name or an RVA, relative virtual address, when that is the stable identity; do not paste a displayed absolute address into tomorrow’s program.
+The returned address is a virtual address in the current process. Address Space Layout Randomization, or A S L R, address space layout randomization,, means the same D L L can be mapped at a different base address in another process or after a reboot. Store the name or an R V A, relative virtual address, when that is the stable identity; do not paste a displayed absolute address into tomorrow’s program.
 
 Section: Build the address inspector.
 
 The lab gets handles to DLLs already loaded in its own process, resolves three names, and prints their process-local addresses. It never opens a game process and never calls the native function:
 
-Diagram. From GetModuleHandleW('kernel32.dll') to exported_address: VirtualQueryEx, ReadFile. From GetModuleHandleW('ntdll.dll') to exported_address: NtQueryVirtualMemory. From exported_address: VirtualQueryEx, ReadFile to print layer, name, address in this run. From exported_address: NtQueryVirtualMemory to print layer, name, address in this run.
-
 Additional detail: Complete lab source: api_layers.rs.
 
-Code example. The code’s comments explain: SAFETY: these DLL names are terminated, static UTF-16 strings. Windows // loads both modules before a normal console program reaches main. let kernel32 equals unsafe { GetModuleHandleW(w!("kernel32.dll")) }?; // SAFETY: ntdll.dll is likewise a terminated, static UTF-16 name for a // module that is already loaded in every normal Windows process. let ntdll equals unsafe { GetModuleHandleW(w!("ntdll.dll")) }?;
+Code example. The code’s comments explain: SAFETY: module is loaded in this process and name is a terminated, static A S C I I string. We only print the returned address. SAFETY: these D L L names are terminated, static UTF-16 strings. Windows loads both modules before a normal console program reaches main. SAFETY: ntdll.dll is likewise a terminated, static UTF-16 name for a module that is already loaded in every normal Windows process.
 
 Section: Why GetModuleHandleW instead of LoadLibraryW?.
 
 Both DLLs are already present in a normal Windows console process. GetModuleHandleW borrows their existing module handles; it does not request another load or add a loader reference that we would later need to release.
 
-Section: Why does GetProcAddress use an ASCII name?.
+Section: Why does GetProcAddress use an A S C I I name?.
 
-PE, portable executable, export names are byte strings. The s! macro creates a terminated static PCSTR. DLL file names use Windows wide strings, so GetModuleHandleW receives values from the w! macro instead.
+P E, portable executable, export names are byte strings. The s! macro creates a terminated static PCSTR. D L L file names use Windows wide strings, so GetModuleHandleW receives values from the w! macro instead.
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -92,9 +86,9 @@ Run it again after restarting the virtual machine and compare the addresses. A d
 
 Then use module_inventory against wesnoth.exe, ac_client.exe, or Quake3-UrT.exe. You are looking at two sides of the same loader idea:
 
-module_inventory shows which DLL images the game loaded;
+module_inventory shows which D L L images the game loaded;
 
-api_layers shows how one process asks a loaded DLL for an exported name.
+api_layers shows how one process asks a loaded D L L for an exported name.
 
 The complete program is api_layers.rs.
 

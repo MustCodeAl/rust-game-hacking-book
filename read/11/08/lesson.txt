@@ -2,11 +2,9 @@ Capture Provenance and Validation
 
 Section: A clean translation can still be the wrong one.
 
-Page-table translation can produce an address and still answer the wrong question. You may have the wrong CR3, a stale object pointer, a different build, or a capture taken between two related updates.
+Page-table translation can produce an address and still answer the wrong question. You may have the wrong c r 3, a stale object pointer, a different build, or a capture taken between two related updates.
 
-None of those mistakes makes the walk fail. A wrong CR3 is still a valid page-table root for some other address space, a stale pointer can still land on mapped memory, and another build’s object still has bytes where the old layout expects fields. A successful walk means only that the page tables in the file lead somewhere; each stage below checks, in a different way, that the somewhere is the object you meant:
-
-Diagram. From capture file to SHA-256 matches the provenance digest?. From SHA-256 matches the provenance digest? to stop: the file changed. The connection is labelled: no. From SHA-256 matches the provenance digest? to walk the page tables with the recorded CR3. The connection is labelled: yes. From walk the page tables with the recorded CR3 to stop: no translation. The connection is labelled: NonCanonical, NotPresent, or OutOfRange. From walk the page tables with the recorded CR3 to a second translator gives the same address?. The connection is labelled: physical address. From a second translator gives the same address? to stop: translation disagreement; check implementation and capture layout. The connection is labelled: no. From a second translator gives the same address? to decode the object layout. The connection is labelled: yes. From decode the object layout to every invariant holds?. From every invariant holds? to reject: wrong object, wrong build, or stale pointer. The connection is labelled: no. From every invariant holds? to accept a PlayerSnapshot. The connection is labelled: yes.
+None of those mistakes makes the walk fail. A wrong c r 3 is still a valid page-table root for some other address space, a stale pointer can still land on mapped memory, and another build’s object still has bytes where the old layout expects fields. A successful walk means only that the page tables in the file lead somewhere; each stage below checks, in a different way, that the somewhere is the object you meant:
 
 Section: Preserve capture provenance.
 
@@ -18,7 +16,7 @@ source machine or virtual machine;
 
 operating-system and game build;
 
-CPU, central processing unit, architecture and paging mode;
+C P U, central processing unit, architecture and paging mode;
 
 capture tool and settings;
 
@@ -26,7 +24,7 @@ UTC capture time;
 
 physical address ranges included or omitted;
 
-CR3 source and the process it belongs to;
+c r 3 source and the process it belongs to;
 
 SHA-256 digest of the unchanged file.
 
@@ -62,8 +60,6 @@ handles resolve with matching generations.
 
 Here is how several of those checks land on one small object, a toy 64-bit player layout:
 
-Labelled memory diagram. +hexadecimal 0 0: vptr; +hexadecimal 0 8: health; +hexadecimal 0 C: x; +hexadecimal 1 0: y; +hexadecimal 1 4: z; +hexadecimal 1 8: begin; +hexadecimal 2 0: end; +hexadecimal 2 8: capacity. Groups: in module .rdata; 0 to max; finite floats, no NaN or infinity; item list, begin less than or equal to end less than or equal to capacity. A 48-byte PlayerLayout: an 8-byte vtable pointer, a 4-byte health value, three 4-byte floats, and three 8-byte container pointers, so 8 + 4 + 3 times 4 + 3 times 8 equals 48 equals 3 times 16 equals hexadecimal 3 0 bytes, and PlayerLayout::SIZE is 48. Each brace is a check on different bytes.
-
 A single field can look right by accident: plenty of unrelated memory holds a small integer that could pass for health. Four checks on different bytes, each failing in its own way, rarely all pass at a wrong address, so an object that passes every one is far more likely to be the one you meant.
 
 Section: Separate capture parsing from game meaning.
@@ -74,13 +70,11 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 The capture layer understands physical ranges and page tables. The layout layer understands fields and invariants. The presentation layer prints a PlayerSnapshot.
 
-Diagram. From capture layer physical ranges, page tables to layout layer fields and invariants. The connection is labelled: bytes, or a MemoryError. From layout layer fields and invariants to presentation layer prints the snapshot. The connection is labelled: PlayerSnapshot, or a PlayerReadError.
-
 This separation keeps an object-layout mistake from corrupting translation code and makes each layer independently testable.
 
 Section: Account for IOMMU and platform protections.
 
-Modern systems use an IOMMU and operating-system policy to restrict DMA, direct memory access,-capable devices. On supported Windows systems, Kernel DMA Protection can isolate peripherals and block unsafe access, especially around externally accessible buses.
+Modern systems use an IOMMU and operating-system policy to restrict D M A, direct memory access,-capable devices. On supported Windows systems, Kernel D M A Protection can isolate peripherals and block unsafe access, especially around externally accessible buses.
 
 For defensive validation:
 
@@ -94,37 +88,19 @@ lock or shut down a machine before leaving it unattended;
 
 follow organizational policy for external PCIe/Thunderbolt devices;
 
-investigate unexpected DMA-capable hardware.
+investigate unexpected D M A-capable hardware.
 
-Do not disable Secure Boot, virtualization-based protections, an IOMMU, or Kernel DMA Protection to make an experiment easier. A blocked path is a successful defense, not a translation failure.
+Do not disable Secure Boot, virtualization-based protections, an IOMMU, or Kernel D M A Protection to make an experiment easier. A blocked path is a successful defense, not a translation failure.
 
 Section: A bypass reveals a failed assumption.
 
-Our capture workflow makes several promises: the hash names the bytes being read, CR3 names the intended address space, bounds protect every physical read, and the decoded object passes its game-specific invariants. A successful page-table walk alone guarantees none of the other promises. A bypass in the wider sense is the same mismatch: a protection checked one signal while the unwanted effect arrived by another path. The table transfers the capture lesson to the controls studied in Chapter 13:
-
-Table columns: Defensive gap; What the control wrongly assumed; Safer lab test.
-
-Defensive gap: Coverage gap; What the control wrongly assumed: Every execution, input, and memory path passes the point it observes; Safer lab test: Send labeled events through toy paths and compare logs.
-
-Defensive gap: Identity gap; What the control wrongly assumed: The name, signer, PID, process identifier,, or handle it trusted cannot change; Safer lab test: Restart/rebuild the toy target and verify identity is re-evaluated.
-
-Defensive gap: Time gap; What the control wrongly assumed: Trusted state stays the same between the check and the use; Safer lab test: Pause between validation and use, mutate a fixture, and expect rejection.
-
-Defensive gap: Parser gap; What the control wrongly assumed: Producer and consumer agree about lengths and encodings; Safer lab test: Feed a corpus of bounded malformed fixtures into both parsers.
-
-Defensive gap: Privilege gap; What the control wrongly assumed: Requests reaching a higher-privilege component are already safe to accept; Safer lab test: Exercise a fake broker with least-privilege test tokens.
-
-Defensive gap: Telemetry gap; What the control wrongly assumed: A blocked action needs no event of its own; Safer lab test: Assert that every allow, deny, timeout, and parse failure has an event.
-
-Defensive gap: Recovery gap; What the control wrongly assumed: A crash cannot leave hooks, input, bytes, or handles in a bad state; Safer lab test: Inject worker errors and verify reverse-order cleanup.
+Our capture workflow makes several promises: the hash names the bytes being read, c r 3 names the intended address space, bounds protect every physical read, and the decoded object passes its game-specific invariants. A successful page-table walk alone guarantees none of the other promises. A bypass in the wider sense is the same mismatch: a protection checked one signal while the unwanted effect arrived by another path. The table transfers the capture lesson to the controls studied in Chapter 13:
 
 An assumption becomes testable once it is stated as an invariant, a condition that must hold every time. For example, an offline tool may promise: “a local fixture write is accepted only when the build matches, the range is expected, the old bytes match, and observation-only mode is off.” The sketch below is a policy check over a toy LabState and WriteRequest, not a function that writes to a process. It returns one named reason for each refusal:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: ✅ Each independent assumption gets a named, testable rejection.
 
 Each ? is a separate exit, so each broken assumption produces its own named denial, and a test can target exactly one of them:
-
-Diagram. From write request to write policy allows writes?. From write policy allows writes? to Denial::ReadOnly. The connection is labelled: no. From write policy allows writes? to build_id matches the verified build?. The connection is labelled: yes. From build_id matches the verified build? to Denial::WrongBuild. The connection is labelled: no. From build_id matches the verified build? to range inside a writable region?. The connection is labelled: yes. From range inside a writable region? to Denial::OutsideAllowedRegion. The connection is labelled: no. From range inside a writable region? to current bytes equal the expected bytes?. The connection is labelled: yes. From current bytes equal the expected bytes? to Denial::StateChanged. The connection is labelled: no. From current bytes equal the expected bytes? to Ok, the write may proceed. The connection is labelled: yes.
 
 The byte comparison runs last, immediately before the toy tool would act. It shortens a time gap; it does not make a remote read and write atomic. A tool that needs that guarantee must arrange exclusive ownership or have the owner of the state validate and apply the request as one operation.
 
@@ -134,7 +110,7 @@ Section: What this chapter intentionally does not provide.
 
 The chapter does not include:
 
-live DMA device setup;
+live D M A device setup;
 
 custom device firmware;
 

@@ -42,8 +42,6 @@ Section: Find one known tile.
 
 In an offline Wesnoth match, compare a currently visible tile with a tile hidden by fog. Search for the observed visibility value, reveal or hide the tile through normal gameplay, and filter again.
 
-Image description: A narrowed set of tile candidates
-
 Repeat with several tiles. You are testing whether candidates belong to:
 
 one tile;
@@ -60,8 +58,6 @@ Section: Break on a normal update.
 
 Set a write breakpoint on a confirmed tile and move a unit so visibility updates.
 
-Image description: The instruction that updates map tiles
-
 Look for:
 
 a base pointer to map data;
@@ -72,7 +68,7 @@ a player or team index;
 
 the value written for hidden, explored, and visible states.
 
-Do not assume a value such as hexadecimal F F F F F F F F means “visible.” It may mean -1, a bit mask, or an uninitialized sentinel. Collect examples for every state you name.
+Do not assume a value such as this value means “visible.” It may mean -1, a bit mask, or an uninitialized sentinel. Collect examples for every state you name.
 
 Section: Model visibility as states.
 
@@ -98,23 +94,21 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 That keeps the experiment observable and easy to shut down.
 
-Image description: A fully revealed local practice map
-
 Section: Reproduce the original Wesnoth map patch.
 
 The original course called this exercise the map hack.
 
-For Wesnoth 1.14.9, the write-breakpoint trail leads to hexadecimal 0 0 6 C D 5 1 9. The original eight-byte sequence updates a visibility column.
+For Wesnoth 1.14.9, the write-breakpoint trail leads to this value. The original eight-byte sequence updates a visibility column.
 
-This build does not store one u32 per tile the way the model earlier in this lesson does. It packs 32 tiles into a single 32-bit column, one bit per tile, so the instructions below are bit-level field assignment rather than the y * width + x array indexing shown above. mov eax, ebp then shl eax, cl builds a single set bit, shifted into the position cl names — the bit that belongs to one specific tile in that column. not eax flips every bit, which turns that into a mask that is 0 at the tile’s position and 1 everywhere else. and dword ptr [esi], eax applies the mask to the stored column, clearing only that one tile’s visibility bit while leaving the other 31 alone. Replacing that full span with the following bytes forces the column bits to 1 using or [esi], hexadecimal F F:
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-The observation, grid model, and debugger experiment above are the core exercise here. For an automated repeat after Lesson 6.4 teaches patch ownership and DLL, dynamic link library, lifecycle, the verified patch object expresses the same byte check and restoration in code:
+This build does not store one u32 per tile the way the model earlier in this lesson does. It packs 32 tiles into a single 32-bit column, one bit per tile, so the instructions below are bit-level field assignment rather than the y * width + x array indexing shown above. mov e a x, e b p then shl e a x, c l builds a single set bit, shifted into the position c l names — the bit that belongs to one specific tile in that column. not e a x flips every bit, which turns that into a mask that is 0 at the tile’s position and 1 everywhere else. and dword ptr [e s i], e a x applies the mask to the stored column, clearing only that one tile’s visibility bit while leaving the other 31 alone. Replacing that full span with the following bytes forces the column bits to 1 using or [e s i], hexadecimal F F:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Move a unit in a local match. As each visibility column is updated, every bit becomes hexadecimal F F F F F F F F, revealing the map as shown above. Call patch.restore() and start a fresh map to confirm fog behaves normally again.
+The observation, grid model, and debugger experiment above are the core exercise here. For an automated repeat after Lesson 6.4 teaches patch ownership and D L L, dynamic link library, lifecycle, the verified patch object expresses the same byte check and restoration in code:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Move a unit in a local match. As each visibility column is updated, every bit becomes this value, revealing the map as shown above. Call patch.restore() and start a fresh map to confirm fog behaves normally again.
 
 The expected bytes are no longer an unnamed profile placeholder: they encode the four instructions shown in the debugger. The injected implementation is enable_wesnoth_map_reveal. After injection, F3 toggles it and End restores it.
 

@@ -2,35 +2,19 @@ Rust Primer: Logic in Code
 
 This lesson gives Rust syntax a purpose. A program runs steps in order, chooses between possible steps, repeats a step, and keeps related state together. Rust has familiar ways to express each of those ideas. We will build one small program around a fictional runner named Mira, who has 12 stamina. A dash uses 4 stamina. A second runner named Sol will let us see why the same rule can serve several records.
 
-Table columns: Programming question; Rust expression in this lesson.
-
-Programming question: What happens first, next, and last?; Rust expression in this lesson: Statements in main, function calls, and assignments..
-
-Programming question: Which path should run?; Rust expression in this lesson: if, match, and if let..
-
-Programming question: What should repeat, and when should it stop?; Rust expression in this lesson: for, while, loop, and collection iterators..
-
-Programming question: Which values belong together?; Rust expression in this lesson: struct, collections, and enum..
-
-Programming question: Who can read or change a value?; Rust expression in this lesson: &, &mut, ownership, and methods..
-
-Programming question: What if a value is missing or an operation fails?; Rust expression in this lesson: Option, Result, and ?..
-
 Section: Give the code a place to run.
 
 Cargo is the tool normally used to build and run Rust projects. After installing a Rust toolchain, a terminal can check that Cargo is available:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-A version number means the command is ready. If it is not installed, the official Rust installation guide explains the supported setup. You can read this primer now and run it after the Windows lab setup in Lesson 1.7 (Alternative: To try a short program sooner, the Rust Playground compiles and runs it in your browser with nothing to install. The Windows tools later in the book still need the lab setup from Lesson 1.7.).
+A version number means the command is ready. If it is not installed, the official Rust installation guide explains the supported setup. You can read this primer now and run it after the Windows lab setup in Lesson 1.7.
 
 Make a project in a folder you control:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 Cargo creates Cargo.toml, which describes the project, and src/main.rs, which holds the starting program. Replace the contents of src/main.rs with the complete program below. The shorter fragments before it each isolate one idea; do not paste all of them into the same file. cargo run compiles and runs it. cargo check checks the code without producing a program you can run. The official Cargo chapter walks through these same commands.
-
-Diagram. From src/main.rs source you edit to cargo run compile. From cargo run compile to running program prints Mira's stamina.
 
 Section: Name the state, then run steps in order.
 
@@ -44,7 +28,7 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Section: Selection: run only the path that fits.
 
-The assignment above assumes the runner has enough stamina (Caution: Without a check, a u32 that would go below zero does not become negative. A debug build stops with a subtract-with-overflow panic; a release build wraps around, so 2 minus 4 gives 4,294,967,294.). To express a rule with two possible paths, use if and else:
+The assignment above assumes the runner has enough stamina. To express a rule with two possible paths, use if and else:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -54,13 +38,13 @@ Section: Repetition: apply the same rule to several inputs.
 
 A for loop repeats a body for each item in a collection. Here the loop tries three dash costs in order, carrying the current stamina into the next attempt:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: stamina is 6: use 4, skip 10, use 2
 
 stamina -= cost is short for stamina equals stamina - cost. The trace is 12 to 8; 10 needs more stamina than remains, so stamina stays 8; using 2 leaves 6. The code shows repetition without writing the dash check three times.
 
 Use for when there is a collection to visit. Use while when the condition determines whether another pass is needed:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: prints Attempt 1, Attempt 2, Attempt 3
 
 Use loop when the body decides exactly when to stop:
 
@@ -80,8 +64,6 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 The order of those lines matters. main starts, creates this sample runner, prints the starting value, asks dash to apply the rule, and prints the new value. The first and last print calls read the same runner record, before and after one controlled change.
 
-Labelled memory diagram. Mira.stamina before: 12; dash cost: 4; Mira.stamina after: 8. Groups: dash checks the cost, then changes Mira's stored stamina. The dash call changes Mira's record; show_stamina only reads it.
-
 Section: Who owns the runner, and who may change it?.
 
 let mut mira creates a mutable runner value inside main. main owns that value for this example. The name field is a String: owned text stored in Mira’s record. u32 is a non-negative whole-number type, suitable for this simple stamina example.
@@ -90,15 +72,13 @@ show_stamina(&mira) lends the function a read-only reference to Mira. The &Runne
 
 Think of Mira’s record as one notebook. show_stamina may read it; dash needs permission to write in it. The analogy stops at the Rust rule: references are checked by the compiler, and Rust will reject conflicting access to the same value during an editable borrow. Lesson 3.1 develops ownership, borrowing, and error handling when we build an external memory tool.
 
-Diagram. From main owns Mira to show_stamina. The connection is labelled: &mira: read. From main owns Mira to dash. The connection is labelled: &mut mira: edit. From dash to main owns Mira. From main owns Mira to show_stamina. The connection is labelled: &mira: read again.
-
 Remove mut from let mut mira and run cargo check: the editable &mut mira call is rejected before the program runs. Put mut back to make the intended change explicit. Compiler messages are useful clues about which part of the code’s promise does not match.
 
 Section: Copy a number, move an owned string.
 
-Ownership (Reference: The Rust Book's chapter on ownership gives the rules with more examples: each value has an owner, there is one owner at a time, and the value is dropped when its owner goes out of scope.) becomes clearer when we compare two assignments. A u32 number is a small Copy value: assigning it to another variable copies the number, so both names remain usable. A String owns growable text; assigning it normally moves ownership to the new name:
+Ownership becomes clearer when we compare two assignments. A u32 number is a small Copy value: assigning it to another variable copies the number, so both names remain usable. A String owns growable text; assigning it normally moves ownership to the new name:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: println!("{name}"); // rejected: name no longer owns it
 
 This does not make a second independent copy of the text. If both names claimed to own the same growable allocation, each might try to release it later. Rust makes the transfer visible to the compiler instead. A borrow such as &mira is different: it lets a function use the value temporarily while Mira remains owned by main.
 
@@ -108,21 +88,7 @@ Section: Punctuation that carries meaning.
 
 Rust’s symbols are easier to read when each has a job:
 
-Table columns: In the example; Read it as.
-
-In the example: name: String; Read it as: a field named name whose type is String.
-
-In the example: to bool; Read it as: this function returns true or false.
-
-In the example: runner.stamina; Read it as: the stamina field in this runner.
-
-In the example: String::from("Mira"); Read it as: call from associated with the String type.
-
-In the example: &mira / &mut mira; Read it as: lend read access / lend editable access.
-
-In the example: println!; Read it as: a printing macro; the ! marks macro syntax.
-
-The braces in println!("{} has {} stamina", ...) mark slots filled by the values after the quoted text. The {dashed} form uses the local variable by name. In a later collection example, use std::collections::{HashMap, VecDeque}; brings two standard-library names into scope; :: walks through their module path.
+The braces in println!("{} has {} stamina"...) mark slots filled by the values after the quoted text. The {dashed} form uses the local variable by name. In a later collection example, use std::collections::{HashMap, VecDeque}; brings two standard-library names into scope; :: walks through their module path.
 
 Section: Grow one runner into the full two-runner program.
 
@@ -166,9 +132,9 @@ A loop is useful when you want to show each step. An iterator can express the sa
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-.iter() walks borrowed values from the array, .copied() makes cheap u32 copies, filter keeps the values that satisfy the condition, and count counts those kept. |stamina| *stamina greater than or equal to 4 is a closure: a small unnamed function supplied right where it is used. *stamina reads the number passed to that closure. The longer for version says the same thing:
+.iter() walks borrowed values from the array.copied() makes cheap u32 copies, filter keeps the values that satisfy the condition, and count counts those kept. |stamina| *stamina greater than or equal to 4 is a closure: a small unnamed function supplied right where it is used. *stamina reads the number passed to that closure. The longer for version says the same thing:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: ready is 2
 
 Use the form that makes the rule clearest. Later labs also use .map(...) to transform each item and .collect() to gather results; the logic is still “visit each item, do something, then produce an answer.”
 
@@ -198,12 +164,6 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 The ::<u32> tells parse which number type we want. match selects one arm by the shape of the result and gives the value inside that arm a name. For "4", the first arm prints Cost: 4. Change the text to "tired" and the error arm runs instead. Both possibilities are written down, so the caller cannot silently treat invalid text as a valid zero cost.
 
-Table columns: Question; Rust shape; Example.
-
-Question: Might there be no value?; Rust shape: Option<T>: Some or None; Example: No item at index 5..
-
-Question: Might an operation fail with a reason?; Rust shape: Result<T, E>: Ok or Err; Example: Text is not a whole number..
-
 The letters T and E stand for the success-value type and error type. You do not need to invent a custom error type yet. Lesson 3.1 returns useful errors from a memory reader and explains where to handle them.
 
 Section: Stop a sequence early with ?.
@@ -212,7 +172,7 @@ Sometimes a function has several steps, and each step can fail. Rust’s ? keeps
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-For "4", parse produces Ok(4), ? gives 4 to cost, and the function returns Ok(4). For "tired", parse produces Err, so the function stops before Ok(cost) and passes that error to its caller. The caller’s match still decides what to do with it. Read ? as “continue with the value, or return the error now.”
+For "4", parse produces Ok(4)? gives 4 to cost, and the function returns Ok(4). For "tired", parse produces Err, so the function stops before Ok(cost) and passes that error to its caller. The caller’s match still decides what to do with it. Read ? as “continue with the value, or return the error now.”
 
 The angle brackets in Result<u32, ParseIntError> supply concrete types to a reusable type: success holds a u32, error holds a parse error. Option<u32>, Vec<u32>, and HashMap<&str, u32> use the same generic pattern with different values inside.
 
@@ -220,15 +180,7 @@ Section: Recognize a few later Rust boundaries.
 
 The book’s memory tools also introduce syntax whose full rules belong beside the tool that needs them. You can still tell what role each plays:
 
-Table columns: Later syntax; Programming idea it expresses; Where it becomes concrete.
-
-Later syntax: trait MemoryReader { ... }; Programming idea it expresses: A promise that different readers provide the same behavior.; Where it becomes concrete: Lesson 3.1.
-
-Later syntax: unsafe { ... }; Programming idea it expresses: A small region where the programmer must uphold rules the compiler cannot verify.; Where it becomes concrete: Lesson 3.1.
-
-Later syntax: extern "system" { ... }; Programming idea it expresses: A call across the Rust–Windows boundary.; Where it becomes concrete: Lesson 5.7.
-
-You can read a lab function as inputs to operation to Result to caller’s decision even before knowing every Windows API, application programming interface, name. The later lesson defines the new boundary when you reach it.
+You can read a lab function as inputs to operation to Result to caller’s decision even before knowing every Windows A P I, application programming interface, name. The later lesson defines the new boundary when you reach it.
 
 Section: Check the rule with a small test.
 

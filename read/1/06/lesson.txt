@@ -6,8 +6,6 @@ Section: Start with evidence, not a scan result.
 
 An observation is what you can actually see: after a 25-gold purchase, the display changes from 100 to 75. An explanation is a hypothesis: perhaps a four-byte value in the game’s memory stores the gold used by the purchase rule. Other explanations are possible. The game may keep a display copy, recalculate gold from other data, or let a server decide the result. A matching number is therefore a candidate, not a conclusion.
 
-Animated diagram: One purchase, one candidate, one test. A game screen showing 100 gold beside a memory panel holding a candidate value of 100. A 25-gold purchase lowers both to 75. The candidate is overwritten with 500 and the purchase repeated: the screen shows 475, so the candidate is part of the rule rather than only the displayed text. Step 1: The screen shows 100 gold. One value in memory also holds 100: a candidate from a scan, not yet proof of anything. Step 2: Act: buy an item whose cost is known, 25 gold. Step 3: Observe: the screen falls from 100 to 75, and the candidate falls with it. Step 4: Hypothesize: perhaps this stored value governs the purchase. It might also be a display copy, so it is a candidate, not a conclusion. Step 5: Test one candidate: write 500 into it, then repeat the purchase. The screen still shows 75, because nothing has been recomputed yet. Step 6: Judge the evidence: the screen now shows 475, which is 500 minus 25. The purchase used the changed value, so the candidate is part of the rule, not just the text on screen. The visible change motivates a hypothesis; the second purchase tests whether the candidate affects the game’s state or only its display.
-
 The fastest way to get completely lost is to open a memory scanner and start searching before deciding what you are asking. You can end up with hundreds of addresses—numbered locations in the game’s running memory—with no way to tell which matters and no record of which ones you have ruled out. A scanner finds values that match a question; a debugger can later show the instruction that reads or writes a candidate. Neither tool supplies the meaning by itself.
 
 Section: Four steps for a controlled experiment.
@@ -23,8 +21,6 @@ Locate the data and code involved.
 Change one thing and measure the result.
 
 The steps can repeat. A failed change often sends you back to improve what you understand or locate a different copy:
-
-Diagram. From 1. Identify one behavior you can repeat to 2. Understand the rules it should follow. From 2. Understand the rules it should follow to 3. Locate the data and the code. From 3. Locate the data and the code to 4. Change one thing, then measure. From 4. Change one thing, then measure to 3. Locate the data and the code. The connection is labelled: only the text changed: you found a display copy. From 4. Change one thing, then measure to 2. Understand the rules it should follow. The connection is labelled: the value snapped back: another system owns it. From 4. Change one thing, then measure to restore, then repeat from a fresh start. The connection is labelled: the prediction held.
 
 Section: 1. Identify the behavior.
 
@@ -63,8 +59,6 @@ The rule also implies conditions that should always hold:
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 The health calculation, stored result, and visible bar are connected, but they need not be one stored value:
-
-Diagram. From damage event: input to calculate 80 minus 25: temporary result. From calculate 80 minus 25: temporary result to store health equals 55: game state. From store health equals 55: game state to resize the health bar: derived display.
 
 These rules help distinguish a value used by the game’s rules from text, animation state, or a cached display value.
 
@@ -110,13 +104,9 @@ The first lab stops after scanning, filtering, and testing a candidate. The brea
 
 Inside one scan, the scanner follows an algorithm over readable regions: ranges of numbered locations the operating system currently permits it to read. It copies one limited chunk at a time:
 
-Diagram. From visit the next readable region to read a bounded chunk. From read a bounded chunk to compare each position with the search value. From compare each position with the search value to record matching addresses. From record matching addresses to more regions?. From more regions? to visit the next readable region. The connection is labelled: yes. From more regions? to later: re-read only earlier candidates and keep matches. The connection is labelled: no.
-
 An algorithm is a repeatable set of steps. The scanner does not know what gold means; it compares bytes according to the value and type you supplied. Even a small choice such as checking only every fourth byte can miss a value starting at one of the positions between those checks.
 
 Each controlled change throws away the candidates that did not change the same way. The numbers below are only an example, but the shape is typical:
-
-Labelled memory diagram. first scan for 100: 4,012; after spending 25 gold: 37; after a second purchase: 3; write breakpoint: 1 instruction, highlighted. Scanning narrows the addresses; a write breakpoint then names the instruction that stores to the survivor, which ties the address to the game's own code rather than to a coincidence of values.
 
 An address found once is only a candidate for that run; its object can even disappear before the run ends. Restarting the game shows whether it is repeatable. If the absolute address moves but a module-relative path keeps working, the path is what carries over, and only for the exact build it was found in.
 
@@ -164,9 +154,9 @@ A debugger lets you pause at the suspicious step and inspect its values and inst
 
 Section: Use tests and types for quick feedback.
 
-Separate code that decides what should happen from code that performs a Windows API, application programming interface, call. In this toy rule, a write is allowed only when the current value still matches the value we expected and the replacement is at most 10,000. That limit is an example policy for this exercise, not a universal gold limit. Pure logic like this can be tested without launching the game:
+Separate code that decides what should happen from code that performs a Windows A P I, application programming interface, call. In this toy rule, a write is allowed only when the current value still matches the value we expected and the replacement is at most 10,000. That limit is an example policy for this exercise, not a universal gold limit. Pure logic like this can be tested without launching the game:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: Both the expected-value check and the replacement limit must pass. A changed field must not pass the expected-value check. The limit is allowed; the next value is not.
 
 The first test passes because 74 is different from the expected 75, so should_write returns false. ! reverses that boolean, making the assertion true. The #[test] marker tells Rust’s test runner to call the function, and assert! fails when its expression is false. The other tests exercise a permitted write and both sides of the 10,000 limit. The Rust test guide explains these test features. The compiler checks types, tests check examples, and the debugger checks the running game. Each one catches mistakes the other two cannot. This function checks the supplied sample; the game may change again after that sample was read.
 

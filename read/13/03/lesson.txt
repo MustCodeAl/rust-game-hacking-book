@@ -8,8 +8,6 @@ An anti-debug routine is often described as a bag of checks. That view hides the
 
 Model it as a protocol with inputs, memory, and outputs. For a deliberately small local fixture:
 
-Diagram labels, in drawing order: begin sample window; ordinary sample; one unusual signal; request another sample; signal repeats; explained by fixture; unexplained invariant failure; reset experiment; Baseline; Measuring; Suspect; Diagnosing; Reported.
-
 This diagram exposes questions a single if debugger_present cannot answer:
 
 Does one sample cause a permanent decision?
@@ -38,19 +36,15 @@ Section: What a Windows program can actually measure.
 
 The state machine above is deliberately abstract, which risks leaving the impression that an “observer signal” is one vague thing. It is not. A Windows program can take the signal from several genuinely different sources, and they differ in what they prove, which is why a signal and the assessment drawn from it are kept apart.
 
-Diagram. From Sources of an anti-debug signal to the loader wrote it down: PEB.BeingDebugged @ +hexadecimal 0 2, NtGlobalFlag, heap Flags/ForceFlags. From Sources of an anti-debug signal to kernel bookkeeping: NtQueryInformationProcess — ProcessDebugPort / ProcessDebugObjectHandle. From Sources of an anti-debug signal to its own code: a checksum notices a hexadecimal C C byte. From Sources of an anti-debug signal to thread context: DR0-DR3, DR7 in a suspended thread. From Sources of an anti-debug signal to who handles an exception first. From Sources of an anti-debug signal to the surrounding machine: parent process, window titles, module list.
-
 Things the loader wrote down. When Windows starts a process for a debugger, it records that fact inside the process itself. The Process Environment Block carries a BeingDebugged byte at offset hexadecimal 0 2, and IsDebuggerPresent is little more than a read of it. The same structure’s NtGlobalFlag field gains heap-checking bits, and the process heap ends up with different Flags and ForceFlags values than it otherwise would. Nothing here measured anything. The loader simply noted what it was asked to do, and the program is reading the note.
 
 Bookkeeping the kernel keeps. A debugged process has a debug object associated with it, and NtQueryInformationProcess will report on that association when asked for ProcessDebugPort or ProcessDebugObjectHandle. Again a record, held somewhere else.
 
 Its own code. Lesson 2.4 showed that a software breakpoint replaces a byte with hexadecimal C C. A checksum over its own instructions notices that change.
 
-Thread context. A hardware breakpoint changes no code bytes, so a checksum misses it entirely. It lives in the CPU, central processing unit,’s debug registers — DR0 through DR3 holding addresses, DR7 holding enable and condition bits — and those registers are part of a thread’s saved context. A debugger can inspect a suspended target thread with GetThreadContext. Windows explicitly says a call on the current running thread can return success with an invalid context; the return code alone is not evidence of its live debug-register values.
+Thread context. A hardware breakpoint changes no code bytes, so a checksum misses it entirely. It lives in the C P U, central processing unit,’s debug registers — d r 0 through d r 3 holding addresses, d r 7 holding enable and condition bits — and those registers are part of a thread’s saved context. A debugger can inspect a suspended target thread with GetThreadContext. Windows explicitly says a call on the current running thread can return success with an invalid context; the return code alone is not evidence of its live debug-register values.
 
 That pair is worth sitting with. Neither kind of breakpoint is invisible, and neither is universally visible; they leave traces in different places. A program checking only its bytes never sees a hardware breakpoint, and one checking only its debug registers never sees a software breakpoint.
-
-Diagram. From software breakpoint: hexadecimal C C byte patch to a byte / checksum check. The connection is labelled: visible to. From hardware breakpoint: DR0-DR3 + DR7 to a debug-register check. The connection is labelled: visible to. From software breakpoint: hexadecimal C C byte patch to a debug-register check. The connection is labelled: invisible to. From hardware breakpoint: DR0-DR3 + DR7 to a byte / checksum check. The connection is labelled: invisible to.
 
 Who handles an exception first. A program can raise an exception on purpose and see whether its own handler runs. If something else took it, something else is attached.
 
@@ -73,18 +67,6 @@ Now try to pick a threshold. Set it at 10 microseconds and ordinary background a
 Repetition gives stronger evidence than one sample, but does not reveal intent. Twenty slow samples from the same code path could reflect a persistent load, power policy, or an attached debugger. That is why the state machine above asks for another sample and then a diagnosis rather than declaring a game-rule violation from a timing number.
 
 Use distributions rather than one magic threshold:
-
-Table columns: Measurement; Useful interpretation.
-
-Measurement: Median; Useful interpretation: Typical sample duration.
-
-Measurement: 95th or 99th percentile; Useful interpretation: Ordinary tail latency.
-
-Measurement: Maximum; Useful interpretation: One extreme event; inspect rather than generalize.
-
-Measurement: Repeated outliers; Useful interpretation: Evidence that the environment changed.
-
-Measurement: Game invariant failure; Useful interpretation: Evidence that game state became invalid.
 
 Establish a baseline on the same fixture, retain raw bounded samples, and report the threshold and sample count. A threshold without its distribution is not a reproducible result.
 
@@ -115,18 +97,6 @@ Name the response precisely. “The game detects a debugger” is weaker than �
 Section: Test false positives and false negatives.
 
 Build a matrix from conditions you can deliberately create in the fixture:
-
-Table columns: Condition; Expected assessment; Expected game effect.
-
-Condition: Normal run; Expected assessment: Ordinary; Expected game effect: Command still validated normally.
-
-Condition: Deliberate short sleep; Expected assessment: Needs another sample; Expected game effect: No state change by the detector.
-
-Condition: Repeated long sleeps; Expected assessment: Needs diagnosis; Expected game effect: Diagnostic event only.
-
-Condition: Explicit observer flag; Expected assessment: Needs diagnosis; Expected game effect: Diagnostic event only.
-
-Condition: Invalid health command with no signals; Expected assessment: Ordinary environment; command rejected; Expected game effect: Health unchanged.
 
 The last row is essential. A quiet environment must not turn an invalid game operation into a valid one.
 

@@ -2,29 +2,15 @@ Byte Signatures and Pattern Scanning
 
 Section: Why patterns help.
 
-Lesson 5.2 recovered a live address by adding the current module base to a known RVA, relative virtual address,. That works for the exact build whose RVA you measured. After a game update, the gold-changing instruction may move within the module, so the old RVA can point at different code even when the base calculation is perfect.
+Lesson 5.2 recovered a live address by adding the current module base to a known R V A, relative virtual address. That works for the exact build whose R V A you measured. After a game update, the gold-changing instruction may move within the module, so the old R V A can point at different code even when the base calculation is perfect.
 
 A byte pattern searches the current module for a distinctive instruction sequence. It gives us a candidate location to check in each explicitly supported build; it does not by itself prove that the candidate is still the gold-changing instruction.
-
-Image description: The gold-changing instruction in two builds
 
 Some bytes encode registers or opcodes and stay stable. Others encode addresses or displacements and may change.
 
 Section: What a signature actually describes.
 
-The CPU, central processing unit, sees one continuous byte stream. The disassembler groups that stream into instructions, and each instruction may contain several kinds of information:
-
-Table columns: Part; Plain-English meaning; Usually stable?.
-
-Part: Opcode; Plain-English meaning: Which operation to perform, such as subtract or call; Usually stable?: Often.
-
-Part: ModR/M and SIB; Plain-English meaning: Which registers and addressing shape to use; Usually stable?: Often.
-
-Part: Displacement; Plain-English meaning: A field offset or distance from another address; Usually stable?: Sometimes.
-
-Part: Immediate; Plain-English meaning: A number stored directly inside the instruction; Usually stable?: Depends on the rule.
-
-Part: Relative target; Plain-English meaning: How far a call or jump travels; Usually stable?: Often changes when code moves.
+The C P U, central processing unit, sees one continuous byte stream. The disassembler groups that stream into instructions, and each instruction may contain several kinds of information:
 
 Suppose two supported builds both subtract a value and then load a nearby field. The instruction shape may stay recognizable while the relative call target between those instructions moves. A useful signature keeps the stable shape and places wildcards over the changing target bytes.
 
@@ -32,7 +18,7 @@ Written out, that comparison looks like this. The same two instructions, taken f
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The first three bytes are sub dword ptr [edi+4], eax: the operation, the registers, and the field offset, none of which the compiler had any reason to change. E8 is a call, and the four bytes after it hold a relative distance to the target, measured from the end of the call instruction. That distance shifts whenever either the calling code or the called function moves, even by a single byte, even though it still calls exactly the same function.
+The first three bytes are sub dword ptr [e d i+4], e a x: the operation, the registers, and the field offset, none of which the compiler had any reason to change. E8 is a call, and the four bytes after it hold a relative distance to the target, measured from the end of the call instruction. That distance shifts whenever either the calling code or the called function moves, even by a single byte, even though it still calls exactly the same function.
 
 So the signature keeps the first four bytes and wildcards the last four:
 
@@ -44,25 +30,15 @@ Section: A signature can overfit one recording.
 
 A pattern overfits when it memorizes accidental details from one executable instead of describing the instruction identity you meant to find. An exact 30-byte sequence may work perfectly on the build used to create it and fail after an unrelated compiler layout change. The opposite mistake is a pattern so loose that it matches ordinary code everywhere.
 
-Table columns: Pattern behavior; Meaning; Correct response.
-
-Pattern behavior: one match only in the design build; Meaning: may be overfitted; Correct response: compare another build you actually intend to support.
-
-Pattern behavior: many matches in the design build; Meaning: under-specified; Correct response: add stable decoded context.
-
-Pattern behavior: one decoded candidate in every declared profile; Meaning: appropriately scoped; Correct response: keep each build fingerprint and semantic check.
-
 When supporting two exact builds, design the candidate signature with one build and test it against the other before calling it version-tolerant. Then reverse the test: bytes from each build should locate the same kind of instruction, not merely return one arbitrary address.
 
 Do not weaken a pattern until it matches an unknown build and then declare success. If the course supports only one build, an exact fingerprint plus a build-specific signature is more honest than pretending the signature is portable. The goal is a pattern that finds the same instruction in every build you named, not the longest or shortest possible byte string.
-
-Diagram. From Find the instruction in a supported build to Decode neighboring instructions. From Decode neighboring instructions to Compare bytes across supported builds. From Compare bytes across supported builds to Keep stable bytes; wildcard explained differences. From Keep stable bytes; wildcard explained differences to Scan only the intended executable section. From Scan only the intended executable section to Require exactly one match. From Require exactly one match to Decode again and verify meaning.
 
 Section: Represent exact and wildcard bytes.
 
 A written signature such as 29 47 04 E8 ?? ?? ?? ?? contains two different kinds of instruction: compare this byte exactly, or accept any byte at this position. Represent that choice in the type rather than reserving a magic value like zero. The matcher below receives copied code bytes, a starting offset, and that typed pattern; it returns false when the whole pattern would run past the buffer.
 
-Code example. The code’s comments explain: 🔍 `Any` consumes exactly one byte too; it relaxes equality, not length. window.iter().zip(pattern).all(|(found, expected)| { matches!(expected, PatternByte::Any) || matches!(expected, PatternByte::Exact(value) if value equals found) })}
+Code example. The code’s comments explain: 📏 Ask for the whole candidate window at once. Near the buffer end, an incomplete window is simply “not a match” instead of an indexing panic. 🔍 `Any` consumes exactly one byte too; it relaxes equality, not length.
 
 The safe matcher makes wildcard meaning and range failure explicit:
 
@@ -88,7 +64,7 @@ Section: Scan safely.
 
 One safe comparison is not a scan yet. The next function tries every start position where the full pattern could fit, collecting offsets in the local buffer. If the buffer has three bytes and the pattern has two, both starts 0 and 1 must be considered; start 1 is easy to miss with an exclusive range.
 
-Code example. The code’s comments explain: ✅ The inclusive end keeps the final legal starting position searchable. (0..=bytes.len() - pattern.len()) .filter(|&offset| matches_at(bytes, offset, pattern)) .collect()}
+Code example. The code’s comments explain: ⚠️ An empty pattern would otherwise appear to match between every byte, and subtracting a longer pattern would underflow. ✅ The inclusive end keeps the final legal starting position searchable.
 
 Use less than or equal to so a match beginning at the final possible offset is included.
 
@@ -108,11 +84,9 @@ Section: Scan the correct range.
 
 Do not scan an entire process by default. Locate the intended module and executable section, copy that bounded region, and scan the local buffer.
 
-Image description: The loaded Wesnoth modules
+For a P E, portable executable, image, confirm:
 
-For a PE, portable executable, image, confirm:
-
-DOS and PE signatures;
+DOS and P E signatures;
 
 section table bounds;
 
@@ -120,7 +94,7 @@ executable characteristic;
 
 virtual address plus size stays in the module.
 
-Libraries such as goblin can parse PE files, but live in-memory images still need careful address and section validation.
+Libraries such as goblin can parse P E files, but live in-memory images still need careful address and section validation.
 
 This separation matters. ReadProcessMemory works at the Windows boundary and can fail because a page changed. Once the bytes are in a local Vec<u8>, the matching loop uses only checked slices: no remote pointers, no changing protections, and no partial Windows reads during comparisons.
 
@@ -128,7 +102,7 @@ Section: Require one match.
 
 The scan returns a list because one pattern can occur more than once. Before turning an offset into a candidate instruction address, make the three possible counts explicit. Returning the first entry would disguise an ambiguous signature as a successful find.
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: 🎯 “First result wins” hides ambiguity. All three match counts are handled explicitly so a weak pattern cannot choose code by accident.
 
 Picking the first of five matches is not version tolerance.
 
@@ -156,8 +130,6 @@ check the supported module fingerprint;
 
 reject an unknown build.
 
-Image description: Comparing a signature across versions
-
 Section: Test edge cases.
 
 A two-byte pattern at the end of a three-byte buffer exercises the range boundary that ordinary middle-of-buffer examples miss. The expected offset is 1, so this test catches an accidental exclusive upper bound:
@@ -166,15 +138,13 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Follow that boundary test as two candidate windows. All byte values below are hexadecimal; offset 1 must be included in the scan:
 
-Animated diagram: Sliding a two-byte pattern over a three-byte buffer. A buffer of three bytes, 10 20 30, and a two-byte pattern, 20 30. The pattern is tried at offset 0, where 10 does not equal 20, and then at offset 1, where both bytes match. Offset 1 is the final legal start, so the search must include it. Step 1: The scanner has copied three bytes from the game, 10 20 30, and is looking for the two-byte pattern 20 30. Both positions must match exactly; this pattern has no wildcards. Step 2: How many places can the pattern start? The last legal start is 3 minus 2 equals 1, so the offsets to try are 0 through 1, inclusive: two candidate windows. Step 3: Offset 0: the window holds 10 and 20. The first exact byte, 10, is not 20, so this window does not match, and the second byte is never needed. Step 4: Slide the pattern one byte to offset 1: the window holds 20 and 30. Step 5: Both exact comparisons pass: 20 equals 20 and 30 equals 30. This is the final legal window, and it holds the only match. Step 6: find_all returns offset 1, so the test expects [1]. If the loop stopped one start too early, with an exclusive upper bound, it would skip this window and report nothing. A range boundary is part of correctness. Matching bytes still leaves the separate checks for build identity and instruction meaning.
-
 Also test empty patterns, all wildcards, a pattern longer than input, no matches, overlapping matches, and multiple matches.
 
 A useful test asks the program to do something and checks an observable result. It does not merely repeat the code it is supposedly checking:
 
-Code example. The code’s comments explain: ❌ This only proves that a two-item array has two items.#[test]fn pattern_has_the_length_we_just_wrote() { let pattern equals [hexadecimal 2 0, hexadecimal 3 0]; assert_eq!(pattern.len(), 2);}
+Code example. The code’s comments explain: ❌ This only proves that a two-item array has two items.
 
-By contrast, the boundary test above can catch a real off-by-one bug. That is the standard to use when AI, artificial intelligence, or autocomplete suggests tests too: ask what incorrect implementation would make the test fail. If the answer is “none,” the test is decoration.
+By contrast, the boundary test above can catch a real off-by-one bug. That is the standard to use when A I, artificial intelligence, or autocomplete suggests tests too: ask what incorrect implementation would make the test fail. If the answer is “none,” the test is decoration.
 
 A pattern only finds where bytes match. It does not replace target-version checks or instruction decoding.
 
@@ -206,25 +176,13 @@ The complete executable is pattern_scanner.rs. Shared ToolHelp module discovery,
 
 Additional detail: Complete lab source: pattern_scanner.rs.
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+Code example. The code’s comments explain: 🔒 Code signatures belong in executable image pages, not heaps or unrelated readable allocations that happen to share three bytes. 📏 Clip Windows' page-sized region to the exact module interval. 🔍 Copy once, then scan safe local slices while the game keeps running.
 
 Notice the order: restrict to the correct module, restrict again to readable executable regions, copy each region, scan the safe local copy, then demand one result. A three-byte match identifies a candidate only; patching requires a separately verified address and expected bytes.
 
 Section: When results are wrong.
 
 When a scan result is wrong
-
-Table columns: Symptom; Most likely question to ask.
-
-Symptom: No matches; Most likely question to ask: Is this the exact supported executable and correct architecture?.
-
-Symptom: Many matches; Most likely question to ask: Is the signature too short or too full of wildcards?.
-
-Symptom: Read failure; Most likely question to ask: Did the region change, or was its protection classified incorrectly?.
-
-Symptom: Match points into data; Most likely question to ask: Did the scan include a non-executable section?.
-
-Symptom: Correct bytes, wrong behavior; Most likely question to ask: Did you decode enough surrounding instructions and verify the function?.
 
 Error messages should preserve this distinction. “Scanner failed” is not actionable; “pattern matched six locations in executable regions” tells the learner exactly which assumption to revisit.
 

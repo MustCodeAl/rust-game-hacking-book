@@ -6,27 +6,21 @@ In the previous memory lab, we found the current gold. Now we want to know:
 
 Which instruction subtracts the price of a recruited unit?
 
-Use the same offline Wesnoth 1.14.9 target and restore your clean VM, virtual machine, snapshot before starting. For a concrete run, suppose you start at 100 gold and recruit a unit costing 15. The expected result is 85. Use the actual price and gold shown in your match when checking the paused instruction.
+Use the same offline Wesnoth 1.14.9 target and restore your clean V M, virtual machine, snapshot before starting. For a concrete run, suppose you start at 100 gold and recruit a unit costing 15. The expected result is 85. Use the actual price and gold shown in your match when checking the paused instruction.
 
 Section: Attach x64dbg.
 
-Launch Wesnoth, begin a local match, and find the gold address again. Then attach x64dbg (Reference: The x64dbg documentation covers every view and menu used in this lesson.) to the running process.
+Launch Wesnoth, begin a local match, and find the gold address again. Then attach x64dbg to the running process.
 
-Image description: The Attach command in x64dbg
-
-Image description: Selecting the Wesnoth process
-
-The CPU, central processing unit, view contains four useful areas:
+The C P U, central processing unit, view contains four useful areas:
 
 disassembly—the instructions near the current position;
 
-registers—the CPU’s current scratch values;
+registers—the C P U’s current scratch values;
 
 dump—raw memory;
 
 stack—return addresses and temporary data.
-
-Image description: The main x64dbg view
 
 Attaching may pause in Windows system code. That is normal. Resume the process before triggering your experiment.
 
@@ -34,11 +28,7 @@ Section: Go to the gold address.
 
 Open the dump view’s “go to expression” command and enter the address found by the memory scanner.
 
-Image description: Going to an address in the dump
-
-Image description: The player gold address in memory
-
-The bytes in the dump are little-endian. If the gold is 100, the 32-bit value hexadecimal 0 0 0 0 0 0 6 4 appears as:
+The bytes in the dump are little-endian. If the gold is 100, the 32-bit value shown here appears as:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -60,21 +50,17 @@ Cheat Engine
 
 Right-click the gold entry in the address list and choose Find out what writes to this address. Cheat Engine lists each instruction that writes it, with a count.
 
-A hardware memory breakpoint does not replace the game’s instruction bytes. The debugger programs special CPU debug registers with an address, access type, and width. When an instruction writes across that watched range, the CPU raises a debug exception and Windows reports it to the debugger.
+A hardware memory breakpoint does not replace the game’s instruction bytes. The debugger programs special C P U debug registers with an address, access type, and width. When an instruction writes across that watched range, the C P U raises a debug exception and Windows reports it to the debugger.
 
 The width matters. Gold is believed to be a four-byte value, so watch all four bytes. Watching one byte can still trigger, but it hides whether the game wrote the complete integer or only part of it.
 
 This breakpoint watches a data address, not one fixed instruction. If three different functions write gold, the same watch can reveal all three. A software breakpoint placed on a code address answers the opposite question: “When does this exact instruction execute?”
-
-Image description: Setting a write breakpoint on gold
 
 Resume the game and recruit one unit. The debugger should pause close to an instruction that resembles:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 Do not copy the exact register or offset from this page. Read the instruction in your own debugger. A hardware data breakpoint can report an access after the instruction has run, so the highlighted next instruction may not be the one that wrote gold. Use the breakpoint’s access information and nearby disassembly to identify the triggering write, then confirm that its calculated destination is your gold address. Builds and runs can differ.
-
-Image description: The instruction that changes player gold
 
 Section: Ask the five assembly questions.
 
@@ -94,7 +80,7 @@ Now compare the price register with the unit’s price. In the example run, it s
 
 Section: Read an instruction as state transition.
 
-For sub dword ptr [reg+offset], eax, the complete before-and-after effect is:
+For sub dword ptr [reg+offset], e a x, the complete before-and-after effect is:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -110,31 +96,27 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 read it from the inside outward:
 
-take the address currently stored in esi;
+take the address currently stored in e s i;
 
 add hexadecimal offset hexadecimal 3 0;
 
 treat the four bytes at that final address as the destination;
 
-subtract the lower 32 bits of eax from that destination;
+subtract the lower 32 bits of e a x from that destination;
 
 store the result back to the same four bytes;
 
-update CPU flags for later branches.
+update C P U flags for later branches.
 
-The bracketed expression accesses memory. Without brackets, esi+30h would be an address calculation rather than a read or write of the bytes at that address.
+The bracketed expression accesses memory. Without brackets, e s i+30h would be an address calculation rather than a read or write of the bytes at that address.
 
-Read the live value of esi in the register panel and add hexadecimal 3 0 yourself. For example, if esi holds hexadecimal 0 A 3 C 1 2 0 0, the destination is hexadecimal 0 A 3 C 1 2 0 0 + hexadecimal 3 0 equals hexadecimal 0 A 3 C 1 2 3 0. If the sum equals the candidate gold address, this instruction writes the gold you found.
+Read the live value of e s i in the register panel and add hexadecimal 3 0 yourself. For example, if e s i holds this value, the destination is this value + hexadecimal 3 0 equals this value. If the sum equals the candidate gold address, this instruction writes the gold you found.
 
 Section: Test with a reversible patch.
 
-Copy the original instruction bytes first, so you can write them back. Then temporarily replace the entire subtraction instruction with the same number of nop bytes (Example: The length comes from the encoding. sub [edx+4], eax is the three bytes 29 42 04, so it takes three 90 bytes. sub [edx+hexadecimal 1 2 3 4], eax is the six bytes 29 82 34 12 00 00, so it takes six. The disassembly's bytes column shows the count.).
-
-Image description: Filling the instruction with NOP bytes
+Copy the original instruction bytes first, so you can write them back. Then temporarily replace the entire subtraction instruction with the same number of nop bytes.
 
 Resume and recruit another unit. If gold no longer decreases, this instruction is the one that subtracts the price. Restore the original bytes immediately afterward.
-
-Image description: The patched instruction
 
 Section: Turn one discovery into a repeatable patch.
 
@@ -155,8 +137,6 @@ Checking the original bytes is crucial. Refusing to patch an unknown version is 
 Section: Clean up.
 
 Remove the breakpoint through x64dbg’s Breakpoints tab and confirm the original instruction is restored.
-
-Image description: The Breakpoints tab
 
 The scan gave us a candidate value; the write breakpoint gave us a specific instruction and the register values from one recruitment. The reversible patch checked its effect, but the instruction may also run for other gold-changing actions. Lesson 2.6 follows the call path to find which rule brought execution here.
 

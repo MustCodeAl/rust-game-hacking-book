@@ -2,9 +2,7 @@ Local Proxies and Bidirectional Streams
 
 Section: What a proxy does.
 
-A local TCP, transmission control protocol, proxy accepts a client connection, opens a connection to your local server, and relays bytes both ways.
-
-Diagram. From Wesnoth client to Local proxy 127.0.0.1:27015. From Local proxy 127.0.0.1:27015 to Local server 127.0.0.1:15000. From Local server 127.0.0.1:15000 to Local proxy 127.0.0.1:27015. From Local proxy 127.0.0.1:27015 to Wesnoth client.
+A local T C P, transmission control protocol, proxy accepts a client connection, opens a connection to your local server, and relays bytes both ways.
 
 Begin as a transparent relay. If the protocol fails before you modify anything, fix the relay first. This first version treats bytes as bytes. Only after it passes the normal Wesnoth login should the proxy switch to the framed, message-aware upstream path below. The two modes have different failure behavior: a transparent relay does not need to decode; a message-aware relay must decide what to do when decoding fails.
 
@@ -22,7 +20,7 @@ The standard library can copy a stream until EOF:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-TCP is full duplex, so run two relays:
+T C P is full duplex, so run two relays:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -42,8 +40,6 @@ If you parse frame previews, cap their length and avoid logging secrets or full 
 
 Section: Diagnose handshake failures.
 
-Image description: A failed local handshake
-
 When a transparent proxy fails, compare direct and proxied captures:
 
 Did both directions start?
@@ -56,9 +52,7 @@ Is there TLS (Transport Layer Security, the encryption behind HTTPS) or a certif
 
 Did a relay block because it waited for EOF?
 
-Did one side expect a UDP, user datagram protocol, companion channel?
-
-Image description: Comparing the handshake data
+Did one side expect a U D P, user datagram protocol, companion channel?
 
 Do not bypass certificate validation. For encrypted protocols, create a development configuration with certificates you control.
 
@@ -68,7 +62,7 @@ The safest next step is a tee:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Keep parsing off the relay’s critical path. If the parser cannot keep up, drop log entries rather than blocking the connection. This tee is for observation. It cannot decide where to insert a new message, because a TCP read does not identify a frame boundary. The insertion path therefore waits for a complete bounded frame and handles parse errors explicitly.
+Keep parsing off the relay’s critical path. If the parser cannot keep up, drop log entries rather than blocking the connection. This tee is for observation. It cannot decide where to insert a new message, because a T C P read does not identify a frame boundary. The insertion path therefore waits for a complete bounded frame and handles parse errors explicitly.
 
 Section: Inject a real local Wesnoth chat response.
 
@@ -76,11 +70,11 @@ The original lab used proxy port 27015 and server port 15000. Start wesnothd.exe
 
 For injection, one task must own the upstream writer so two threads cannot interleave bytes. After the special four-zero negotiation has passed, have the client-to-server path read one complete Wesnoth frame at a time. Forward the original bytes unchanged, but inspect a decoded copy:
 
-Code example. The code’s comments explain: 📦 Preserve the legitimate game packet exactly as captured and send // it first; inspecting a copy must not silently replace normal traffic. server.write_all(&original)?;
+Code example. The code’s comments explain: 📦 `read_frame` returns one complete length-prefixed message. A plain `read` here could split one frame or combine several frames. A decode error stops this modified upstream path before sending this frame. The transparent relay above has no such dependency on parsing. 📦 Preserve the legitimate game packet exactly as captured and send it first; inspecting a copy must not silently replace normal traffic. 🔒 This task is the sole owner of `server`, so the original and injected frames cannot be interleaved by the reverse relay.
 
 Keep the server-to-client direction as an ordinary transparent relay. The handshake needs one small state flag because its first four zero bytes are not a gzip frame; forward those four bytes directly before switching the upstream parser into framed mode.
 
-The contains check is enough only for this controlled one-command fixture. It could match that text inside an unrelated WML field. A general proxy should parse the WML tree from Lesson 8.3 and inspect the actual chat-message field and session state before inserting a response. The complete lab below uses the same narrow shortcut, so do not treat it as a general message router.
+The contains check is enough only for this controlled one-command fixture. It could match that text inside an unrelated W M L field. A general proxy should parse the W M L tree from Lesson 8.3 and inspect the actual chat-message field and session state before inserting a response. The complete lab below uses the same narrow shortcut, so do not treat it as a general message router.
 
 Now send \wave from the real Wesnoth client. The server receives both the original command and the injected Hello! message on the already authenticated connection. This is the practical advantage of the proxy: the official client performs its own login while the proxy observes and modifies the loopback traffic.
 
@@ -114,10 +108,10 @@ Connect the official Wesnoth 1.14.9 client to localhost:27015. Type \wave after 
 
 Additional detail: Complete lab source: wesnoth_proxy.rs.
 
-Code example. The code’s comments explain: 🔀 Clones share each socket but each thread owns one traffic direction. // Only `upstream` ever writes to the game server, preserving frame order. let client_control equals client.try_clone()?; let server_control equals server.try_clone()?; let upstream_client equals client.try_clone()?; let downstream_server equals server.try_clone()?; let up equals thread::spawn(move || upstream(upstream_client, server)); let down equals thread::spawn(move || downstream(downstream_server, client)); let upstream_result equals up .join() .map_err(|_| anyhow::anyhow!("upstream thread panicked")) .and_then(|result| result); if upstream_result.is_err() { let _ equals client_control.shutdown(Shutdown::Both); let _ equals server_control.shutdown(Shutdown::Both); } let downstream_result equals down .join() .map_err(|_| anyhow::anyhow!("downstream thread panicked")) .and_then(|result| result); upstream_result?; downstream_result?; Ok(())}
+Code example. The code’s comments explain: ⚠️ The negotiation request is the protocol's one unframed client message. ✅ EOF stops this direction before any incomplete frame is forwarded. 🔁 Forward the authentic frame even when it does not trigger the lab. 🧹 Signal “no more client bytes” while leaving the read half available for the downstream task to drain the server's final response. 🔀 Clones share each socket but each thread owns one traffic direction. Only `upstream` ever writes to the game server, preserving frame order.
 
 Only the upstream task writes to the server. That single-writer rule prevents the original frame and injected frame from being interleaved. The downstream task stays byte-for-byte transparent, so one experimental hook cannot accidentally rewrite both directions.
 
-The proxy needs TCP because its two endpoints are network clients. When two cooperating programs run on the same computer, they can exchange the same kind of bounded message through shared memory or a named pipe instead. Lessons 8.7–8.8 compare those local transports.
+The proxy needs T C P because its two endpoints are network clients. When two cooperating programs run on the same computer, they can exchange the same kind of bounded message through shared memory or a named pipe instead. Lessons 8.7–8.8 compare those local transports.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/6/06/

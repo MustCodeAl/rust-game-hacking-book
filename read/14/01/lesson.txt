@@ -4,7 +4,7 @@ The tools so far have asked Windows for something: a handle to a game, a copy of
 
 This lesson answers four questions. How does the processor keep ordinary programs away from the kernel’s powers? How does a program ask the kernel for something anyway? What does the kernel do with its authority? And why can one kernel bug stop the whole computer, when a bug in a game only ends the game? A four-byte ReadProcessMemory request will carry these questions through the user/kernel boundary. The next lesson reads the exact bits the processor checks and follows the request one layer at a time.
 
-The API, application programming interface, layers in the previous lesson showed the route a request takes. Here we examine the authority that makes that route work. After the privilege checks, a crash dump will bring threads, modules, and saved registers back together into one process snapshot. Chapter 12 then follows requests across DLL, dynamic link library, and device boundaries; Chapter 14 builds on that foundation to explain virtual machines and hardware.
+The A P I, application programming interface, layers in the previous lesson showed the route a request takes. Here we examine the authority that makes that route work. After the privilege checks, a crash dump will bring threads, modules, and saved registers back together into one process snapshot. Chapter 12 then follows requests across D L L, dynamic link library, and device boundaries; Chapter 14 builds on that foundation to explain virtual machines and hardware.
 
 Section: Two modes, enforced by the processor.
 
@@ -24,7 +24,7 @@ Section: What ring 3 is not allowed to do.
 
 At ring 3 the processor refuses two kinds of thing.
 
-Privileged instructions. Some instructions only make sense for whoever runs the machine. hlt stops the processor until the next interrupt. cli turns interrupts off, which would silence the timer the kernel relies on to take the processor back. mov cr3, rax switches to a different set of page tables, which selects a process’s whole view of memory. The physical-memory lessons in Chapter 12 will follow those page tables. wrmsr rewrites the processor’s internal settings. At ring 3, each of these raises a general-protection fault instead of running, and the kernel turns the fault into an exception that normally ends the program.
+Privileged instructions. Some instructions only make sense for whoever runs the machine. hlt stops the processor until the next interrupt. cli turns interrupts off, which would silence the timer the kernel relies on to take the processor back. mov c r 3, r a x switches to a different set of page tables, which selects a process’s whole view of memory. The physical-memory lessons in Chapter 12 will follow those page tables. wrmsr rewrites the processor’s internal settings. At ring 3, each of these raises a general-protection fault instead of running, and the kernel turns the fault into an exception that normally ends the program.
 
 Memory marked for the kernel. Page-table entries carry a user/supervisor bit, bit 2. When it is 0 on a present mapping, a ring-3 access causes a page fault. Windows reserves a system range of virtual addresses for the kernel. In a traditional shared page table, kernel pages can be mapped there alongside a game’s pages, but their supervisor bit still blocks the game. With KVA shadow, the user-mode page table omits most kernel mappings and keeps only the pages needed to enter the kernel; entry code switches to the fuller kernel page table. In either arrangement, a game cannot read or write the kernel’s privileged pages. Lesson 11.11 compares the flag bits of a user page and a kernel page.
 
@@ -34,7 +34,7 @@ Section: A system call is how a program asks.
 
 If ring 3 cannot touch kernel memory or raise its own level, how does ReadProcessMemory ever reach code that can read another process? Through a system call: an instruction that switches the processor to ring 0 and jumps to an address the kernel chose. On x86-64 the instruction is syscall. When the processor executes it, it:
 
-copies the address of the next instruction into rcx and the flags register into r11, so the kernel can come back later;
+copies the address of the next instruction into r c x and the flags register into r 1 1, so the kernel can come back later;
 
 switches the privilege level to 0;
 
@@ -44,21 +44,17 @@ Step 3 is what makes the design safe. A program chooses when to request a servic
 
 Section: Follow one call into the kernel and back.
 
-Take a read like the ones in Lesson 11.5: a handle to the game opened with only query and read rights, and a request for 4 bytes at address hexadecimal 0 0 5 0 1 0 0 0. Here is the whole round trip:
+Take a read like the ones in Lesson 11.5: a handle to the game opened with only query and read rights, and a request for 4 bytes at address shown here. Here is the whole round trip:
 
-Diagram labels, in drawing order: Windows kernel; CPU, central processing unit,; ntdll.dll; kernel32 and kernelbase; Your tool; ring 3 to ring 0,; jump to the kernel's entry point; check both address ranges,; check the handle's rights,; copy 4 bytes from the game; ring 0 to ring 3,; resume after the syscall; ReadProcessMemory(handle, hexadecimal 5 0 1 0 0 0, buffer, 4); NtReadVirtualMemory with the same arguments; service number in eax, then syscall; entry code saves the user registers; status in eax, then sysret; STATUS_SUCCESS; success, 4 bytes read.
-
-Your tool’s call passes through kernel32.dll and kernelbase.dll, the layers that Lesson 11.9 followed down the stack, to NtReadVirtualMemory in ntdll.dll. That function is only a few instructions long: it puts a service number, which tells the kernel which of its routines to run, into the eax register, and executes syscall.
+Your tool’s call passes through kernel32.dll and kernelbase.dll, the layers that Lesson 11.9 followed down the stack, to NtReadVirtualMemory in ntdll.dll. That function is only a few instructions long: it puts a service number, which tells the kernel which of its routines to run, into the e a x register, and executes syscall.
 
 On the other side, the kernel’s entry code moves onto a stack of its own and saves your registers. Then the kernel’s own NtReadVirtualMemory checks the request before touching anything. Both address ranges, the 4 bytes in the game and your tool’s buffer, must lie in user space, which is why ReadProcessMemory can never read kernel memory, whatever handle you hold. And the handle must carry the right the operation needs: PROCESS_VM_READ for a read, which this handle has, or PROCESS_VM_WRITE for a write, which it lacks. A handle’s rights are fixed when it is opened, and nothing done with it afterward can add one.
 
-Only then does the kernel copy the 4 bytes into your buffer. It puts a status code in eax, here STATUS_SUCCESS, which is 0, and executes sysret, the reverse of syscall, which drops the level back to 3 and resumes your thread after its syscall. On a failure, kernelbase.dll turns the status into the error number that GetLastError reports, such as 5 for access denied. Lesson 11.11 follows each step with the values involved, including the arithmetic of the rights check.
+Only then does the kernel copy the 4 bytes into your buffer. It puts a status code in e a x, here STATUS_SUCCESS, which is 0, and executes sysret, the reverse of syscall, which drops the level back to 3 and resumes your thread after its syscall. On a failure, kernelbase.dll turns the status into the error number that GetLastError reports, such as 5 for access denied. Lesson 11.11 follows each step with the values involved, including the arithmetic of the rights check.
 
 Section: How the kernel regains control.
 
 A system call is one common way execution crosses from a user thread into the kernel. Two others are exceptions, raised by the instruction that is running (a page fault, a division by zero, the int3 breakpoint), and interrupts, signals that arrive between instructions whether or not the running program expects them.
-
-Diagram. From user-mode code ring 3 to system-call entry. The connection is labelled: syscall instruction. From user-mode code ring 3 to exception handler. The connection is labelled: fault or breakpoint during an instruction. From device or timer to interrupt handler. The connection is labelled: interrupt between instructions. From system-call entry to kernel work ring 0. From exception handler to kernel work ring 0. From interrupt handler to kernel work ring 0. From kernel work ring 0 to user-mode code ring 3. The connection is labelled: return to ring 3.
 
 The kernel does not interpret each ordinary game instruction. These entries bring a user thread into kernel code when work needs its authority. Windows also schedules its own kernel worker threads for work that need not begin in a game’s call. Both facts fit the same model: the kernel is code with privileged responsibilities, and the processor enforces who may run it.
 
@@ -70,7 +66,7 @@ Section: It schedules threads.
 
 A computer has a handful of processor cores and, at any moment, hundreds or thousands of threads (Lesson 11.8 described ready, running, and waiting threads). The kernel’s scheduler decides which ready thread runs on each core. Timer interrupts are one opportunity to reconsider that choice; a thread blocking for input or a lock is another. Timer resolution and interrupt scheduling vary by Windows version, hardware, and power state, so a fixed tick interval is not a reliable description of every game session.
 
-When a running thread stops to wait for input, a lock, or a timer, or when its turn is interrupted, the scheduler can pick another thread. Changing threads is a context switch: the kernel saves the old thread’s registers into its context, loads the new thread’s registers, and, if the new thread belongs to a different process, loads that process’s top-level page-table address into cr3. The program never sees the switch. Its registers come back exactly as they were.
+When a running thread stops to wait for input, a lock, or a timer, or when its turn is interrupted, the scheduler can pick another thread. Changing threads is a context switch: the kernel saves the old thread’s registers into its context, loads the new thread’s registers, and, if the new thread belongs to a different process, loads that process’s top-level page-table address into c r 3. The program never sees the switch. Its registers come back exactly as they were.
 
 Section: It manages every process’s memory.
 
@@ -94,8 +90,6 @@ When user-mode code follows a bad pointer, the processor raises a page fault and
 
 There is no separate part of Windows that can repair arbitrary damage to its own kernel state. A hypervisor may isolate a whole guest from the host, as Lesson 14.1 will show, but it cannot resume a guest kernel whose internal records are already corrupted. Kernel code does catch faults it expects, such as touching a user buffer that another thread may have freed; the copy behind ReadProcessMemory is written to catch exactly those. But a driver that follows a bad pointer by mistake can raise an unexpected fault inside the kernel, and kernel code and drivers share an address space and a set of data structures: the scheduler’s lists, the memory manager’s page records, and the locks that guard them. The fault may have struck halfway through updating one of those structures, with a lock still held. Windows cannot generally prove which of its own records remain sound, and carrying on could write corrupted data to disk. For an unrecoverable kernel failure, Windows stops on purpose.
 
-Diagram. From code follows a bad pointer to privilege level of the faulting code. From privilege level of the faulting code to kernel handles the page fault. The connection is labelled: ring 3. From kernel handles the page fault to access violation for that one process. From access violation for that one process to the process handles it or ends, everything else keeps running. From privilege level of the faulting code to no general in-OS, operating system, repair for damaged kernel state. The connection is labelled: ring 0, unexpected. From no general in-OS repair for damaged kernel state to shared kernel state may be half updated. From shared kernel state may be half updated to bug check: stop code, crash dump, restart.
-
 That deliberate stop is a bug check, better known as the blue screen. Windows shows a stop code, such as hexadecimal 5 0 PAGE_FAULT_IN_NONPAGED_AREA or hexadecimal D 1 DRIVER_IRQL_NOT_LESS_OR_EQUAL, writes a crash dump of the whole machine if it can (Lesson 11.12 will capture a dump of one process), and restarts.
 
 This is why the book keeps its labs in user mode and inside a virtual machine. The kernel trust lesson will make that design choice concrete with a read-only driver inventory. A crash in a user-mode lab ends one process, and even a bug check inside a virtual machine stops only that virtual machine (Lesson 14.1).
@@ -106,7 +100,7 @@ Anti-cheat software exists to notice when another program interferes with a game
 
 A kernel component changes that balance. Running in ring 0 lets it use documented Windows facilities that user-mode code cannot reach:
 
-process and image-load notifications, so it learns about every new process and every DLL or driver as it loads, instead of scanning for them afterward;
+process and image-load notifications, so it learns about every new process and every D L L or driver as it loads, instead of scanning for them afterward;
 
 handle-operation callbacks, which run while another process opens a handle to the game and may remove rights from the request. A tool that asks for read and write rights can receive a handle without them, and its ReadProcessMemory then fails at exactly the rights check described above;
 

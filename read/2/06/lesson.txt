@@ -8,8 +8,6 @@ A code cave is a spare executable area used for extra code. A detour redirects e
 
 The road-diversion image behind the name is worth taking literally, because every part of it maps onto something you have to get right. You put a sign at one junction sending traffic down a side road that rejoins the main road further along. You have not demolished the main road, so traffic can be restored by removing the sign. The side road must rejoin — a diversion that just stops leaves everyone stranded, which is what a detour with no return jump does. And the sign has to replace a whole junction, not half of one, which is the instruction-boundary problem below.
 
-Diagram. From original code runs up to the hook site to hook site: a jump now sits where whole instructions were. From hook site: a jump now sits where whole instructions were to cave: save registers and flags. From cave: save registers and flags to cave: run the extra logic. From cave: run the extra logic to cave: restore registers and flags. From cave: restore registers and flags to cave: replay the replaced instructions. From cave: replay the replaced instructions to jump back to the return address. From jump back to the return address to original code continues.
-
 Section: A detour needs five parts.
 
 A responsible detour has:
@@ -30,23 +28,17 @@ Section: Instructions are not all the same size.
 
 On x86, one instruction may be 1 byte and another may be 7 bytes. A typical near jump needs 5 bytes. You must replace whole instructions until you have enough room.
 
-The reason is that the CPU, central processing unit, keeps no map of where instructions begin. It starts decoding at whatever address it is handed and reads forward, letting each opcode announce how many bytes it consumes. Start it one byte late and every instruction from that point on is decoded from the wrong position.
+The reason is that the C P U, central processing unit, keeps no map of where instructions begin. It starts decoding at whatever address it is handed and reads forward, letting each opcode announce how many bytes it consumes. Start it one byte late and every instruction from that point on is decoded from the wrong position.
 
 Take the six-byte span this lesson hooks:
 
-Labelled memory diagram. hexadecimal 1 0 0 0: 8B; cell 2: 01; hexadecimal 1 0 0 2: 8D; cell 4: 74; cell 5: 26; cell 6: 00. Groups: mov eax, [ecx]; lea esi, [esi]. Two whole instructions, six bytes.
-
-A five-byte jump written over it covers 8B 01 8D 74 26 and strands the final 00. When the cave later returns to hexadecimal 1 0 0 5, the CPU does not see “the leftover tail of a lea.” It sees a fresh byte stream beginning with 00, which starts a completely different instruction that swallows whatever follows as its operands. Execution continues confidently into nonsense, and the crash usually surfaces somewhere unrelated a few instructions later — which is what makes this mistake so hard to diagnose after the fact.
-
-Labelled memory diagram. hexadecimal 1 0 0 0: E9; cell 2: ??; cell 3: ??; cell 4: ??; cell 5: ??; hexadecimal 1 0 0 5: 00, highlighted. Groups: jmp to the cave; stranded. Bad: exactly five bytes copied. The cave returns to hexadecimal 1 0 0 5, and the CPU starts a new instruction at the orphaned 00.
-
-Labelled memory diagram. hexadecimal 1 0 0 0: E9; cell 2: ??; cell 3: ??; cell 4: ??; cell 5: ??; cell 6: 90. Groups: jmp to the cave; nop. Good: both whole instructions covered, the spare byte filled with nop. The cave returns to hexadecimal 1 0 0 6, the first untouched byte.
+A five-byte jump written over it covers 8B 01 8D 74 26 and strands the final 00. When the cave later returns to hexadecimal 1 0 0 5, the C P U does not see “the leftover tail of a lea.” It sees a fresh byte stream beginning with 00, which starts a completely different instruction that swallows whatever follows as its operands. Execution continues confidently into nonsense, and the crash usually surfaces somewhere unrelated a few instructions later — which is what makes this mistake so hard to diagnose after the fact.
 
 So you round up to the next instruction boundary: cover all six bytes and fill the spare sixth byte with a nop. The return address is the hook address plus the total number of whole bytes replaced.
 
-Section: Follow the detour before writing a DLL, dynamic link library,.
+Section: Follow the detour before writing a D L L, dynamic link library.
 
-For the pinned Wesnoth 1.14.9 build, the Terrain Description menu reaches a six-byte span at hexadecimal 0 0 C C A F 8 A: 8B 01 8D 74 26 00. The first two bytes encode mov eax,[ecx]; the other four encode an alignment lea. A jump needs five bytes, so it must cover both whole instructions and resume at hexadecimal 0 0 C C A F 9 0, the first untouched byte.
+For the pinned Wesnoth 1.14.9 build, the Terrain Description menu reaches a six-byte span at this value: 8B 01 8D 74 26 00. The first two bytes encode mov e a x,[e c x]; the other four encode an alignment lea. A jump needs five bytes, so it must cover both whole instructions and resume at this value, the first untouched byte.
 
 This short x86 sketch puts code beside the flow diagram above. The two instructions near the end replay the behavior removed from the hook site; the final jump lands after all six covered bytes:
 
@@ -54,7 +46,7 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 extra_logic is a placeholder, not a ready-to-install hook. The exact implementation also has to verify the original bytes, encode a reachable relative jump, and restore the patch when disabled.
 
-Lesson 2.10 uses x64dbg to trace that route with breakpoints before adding behavior. Lesson 6.4 then builds the full DLL version: checked gold pointer path, naked x86 cave, relative jump bytes, saved registers and flags, injector commands, F1 toggle, and restoration. The exact code and stack diagram live beside that runnable implementation.
+Lesson 2.10 uses x64dbg to trace that route with breakpoints before adding behavior. Lesson 6.4 then builds the full D L L version: checked gold pointer path, naked x86 cave, relative jump bytes, saved registers and flags, injector commands, F1 toggle, and restoration. The exact code and stack diagram live beside that runnable implementation.
 
 Section: Why assembly is still required.
 
@@ -70,7 +62,7 @@ build a patch plan;
 
 restore original bytes automatically;
 
-expose a small safe API, application programming interface,.
+expose a small safe A P I, application programming interface.
 
 The final jump bytes and an in-process hook still require unsafe code and a small amount of assembly. Typed code manages the larger, error-prone lifecycle:
 
@@ -92,6 +84,6 @@ make repeated enable/disable operations safe.
 
 This habit will shape the wrappers we build later.
 
-The key distinction is lifecycle code versus boundary code. The manager owns the patch, validates the target, reports failures, and restores state. Assembly describes the few CPU instructions that must run at the exact hijacked boundary.
+The key distinction is lifecycle code versus boundary code. The manager owns the patch, validates the target, reports failures, and restores state. Assembly describes the few C P U instructions that must run at the exact hijacked boundary.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/2/06/
