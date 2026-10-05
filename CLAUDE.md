@@ -276,22 +276,13 @@ physical-board programming requires the documented board configuration.
 Game Fundamentals and the problem-solving explanations are expanded with local
 examples. Data-model, cache/index, and asynchronous stream/batch explanations
 belong in the network/file introductions where their context is available.
-`AnimatedFlow` teaches an ordered process with explicit playback, accessible
-stepping, reduced motion, and complete static/print explanations. `LessonVideo`
-embeds the retained silent clips with native controls and a download fallback.
-Keep framing tied to the chapter and stage colours tied to documented reading
-roles; preserve all original visuals. Walkthroughs never start automatically.
-There are now **42 animated lessons**, three per displayed chapter. The shared
-walkthrough renders a connected SVG with labelled nodes, short state values,
-and a signal that traces the currently playing connection. Keep that diagram,
-the direct step buttons, the written explanation, and the state value in sync.
-Current/Done/Next labels and dashed upcoming nodes make state visible without
-depending on colour. Fourteen tours animate the original Mermaid graph using
-authored source node IDs and an explicit path. Preserve those graphs and paths.
-System reduced motion suppresses moving effects while Play still advances
-steps. On Play permits effects on explicit request; Off keeps manual steps.
-Playback speed is a saved choice of two, four, or six seconds per step. The
-complete static/print explanation remains available.
+That pass introduced 42 step-through diagrams. They have since all been replaced
+by causal `Scene` animations, described below. Keep actual source values, copied
+data, call routes, geometry, and ownership visible. The complete steps remain in
+HTML and print. Reader editions retain compact final pictures, silently, while
+the surrounding prose explains their meaning. `LessonVideo` embeds the retained
+silent clips with native controls and a download fallback. Reduced motion keeps
+the final picture and manual controls; motion settings govern playback.
 The current validation and publication receipt are in BOOK_REVISION_PROGRESS.md.
 
 The complete firmware/fundamentals/media build is source **b54a88b**, published
@@ -535,8 +526,7 @@ bar is always shown; and the listening dock is compact in landscape.
 
 ## Animations (scenes) and the previous/next arrows
 
-**Scenes replace the old step-through diagrams.** `AnimatedFlow` only lit up one box after
-another, which the user called "a slide show". A scene (`<Scene name="x" />`, definition in
+**All 42 step-through diagrams are now causal scenes.** A scene (`<Scene name="x" />`, definition in
 `site/src/scenes/x.mjs`) is a set of parts (boxes, cells, text, lines, queues) with keyframe
 tracks that move or change them, so the data the lesson talks about really moves: a number is
 copied into a format and converted, a pointer's bytes reverse into an address, `call` pushes a
@@ -554,11 +544,13 @@ for the "Follow my device" motion setting and not for reduced motion.
 - Always look at a scene before wiring it in: `node scripts/scene-png.mjs <dir> <name>` draws one
   still per step (no browser); `scripts/scene-sheet.mjs` does the same with the site's styles.
   Check for overlapping labels, text running off the edge, and parts that start off screen.
-- `python3 swap_flow.py` style swap: replace the `<AnimatedFlow …/>` block with
-  `<Scene name="…" />` and import `Scene` from `components/Scene.astro`. A scene name may appear
+- Add `<Scene name="…" />` and import `Scene` from `components/Scene.astro`. A scene name may appear
   once per page (its id is `scene-<name>`).
-- Done so far (15 of 42): 1.3, 1.6, 1.8, 2.2, 2.3, 2.4, 3.1, 3.3, 3.7, 4.4, 4.9, 4.10, 5.1, 5.2,
-  5.4. The other 27 `AnimatedFlow`s are still the old component.
+- The obsolete step-through component, stylesheet, runtime, and reader special
+  cases are removed. `check-reader-scenes.mjs` verifies all current scene
+  pictures in both reader variants and the complete explanations in print.
+- Make the final frame useful as a static picture. Retain labelled completed or
+  released states where fading everything out would leave an empty diagram.
 
 **Previous/next arrows.** `public/scripts/pager.js` copies the two bottom links into a pair of
 tabs beside the text (level with the middle of the screen, coloured for the chapter they lead

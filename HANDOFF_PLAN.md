@@ -85,10 +85,9 @@ The quiz-bank, quiz controls, and chapter-completion requests are newly queued
 work, not yet verified or published. Complete them with the metadata/progress
 work in T7 or immediately after it; do not lose them after the urgent release.
 
-Current task state: T1 is complete and published. T2 contains the four scene
-conversions plus the urgent reader/layout/audio changes above and has passed
-local verification; publish the verified commit and confirm it live. T3 still
-has 23 old step-through diagrams to replace. T4
+Current task state: T1 and T2 are complete, published, and confirmed live. T2
+source `a505cfd` is published at `gh-pages` `1c8e249`. T3 is complete and verified locally: all 23 remaining walkthroughs were replaced,
+for 42 causal scenes in total. T3 publication is next. T4
 through T8 remain required: CC0 artwork/GIFs, Source engine lesson, defensive
 anti-cheat chapter, metadata/reader counts, and additional typing practice.
 

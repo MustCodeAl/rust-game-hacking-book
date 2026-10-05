@@ -12,7 +12,7 @@ sidebar:
 import { Badge, GitHub } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
-import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
+import Scene from '../../../../components/Scene.astro';
 
 ## A program file is not a running process
 
@@ -170,30 +170,7 @@ Walking internal loader pointers is useful when you are learning in a debugger. 
 
 The shared wrapper keeps that unsafe boundary in one reviewed function. Here is the order of Windows calls it makes before it ever returns a module base and size:
 
-<AnimatedFlow
-  nativeDiagram
-  title="Find one loaded module by snapshot"
-  stages={[
-    { label: 'Take the snapshot', detail: 'Ask Windows for the target process module list.', role: 'input', value: 'module snapshot', nodes: ['A'] },
-    { label: 'Own the handle', detail: 'Wrap the snapshot so it closes at scope exit.', role: 'process', value: 'OwnedHandle', nodes: ['B'] },
-    { label: 'Read an entry', detail: 'Windows fills a correctly sized MODULEENTRY32W.', role: 'state', value: 'module record', nodes: ['C'] },
-    { label: 'Compare its name', detail: 'Check the record against the requested module.', role: 'process', value: 'name matches?', nodes: ['D'] },
-    { label: 'Return its range', detail: 'This tour follows the yes branch to base and size.', role: 'output', value: 'base + size', nodes: ['E'] },
-  ]}
-  caption="This follows a successful first-match lookup; a miss advances with Module32NextW, while end-of-list and other errors take the branches also shown in the graph."
->
-```mermaid
-flowchart TD
-    A["CreateToolhelp32Snapshot"] --> B["OwnedHandle::from_raw<br/>(closes itself when dropped)"]
-    B --> C["Module32FirstW<br/>fills the first MODULEENTRY32W"]
-    C --> D{"szModule matches<br/>wanted_name?"}
-    D -->|"yes"| E["return modBaseAddr, modBaseSize"]
-    D -->|"no"| F["Module32NextW"]
-    F -->|"Ok(())"| D
-    F -->|"no more files"| G["anyhow::bail!<br/>module not found"]
-    F -->|"other error"| H["return Err"]
-```
-</AnimatedFlow>
+<Scene name="module-snapshot" />
 
 ```rust
 pub fn module(&self, wanted_name: &str) -> anyhow::Result<(usize, usize)> {

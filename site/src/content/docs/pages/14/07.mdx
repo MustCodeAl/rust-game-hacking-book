@@ -11,7 +11,7 @@ sidebar:
 ---
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Quiz from '../../../../components/Quiz.astro';
-import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
+import Scene from '../../../../components/Scene.astro';
 
 [Lesson 11.10](/pages/14/01/) showed the processor keeping user-mode code away
 from the kernel and drew one `ReadProcessMemory` call crossing into the kernel
@@ -219,18 +219,7 @@ two modes use different code segments, which is why `cs` reads `0023` in a
 illustrates the native 64-bit path, not every instruction a 32-bit caller runs.
 :::
 
-<AnimatedFlow
-  title="A four-byte read crosses the privilege boundary"
-  stages={[
-    { label: 'Submit the user-mode request', role: 'input', value: '4 bytes at 0x00501000', detail: 'The tool requests four bytes from game address 0x0050_1000 into its own buffer. Its process handle carries rights 0x1010: limited query plus memory read.' },
-    { label: 'Follow the application wrappers', role: 'process', value: 'ring 3; NtReadVirtualMemory', detail: 'ReadProcessMemory passes through kernel32 and kernelbase to the ntdll stub. This remains user-mode code. The stub preserves the first argument in r10 and selects the current build’s system service number.' },
-    { label: 'Enter the prepared kernel path', role: 'state', value: 'ring 0; kernel dispatch', detail: 'syscall enters the address the kernel prepared. Entry code saves the user context, switches to the thread’s kernel stack, validates the service number, and dispatches the request.' },
-    { label: 'Validate ranges and authority', role: 'process', value: '0x1010 & 0x0010 = 0x0010', detail: 'The kernel checks the source range ending at 0x0050_1004 and the destination buffer, then checks the handle’s read right. Every needed bit survives the AND, so this handle authorizes a read; its missing write bit would still prevent a write.' },
-    { label: 'Copy in the correct address spaces', role: 'process', value: 'game memory → tool buffer', detail: 'The source belongs to the game and the destination to the tool. The kernel interprets both in their proper process context while copying. A page becoming unavailable can still cause a failed or partial read.' },
-    { label: 'Return and check the result', role: 'output', value: 'ring 3; check bytes read', detail: 'sysret resumes the user-mode stub with an NTSTATUS result. kernelbase translates failures into the Win32 interface. The tool checks success and the returned byte count before treating its buffer as four valid bytes.' },
-  ]}
-  caption="This follows the native 64-bit route explained above. A 32-bit caller adds the WoW64 translation stage. Crossing into ring 0 gives Windows the authority to check and copy; it does not add rights to the caller’s handle."
-/>
+<Scene name="privilege-copy" />
 
 <Quiz
   id="kernel-handle-rights-and"

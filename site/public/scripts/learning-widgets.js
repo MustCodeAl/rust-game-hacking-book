@@ -1374,65 +1374,121 @@
 
   function initializePointerWalk(root) {
     root.replaceChildren();
+    root.setAttribute("data-reader-skip", "");
     root.append(
       makeLabHeader(
         "Pointer walk",
-        "Follow a chain one operation at a time",
-        "Step through a tiny fake address space. Notice when the tool adds an offset and when it reads a pointer stored at the resulting address."
+        "Calculate an address, then copy what it holds",
+        "Step through the capture above. Adding an offset moves the read location; reading copies a value while memory stays in place."
       )
     );
-
+    // These addresses and the gold value are the worked capture in Lesson 2.7.
     const steps = [
-      { label: "Module base", value: "0x00400000", operation: "Start at a location Windows can resolve each run." },
-      { label: "Root slot", value: "0x00400120", operation: "Add 0x120. This calculates an address; it does not read memory yet." },
-      { label: "Manager", value: "0x00500000", operation: "Read the pointer stored in the root slot. This is the first dereference." },
-      { label: "Player", value: "0x00700000", operation: "Add 0x18, then read the pointer stored there. This is the second dereference." },
-      { label: "Gold field", value: "0x00700030", operation: "Add the final field offset 0x30. Read the gold value here; do not follow it as another pointer." }
+      { code: "address = module_base;", address: "0x14000000", operation: "Start at the module base. No memory has been read." },
+      { code: "address += root_offset;", address: "0x15A2B3C0", source: 0, operation: "Add 0x01A2B3C0 to 0x14000000. The result selects the root slot; it is still an address." },
+      { code: "address = read_pointer(address);", address: "0x04531180", read: 0, operation: "Copy the pointer from the root slot into address. The root slot keeps its value." },
+      { code: "address += 0x18;", address: "0x04531198", source: 1, operation: "Add 0x18 to the manager pointer. The new address selects its player-pointer field." },
+      { code: "address = read_pointer(address);", address: "0x0691A200", read: 1, operation: "Copy the player pointer from that field. The field itself does not move." },
+      { code: "address += 0x30;", address: "0x0691A230", source: 2, operation: "Add 0x30 to the player pointer. This selects gold; there is no further pointer to follow." },
+      { code: "gold = read_u32(address);", address: "0x0691A230", read: 2, operation: "Copy four bytes into gold. Their value is 250. Keep the field address separate from that ordinary game value." }
     ];
-
     const body = element("div", "concept-lab__body");
-    const path = element("div", "concept-lab__pointer-path");
-    const cards = steps.map((step, index) => {
-      const card = element("button", "concept-lab__pointer-node");
-      card.type = "button";
-      card.dataset.pointerStep = String(index);
-      card.append(
-        element("span", "concept-lab__pointer-step", `Step ${index + 1}`),
-        element("strong", "", step.label),
-        element("code", "", step.value)
-      );
-      path.append(card);
-      return card;
+    const code = element("ol", "pointer-tracer__code");
+    const codeLines = steps.map((step) => {
+      const item = element("li", "");
+      item.append(element("code", "", step.code));
+      code.append(item);
+      return item;
     });
-    const explanation = element("div", "concept-lab__pointer-explanation");
-    const explanationTitle = element("strong", "");
-    const explanationText = element("p", "");
-    explanation.append(explanationTitle, explanationText);
+    const ns = "http://www.w3.org/2000/svg";
+    const svgNode = (tag, attrs, text) => {
+      const node = document.createElementNS(ns, tag);
+      Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    const picture = svgNode("svg", { viewBox: "0 0 500 192", class: "pointer-tracer__picture", "aria-hidden": "true" });
+    const viewport = element("div", "pointer-tracer__viewport");
+    viewport.append(picture);
+    picture.append(svgNode("text", { x: 8, y: 16 }, "Captured memory"));
+    const sources = [
+      ["0x15A2B3C0", "0x04531180", "Root pointer"],
+      ["0x04531198", "0x0691A200", "Player pointer"],
+      ["0x0691A230", "250", "Gold, four bytes"]
+    ];
+    const sourceBoxes = sources.map(([address, value, label], index) => {
+      const y = 26 + index * 48;
+      const box = svgNode("rect", { x: 8, y, width: 175, height: 39, rx: 3, class: "pointer-tracer__memory" });
+      picture.append(box,
+        svgNode("text", { x: 16, y: y + 15, class: "pointer-tracer__small" }, address),
+        svgNode("text", { x: 16, y: y + 31, class: "pointer-tracer__mono" }, value));
+      return box;
+    });
+    const route = svgNode("path", { d: "", class: "pointer-tracer__route" });
+    const chip = svgNode("g", { class: "pointer-tracer__copy", opacity: 0 });
+    chip.append(svgNode("rect", { x: 0, y: 0, width: 104, height: 28, rx: 3 }));
+    const copied = svgNode("text", { x: 52, y: 18, "text-anchor": "middle", class: "pointer-tracer__mono" }, "");
+    chip.append(copied);
+    picture.append(route, chip,
+      svgNode("text", { x: 335, y: 16 }, "Local values"),
+      svgNode("rect", { x: 335, y: 26, width: 155, height: 46, rx: 3, class: "pointer-tracer__register" }),
+      svgNode("text", { x: 343, y: 42, class: "pointer-tracer__small" }, "address"));
+    const addressValue = svgNode("text", { x: 343, y: 61, class: "pointer-tracer__mono" }, "");
+    const goldValue = svgNode("text", { x: 343, y: 107, class: "pointer-tracer__mono" }, "gold: not read");
+    picture.append(addressValue, goldValue);
+    const explanationText = element("p", "pointer-tracer__explanation");
+    explanationText.setAttribute("role", "status");
     const controls = element("div", "concept-lab__step-controls");
-    const previous = element("button", "concept-lab__example", "← Previous");
+    const previous = element("button", "concept-lab__example", "Previous");
     previous.type = "button";
-    const next = element("button", "concept-lab__example", "Next →");
+    const next = element("button", "concept-lab__example", "Next operation");
     next.type = "button";
-    controls.append(previous, next);
-    body.append(path, explanation, controls);
+    const reset = element("button", "concept-lab__example", "Reset");
+    reset.type = "button";
+    const position = element("small", "");
+    controls.append(previous, next, reset, position);
+    body.append(code, viewport, explanationText, controls);
     root.append(body);
-
     let activeStep = 0;
+    let animationTimer;
     function render(step) {
+      clearTimeout(animationTimer);
       activeStep = Math.max(0, Math.min(steps.length - 1, step));
-      cards.forEach((card, index) => {
-        card.classList.toggle("is-active", index === activeStep);
-        card.classList.toggle("is-visited", index < activeStep);
-        card.setAttribute("aria-current", index === activeStep ? "step" : "false");
+      const current = steps[activeStep];
+      codeLines.forEach((item, index) => {
+        item.classList.toggle("is-active", index === activeStep);
+        item.setAttribute("aria-current", index === activeStep ? "step" : "false");
       });
-      explanationTitle.textContent = `${steps[activeStep].label} · ${steps[activeStep].value}`;
-      explanationText.textContent = steps[activeStep].operation;
+      const source = current.read ?? current.source;
+      sourceBoxes.forEach((box, index) => box.classList.toggle("is-selected", index === source));
+      addressValue.textContent = current.address;
+      goldValue.textContent = activeStep === 6 ? "gold: 250" : "gold: not read";
+      explanationText.textContent = current.operation;
+      position.textContent = `${activeStep + 1} / ${steps.length}`;
+      chip.setAttribute("opacity", "0");
+      route.setAttribute("d", "");
+      if (current.read !== undefined) {
+        const sourceY = 26 + current.read * 48;
+        const targetY = current.read === 2 ? 100 : 54;
+        route.setAttribute("d", `M183 ${sourceY + 20} H270 V${targetY} H335`);
+        copied.textContent = sources[current.read][1];
+        chip.style.transition = "none";
+        chip.style.transform = `translate(191px, ${sourceY + 6}px)`;
+        chip.setAttribute("opacity", "1");
+        if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          animationTimer = setTimeout(() => {
+            chip.style.transition = "transform 550ms ease";
+            chip.style.transform = `translate(223px, ${targetY - 14}px)`;
+          }, 20);
+        }
+      }
       previous.disabled = activeStep === 0;
       next.disabled = activeStep === steps.length - 1;
     }
-    cards.forEach((card) => card.addEventListener("click", () => render(Number(card.dataset.pointerStep))));
     previous.addEventListener("click", () => render(activeStep - 1));
     next.addEventListener("click", () => render(activeStep + 1));
+    reset.addEventListener("click", () => render(0));
+    window.addEventListener("pagehide", () => clearTimeout(animationTimer), { once: true });
     render(0);
   }
 

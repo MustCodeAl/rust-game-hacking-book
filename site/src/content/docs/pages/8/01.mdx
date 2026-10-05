@@ -10,8 +10,8 @@ sidebar:
   label: "6.2 In-Process DLLs and Loader Boundaries"
 ---
 import { GitHub } from '../../../../components/kit';
+import Scene from '../../../../components/Scene.astro';
 
-import AnimatedFlow from '../../../../components/AnimatedFlow.astro';
 
 ## External versus in-process
 
@@ -55,30 +55,7 @@ Resolve short-lived pointers near the point of use. Copy the few fields you need
 
 The safe path has distinct stages instead of one giant startup function:
 
-<AnimatedFlow
-  nativeDiagram
-  title="Follow an in-process tool's lifetime"
-  stages={[
-    { label: 'Load the library', detail: 'Windows maps the DLL into the target process.', role: 'input', value: 'DLL loaded', nodes: ['A'] },
-    { label: 'Keep DllMain small', detail: 'The loader callback does only safe, minimal work.', role: 'process', value: 'tiny callback', nodes: ['B'] },
-    { label: 'Start explicitly', detail: 'A separate export begins work after loading finishes.', role: 'process', value: 'gha_start', nodes: ['C'] },
-    { label: 'Verify the build', detail: 'Refuse a target whose bytes or layout are unsupported.', role: 'state', value: 'supported build?', nodes: ['D'] },
-    { label: 'Own worker state', detail: 'The worker holds the lab resources it will later release.', role: 'process', value: 'worker active', nodes: ['E'] },
-    { label: 'Request shutdown', detail: 'Stop new work before removing any owned feature.', role: 'process', value: 'stop requested', nodes: ['F'] },
-    { label: 'Restore and unload', detail: 'Return changed state and release ownership in order.', role: 'output', value: 'clean exit', nodes: ['G'] },
-  ]}
-  caption="Loading, starting, verifying, working, and stopping are separate phases; cleanup follows the ownership established during startup."
->
-```mermaid
-flowchart TD
-    A["Windows loads DLL"] --> B["Tiny DllMain"]
-    B --> C["Explicit gha_start"]
-    C --> D["Verify target build"]
-    D --> E["Worker owns lab state"]
-    E --> F["Request stop"]
-    F --> G["Restore and unload"]
-```
-</AnimatedFlow>
+<Scene name="dll-lifetime" />
 
 Each stage earns the capabilities used by the next one, and shutdown releases them in a controlled order.
 

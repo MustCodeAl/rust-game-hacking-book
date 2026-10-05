@@ -2,7 +2,7 @@
 // parts that make sense when spoken or exported as plain text.
 import { tableMedia } from './reader-table.mjs';
 
-const BLOCKS = 'h1, h2, h3, h4, h5, h6, p, li, summary, figcaption, table, pre, img, aside[data-margin-note], figure[data-scene], figure[data-animated-flow], figure.mem-figure, figure.lesson-video';
+const BLOCKS = 'h1, h2, h3, h4, h5, h6, p, li, summary, figcaption, table, pre, img, aside[data-margin-note], figure[data-scene], figure.mem-figure, figure.lesson-video';
 const SKIP = '[data-reader-skip], .reader-tools, .academy-quiz, .concept-lab, .ownership-scope, .projection-lab, .kit-card__body, .academy-hovercard, [role="tooltip"], nav, script, style, noscript, [hidden], [aria-hidden="true"]';
 const ACRONYMS = {
 	CPU: 'central processing unit',
@@ -225,13 +225,12 @@ export function collectReadableBlocks(article, includeCode = false) {
 	for (const element of article.querySelectorAll(BLOCKS)) {
 		if (element.closest(SKIP)) continue;
 		const tag = element.tagName.toLowerCase();
-		const flow = element.closest('[data-animated-flow]');
 		const scene = element.closest('[data-scene]');
 		const margin = element.closest('[data-margin-note]');
 		const memory = element.closest('.mem-figure');
 		const video = element.closest('.lesson-video');
 		const table = element.closest('table');
-		if ((margin && margin !== element) || (scene && scene !== element) || (flow && flow !== element) || (memory && memory !== element) || (video && video !== element) || (table && table !== element)) continue;
+		if ((margin && margin !== element) || (scene && scene !== element) || (memory && memory !== element) || (video && video !== element) || (table && table !== element)) continue;
 		if (table === element) {
 			add('Lesson table', element, 'table', tableMedia(element));
 			continue;
@@ -245,26 +244,6 @@ export function collectReadableBlocks(article, includeCode = false) {
 			const alt = cleanReaderText(element.querySelector('.scene__alt')?.textContent);
 			const caption = cleanReaderText(element.querySelector('.scene__caption')?.textContent);
 			add(`Diagram: ${title}. ${caption}`, element, 'diagram', svgMedia(element.querySelector('svg'), alt || title));
-			continue;
-		}
-		if (flow === element) {
-			const title = cleanReaderText(element.querySelector('.animated-flow__header strong')?.textContent);
-			const picture = element.ownerDocument.createElement('table');
-			const heading = picture.insertRow?.() || picture.appendChild(element.ownerDocument.createElement('tr'));
-			const headingCell = element.ownerDocument.createElement('th');
-			headingCell.setAttribute('colspan', '2'); headingCell.textContent = title; heading.append(headingCell);
-			const steps = [...element.querySelectorAll('[data-flow-stage]')].map((stage, index) => {
-				const label = cleanReaderText(stage.querySelector('[data-flow-label]')?.textContent);
-				const value = cleanReaderText(stage.querySelector('[data-flow-value]')?.textContent);
-				const detail = cleanReaderText(stage.querySelector('[data-flow-detail]')?.textContent);
-				const row = element.ownerDocument.createElement('tr');
-				for (const text of [`${index + 1}. ${label}`, value]) {
-					const cell = element.ownerDocument.createElement('td'); cell.textContent = text; row.append(cell);
-				}
-				picture.append(row);
-				return `Step ${index + 1}: ${label}. ${value ? `State: ${value}. ` : ''}${detail}`;
-			});
-			add(`Diagram walkthrough: ${title}. ${steps.join(' ')} ${cleanReaderText(element.querySelector('.animated-flow__caption')?.textContent)}`, element, 'diagram', tableMedia(picture));
 			continue;
 		}
 		if (memory === element) {

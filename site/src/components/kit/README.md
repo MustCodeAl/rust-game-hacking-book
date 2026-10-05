@@ -23,7 +23,7 @@ decoration; if the page reads as well without it, leave it out.
 | `Tooltip` | A sentence or two on a word a reader may not know and the lesson does not depend on, with the real numbers if it has any. It is a `HoverCard` of kind `explanation`. | A word used in many places (that is a glossary entry), or anything a later step needs. |
 | `Scene` | A mechanism that is easier to see move than to read: bytes, pointers, a stack, a queue, messages between two parties. Parts really move and change over time; the steps are written under it. Never a list of boxes that light up in turn. | A fixed picture (use a diagram), or anything that is only a sequence of names. See `CLAUDE.md`, "Animations (scenes)". |
 | `SpeedType` | A short block of code (5 to 15 lines, plain ASCII) the lesson has just explained, which a reader can type out for practice: words per minute, accuracy, a personal best. | Long listings, code full of comments or symbols a keyboard cannot type, or code the lesson has not explained yet. |
-| `Frame` | A screenshot or figure with a caption. Put the full description in the image's alt text; the caption is visual only. | Decorative images. |
+| `Frame` | A screenshot or figure with a caption. Describe the picture in alt text and explain necessary concepts in nearby prose. Reader editions keep the picture silent. | Decorative images. |
 | `Badge` | A short fact about what follows: "Optional", "Windows only". | Labelling a heading that already says it. |
 | `HoverCard` | An extra a reader can do without, opened over a word: an `example`, `reference`, `tip`, `alternative`, `recommendation`, closer `explanation`, `definition`, or `caution`. A glossary word needs none: the build marks those. | Anything a later step, value, or definition depends on: a reader can turn cards off, and a phone needs a tap. Never more than a few in a lesson; a card is not a footnote. |
 | `Fields` / `ParamField` / `ResponseField` | A function, request, or structure documented name by name, with long descriptions. | Short descriptions: a table is clearer. |
@@ -38,15 +38,15 @@ decoration; if the page reads as well without it, leave it out.
 
 ## Rules every component follows
 
-- **All text stays in the HTML.** Printing, search, and the listening edition read
-  the page, not the screen: a closed accordion and a hidden tab still print and are
-  read aloud. `kit.js` only improves how they are used on a lesson page.
+- **Content stays in the HTML.** Printing and search can use closed accordions
+  and inactive tabs. Reader editions select explanatory prose and retain silent
+  diagram, image, and table pictures. Controls and optional hover bodies are skipped.
 - **Colour has a job.** A chapter's colour marks structure that belongs to the
   lesson. The reading roles keep their meanings: information for terms and prompts,
   process for types and code, result for what comes back. See `kit.css`.
-- **Write for the listening edition.** Labels that matter are real paragraphs (a
-  Tab's label, a field's name and type). A Frame's caption is not read, so write what
-  the picture shows in the alt text.
+- **Write for the listening edition.** Explain necessary results in real prose.
+  Scene steps and diagram labels remain available visually and in print, without
+  an automatic spoken recital. A final scene frame must still show a useful result.
 - **Maths needs no dollar-sign care.** Only `$$ ... $$` is maths, so a price or a
   shell variable is safe.
 
@@ -68,9 +68,10 @@ the reading role each takes its colour from (`src/data/card-kinds.mjs`):
 | `recommendation` | What the book would choose, and why | result |
 | `caution` | A likely mistake | caution |
 
-The card's text is also in the page, in brackets after its words, so it prints, is read in
-the listening edition, and is searched; `hover-cards.js` hides it on screen and shows it in
-the card. `Tooltip` is a `HoverCard` of kind `explanation`.
+The card body remains in source HTML for print and search. Narration skips that
+optional body and the floating tooltip; the surrounding sentence and link words
+remain. `hover-cards.js` shows the body on request. `Tooltip` is a `HoverCard` of
+kind `explanation`.
 
 ## Where things live
 

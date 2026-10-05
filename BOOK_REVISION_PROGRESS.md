@@ -1005,5 +1005,35 @@ remain unverified. No lab programs or lab tests were run.
 
 New quiz-bank, quiz-control, and chapter-completion requests are recorded in
 `HANDOFF_PLAN.md` and remain pending. T3 has 23 scenes left; T4–T8 remain required.
-Publish this verified batch after committing and pushing it, then check the live
-reader page and a new script/image.
+Source commit `a505cfd` was pushed to `codex/book-revision` and published at
+`gh-pages` commit `1c8e249`. The public reader page for 14.8, the new ReaderTools
+script, and the original rain audio returned HTTP 200 and matched the verified
+build byte for byte. T1's source receipt is `74d3016`, published at `d86ab46`.
+
+## T3 — remaining mechanism simulations (2026-10-05)
+
+Replaced all 23 remaining AnimatedFlow walkthroughs. The book now has 42 causal
+scenes. Data copies, instruction and call routes, receive buffers, state history,
+file recovery, startup memory, input edges, and geometric positions change in
+the pictures. Removed the old slideshow component, runtime, and styles.
+
+The pointer-chain lab now steps actual code operations and marks read sources,
+copied values, and local results. Its final read is 250; captured memory remains
+unchanged. Phone graphics scroll within their region instead of shrinking text.
+The world-to-screen fixture derives its camera, projection, divide, and pixel
+positions. The restoration scene verifies both its backup and restored output
+before changing the manifest to Restored.
+
+All 23 scene contact sheets were viewed before lesson wiring. Actual lesson
+pages were reviewed, including corrected final frames. The final build exits 0:
+297 pages, 270 Mermaid diagrams, 137 listening articles, and 802 silent visual
+blocks. Links report 0 broken. Reader checks pass for all 42 scene pictures;
+chat completion passes 15 checks. A 320-pixel pointer tracer and 375-pixel scene
+have no sideways page overflow. A temporary 120-frame sample on the long CPU
+lesson measured median 16.7 ms and 95th percentile 17.7 ms, with none over 50 ms;
+the probe was removed. Proof: `/tmp/gha-t3-final.jpg`.
+
+No lab programs or lab tests were run. Native Edge's final colour/extraction,
+actual Chrome Reading mode, and physical phone performance remain unverified.
+T4–T8 and the recorded quiz/completion requests remain required. T3 is ready
+for its source push and verified publication; receipt follows in the next task.
