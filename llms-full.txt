@@ -17788,30 +17788,7 @@ Resolve short-lived pointers near the point of use. Copy the few fields you need
 
 The safe path has distinct stages instead of one giant startup function:
 
-<AnimatedFlow
-  nativeDiagram
-  title="Follow an in-process tool's lifetime"
-  stages={[
-    { label: 'Load the library', detail: 'Windows maps the DLL into the target process.', role: 'input', value: 'DLL loaded', nodes: ['A'] },
-    { label: 'Keep DllMain small', detail: 'The loader callback does only safe, minimal work.', role: 'process', value: 'tiny callback', nodes: ['B'] },
-    { label: 'Start explicitly', detail: 'A separate export begins work after loading finishes.', role: 'process', value: 'gha_start', nodes: ['C'] },
-    { label: 'Verify the build', detail: 'Refuse a target whose bytes or layout are unsupported.', role: 'state', value: 'supported build?', nodes: ['D'] },
-    { label: 'Own worker state', detail: 'The worker holds the lab resources it will later release.', role: 'process', value: 'worker active', nodes: ['E'] },
-    { label: 'Request shutdown', detail: 'Stop new work before removing any owned feature.', role: 'process', value: 'stop requested', nodes: ['F'] },
-    { label: 'Restore and unload', detail: 'Return changed state and release ownership in order.', role: 'output', value: 'clean exit', nodes: ['G'] },
-  ]}
-  caption="Loading, starting, verifying, working, and stopping are separate phases; cleanup follows the ownership established during startup."
->
-```mermaid
-flowchart TD
-    A["Windows loads DLL"] --> B["Tiny DllMain"]
-    B --> C["Explicit gha_start"]
-    C --> D["Verify target build"]
-    D --> E["Worker owns lab state"]
-    E --> F["Request stop"]
-    F --> G["Restore and unload"]
-```
-</AnimatedFlow>
+<Scene name="dll-lifetime" />
 
 Each stage earns the capabilities used by the next one, and shutdown releases them in a controlled order.
 
@@ -19166,18 +19143,7 @@ partial installation; the returned `Result` alone does not undo it.
 
 <Badge text="Windows VM" variant="note" />
 
-<AnimatedFlow
-  title="Follow one imported call before, during, and after the hook"
-  stages={[
-    { label: 'Identify the import', role: 'input', value: 'user32.dll!MessageBoxW', detail: 'The import name identifies the intended function. The loader has already resolved its address in this PE32 executable.' },
-    { label: 'Find the matching slot', role: 'process', value: 'name index → four-byte IAT slot', detail: 'Walk lookup names and IAT entries together. The matching name selects the slot; bounds checks prove that the four-byte slot belongs to the loaded image.' },
-    { label: 'Keep the original route', role: 'state', value: 'saved pointer → real MessageBoxW', detail: 'Save the slot value before changing it. The replacement uses that callable original, and the patch owner keeps the same value for restoration.' },
-    { label: 'Install the replacement', role: 'process', value: 'IAT slot → hooked_message_box', detail: 'Make the slot writable, write the replacement pointer, and restore the previous page protection. The call instruction remains in place.' },
-    { label: 'Follow the redirected call', role: 'output', value: 'replacement → saved original', detail: 'A normal MessageBoxW call now reaches the replacement. Its matching Windows ABI lets it forward to the saved original with the replacement message text.' },
-    { label: 'Restore the normal route', role: 'output', value: 'IAT slot → real MessageBoxW', detail: 'When cleanup succeeds, IatPatch has written the saved pointer back through the protection-changing helper. The next imported call reaches the original function again.' },
-  ]}
-  caption="The three-message lab observes the normal, redirected, and restored routes. A failed protection change can leave partial installation state, so restoration must remain owned until cleanup succeeds."
-/>
+<Scene name="iat-call-route" />
 
 Run this from `windows-labs` in the Windows VM. The three message boxes let
 you observe the original import, the redirected call, and the restored call
@@ -20791,18 +20757,7 @@ stateDiagram-v2
     Ready --> Absent: validation failed
 ```
 
-<AnimatedFlow
-  title="Follow a hook through installation and removal"
-  stages={[
-    { label: 'Verified target', role: 'input', value: 'expected original bytes match', detail: 'Identify the exact supported module and compare the original instruction bytes. A mismatch stops preparation before the live code changes.' },
-    { label: 'Prepared trampoline', role: 'process', value: 'whole relocated instructions', detail: 'Decode whole instructions, relocate address-dependent operands, and validate the return path. Keep the original bytes and callback state with the owner of the allocation.' },
-    { label: 'Publish the detour', role: 'process', value: 'verified jump + cache flush', detail: 'Use the declared thread rendezvous or framework transaction. Write the complete patch, flush the instruction cache, restore page protections, and verify the result before releasing peers.' },
-    { label: 'Installed', role: 'state', value: 'HookPhase::Installed', detail: 'Calls can now enter the callback and original path. Keep their state alive, follow the re-entry policy, and capture only bounded work on the calling thread.' },
-    { label: 'Draining', role: 'state', value: 'active users → 0', detail: 'Refuse new callback work and wait for existing users to finish. A timeout leaves the still-valid trampoline and callback state alive; it does not permit freeing them.' },
-    { label: 'Original path restored', role: 'output', value: 'original bytes restored', detail: 'Restore and verify the exact original bytes under the same thread-safety mechanism. Release hook resources only when no execution can still use them.' },
-  ]}
-  caption="The transitions are the difficult part: preparation failure leaves the original path intact, and incomplete draining keeps resources alive. Step through the lifecycle to see which guarantee each transition needs."
-/>
+<Scene name="hook-lifetime" />
 
 There should be no `HalfPatched` state visible to executing threads.
 
@@ -21254,28 +21209,7 @@ that wrap around.
 
 A 3D point cannot be drawn directly on a 2D monitor. The renderer transforms it through several spaces:
 
-<AnimatedFlow
-  nativeDiagram
-  title="Follow a vertex from model to screen"
-  stages={[
-    { label: 'Model space', detail: 'The point starts in local object coordinates.', role: 'input', value: 'local point', nodes: ['A'] },
-    { label: 'World space', detail: 'Object placement gives the point a world position.', role: 'state', value: 'world point', nodes: ['B'] },
-    { label: 'Camera space', detail: 'Express the point relative to the viewer.', role: 'process', value: 'view position', nodes: ['C'] },
-    { label: 'Clip space', detail: 'Projection prepares the point for visibility testing.', role: 'process', value: 'clip coordinates', nodes: ['D'] },
-    { label: 'Normalized space', detail: 'Divide and map into the canonical view range.', role: 'process', value: 'normalized point', nodes: ['E'] },
-    { label: 'Screen pixels', detail: 'The viewport turns the projected position into pixels.', role: 'output', value: 'pixel position', nodes: ['F'] },
-  ]}
-  caption="Each coordinate space answers a different question: where the point is in the object, world, camera, projected view, and finally the screen."
->
-```mermaid
-flowchart TD
-    A["Model space"] --> B["World space"]
-    B --> C["View / camera space"]
-    C --> D["Clip space"]
-    D --> E["Normalized device space"]
-    E --> F["Screen pixels"]
-```
-</AnimatedFlow>
+<Scene name="vertex-to-screen" />
 
 A **coordinate space** is one specific choice of where the origin sits and which way each axis points. The same physical spot in the level gets different numbers in each space, so a coordinate is meaningless until you say which space it belongs to.
 
@@ -24873,18 +24807,7 @@ fn clamp_to_circle(x: f32, y: f32, radius: f32) -> (f32, f32, bool) {
 Clamping x and y independently would clamp to a square, distort direction near
 corners, and make diagonal markers appear farther from the center.
 
-<AnimatedFlow
-  title="Follow one teammate from world coordinates to a radar marker"
-  stages={[
-    { label: 'Copy the observation', role: 'input', value: 'world position, local position, yaw', detail: 'Read the entity and local-player facts needed for this radar update. A copied record gives the filter and geometry the same observed position.' },
-    { label: 'Apply the radar rule', role: 'process', value: 'distinct, active, living teammate', detail: 'Check identity, activity, alive state, team, and usable coordinates. A record that fails this rule stops here instead of becoming a marker.' },
-    { label: 'Center on the local player', role: 'process', value: 'entity.xy − local.xy', detail: 'Subtract the local position from the entity position. The result is a relative displacement, so the radar center represents the local player.' },
-    { label: 'Undo the local heading', role: 'process', value: 'rotate(relative_xy, −yaw)', detail: 'For the heading-up convention used here, rotate by negative yaw. The forward direction becomes radar-up while the displacement length stays unchanged.' },
-    { label: 'Scale and bound the offset', role: 'state', value: 'pixels; circular radius R', detail: 'Multiply by pixels per world unit, then apply the chosen range policy. Circular clamping preserves direction and records when a marker was outside range.' },
-    { label: 'Draw the marker', role: 'output', value: 'radar pixel offset + range flag', detail: 'Use the bounded offset and its range flag to choose the marker position and style. Height remains a separate visual rule rather than changing the team filter.' },
-  ]}
-  caption="This follows an accepted record through the heading-up model. Missing markers can originate in filtering, coordinates, range, or drawing; following the stages keeps those causes separate."
-/>
+<Scene name="radar-marker" />
 
 ## Height needs an explicit visual rule
 
@@ -25036,18 +24959,15 @@ flowchart LR
     N -->|viewport| P["Pixels"]
 ```
 
-<AnimatedFlow
-  title="Follow one label anchor from the world to the screen"
-  stages={[
-    { label: 'World point', role: 'input', value: 'world (x, y, z, 1)', detail: 'Begin with one entity position and the camera from the same frame. These coordinates describe a place in the game world, not a pixel.' },
-    { label: 'View transform', role: 'process', value: 'camera coordinates', detail: 'Apply the inverse camera pose. The point is now measured from the camera along its right, up, and forward or back directions.' },
-    { label: 'Projection transform', role: 'process', value: 'clip (x, y, z, w)', detail: 'Apply the declared projection matrix to obtain clip x, y, z, and w. Its field of view, aspect ratio, handedness, and depth convention must match the game.' },
-    { label: 'Visibility check', role: 'process', value: 'point inside clip bounds', detail: 'Check finite coordinates, usable w, and the clip bounds for this API. A label anchor behind the camera or outside those bounds does not continue to drawing.' },
-    { label: 'Perspective divide', role: 'process', value: 'NDC (x/w, y/w, z/w)', detail: 'For an accepted point, divide x, y, and z by w to obtain normalized device coordinates. This is where perspective makes distant displacements occupy less screen space.' },
-    { label: 'Viewport pixels', role: 'output', value: 'screen (pixel_x, pixel_y)', detail: 'Map normalized x and y into the current viewport dimensions and its vertical-axis convention. Only this final pixel position belongs to the overlay.' },
-  ]}
-  caption="Step through one point, then replay the path. A rejected label anchor produces no pixel; clipping a triangle can instead preserve its visible portion."
-/>
+This tour chooses a world point `(2, 1, -4)` and a camera at `(1, 0, 0)`
+looking along negative Z. Its right and up directions match the world axes.
+Subtracting the camera position gives `(1, 1, -4)`. Choose an 800-by-800
+viewport so the aspect ratio is one. A 90-degree vertical field of view
+gives `1 / tan(45°) = 1`. Choose near and far distances of one and nine;
+the depth formula below then gives `(9 + 1) / (1 - 9) = -1.25` and
+`2 × 9 × 1 / (1 - 9) = -2.25`. These settings make every conversion visible.
+
+<Scene name="world-to-screen" />
 
 Naming the stages makes bugs easier to locate. A marker that rotates the wrong
 way usually points to the view transform. A marker that stretches after a
@@ -26817,16 +26737,7 @@ flowchart TD
 
 **Serialization** turns structured values into bytes. **Framing** tells the receiver where one serialized message ends. **Transport** moves bytes between endpoints. Keeping those jobs separate makes both the explanation and the code easier to test.
 
-<AnimatedFlow
-  title="From received bytes to a game event"
-  stages={[
-    { label: 'Collect one frame', role: 'input', value: 'length + complete payload', detail: 'Keep partial input until the length header and its complete payload are available. Reject a length above the limit.' },
-    { label: 'Decompress the payload', role: 'process', value: 'gzip → WML bytes', detail: 'For this Wesnoth message, decode the gzip payload. A valid frame is not necessarily valid compressed data.' },
-    { label: 'Parse its fields', role: 'process', value: 'typed message', detail: 'Interpret the WML tags and fields, then construct a typed message. Reject malformed or invalid fields.' },
-    { label: 'Apply the session rules', role: 'state', value: 'accepted session transition', detail: 'Check whether this message is permitted now. Only accepted messages can change the session or game state.' },
-  ]}
-  caption="The next stage depends on the preceding stage succeeding. Receiving bytes is not the same as accepting a game action."
-/>
+<Scene name="receive-to-event" />
 
 ## Messages can feed a data pipeline
 
@@ -27695,18 +27606,7 @@ every state, including `Closed` itself.
 
 This looks more verbose than a chain of `if` statements. The benefit is coverage: the compiler helps you notice new states and message variants that need rules.
 
-<AnimatedFlow
-  title="Replay the five captured messages through the session states"
-  stages={[
-    { label: 'Start the replay', role: 'input', value: 'state = Connected', detail: 'Begin with the initial session state and the unchanged capture log. Parsing each record produces a message; the transition function decides whether it is legal now.' },
-    { label: 'Accept Greeting version 1', role: 'process', value: 'Connected → Greeted', detail: 'The first frame selects the version-1 greeting arm. Another version is refused, and another greeting after this transition has no legal arrow.' },
-    { label: 'Accept LobbyJoined', role: 'state', value: 'Greeted → InLobby', detail: 'A nonempty room name permits entry to the lobby. A parseable frame alone cannot make this transition from an unrelated session state.' },
-    { label: 'Accept Chat in the lobby', role: 'state', value: 'InLobby → InLobby', detail: 'The chat frame is legal here, but it does not advance the session. An accepted message can preserve the current state.' },
-    { label: 'Accept MatchStarted', role: 'state', value: 'InLobby → InMatch', detail: 'A nonempty scenario name permits the match transition. The same message received before the lobby would be an illegal transition.' },
-    { label: 'Accept Goodbye', role: 'output', value: 'InMatch → Closed', detail: 'The final frame closes this replayed session. Goodbye is accepted from every modeled state, so cleanup does not depend on reaching the happy path first.' },
-  ]}
-  caption="These are the same five frames shown in the log above. The log stays fixed; each accepted message updates the modeled state, and an illegal message stops replay at its recorded frame."
-/>
+<Scene name="session-replay" />
 
 ## Store captures as direction plus bytes
 
@@ -27930,30 +27830,7 @@ sequenceDiagram
 Keep transport, decoding, session meaning, and behavior as separate layers. One
 incoming message should travel through the pipeline before any reply is built:
 
-<AnimatedFlow
-  nativeDiagram
-  title="Trace one chat message through the client"
-  stages={[
-    { label: 'Receive bytes', detail: 'TCP supplies bytes without message boundaries.', role: 'input', value: 'byte stream', nodes: ['A'] },
-    { label: 'Recover a frame', detail: 'The decoder waits for one complete bounded message.', role: 'process', value: 'complete frame', nodes: ['B'] },
-    { label: 'Parse WML', detail: 'Structure turns the payload into named fields.', role: 'process', value: 'parsed message', nodes: ['C'] },
-    { label: 'Update the session', detail: 'The client records the state needed to interpret the event.', role: 'state', value: 'session state', nodes: ['D'] },
-    { label: 'Create a domain event', detail: 'A game-level event separates protocol syntax from behavior.', role: 'process', value: 'chat event', nodes: ['E'] },
-    { label: 'Handle the command', detail: 'The bot decides whether the chat text requests a reply.', role: 'process', value: 'reply decision', nodes: ['F'] },
-    { label: 'Send a frame', detail: 'The response is encoded and framed for the stream.', role: 'output', value: 'outbound message', nodes: ['G'] },
-  ]}
-  caption="This follows one chat command from unframed TCP bytes to a framed reply; each layer gives the next one a narrower meaning."
->
-```mermaid
-flowchart TD
-    A["TCP byte stream"] --> B["Bounded frame decoder"]
-    B --> C["WML parser"]
-    C --> D["Session-state update"]
-    D --> E["Domain event"]
-    E --> F["Chat command handler"]
-    F --> G["Framed outbound message"]
-```
-</AnimatedFlow>
+<Scene name="chat-client" />
 
 This separation lets a malformed frame fail before it reaches chat behavior,
 and it lets the command handler work with events instead of raw network bytes.
@@ -29859,18 +29736,7 @@ and contents, then ask the user before replacing the only known-good copy.
 
 <Badge text="Windows VM" variant="note" />
 
-<AnimatedFlow
-  title="Follow the Flare save through a recoverable edit"
-  stages={[
-    { label: 'Read the closed-game save', role: 'input', value: 'build=5,1,1,2', detail: 'Close Flare and read the known avatar.txt save. Keep the original bytes available while preparing the replacement; do not edit the only copy in place.' },
-    { label: 'Validate the target field', role: 'process', value: 'exactly one build= line', detail: 'Require one target field and check the intended complete value. Preserve every other line and the original LF or CRLF newline style.' },
-    { label: 'Construct the replacement', role: 'state', value: 'build=30,30,30,30', detail: 'Build new bytes separately, changing the four named attributes together. At this point the original path still contains the untouched save.' },
-    { label: 'Flush the temporary sibling', role: 'process', value: 'complete temporary file', detail: 'Write all replacement bytes to a sibling temporary file, flush it, and close its handle. Interrupted preparation leaves the original save available.' },
-    { label: 'Replace and keep the backup', role: 'process', value: 'new original + backup', detail: 'The complete Windows lab uses ReplaceFileW to install the new save and preserve the old one at avatar.txt.gha-backup. An existing backup causes refusal.' },
-    { label: 'Verify through the game', role: 'output', value: 'four attributes = 30', detail: 'Reload the disposable character, check the four visible values, and let Flare save normally. Keep the backup until the loader and serializer have accepted the edit.' },
-  ]}
-  caption="This is the successful route through prepare, validate, commit, and recover. The temporary file and backup make interruptions distinguishable; atomic replacement does not make every possible failure durable."
-/>
+<Scene name="recoverable-save" />
 
 Close Flare, build the Windows lab workspace, and pass the exact save path and new `build` value:
 
@@ -30321,18 +30187,7 @@ flowchart TD
     F -->|"yes"| G["Decode the fields and load"]
 ```
 
-<AnimatedFlow
-  title="Follow the 19-byte GSAV save through its loader checks"
-  stages={[
-    { label: 'Read the complete file', role: 'input', value: '19 bytes', detail: 'Keep the whole byte sequence available. Offsets describe positions in this file, and no field is trusted merely because its bytes resemble readable text.' },
-    { label: 'Check magic and version', role: 'process', value: 'GSAV; version = 1', detail: 'Require bytes 47 53 41 56 at offsets 0–3 and decode 01 00 as little-endian version 1. Unknown layouts stop before their fields are interpreted.' },
-    { label: 'Bound the variable-length name', role: 'process', value: '12 + 3 + 4 = 19', detail: 'The name-length byte is 03. Twelve fixed bytes, three name bytes, and four checksum bytes must exactly fit the file before those slices can be used.' },
-    { label: 'Compute the checksum', role: 'process', value: 'sum(bytes 0–14) = 842', detail: 'Add every byte before the checksum, including the header, numeric fields, length, and name. For this exact save, the total is 842.' },
-    { label: 'Compare the stored total', role: 'state', value: '4A 03 00 00 → 842', detail: 'Read the final four bytes as a little-endian u32. The stored 842 equals the computed 842; a mismatch refuses the file instead of loading damaged state.' },
-    { label: 'Decode the accepted record', role: 'output', value: 'Nia: level 3, gold 250', detail: 'The checked layout now gives gold 250 at offsets 6–9, level 3 at offset 10, and the three name bytes Nia at offsets 12–14.' },
-  ]}
-  caption="This traces the unchanged sample save. Editing gold also changes the required checksum; a correct offset and byte order cannot bypass a failed integrity check."
-/>
+<Scene name="gsav-loader" />
 
 Now type gold over as 9,999 and change nothing else. 9,999 is 39 × 256 + 15,
 and 39 = 2 × 16 + 7 = `0x27` while 15 = `0x0F`, so 9,999 is `0x270F` and its
@@ -31385,30 +31240,7 @@ Do not store absolute paths inside a portable manifest. Keep a trusted game root
 Treat installation as a reversible state transition with a durable journal, not
 as an unrecorded sequence of file copies:
 
-<AnimatedFlow
-  nativeDiagram
-  title="Make a mod install reversible"
-  stages={[
-    { label: 'Plan the change', detail: 'Name the destination and the exact file that should replace it.', role: 'input', value: 'intended file', nodes: ['A'] },
-    { label: 'Verify the original', detail: 'Check the current hash before changing anything.', role: 'process', value: 'known starting state', nodes: ['B'] },
-    { label: 'Preserve the old state', detail: 'Back up the file or record that it did not exist.', role: 'state', value: 'backup or absence', nodes: ['C'] },
-    { label: 'Install the mod', detail: 'Write the intended replacement only after preservation.', role: 'process', value: 'modded file', nodes: ['D'] },
-    { label: 'Record the result', detail: 'Commit manifest status so the change can be checked later.', role: 'state', value: 'manifest entry', nodes: ['E'] },
-    { label: 'Check before removal', detail: 'Verify the installed file has not changed since the manifest.', role: 'process', value: 'still our file?', nodes: ['F'] },
-    { label: 'Undo safely', detail: 'Restore the backup or remove only the file the mod added.', role: 'output', value: 'original state', nodes: ['G'] },
-  ]}
-  caption="The same receipt supports installation and removal: every write has a verified starting state and a recorded way back."
->
-```mermaid
-flowchart TD
-    A["Plan the intended change"] --> B["Verify the current hash"]
-    B --> C["Back up or record absence"]
-    C --> D["Install the new file"]
-    D --> E["Commit manifest status"]
-    E --> F["Verify before uninstall"]
-    F --> G["Restore or remove safely"]
-```
-</AnimatedFlow>
+<Scene name="reversible-mod" />
 
 The manifest records which state was reached. After a crash, that record tells
 the recovery code whether an original file still needs restoring.
@@ -32216,26 +32048,7 @@ Lua is a small programming language commonly **embedded** inside a larger progra
 
 Use the host-boundary model:
 
-<AnimatedFlow
-  nativeDiagram
-  title="See what the Lua script can reach"
-  stages={[
-    { label: 'Platform', detail: 'Windows and hardware run the compiled game.', role: 'input', value: 'Windows + hardware', nodes: ['A'] },
-    { label: 'Engine', detail: 'Native engine code owns the game and its rules.', role: 'state', value: 'compiled engine', nodes: ['B'] },
-    { label: 'Lua runtime', detail: 'The engine creates and controls the interpreter.', role: 'process', value: 'hosted Lua VM', nodes: ['C'] },
-    { label: 'Host API', detail: 'Only chosen values and functions cross this boundary.', role: 'process', value: 'limited functions', nodes: ['D'] },
-    { label: 'Script', detail: 'The mod uses the exposed API rather than raw engine authority.', role: 'output', value: 'script capability', nodes: ['E'] },
-  ]}
-  caption="This follows the authority the host deliberately exposes to a script; the arrows do not grant the script unrestricted access to Windows or game memory."
->
-```mermaid
-flowchart TD
-    A["Windows and hardware"] --> B["Compiled game engine"]
-    B --> C["Engine-owned Lua runtime"]
-    C --> D["Narrow host API"]
-    D --> E["Lua script or mod"]
-```
-</AnimatedFlow>
+<Scene name="lua-capabilities" />
 
 The engine owns the runtime and decides which values and functions cross the API
 boundary. A script cannot automatically do everything the engine can do; it sees
@@ -33176,18 +32989,7 @@ The script did nothing wrong: entity 7 really was alive in snapshot 41. The
 game moved on while the script was deciding, and `based_on` lets the host see
 that the request describes a moment that has already passed.
 
-<AnimatedFlow
-  title="Follow a valid snapshot into a stale request"
-  stages={[
-    { label: 'Capture entity 7', role: 'input', value: 'sequence 41: entity 7 alive', detail: 'The observer validates the entity at sequence 41 and copies its fields. This is an observation of one moment, not a promise that the entity will remain alive.' },
-    { label: 'Give Lua an owned snapshot', role: 'state', value: 'snapshot.sequence = 41', detail: 'Lua receives named values and the sequence they came from. No raw process address crosses the boundary, so the script reasons about the snapshot contract.' },
-    { label: 'Let the world advance', role: 'state', value: 'sequence 42: entity 7 missing', detail: 'Entity 7 despawns while the script is deciding. The earlier snapshot stays internally valid, but it no longer describes the current game world.' },
-    { label: 'Submit a structured request', role: 'input', value: 'entity_id=7, based_on=41', detail: 'The script requests select_entity for the ID it observed and includes sequence 41. It sends data to the host rather than an executable command string.' },
-    { label: 'Revalidate at action time', role: 'process', value: 'request 41; current sequence 42', detail: 'The host checks the request against current identity, state, permissions, and budgets. Entity 7 no longer exists, so this request cannot reach the action layer.' },
-    { label: 'Return the refusal', role: 'output', value: 'no action: entity 7 is missing', detail: 'Return a useful error and keep the host alive. Refusing this stale request preserves the boundary even though the script used a once-valid observation.' },
-  ]}
-  caption="Snapshot validation and action-time validation protect different moments. A sequence label lets the host connect a request to the observation that produced it."
-/>
+<Scene name="stale-entity-request" />
 
 ## Requests are data, not commands
 
@@ -34813,30 +34615,7 @@ Walking internal loader pointers is useful when you are learning in a debugger. 
 
 The shared wrapper keeps that unsafe boundary in one reviewed function. Here is the order of Windows calls it makes before it ever returns a module base and size:
 
-<AnimatedFlow
-  nativeDiagram
-  title="Find one loaded module by snapshot"
-  stages={[
-    { label: 'Take the snapshot', detail: 'Ask Windows for the target process module list.', role: 'input', value: 'module snapshot', nodes: ['A'] },
-    { label: 'Own the handle', detail: 'Wrap the snapshot so it closes at scope exit.', role: 'process', value: 'OwnedHandle', nodes: ['B'] },
-    { label: 'Read an entry', detail: 'Windows fills a correctly sized MODULEENTRY32W.', role: 'state', value: 'module record', nodes: ['C'] },
-    { label: 'Compare its name', detail: 'Check the record against the requested module.', role: 'process', value: 'name matches?', nodes: ['D'] },
-    { label: 'Return its range', detail: 'This tour follows the yes branch to base and size.', role: 'output', value: 'base + size', nodes: ['E'] },
-  ]}
-  caption="This follows a successful first-match lookup; a miss advances with Module32NextW, while end-of-list and other errors take the branches also shown in the graph."
->
-```mermaid
-flowchart TD
-    A["CreateToolhelp32Snapshot"] --> B["OwnedHandle::from_raw<br/>(closes itself when dropped)"]
-    B --> C["Module32FirstW<br/>fills the first MODULEENTRY32W"]
-    C --> D{"szModule matches<br/>wanted_name?"}
-    D -->|"yes"| E["return modBaseAddr, modBaseSize"]
-    D -->|"no"| F["Module32NextW"]
-    F -->|"Ok(())"| D
-    F -->|"no more files"| G["anyhow::bail!<br/>module not found"]
-    F -->|"other error"| H["return Err"]
-```
-</AnimatedFlow>
+<Scene name="module-snapshot" />
 
 ```rust
 pub fn module(&self, wanted_name: &str) -> anyhow::Result<(usize, usize)> {
@@ -36519,17 +36298,7 @@ for a purchase, and let the scheduler interleave them:
 | 4 | writes 1,500 | | 1,500 |
 | 5 | | writes 700 | 700 |
 
-<AnimatedFlow
-  title="Two correct calculations, one lost reward"
-  stages={[
-    { label: 'Reward thread reads gold', role: 'input', value: 'gold = 1000', detail: 'The reward thread reads the shared gold field as 1,000. It now has a local copy to which it will add the 500-gold reward; memory still holds 1,000.' },
-    { label: 'Purchase thread reads gold', role: 'input', value: 'purchase reads 1000', detail: 'Before the reward is written back, the purchase thread also reads 1,000. Both threads now calculate from the same old value, even though their changes should accumulate.' },
-    { label: 'Calculate in separate registers', role: 'process', value: 'reward 1500; purchase 700', detail: 'The reward thread computes 1,000 + 500 = 1,500. The purchase thread computes 1,000 − 300 = 700. Neither result has reached the shared field, which still contains 1,000.' },
-    { label: 'Publish the reward result', role: 'state', value: 'gold = 1500', detail: 'The reward thread writes 1,500 to gold. This write completes its work, but it does not update the purchase thread’s local result of 700.' },
-    { label: 'Overwrite with the stale result', role: 'output', value: 'gold = 700; expected 1200', detail: 'The purchase thread writes 700 last. The shared field loses the reward, although both arithmetic operations were correct. The intended combined result was 1,000 + 500 − 300 = 1,200.' },
-  ]}
-  caption="The changing memory value makes this particular interleaving visible. The mutex described below makes the purchase wait, then read 1,500 and write 1,200, preserving both changes."
-/>
+<Scene name="lost-reward" />
 
 The player should have 1,000 + 500 − 300 = 1,200 and has 700. The reward
 vanished, because the purchase thread wrote a result computed from a value that
@@ -37600,18 +37369,7 @@ two modes use different code segments, which is why `cs` reads `0023` in a
 illustrates the native 64-bit path, not every instruction a 32-bit caller runs.
 :::
 
-<AnimatedFlow
-  title="A four-byte read crosses the privilege boundary"
-  stages={[
-    { label: 'Submit the user-mode request', role: 'input', value: '4 bytes at 0x00501000', detail: 'The tool requests four bytes from game address 0x0050_1000 into its own buffer. Its process handle carries rights 0x1010: limited query plus memory read.' },
-    { label: 'Follow the application wrappers', role: 'process', value: 'ring 3; NtReadVirtualMemory', detail: 'ReadProcessMemory passes through kernel32 and kernelbase to the ntdll stub. This remains user-mode code. The stub preserves the first argument in r10 and selects the current build’s system service number.' },
-    { label: 'Enter the prepared kernel path', role: 'state', value: 'ring 0; kernel dispatch', detail: 'syscall enters the address the kernel prepared. Entry code saves the user context, switches to the thread’s kernel stack, validates the service number, and dispatches the request.' },
-    { label: 'Validate ranges and authority', role: 'process', value: '0x1010 & 0x0010 = 0x0010', detail: 'The kernel checks the source range ending at 0x0050_1004 and the destination buffer, then checks the handle’s read right. Every needed bit survives the AND, so this handle authorizes a read; its missing write bit would still prevent a write.' },
-    { label: 'Copy in the correct address spaces', role: 'process', value: 'game memory → tool buffer', detail: 'The source belongs to the game and the destination to the tool. The kernel interprets both in their proper process context while copying. A page becoming unavailable can still cause a failed or partial read.' },
-    { label: 'Return and check the result', role: 'output', value: 'ring 3; check bytes read', detail: 'sysret resumes the user-mode stub with an NTSTATUS result. kernelbase translates failures into the Win32 interface. The tool checks success and the returned byte count before treating its buffer as four valid bytes.' },
-  ]}
-  caption="This follows the native 64-bit route explained above. A 32-bit caller adds the WoW64 translation stage. Crossing into ring 0 gives Windows the authority to check and copy; it does not add rights to the caller’s handle."
-/>
+<Scene name="privilege-copy" />
 
 <Quiz
   id="kernel-handle-rights-and"
@@ -38280,18 +38038,7 @@ sequenceDiagram
     G->>G: spawn worker thread, return
 ```
 
-<AnimatedFlow
-  title="Finish loading before starting the worker"
-  stages={[
-    { label: 'Request the DLL load', role: 'input', value: 'LoadLibraryW requested', detail: 'The injector calls LoadLibraryW. It must wait for that loading thread to finish before requesting the separate application startup export.' },
-    { label: 'Prepare the module', role: 'process', value: 'sections mapped; imports resolved', detail: 'Windows maps the DLL, applies required relocations, resolves imports, prepares thread-local storage, and updates loader records. These dependencies must be ready before application work begins.' },
-    { label: 'Complete the loader notification', role: 'process', value: 'DllMain; loader lock held', detail: 'Windows calls DllMain while holding the loader lock. The course callback disables unused thread notifications and returns; it does not start a worker or wait for one.' },
-    { label: 'Finish the loading operation', role: 'state', value: 'LoadLibraryW returned', detail: 'The loader completes its notifications and returns to the injector. The initial loader work has finished, so the injector can now call gha_start rather than running complex work inside DllMain.' },
-    { label: 'Publish startup once', role: 'process', value: 'STARTED set; STOP = false', detail: 'On the first successful startup path, gha_start records STARTED, publishes STOP = false, and spawns the worker. A duplicate call or failed spawn returns its explicit error result instead.' },
-    { label: 'Run outside the loader callback', role: 'output', value: 'worker outside loader lock', detail: 'The worker runs run_lab from ordinary thread execution after the initial loading operation. Startup and later cleanup have an explicit owner, and a loader callback never waits for that worker.' },
-  ]}
-  caption="The moving handoff follows the successful lifecycle in the sequence diagram. Loader completion is a dependency for explicit startup, while stop requests and worker joining remain separate operations."
-/>
+<Scene name="loader-startup" />
 
 The exported function uses the Windows thread-procedure ABI because the course injector calls it as a separate thread entry:
 
@@ -38793,31 +38540,7 @@ passes through is a device, a driver, or a queue from this lesson.
 game uses through Windows. Here are the steps inside that path, for a USB
 keyboard on a modern PC:
 
-<AnimatedFlow
-  nativeDiagram
-  title="Follow one key press into a game"
-  stages={[
-    { label: 'Keyboard and controller', detail: 'The keyboard reports a key; the host controller moves the report into RAM.', role: 'input', value: '8-byte USB report', nodes: ['K', 'HC'] },
-    { label: 'USB and HID drivers', detail: 'The driver stack interprets the transport and HID report.', role: 'process', value: 'HID usage 0x04', nodes: ['U', 'H'] },
-    { label: 'Translate the key', detail: 'KBDHID maps the usage to a scan code.', role: 'process', value: 'scan code 0x1E', nodes: ['KH'] },
-    { label: 'Queue key-down', detail: 'KBDCLASS reports a keyboard event.', role: 'state', value: 'key-down', nodes: ['KC'] },
-    { label: 'Make a virtual key', detail: 'The raw input thread maps the scan code to VK_A.', role: 'process', value: 'VK_A = 0x41', nodes: ['RIT'] },
-    { label: 'Deliver to the game', detail: 'A queue entry reaches the game message loop.', role: 'output', value: 'WM_KEYDOWN / WM_INPUT', nodes: ['Q', 'G'] },
-  ]}
-  caption="This follows the A key along the diagram's directed path: hardware report, driver translation, Windows input queue, and the game's message loop."
->
-```mermaid
-flowchart TD
-    K["USB keyboard<br/>answers each poll with an 8-byte report"] --> HC["USB host controller<br/>DMA into RAM, then an interrupt"]
-    HC --> U["USB host controller<br/>and hub drivers"]
-    U --> H["HIDUSB.SYS and HIDCLASS.SYS<br/>HID transport and class drivers"]
-    H --> KH["KBDHID.SYS<br/>HID usage 0x04 becomes scan code 0x1E"]
-    KH --> KC["KBDCLASS.SYS<br/>queues a key-down event"]
-    KC --> RIT["raw input thread in win32k<br/>scan code 0x1E becomes VK_A, 0x41"]
-    RIT --> Q["foreground thread's message queue<br/>WM_KEYDOWN, or WM_INPUT for Raw Input"]
-    Q --> G["the game's message loop<br/>GetMessage or PeekMessage"]
-```
-</AnimatedFlow>
+<Scene name="key-to-game" />
 
 A USB device never speaks first. The host controller asks each device for news
 on a fixed schedule, and a keyboard asked 125 times a second is asked every
@@ -40334,17 +40057,7 @@ sequence  tick  source        entity  event
 Health reaches 0 at tick 900 and the mode changes in the same tick. The health
 bar, which draws from a copy, shows 0 only at tick 901, one tick later.
 
-<AnimatedFlow
-  title="One entity, three observations over two ticks"
-  stages={[
-    { label: 'Begin with the prior entity state', role: 'input', value: 'entity 7; health 6; Alive', detail: 'The trace identifies entity 7. The recorded before-values show health 6 and mode Alive immediately before the respective changes; the entity ID keeps this sequence separate from other entities.' },
-    { label: 'Record the health write', role: 'process', value: 'seq 41: 6 → 0; tick 900', detail: 'At tick 900, the health observer records HealthWrite with before = 6 and after = 0. The event states exactly which value changed, rather than merely logging that damage happened.' },
-    { label: 'Record the mode transition', role: 'state', value: 'seq 42: Alive → Downed; tick 900', detail: 'The next recorded event for entity 7 changes its mode from Alive to Downed in the same tick. A typed trace can compare this transition with the health write ending at zero.' },
-    { label: 'Observe the display copy', role: 'process', value: 'seq 43: health 0; tick 901', detail: 'The health-bar observer reads zero at tick 901. Its copy catches up one tick after the health and mode observations; reading a matching number alone would have hidden that delay.' },
-    { label: 'Compare the recorded sequence', role: 'output', value: 'health and mode before UI read', detail: 'Grouping by entity ID and comparing event types, sequence numbers, and ticks exposes the recorded ordering and the display delay. It does not by itself prove that one observed event caused another.' },
-  ]}
-  caption="The state display follows the exact three-event trace above. Sequence numbers establish log order; the next paragraph explains why delayed logging or a shared cause can require further evidence."
-/>
+<Scene name="entity-observations" />
 
 Log order is not cause. Event 41 appearing before event 42 fits the damage
 causing the transition, but it also fits both events sharing one cause, or two
@@ -42089,24 +41802,7 @@ Nothing overflowed *visibly*. In a release build there is no panic, no warning,
 and the comparison is perfectly true. The read then starts at an address near
 the top of the address space.
 
-<AnimatedFlow
-  nativeDiagram
-  title="See a bound check fooled by overflow"
-  stages={[
-    { label: 'Start near the limit', detail: 'The requested offset is only three below usize::MAX.', role: 'input', value: 'MAX − 3', nodes: ['A'] },
-    { label: 'Add the length', detail: 'Unchecked addition wraps the end of the range to 12.', role: 'process', value: 'end becomes 12', nodes: ['B'] },
-    { label: 'Compare the wrong end', detail: 'The bound check sees only the wrapped small number.', role: 'state', value: '12 ≤ region size?', nodes: ['C'] },
-    { label: 'Allow a bad read', detail: 'This tour follows the yes branch despite the invalid start.', role: 'output', value: 'false acceptance', nodes: ['D'] },
-  ]}
-  caption="The yes branch is the failure: a wrapped end looks small enough, although the requested range began near the address-space limit."
->
-```mermaid
-flowchart LR
-    A["offset = usize::MAX - 3"] --> B["offset + length<br/>wraps to 12"]
-    B --> C{"12 <= region_size?"}
-    C -->|"yes"| D["read allowed — starting near<br/>the top of the address space"]
-```
-</AnimatedFlow>
+<Scene name="checked-range-overflow" />
 
 **The repair** is not a bigger integer. It is refusing to answer a question that
 has no answer:
@@ -43003,17 +42699,7 @@ supplies its memory map and Rust entry function. The runtime prepares static
 data, then calls that function. These responsibilities are why a source file
 containing `fn main()` alone is not a complete firmware image.
 
-<AnimatedFlow
-  title="From reset to the lamp controller"
-  stages={[
-    { label: 'Read the vectors', role: 'input', value: 'initial SP | reset address', detail: 'The core obtains the initial stack pointer and the reset-handler address from the image.' },
-    { label: 'Prepare working memory', role: 'process', value: '.data copied; .bss = 0', detail: 'Runtime startup copies initialized static data into RAM and zeroes the .bss range.' },
-    { label: 'Enter Rust', role: 'process', value: '#[entry] begins', detail: 'The runtime calls the function marked #[entry]. Application logic can now use its initialized state.' },
-    { label: 'Process button samples', role: 'state', value: 'released -> pressed: toggle lamp', detail: 'The controller changes its lamp state only when a released button becomes pressed.' },
-    { label: 'Report the trace', role: 'output', value: 'trace -> QEMU; emulator exit', detail: 'Semihosting sends the results to QEMU. This test image then requests an emulator exit.' },
-  ]}
-  caption="Step through the order. Printing results depends on reaching application code; it cannot replace the earlier startup work."
-/>
+<Scene name="reset-lamp" />
 
 ### A bootloader is an additional stage
 
@@ -43542,32 +43228,7 @@ When a console powers on, which code runs first, and why should anyone trust it?
 signature ([Lesson 9.8](/pages/9/07/)) of the next stage before running it, and
 refuses if the check fails.
 
-<AnimatedFlow
-  nativeDiagram
-  title="Follow a successful console boot"
-  stages={[
-    { label: 'Power on', detail: 'The console begins from hardware-controlled startup.', role: 'input', value: 'power on', nodes: ['P'] },
-    { label: 'Boot ROM', detail: 'Factory-written code checks the next boot stage.', role: 'process', value: 'root of trust', nodes: ['R'] },
-    { label: 'Bootloader', detail: 'A verified loader checks the privileged software it starts.', role: 'process', value: 'signed loader', nodes: ['B'] },
-    { label: 'Privileged software', detail: 'The hypervisor and kernels verify the components they load.', role: 'state', value: 'verified kernels', nodes: ['H'] },
-    { label: 'System software', detail: 'The home screen and services check the game package.', role: 'process', value: 'system services', nodes: ['S'] },
-    { label: 'Start the game', detail: 'A valid signature and licence allow the package to run.', role: 'output', value: 'game starts', nodes: ['G'] },
-  ]}
-  caption="This follows the successful chain of trust. A failed check at any verifying stage takes the graph's refusal branch instead of starting the game."
->
-```mermaid
-flowchart TD
-    P["power on"] --> R["boot ROM in the security processor:<br/>written at the factory, cannot change"]
-    R -->|"checks the bootloader's key,<br/>signature, and security version"| B["bootloader"]
-    B -->|"checks their signatures"| H["hypervisor and system kernels"]
-    H -->|"checks each component"| S["system software:<br/>home screen, store, network"]
-    S -->|"checks the package's signature<br/>and licence, then decrypts it"| G["game"]
-    R -.->|"any check fails"| X["refuse to run it:<br/>stop, recovery mode, or an error"]
-    B -.-> X
-    H -.-> X
-    S -.-> X
-```
-</AnimatedFlow>
+<Scene name="console-boot" />
 
 The first link is the **boot ROM**, a small program written into the chip when
 it is manufactured, which no software, update, or owner can change. It is the
