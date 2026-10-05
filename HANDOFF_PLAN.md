@@ -13,17 +13,25 @@ https://mustcodeal.github.io/rust-game-hacking-book/ (served from branch `gh-pag
 > `HANDOFF_PLAN.md`, `CLAUDE.md`, and `BOOK_REVISION_PROGRESS.md`, then do the tasks in `HANDOFF_PLAN.md`
 > section 4 in order, one at a time. After each task: run `cd site && npm run build` and
 > `python3 scripts/check-links.py dist`, check the result in a browser, `git add` only the files you
-> changed, commit with a clear message, and `git push origin HEAD:codex/book-revision`. Do not publish to
-> `gh-pages` and do not run lab binaries. Follow the house rules in section 5. Report what you finished and
-> what you could not verify.
+> changed, commit with a clear message, and `git push origin HEAD:codex/book-revision`. Then publish that
+> verified work (section 1, "Publishing") and check the live site. Do not run lab binaries. Follow the house
+> rules in section 5. Report what you finished, what you published, and what you could not verify.
 
 ## 1. Ground rules
 
 - **Branches.** Source is `codex/book-revision` on `origin` (`MustCodeAl/rust-game-hacking-book`). The live
   site is `gh-pages`, written only by `cd site && node scripts/publish-pages.mjs` (it needs a clean tree and
-  builds from the commit). **Publishing is the user's decision; commit and push the source, do not publish.**
+  builds from the commit). **Publishing is allowed, under the "Publishing" rule below.**
   Never commit to `master`. Do not switch branches in the main checkout
   (`/Users/notlaggy/Documents/GitFolder/gamehackingacademy.github.io`, on `gh-pages` with many untracked files).
+- **Publishing.** After a task is built, link-checked, looked at in a browser, committed, and pushed to
+  `codex/book-revision`, publish it: `cd site && node scripts/publish-pages.mjs` (from a clean tree; it refuses
+  otherwise, so commit first and keep unfinished files out of `site/`). Publish only work that is finished and
+  verified; never publish a build that fails, has broken links, or has a half-done scene wired in. Never
+  force-push `gh-pages`. GitHub Pages takes a few minutes: afterwards fetch a changed page and a new script or
+  image from https://mustcodeal.github.io/rust-game-hacking-book/ and confirm they are there (200, new content).
+  Publish after each task or small group of tasks, so the live site never lags far behind. This needs push access
+  to `origin`; if a push is refused, stop and say so.
 - **Never run lab binaries or tests that execute them** (`cargo run`, `cargo test` in `rust-labs`,
   `windows-labs`, `lua-labs`, `advanced-memory-labs`). Compile-only checks are fine: `cargo fmt --check`,
   `cargo check --all-targets`, `cargo clippy --all-targets -- -D warnings`.
