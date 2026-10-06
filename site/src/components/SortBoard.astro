@@ -1,0 +1,103 @@
+---
+// A sort board: chips are dragged (or tapped, then a zone tapped) into zones or a
+// two-circle Venn. It opens already sorted the way the lesson sorts things, with a
+// plain-English reason for every chip, and a live line says what the groups mean.
+// Nothing is graded. Boards are data in src/scripts/sort-board.js (BOARDS).
+//
+//   <SortBoard board="menu-vs-worker" label="Explore who does what" />
+import { BOARDS } from '../scripts/sort-board.js';
+
+interface Props {
+	board: string;
+	id?: string;
+	label?: string;
+}
+const { board: boardId, id = `sort-${boardId}`, label = 'Interactive sorting board' } = Astro.props;
+const board = BOARDS[boardId];
+if (!board) throw new Error(`SortBoard: unknown board "${boardId}"`);
+const zoneName = (zid: string) => board.zones.find((z: { id: string }) => z.id === zid)?.name;
+---
+
+<section class="concept-lab sort-board not-content" id={id} data-sort-board={boardId} aria-label={label} data-reader-skip>
+	<div class="concept-lab__body">
+		<p class="concept-lab__fallback">
+			This board needs JavaScript to move things around. Here is the lesson&rsquo;s sorting:
+		</p>
+		<dl class="sort-board__static">
+			{board.zones.map((zone: { id: string; name: string }) => {
+				const items = board.items.filter((i: { home: string }) => i.home === zone.id);
+				return items.length ? (
+					<>
+						<dt>{zone.name}</dt>
+						<dd>
+							<ul>
+								{items.map((i: { label: string; why: Record<string, string>; home: string }) => (
+									<li><strong>{i.label}.</strong> {i.why[i.home]}</li>
+								))}
+							</ul>
+						</dd>
+					</>
+				) : null;
+			})}
+		</dl>
+	</div>
+</section>
+
+<script>
+	import { mountSortBoards } from '../scripts/sort-board.js';
+	mountSortBoards();
+</script>
+
+<style is:global>
+	.sort-board__invite { margin: 0 0 10px; color: var(--ink-soft); font-size: 0.88em; line-height: 1.5; }
+	.sort-board__static { margin: 0; font-size: 0.9em; }
+	.sort-board__static dt { margin-top: 8px; font-weight: 700; color: var(--ink-strong); }
+	.sort-board__static dd { margin: 2px 0 0; }
+	.sort-board__zones { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 10px; }
+	.sort-board__zone { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-alt); }
+	.sort-board__zone-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+	.sort-board .sort-board__zone-name { margin: 0; color: var(--ink-strong); font-size: 0.95em; line-height: 1.25; overflow-wrap: anywhere; }
+	.sort-board .sort-board__zone-sub { margin: 2px 0 0; color: var(--ink-soft); font-size: 0.78em; line-height: 1.35; }
+	.sort-board__key { display: inline-block; margin-right: 6px; padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink-soft); font-family: var(--mono); font-size: 0.8em; font-weight: 700; vertical-align: 1px; }
+	.sort-board__count { white-space: nowrap; flex: 0 0 auto; min-width: 1.6em; padding: 0 6px; border: 1px solid var(--chapter-ink); border-radius: 999px; color: var(--chapter-ink); font-family: var(--mono); font-size: 11px; font-weight: 700; text-align: center; }
+	.sort-board__bin { display: flex; flex: 1; flex-wrap: wrap; align-content: flex-start; gap: 6px; min-height: 56px; padding: 6px; border: 2px dashed var(--line); border-radius: 8px; }
+	.sort-board__zone.is-target .sort-board__bin { border-color: var(--chapter-accent); }
+	.sort-board__zone.is-target .sort-board__bin::after { content: 'Tap here to move it to this zone'; display: flex; align-items: center; flex: 1 0 100%; min-height: 30px; color: var(--chapter-ink); font-size: 0.78em; font-weight: 600; }
+	.sort-board__zone.is-over .sort-board__bin { border-style: solid; border-color: var(--chapter-accent); background: var(--chapter-tint); }
+	.sort-board__chip { max-width: 100%; min-height: 36px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 0.82em; line-height: 1.3; text-align: left; overflow-wrap: anywhere; cursor: grab; }
+	.sort-board__chip:hover { border-color: var(--chapter-ink); }
+	.sort-board__chip:focus-visible, .sort-board__put:focus-visible { outline: 2px solid var(--chapter-accent); outline-offset: 2px; }
+	.sort-board__chip.is-picked { outline: 3px solid var(--chapter-accent); outline-offset: 1px; background: var(--chapter-tint); color: var(--ink-strong); }
+	.sort-board__chip.is-off { border: 2px dashed var(--warning); background: color-mix(in srgb, var(--warning) 12%, var(--surface)); }
+	.sort-board__chip.is-dragging { opacity: 0.45; }
+	.sort-board__put { align-self: flex-start; max-width: 100%; min-height: 32px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--ink-soft); font: inherit; font-size: 0.78em; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+	.sort-board__put[aria-disabled='true'] { opacity: 0.6; }
+	.sort-board__zone.is-target .sort-board__put { border-color: var(--chapter-accent); color: var(--ink-strong); background: var(--chapter-tint); }
+	.sort-board__summary { margin: 12px 0 0; color: var(--ink-strong); font-weight: 600; line-height: 1.5; }
+	.sort-board__explain { margin: 10px 0; padding: 8px 10px; border-left: 4px solid var(--chapter-accent); background: var(--chapter-tint); color: var(--ink); line-height: 1.5; }
+	.sort-board__explain p { margin: 0 0 4px; }
+	.sort-board__explain p:last-child { margin-bottom: 0; }
+	.sort-board__explain.is-different { border-left-color: var(--warning); background: color-mix(in srgb, var(--warning) 12%, var(--surface)); }
+	.sort-board__tag { display: inline-block; padding: 0 6px; border: 1px dashed var(--warning); border-radius: 4px; color: var(--ink-strong); font-size: 0.78em; font-weight: 700; }
+	.sort-board__actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+	.sort-board__why { margin-top: 8px; font-size: 0.9em; }
+	.sort-board__why summary { cursor: pointer; color: var(--chapter-ink); font-weight: 700; }
+	.sort-board__why ul { margin: 6px 0 0; padding-left: 1.2em; }
+	.sort-board__why li { margin: 4px 0; }
+	.sort-board__legend { margin: 0 0 6px; color: var(--ink-soft); font-size: 0.85em; }
+	.sort-board__venn { container-type: inline-size; position: relative; }
+	.sort-board__venn-grid { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); min-height: 230px; }
+	.sort-board__venn-shape { position: absolute; top: 0; bottom: 0; width: 66.67%; border: 2px solid color-mix(in srgb, var(--chapter-accent) 75%, transparent); border-radius: 56px; background: color-mix(in srgb, var(--chapter-accent) 9%, transparent); pointer-events: none; }
+	.sort-board__venn-shape--a { left: 0; }
+	.sort-board__venn-shape--b { right: 0; }
+	.sort-board--venn .sort-board__venn .sort-board__zone { position: relative; justify-content: center; border: 0; background: transparent; padding: 14px 8px; }
+	.sort-board--venn .sort-board__venn .sort-board__bin { border-color: color-mix(in srgb, var(--line) 70%, transparent); align-content: center; justify-content: center; }
+	.sort-board__zone--outside { margin-top: 10px; }
+	@container (max-width: 540px) {
+		.sort-board__venn-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: repeat(3, 1fr); min-height: 0; }
+		.sort-board__venn-shape { left: 0; right: 0; width: auto; height: 66.67%; border-radius: 40px; }
+		.sort-board__venn-shape--a { top: 0; bottom: auto; }
+		.sort-board__venn-shape--b { top: auto; bottom: 0; }
+	}
+	@media (prefers-reduced-motion: no-preference) { .sort-board__chip, .sort-board__bin, .sort-board__explain { transition: background-color 0.15s, border-color 0.15s, opacity 0.15s; } }
+</style>
