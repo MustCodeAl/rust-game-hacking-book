@@ -1,0 +1,98 @@
+---
+// An explorable picture: it opens already showing the lesson's worked example
+// and its explanation, and the reader changes a choice or a slider to see the
+// picture and the plain-English sentence follow. Nothing is graded or required.
+// The visuals are data entries in src/scripts/visuals.js (see VISUALS there).
+//
+//   <Visual kind="hash-source" />
+import { VISUALS } from '../scripts/visuals.js';
+
+interface Props {
+	kind: string;
+	id?: string;
+	label?: string;
+}
+const { kind, id = `visual-${kind}`, label } = Astro.props;
+const entry = VISUALS[kind];
+if (!entry) throw new Error(`Unknown <Visual kind="${kind}">`);
+---
+
+<section class="concept-lab visual-lab not-content" id={id} data-visual={kind} aria-label={label ?? entry.title ?? 'Interactive picture'} data-reader-skip>
+	<p class="concept-lab__fallback">{entry.caption} The interactive version needs JavaScript; the lesson text around it explains the same idea.</p>
+</section>
+
+<script>
+	import { mountVisuals } from '../scripts/visuals.js';
+	mountVisuals();
+</script>
+
+<style is:global>
+	.visual-lab__invite { margin: 4px 0 8px; color: var(--ink-soft); font-size: 0.9em; }
+	.visual-lab__choices { display: grid; gap: 6px; min-width: 0; margin: 8px 0; padding: 0; border: 0; }
+	.visual-lab__choices legend { margin-bottom: 4px; padding: 0; color: var(--ink-soft); font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+	.visual-lab__choice { display: flex; gap: 10px; align-items: flex-start; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-alt); color: var(--ink); cursor: pointer; }
+	.visual-lab__choice:has(input:checked) { border-color: var(--chapter-accent); background: var(--chapter-tint); box-shadow: inset 4px 0 0 var(--chapter-accent); }
+	.visual-lab__choice:focus-within { outline: 2px solid var(--chapter-accent); outline-offset: 2px; }
+	.visual-lab__choice input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--chapter-accent); }
+	.visual-lab__choice-body { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+	.visual-lab__tick { font-size: 0.8em; font-style: normal; color: var(--chapter-ink, var(--ink-soft)); }
+	.visual-lab__figure svg { display: block; width: 100%; max-width: 520px; height: auto; margin: 8px auto; }
+	.visual-lab__explain { margin: 8px 0; padding: 8px 10px; border-left: 4px solid var(--chapter-accent); background: var(--chapter-tint); color: var(--ink); }
+	.visual-lab__explain--diff { border-left-color: var(--warning); background: var(--warning-soft); }
+	.visual-lab__actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+	.visual-lab__controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0; align-items: end; }
+	.visual-lab__slider { display: grid; gap: 2px; min-width: 150px; flex: 1 1 150px; font-size: 0.85em; color: var(--ink-soft); }
+	.visual-lab__slider input { width: 100%; min-height: 28px; accent-color: var(--chapter-accent); }
+	.visual-lab__slider output { font-family: var(--mono); color: var(--ink-strong); }
+	.visual-lab__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; margin: 8px 0; }
+	.visual-lab__group { margin: 10px 0 2px; color: var(--ink-soft); font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+	.visual-lab__row { display: grid; gap: 3px; margin: 6px 0; }
+	.visual-lab__row-label { font-size: 0.85em; color: var(--ink); overflow-wrap: anywhere; }
+	.visual-lab__readout { font-family: var(--mono); font-size: 0.8em; color: var(--ink-soft); overflow-wrap: anywhere; }
+	.visual-lab__track { position: relative; height: 20px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface-alt); }
+	.visual-lab__fill { height: 100%; width: 0; background: var(--chapter-accent); border-radius: 2px; }
+	.visual-lab__fill--warn { background: var(--warning); }
+	.visual-lab__marker { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink-strong); }
+	.visual-lab__legend { margin: 4px 0; color: var(--ink-soft); font-size: 0.8em; }
+	.visual-lab__cells { display: flex; flex-wrap: wrap; gap: 2px; margin: 6px 0; }
+	.visual-lab__cell { box-sizing: border-box; width: 8px; height: 8px; border: 1px solid var(--line); }
+	.visual-lab__cell--on { border-color: var(--chapter-accent); background: var(--chapter-accent); }
+	.visual-lab__cell--warn { border-color: var(--warning); background: var(--warning); }
+	.visual-lab__bytes, .visual-lab__digest-row { display: flex; flex-wrap: wrap; gap: 3px 8px; font-family: var(--mono); font-size: 0.85em; color: var(--ink); }
+	.visual-lab__byte, .visual-lab__hex { padding: 0 1px; border-radius: 2px; }
+	.visual-lab__hexgroup { display: inline-flex; }
+	.visual-lab__hex--diff { background: var(--warning-soft); color: var(--ink-strong); box-shadow: inset 0 -2px 0 var(--warning); }
+	.visual-lab__hist { position: relative; display: flex; align-items: flex-end; gap: 2px; height: 120px; margin: 4px 0 0; padding: 0 0 0 0; border-bottom: 1px solid var(--ink-soft); }
+	.visual-lab__bin { flex: 1 1 0; display: flex; align-items: flex-end; height: 100%; min-width: 0; }
+	.visual-lab__bar { width: 100%; background: var(--chapter-accent); border-radius: 2px 2px 0 0; }
+	.visual-lab__bar--warn { background: var(--warning); }
+	.visual-lab__line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink-strong); }
+	.visual-lab__pause { position: absolute; top: 0; padding: 0 4px; transform: translateX(-50%); border: 1px solid var(--ink-soft); border-radius: 3px; background: var(--surface); color: var(--ink-strong); font-size: 11px; line-height: 16px; }
+	.visual-lab__ticks, .visual-lab__stats { position: relative; height: 18px; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+	.visual-lab__ticks span, .visual-lab__stats span { position: absolute; top: 2px; transform: translateX(-50%); white-space: nowrap; }
+	.visual-lab__stats .visual-lab__stat--end { transform: translateX(-100%); }
+	.visual-lab__ticks span:first-child { transform: none; }
+	.visual-lab__ticks span:last-child { transform: translateX(-100%); }
+	@media (prefers-reduced-motion: no-preference) {
+		.visual-lab__fill { transition: width 0.25s ease; }
+		.visual-lab__line, .visual-lab__pause { transition: left 0.15s ease; }
+	}
+	/* Inline SVG drawings: every colour comes from the page's theme variables. */
+	.visual-lab svg { color: var(--ink); }
+	.visual-lab .v-t { fill: var(--ink); font-size: 12.5px; }
+	.visual-lab .v-sm { font-size: 11px; }
+	.visual-lab .v-b { font-weight: 700; }
+	.visual-lab .v-s { fill: var(--ink-soft); }
+	.visual-lab .v-m { font-family: var(--mono); }
+	.visual-lab .v-box { fill: var(--surface-alt); stroke: var(--ink-soft); stroke-width: 1.2; }
+	.visual-lab .v-ok { fill: var(--chapter-tint); stroke: var(--chapter-accent); stroke-width: 2; }
+	.visual-lab .v-warn { fill: var(--warning-soft); stroke: var(--warning); stroke-width: 2; }
+	.visual-lab .v-dim { fill: none; stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 4 3; }
+	.visual-lab .v-dim ~ text, .visual-lab .v-skip text { fill: var(--ink-soft); opacity: 0.75; }
+	.visual-lab .v-zone { fill: var(--chapter-tint); stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 5 4; opacity: 0.7; }
+	.visual-lab .v-arrow { fill: none; stroke: var(--ink-soft); stroke-width: 1.6; marker-end: url(#v-arr); }
+	.visual-lab .v-faint { opacity: 0.3; }
+	.visual-lab .v-mk { fill: var(--ink-soft); }
+	.visual-lab .v-node { fill: var(--surface); stroke: var(--ink-soft); stroke-width: 1.5; opacity: 0.5; }
+	.visual-lab .v-node--on { fill: var(--chapter-accent); stroke: var(--chapter-accent); opacity: 1; }
+</style>
