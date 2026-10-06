@@ -85,6 +85,7 @@ export default defineConfig({
 				'./src/styles/mermaid.css',
 				'./src/styles/home.css',
 				'./src/styles/print.css',
+				'./src/styles/design/index.css',
 			],
 			components: {
 				Head: './src/components/overrides/Head.astro',
@@ -96,6 +97,8 @@ export default defineConfig({
 				PageSidebar: './src/components/overrides/PageSidebar.astro',
 			},
 			head: [
+				// Opt-in design layer v2: ?design=v2 turns it on and remembers it, ?design=off turns it off.
+				{ tag: 'script', content: "try{var q=new URLSearchParams(location.search).get('design');if(q==='v2')localStorage.setItem('gha-design','v2');if(q==='off')localStorage.removeItem('gha-design');if(localStorage.getItem('gha-design')==='v2'){document.documentElement.setAttribute('data-design','v2');(function(){var r=document.documentElement;function set(k,v){if(v==null||v==='')r.removeAttribute(k);else if(r.getAttribute(k)!==v)r.setAttribute(k,v)}function sync(){var d=r.dataset;set('data-palette',d.academyTheme||'paper');set('data-brightness',d.theme==='dark'?'dark':'light');set('data-bg',d.academyBackground&&d.academyBackground!=='theme'?d.academyBackground:null);set('data-code-brightness',d.academyCodeMode);set('data-ligatures',d.academyLigatures==='on'?'on':'off');set('data-motion',d.academyMotion==='off'?'off':null);set('data-chat-position',d.academyChat)}new MutationObserver(sync).observe(r,{attributes:true,attributeFilter:['data-theme','data-academy-theme','data-academy-background','data-academy-code-mode','data-academy-ligatures','data-academy-motion','data-academy-chat']});document.addEventListener('DOMContentLoaded',sync);sync()})()}}catch(e){}" },
 				// Apply every saved reader-theme choice before first paint, so a dark
 				// palette or a light code theme never flashes the defaults. The keys
 				// match the Jekyll edition, so returning readers keep their settings.

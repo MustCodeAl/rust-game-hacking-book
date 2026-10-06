@@ -83,6 +83,14 @@ detailed notes so any AI can continue. Keep agents to one or two at a time; veri
   none) and making them more visible is a real request. The last five were placed automatically after the first body paragraph
   below the first heading of each lesson; check that placement reads well and move any that interrupt a thought.
 
+### Design layer v2 (opt-in, added 2026-10-06 — see BOOK_REVISION_PROGRESS.md T21)
+
+`site/src/styles/design/*.css` is a complete token + component layer scoped to `:root[data-design="v2"]`. Enable with `?design=v2`, or the
+"Page design" buttons in the Reader theme panel. To make it the default for everyone, change the head script in `astro.config.mjs` to set
+`data-design="v2"` unless `gha-design==='off'` — only after checking the `.kit-*` selectors in `components.css`/`labs.css` against real markup
+(open lessons with the layer on at 420 and 1280 px and look for unstyled kit pieces). Open work: UI for font size / spacing / hovercard
+mode in the appearance drawer, bottom-sheet hovercards on touch, measured contrast.
+
 ### Prioritized plan
 1. **Images and GIFs everywhere** (owner request, unmet): add 2 or 3 original CC0 SVG figures per chapter (about 40 more), each placed
    in a `<Frame caption>` right after the paragraph it illustrates, hand-written SVG 480 wide (see existing ones), rows added to

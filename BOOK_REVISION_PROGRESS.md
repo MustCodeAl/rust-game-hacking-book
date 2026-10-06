@@ -1391,3 +1391,21 @@ Margin comment kinds extended to eleven with a left/right scheme; the margin scr
 reload keeps it, delete works at 420; in the 1280 marker mode the bubble must be opened before the × is clickable). New simulator
 `server-authority` (15.1): checked and unchecked server, verified at both widths. Not done: syncing reader comments to accounts,
 using the new kinds in lessons, KaTeX examples in `math` notes. No lab programs were run.
+
+## T21 — Design layer v2 (opt-in) (2026-10-06)
+
+New modular stylesheet layer in `site/src/styles/design/` (tokens, layout, components, labs, subsystems, responsive, a11y-print,
+`index.css`), imported last in `customCss`. **Every rule is scoped to `:root[data-design="v2"]`, so the live site is unchanged unless a
+reader opts in** (verified: default page has no `data-design`, floating pager still shown, original background and font). Turn it on with
+`?design=v2` once (remembered in `localStorage gha-design`), `?design=off` to remove it, or the new "Page design: Classic / New (beta)"
+buttons in the Reader theme panel (they reload the page). A small head script mirrors the existing `data-academy-*` / `data-theme`
+attributes into the spec's axes (`data-palette`, `data-brightness`, `data-bg`, `data-code-brightness`, `data-ligatures`, `data-motion`,
+`data-chat-position`), so the real theme picker drives the layer. Palettes paper/purple/midnight/forest/contrast use the spec hex values
+(dark surfaces apply in dark brightness; in light only the accent changes; contrast light is white/black). Layout: 720px reading column,
+no fixed pager (static `.pagination-links`), Notes dock bottom-right at z-index 900 (16px inset on phones), off-canvas sidebar under 768px.
+Checked in Chrome: no horizontal page overflow on ten pages at 420 and 1280 px in four palette/brightness combinations; header at 420px
+matches the classic header; lab, quiz and aside render correctly in midnight. A selector bug (the layer forced `display:flex` on Starlight's
+responsive header groups, showing print/theme chips on phones) was found and fixed. Not verified: many `.kit-*` selectors are best guesses
+and some will not match real markup; appearance-drawer controls for the extra axes (font size, spacing, hovercard mode, diagram options)
+are CSS-ready but have no UI yet; hovercard bottom sheet needs JS support; contrast ratios were chosen, not measured; no touch devices,
+Safari or Firefox. No lab programs were run.
