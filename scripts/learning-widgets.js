@@ -831,10 +831,187 @@
     render();
   }
 
+
+  // Predict-then-check labs: the reader changes the numbers, commits to an
+  // answer, and only then sees the worked steps. Each lab is plain data.
+  const hex = (n) => "0x" + n.toString(16).toUpperCase();
+  const parseNumber = (raw) => {
+    const text = String(raw || "").trim().toLowerCase().replace(/_/g, "");
+    if (/^-?0x[0-9a-f]+$/.test(text)) return Number.parseInt(text, 16);
+    if (/^-?\d+(\.\d+)?$/.test(text)) return Number(text);
+    return NaN;
+  };
+  const PREDICT_LABS = {
+    "stride-lab": {
+      eyebrow: "Predict, then check",
+      title: "Find a field inside a table of records",
+      description: "Records sit one fixed stride apart. Pick a player and a field, predict the offset from the table's start, then check it.",
+      inputs: [
+        { key: "index", label: "Player index", min: 0, max: 9, value: 2 },
+        { key: "stride", label: "Bytes between records", options: [0x20, 0x270], value: 0x20, format: hex },
+        { key: "field", label: "Field offset inside a record", options: [0x00, 0x04, 0x08, 0x10], value: 0x04, format: hex },
+      ],
+      ask: (v) => `Player ${v.index} has its record ${hex(v.stride)} bytes after the previous one, and the field you want is at +${hex(v.field)}. What offset from the table's start reaches it? Answer in hexadecimal.`,
+      answer: (v) => v.index * v.stride + v.field,
+      accept: (guess, right) => guess === right,
+      hint: (v) => `Count whole records first: the first player is record 0, so player ${v.index} starts after ${v.index} strides. Add the field offset last.`,
+      steps: (v) => [`Record start = ${v.index} × ${hex(v.stride)} = ${hex(v.index * v.stride)}`, `Field = ${hex(v.index * v.stride)} + ${hex(v.field)} = ${hex(v.index * v.stride + v.field)}`],
+      show: (right) => hex(right),
+    },
+    "grid-lab": {
+      eyebrow: "Predict, then check",
+      title: "Turn a tile's (x, y) into a position in a flat list",
+      description: "A map is stored as one long row-major list. Pick a tile, predict its index, then check the arithmetic.",
+      inputs: [
+        { key: "width", label: "Map width (tiles)", min: 3, max: 12, value: 5 },
+        { key: "x", label: "Tile x (column)", min: 0, max: 11, value: 2 },
+        { key: "y", label: "Tile y (row)", min: 0, max: 5, value: 3 },
+      ],
+      normalize: (v) => ({ ...v, x: Math.min(v.x, v.width - 1) }),
+      ask: (v) => `The map is ${v.width} tiles wide. What is the row-major index of tile (${v.x}, ${v.y}), counting from 0?`,
+      answer: (v) => v.y * v.width + v.x,
+      accept: (guess, right) => guess === right,
+      hint: (v) => `Each full row above holds ${v.width} tiles. Skip ${v.y} full row${v.y === 1 ? "" : "s"}, then move ${v.x} tile${v.x === 1 ? "" : "s"} along the row.`,
+      steps: (v) => [`Skipped rows = ${v.y} × ${v.width} = ${v.y * v.width}`, `Index = ${v.y * v.width} + ${v.x} = ${v.y * v.width + v.x}`],
+      show: (right) => String(right),
+    },
+    "vector-lab": {
+      eyebrow: "Predict, then check",
+      title: "How far apart are two points?",
+      description: "Subtract to get the direction, then measure its length. Predict the distance to one decimal place.",
+      inputs: [
+        { key: "ax", label: "Point A x", min: -6, max: 6, value: 0 },
+        { key: "ay", label: "Point A y", min: -6, max: 6, value: 0 },
+        { key: "bx", label: "Point B x", min: -6, max: 6, value: 3 },
+        { key: "by", label: "Point B y", min: -6, max: 6, value: 4 },
+      ],
+      ask: (v) => `A is at (${v.ax}, ${v.ay}) and B is at (${v.bx}, ${v.by}). What is the distance from A to B, rounded to one decimal place?`,
+      answer: (v) => Math.hypot(v.bx - v.ax, v.by - v.ay),
+      accept: (guess, right) => Math.abs(guess - right) <= 0.051,
+      hint: (v) => `Subtract first: B − A gives (${v.bx - v.ax}, ${v.by - v.ay}). The length is the square root of the sum of the squares of those two numbers.`,
+      steps: (v) => {
+        const dx = v.bx - v.ax, dy = v.by - v.ay;
+        return [`Direction = B − A = (${dx}, ${dy})`, `Squares added = ${dx * dx} + ${dy * dy} = ${dx * dx + dy * dy}`, `Distance = √${dx * dx + dy * dy} ≈ ${Math.hypot(dx, dy).toFixed(1)}`];
+      },
+      show: (right) => right.toFixed(1),
+    },
+    "utf8-lab": {
+      eyebrow: "Predict, then check",
+      title: "How many bytes does this text take?",
+      description: "One visible character is not always one byte. Pick a word, predict its UTF-8 byte count, then see each character's bytes.",
+      text: { key: "text", label: "Text (up to 8 characters)", value: "café", samples: ["gold", "café", "金貨", "🙂"] },
+      ask: (v) => `How many bytes does “${v.text}” take in UTF-8? Count bytes, not characters.`,
+      answer: (v) => new TextEncoder().encode(v.text).length,
+      accept: (guess, right) => guess === right,
+      hint: (v) => `Count characters first (${Array.from(v.text).length}). Plain ASCII letters use one byte each; most other characters need two, three, or four.`,
+      steps: (v) => Array.from(v.text).map((ch) => {
+        const bytes = Array.from(new TextEncoder().encode(ch));
+        return `${ch} → U+${ch.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")} → ${bytes.map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join(" ")} (${bytes.length} byte${bytes.length === 1 ? "" : "s"})`;
+      }),
+      show: (right) => String(right),
+    },
+  };
+
+  function initializePredictLab(root, lab) {
+    const cfg = PREDICT_LABS[lab];
+    const id = String(root.dataset.conceptId || lab).replace(/[^a-z0-9_-]/gi, "-");
+    root.replaceChildren(makeLabHeader(cfg.eyebrow, cfg.title, cfg.description));
+    const body = element("div", "concept-lab__body");
+    const controls = element("div", "concept-lab__control-row");
+    const values = {};
+    const readers = [];
+    const sync = () => {
+      Object.assign(values, cfg.normalize ? cfg.normalize({ ...values }) : values);
+      readers.forEach(({ spec, input }) => { if (!spec.options && values[spec.key] !== undefined) { input.value = String(values[spec.key]); if (input.nextSibling) input.nextSibling.textContent = String(values[spec.key]); } });
+    };
+    (cfg.inputs || []).forEach((spec) => {
+      const label = element("label", "concept-lab__field");
+      label.htmlFor = `${id}-${spec.key}`;
+      const caption = element("span", "concept-lab__field-label", spec.label);
+      let input;
+      if (spec.options) {
+        input = element("select", "concept-lab__text-input");
+        spec.options.forEach((option) => { const o = element("option", "", (spec.format || String)(option)); o.value = String(option); input.append(o); });
+      } else {
+        input = element("input", "concept-lab__text-input");
+        input.type = "range"; input.min = spec.min; input.max = spec.max; input.step = 1;
+      }
+      input.id = `${id}-${spec.key}`;
+      input.value = String(spec.value);
+      const shown = element("span", "concept-lab__result-note", "");
+      const read = () => { values[spec.key] = Number(input.value); shown.textContent = spec.options ? "" : String(input.value); };
+      input.addEventListener("input", () => { read(); sync(); resetAnswer(); redraw(); });
+      readers.push({ spec, input, read });
+      read();
+      label.append(caption, input, shown);
+      controls.append(label);
+    });
+    if (cfg.text) {
+      const control = makeTextControl(`${id}-text`, cfg.text.label, cfg.text.value);
+      control.input.maxLength = 16;
+      values.text = cfg.text.value;
+      control.input.addEventListener("input", () => { values.text = control.input.value.slice(0, 8) || " "; resetAnswer(); redraw(); });
+      const samples = element("div", "concept-lab__examples");
+      samples.append(element("span", "concept-lab__example-label", "Try:"));
+      cfg.text.samples.forEach((sample) => {
+        const button = element("button", "concept-lab__example", sample);
+        button.type = "button";
+        button.addEventListener("click", () => { control.input.value = sample; values.text = sample; resetAnswer(); redraw(); });
+        samples.append(button);
+      });
+      controls.append(control.label, samples);
+    }
+    sync();
+
+    const question = element("p", "concept-lab__description");
+    question.setAttribute("aria-live", "polite");
+    const guessLabel = element("label", "concept-lab__field");
+    guessLabel.htmlFor = `${id}-guess`;
+    const guess = element("input", "concept-lab__text-input");
+    guess.id = `${id}-guess`; guess.type = "text"; guess.autocomplete = "off"; guess.spellcheck = false; guess.placeholder = "Your prediction";
+    guessLabel.append(element("span", "concept-lab__field-label", "Your prediction"), guess);
+    const actions = element("div", "concept-lab__examples");
+    const mk = (text) => { const b = element("button", "concept-lab__example", text); b.type = "button"; actions.append(b); return b; };
+    const check = mk("Check"), hintButton = mk("Hint"), reveal = mk("Show the steps"), shuffle = mk("New numbers");
+    const status = element("p", "concept-lab__takeaway");
+    status.setAttribute("aria-live", "polite");
+    const steps = element("ol", "concept-lab__steps");
+    steps.hidden = true;
+    body.append(controls, question, guessLabel, actions, status, steps);
+    root.append(body);
+
+    function resetAnswer() { guess.value = ""; status.textContent = ""; steps.hidden = true; }
+    function showSteps() { steps.replaceChildren(...cfg.steps(values).map((line) => element("li", "", line))); steps.hidden = false; }
+    function redraw() { question.textContent = cfg.ask(values); }
+    check.addEventListener("click", () => {
+      const right = cfg.answer(values);
+      const given = parseNumber(guess.value);
+      if (!Number.isFinite(given)) { status.textContent = "Type a number first, then check it."; return; }
+      if (cfg.accept(given, right)) { status.textContent = "✅ Right. Here is the working, so you can compare your method."; showSteps(); }
+      else { status.textContent = "❌ Not quite. Try the hint, change your answer, or open the steps."; }
+    });
+    hintButton.addEventListener("click", () => { status.textContent = "💡 " + cfg.hint(values); });
+    reveal.addEventListener("click", () => { status.textContent = `The answer is ${cfg.show(cfg.answer(values))}.`; showSteps(); });
+    shuffle.addEventListener("click", () => {
+      readers.forEach(({ spec, input, read }) => {
+        input.value = spec.options ? String(spec.options[Math.floor(Math.random() * spec.options.length)]) : String(spec.min + Math.floor(Math.random() * (spec.max - spec.min + 1)));
+        read();
+      });
+      if (cfg.text) {
+        const pick = cfg.text.samples[Math.floor(Math.random() * cfg.text.samples.length)];
+        values.text = pick;
+        root.querySelector(".concept-lab__field input[type=text]").value = pick;
+      }
+      sync(); resetAnswer(); redraw();
+    });
+    guess.addEventListener("keydown", (event) => { if (event.key === "Enter") check.click(); });
+    redraw();
+  }
+
   function initializeConceptLab(root) {
     if (root.dataset.learningReady === "true") return;
     const lab = root.dataset.conceptLab;
-    if (!["byte-lens", "address-builder", "angle-lab", "pointer-walk", "scan-filter", "packet-framer"].includes(lab)) return;
+    if (!["byte-lens", "address-builder", "angle-lab", "pointer-walk", "scan-filter", "packet-framer", ...Object.keys(PREDICT_LABS)].includes(lab)) return;
     root.dataset.learningReady = "true";
     if (lab === "byte-lens") initializeByteLens(root);
     if (lab === "address-builder") initializeAddressBuilder(root);
@@ -842,6 +1019,7 @@
     if (lab === "pointer-walk") initializePointerWalk(root);
     if (lab === "scan-filter") initializeScanFilter(root);
     if (lab === "packet-framer") initializePacketFramer(root);
+    if (PREDICT_LABS[lab]) initializePredictLab(root, lab);
   }
 
   function initializeLearningWidgets(scope) {
