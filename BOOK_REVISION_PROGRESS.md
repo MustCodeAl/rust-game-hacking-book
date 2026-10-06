@@ -1231,6 +1231,7 @@ refilled from the published pages' `data-processed="true"` diagrams, after which
 a build here matches the published one apart from random theme-menu ids. No lab
 programs were run.
 
+<<<<<<< HEAD
 ## T11 — Chat page reference, typing, sounds, explorable simulations (2026-10-06)
 
 Chat: every Context7 message now ends with a `[Reading: lesson ... section ... page ...]` line added when
@@ -1250,3 +1251,52 @@ because the file is fetched only on click. Verified in Chromium at 375 and 1280 
 Quiz buttons: Retake quiz and New quiz now appear only after a batch is finished, below the score with a
 divider, so Check answer / Next question can never sit beside them (`academy-quiz__after`). Verified in Chromium
 at 375 and 1280 pixels: mid-quiz shows only Next question; finished shows Retake and New quiz; New quiz works.
+=======
+## T12 — Code blanks and state machine builder (2026-10-06, branch `claude/interactives`)
+
+Two explore-first components, built on the owner's steer that interactives teach and never gate.
+Each opens already working (the lesson's correct code; the lesson's complete machine) with a short
+explanation, so a reader who never clicks still learns the idea. Nothing is scored or required; a
+version that differs from the lesson is amber, never red.
+
+- **Code blanks** (`blanks-*`): the blanks start filled with the lesson's answer. Tap or drag a piece into a
+  blank (or Enter on a piece, then Enter on a blank; Escape/Delete empties a blank, and an "empty the blank"
+  piece does the same) and a plain-English line says what that version would do or why it would break. Check,
+  Hint (fills one blank), "Empty the blanks" and an always-visible "Show the answer" are optional extras.
+  Lessons: 2.8 (checked pointer resolver, `pages/2/09`), 5.10 (atomic work queue, `pages/8/05`),
+  6.6 (dead zone, `pages/8/11`), 9.1 (magic bytes, `pages/9/01`), 13.6 (check-then-write, `pages/11/04`).
+- **State machine builder** (`fsm-*`): plain SVG. Click a state, then another, pick the input in a select and
+  Add; click an arrow (or use the list) to remove it. Every change re-runs six scripted inputs live and says
+  what changed ("At step 1 ... the bot stays in Observe instead of going to Choose"), adds the arrow's own
+  `ifMissing` sentence, and flags dead ends and unreachable states. "Replay the inputs" steps through the
+  trace (instant under reduced motion); Hint puts one arrow back; "Start from empty" and Reset.
+  Lessons: 10.5 Lua bot (`pages/12/05`) and 4.6 recruitment macro (`pages/4/04`; the lesson's Stopped state
+  is left out of the picture and the widget says so).
+- **Where the code is**: `site/public/scripts/puzzle-labs.js` (the data maps `CODE_BLANKS` and `STATE_MACHINES`
+  plus both engines), loaded on demand by `learning-widgets.js` for any `data-concept-lab` starting with
+  `blanks-` or `fsm-` (it also exposes `window.AcademyLearning` helpers); styles are appended to
+  `site/src/styles/learning-widgets.css` (`code-blanks__*`, `fsm__*`, using the existing theme variables and
+  `concept-lab__*` classes). The widgets sit inside `.concept-lab`, which `reader-text.mjs` already skips, so
+  the listening editions, TXT export and read-aloud queue do not contain them. With JavaScript off the
+  existing ConceptLab fallback sentence shows.
+- **Add a puzzle as data**: for blanks add an entry to `CODE_BLANKS` (`title`, `description`, `code` lines with
+  `{1}`, `{2}` markers, `bank` of pieces including decoys, `blanks: [{ answer, effects: { piece: "what happens" } }]`,
+  `why`), for a machine add an entry to `STATE_MACHINES` (`states` with x/y, `triggers`, the complete `edges`
+  with optional `ifMissing`, `inputs`, `start`, `terminal`, `actor`, `viewBox`). Then put
+  `<ConceptLab lab="the-key" id="unique-id" label="..." />` after the paragraph that explains the idea. No JS edits.
+  Keep code to 8 lines or fewer, ASCII, and make every effect line answerable from the lesson.
+- **Executed and verified**: `bun run build` (exit 0, 318 pages; the "no Chrome ... drew 0" prerender note is
+  expected), `python3 scripts/check-links.py dist` (0 broken), `check-reading-audio.mjs` and
+  `check-lesson-quizzes.mjs` still pass. A Playwright script (kept outside the repo) drove all seven widgets
+  at 375 and 1280 pixels in light and dark: opening state is the working one, swap a piece (effect line and
+  differs-from-lesson summary), Check (amber marks), Hint, Empty, keyboard place and Escape clear, Show the
+  answer, mouse drag (1280 light), state machine remove via list and via selecting an arrow, Hint restores,
+  Start from empty, draw an arrow by clicking two states and choosing a trigger, keyboard-start an arrow and
+  Escape, Replay highlights then reports, reduced-motion replay is immediate, no horizontal page overflow and
+  no page errors (mermaid CDN fetch errors ignored), and the JS-off fallback text. Screenshots were read for
+  both themes and widths. No lab binaries were run.
+- **Not verified**: real touch devices and screen readers (aria-labels and live regions are written but only
+  checked structurally); HTML5 drag-and-drop does not work on touch, where tap-piece-then-tap-blank is the
+  path; the picture is wider than a 375px phone, so it scrolls sideways inside the widget (a tip says so and
+  the arrow list does the same job); Firefox and Safari were not run; nothing was published.
+>>>>>>> claude/interactives

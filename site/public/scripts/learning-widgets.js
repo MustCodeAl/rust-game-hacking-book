@@ -3,6 +3,7 @@
 
   const initializedQuizRoots = new WeakSet();
   const quizModuleURL = new URL('lesson-quiz.mjs', document.currentScript.src).href;
+  const puzzleScriptURL = new URL('puzzle-labs.js', document.currentScript.src).href;
 
   const OWNERSHIP_EXAMPLES = {
     "move-string": {
@@ -1015,9 +1016,32 @@
     redraw();
   }
 
+  // Explore-first puzzles ("blanks-*" code blanks and "fsm-*" state machines) are
+  // plain data in puzzle-labs.js. That file is fetched only on pages that use one.
+  let puzzleScriptPromise = null;
+  function loadPuzzleLabs() {
+    if (window.AcademyPuzzles) return Promise.resolve(window.AcademyPuzzles);
+    if (!puzzleScriptPromise) {
+      window.AcademyLearning = { element, makeLabHeader, makeTextControl, makeResult };
+      puzzleScriptPromise = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = puzzleScriptURL;
+        script.onload = () => resolve(window.AcademyPuzzles);
+        script.onerror = () => reject(new Error("puzzle-labs.js did not load"));
+        document.head.append(script);
+      });
+    }
+    return puzzleScriptPromise;
+  }
+
   function initializeConceptLab(root) {
     if (root.dataset.learningReady === "true") return;
     const lab = root.dataset.conceptLab;
+    if (/^(blanks|fsm)-/.test(lab)) {
+      root.dataset.learningReady = "true";
+      loadPuzzleLabs().then((puzzles) => puzzles.mount(root, lab)).catch(() => { root.dataset.learningReady = "false"; });
+      return;
+    }
     if (!["byte-lens", "address-builder", "angle-lab", "pointer-walk", "scan-filter", "packet-framer", ...Object.keys(PREDICT_LABS)].includes(lab)) return;
     root.dataset.learningReady = "true";
     if (lab === "byte-lens") initializeByteLens(root);
