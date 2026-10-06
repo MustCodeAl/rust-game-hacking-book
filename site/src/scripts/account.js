@@ -7,12 +7,15 @@
 //
 // What is stored, in one row per user (see ACCOUNT_SETUP.md): finished lessons,
 // typing-practice bests, and quiz attempts. No name, e-mail or reading history
-// is written by this site; Supabase holds the sign-in itself.
+// is written by this site; Supabase holds the sign-in itself. Notes are part of
+// the same row (the newer edit of each note wins).
 
 const SESSION_KEY = 'gha-account-session';
 const DONE = 'gha-done';
 const TYPING = 'gha-speedtype-';
 const QUIZ = 'gha-quiz:v7:';
+const NOTE = 'gha-note:';
+const LAST = 'gha-last';
 const PROVIDERS = { google: 'Google', discord: 'Discord', github: 'GitHub' };
 
 const el = (tag, className, text) => {
@@ -27,31 +30,39 @@ const parse = text => { try { return JSON.parse(text); } catch { return null; } 
 
 // ---------------------------------------------------------------- progress
 export function snapshot(storage = window.localStorage) {
-	const data = { done: [], typing: {}, quiz: {} };
+	const data = { done: [], typing: {}, quiz: {}, notes: {}, last: storage.getItem(LAST) };
 	const done = parse(storage.getItem(DONE) || '[]');
 	if (Array.isArray(done)) data.done = done.filter(id => typeof id === 'string').sort();
 	for (let i = 0; i < storage.length; i++) {
 		const key = storage.key(i);
 		if (key.startsWith(TYPING)) data.typing[key.slice(TYPING.length)] = storage.getItem(key);
 		else if (key.startsWith(QUIZ)) data.quiz[key.slice(QUIZ.length)] = storage.getItem(key);
+		else if (key.startsWith(NOTE)) data.notes[key.slice(NOTE.length)] = storage.getItem(key);
 	}
 	return data;
 }
 
 const bestWpm = text => { const value = parse(text); return value && Number.isFinite(value.wpm) ? value.wpm : -1; };
+const editedAt = text => { const value = parse(text); return value && Number.isFinite(value.at) ? value.at : 0; };
 const isComplete = text => { const value = parse(text); return Boolean(value && value.complete === true); };
 
 // Never loses anything: lessons are unioned, the faster typing result stays,
 // and a finished quiz attempt beats an unfinished one (ties keep this device).
 export function mergeProgress(local, remote) {
 	const other = remote && typeof remote === 'object' ? remote : {};
-	const merged = { done: [], typing: { ...(other.typing || {}) }, quiz: { ...(other.quiz || {}) } };
+	const merged = { done: [], typing: { ...(other.typing || {}) }, quiz: { ...(other.quiz || {}) }, notes: { ...(other.notes || {}) }, last: other.last ?? null };
 	merged.done = Array.from(new Set([...(local.done || []), ...(Array.isArray(other.done) ? other.done : [])])).sort();
 	for (const [key, value] of Object.entries(local.typing || {})) {
 		if (!(key in merged.typing) || bestWpm(value) >= bestWpm(merged.typing[key])) merged.typing[key] = value;
 	}
 	for (const [key, value] of Object.entries(local.quiz || {})) {
 		if (!(key in merged.quiz) || isComplete(value) || !isComplete(merged.quiz[key])) merged.quiz[key] = value;
+	}
+	// The reading position is the newer of the two.
+	if (local.last && (!merged.last || editedAt(local.last) > editedAt(merged.last))) merged.last = local.last;
+	// A note keeps whichever edit is newer (an emptied note is an edit too).
+	for (const [key, value] of Object.entries(local.notes || {})) {
+		if (!(key in merged.notes) || editedAt(value) > editedAt(merged.notes[key])) merged.notes[key] = value;
 	}
 	return merged;
 }
@@ -61,6 +72,8 @@ function applyProgress(data) {
 	if (data.done.length) write(DONE, JSON.stringify(data.done));
 	for (const [key, value] of Object.entries(data.typing)) if (typeof value === 'string') write(TYPING + key, value);
 	for (const [key, value] of Object.entries(data.quiz)) if (typeof value === 'string') write(QUIZ + key, value);
+	for (const [key, value] of Object.entries(data.notes || {})) if (typeof value === 'string') write(NOTE + key, value);
+	if (typeof data.last === 'string') write(LAST, data.last);
 	if (read(DONE) !== before) {
 		// reader-progress.js listens for this to redraw its ticks and counts.
 		try { window.dispatchEvent(new StorageEvent('storage', { key: DONE })); } catch { /* older browsers */ }
