@@ -35,13 +35,11 @@ of `src/styles/learning-widgets.css`. Lessons: 2.8, 5.10, 6.6, 9.1, 13.6 (blanks
   `python3 scripts/make-reading-audio.py` (re-encoding changes the old MP3 bytes: restore
   `soft-music.mp3` and `quiet-rain.mp3` from git afterwards).
 
-**In progress — concept-focused quiz rewrite (owner's request):** the 137 pools written on 2026-10-06 are
-too tied to each page's own code, names, and lab details (57% of the new questions, against 13% of the
-older ones). Procedure, all in `site/scripts/`: `quiz-rewrite-prep.py` (finds the 1,621 flagged
-questions), `quiz-rewrite-spec.md` (the instructions for whoever rewrites), `quiz-concept-check.mjs`
-(mechanical checker), `quiz-rewrite-merge.py`. Check `git log` / `BOOK_REVISION_PROGRESS.md` T11 to see
-whether the rewrite was merged; if not, run prep, give each of three agents about a third of the lessons,
-check every output with the checker, merge, rebuild, run `check-lesson-quizzes.mjs`, publish.
+**Concept-focused quiz rewrite — DONE 2026-10-06.** The 137 pools written that day were too tied to each page's own
+code, names and lab details (57% of the new questions, against 13% of the older ones). All 1,621 flagged
+questions were rewritten to test the underlying concept in new scenarios (now 2% page-specific), checked by
+`site/scripts/quiz-concept-check.mjs` and merged. To redo or extend: `site/scripts/quiz-rewrite-prep.py`,
+`quiz-rewrite-spec.md`, `quiz-rewrite-merge.py`.
 
 **Principle (owner, 2026-10-06): interactives teach, they are not required exercises.** Every widget opens
 already showing a worked example and its explanation, updates live as the reader changes numbers, never grades

@@ -1300,3 +1300,14 @@ version that differs from the lesson is amber, never red.
   path; the picture is wider than a 375px phone, so it scrolls sideways inside the widget (a tip says so and
   the arrow list does the same job); Firefox and Safari were not run; nothing was published.
 >>>>>>> claude/interactives
+
+## T13 — Concept-focused quiz questions, interactive puzzles merged (2026-10-06)
+
+Rewrote 1,621 page-specific quiz questions (all 137 pools written on 2026-10-06) to test the concept in fresh
+scenarios, with the same ids: page-specific share 57% to 2%. Mechanical checks: `quiz-concept-check.mjs` per
+lesson (no lesson/lab references, identifiers or example names; four distinct options; balanced lengths;
+no duplicate prompts), then `check-lesson-quizzes.mjs` (147 pools, 3,064 questions, all three-times pools,
+balance on every question). Questions were not fact-checked against the lessons beyond the writers' own checks.
+Merged `claude/interactives` (code blanks in 2.8, 5.10, 6.6, 9.1, 13.6; state machine builder in 4.6, 10.5).
+The merge dropped a closing brace in `learning-widgets.css` and broke the build; fixed. Sign-in code is
+parked (see the sign-in paragraph above). No lab programs were run.
