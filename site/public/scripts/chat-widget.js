@@ -232,7 +232,8 @@
   // ------------------------------------------------------------------
 
   function setting() {
-    var value = root.dataset.academyChat;
+    // Top corners sat over the "On this page" controls, so an old saved top choice now means the bottom corner on the same side.
+    var value = (root.dataset.academyChat || "").replace(/^top/, "bottom");
     return value === "off" || CORNERS.indexOf(value) !== -1 ? value : "bottom-right";
   }
 

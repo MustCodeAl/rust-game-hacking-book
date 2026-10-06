@@ -78,7 +78,6 @@ export default defineConfig({
 				'./src/styles/reader-appearance.css',
 				'./src/styles/reader-progress.css',
 				'./src/styles/hover-cards.css',
-				'./src/styles/pager.css',
 				'./src/styles/speedtype.css',
 				'./src/styles/kit.css',
 				'katex/dist/katex.min.css',

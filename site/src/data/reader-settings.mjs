@@ -6,7 +6,6 @@ export const readerSettingsScript = `(${function () {
   function choose(value, values, fallback) { return values.indexOf(value) >= 0 ? value : fallback; }
   var settings = [
     ['academyTheme', 'gha-theme', ['paper', 'purple', 'midnight', 'forest', 'contrast'], 'paper'],
-    ['academyCodeMode', 'gha-code-mode', ['dark', 'light'], 'dark'],
     ['academySyntax', 'gha-syntax-palette', ['academy', 'cyber', 'aurora', 'solar', 'ocean', 'mono'], 'academy'],
     ['academyDiagramBackground', 'gha-diagram-background', ['theme', 'page', 'warm', 'cool', 'rose', 'neutral'], 'theme'],
     ['academyDiagramFill', 'gha-diagram-fill', ['tinted', 'plain'], 'tinted'],
@@ -15,7 +14,7 @@ export const readerSettingsScript = `(${function () {
     ['academyDiagramSize', 'gha-diagram-size', ['fit', 'actual'], 'fit'],
     ['academyGrid', 'gha-grid', ['on', 'off'], 'on'],
     ['academyCards', 'gha-cards', ['on', 'off'], 'on'],
-    ['academyChat', 'gha-chat', ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'off'], 'bottom-right'],
+    ['academyChat', 'gha-chat', ['bottom-right', 'bottom-left', 'off'], 'bottom-right'],
     ['academyGradients', 'gha-gradients', ['on', 'off'], 'on'],
     ['academyMotion', 'gha-motion', ['system', 'onrequest', 'off'], 'system'],
     ['academyAnimationSpeed', 'gha-animation-speed', ['slow', 'normal', 'fast'], 'normal'],
@@ -33,4 +32,8 @@ export const readerSettingsScript = `(${function () {
   root.dataset.theme = root.dataset.academyMode === 'auto'
     ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
     : root.dataset.academyMode;
+  // Code brightness: "page" (the default) follows the page, so a light page gets a light code surface; "dark" and "light" are
+  // explicit. academyCodeChoice is what the reader chose, academyCodeMode is what the stylesheets key on.
+  root.dataset.academyCodeChoice = choose(get('gha-code-mode'), ['page', 'dark', 'light'], 'page');
+  root.dataset.academyCodeMode = root.dataset.academyCodeChoice === 'page' ? root.dataset.theme : root.dataset.academyCodeChoice;
 }.toString()})();`;

@@ -1409,3 +1409,21 @@ responsive header groups, showing print/theme chips on phones) was found and fix
 and some will not match real markup; appearance-drawer controls for the extra axes (font size, spacing, hovercard mode, diagram options)
 are CSS-ready but have no UI yet; hovercard bottom sheet needs JS support; contrast ratios were chosen, not measured; no touch devices,
 Safari or Firefox. No lab programs were run.
+
+## T22 — Five visual fixes on the live (classic) layer (2026-10-06)
+
+Owner-reported bugs under Paper · Light, fixed in the classic styles (not only the opt-in v2 layer) and checked in Chrome at 1280 and 420 px:
+1. **Code surface follows the page.** New code brightness choice `page` (default; button "Match page" in the Reader theme panel), besides
+   explicit `dark` and `light`. The choice is `data-academy-code-choice`; the surface the stylesheets key on stays `data-academy-code-mode`
+   and is recomputed when `data-theme` changes (`resolveCodeMode` in `academy.js`; first paint in `src/data/reader-settings.mjs`).
+   Paper light code is now `#f4ede0` with a `#d8cbb0` 1px border (`code-theme.css`). Readers who saved an explicit `dark` keep it.
+2. **Inline code is quieter** (`reader-appearance.css`, last block): neutral tint (4.5% of the ink colour), 9% border, line-height inherited,
+   `box-decoration-break: clone`; inherits colour inside links and headings. Uses a `:root` prefix because bundle order varies.
+3. **Mid-screen chevrons removed.** `public/scripts/pager.js` no longer builds the floating pager; only the left/right arrow keys remain
+   (they use the `.pagination-links` cards at the bottom). `pager.css` deleted.
+4. **Chat bubble** only has bottom corners now (`chat-widget.js` `setting()` maps an old saved top choice to the bottom corner on the same
+   side; top buttons removed from the theme panel; Notes button sits above it). Not reproducible in the sandbox (the widget loads from a CDN),
+   so this was fixed by construction, not observed.
+5. **Sidebar active lesson**: 3px `border-inline-start` accent strip, square-left/rounded-right, raised surface, no outline box; keyboard
+   focus gets a 2px accent ring (`reader.css`).
+No lab programs were run.

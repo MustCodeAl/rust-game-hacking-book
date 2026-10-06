@@ -18,7 +18,7 @@
     { id: "contrast", label: "Contrast" }
   ];
   var MODE_LABELS = { light: "Light", dark: "Dark", auto: "Auto" };
-  var CODE_MODES = ["dark", "light"];
+  var CODE_MODES = ["page", "dark", "light"];
   var SYNTAX_PALETTES = ["academy", "cyber", "aurora", "solar", "ocean", "mono"];
   var BACKGROUND_TONES = ["theme", "warm", "cool", "rose", "neutral"];
   // These choices change presentation only. Chapter identity, diagram roles,
@@ -31,7 +31,7 @@
     diagramSize: { attribute: "academyDiagramSize", key: "gha-diagram-size", values: ["fit", "actual"], fallback: "fit", control: "data-diagram-size-choice" },
     grid: { attribute: "academyGrid", key: "gha-grid", values: ["on", "off"], fallback: "on", control: "data-grid-choice" },
     cards: { attribute: "academyCards", key: "gha-cards", values: ["on", "off"], fallback: "on", control: "data-cards-choice" },
-    chat: { attribute: "academyChat", key: "gha-chat", values: ["bottom-right", "bottom-left", "top-right", "top-left", "off"], fallback: "bottom-right", control: "data-chat-choice" },
+    chat: { attribute: "academyChat", key: "gha-chat", values: ["bottom-right", "bottom-left", "off"], fallback: "bottom-right", control: "data-chat-choice" },
     gradients: { attribute: "academyGradients", key: "gha-gradients", values: ["on", "off"], fallback: "on", control: "data-gradients-choice" },
     motion: { attribute: "academyMotion", key: "gha-motion", values: ["system", "onrequest", "off"], fallback: "system", control: "data-motion-choice" },
     animationSpeed: { attribute: "academyAnimationSpeed", key: "gha-animation-speed", values: ["slow", "normal", "fast"], fallback: "normal", control: "data-animation-speed-choice" },
@@ -112,7 +112,7 @@
     document.querySelectorAll("[data-mode-label]").forEach(function (label) { label.textContent = MODE_LABELS[mode]; });
     setPressed("data-theme-choice", theme.id);
     setPressed("data-mode-choice", mode);
-    setPressed("data-code-mode-choice", root.dataset.academyCodeMode || "dark");
+    setPressed("data-code-mode-choice", root.dataset.academyCodeChoice || "page");
     setPressed("data-syntax-palette-choice", root.dataset.academySyntax || "academy");
     setPressed("data-background-choice", root.dataset.academyBackground || "theme");
     setPressed("data-semantic-choice", root.dataset.academySemantic === "off" ? "off" : "on");
@@ -225,10 +225,19 @@
     syncThemeControls();
   }
 
+  // "page" follows the page brightness; "dark" and "light" are explicit. The choice is academyCodeChoice and the
+  // surface the stylesheets key on is academyCodeMode, which is recomputed whenever the page brightness changes.
+  function resolveCodeMode() {
+    var choice = root.dataset.academyCodeChoice || "page";
+    var mode = choice === "page" ? (root.dataset.theme === "dark" ? "dark" : "light") : choice;
+    if (root.dataset.academyCodeMode !== mode) root.dataset.academyCodeMode = mode;
+  }
+
   function applyCodeMode(id) {
-    var mode = CODE_MODES.indexOf(id) === -1 ? "dark" : id;
-    root.dataset.academyCodeMode = mode;
-    storageSet("gha-code-mode", mode);
+    var choice = CODE_MODES.indexOf(id) === -1 ? "page" : id;
+    root.dataset.academyCodeChoice = choice;
+    resolveCodeMode();
+    storageSet("gha-code-mode", choice);
     syncThemeControls();
   }
 
@@ -331,7 +340,7 @@
       applyTheme("paper");
       applyMode("auto");
       applyBackground("theme");
-      applyCodeMode("dark");
+      applyCodeMode("page");
       applySyntaxPalette("academy");
       applySemanticSetting("on");
       applyLigatureSetting("off");
@@ -395,6 +404,7 @@
         if (savedMode() === "auto") root.dataset.theme = systemMode();
       });
     }
+    new MutationObserver(resolveCodeMode).observe(root, { attributes: true, attributeFilter: ["data-theme"] });
   }
 
   // ------------------------------------------------------------------
