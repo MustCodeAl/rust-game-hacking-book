@@ -1246,3 +1246,7 @@ Lab file cards (`kit/GitHub.astro`): the "Open the file" link, which pointed at 
 download it, is now a "Show the code" / "Hide the code" button that fetches the file on first use and shows
 it in a scrollable panel under the card. Nothing is saved to the reader's computer; page weight is unchanged
 because the file is fetched only on click. Verified in Chromium at 375 and 1280 pixels (no download event).
+
+Quiz buttons: Retake quiz and New quiz now appear only after a batch is finished, below the score with a
+divider, so Check answer / Next question can never sit beside them (`academy-quiz__after`). Verified in Chromium
+at 375 and 1280 pixels: mid-quiz shows only Next question; finished shows Retake and New quiz; New quiz works.

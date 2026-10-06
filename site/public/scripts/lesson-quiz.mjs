@@ -34,7 +34,7 @@ export function mountQuiz(root) {
   header.append(progress);
   const savedLabel = root.querySelector('[data-quiz-saved]');
   const stage = el('div', 'academy-quiz__stage');
-  const controls = el('div', 'academy-quiz__actions');
+  const controls = el('div', 'academy-quiz__actions academy-quiz__after');
   const retake = el('button', 'academy-quiz__retry', 'Retake quiz');
   const newQuiz = el('button', 'academy-quiz__retry', 'New quiz');
   retake.type = newQuiz.type = 'button';
@@ -71,6 +71,8 @@ export function mountQuiz(root) {
     root.classList.remove('is-unanswered', 'is-correct', 'is-incorrect', 'is-follow-up-active');
     root.dataset.quizBatch = attempt.ids.join(' ');
     retake.hidden = !attempt.complete;
+    newQuiz.hidden = pool.length <= size || !attempt.complete;
+    controls.hidden = !attempt.complete;
     savedLabel.hidden = !Object.keys(attempt.responses).length;
     savedLabel.textContent = 'Saved';
     if (attempt.complete) { renderScore(); return; }
