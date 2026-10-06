@@ -1332,3 +1332,9 @@ slide-show scenes: lost update (the order of two threads decides the gold; optio
 (lesson order gives 700, sequential gives 1,200, the lock blocks the other thread; no overflow or errors). Checks:
 build, links 0 broken, quiz pools. The agents' example values and the margin comments are not fact-checked beyond
 their own work. No lab programs were run.
+
+Lab formatting pass (appended to `learning-widgets.css`, "Lab formatting pass"): compact lab headers with the badge in
+the corner and smaller description text; scan simulator cards in a compact 4-across grid; larger, readable text in
+the pointer walk's picture (it scrolls inside the lab on narrow screens instead of shrinking); consistent side
+margins for the simulations and visuals. Checked by screenshot at 460 and 1100 pixels and for horizontal overflow on
+28 lab pages at 320 and 375 pixels (none). Not changed: the long instruction paragraph above the sort boards.
