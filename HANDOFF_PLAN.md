@@ -68,9 +68,15 @@ blocking within noise (pages are about 4 KB gzip heavier on average because of t
 3. **Animation fixes.** `scripts/scenes-sweep` style check (play, scrub, clip, overflow) found no zero-size, overflow or
    frozen scenes in the first run; its "text outside the drawing" results were false alarms from comparing local text
    coordinates with the viewBox. Compare on-screen rectangles instead. Owner wants animations to simulate real state changes.
-4. **Interactives in the remaining lessons**: three agent worktrees (`/home/user/ui-0`, `ui-1`, `ui-2`, branches
-   `claude/interactives-0|1|2`) may hold unmerged work (code tracer, sort board and formula builder, cost visualizer);
-   check `git branch -a` and merge what is committed and verified.
+4. Interactives: merged 2026-10-06 and published (code tracers in 10 lessons, sort boards and formula builders in 11,
+   cost/choice visuals in 9, plus code blanks, state machine builder and nine explorable simulations). How to add
+   one as data: `site/INTERACTIVES_CODE_TRACE.md`, `INTERACTIVES_SORT_FORMULA.md`, `INTERACTIVES_VISUALS.md`,
+   `SimLab` in `src/scripts/sim-labs.js`, `puzzle-labs.js`. About 20 lessons still have no interactive tool
+   (behaviour trees and a scan-cost visual were not done). Several example values in them are illustrations the
+   agents invented (their intros say so); an author should skim them. The owner dislikes animations that are only
+   slide shows: replace more of the 52 scenes with live simulations (done so far for page-table, base-rate,
+   checked-range, RVA, torn-read, lost-update, crash-save; next candidates: server-authority, evidence-correlation,
+   detector-input-window, edge-events).
 5. Sign-in: wired in but inert until `site/src/data/account-config.json` is filled (see ACCOUNT_SETUP.md); the full flow
    passed a browser test against a stand-in Supabase.
 

@@ -1322,3 +1322,13 @@ the reader panels, inert without config; full flow (redirect, tokens, merge, pus
 stand-in server; notes and the reading position sync with progress. Margin comments added to 45 lessons (143 notes,
 agent-written, spot-checked only by the render count). Scenes: automated sweep of all 52 found no zero-size,
 overflow, frozen or caption-less scenes; the clipping check needs on-screen rectangles. No lab programs were run.
+
+## T15 — Interactives merged, more simulations (2026-10-06)
+
+Merged the three interactives branches (code tracer, sort board and formula builder, cost/choice visuals; see the
+INTERACTIVES_*.md files in site/ for what each agent built and verified) and added two simulations in place of
+slide-show scenes: lost update (the order of two threads decides the gold; optional lock) and crash-safe save
+(slide the crash point for overwrite-in-place versus write-then-replace). Driven in Chromium at 375 and 1280 pixels
+(lesson order gives 700, sequential gives 1,200, the lock blocks the other thread; no overflow or errors). Checks:
+build, links 0 broken, quiz pools. The agents' example values and the margin comments are not fact-checked beyond
+their own work. No lab programs were run.
