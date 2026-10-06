@@ -51,7 +51,7 @@ add one by writing a function in `SIMS` and `<SimLab sim="...">`): `base-rate` (
 style. Performance was compared with the pre-session site at 4x CPU throttle: scroll median 16.7 ms, load
 blocking within noise (pages are about 4 KB gzip heavier on average because of the quiz pools).
 
-**OWNER HAS ABOUT $7 OF CREDITS LEFT (end of the 2026-10-06 sessions). Prefer small, verified steps; at most one agent.**
+**OWNER HAS ABOUT $5 OF CREDITS LEFT (end of the 2026-10-06 sessions). Prefer small, verified steps; at most one agent.**
 
 **Latest additions (all published unless `git log` says otherwise), with where to find them:**
 - **Downloadable cheatsheet per lesson** (`site/src/components/Cheatsheet.astro`, `site/src/lib/cheatsheet.mjs`,
@@ -75,9 +75,15 @@ blocking within noise (pages are about 4 KB gzip heavier on average because of t
   formula-builder widgets.
 - **Lab formatting pass** (`learning-widgets.css`, "Lab formatting pass"): compact headers, badge in the corner, 4-across
   scan grid, readable pointer-walk text, consistent side margins for `SimLab` and `Visual`.
-- **Margin comments are speech bubbles** beside the passage, alternating right and left (`site/src/styles/margin-notes.css`,
-  script in `components/kit/MarginNote.astro` moves each note before the paragraph it follows and sets `data-side`).
-  Bubbles apply when the article column is at least 28rem wide; below that they stay inline. Printing is unchanged.
+- **Margin comments never push the text** (`site/src/styles/margin-notes.css`; script in `components/kit/MarginNote.astro`).
+  The owner wants bubbles in the outer margin, not under the text and not shifting it. The script moves each note before the
+  paragraph it follows and measures the free space beside the text column (between the content and the left sidebar and the
+  right "On this page" column): if both sides have 16.5rem it hangs bubbles in the margins (`html[data-note-mode=margin]`,
+  alternating sides, overlapping ones stacked); if only the right has room all bubbles go right; otherwise (the usual case,
+  because Starlight's sidebars leave about 115px even at 1900px) each note becomes a small 💬 marker that opens a bubble over
+  the text on click or Enter (`data-note-mode=pin`); on phones (<640px) the plain inline note remains. If the owner still
+  wants true outer-margin bubbles at common widths, the layout would need the sidebars narrowed or the bubbles drawn over them.
+  Checked at 1900, 1280 and 420 pixels (no overflow). Not checked: the margin mode itself, because no tested width had room.
 - Per-lesson **Markdown notes** with export, **Continue reading** on the home page, **sign-in** (inert until configured),
   **explorable simulations** (`src/scripts/sim-labs.js`: base-rate, page-table, checked-range, rva-offset, torn-read,
   lost-update, crash-save), code tracers, sort boards, formula builders, cost/choice visuals, code blanks, state machine builder.

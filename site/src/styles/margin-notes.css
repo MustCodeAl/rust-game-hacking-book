@@ -15,42 +15,78 @@
 .margin-note strong { display: block; color: var(--chapter-ink, var(--ink-strong)); font-size: 0.75rem; }
 .sl-markdown-content:has(.margin-note) { container: noted-lesson / inline-size; }
 
-/* Notes are speech bubbles beside the passage they explain, alternating right
-   and left; the tail points at the text. Below this width they stay inline. */
-@container noted-lesson (min-width: 28rem) {
-	.margin-note {
-		position: relative;
-		clear: none;
-		float: inline-end;
-		width: clamp(10.5rem, 40%, 15rem);
-		margin: 0.25rem 0 0.9rem 1rem;
-		padding: 0.6rem 0.8rem;
-		border: 1px solid var(--line, #c9d0d8);
-		border-radius: 14px;
-		background: var(--reader-panel);
-		text-align: start;
-		box-shadow: none;
-	}
-	.margin-note[data-side='left'] { float: inline-start; margin: 0.25rem 1rem 0.9rem 0; }
-	.margin-note::after {
-		content: '';
-		position: absolute;
-		top: 0.85rem;
-		inset-inline-start: -7px;
-		width: 12px;
-		height: 12px;
-		background: var(--reader-panel);
-		border: 1px solid var(--line, #c9d0d8);
-		border-inline-end: 0;
-		border-top: 0;
-		transform: rotate(45deg);
-	}
-	.margin-note[data-side='left']::after {
-		inset-inline-start: auto;
-		inset-inline-end: -7px;
-		transform: rotate(-135deg);
-	}
+/* Margin notes never push the text. The script in kit/MarginNote.astro measures the
+   free space beside the text column and sets html[data-note-mode]:
+   - margin: bubbles hang in the outer margin, alternating right and left;
+   - pin:    no room, so each note is a small marker that opens a bubble over the text;
+   - (none): a narrow phone keeps the plain inline note above. */
+html[data-note-mode='margin'] .sl-markdown-content,
+html[data-note-mode='pin'] .sl-markdown-content { position: relative; }
+
+html[data-note-mode] .margin-note {
+	position: absolute;
+	clear: none;
+	float: none;
+	width: 15rem;
+	margin: 0;
+	padding: 0.6rem 0.8rem;
+	border: 1px solid var(--line, #c9d0d8);
+	border-radius: 14px;
+	background: var(--reader-panel);
+	text-align: start;
+	z-index: 2;
 }
+html[data-note-mode='margin'] .margin-note { inset-inline-end: -16.5rem; inset-inline-start: auto; }
+html[data-note-mode='margin'] .margin-note[data-side='left'] { inset-inline-start: -16.5rem; inset-inline-end: auto; }
+html[data-note-mode='margin'] .margin-note::after {
+	content: '';
+	position: absolute;
+	top: 0.85rem;
+	inset-inline-start: -7px;
+	width: 12px;
+	height: 12px;
+	background: var(--reader-panel);
+	border: 1px solid var(--line, #c9d0d8);
+	border-inline-end: 0;
+	border-top: 0;
+	transform: rotate(45deg);
+}
+html[data-note-mode='margin'] .margin-note[data-side='left']::after {
+	inset-inline-start: auto;
+	inset-inline-end: -7px;
+	transform: rotate(-135deg);
+}
+
+/* Pin mode: a small round marker at the text's edge; tap or focus opens the bubble. */
+html[data-note-mode='pin'] .margin-note {
+	inset-inline-end: -0.35rem;
+	width: 1.9rem;
+	height: 1.9rem;
+	padding: 0;
+	overflow: hidden;
+	border-radius: 50%;
+	cursor: pointer;
+}
+html[data-note-mode='pin'] .margin-note > * { visibility: hidden; }
+html[data-note-mode='pin'] .margin-note::before {
+	content: '💬';
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	font-size: 0.95rem;
+}
+html[data-note-mode='pin'] .margin-note[data-open='true'] {
+	width: min(16rem, 78%);
+	height: auto;
+	padding: 0.6rem 0.8rem;
+	overflow: visible;
+	border-radius: 14px;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+	z-index: 6;
+}
+html[data-note-mode='pin'] .margin-note[data-open='true'] > * { visibility: visible; }
+html[data-note-mode='pin'] .margin-note[data-open='true']::before { display: none; }
 
 @media (min-width: 70rem) {
 	.reader-article__body:has(.margin-note) { padding-inline-start: 14rem; }

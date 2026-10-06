@@ -1350,3 +1350,8 @@ the 2.8 code-blank lab was driven through select blank, wrong piece, lesson piec
 (bubbles at 187 px wide) and 420 pixels (inline), no horizontal overflow. Checks: build, links 0 broken, quiz pools,
 account merge. Not checked: the other lab types in dark theme beyond the quiz, narration of bubbles, print of bubbles
 beyond the existing print rule. No lab programs were run.
+
+Margin notes were reworked a second time (see HANDOFF_PLAN.md): no float, no text shift; `data-note-mode` margin/pin/inline
+chosen by measuring free space; pin mode verified by clicking a marker at 1280 pixels (bubble opens over the text). Code blanks
+now draw slots dashed and pieces as solid pills with a blue ring on the picked piece. The owner's screenshots of the live 2.8 lab
+showed the build from before the feedback-colour and highlighting commits (stale Pages deploy or cache): check the live site again.
