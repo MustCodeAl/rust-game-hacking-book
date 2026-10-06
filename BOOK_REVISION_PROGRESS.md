@@ -1448,5 +1448,5 @@ Owner decision: no beta, no toggle; the design layer in `site/src/styles/design/
   brief amber, alternative violet, narration cyan, context slate, clarify orange, inquiry indigo, praise green, action blue, code rose, math fuchsia,
   mine neutral); the label stays as visually hidden text, `aria-label` and the hover `title`. Pin markers take the colour too.
 Checked in Chrome: no horizontal overflow on ten pages at 420/1280 px in four palette/brightness combinations; desktop sheet, phone drawer, margin notes
-(paper and midnight). Not checked: contrast ratios by measurement, tabs/accordion after the fix, every kit component in every palette, touch, Safari/Firefox.
+(paper and midnight). Contrast: `site/scripts/check-contrast.mjs` (all 5 palettes x light/dark on lessons 1.5 and 3.2) passes AA 4.5:1 after fixing inline code and field names. Not checked: other pages' contrast, tabs/accordion after the fix, every kit component in every palette, touch, Safari/Firefox.
 No lab programs were run.
