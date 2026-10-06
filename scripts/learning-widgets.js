@@ -987,8 +987,9 @@
       const right = cfg.answer(values);
       const given = parseNumber(guess.value);
       if (!Number.isFinite(given)) { status.textContent = "Type a number first, then check it."; return; }
-      if (cfg.accept(given, right)) { status.textContent = "✅ Right. Here is the working, so you can compare your method."; showSteps(); }
-      else { status.textContent = "❌ Not quite. Try the hint, change your answer, or open the steps."; }
+      const sound = (kind) => document.dispatchEvent(new CustomEvent("academy:sound", { detail: { kind } }));
+      if (cfg.accept(given, right)) { sound("correct"); status.textContent = "✅ Right. Here is the working, so you can compare your method."; showSteps(); }
+      else { sound("wrong"); status.textContent = "❌ Not quite. Try the hint, change your answer, or open the steps."; }
     });
     hintButton.addEventListener("click", () => { status.textContent = "💡 " + cfg.hint(values); });
     reveal.addEventListener("click", () => { status.textContent = `The answer is ${cfg.show(cfg.answer(values))}.`; showSteps(); });

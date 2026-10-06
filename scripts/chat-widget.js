@@ -376,7 +376,65 @@
     return completion;
   }
 
+
+  // Every message carries where the reader is, so a question like "what does
+  // this mean?" can be answered about the right lesson and section. The line is
+  // added to the box at the moment of sending (Enter or the send button), once,
+  // and it is visible in the sent message.
+  var REFERENCE = "[Reading: ";
+
+  function pageReference() {
+    var c = context;
+    var section = currentSection();
+    var where;
+    if (c.kind === "lesson" && c.lesson) {
+      where = "lesson " + c.lesson + " “" + c.title + "”" + (c.chapter ? " (chapter " + c.chapter.number + ", " + c.chapter.title + ")" : "");
+    } else if (c.kind === "chapter" && c.chapter) {
+      where = "chapter " + c.chapter.number + " “" + c.chapter.title + "”";
+    } else {
+      where = (c.kind || "page") + " “" + (c.title || document.title) + "”";
+    }
+    var text = REFERENCE + where + (section && section !== c.title ? ", section “" + section + "”" : "") + ", page " + location.pathname + "]";
+    return text.replace(/\s+/g, " ");
+  }
+
+  function addReference(input) {
+    var value = input.value;
+    if (!value.trim() || value.indexOf(REFERENCE) !== -1) return;
+    var next = value.replace(/\s+$/, "") + "\n\n" + pageReference();
+    if (input.tagName === "TEXTAREA" || input.tagName === "INPUT") {
+      var native = Object.getOwnPropertyDescriptor(input.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, "value");
+      if (native && native.set) native.set.call(input, next); else input.value = next;
+    } else {
+      input.value = next;
+    }
+    input.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+  }
+
+  function referencePages(capture) {
+    var shadow = capture.shadow;
+    if (!shadow || shadow.__academyReference) return;
+    shadow.__academyReference = true;
+    function box() { return shadow.querySelector(".c7-input"); }
+    shadow.addEventListener("keydown", function (event) {
+      var input = box();
+      if (input && event.target === input && event.key === "Enter" && !event.shiftKey && !event.isComposing) addReference(input);
+    }, true);
+    shadow.addEventListener("click", function (event) {
+      var input = box();
+      var path = event.composedPath ? event.composedPath() : [];
+      var button = path.filter(function (node) { return node && node.tagName === "BUTTON"; })[0];
+      var area = shadow.querySelector(".c7-input-area");
+      if (input && button && area && area.contains(button)) addReference(input);
+    }, true);
+    shadow.addEventListener("submit", function () {
+      var input = box();
+      if (input) addReference(input);
+    }, true);
+  }
+
   function offerCompletion(capture, color) {
+    referencePages(capture);
     loadCompletion().then(function (api) {
       if (!api || !capture.shadow || !capture.host.isConnected) return;
       api.attach(capture.shadow, { context: context, accent: color, heading: currentHeading, load: loadVocabulary });
