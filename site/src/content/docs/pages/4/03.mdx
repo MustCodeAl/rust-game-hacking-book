@@ -11,6 +11,7 @@ sidebar:
 ---
 import { Frame, GitHub } from '../../../../components/kit';
 import ConceptLab from '../../../../components/ConceptLab.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 A player record is one object. A map asks the same memory question thousands
 of times: which tile is this, and what does this player know about it? In a
@@ -46,6 +47,8 @@ On a three-column, two-row map, tile `(2, 1)` becomes index `1 × 3 + 2 = 5`.
 Tile `(3, 1)` is outside the map and returns `None`. The checked multiplication
 also refuses dimensions so large that the index would overflow `usize`.
 
+<MarginNote kind="brief">A flat list can hold a grid: a tile's index is its row times the width plus its column. Check the bounds before you use it.</MarginNote>
+
 Never trust coordinates from remote memory until they pass bounds checks.
 
 ## A grid needs a coordinate contract
@@ -64,6 +67,8 @@ For a candidate grid, recover these facts separately:
 If the row stride includes padding, `y * width + x` is wrong even when the first row looks perfect. The byte address becomes `base + y * row_stride + x * element_size`. Verify it with tiles on different rows and near both edges of the map.
 
 Visibility is often a **derived view** of terrain, units, teams, and line-of-sight rules. A cached visibility layer can be useful to read without being the source of truth, because the game rebuilds it from those inputs. What matters is which system recomputes it and when.
+
+<MarginNote kind="alternative">Think of fog as a sheet of tracing paper over the map: the terrain underneath is shared, but each player has their own sheet showing what they have seen.</MarginNote>
 
 <Frame caption="Both layers describe tile (2, 1), whose row-major index is 1 × 3 + 2 = 5. The terrain and fog symbols are illustrative; the coordinate contract joins their records.">
   <img src={`${import.meta.env.BASE_URL}assets/images/original/grid-layers.png`} width="480" height="240" style="width:480px;max-width:100%;height:auto;" alt="Terrain and player-visibility grids highlight the same tile and connect it to array index 5." loading="lazy" decoding="async" />
@@ -133,6 +138,8 @@ fn decode_visibility(raw: u32) -> Visibility {
 ```
 
 Keep `Unknown`. Silently treating a new value as visible would hide the fact that the byte has a state the model does not know about.
+
+<MarginNote kind="narration">A value you did not expect is information: it may be a state you have not met yet. Keeping Unknown makes the surprise visible instead of hiding it.</MarginNote>
 
 ## Read a bounded layer
 

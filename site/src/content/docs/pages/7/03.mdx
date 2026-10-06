@@ -12,6 +12,7 @@ sidebar:
 import { Accordion, GitHub } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## An export table is a DLL's public index
 
@@ -30,6 +31,8 @@ An export table connects three parallel ideas:
 Not every export needs a name. A DLL can export by ordinal only. This beginner tool lists named exports and reports the total number of address entries so the difference stays visible.
 
 An ordinal is not simply a row's position in the address table. The export directory also stores an **ordinal base**, commonly `1`, and an export's real public ordinal is `ordinal_base + its index in the address table`. A caller asking for “ordinal 5” with a base of `1` wants `functions[5 - 1]`, not `functions[5]`. The parser below reads that base once and adds it back in for every named export so the printed ordinals match what the DLL actually publishes.
+
+<MarginNote kind="brief">An export table pairs names with ordinals and addresses. The public ordinal is the ordinal base plus the entry's position, not the position alone.</MarginNote>
 
 <MemoryStrip
   cells="functions[0]=ordinal 1|functions[1]=ordinal 2|functions[2]=ordinal 3|functions[3]=ordinal 4|functions[4]=ordinal 5"
@@ -97,6 +100,8 @@ An export-address entry usually holds an RVA for code or data. If the RVA points
 
 The loader follows that string to another DLL export. This is how Windows can keep a familiar public name while moving the implementation behind it.
 
+<MarginNote kind="alternative">Think of a shop's old phone number that now redirects to a new branch: callers still dial it and are passed along. A forwarder does that for a function name.</MarginNote>
+
 ```mermaid
 flowchart LR
     A["AddressOfFunctions[i]<br/>a function RVA"] --> B{"inside export_rva..export_end?"}
@@ -117,6 +122,8 @@ This implementation uses five guardrails:
 5. Strings must terminate within 4096 bytes.
 
 Validate from the outside inward. Prove the DOS header range before reading its PE offset, prove the PE and optional-header ranges before reading directories, then prove section and export ranges. A later valid-looking signature cannot make an earlier out-of-bounds read safe.
+
+<MarginNote kind="narration">A count field claiming billions of entries can make a careless parser allocate huge memory or loop forever. Damaged or hostile files do this, so limits matter.</MarginNote>
 
 ## Build the complete parser
 
