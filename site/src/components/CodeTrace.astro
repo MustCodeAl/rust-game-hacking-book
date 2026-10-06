@@ -1,0 +1,103 @@
+---
+// A step-by-step code tracer: a short listing with the current line highlighted, a Variables
+// panel that marks what each step changed, and a plain-English line saying what the step did
+// and why. It opens on step 1 and always shows where the run ends. Nothing is graded. The traces
+// are data in src/scripts/code-trace.js (add one to the TRACES map, then mount it here).
+//
+//   <CodeTrace trace="sub-instruction" />
+//
+// With JavaScript off, the server-rendered caption below shows the listing and the final state.
+import { TRACES, staticSummary } from '../scripts/code-trace.js';
+
+interface Props {
+	trace: string;
+	id?: string;
+	label?: string;
+}
+const { trace, id = `trace-${trace}`, label = 'Step-by-step code trace' } = Astro.props;
+if (!TRACES[trace]) throw new Error(`CodeTrace: unknown trace "${trace}"`);
+const summary = staticSummary(trace);
+---
+
+<section class="concept-lab code-trace not-content" id={id} data-code-trace={trace} aria-label={label} data-reader-skip>
+	<div class="code-trace__fallback">
+		<p><strong>{summary.title}.</strong> This step-by-step trace needs JavaScript. Here is the code and where the run ends.</p>
+		<pre><code>{summary.code.join('\n')}</code></pre>
+		<p>{summary.end}</p>
+		<p>Final values: {summary.vars.map(([name, value]) => `${name} = ${value}`).join('; ')}.</p>
+	</div>
+</section>
+
+<script>
+	import { mountCodeTraces } from '../scripts/code-trace.js';
+	mountCodeTraces();
+</script>
+
+<style is:global>
+	.code-trace { max-width: 100%; overflow-wrap: anywhere; container-type: inline-size; }
+	.code-trace__fallback { padding: 0.75rem; }
+	.code-trace__fallback pre { overflow-x: auto; margin: 0.5rem 0; padding: 8px 10px; background: var(--surface-alt); border: 1px solid var(--line); font-family: var(--mono); font-size: 0.85em; }
+
+	.code-trace__controls { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 0.75rem 0.75rem 0; }
+	.code-trace__field { display: grid; gap: 4px; min-width: 0; flex: 1 1 220px; font-size: 0.85em; color: var(--ink-soft); }
+	.code-trace__field select,
+	.code-trace__field input[type='range'] { width: 100%; max-width: 100%; min-height: 36px; margin: 0; box-sizing: border-box; }
+	.code-trace__field select { padding: 4px 8px; color: var(--ink); background: var(--surface-alt); border: 1px solid var(--line); border-radius: 3px; font: inherit; }
+	.code-trace__field input[type='range'] { accent-color: var(--chapter-accent); }
+	.code-trace__out { font-family: var(--mono); color: var(--ink-strong); }
+
+	.code-trace__grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 0.75rem; }
+	@container (min-width: 540px) { .code-trace__grid { grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); } }
+	.code-trace__panel { min-width: 0; }
+	.sl-markdown-content .code-trace__label { margin: 0 0 4px; color: var(--chapter-ink); font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+
+	.code-trace__code { margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: 3px; background: var(--surface-alt); font-family: var(--mono); font-size: 0.82rem; line-height: 1.5; }
+	.code-trace__code:focus-visible { outline: 2px solid var(--chapter-accent); outline-offset: 2px; }
+	.code-trace__line { display: flex; gap: 8px; box-sizing: border-box; margin: 0; padding: 2px 10px 2px 6px; border-left: 4px solid transparent; }
+	.code-trace__line code { min-width: 0; padding: 0; background: none; border: 0; font: inherit; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+	.code-trace__ln { flex: 0 0 1.4em; text-align: right; color: var(--ink-soft); user-select: none; }
+	.code-trace__line.is-current { border-left-color: var(--chapter-accent); background: var(--chapter-tint); font-weight: 700; }
+	.code-trace__line.is-current code { color: var(--ink-strong); }
+	.code-trace__line.is-current .code-trace__ln::after { content: '\25B6'; margin-left: 2px; }
+
+	.code-trace__vars { width: 100%; margin: 0; border-collapse: collapse; font-size: 0.85rem; }
+	.sl-markdown-content .code-trace__vars th,
+	.sl-markdown-content .code-trace__vars td { padding: 4px 6px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; vertical-align: top; }
+	.sl-markdown-content .code-trace__vars th { width: 34%; font-family: var(--mono); font-weight: 700; color: var(--ink-strong); white-space: nowrap; }
+	.code-trace__val { font-family: var(--mono); color: var(--ink-strong); }
+	.code-trace__dim { color: var(--ink-soft); font-style: italic; }
+	.code-trace__var.is-unset th { color: var(--ink-soft); font-weight: 400; }
+	.code-trace__var.is-changed th { box-shadow: inset 4px 0 0 var(--chapter-accent); }
+	.code-trace__var.is-changed .code-trace__val { font-weight: 800; }
+	.code-trace__tag { display: inline-block; margin-left: 6px; padding: 0 5px; color: var(--chapter-ink); border: 1px solid currentColor; border-radius: 3px; font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+	.code-trace__was { margin-left: 6px; color: var(--ink-soft); font-size: 0.85em; text-decoration: line-through; }
+
+	.code-trace__mem { margin-top: 10px; }
+	.code-trace__mem-title { margin: 0 0 4px; color: var(--ink-soft); font-size: 0.8rem; }
+	.code-trace__cells { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
+	.code-trace__cell { display: grid; flex: 1 1 3.4rem; min-width: 3.4rem; max-width: 6rem; gap: 2px; padding: 4px 6px; border: 1px solid var(--line); border-top: 4px solid var(--line); border-radius: 3px; background: var(--surface-alt); text-align: center; }
+	.code-trace__cell-label { color: var(--ink-soft); font-family: var(--mono); font-size: 0.68rem; }
+	.code-trace__cell-value { color: var(--ink-strong); font-family: var(--mono); font-size: 0.95rem; }
+	.code-trace__cell-note { color: var(--chapter-ink); font-size: 0.68rem; font-weight: 700; }
+	.code-trace__cell.is-marked { border-top-color: var(--chapter-accent); }
+	.code-trace__cell.is-changed { border-color: var(--chapter-accent); border-top-color: var(--chapter-accent); background: var(--chapter-tint); outline: 2px solid var(--chapter-accent); outline-offset: -2px; }
+
+	.sl-markdown-content .code-trace__say { margin: 0 0.75rem; padding: 8px 10px; border-left: 4px solid var(--chapter-accent); background: var(--chapter-tint); color: var(--ink); line-height: 1.5; }
+	.code-trace__nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0.75rem 0.75rem 0; }
+	.code-trace__btn { min-height: 40px; padding: 4px 14px; color: var(--ink); border: 1px solid var(--line); border-radius: 3px; background: var(--surface-alt); font: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer; }
+	.code-trace__btn:hover,
+	.code-trace__btn:focus-visible { color: var(--ink-strong); border-color: var(--chapter-ink); outline: 2px solid var(--chapter-accent); outline-offset: 2px; }
+	.code-trace__btn--main { border-color: var(--chapter-accent); box-shadow: inset 0 -3px 0 var(--chapter-accent); }
+	.code-trace__btn.is-disabled { opacity: 0.45; cursor: default; }
+	.code-trace__count { margin-left: auto; color: var(--ink-soft); font-family: var(--mono); font-size: 0.8rem; }
+	.sl-markdown-content .code-trace__diff { margin: 8px 0.75rem 0; padding: 6px 10px; color: var(--ink); border-left: 4px solid var(--warning); background: var(--warning-soft); font-size: 0.85rem; }
+	.sl-markdown-content .code-trace__diff[hidden] { display: none; }
+	.sl-markdown-content .code-trace__hint { margin: 8px 0.75rem 0.75rem; color: var(--ink-soft); font-size: 0.8rem; }
+
+	@media (prefers-reduced-motion: no-preference) {
+		@keyframes code-trace-flash { from { box-shadow: inset 0 0 0 3px var(--chapter-accent); background-color: var(--chapter-tint); } to { box-shadow: inset 0 0 0 3px transparent; background-color: transparent; } }
+		.code-trace__var.is-flash td,
+		.code-trace__var.is-flash th { animation: code-trace-flash 0.7s ease-out; }
+		.code-trace__cell.is-flash { animation: code-trace-flash 0.7s ease-out; }
+	}
+</style>
