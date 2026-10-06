@@ -1375,3 +1375,10 @@ Notes button: Move (four corners), Hide (thin edge tab, Alt+N or a tab click res
 and alternatives, right for TL;DR and narration; checked on lesson 4.3: TL;DR right, Alternative left, Narration right). New simulator
 `input-edge` (lesson 4.9): click frames to hold or release a key and compare a level rule with an edge rule (verified at 420 and 1280
 pixels). The images and GIFs published earlier exist but appear in only about 11 lessons; see the next-AI plan. No lab programs were run.
+
+## T19 — Five more CC0 figures (2026-10-06)
+
+Added `little-endian`, `pointer-chain`, `hash-change`, `server-authority` and `render-pipeline` SVGs (credited in CREDITS.md) and placed
+one in each of lessons 1.8, 2.7, 9.8, 15.1 and 7.2 after the first body paragraph below the first heading. Checked: images load at 420 and
+1280 pixels with no overflow; links 0 broken. The hash figure's values are illustrative and say so. Placement was automatic and not
+reviewed in context. No lab programs were run.

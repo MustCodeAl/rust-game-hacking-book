@@ -68,10 +68,12 @@ detailed notes so any AI can continue. Keep agents to one or two at a time; veri
 - **Lab feedback**: blue = prompt, green = matches the lesson, amber = different, red = wrong (quiz only). Tones are set by `data-tone`
   (see `toneFor` in `public/scripts/learning-widgets.js`). New widgets should set `data-tone` or use the known class names.
 - **Images**: all original CC0 art is in `site/public/assets/images/original/` with rows in `site/public/assets/images/CREDITS.md`.
-  Currently shown in only ~11 lessons: 3.8 (utf8-bytes), 4.1 (record-stride), 4.5 (grid-layers), 4.8 (path sprites), 4.9
-  (input-edge.gif with still), 4.10 (los-samples), 4.11 (vector-distance, npc-view-cone in 4.12), 10.x (handle-table), 12.x
-  (script-budgets), 14.x (context-switch). The owner said they could not find the images and GIFs, so spreading more of them across
-  lessons (and making them more visible) is a real request.
+  Now shown in about 16 lessons: 1.8 (little-endian), 2.7 (pointer-chain), 3.8 (utf8-bytes), 4.1 (record-stride), 4.5 (grid-layers),
+  4.8 (path sprites), 4.9 (input-edge.gif with still), 4.10 (los-samples), 4.11 (vector-distance, npc-view-cone in 4.12), 7.2
+  (render-pipeline), 9.8 (hash-change), 10.x (handle-table), 12.x (script-budgets), 14.x (context-switch), 15.1 (server-authority).
+  The owner said they could not find the images and GIFs, so spreading more of them across lessons (about 130 lessons still have
+  none) and making them more visible is a real request. The last five were placed automatically after the first body paragraph
+  below the first heading of each lesson; check that placement reads well and move any that interrupt a thought.
 
 ### Prioritized plan
 1. **Images and GIFs everywhere** (owner request, unmet): add 2 or 3 original CC0 SVG figures per chapter (about 40 more), each placed

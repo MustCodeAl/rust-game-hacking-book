@@ -14,6 +14,11 @@ https://creativecommons.org/publicdomain/zero/1.0/
 | `utf8-bytes.svg` | The word café as four characters and five UTF-8 bytes | hand-written SVG in this directory |
 | `record-stride.svg` | Records one stride apart and a field offset inside one | hand-written SVG in this directory |
 | `vector-distance.svg` | The 3-4-5 distance triangle between two points | hand-written SVG in this directory |
+| `little-endian.svg` | The number 100 stored low byte first | hand-written SVG in this directory |
+| `pointer-chain.svg` | A pointer chain from a module base to a value | hand-written SVG in this directory |
+| `hash-change.svg` | One changed byte gives an unrelated hash (illustrative values) | hand-written SVG in this directory |
+| `server-authority.svg` | The server checks a client's request | hand-written SVG in this directory |
+| `render-pipeline.svg` | Vertices to triangles to pixels to a frame | hand-written SVG in this directory |
 | `handle-table.svg` | Two handle values as rows of one process's handle table, pointing to one kernel object | hand-written SVG in this directory |
 | `context-switch.svg` | The kernel saving one thread's registers, loading the next, and swapping page tables | hand-written SVG in this directory |
 | `script-budgets.svg` | Seven separate script budgets, each with its own cap and reset window | hand-written SVG in this directory |
