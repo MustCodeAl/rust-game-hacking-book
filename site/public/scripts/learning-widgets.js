@@ -843,9 +843,9 @@
   };
   const PREDICT_LABS = {
     "stride-lab": {
-      eyebrow: "Predict, then check",
+      eyebrow: "Explore it",
       title: "Find a field inside a table of records",
-      description: "Records sit one fixed stride apart. Pick a player and a field, predict the offset from the table's start, then check it.",
+      description: "Records sit one fixed stride apart. Change the player and the field and watch the offset from the table's start get built, one step at a time.",
       inputs: [
         { key: "index", label: "Player index", min: 0, max: 9, value: 2 },
         { key: "stride", label: "Bytes between records", options: [0x20, 0x270], value: 0x20, format: hex },
@@ -859,9 +859,9 @@
       show: (right) => hex(right),
     },
     "grid-lab": {
-      eyebrow: "Predict, then check",
+      eyebrow: "Explore it",
       title: "Turn a tile's (x, y) into a position in a flat list",
-      description: "A map is stored as one long row-major list. Pick a tile, predict its index, then check the arithmetic.",
+      description: "A map is stored as one long row-major list. Move the tile and the width and see which index it lands on, and why.",
       inputs: [
         { key: "width", label: "Map width (tiles)", min: 3, max: 12, value: 5 },
         { key: "x", label: "Tile x (column)", min: 0, max: 11, value: 2 },
@@ -876,9 +876,9 @@
       show: (right) => String(right),
     },
     "vector-lab": {
-      eyebrow: "Predict, then check",
+      eyebrow: "Explore it",
       title: "How far apart are two points?",
-      description: "Subtract to get the direction, then measure its length. Predict the distance to one decimal place.",
+      description: "Subtract to get the direction, then measure its length. Move the points and watch the numbers change.",
       inputs: [
         { key: "ax", label: "Point A x", min: -6, max: 6, value: 0 },
         { key: "ay", label: "Point A y", min: -6, max: 6, value: 0 },
@@ -896,9 +896,9 @@
       show: (right) => right.toFixed(1),
     },
     "utf8-lab": {
-      eyebrow: "Predict, then check",
+      eyebrow: "Explore it",
       title: "How many bytes does this text take?",
-      description: "One visible character is not always one byte. Pick a word, predict its UTF-8 byte count, then see each character's bytes.",
+      description: "One visible character is not always one byte. Type a word and see each character's UTF-8 bytes and the total.",
       text: { key: "text", label: "Text (up to 8 characters)", value: "café", samples: ["gold", "café", "金貨", "🙂"] },
       ask: (v) => `How many bytes does “${v.text}” take in UTF-8? Count bytes, not characters.`,
       answer: (v) => new TextEncoder().encode(v.text).length,
@@ -963,36 +963,42 @@
     }
     sync();
 
+    const steps = element("ol", "concept-lab__steps");
+    const result = element("p", "concept-lab__takeaway");
+    result.setAttribute("aria-live", "polite");
+    const guessBox = element("details", "concept-lab__guess");
+    guessBox.append(element("summary", "", "Want to guess first? (optional)"));
     const question = element("p", "concept-lab__description");
     question.setAttribute("aria-live", "polite");
     const guessLabel = element("label", "concept-lab__field");
     guessLabel.htmlFor = `${id}-guess`;
     const guess = element("input", "concept-lab__text-input");
-    guess.id = `${id}-guess`; guess.type = "text"; guess.autocomplete = "off"; guess.spellcheck = false; guess.placeholder = "Your prediction";
-    guessLabel.append(element("span", "concept-lab__field-label", "Your prediction"), guess);
+    guess.id = `${id}-guess`; guess.type = "text"; guess.autocomplete = "off"; guess.spellcheck = false; guess.placeholder = "Your guess";
+    guessLabel.append(element("span", "concept-lab__field-label", "Your guess"), guess);
     const actions = element("div", "concept-lab__examples");
     const mk = (text) => { const b = element("button", "concept-lab__example", text); b.type = "button"; actions.append(b); return b; };
-    const check = mk("Check"), hintButton = mk("Hint"), reveal = mk("Show the steps"), shuffle = mk("New numbers");
+    const check = mk("Compare"), shuffle = mk("New numbers");
     const status = element("p", "concept-lab__takeaway");
     status.setAttribute("aria-live", "polite");
-    const steps = element("ol", "concept-lab__steps");
-    steps.hidden = true;
-    body.append(controls, question, guessLabel, actions, status, steps);
+    guessBox.append(question, guessLabel, status);
+    body.append(controls, result, steps, guessBox, actions);
     root.append(body);
 
-    function resetAnswer() { guess.value = ""; status.textContent = ""; steps.hidden = true; }
-    function showSteps() { steps.replaceChildren(...cfg.steps(values).map((line) => element("li", "", line))); steps.hidden = false; }
-    function redraw() { question.textContent = cfg.ask(values); }
+    function resetAnswer() { guess.value = ""; status.textContent = ""; }
+    function redraw() {
+      question.textContent = cfg.ask(values);
+      steps.replaceChildren(...cfg.steps(values).map((line) => element("li", "", line)));
+      result.textContent = "Result: " + cfg.show(cfg.answer(values));
+    }
     check.addEventListener("click", () => {
+      guessBox.open = true;
       const right = cfg.answer(values);
       const given = parseNumber(guess.value);
-      if (!Number.isFinite(given)) { status.textContent = "Type a number first, then check it."; return; }
       const sound = (kind) => document.dispatchEvent(new CustomEvent("academy:sound", { detail: { kind } }));
-      if (cfg.accept(given, right)) { sound("correct"); status.textContent = "✅ Right. Here is the working, so you can compare your method."; showSteps(); }
-      else { sound("wrong"); status.textContent = "❌ Not quite. Try the hint, change your answer, or open the steps."; }
+      if (!Number.isFinite(given)) { status.textContent = "Type a guess above to compare it with the steps."; return; }
+      if (cfg.accept(given, right)) { sound("correct"); status.textContent = "That matches the steps above."; }
+      else { sound("wrong"); status.textContent = "Not the same as the steps above. " + cfg.hint(values); }
     });
-    hintButton.addEventListener("click", () => { status.textContent = "💡 " + cfg.hint(values); });
-    reveal.addEventListener("click", () => { status.textContent = `The answer is ${cfg.show(cfg.answer(values))}.`; showSteps(); });
     shuffle.addEventListener("click", () => {
       readers.forEach(({ spec, input, read }) => {
         input.value = spec.options ? String(spec.options[Math.floor(Math.random() * spec.options.length)]) : String(spec.min + Math.floor(Math.random() * (spec.max - spec.min + 1)));

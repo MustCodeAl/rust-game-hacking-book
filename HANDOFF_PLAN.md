@@ -39,6 +39,16 @@ questions), `quiz-rewrite-spec.md` (the instructions for whoever rewrites), `qui
 whether the rewrite was merged; if not, run prep, give each of three agents about a third of the lessons,
 check every output with the checker, merge, rebuild, run `check-lesson-quizzes.mjs`, publish.
 
+**Principle (owner, 2026-10-06): interactives teach, they are not required exercises.** Every widget opens
+already showing a worked example and its explanation, updates live as the reader changes numbers, never grades
+or gates, and offers guessing only as an optional extra. Invite ("Try changing...") rather than command.
+
+**Explorable simulations added 2026-10-06** (`site/src/components/SimLab.astro`, `site/src/scripts/sim-labs.js`;
+add one by writing a function in `SIMS` and `<SimLab sim="...">`): `base-rate` (15.5), `page-table` (12.8),
+`checked-range` (13.8). The four predict labs (3.8, 4.3, 4.5, 4.7) were reworked to the same explore-first
+style. Performance was compared with the pre-session site at 4x CPU throttle: scroll median 16.7 ms, load
+blocking within noise (pages are about 4 KB gzip heavier on average because of the quiz pools).
+
 **Backlog from the owner's Brilliant.org wish list (not started unless listed above).** Prefer small,
 reusable, data-driven components over per-lesson code, add each to lessons that have no interactive
 tool (38 remain; list them by grepping for lessons without `<Scene|<CpuStepLab|<MemoryStrip|<ConceptLab|

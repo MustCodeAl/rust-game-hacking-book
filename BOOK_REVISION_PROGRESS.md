@@ -1230,3 +1230,14 @@ and was repaired by `bb12295`. The prerender cache
 refilled from the published pages' `data-processed="true"` diagrams, after which
 a build here matches the published one apart from random theme-menu ids. No lab
 programs were run.
+
+## T11 — Chat page reference, typing, sounds, explorable simulations (2026-10-06)
+
+Chat: every Context7 message now ends with a `[Reading: lesson ... section ... page ...]` line added when
+Enter or the send button is used. Verified against a stand-in widget in Chromium (Enter and button); the real
+widget host cannot be reached from the cloud sandbox, so confirm it live. Typing: 13 more snippets (31 total).
+Sound: right/wrong/finished-quiz sounds and two ambient loops, all behind the existing off-by-default effects
+toggle; verified that zero oscillators are created with effects off, sounds play with them on, and a reload
+with answers restored is silent. Simulations: three explorable `SimLab`s and the reworked explore-first predict
+labs, driven in Chromium at 375 and 1280 pixels with no overflow or page errors. Performance: compared with the
+pre-session build under 4x CPU throttle. No lab programs were run.
