@@ -128,6 +128,36 @@
     return items;
   }
 
+
+  // Small syntax highlighter for lab code (Rust, Lua, Python-like, assembly).
+  function academyGuessLang(text) {
+    if (/\b(mov|lea|push|pop|jmp)\b\s/.test(text)) return "asm";
+    if (/\b(local|function|then|elseif)\b/.test(text) && !/\bfn\b|\blet\b/.test(text)) return "lua";
+    if (/^\s*(def |for .* in .*:|#)/m.test(text) && !/[{};]/.test(text)) return "py";
+    return "rust";
+  }
+  function academyHighlight(text, lang) {
+    var KW = " fn let mut if else match return use struct enum impl for while in loop const pub as break continue local function end then elseif do not and or def import from mov lea push pop jmp call ret cmp add sub xor test nop ";
+    var LIT = " true false nil None Some Ok Err self null True False ";
+    var comment = lang === "lua" ? "--" : lang === "py" ? "#" : lang === "asm" ? ";" : "//";
+    var esc = function (s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
+    var span = function (k, s) { return '<span class="hl-' + k + '">' + esc(s) + "</span>"; };
+    var out = "", i = 0, m;
+    while (i < text.length) {
+      var rest = text.slice(i);
+      if (rest.indexOf(comment) === 0) { out += span("c", rest); break; }
+      if ((m = /^"(?:[^"\\]|\\.)*"|^'(?:[^'\\]|\\.)*'/.exec(rest))) { out += span("s", m[0]); i += m[0].length; continue; }
+      if (!/\w/.test(text.charAt(i - 1)) && (m = /^0x[0-9a-fA-F_]+|^\d[\d_.]*/.exec(rest))) { out += span("n", m[0]); i += m[0].length; continue; }
+      if ((m = /^[A-Za-z_]\w*/.exec(rest))) {
+        var w = m[0], after = rest.charAt(w.length);
+        var kind = KW.indexOf(" " + w + " ") >= 0 ? "k" : LIT.indexOf(" " + w + " ") >= 0 ? "l" : after === "(" ? "f" : /^[A-Z]/.test(w) ? "t" : "";
+        out += kind ? span(kind, w) : esc(w); i += w.length; continue;
+      }
+      out += esc(text.charAt(i)); i++;
+    }
+    return out;
+  }
+
   function element(tagName, className, text) {
     const node = document.createElement(tagName);
     if (className) node.className = className;
@@ -600,7 +630,7 @@
     const code = element("ol", "pointer-tracer__code");
     const codeLines = steps.map((step) => {
       const item = element("li", "");
-      item.append(element("code", "", step.code));
+      var codeEl = element("code", "", ""); codeEl.innerHTML = academyHighlight(step.code, "rust"); item.append(codeEl);
       code.append(item);
       return item;
     });
@@ -997,8 +1027,8 @@
       const given = parseNumber(guess.value);
       const sound = (kind) => document.dispatchEvent(new CustomEvent("academy:sound", { detail: { kind } }));
       if (!Number.isFinite(given)) { status.textContent = "Type a guess above to compare it with the steps."; return; }
-      if (cfg.accept(given, right)) { sound("correct"); status.textContent = "That matches the steps above."; }
-      else { sound("wrong"); status.textContent = "Not the same as the steps above. " + cfg.hint(values); }
+      if (cfg.accept(given, right)) { sound("correct"); status.textContent = "✅ That matches the steps above."; }
+      else { sound("wrong"); status.textContent = "⚠️ Different from the steps above. " + cfg.hint(values); }
     });
     shuffle.addEventListener("click", () => {
       readers.forEach(({ spec, input, read }) => {
@@ -1060,8 +1090,33 @@
     root.querySelectorAll("[data-concept-lab]").forEach(initializeConceptLab);
   }
 
+  // Feedback tone: a message that starts with a tick, a warning mark, or a
+  // plain "Correct"/"Not quite" is marked so the CSS can colour right and
+  // wrong differently (green for right, amber for different).
+  function feedbackTone(text) {
+    var t = String(text || "").trim();
+    if (/^(✅|Correct\b|Right\b|That matches|Matches the)/.test(t)) return "good";
+    if (/^(❌|Not quite|Not the same)/.test(t)) return "bad";
+    if (/^(⚠|Different from|Careful)/.test(t)) return "warn";
+    return "";
+  }
+  function markTone(node) {
+    var el = node && node.nodeType === 3 ? node.parentElement : node;
+    if (!el || !el.closest || !el.closest(".concept-lab")) return;
+    var box = el.closest(".concept-lab__takeaway, .sim-lab__explain, [aria-live]");
+    if (!box || !box.closest(".concept-lab") || box.hasAttribute("data-tone-explicit")) return;
+    var tone = feedbackTone(box.textContent);
+    if (tone) box.setAttribute("data-tone", tone); else box.removeAttribute("data-tone");
+  }
+  function watchTones() {
+    if (!window.MutationObserver) return;
+    new MutationObserver(function (mutations) { mutations.forEach(function (m) { markTone(m.target); }); })
+      .observe(document.body, { subtree: true, childList: true, characterData: true });
+  }
+
   function start() {
     initializeLearningWidgets(document);
+    watchTones();
 
     const bookBody = document.querySelector("main") || document.body;
     if (window.MutationObserver && bookBody) {
