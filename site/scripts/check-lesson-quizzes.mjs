@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { balanceProblem } from './quiz-balance.mjs';
 import { choiceValues, drawBatch, fingerprint, isCorrect, restoreAttempt, shuffleOrder } from '../public/scripts/quiz-session.mjs';
 
 const site = fileURLToPath(new URL('../', import.meta.url));
@@ -20,6 +21,7 @@ for (const [lesson, seed] of Object.entries(seeds)) {
       assert.equal(question.options.length, 4, question.id);
       assert.ok(choiceValues(question).includes(String(question.answer)), question.id);
       assert.equal(new Set(question.options).size, 4, question.id);
+      assert.equal(balanceProblem(question), null, question.id + ' gives the answer away by length');
     }
   }
   if (banks[lesson]?.batchSize) {
@@ -47,6 +49,7 @@ for (const [lesson, seed] of Object.entries(seeds)) {
     assert.equal(restoreAttempt(JSON.stringify({ ...recovered, ids: batch.map(() => batch[0]) }), questions, size, revision), null, 'Duplicate IDs survived recovery');
     for (const question of questions) {
       const choices = choiceValues(question);
+      if (choices.length < 2) continue;
       const order = shuffleOrder(choices, choices, () => 0);
       assert.notDeepEqual(order, choices);
       assert.equal(order.filter(value => isCorrect(question, value)).length, 1, 'Shuffling changed the correct choice');
@@ -69,4 +72,4 @@ for (const file of await fs.readdir(contentRoot + 'pages', { recursive: true }))
 }
 assert.equal(pages, Object.keys(seeds).length, 'Quiz/lesson coverage differs');
 console.log('lesson-quizzes: ' + pages + ' pages have one quiz; ' + questionCount + ' scoped questions; ' + expanded + ' full three-times pools. New/retake/recovery/grading checks pass.');
-console.log('Coverage remaining: ' + (pages - expanded) + ' older page pools still need five-to-ten batches and three-times distinct questions.');
+console.log('Coverage remaining: ' + (pages - expanded) + ' page pools still need batches.');

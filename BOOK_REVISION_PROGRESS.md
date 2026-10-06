@@ -1198,3 +1198,17 @@ The recorded 137 older quiz
 pools remain incomplete. Final native Edge review was blocked by a locked
 Mac; the earlier published-reader Edge F9/Natural voice check remains valid.
 Chrome Reading mode and a physical phone keyboard remain unverified.
+
+## T9 — Quiz pools for all 147 lessons (2026-10-06)
+
+Expanded the 137 older pools to three-times batches (5/15 up to 10/30; 3,064
+questions in all) and reworded every existing question's options. Before this,
+the correct choice was the single longest in 49% of multiple-choice questions;
+it is now the longest in 31% and the shortest in 22%, at 1.01 times the average
+wrong-choice length. `site/scripts/quiz-balance.mjs` rejects a clearly longest,
+much longer, or much shorter correct choice, and the quiz checker runs it on
+every question. The checker now skips the two short-answer questions when
+shuffling choices. New questions were drafted per lesson by parallel agents from
+the lesson text; the factual spot-check pass was not run. No lab programs were
+run. Browser: a quiz loaded at 375 and 1280 pixels with four choices, New quiz,
+and no horizontal overflow.

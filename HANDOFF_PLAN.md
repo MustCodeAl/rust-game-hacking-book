@@ -95,9 +95,9 @@ reorders the same batch and choices. Completed attempts survive reload.
 Chapter marking remains on Contents, automatic completion uses deeper checks,
 and optional completion sounds respect the saved effects preference.
 
-**Remaining content work:** 137 older page pools still need their five-to-ten
-question batches and at least three-times distinct question pools. Do not
-claim those requests complete or restore off-topic chapter borrowing.
+**Quiz pools (done 2026-10-06):** all 147 pages now have their own pool of at least three times
+the batch size (five-to-ten per batch), with answer lengths balanced by `site/scripts/quiz-balance.mjs`,
+which `check-lesson-quizzes.mjs` enforces. Do not restore chapter-wide borrowing.
 T8 adds four already explained ASCII snippets (18 total), smaller desktop
 controls, clearer untyped code, and a fix for doubled blank rows. It is
 published and confirmed live: source `3a484fe`, Pages `4059943`. See
