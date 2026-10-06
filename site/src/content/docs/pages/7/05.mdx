@@ -13,6 +13,7 @@ import { Accordion, Badge, Frame, GitHub, Panel, Steps } from '../../../../compo
 
 import ConceptLab from '../../../../components/ConceptLab.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## The scanner pipeline
 
@@ -65,6 +66,8 @@ Each scan keeps only the addresses that already survived every earlier one — t
 
 The scanner never rescans the whole process after the first pass. It re-reads only the surviving addresses. This makes later passes faster and preserves the history needed for filters such as increased, decreased, changed, and unchanged.
 
+<MarginNote kind="brief">Each scan keeps only candidates that survived all earlier ones. The list can only shrink, which is why a few controlled changes narrow millions of bytes to one.</MarginNote>
+
 ### How the work grows
 
 How much faster is worth working out, because the same reasoning decides whether
@@ -96,6 +99,8 @@ comparisons, 40,000 times the work of reading the list once, and doubling the
 candidates makes it four times worse. That is **O(n²)**. Before adding a scan
 feature, ask what happens to the work when the memory or the candidate list
 doubles.
+
+<MarginNote kind="alternative">Think of a phone book: reading every page costs more as the book grows, but jumping straight to the right letter barely changes. Ask which kind of work you add.</MarginNote>
 
 ## Describe readable regions
 
@@ -161,6 +166,8 @@ For an aligned-only scan, step by four. For a general scan, `windows(4)` checks 
 `wanted.to_le_bytes()` creates the exact four-byte representation used by the 32-bit Windows course games. `.windows(4)` yields overlapping four-byte slices, so a value may start at any byte. When a match appears, `base + offset` translates the local slice position back into the target’s virtual address.
 
 The complete program reads 1 MiB chunks. Adjacent chunks overlap by three bytes because a four-byte value can begin in the final three positions of the earlier chunk. Without that overlap, a value split across the boundary would never exist in either local buffer as a complete four-byte window.
+
+<MarginNote kind="narration">Boundary slips like this are easy to miss: a scanner without the overlap works almost always, then silently misses a value that happens to sit across a chunk edge.</MarginNote>
 
 <MemoryStrip
   cells="A[end−3]=E8|A[end−2]=03|A[end−1]=00|B[0]=00"
@@ -326,6 +333,8 @@ flowchart LR
 The UI should show the old and new value and require an explicit action.
 
 The second read closes a **time-of-check/time-of-use** gap. The candidate matched during the last filter, but the game kept running afterward. If the current value no longer equals `candidate.previous`, the address may be stale or the rule may have changed; the write must stop rather than overwrite newer state.
+
+<MarginNote kind="alternative">Like glancing at a traffic light and then closing your eyes: the colour may change before you move. Re-check at the moment you act.</MarginNote>
 
 <Frame caption="A simple memory-scanner interface like the one this lesson builds.">
 
