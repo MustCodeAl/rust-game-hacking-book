@@ -22,6 +22,8 @@ Instead, use a clear boundary:
 
 After the copy succeeds, ordinary ownership rules protect the local buffer. Before the copy, the address is untrusted input that needs checked arithmetic, region validation, and a useful error.
 
+In brief: Never treat another process’s address as your own pointer. Copy the bytes into a buffer you own, then work on the copy.
+
 Section: Values and types.
 
 Memory work depends on sizes, so we use explicit integer types:
@@ -41,6 +43,8 @@ A player ID and a health amount might both fit in a u32, yet swapping them shoul
 Code example. The code’s comments explain: damage(Health(50), PlayerId(3)); // rejected: the arguments are swapped
 
 These are newtypes. The wrapper tells the compiler that equal byte representations do not mean interchangeable values. The same technique keeps a remote address, a byte offset, and a game value from being passed to the wrong parameter just because all three happen to be integers. Chapter 1 first kept these ideas separate in words; a newtype can enforce the distinction in code.
+
+Alternative: Think of labelled jars: sugar and salt look alike, but the label stops you pouring one where the other belongs. A newtype is that label for numbers.
 
 Section: Ownership and borrowing.
 
@@ -96,6 +100,8 @@ Add context at each boundary without erasing the original Windows or parsing err
 
 This makes failure part of the design. “Keep going” is safe only when the next iteration starts from fresh, validated state.
 
+Narration: A reader that keeps going after a stale pointer can report numbers from an object that no longer exists. Discarding the snapshot and reading again avoids that.
+
 Section: Put uncertain reads behind one boundary.
 
 The scanner and the game-specific logic should not each repeat Windows handle checks, byte counts, and error conversion. An abstraction gives that work one named interface. This sketch describes the operation the rest of a tool needs, without claiming that the method alone makes an address safe:
@@ -135,6 +141,8 @@ This function reads a pointer in the tool’s own address space only when its ca
 Section: What .offset() actually does.
 
 Raw pointers have an offset method, but its number is an element count, not a byte count. If pointer has type *const u32, one element is four bytes:
+
+Alternative: Picture a row of four-byte lockers: offset 2 skips two lockers, which is eight bytes. To count in bytes, use a byte pointer instead.
 
 Code example. The code’s comments explain: 🧭 `offset(2)` means "move by two u32 values," so this advances 8 bytes. 🛡️ SAFETY: `third` is aligned, initialized, and still inside `values`.
 

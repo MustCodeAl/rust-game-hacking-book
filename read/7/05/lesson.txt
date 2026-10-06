@@ -26,6 +26,8 @@ Each scan keeps only the addresses that already survived every earlier one — t
 
 The scanner never rescans the whole process after the first pass. It re-reads only the surviving addresses. This makes later passes faster and preserves the history needed for filters such as increased, decreased, changed, and unchanged.
 
+In brief: Each scan keeps only candidates that survived all earlier ones. The list can only shrink, which is why a few controlled changes narrow millions of bytes to one.
+
 Section: How the work grows.
 
 How much faster is worth working out, because the same reasoning decides whether any tool feature is usable. Suppose the game has 400 MiB of readable memory and each candidate is a 4-byte value:
@@ -33,6 +35,8 @@ How much faster is worth working out, because the same reasoning decides whether
 The second pass reads about 2,600 times less than the first (the large number shown divided by 160,000 approximately 2,621), and it no longer depends on how big the game is at all, only on how many candidates survived.
 
 The first scan’s cost grows in step with its input: give the game twice the memory and the scan reads twice the bytes. Programmers write that as O(n), read “order n”, where n is the size of the input. Some costs do not grow at all: finding one candidate’s previous value in a hash table keyed by address takes about the same time with 40 candidates or 40,000, as Lesson 3.6 explains. That is O(1) on average: hashing one address chooses a bucket instead of reading the entire candidate list. Collisions and a badly overloaded table can make individual lookups slower, so this is not a promise of identical timing. And a loop inside a loop multiplies. Comparing every one of the 40,000 candidates with every other takes 40,000 times 40,000 equals the large number shown comparisons, 40,000 times the work of reading the list once, and doubling the candidates makes it four times worse. That is O(n²). Before adding a scan feature, ask what happens to the work when the memory or the candidate list doubles.
+
+Alternative: Think of a phone book: reading every page costs more as the book grows, but jumping straight to the right letter barely changes. Ask which kind of work you add.
 
 Section: Describe readable regions.
 
@@ -61,6 +65,8 @@ For an aligned-only scan, step by four. For a general scan, windows(4) checks ev
 wanted.to_le_bytes() creates the exact four-byte representation used by the 32-bit Windows course games. .windows(4) yields overlapping four-byte slices, so a value may start at any byte. When a match appears, base + offset translates the local slice position back into the target’s virtual address.
 
 The complete program reads 1 MiB chunks. Adjacent chunks overlap by three bytes because a four-byte value can begin in the final three positions of the earlier chunk. Without that overlap, a value split across the boundary would never exist in either local buffer as a complete four-byte window.
+
+Narration: Boundary slips like this are easy to miss: a scanner without the overlap works almost always, then silently misses a value that happens to sit across a chunk edge.
 
 Section: Keep candidate values.
 
@@ -131,6 +137,8 @@ Code example. The code’s comments explain: ⚠️ The game continued after the
 The UI should show the old and new value and require an explicit action.
 
 The second read closes a time-of-check/time-of-use gap. The candidate matched during the last filter, but the game kept running afterward. If the current value no longer equals candidate.previous, the address may be stale or the rule may have changed; the write must stop rather than overwrite newer state.
+
+Alternative: Like glancing at a traffic light and then closing your eyes: the colour may change before you move. Re-check at the moment you act.
 
 Section: Separate types.
 

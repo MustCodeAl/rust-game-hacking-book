@@ -42,6 +42,8 @@ An external tool cannot dereference a target-process pointer directly. Windows m
 
 The returned bytes belong to the observer, but their interpretation is valid only for the target build and moment that justified the layout. A write is a separate, stronger capability and needs its own expected-value check.
 
+In brief: An external tool asks Windows to copy bytes out of the game, then reads its own copy. A write is a stronger power and needs its own check.
+
 Even two successful reads can describe different moments. Suppose the tool follows a player pointer, the game removes that player and reuses the same allocation, and the tool then reads health. Both requests can succeed while the combined result describes no real player:
 
 Watch that race. Each read can succeed while the pair of observations becomes inconsistent:
@@ -84,6 +86,8 @@ Every use of ? can return early. Manual cleanup at the bottom is skipped by thos
 
 The Process type stores this OwnedHandle. The rest of the program cannot forget to close it. Its complete ToolHelp implementation is in process.rs; the important discovery step is:
 
+Alternative: Think of a self-closing door: however you leave the function, normally or through an early error, Drop closes the handle for you.
+
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 Process::list creates a TH32CS_SNAPPROCESS snapshot, initializes PROCESSENTRY32W.dwSize, and repeatedly calls Process32FirstW and Process32NextW. That code is shown in full in the linked source rather than being replaced by “enumerate processes here.”
@@ -117,6 +121,8 @@ Open the handle with allow_write: true only when the user explicitly requests a 
 Section: Defeat the moving-address problem.
 
 Wesnoth 1.14.9 is a 32-bit target, so a 64-bit tool must read its pointers as four-byte u32 values, not as the tool’s native usize:
+
+Narration: Reading eight bytes where the game stored four pulls the next field into the pointer. The result looks like a random address, so a width mistake is easy to miss.
 
 Code example. The code’s comments explain: 📏 Pointer width belongs to the target process, not to this tool. Reading a native usize here would consume eight bytes in a 64-bit build.
 

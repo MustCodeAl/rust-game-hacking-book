@@ -20,6 +20,8 @@ Where shared data lives
 
 In memory the three look different. The 42 positions are one run of 42 records, which a scan finds together. A resource is one record at one address, so a scan for the score finds a single candidate instead of forty. An event is an entry in a queue that the engine empties again within a frame or two.
 
+In brief: Systems share data in three ways: components belong to entities, a resource exists once for the world, and an event is a short-lived message.
+
 Section: Resources: one value for the whole world.
 
 A resource is a value that exists once for the whole world, whatever entities there are: the clock, the score, the settings read at startup, the state of the keyboard. Because there is exactly one of each kind, a system asks for it by kind and needs no entity.
@@ -31,6 +33,8 @@ Section: Events: messages with a short life.
 An event carries one fact from the systems that notice it to the systems that care. The collision system does not know that a score or a sound exists; it sends BrickHit and moves on. Any number of systems can read it, and a new system, such as a particle burst, can be added later without touching the collision code.
 
 Mechanically an event queue is a list. A sender appends to it. Each reader keeps its own count of how many entries it has read, so two readers each see every event once. The engine empties old entries after a short time. Bevy keeps each event for at least two frames, and other engines choose differently, so a system that does not run during that window never sees the event. A paused game is the usual case: the systems that read events stop, the events expire, and the reaction is lost for good.
+
+Alternative: Think of a noticeboard where each notice comes down after two days. A student who is away on both days never reads it.
 
 Order matters as well, because a reader only sees what has already been sent when it runs:
 
@@ -76,6 +80,8 @@ The engine keeps a counter that rises with every frame. When a system writes a c
 
 The saving can be large. With 10,000 characters and a redraw that costs 0.002 milliseconds each, redrawing all of them costs 10,000 times 0.002 equals 20 milliseconds, more than a whole 16.67 milliseconds frame. If only 12 changed this frame, the cost is 12 times 0.002 equals 0.024 milliseconds, about 833 times less.
 
+Narration: A tool that rewrites a value every frame can make the engine think it changed every frame, so work that should be skipped runs again and again.
+
 Three consequences follow, and the third one matters when you edit memory:
 
 A system that was paused and runs again still sees every change since it last ran, because it compares against its own counter. Events behave differently, as above.
@@ -107,6 +113,8 @@ every system that was ordered before it has finished or been skipped;
 its run conditions, covered next, are true.
 
 A ready system starts on any free C P U, central processing unit, thread, so systems that touch different data run at the same time. When the order of two systems is not stated, the engine may run them either way round, and the order can even change from one frame to the next.
+
+Alternative: Think of cooks in a kitchen: those at different counters work at once, but two who need the same pan must take turns.
 
 Take five systems with these costs: read_input writes the player’s intent (1 milliseconds), enemy_ai (3 milliseconds), move_player writes Position and runs after read_input (1 milliseconds), collide reads Position and sends events (2 milliseconds), and play_sounds reads the events (1 milliseconds). One thread would take 1 + 3 + 1 + 2 + 1 equals 8 milliseconds. On two threads the result depends on what enemy_ai touches:
 

@@ -26,6 +26,8 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 An offset is a distance, not an address by itself. Many player objects can use the same yaw offset while living at different base addresses.
 
+In brief: An object has one base address, and each field sits a fixed distance from it. Many objects can share the same offsets.
+
 Section: What an object looks like in memory.
 
 For the course build of AssaultCube, our recovered player model contains these useful landmarks:
@@ -35,6 +37,8 @@ Notice the gaps. We have not claimed that every byte between hexadecimal 0 C and
 Padding is especially easy to miss. CPUs and compilers often place a field at an aligned address — usually a multiple of that field’s own size — leaving unused bytes in between. Three fields declared in this order produce a layout with a hole in it:
 
 The three bytes at +hexadecimal 0 1, +hexadecimal 0 2, and +hexadecimal 0 3 hold nothing meaningful. They exist only so that health begins at a multiple of four. If you assume fields sit back to back and put health at +hexadecimal 0 1, then every offset after it is wrong by three bytes, and each read returns a value stitched together from pieces of two neighboring fields. ❌
+
+Alternative: Think of parking bays marked in sets of four: a bigger car skips ahead to the next set, leaving empty bays. Padding is those empty bays inside an object.
 
 Section: Find the object base from one known field.
 
@@ -102,6 +106,8 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 The offset hexadecimal 0 C is 12, and a pointer in a 32-bit process is four bytes, so 12 / 4 equals 3: this is the fourth entry counting from zero, which is why it is called slot 3. Two objects of different classes executing this identical instruction end up in different functions, because the second step read a different table.
 
+Narration: This is how a game loop can call update on every entity, human or bot, without checking each one. The object carries the pointer to the right code.
+
 Do not label every first pointer a vptr. Test it:
 
 The object field should point into a readable table, usually in a module’s read-only data.
@@ -159,6 +165,8 @@ returns the same object or passes it into a registration system.
 None of those clues identifies a constructor alone, because an ordinary reset function can also fill fields with defaults. What a reset function does not do is run right after an allocation, call base constructors first, and switch the vptr from the base table to the derived table.
 
 Destructors provide the other half: they reveal child cleanup, unregistering, reference releases, pool returns, and the point after which a cached address is stale. For a memory tool, this lifetime boundary matters more than recovering the original C++ class name.
+
+In brief: Constructors show how an object comes to exist, and destructors show when old addresses stop being safe to trust.
 
 Section: Recover a structure step by step.
 

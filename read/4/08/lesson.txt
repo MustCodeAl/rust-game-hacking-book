@@ -16,6 +16,8 @@ A telemetry pipeline separates those jobs:
 
 The producer never waits for disk. The consumer owns the file.
 
+In brief: Split recording in two: a fast sampler captures facts, and a separate writer saves them, so a slow disk never stalls the game.
+
 Section: Record overload and failure instead of hiding them.
 
 A fault is one thing going wrong: the disk pauses, a queue fills, the target closes, or the writer thread exits. A failure is the recorder breaking its promise to the learner—for example, inventing continuous data after samples were lost or labeling an incomplete file as clean.
@@ -58,6 +60,8 @@ Different tools can choose different policies:
 
 Backpressure is not one library call. It is the decision a system makes when producers outrun consumers.
 
+Alternative: Think of a tap over a sink: if water arrives faster than the drain empties, you slow the tap, spill some, or stop. A full queue forces that choice.
+
 Section: Let channel closure be the stop message.
 
 The sink owns an optional sender and writer thread. Finishing removes the final sender:
@@ -69,6 +73,8 @@ The receiver’s loop ends naturally when the channel is disconnected and empty.
 The writer then flushes BufWriter, returns the count, and joins. This ordering proves that a successful finish means all accepted events reached the operating-system file interface.
 
 That promise is deliberately narrow. BufWriter::flush sends buffered bytes to the file object, but it is not a guarantee that every storage device could survive an immediate power loss. A short course telemetry run needs honest completion and visible loss; a crash-resilient journal would need a stronger, explicit durability design.
+
+Narration: Flushing hands bytes to the operating system, not to the disk platter. After a sudden power cut, the last few lines of a log can still be missing.
 
 Drop repeats the close-and-join path as a fallback. Explicit finish is still better because it returns errors and counts to main.
 
