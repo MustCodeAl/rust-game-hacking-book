@@ -1100,18 +1100,43 @@
     if (/^(⚠|Different from|Careful)/.test(t)) return "warn";
     return "";
   }
-  function markTone(node) {
-    var el = node && node.nodeType === 3 ? node.parentElement : node;
-    if (!el || !el.closest || !el.closest(".concept-lab")) return;
-    var box = el.closest(".concept-lab__takeaway, .sim-lab__explain, [aria-live]");
-    if (!box || !box.closest(".concept-lab") || box.hasAttribute("data-tone-explicit")) return;
-    var tone = feedbackTone(box.textContent);
-    if (tone) box.setAttribute("data-tone", tone); else box.removeAttribute("data-tone");
+  var TONE_BOXES = ".concept-lab__takeaway, .sim-lab__explain, .code-trace__say, .code-trace__diff, .fsm__status, .fsm__change, " +
+    ".sort-board__explain, .formula-builder__explain, .formula-builder__note, .visual-lab__explain, [aria-live]";
+  function toneFor(el) {
+    if (el.hasAttribute("data-tone-explicit")) return null;
+    var text = (el.textContent || "").trim();
+    if (!text) return "";
+    var byText = feedbackTone(text);
+    if (byText) return byText;
+    var c = String(el.className || "");
+    if (/code-trace__diff/.test(c) || /formula-builder__note/.test(c)) return "warn";
+    if (/code-trace__say|fsm__status|formula-builder__explain|sim-lab__explain|concept-lab__takeaway/.test(c)) return "info";
+    if (/fsm__change|sort-board__explain|visual-lab__explain/.test(c)) {
+      if (/lesson.s (complete|working|version|choice|machine)|matches the lesson|belongs there|same as the lesson/i.test(text)) return "good";
+      if (/differ|different from|no longer|instead|stuck|not where/i.test(text)) return "warn";
+      return "info";
+    }
+    return "";
+  }
+  function scanTones() {
+    document.querySelectorAll(".concept-lab").forEach(function (lab) {
+      lab.querySelectorAll(TONE_BOXES).forEach(function (box) {
+        var tone = toneFor(box);
+        if (tone === null) return;
+        if (tone) { if (box.getAttribute("data-tone") !== tone) box.setAttribute("data-tone", tone); }
+        else if (box.hasAttribute("data-tone")) box.removeAttribute("data-tone");
+      });
+    });
   }
   function watchTones() {
     if (!window.MutationObserver) return;
-    new MutationObserver(function (mutations) { mutations.forEach(function (m) { markTone(m.target); }); })
-      .observe(document.body, { subtree: true, childList: true, characterData: true });
+    var queued = false;
+    new MutationObserver(function () {
+      if (queued) return;
+      queued = true;
+      window.requestAnimationFrame(function () { queued = false; scanTones(); });
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+    scanTones();
   }
 
   function start() {

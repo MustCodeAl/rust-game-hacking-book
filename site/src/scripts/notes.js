@@ -71,8 +71,10 @@ export function renderMarkdown(source) {
 const slug = text => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
 const lessonOrder = a => String(a.lesson || '0').split('.').map(Number);
 
+const absolutize = (text, url) => text.replace(/\]\(#/g, `](${url}#`);
+
 export function noteDocument(note, url) {
-	return `# Lesson ${note.lesson} — ${note.title}\n\nSource: ${url}\nLast edited: ${new Date(note.at).toISOString().slice(0, 10)}\n\n${note.text.trim()}\n`;
+	return `# Lesson ${note.lesson} — ${note.title}\n\nSource: ${url}\nLast edited: ${new Date(note.at).toISOString().slice(0, 10)}\n\n${absolutize(note.text.trim(), url)}\n`;
 }
 
 export function allNotes() {
@@ -106,21 +108,23 @@ export function mountNotes() {
 	for (const root of document.querySelectorAll('[data-lesson-notes]')) {
 		if (root.dataset.noteReady === 'true') continue;
 		root.dataset.noteReady = 'true';
+		// Fixed-position widgets must live outside the lesson's contained layout, or the sidebars paint over them.
+		document.body.append(root);
 		const { noteId: id, noteLesson: lesson, noteTitle: title } = root.dataset;
 		const key = PREFIX + id;
 		const area = root.querySelector('[data-note-text]');
 		const preview = root.querySelector('[data-note-preview]');
 		const status = root.querySelector('[data-note-status]');
 		const summary = root.querySelector('[data-note-summary]');
-		const details = root.querySelector('details');
+		const panel = root.querySelector('.lesson-notes__panel');
+		const fab = root.querySelector('[data-note-open]');
 		const tabs = Array.from(root.querySelectorAll('[data-note-tab]'));
 		const saved = parse(read(key) || 'null');
 		area.value = saved && typeof saved.text === 'string' ? saved.text : '';
-		if (area.value.trim()) details.open = true;
 		let timer = 0;
 
 		const words = () => (area.value.trim() ? area.value.trim().split(/\s+/).length : 0);
-		const refresh = () => { summary.textContent = area.value.trim() ? `· ${words()} word${words() === 1 ? '' : 's'}` : ''; };
+		const refresh = () => { summary.textContent = area.value.trim() ? `· ${words()}w` : ''; };
 		const save = () => {
 			try {
 				window.localStorage.setItem(key, JSON.stringify({ text: area.value, at: Date.now(), title, lesson }));
@@ -153,7 +157,7 @@ export function mountNotes() {
 			if (!notes.length) { status.textContent = 'You have no notes to export yet.'; return; }
 			const base = location.origin + location.pathname.replace(/pages\/.*$/, '');
 			const text = `# Game Hacking Academy — my notes\n\nExported ${new Date().toISOString().slice(0, 10)}\n\n` +
-				notes.map(note => `## Lesson ${note.lesson} — ${note.title}\n\nSource: ${base}${note.id}/\n\n${note.text.trim()}\n`).join('\n');
+				notes.map(note => `## Lesson ${note.lesson} — ${note.title}\n\nSource: ${base}${note.id}/\n\n${absolutize(note.text.trim(), base + note.id + '/')}\n`).join('\n');
 			download('game-hacking-academy-notes.md', text);
 			status.textContent = `Exported ${notes.length} note${notes.length === 1 ? '' : 's'}.`;
 		});
@@ -165,5 +169,40 @@ export function mountNotes() {
 			status.textContent = 'Note cleared.';
 		});
 		refresh();
+
+		const setOpen = open => { panel.hidden = !open; fab.setAttribute('aria-expanded', String(open)); if (open) area.focus(); };
+		fab.addEventListener('click', () => setOpen(panel.hidden));
+		root.querySelector('[data-note-close]').addEventListener('click', () => { setOpen(false); fab.focus(); });
+		panel.addEventListener('keydown', event => { if (event.key === 'Escape') { setOpen(false); fab.focus(); } });
+
+		// A reference to the part being read: a link to its heading, inserted where the cursor is.
+		const sectionNow = () => {
+			const line = window.innerHeight * 0.35;
+			let found = null;
+			for (const heading of document.querySelectorAll('.sl-markdown-content h2[id], .sl-markdown-content h3[id]')) {
+				if (heading.getBoundingClientRect().top > line) break;
+				found = heading;
+			}
+			return found;
+		};
+		const insert = text => {
+			show('write');
+			const start = area.selectionStart ?? area.value.length, end = area.selectionEnd ?? start;
+			area.value = area.value.slice(0, start) + text + area.value.slice(end);
+			area.selectionStart = area.selectionEnd = start + text.length;
+			area.dispatchEvent(new Event('input', { bubbles: true }));
+			area.focus();
+		};
+		const reference = () => {
+			const heading = sectionNow();
+			const label = heading ? heading.textContent.replace(/\s+/g, ' ').trim() : `Lesson ${lesson}: ${title}`;
+			return `[${label.replace(/[\[\]]/g, '')}](#${heading ? heading.id : ''})`;
+		};
+		root.querySelector('[data-note-ref]').addEventListener('click', () => insert(reference() + ' '));
+		root.querySelector('[data-note-quote]').addEventListener('click', () => {
+			const selected = (window.getSelection()?.toString() || '').replace(/\s+/g, ' ').trim().slice(0, 400);
+			if (!selected) { status.textContent = 'Select some text in the lesson first, then press this button.'; return; }
+			insert(`> ${selected}\n> — ${reference()}\n\n`);
+		});
 	}
 }

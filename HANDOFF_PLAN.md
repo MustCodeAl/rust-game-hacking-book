@@ -51,9 +51,16 @@ add one by writing a function in `SIMS` and `<SimLab sim="...">`): `base-rate` (
 style. Performance was compared with the pre-session site at 4x CPU throttle: scroll median 16.7 ms, load
 blocking within noise (pages are about 4 KB gzip heavier on average because of the quiz pools).
 
-**OWNER HAS ABOUT $5 OF CREDITS LEFT (end of the 2026-10-06 sessions). Prefer small, verified steps; at most one agent.**
+**OWNER HAS ABOUT $3 OF CREDITS LEFT (end of the 2026-10-06 sessions). Prefer small, verified steps; at most one agent.**
 
 **Latest additions (all published unless `git log` says otherwise), with where to find them:**
+- **Notes are a floating chat-style panel** (`Notes.astro`, `src/scripts/notes.js`): a 📝 button at the bottom-right (above the chat
+  button) opens a panel on any part of the page; "Insert reference to this part" adds `[Section](#id)` for the section being read,
+  "Quote what I selected" adds a blockquote with a reference; Markdown preview; exports turn `](#id)` into absolute links. The widget
+  is moved to `document.body` on load, because `position: fixed` inside `.sl-markdown-content` (a CSS container) is trapped under the
+  sidebars. The **cheatsheet is now at the top of each lesson** with a rendered preview; the download is the raw Markdown.
+- **Every lab family shares feedback tones** (`toneFor` / `scanTones` in `learning-widgets.js` and `[data-tone]` CSS with !important
+  backgrounds): blue = prompt/info, green = matches the lesson, amber = different, red = wrong in a quiz.
 - **Downloadable cheatsheet per lesson** (`site/src/components/Cheatsheet.astro`, `site/src/lib/cheatsheet.mjs`,
   wired in `components/overrides/MarkdownContent.astro`). Built at build time from the lesson text: TL;DR and alternative
   margin notes, section outline, bold key terms with their defining sentence, short formulas, four self-check questions
