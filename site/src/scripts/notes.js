@@ -178,8 +178,11 @@ export function mountNotes() {
 			root.dataset.corner = corners.includes(ui.corner) ? ui.corner : 'br';
 			root.dataset.hidden = String(ui.hidden);
 			try { window.localStorage.setItem(UI, JSON.stringify(ui)); } catch { /* optional */ }
+			window.dispatchEvent(new CustomEvent('gha:notes-ui', { detail: { ...ui } }));
 		};
 		applyUi();
+		// The Reader theme panel can place or hide the button too (it sends this event; the panel's own Move and Hide stay in sync).
+		window.addEventListener('gha:notes-ui-set', event => { Object.assign(ui, event.detail || {}); applyUi(); if (ui.hidden) setOpen(false); });
 		root.querySelector('[data-note-move]').addEventListener('click', () => { ui.corner = corners[(corners.indexOf(ui.corner) + 1) % corners.length]; applyUi(); status.textContent = 'Moved. Press Move again for the next corner.'; });
 		root.querySelector('[data-note-hide]').addEventListener('click', () => { ui.hidden = true; applyUi(); setOpen(false); });
 		window.addEventListener('keydown', event => { if (event.altKey && event.key.toLowerCase() === 'n') { ui.hidden = false; applyUi(); setOpen(panel.hidden); } });

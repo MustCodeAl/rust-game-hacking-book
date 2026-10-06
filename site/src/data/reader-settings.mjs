@@ -14,7 +14,7 @@ export const readerSettingsScript = `(${function () {
     ['academyDiagramSize', 'gha-diagram-size', ['fit', 'actual'], 'fit'],
     ['academyGrid', 'gha-grid', ['on', 'off'], 'on'],
     ['academyCards', 'gha-cards', ['on', 'off'], 'on'],
-    ['academyChat', 'gha-chat', ['bottom-right', 'bottom-left', 'off'], 'bottom-right'],
+    ['academyChat', 'gha-chat', ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'off'], 'bottom-right'],
     ['academyGradients', 'gha-gradients', ['on', 'off'], 'on'],
     ['academyMotion', 'gha-motion', ['system', 'onrequest', 'off'], 'system'],
     ['academyAnimationSpeed', 'gha-animation-speed', ['slow', 'normal', 'fast'], 'normal'],
@@ -24,7 +24,10 @@ export const readerSettingsScript = `(${function () {
     ['academySemantic', 'gha-semantic-highlighting', ['on', 'off'], 'on'],
     ['academyLigatures', 'gha-code-ligatures', ['on', 'off'], 'off'],
     ['academySidebar', 'gha-sidebar', ['shown', 'hidden'], 'shown'],
-    ['academyToc', 'gha-toc', ['shown', 'hidden'], 'shown']
+    ['academyToc', 'gha-toc', ['shown', 'hidden'], 'shown'],
+    ['academyTocTone', 'gha-toc-tone', ['page', 'light', 'dark'], 'page'],
+    ['academySidebarTone', 'gha-sidebar-tone', ['page', 'light', 'dark'], 'page'],
+    ['academyMeasure', 'gha-measure', ['narrow', 'standard', 'wide'], 'standard']
   ];
   settings.forEach(function (setting) { root.dataset[setting[0]] = choose(get(setting[1]), setting[2], setting[3]); });
   root.dataset.academyBackground = choose(get('gha-background-tone') || get('gha-background'), ['theme', 'warm', 'cool', 'rose', 'neutral'], 'theme');

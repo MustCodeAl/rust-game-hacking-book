@@ -31,12 +31,15 @@
     diagramSize: { attribute: "academyDiagramSize", key: "gha-diagram-size", values: ["fit", "actual"], fallback: "fit", control: "data-diagram-size-choice" },
     grid: { attribute: "academyGrid", key: "gha-grid", values: ["on", "off"], fallback: "on", control: "data-grid-choice" },
     cards: { attribute: "academyCards", key: "gha-cards", values: ["on", "off"], fallback: "on", control: "data-cards-choice" },
-    chat: { attribute: "academyChat", key: "gha-chat", values: ["bottom-right", "bottom-left", "off"], fallback: "bottom-right", control: "data-chat-choice" },
+    chat: { attribute: "academyChat", key: "gha-chat", values: ["bottom-right", "bottom-left", "top-right", "top-left", "off"], fallback: "bottom-right", control: "data-chat-choice" },
     gradients: { attribute: "academyGradients", key: "gha-gradients", values: ["on", "off"], fallback: "on", control: "data-gradients-choice" },
     motion: { attribute: "academyMotion", key: "gha-motion", values: ["system", "onrequest", "off"], fallback: "system", control: "data-motion-choice" },
     animationSpeed: { attribute: "academyAnimationSpeed", key: "gha-animation-speed", values: ["slow", "normal", "fast"], fallback: "normal", control: "data-animation-speed-choice" },
     headingStyle: { attribute: "academyHeadingStyle", key: "gha-heading-style", values: ["boxed", "plain"], fallback: "boxed", control: "data-heading-style-choice" },
     textSize: { attribute: "academyTextSize", key: "gha-text-size", values: ["small", "standard", "large"], fallback: "standard", control: "data-text-size-choice" },
+    tocTone: { attribute: "academyTocTone", key: "gha-toc-tone", values: ["page", "light", "dark"], fallback: "page", control: "data-toc-tone-choice" },
+    sidebarTone: { attribute: "academySidebarTone", key: "gha-sidebar-tone", values: ["page", "light", "dark"], fallback: "page", control: "data-sidebar-tone-choice" },
+    measure: { attribute: "academyMeasure", key: "gha-measure", values: ["narrow", "standard", "wide"], fallback: "standard", control: "data-measure-choice" },
     spacing: { attribute: "academySpacing", key: "gha-spacing", values: ["compact", "comfortable", "spacious"], fallback: "comfortable", control: "data-spacing-choice" }
   };
 
@@ -105,11 +108,31 @@
     });
   }
 
+  // The Notes button: four corners or hidden, shared with the Notes panel's own Move and Hide (see src/scripts/notes.js).
+  var NOTES_UI = "gha-notes-ui";
+  function readNotesUi() {
+    try { return Object.assign({ corner: "br", hidden: false }, JSON.parse(storageGet(NOTES_UI) || "null") || {}); } catch (e) { return { corner: "br", hidden: false }; }
+  }
+  function syncNotesChoice(ui) {
+    ui = ui || readNotesUi();
+    setPressed("data-notes-choice", ui.hidden ? "hidden" : ui.corner);
+  }
+  function applyNotesChoice(id) {
+    var ui = readNotesUi();
+    if (id === "hidden") ui.hidden = true;
+    else { ui.hidden = false; ui.corner = ["br", "bl", "tr", "tl"].indexOf(id) === -1 ? "br" : id; }
+    storageSet(NOTES_UI, JSON.stringify(ui));
+    window.dispatchEvent(new CustomEvent("gha:notes-ui-set", { detail: ui }));
+    syncNotesChoice(ui);
+  }
+  window.addEventListener("gha:notes-ui", function (event) { syncNotesChoice(event.detail); });
+
   function syncThemeControls() {
     var theme = THEMES.find(function (candidate) { return candidate.id === root.dataset.academyTheme; }) || THEMES[0];
     var mode = savedMode();
     document.querySelectorAll("[data-theme-label]").forEach(function (label) { label.textContent = theme.label; });
     document.querySelectorAll("[data-mode-label]").forEach(function (label) { label.textContent = MODE_LABELS[mode]; });
+    syncNotesChoice();
     setPressed("data-theme-choice", theme.id);
     setPressed("data-mode-choice", mode);
     setPressed("data-code-mode-choice", root.dataset.academyCodeChoice || "page");
@@ -301,7 +324,7 @@
       "[data-background-choice], [data-semantic-choice], [data-ligature-choice], [data-theme-reset], " +
       "[data-diagram-background-choice], [data-diagram-fill-choice], [data-heading-style-choice], [data-text-size-choice], [data-spacing-choice], " +
       "[data-diagram-labels-choice], [data-diagram-borders-choice], [data-diagram-size-choice], [data-grid-choice], [data-cards-choice], [data-chat-choice], [data-gradients-choice], [data-motion-choice], [data-animation-speed-choice], " +
-      "[data-print-book], [data-panel-hide], [data-panel-show], .theme-switcher__toggle"
+      "[data-notes-choice], [data-toc-tone-choice], [data-sidebar-tone-choice], [data-measure-choice], [data-print-book], [data-panel-hide], [data-panel-show], .theme-switcher__toggle"
     );
     if (!target) {
       closeThemeMenus(event.target.closest("[data-theme-switcher]"));
@@ -323,6 +346,10 @@
     if ("chatChoice" in data) return applyReaderChoice("chat", data.chatChoice);
     if ("gradientsChoice" in data) return applyReaderChoice("gradients", data.gradientsChoice);
     if ("motionChoice" in data) return applyReaderChoice("motion", data.motionChoice);
+    if ("notesChoice" in data) return applyNotesChoice(data.notesChoice);
+    if ("tocToneChoice" in data) return applyReaderChoice("tocTone", data.tocToneChoice);
+    if ("sidebarToneChoice" in data) return applyReaderChoice("sidebarTone", data.sidebarToneChoice);
+    if ("measureChoice" in data) return applyReaderChoice("measure", data.measureChoice);
     if ("animationSpeedChoice" in data) return applyReaderChoice("animationSpeed", data.animationSpeedChoice);
     if ("headingStyleChoice" in data) return applyReaderChoice("headingStyle", data.headingStyleChoice);
     if ("textSizeChoice" in data) return applyReaderChoice("textSize", data.textSizeChoice);
@@ -341,6 +368,7 @@
       applyMode("auto");
       applyBackground("theme");
       applyCodeMode("page");
+      applyNotesChoice("br");
       applySyntaxPalette("academy");
       applySemanticSetting("on");
       applyLigatureSetting("off");

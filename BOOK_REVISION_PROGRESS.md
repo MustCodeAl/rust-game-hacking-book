@@ -1466,3 +1466,19 @@ Owner feedback: the parchment look and dotted page texture read as "sandpaper"; 
 Checked in Chrome: contrast audit (`check-contrast.mjs`) passes in all 10 palette/brightness combinations on lessons 1.5 and 3.2; no horizontal overflow on
 ten pages at 420 and 1280 px in four combinations; paper light lesson page reviewed by eye. Dark paper and the other palettes were audited by script only.
 No lab programs were run.
+
+## T25 — Preference controls: panel tones, reading width, chat and Notes corners (2026-10-06)
+
+Rule from the owner: when in doubt, or when something is a big change or a matter of preference, add a control. Added to the Reader theme panel
+(`ThemeSelect.astro`; wired in `public/scripts/academy.js`, first-paint defaults in `src/data/reader-settings.mjs`, mirrored to the spec's attributes by the
+head script in `astro.config.mjs`):
+- **Lesson list** and **Table of contents**: Match page / Light / Dark each (`data-academy-sidebar-tone`, `data-academy-toc-tone`; CSS in `chrome.css`, token sets
+  `--panel-light-*`, `--panel-dark-*` in `tokens.css`). The panel re-declares the tokens and legacy `--sidebar-*` vars it reads, so everything inside follows.
+- **Reading width**: Narrow / Standard / Wide (`--reading-width` 38 / 45 / 56rem, also drives `--sl-content-width`).
+- **Chat button**: all four corners again (top corners now step past the side panels via `--chat-left` / `--chat-right`, set in `tokens.css` and read by
+  `chat-widget.js`). **Notes button**: all four corners plus Hidden, in the panel (same offsets so it never sits on the side panels); the Notes panel's own Move
+  and Hide stay in sync through the `gha:notes-ui` and `gha:notes-ui-set` events. Verified end to end in Chrome (each corner, hidden, back; pressed states sync).
+- Themed range sliders (track, thumb, hover), checkbox accent, select/number inputs in the panel. `data-code-brightness` now carries the choice (`match|dark|light`)
+  and `data-semantic` mirrors the semantic-highlighting setting.
+Verified: contrast audit passes (all palettes, lessons 1.5 and 3.2), links 0 broken, panel tones change the TOC/sidebar colours. Not verified by eye: dark panel on a
+light page and the reverse (computed colours only), top-right chat on a real phone, Notes tl/tr visual overlap with the header. No lab programs were run.
