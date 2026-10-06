@@ -1241,3 +1241,8 @@ toggle; verified that zero oscillators are created with effects off, sounds play
 with answers restored is silent. Simulations: three explorable `SimLab`s and the reworked explore-first predict
 labs, driven in Chromium at 375 and 1280 pixels with no overflow or page errors. Performance: compared with the
 pre-session build under 4x CPU throttle. No lab programs were run.
+
+Lab file cards (`kit/GitHub.astro`): the "Open the file" link, which pointed at the raw source file and could
+download it, is now a "Show the code" / "Hide the code" button that fetches the file on first use and shows
+it in a scrollable panel under the card. Nothing is saved to the reader's computer; page weight is unchanged
+because the file is fetched only on click. Verified in Chromium at 375 and 1280 pixels (no download event).

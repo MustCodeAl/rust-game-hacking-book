@@ -27,6 +27,39 @@ const folder = path.split('/').slice(0, -1).join('/');
 	</div>
 	<p class="kit-github__links">
 		<a href={githubUrl} rel="noopener">View on GitHub<span aria-hidden="true"> ↗</span></a>
-		{served && <a href={`${base}/${path}`}>Open the file</a>}
+		{served && <button type="button" class="kit-github__toggle" aria-expanded="false" data-github-src={`${base}/${path}`}>Show the code</button>}
 	</p>
+	{served && (
+		<div class="kit-github__code" hidden>
+			<pre tabindex="0"><code></code></pre>
+		</div>
+	)}
 </div>
+
+<script>
+	// Shows a lab's source in place. The file is fetched the first time it is
+	// asked for, so a page with many cards stays light, and nothing is saved to
+	// the reader's computer.
+	document.addEventListener('click', async event => {
+		const button = event.target instanceof Element ? event.target.closest('[data-github-src]') : null;
+		if (!button) return;
+		const card = button.closest('.kit-github');
+		const panel = card?.querySelector('.kit-github__code');
+		const code = panel?.querySelector('code');
+		if (!panel || !code) return;
+		const open = panel.hidden;
+		panel.hidden = !open;
+		button.setAttribute('aria-expanded', String(open));
+		button.textContent = open ? 'Hide the code' : 'Show the code';
+		if (open && !code.textContent) {
+			code.textContent = 'Loading…';
+			try {
+				const response = await fetch(button.getAttribute('data-github-src'));
+				if (!response.ok) throw new Error(String(response.status));
+				code.textContent = await response.text();
+			} catch {
+				code.textContent = 'The file could not be loaded here. Use “View on GitHub” instead.';
+			}
+		}
+	});
+</script>
