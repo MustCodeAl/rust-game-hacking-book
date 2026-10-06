@@ -1212,3 +1212,21 @@ shuffling choices. New questions were drafted per lesson by parallel agents from
 the lesson text; the factual spot-check pass was not run. No lab programs were
 run. Browser: a quiz loaded at 375 and 1280 pixels with four choices, New quiz,
 and no horizontal overflow.
+
+## T10 — Predict-then-check labs and three CC0 figures (2026-10-06)
+
+Added a data-driven predict-then-check lab type to `learning-widgets.js`
+(sliders or text, a committed prediction, hint, worked steps, new numbers) and
+four labs in lessons that had no interactive tool: UTF-8 byte count (3.8),
+record stride (4.3), grid index (4.5), and 2D distance (4.7). Each was driven in
+Chromium at 375 and 1280 pixels: empty guess, wrong guess, hint, steps, right
+guess, new numbers, no horizontal overflow, no page errors. Added three original
+CC0 SVGs (`utf8-bytes`, `record-stride`, `vector-distance`) with credits.
+
+Publishing note: a build without Chrome or CDN access leaves every diagram
+undrawn and drops the reader SVGs. The earlier T9 publish (`c8e8db1`) did that
+and was repaired by `bb12295`. The prerender cache
+(`site/node_modules/.cache/academy-diagrams/<hash>/<diagram-hash>.svg`) can be
+refilled from the published pages' `data-processed="true"` diagrams, after which
+a build here matches the published one apart from random theme-menu ids. No lab
+programs were run.

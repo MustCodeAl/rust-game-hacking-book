@@ -11,6 +11,9 @@ https://creativecommons.org/publicdomain/zero/1.0/
 | `npc-view-cone.svg`, `npc-view-cone.png` | The guard's range, facing direction, and view cone | `site/scripts/make-concept-art.mjs` |
 | `los-samples.svg`, `los-samples.png` | The worked guard-to-target vector and line-of-sight samples | `site/scripts/make-concept-art.mjs` |
 | `input-edge.gif`, `input-edge-still.png` | A held input and the fresh press that changes a lamp | `site/scripts/make-edge-gif.py` |
+| `utf8-bytes.svg` | The word café as four characters and five UTF-8 bytes | hand-written SVG in this directory |
+| `record-stride.svg` | Records one stride apart and a field offset inside one | hand-written SVG in this directory |
+| `vector-distance.svg` | The 3-4-5 distance triangle between two points | hand-written SVG in this directory |
 
 These files use original geometry and pixel designs. They contain no game
 screenshots, third-party sprites, copied illustrations, or commercial music.
