@@ -1450,3 +1450,19 @@ Owner decision: no beta, no toggle; the design layer in `site/src/styles/design/
 Checked in Chrome: no horizontal overflow on ten pages at 420/1280 px in four palette/brightness combinations; desktop sheet, phone drawer, margin notes
 (paper and midnight). Contrast: `site/scripts/check-contrast.mjs` (all 5 palettes x light/dark on lessons 1.5 and 3.2) passes AA 4.5:1 after fixing inline code and field names. Not checked: other pages' contrast, tabs/accordion after the fix, every kit component in every palette, touch, Safari/Firefox.
 No lab programs were run.
+
+## T24 — Paper back to the original, buttons and diagrams (2026-10-06)
+
+Owner feedback: the parchment look and dotted page texture read as "sandpaper"; the suggestions were about blending colours, nicer buttons and nicer diagrams.
+- **Paper palette = the original**: light canvas `#f7f9fc` with white cards, `#eef2f7` sidebar, ink `#252a31`, rust accent `#b8431c` (AA on white);
+  dark = the original `#0f1216` with coral `#ff8c61`. The dot texture is gone (the original faint line grid stays, controlled by the Grid setting).
+  Paper light code is the original cool `#edf2f7`. The hero code mock-up is a cool dark card.
+- **`buttons.css`**: one button system (white card + hairline + soft shadow, tinted hover with 1px lift, pressed settles, disabled fades; accent fill for
+  primary actions; quiet icon buttons in the header/sidebar). Lab buttons are matched by container because the scripts create them without classes
+  (selector list in the file; add new lab container classes there).
+- **Diagrams**: each diagram is a white card with a hairline and soft shadow, nodes lifted a hair, and the SVG background follows the card (no second box)
+  unless the reader picked a tinted diagram background. Role colours stay with `mermaid.css` / `reader-appearance.css`.
+- Touch devices: hover cards open as a bottom sheet (CSS; the JS still positions them but the sheet rules use `!important`). Not tested on a device.
+Checked in Chrome: contrast audit (`check-contrast.mjs`) passes in all 10 palette/brightness combinations on lessons 1.5 and 3.2; no horizontal overflow on
+ten pages at 420 and 1280 px in four combinations; paper light lesson page reviewed by eye. Dark paper and the other palettes were audited by script only.
+No lab programs were run.
