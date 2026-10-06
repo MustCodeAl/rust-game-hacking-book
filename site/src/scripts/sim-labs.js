@@ -444,7 +444,45 @@ function crashSave(root) {
 	render();
 }
 
-const SIMS = { 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange, 'rva-offset': rvaOffset, 'torn-read': tornRead, 'lost-update': lostUpdate, 'crash-save': crashSave };
+// ------------------------------------------------------------- input edges
+function inputEdge(root) {
+	header(root, 'Explore it', 'A held key versus a fresh press',
+		'Click frames to hold or release the key. A level rule acts on every frame the key is down; an edge rule acts only on the frame where it goes from up to down.');
+	const frames = [0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0];
+	const row = el('div', 'sim-lab__fields');
+	const cells = frames.map((_v, i) => {
+		const b = el('button', 'concept-lab__example'); b.type = 'button';
+		b.addEventListener('click', () => { frames[i] = frames[i] ? 0 : 1; render(); });
+		row.append(b); return b;
+	});
+	const cards = el('div', 'sim-lab__cards');
+	const explain = el('p', 'sim-lab__explain'); explain.setAttribute('aria-live', 'polite');
+	const apply = item => { item.f.forEach((v, i) => { frames[i] = v; }); render(); };
+	root.append(presets([
+		{ label: 'The lesson’s pattern', f: [0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+		{ label: 'One long hold', f: [0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0] },
+		{ label: 'Three quick taps', f: [0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+	], apply), row, cards, explain);
+	function render() {
+		let level = 0, edge = 0;
+		frames.forEach((v, i) => {
+			const press = v === 1 && (i === 0 ? true : frames[i - 1] === 0);
+			if (v) level++; if (press) edge++;
+			cells[i].textContent = `${i + 1}${v ? (press ? ' ▲' : ' ■') : ' ·'}`;
+			cells[i].setAttribute('aria-label', `Frame ${i + 1}: key ${v ? 'down' : 'up'}${press ? ', fresh press' : ''}`);
+			cells[i].setAttribute('aria-pressed', String(!!v));
+			cells[i].style.fontWeight = v ? '700' : '400';
+		});
+		cards.replaceChildren(...[['Frames with the key down', String(level), '■ held, ▲ the fresh press'], ['Level rule fires', String(level), 'once per frame held'], ['Edge rule fires', String(edge), 'once per fresh press']]
+			.map(([name, value, note]) => { const c = el('div', 'concept-lab__result-card'); c.append(el('span', 'concept-lab__result-label', name), el('strong', 'concept-lab__result-value', value), el('small', 'concept-lab__result-note', note)); return c; }));
+		explain.textContent = level === 0 ? 'The key is never down, so neither rule fires. Click some frames to hold it.'
+			: level === edge ? `Every press lasts one frame, so both rules fire ${edge} time${edge === 1 ? '' : 's'}. Hold the key for several frames in a row to pull them apart.`
+				: `The key is down for ${level} frames but pressed fresh only ${edge} time${edge === 1 ? '' : 's'}. A lamp toggled by the level rule flips ${level} times and ends up wherever the count lands; the edge rule flips it ${edge} time${edge === 1 ? '' : 's'}, once per press.`;
+	}
+	render();
+}
+
+const SIMS = { 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange, 'rva-offset': rvaOffset, 'torn-read': tornRead, 'lost-update': lostUpdate, 'crash-save': crashSave, 'input-edge': inputEdge };
 
 export function mountSimLabs() {
 	for (const root of document.querySelectorAll('[data-sim-lab]')) {

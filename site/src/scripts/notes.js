@@ -170,8 +170,22 @@ export function mountNotes() {
 		});
 		refresh();
 
+		// Where the button sits, and whether it is hidden, are the reader's choice (kept in this browser).
+		const UI = 'gha-notes-ui';
+		const ui = { corner: 'br', hidden: false, ...(parse(read(UI) || 'null') || {}) };
+		const corners = ['br', 'bl', 'tr', 'tl'];
+		const applyUi = () => {
+			root.dataset.corner = corners.includes(ui.corner) ? ui.corner : 'br';
+			root.dataset.hidden = String(ui.hidden);
+			try { window.localStorage.setItem(UI, JSON.stringify(ui)); } catch { /* optional */ }
+		};
+		applyUi();
+		root.querySelector('[data-note-move]').addEventListener('click', () => { ui.corner = corners[(corners.indexOf(ui.corner) + 1) % corners.length]; applyUi(); status.textContent = 'Moved. Press Move again for the next corner.'; });
+		root.querySelector('[data-note-hide]').addEventListener('click', () => { ui.hidden = true; applyUi(); setOpen(false); });
+		window.addEventListener('keydown', event => { if (event.altKey && event.key.toLowerCase() === 'n') { ui.hidden = false; applyUi(); setOpen(panel.hidden); } });
+
 		const setOpen = open => { panel.hidden = !open; fab.setAttribute('aria-expanded', String(open)); if (open) area.focus(); };
-		fab.addEventListener('click', () => setOpen(panel.hidden));
+		fab.addEventListener('click', () => { if (ui.hidden) { ui.hidden = false; applyUi(); return; } setOpen(panel.hidden); });
 		root.querySelector('[data-note-close]').addEventListener('click', () => { setOpen(false); fab.focus(); });
 		panel.addEventListener('keydown', event => { if (event.key === 'Escape') { setOpen(false); fab.focus(); } });
 

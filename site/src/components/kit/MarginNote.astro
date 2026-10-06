@@ -15,8 +15,14 @@ const label = { brief: 'TL;DR', alternative: 'Alternative', narration: 'Narratio
 	const content = document.querySelector('.sl-markdown-content');
 	const notes = content ? Array.from(content.querySelectorAll<HTMLElement>('[data-margin-note]')) : [];
 	if (notes.length) {
-		notes.forEach((note, index) => {
-			note.dataset.side = index % 2 === 0 ? 'right' : 'left';
+		// Which side a bubble sits on: LEFT is "how it works" (explaining a code snippet, or another way to do
+		// or see it); RIGHT is "what to keep" (the TL;DR) and narrated asides. See HANDOFF_PLAN.md.
+		const isCode = (el: Element | null) => !!el && (el.matches('pre, .expressive-code, .kit-speedtype, .kit-github, .code-trace, .code-blanks, [data-code-trace]') || !!el.querySelector('pre, .expressive-code'));
+		notes.forEach(note => {
+			const label = (note.getAttribute('aria-label') || '').toLowerCase();
+			const nearCode = isCode(note.previousElementSibling) || isCode(note.nextElementSibling) ||
+				(note.previousElementSibling?.querySelectorAll('code').length ?? 0) >= 2;
+			note.dataset.side = nearCode || label === 'alternative' ? 'left' : 'right';
 			note.tabIndex = 0;
 			note.setAttribute('role', 'note');
 			const before = note.previousElementSibling;

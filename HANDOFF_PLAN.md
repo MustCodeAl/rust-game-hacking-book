@@ -51,7 +51,56 @@ add one by writing a function in `SIMS` and `<SimLab sim="...">`): `base-rate` (
 style. Performance was compared with the pre-session site at 4x CPU throttle: scroll median 16.7 ms, load
 blocking within noise (pages are about 4 KB gzip heavier on average because of the quiz pools).
 
-**OWNER HAS ABOUT $3 OF CREDITS LEFT (end of the 2026-10-06 sessions). Prefer small, verified steps; at most one agent.**
+## NEXT AI: START HERE (written at the end of the 2026-10-06 sessions; the owner has about $2 of credits left)
+
+Read this block, then `BOOK_REVISION_PROGRESS.md` (T9 to T17 are the latest). Source branch `codex/book-revision`; live branch `gh-pages`,
+published only with `cd site && node scripts/publish-pages.mjs` after refilling the diagram cache (see "Publishing hazards" below).
+The owner values: teaching-first interactives (never forced exercises), balanced non-obvious quizzes, calm minimal UI, speed, and
+detailed notes so any AI can continue. Keep agents to one or two at a time; verify with the cheap checks listed below.
+
+### Conventions decided with the owner (keep them)
+- **Margin bubble side scheme** (`components/kit/MarginNote.astro`, `styles/margin-notes.css`): LEFT = "how it works": a note beside a
+  code snippet, a note on a paragraph with several inline code terms, and every `alternative` note. RIGHT = "what to keep": `brief`
+  (TL;DR) and `narration` (asides). Where no true outer margin exists (the usual case) bubbles are 💬 markers that open over the text.
+  If you add a new note kind, pick left or right by that rule (left = explains mechanism/code, right = summary/story) and document it here.
+- **Notes button** (`Notes.astro`, `scripts/notes.js`): reader can Move it between four corners, Hide it (thin edge tab; click the tab or
+  press Alt+N to bring it back); choices are kept in `localStorage` key `gha-notes-ui`.
+- **Lab feedback**: blue = prompt, green = matches the lesson, amber = different, red = wrong (quiz only). Tones are set by `data-tone`
+  (see `toneFor` in `public/scripts/learning-widgets.js`). New widgets should set `data-tone` or use the known class names.
+- **Images**: all original CC0 art is in `site/public/assets/images/original/` with rows in `site/public/assets/images/CREDITS.md`.
+  Currently shown in only ~11 lessons: 3.8 (utf8-bytes), 4.1 (record-stride), 4.5 (grid-layers), 4.8 (path sprites), 4.9
+  (input-edge.gif with still), 4.10 (los-samples), 4.11 (vector-distance, npc-view-cone in 4.12), 10.x (handle-table), 12.x
+  (script-budgets), 14.x (context-switch). The owner said they could not find the images and GIFs, so spreading more of them across
+  lessons (and making them more visible) is a real request.
+
+### Prioritized plan
+1. **Images and GIFs everywhere** (owner request, unmet): add 2 or 3 original CC0 SVG figures per chapter (about 40 more), each placed
+   in a `<Frame caption>` right after the paragraph it illustrates, hand-written SVG 480 wide (see existing ones), rows added to
+   `CREDITS.md`; optionally a few short optional GIFs (`site/scripts/make-edge-gif.py` shows how). Consider a "Figures" index page.
+2. **Margin comments for the 88 lessons after 5.5** (`site/scripts/margin-notes-spec.md`; find them with
+   `grep -L "<MarginNote" site/src/content/docs/pages/*/*.mdx`). Use the side scheme above. About one agent-run of credits.
+3. **More interactives**: about 20 lessons still have none (grep lessons lacking `<Scene|<ConceptLab|<SimLab|<CodeTrace|<SortBoard|
+   <FormulaBuilder|<Visual`). Reuse the existing data-driven components: `SimLab` (`src/scripts/sim-labs.js`: add a function and an entry
+   in `SIMS`), `CodeTrace`, `SortBoard`, `FormulaBuilder`, `Visual`, code blanks and state machines (`public/scripts/puzzle-labs.js`).
+   Still unbuilt from the owner's Brilliant.org wish list: behaviour trees (node-and-edge with a test run), a scan-cost visualiser,
+   a toy assembly sandbox with a Run button, a Venn/probability board beyond the base-rate sim.
+4. **Replace slideshow animations with simulations** (owner: "some are literal slide shows"). Done: page-table, base-rate, checked-range,
+   RVA, torn-read, lost-update, crash-save, input-edge. Next: server-authority (15.1), evidence-correlation, detector-input-window,
+   then audit the other scenes in `site/src/scenes/` one by one.
+5. **Review lab wording and layout** the owner finds confusing: the long instruction text above sort boards, fill-in code lines that scroll
+   sideways with no cue, the state-machine diagram on phones; lab-specific buttons (Show the answer, Check my pieces, hints) have no icons.
+6. **Sign-in** needs the owner's Supabase project (`ACCOUNT_SETUP.md`); the flow passed a stand-in test only.
+7. Unverified: real touch devices, screen readers, Safari/Firefox, Edge and Chrome Reading mode, a physical phone keyboard; agent-written
+   margin comments, example values and cheatsheets are not fact-checked beyond the writers' own checks.
+
+### Cheap checks (run from `site/`)
+`bun run build`; `python3 scripts/check-links.py dist`; `node scripts/check-lesson-quizzes.mjs`; `node scripts/check-account.mjs`;
+`node scripts/check-reading-audio.mjs`; `node scripts/check-chat-suggest.mjs`. For UI work drive the page with Playwright
+(`/opt/node22/lib/node_modules/playwright`, Chrome at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`; serve `dist` with
+`python3 scripts/serve-dist.py 8766`, base path `/rust-game-hacking-book/`; the sandbox blocks CDNs, so ignore mermaid fetch errors).
+Check 375 and 1280 pixels, no horizontal overflow, no page errors.
+
+**(Older note) OWNER HAD ABOUT $3 OF CREDITS LEFT (end of the 2026-10-06 sessions). Prefer small, verified steps; at most one agent.**
 
 **Latest additions (all published unless `git log` says otherwise), with where to find them:**
 - **Notes are a floating chat-style panel** (`Notes.astro`, `src/scripts/notes.js`): a 📝 button at the bottom-right (above the chat
