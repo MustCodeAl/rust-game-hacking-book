@@ -1,93 +1,79 @@
 ---
 import '../../styles/margin-notes.css';
-interface Props { kind?: 'brief' | 'alternative' | 'narration' }
+// Kinds and the side they sit on (see HANDOFF_PLAN.md): LEFT explains how something works (code, alternative,
+// clarification, math); RIGHT is what to keep or do (brief, narration, context, action, wonder, praise).
+type Kind = 'brief' | 'alternative' | 'narration' | 'context' | 'clarify' | 'inquiry' | 'praise' | 'action' | 'code' | 'math' | 'mine';
+interface Props { kind?: Kind }
 const { kind = 'brief' } = Astro.props;
-const label = { brief: 'TL;DR', alternative: 'Alternative', narration: 'Narration' }[kind];
+const label = { brief: 'TL;DR', alternative: 'Alternative', narration: 'Narration', context: 'Context', clarify: 'Clarification', inquiry: 'Wonder', praise: 'Well spotted', action: 'Try this', code: 'Code note', math: 'Math', mine: 'My note' }[kind];
 ---
 
-<aside class="margin-note" data-margin-note role="note" aria-label={label}>
+<aside class="margin-note" data-margin-note data-kind={kind} role="note" aria-label={label}>
 	<p><strong>{label}:</strong> <slot /></p>
 </aside>
 
 <script>
-	// Margin notes sit beside their paragraph without moving it. Each note is put just
-	// before the paragraph it follows; the mode depends on the free space beside the text.
+	// Notes sit beside their paragraph without moving it. Each note goes just before the paragraph it follows;
+	// the mode depends on free space beside the text. Reader-made notes (from the Notes panel) join the same scheme.
+	const LEFT = ['alternative', 'clarification', 'code note', 'math'];
 	const content = document.querySelector('.sl-markdown-content');
-	const notes = content ? Array.from(content.querySelectorAll<HTMLElement>('[data-margin-note]')) : [];
-	if (notes.length) {
-		// Which side a bubble sits on: LEFT is "how it works" (explaining a code snippet, or another way to do
-		// or see it); RIGHT is "what to keep" (the TL;DR) and narrated asides. See HANDOFF_PLAN.md.
-		const isCode = (el: Element | null) => !!el && (el.matches('pre, .expressive-code, .kit-speedtype, .kit-github, .code-trace, .code-blanks, [data-code-trace]') || !!el.querySelector('pre, .expressive-code'));
-		notes.forEach(note => {
-			const label = (note.getAttribute('aria-label') || '').toLowerCase();
-			const nearCode = isCode(note.previousElementSibling) || isCode(note.nextElementSibling) ||
-				(note.previousElementSibling?.querySelectorAll('code').length ?? 0) >= 2;
-			note.dataset.side = nearCode || label === 'alternative' ? 'left' : 'right';
-			note.tabIndex = 0;
-			note.setAttribute('role', 'note');
-			const before = note.previousElementSibling;
-			if (before && /^(P|UL|OL|BLOCKQUOTE)$/.test(before.tagName)) before.before(note);
+	const root = document.documentElement;
+	const NEED = 16.5 * 16;
+	const isCode = (el: Element | null) => !!el && (el.matches('pre, .expressive-code, .kit-speedtype, .kit-github, .code-trace, .code-blanks, [data-code-trace]') || !!el.querySelector('pre, .expressive-code'));
+	let notes: HTMLElement[] = [];
+
+	const adopt = (note: HTMLElement) => {
+		if (note.dataset.adopted) return;
+		note.dataset.adopted = 'true';
+		const label = (note.getAttribute('aria-label') || '').toLowerCase();
+		const nearCode = isCode(note.previousElementSibling) || isCode(note.nextElementSibling) || (note.previousElementSibling?.querySelectorAll('code').length ?? 0) >= 2;
+		note.dataset.side = nearCode || LEFT.includes(label) ? 'left' : 'right';
+		note.tabIndex = 0;
+		const before = note.previousElementSibling;
+		if (!note.classList.contains('margin-note--mine') && before && /^(P|UL|OL|BLOCKQUOTE)$/.test(before.tagName)) before.before(note);
+		note.addEventListener('click', () => toggle(note));
+		note.addEventListener('keydown', event => {
+			if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(note); }
+			if (event.key === 'Escape') note.removeAttribute('data-open');
 		});
-
-		const root = document.documentElement;
-		const NEED = 16.5 * 16; // a bubble and its gap, in pixels
-
-		const spaceRight = () => {
-			const toc = document.querySelector('.right-sidebar');
-			const edge = toc && toc.getBoundingClientRect().width > 0 ? toc.getBoundingClientRect().left : window.innerWidth;
-			return edge - content!.getBoundingClientRect().right;
-		};
-		const spaceLeft = () => {
-			const bar = document.querySelector('.sidebar-pane, nav.sidebar');
-			const edge = bar && bar.getBoundingClientRect().width > 0 ? bar.getBoundingClientRect().right : 0;
-			return content!.getBoundingClientRect().left - edge;
-		};
-
-		const settle = () => {
-			// Stack bubbles that would overlap in the same margin.
-			const bottoms: Record<string, number> = { left: 0, right: 0 };
-			notes.forEach(note => {
-				note.style.top = '';
-				const natural = note.offsetTop;
-				const side = note.dataset.side || 'right';
-				const top = Math.max(natural, bottoms[side] + 10);
-				if (top !== natural) note.style.top = top + 'px';
-				bottoms[side] = top + note.offsetHeight;
-			});
-		};
-
-		const layout = () => {
-			const right = spaceRight() >= NEED;
-			const left = spaceLeft() >= NEED;
-			notes.forEach(n => n.removeAttribute('data-open'));
-			if (window.innerWidth < 640) root.removeAttribute('data-note-mode');
-			else if (right && left) root.dataset.noteMode = 'margin';
-			else if (right) { notes.forEach(n => (n.dataset.side = 'right')); root.dataset.noteMode = 'margin'; }
-			else root.dataset.noteMode = 'pin';
-			notes.forEach(n => { if (root.dataset.noteMode !== 'margin') n.style.top = ''; });
-			if (root.dataset.noteMode === 'margin') settle();
-			else if (root.dataset.noteMode === 'pin') settle();
-		};
-
-		const toggle = (note: HTMLElement) => {
-			if (root.dataset.noteMode !== 'pin') return;
-			const open = note.dataset.open !== 'true';
-			notes.forEach(n => n.removeAttribute('data-open'));
-			if (open) note.dataset.open = 'true';
-		};
+	};
+	const toggle = (note: HTMLElement) => {
+		if (root.dataset.noteMode !== 'pin') return;
+		const open = note.dataset.open !== 'true';
+		notes.forEach(n => n.removeAttribute('data-open'));
+		if (open) note.dataset.open = 'true';
+	};
+	const spaceRight = () => { const toc = document.querySelector('.right-sidebar'); const edge = toc && toc.getBoundingClientRect().width > 0 ? toc.getBoundingClientRect().left : window.innerWidth; return edge - content!.getBoundingClientRect().right; };
+	const spaceLeft = () => { const bar = document.querySelector('.sidebar-pane, nav.sidebar'); const edge = bar && bar.getBoundingClientRect().width > 0 ? bar.getBoundingClientRect().right : 0; return content!.getBoundingClientRect().left - edge; };
+	const settle = () => {
+		const bottoms: Record<string, number> = { left: 0, right: 0 };
 		notes.forEach(note => {
-			note.addEventListener('click', () => toggle(note));
-			note.addEventListener('keydown', event => {
-				if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(note); }
-				if (event.key === 'Escape') note.removeAttribute('data-open');
-			});
+			note.style.top = '';
+			const natural = note.offsetTop, side = note.dataset.side || 'right';
+			const top = Math.max(natural, bottoms[side] + 10);
+			if (top !== natural) note.style.top = top + 'px';
+			bottoms[side] = top + note.offsetHeight;
 		});
+	};
+	const layout = () => {
+		if (!content) return;
+		notes = Array.from(content.querySelectorAll<HTMLElement>('[data-margin-note]'));
+		notes.forEach(adopt);
+		const right = spaceRight() >= NEED, left = spaceLeft() >= NEED;
+		notes.forEach(n => n.removeAttribute('data-open'));
+		if (window.innerWidth < 640) root.removeAttribute('data-note-mode');
+		else if (right && left) root.dataset.noteMode = 'margin';
+		else if (right) { notes.forEach(n => (n.dataset.side = 'right')); root.dataset.noteMode = 'margin'; }
+		else root.dataset.noteMode = 'pin';
+		if (root.dataset.noteMode) settle();
+	};
+	if (content) {
+		layout();
+		window.addEventListener('load', layout);
+		window.addEventListener('gha:bubbles', layout);
+		window.addEventListener('resize', () => { clearTimeout((layout as any).t); (layout as any).t = setTimeout(layout, 150); });
 		document.addEventListener('click', event => {
 			if (!(event.target instanceof Element) || !event.target.closest('[data-margin-note]')) notes.forEach(n => n.removeAttribute('data-open'));
 		});
-
-		layout();
-		window.addEventListener('load', layout);
-		window.addEventListener('resize', () => { clearTimeout((layout as any).t); (layout as any).t = setTimeout(layout, 150); });
 	}
 </script>

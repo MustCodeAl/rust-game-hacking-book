@@ -184,6 +184,44 @@ export function mountNotes() {
 		root.querySelector('[data-note-hide]').addEventListener('click', () => { ui.hidden = true; applyUi(); setOpen(false); });
 		window.addEventListener('keydown', event => { if (event.altKey && event.key.toLowerCase() === 'n') { ui.hidden = false; applyUi(); setOpen(panel.hidden); } });
 
+		// Reader-made margin comments: pinned to the section being read, shown beside the text like the authors' notes.
+		const BKEY = 'gha-bubbles:' + id;
+		const LABELS = { mine: 'My note', context: 'Context', clarify: 'Clarification', inquiry: 'Wonder', praise: 'Well spotted', action: 'Try this', code: 'Code note', math: 'Math' };
+		const loadBubbles = () => { const v = parse(read(BKEY) || '[]'); return Array.isArray(v) ? v : []; };
+		const saveBubbles = list => { try { window.localStorage.setItem(BKEY, JSON.stringify(list)); } catch { /* optional */ } };
+		const drawBubbles = () => {
+			document.querySelectorAll('.margin-note--mine').forEach(n => n.remove());
+			for (const b of loadBubbles()) {
+				const anchor = (b.heading && document.getElementById(b.heading)) || document.querySelector('.sl-markdown-content > :first-child');
+				if (!anchor) continue;
+				let spot = anchor.nextElementSibling;
+				while (spot && spot.tagName !== 'P') spot = spot.nextElementSibling;
+				const aside = document.createElement('aside');
+				aside.className = 'margin-note margin-note--mine';
+				aside.dataset.marginNote = ''; aside.dataset.kind = b.kind; aside.setAttribute('role', 'note');
+				aside.setAttribute('aria-label', LABELS[b.kind] || 'My note');
+				const p = document.createElement('p'); const strong = document.createElement('strong');
+				strong.textContent = (LABELS[b.kind] || 'My note') + ': ';
+				const x = document.createElement('button'); x.type = 'button'; x.className = 'margin-note__x'; x.textContent = '×'; x.setAttribute('aria-label', 'Delete this comment');
+				x.addEventListener('click', event => { event.stopPropagation(); saveBubbles(loadBubbles().filter(item => item.at !== b.at)); drawBubbles(); });
+				p.append(strong, document.createTextNode(b.text + ' '), x); aside.append(p);
+				(spot || anchor).before(aside);
+			}
+			window.dispatchEvent(new Event('gha:bubbles'));
+		};
+		root.querySelector('[data-note-bubble]').addEventListener('click', () => {
+			const selected = area.value.slice(area.selectionStart ?? 0, area.selectionEnd ?? 0).trim();
+			const lines = area.value.split('\n').map(l => l.trim()).filter(Boolean);
+			const text = (selected || lines[lines.length - 1] || '').slice(0, 240);
+			if (!text) { status.textContent = 'Write something, or select part of the note, then press Add.'; return; }
+			const heading = sectionNow();
+			saveBubbles([...loadBubbles(), { at: Date.now(), heading: heading ? heading.id : '', text, kind: root.querySelector('[data-note-kind]').value }]);
+			drawBubbles();
+			status.textContent = 'Added beside ' + (heading ? '“' + heading.textContent.trim().slice(0, 40) + '”' : 'the start of the lesson') + '. Delete it with the × on the comment.';
+		});
+		window.addEventListener('load', drawBubbles);
+		if (document.readyState === 'complete') drawBubbles();
+
 		const setOpen = open => { panel.hidden = !open; fab.setAttribute('aria-expanded', String(open)); if (open) area.focus(); };
 		fab.addEventListener('click', () => { if (ui.hidden) { ui.hidden = false; applyUi(); return; } setOpen(panel.hidden); });
 		root.querySelector('[data-note-close]').addEventListener('click', () => { setOpen(false); fab.focus(); });

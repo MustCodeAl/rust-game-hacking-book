@@ -1382,3 +1382,12 @@ Added `little-endian`, `pointer-chain`, `hash-change`, `server-authority` and `r
 one in each of lessons 1.8, 2.7, 9.8, 15.1 and 7.2 after the first body paragraph below the first heading. Checked: images load at 420 and
 1280 pixels with no overflow; links 0 broken. The hash figure's values are illustrative and say so. Placement was automatic and not
 reviewed in context. No lab programs were run.
+
+## T20 — More figures, margin kinds, reader margin comments, server-authority simulator (2026-10-06)
+
+Four more CC0 figures (breakpoint-byte 5.7, ownership-move 1.5, packet-frame 6.3, angle-wrap 7.6; load-checked at 420 and 1280 pixels).
+Margin comment kinds extended to eleven with a left/right scheme; the margin script now adopts notes added later and re-lays out
+(`gha:bubbles` event). Readers can add their own margin comments from the Notes panel (driven at 1280 and 420 pixels: add with a kind,
+reload keeps it, delete works at 420; in the 1280 marker mode the bubble must be opened before the × is clickable). New simulator
+`server-authority` (15.1): checked and unchecked server, verified at both widths. Not done: syncing reader comments to accounts,
+using the new kinds in lessons, KaTeX examples in `math` notes. No lab programs were run.

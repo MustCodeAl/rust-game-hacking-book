@@ -19,6 +19,10 @@ https://creativecommons.org/publicdomain/zero/1.0/
 | `hash-change.svg` | One changed byte gives an unrelated hash (illustrative values) | hand-written SVG in this directory |
 | `server-authority.svg` | The server checks a client's request | hand-written SVG in this directory |
 | `render-pipeline.svg` | Vertices to triangles to pixels to a frame | hand-written SVG in this directory |
+| `breakpoint-byte.svg` | A software breakpoint swaps one byte for CC | hand-written SVG in this directory |
+| `ownership-move.svg` | A String move hands over ownership | hand-written SVG in this directory |
+| `packet-frame.svg` | A length-prefixed network frame | hand-written SVG in this directory |
+| `angle-wrap.svg` | 179 and minus 179 degrees are 2 degrees apart | hand-written SVG in this directory |
 | `handle-table.svg` | Two handle values as rows of one process's handle table, pointing to one kernel object | hand-written SVG in this directory |
 | `context-switch.svg` | The kernel saving one thread's registers, loading the next, and swapping page tables | hand-written SVG in this directory |
 | `script-budgets.svg` | Seven separate script budgets, each with its own cap and reset window | hand-written SVG in this directory |

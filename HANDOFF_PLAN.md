@@ -59,6 +59,14 @@ The owner values: teaching-first interactives (never forced exercises), balanced
 detailed notes so any AI can continue. Keep agents to one or two at a time; verify with the cheap checks listed below.
 
 ### Conventions decided with the owner (keep them)
+- **Margin comment kinds** (`<MarginNote kind="...">`, label shown in brackets): `brief` (TL;DR), `alternative` (Alternative), `narration`
+  (Narration), `context` (Context), `clarify` (Clarification: corrective/clarifying), `inquiry` (Wonder: inquisitive), `praise` (Well
+  spotted: praising), `action` (Try this: directive/actionable), `code` (Code note), `math` (Math; put KaTeX in with the existing `Math`
+  kit component inside the note), `mine` (reader-made). Sides: LEFT = `alternative`, `clarify`, `code`, `math` and any note beside a code
+  snippet; RIGHT = `brief`, `narration`, `context`, `action`, `inquiry`, `praise`. **Readers add their own margin comments** from the 📝
+  Notes panel ("Add as margin comment" with a kind picker; text = the selection or last line; pinned to the section being read; stored as
+  `gha-bubbles:<lesson id>`; deleted with the ×). Not yet synced to accounts (add the `gha-bubbles:` prefix to `account.js` snapshot/merge).
+  The authors' comments use only brief/alternative/narration so far; adding the new kinds to lessons is open work.
 - **Margin bubble side scheme** (`components/kit/MarginNote.astro`, `styles/margin-notes.css`): LEFT = "how it works": a note beside a
   code snippet, a note on a paragraph with several inline code terms, and every `alternative` note. RIGHT = "what to keep": `brief`
   (TL;DR) and `narration` (asides). Where no true outer margin exists (the usual case) bubbles are 💬 markers that open over the text.
@@ -87,7 +95,7 @@ detailed notes so any AI can continue. Keep agents to one or two at a time; veri
    Still unbuilt from the owner's Brilliant.org wish list: behaviour trees (node-and-edge with a test run), a scan-cost visualiser,
    a toy assembly sandbox with a Run button, a Venn/probability board beyond the base-rate sim.
 4. **Replace slideshow animations with simulations** (owner: "some are literal slide shows"). Done: page-table, base-rate, checked-range,
-   RVA, torn-read, lost-update, crash-save, input-edge. Next: server-authority (15.1), evidence-correlation, detector-input-window,
+   RVA, torn-read, lost-update, crash-save, input-edge, server-authority. Next: server-authority (15.1), evidence-correlation, detector-input-window,
    then audit the other scenes in `site/src/scenes/` one by one.
 5. **Review lab wording and layout** the owner finds confusing: the long instruction text above sort boards, fill-in code lines that scroll
    sideways with no cue, the state-machine diagram on phones; lab-specific buttons (Show the answer, Check my pieces, hints) have no icons.

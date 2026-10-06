@@ -482,7 +482,40 @@ function inputEdge(root) {
 	render();
 }
 
-const SIMS = { 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange, 'rva-offset': rvaOffset, 'torn-read': tornRead, 'lost-update': lostUpdate, 'crash-save': crashSave, 'input-edge': inputEdge };
+// ------------------------------------------------------------ server authority
+function serverAuthority(root) {
+	header(root, 'Explore it', 'The client asks; the server decides',
+		'A client claims it moved. Change how far it says it moved and whether the server checks, and see where the player really ends up.');
+	const START = 100;
+	const jump = slider('sim-auth-jump', 'Distance the client claims to move', 0, 900, 5, 800, v => v + ' units');
+	const limit = slider('sim-auth-limit', 'Most the server allows per tick', 1, 40, 1, 5, v => v + ' units');
+	const check = el('input'); check.type = 'checkbox'; check.id = 'sim-auth-check'; check.checked = true;
+	const checkLabel = el('label'); checkLabel.htmlFor = check.id; checkLabel.append(check, document.createTextNode(' The server checks the move'));
+	const controls = el('div', 'sim-lab__controls'); controls.append(jump.wrap, limit.wrap, checkLabel);
+	const cards = el('div', 'sim-lab__cards');
+	const lane = el('div', 'sim-lab__fields');
+	const explain = el('p', 'sim-lab__explain'); explain.setAttribute('aria-live', 'polite');
+	root.append(controls, cards, lane, explain);
+	function render() {
+		const claimed = START + Number(jump.input.value), max = Number(limit.input.value);
+		const allowed = !check.checked || Number(jump.input.value) <= max;
+		const real = allowed ? claimed : START + max;
+		cards.replaceChildren(...[['Player was at', String(START), 'before this tick'], ['Client says', String(claimed), `a move of ${jump.input.value}`], ['The game state says', String(real), allowed ? 'the claim was accepted' : `clamped to ${max} per tick`]]
+			.map(([n, v, note]) => { const c = el('div', 'concept-lab__result-card'); c.append(el('span', 'concept-lab__result-label', n), el('strong', 'concept-lab__result-value', v), el('small', 'concept-lab__result-note', note)); return c; }));
+		const chip = (name, v) => { const c = el('div', 'sim-lab__chip'); c.append(el('span', '', name), el('code', '', '█'.repeat(Math.max(1, Math.round(v / 40))) + ' ' + v)); return c; };
+		lane.replaceChildren(chip('start', START), chip('client claim', claimed), chip('real position', real));
+		explain.textContent = !check.checked
+			? `⚠️ With no check the server trusts the client: a claimed move of ${jump.input.value} becomes the real position ${real}. Anything the client says becomes true, which is exactly what a modified client exploits.`
+			: allowed
+				? `✅ The move of ${jump.input.value} is within the server's limit of ${max}, so it is accepted. The server still decided; it just agreed.`
+				: `✅ The claimed move of ${jump.input.value} is over the limit of ${max}, so the server refuses it and keeps the player at ${real}. The client can ask for anything; the server's rule decides.`;
+	}
+	[jump, limit].forEach(s => s.input.addEventListener('input', render));
+	check.addEventListener('change', render);
+	render();
+}
+
+const SIMS = { 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange, 'rva-offset': rvaOffset, 'torn-read': tornRead, 'lost-update': lostUpdate, 'crash-save': crashSave, 'input-edge': inputEdge, 'server-authority': serverAuthority };
 
 export function mountSimLabs() {
 	for (const root of document.querySelectorAll('[data-sim-lab]')) {
