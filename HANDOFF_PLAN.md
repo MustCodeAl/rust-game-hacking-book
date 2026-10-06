@@ -51,7 +51,30 @@ add one by writing a function in `SIMS` and `<SimLab sim="...">`): `base-rate` (
 style. Performance was compared with the pre-session site at 4x CPU throttle: scroll median 16.7 ms, load
 blocking within noise (pages are about 4 KB gzip heavier on average because of the quiz pools).
 
-**Sign-in (Google/Discord/GitHub) is built but PARKED and not wired in (owner: do it later).** Files:
+**OWNER HAS ABOUT $15 OF CREDITS LEFT (2026-10-06). Prefer small, verified steps; no more than one agent.**
+
+**Added 2026-10-06 (all published unless noted):** per-lesson Markdown notes with export to .md for massCode
+(`Notes.astro`, `src/scripts/notes.js`; stored as `gha-note:<lesson id>`); a Continue-reading button on the home page
+(`ResumeReading.astro`, `src/scripts/resume-reading.js`, `gha-last`); explorable simulations for RVA-to-file-offset
+(7.2) and torn reads (3.2); and margin comments (TL;DR / alternative / narration) in lessons 1.1 to 5.5.
+
+**STILL TO DO (owner requests):**
+1. **Margin comments for the other 88 lessons** (5.6 onward). The owner's notes asked for authored margin comments;
+   only 14 lessons had any before this session. Spec: `site/scripts/margin-notes-spec.md`; lists of lessons come from
+   `grep -L "<MarginNote"` over the lesson files. One agent did 45 lessons for roughly one agent-run of credits.
+2. **A downloadable cheatsheet in every lesson** (owner asked, "do that later"). Suggested: a short Markdown file per
+   lesson (key terms, formulas, checklist) generated from the lesson text, offered with the same download pattern as
+   Notes export; keep each under 25 lines.
+3. **Animation fixes.** `scripts/scenes-sweep` style check (play, scrub, clip, overflow) found no zero-size, overflow or
+   frozen scenes in the first run; its "text outside the drawing" results were false alarms from comparing local text
+   coordinates with the viewBox. Compare on-screen rectangles instead. Owner wants animations to simulate real state changes.
+4. **Interactives in the remaining lessons**: three agent worktrees (`/home/user/ui-0`, `ui-1`, `ui-2`, branches
+   `claude/interactives-0|1|2`) may hold unmerged work (code tracer, sort board and formula builder, cost visualizer);
+   check `git branch -a` and merge what is committed and verified.
+5. Sign-in: wired in but inert until `site/src/data/account-config.json` is filled (see ACCOUNT_SETUP.md); the full flow
+   passed a browser test against a stand-in Supabase.
+
+**Sign-in (Google/Discord/GitHub) is built and wired in but inert until configured.** (Older note follows.) Files:
 `site/src/components/AccountControls.astro`, `site/src/scripts/account.js` (no library; Supabase over fetch;
 merge logic checked by `node site/scripts/check-account.mjs`), `site/src/data/account-config.json` (empty =
 renders nothing), `ACCOUNT_SETUP.md` (the owner's one-time Supabase steps and SQL). To finish: (1) the owner

@@ -1311,3 +1311,14 @@ balance on every question). Questions were not fact-checked against the lessons 
 Merged `claude/interactives` (code blanks in 2.8, 5.10, 6.6, 9.1, 13.6; state machine builder in 4.6, 10.5).
 The merge dropped a closing brace in `learning-widgets.css` and broke the build; fixed. Sign-in code is
 parked (see the sign-in paragraph above). No lab programs were run.
+
+## T14 — Notes, continue reading, sign-in wiring, margin comments (2026-10-06)
+
+Notes (`Notes.astro`, `notes.js`): per-lesson Markdown, autosave, safe preview (script tags and javascript: links
+stripped), export of one note or all notes as .md in lesson order; driven in Chromium at 375 and 1280 pixels.
+Continue reading: lessons record the section being read, the home page shows "Continue Lesson N" opening that
+section (verified at both widths; a re-align after load handles lazily laid-out long lessons). Sign-in: wired into
+the reader panels, inert without config; full flow (redirect, tokens, merge, push, sign out) passed against a
+stand-in server; notes and the reading position sync with progress. Margin comments added to 45 lessons (143 notes,
+agent-written, spot-checked only by the render count). Scenes: automated sweep of all 52 found no zero-size,
+overflow, frozen or caption-less scenes; the clipping check needs on-screen rectangles. No lab programs were run.
