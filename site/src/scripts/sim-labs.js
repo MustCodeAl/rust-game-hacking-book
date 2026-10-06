@@ -230,7 +230,108 @@ function checkedRange(root) {
 	render();
 }
 
-const SIMS = { 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange };
+// ------------------------------------------------------------ rva to offset
+function rvaOffset(root) {
+	header(root, 'Explore it', 'Where does a memory address live inside the file?',
+		'A section is stored in the file and mapped into memory at different numbers. Change the section row or the RVA and follow the three steps that carry an address across.');
+	const field = (id, name, value) => {
+		const label = el('label', 'concept-lab__field');
+		const input = el('input', 'concept-lab__text-input');
+		Object.assign(input, { id, type: 'text', value, autocomplete: 'off', spellcheck: false });
+		label.htmlFor = id;
+		label.append(el('span', 'concept-lab__field-label', name), input);
+		return { label, input };
+	};
+	const va = field('sim-sec-va', 'Section RVA (start in memory)', '0x2000');
+	const vs = field('sim-sec-vs', 'Virtual size (bytes in memory)', '0x900');
+	const rs = field('sim-sec-rs', 'SizeOfRawData (bytes in the file)', '0x800');
+	const rp = field('sim-sec-rp', 'PointerToRawData (file offset)', '0x600');
+	const rva = field('sim-rva', 'RVA to translate', '0x2340');
+	const controls = el('div', 'sim-lab__controls');
+	controls.append(va.label, vs.label, rs.label, rp.label, rva.label);
+	const error = el('p', 'sim-lab__error');
+	const steps = el('ol', 'concept-lab__steps');
+	const verdict = el('p', 'sim-lab__explain');
+	verdict.setAttribute('aria-live', 'polite');
+	const hexOf = n => '0x' + n.toString(16).toUpperCase().padStart(4, '0');
+	const number = value => { const v = value.trim().replace(/_/g, ''); return /^(0x[0-9a-f]+|\d+)$/i.test(v) ? Number(v) : NaN; };
+	root.append(controls, error, presets([
+		{ label: '0x2340 (inside the file data)', v: '0x2340' }, { label: '0x2880 (the zero-filled tail)', v: '0x2880' },
+		{ label: '0x1FFF (before the section)', v: '0x1FFF' }, { label: '0x2900 (past the section)', v: '0x2900' },
+	], item => { rva.input.value = item.v; render(); }), steps, verdict);
+	function render() {
+		const [a, size, raw, ptr, r] = [va, vs, rs, rp, rva].map(f => number(f.input.value));
+		if ([a, size, raw, ptr, r].some(n => !Number.isFinite(n))) { error.textContent = 'Use whole numbers, decimal or 0x hexadecimal.'; return; }
+		error.textContent = '';
+		const lines = [`Is ${hexOf(r)} inside the section's memory range [${hexOf(a)}, ${hexOf(a + size)})? ${r >= a && r < a + size ? 'Yes' : 'No'}`];
+		if (r < a || r >= a + size) {
+			steps.replaceChildren(...lines.map(l => el('li', '', l)));
+			verdict.textContent = `${hexOf(r)} is not in this section, so this row cannot translate it. A parser would try the next section row, and refuse the address if no row owns it.`;
+			return;
+		}
+		const delta = r - a;
+		lines.push(`Distance into the section: ${hexOf(r)} − ${hexOf(a)} = ${hexOf(delta)}`);
+		lines.push(`Does the file hold a byte there? ${hexOf(delta)} ${delta < raw ? '<' : '≥'} SizeOfRawData ${hexOf(raw)}: ${delta < raw ? 'yes' : 'no'}`);
+		if (delta < raw) lines.push(`File offset: PointerToRawData ${hexOf(ptr)} + ${hexOf(delta)} = ${hexOf(ptr + delta)}`);
+		steps.replaceChildren(...lines.map(l => el('li', '', l)));
+		verdict.textContent = delta < raw
+			? `The byte at memory address ${hexOf(r)} lives at file offset ${hexOf(ptr + delta)}. The distance into the section (${hexOf(delta)}) is the same in both places; only the starting numbers differ.`
+			: `This address is in the zero-filled tail: memory is larger than the stored data, so these bytes exist only after loading and have no place in the file.`;
+	}
+	[va, vs, rs, rp, rva].forEach(f => f.input.addEventListener('input', render));
+	render();
+}
+
+// ----------------------------------------------------------------- torn read
+function tornRead(root) {
+	header(root, 'Explore it', 'How one successful read after another can still describe nobody',
+		'A tool reads an enemy’s pointer and health in separate steps while the game keeps running. Choose when the game swaps enemy A for enemy B, and decide whether the tool also checks an id.');
+	const check = el('input'); check.type = 'checkbox'; check.id = 'sim-torn-check';
+	const checkLabel = el('label'); checkLabel.htmlFor = check.id;
+	checkLabel.append(check, document.createTextNode(' The tool also reads the enemy’s id before and after the health'));
+	const when = el('input'); Object.assign(when, { id: 'sim-torn-when', type: 'range', min: 0, max: 2, step: 1, value: 1 });
+	const whenLabel = el('label'); whenLabel.htmlFor = when.id;
+	const whenText = el('output');
+	whenLabel.append(el('span', '', 'When does the game replace enemy A with enemy B?'), when, whenText);
+	const controls = el('div', 'sim-lab__controls');
+	controls.append(whenLabel, checkLabel);
+	const steps = el('ol', 'concept-lab__steps');
+	const verdict = el('p', 'sim-lab__explain');
+	verdict.setAttribute('aria-live', 'polite');
+	root.append(controls, steps, verdict);
+	function render() {
+		const checked = check.checked;
+		const reads = checked ? ['pointer', 'id', 'health', 'id again'] : ['pointer', 'health'];
+		when.max = reads.length;
+		const k = Math.min(Number(when.value), reads.length);
+		when.value = k;
+		whenText.textContent = k === 0 ? 'before the tool’s first read' : k === reads.length ? 'after the tool’s last read' : `between “${reads[k - 1]}” and “${reads[k]}”`;
+		const era = i => (i >= k ? 'B' : 'A');
+		const result = reads.map((name, i) => {
+			if (name === 'pointer') return { text: `Read the pointer at 0x2000 → 0x5000`, era: era(i) };
+			if (name === 'health') return { text: `Read health at 0x5030 → ${era(i) === 'A' ? 120 : 87}`, era: era(i), health: era(i) === 'A' ? 120 : 87 };
+			return { text: `Read the id at the object → enemy ${era(i)}`, era: era(i), id: era(i) };
+		});
+		steps.replaceChildren(...result.map((r, i) => el('li', '', `${r.text}${i === k ? '   ← the game swapped just before this read' : ''}`)));
+		const health = result.find(r => r.health !== undefined);
+		const pointerEra = result[0].era;
+		if (checked) {
+			const ids = result.filter(r => r.id).map(r => r.id);
+			verdict.textContent = ids[0] !== ids[1]
+				? `The two id reads disagree (${ids[0]} then ${ids[1]}), so the swap happened while the tool was reading. It refuses this pair and tries again, instead of reporting a health value that belongs to someone else.`
+				: `Both id reads say enemy ${ids[0]}, and the health read happened between them, so the health ${health.health} really belongs to enemy ${ids[0]}. The id check does not stop the game from swapping, but it catches a swap during the read.`;
+		} else if (pointerEra !== health.era) {
+			verdict.textContent = `The tool looked up enemy ${pointerEra}, but the health ${health.health} it reported belongs to enemy ${health.era}. Every read succeeded, yet together they describe no real enemy. Tick the id check above and the tool can notice.`;
+		} else {
+			verdict.textContent = `Here the swap fell outside the tool's reads, so the pointer and health agree (enemy ${health.era}, health ${health.health}). Move the swap between the two reads to see a torn pair. Enemy A's health (120) is only an illustration.`;
+		}
+	}
+	when.addEventListener('input', render);
+	check.addEventListener('change', () => { when.max = check.checked ? 4 : 2; when.value = check.checked ? 2 : 1; render(); });
+	render();
+}
+
+const SIMS = { 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange, 'rva-offset': rvaOffset, 'torn-read': tornRead };
 
 export function mountSimLabs() {
 	for (const root of document.querySelectorAll('[data-sim-lab]')) {
