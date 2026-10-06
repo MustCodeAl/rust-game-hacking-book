@@ -19,6 +19,10 @@ verify with the cheap checks below. `gh-pages` is the live branch; source is `co
   `public/scripts/learning-widgets.js`; add a lab by adding an entry and `<ConceptLab lab="...">`).
 - Three CC0 figures (`public/assets/images/original/`, credited in `CREDITS.md`).
 
+**Done on branch `claude/interactives` (T12, see `BOOK_REVISION_PROGRESS.md`):** code blanks (`blanks-*`) and a state machine
+builder (`fsm-*`), both data maps in `public/scripts/puzzle-labs.js`, loaded on demand by `learning-widgets.js`, styled at the end
+of `src/styles/learning-widgets.css`. Lessons: 2.8, 5.10, 6.6, 9.1, 13.6 (blanks); 4.6, 10.5 (state machines).
+
 **Done in the working tree after that (commit message says what is published; check `git log`):**
 - Context7 chat adds a visible `[Reading: lesson N "Title" (chapter ...), section "...", page /path]`
   line to every message at send time (`referencePages` in `public/scripts/chat-widget.js`). Tested only
@@ -39,15 +43,29 @@ questions), `quiz-rewrite-spec.md` (the instructions for whoever rewrites), `qui
 whether the rewrite was merged; if not, run prep, give each of three agents about a third of the lessons,
 check every output with the checker, merge, rebuild, run `check-lesson-quizzes.mjs`, publish.
 
+**Design principle (owner, 2026-10-06): interactives teach through exploration and immediate explanation; they
+are never required exercises.** Open each one already showing the working answer and a short explanation, so a
+reader who never clicks still learns the idea. Nothing is graded or gating: no scores, no "you must complete
+this", no red failure states (use amber for "different from the lesson's version"). Lead with "Try changing...
+/ What happens if..." and a plain-English line that says what each change does; Check, Hint and Reset are
+optional extras, and "Show the answer" is always one click away.
+
 **Backlog from the owner's Brilliant.org wish list (not started unless listed above).** Prefer small,
 reusable, data-driven components over per-lesson code, add each to lessons that have no interactive
-tool (38 remain; list them by grepping for lessons without `<Scene|<CpuStepLab|<MemoryStrip|<ConceptLab|
-<PerspectivePlayground|<OwnershipScope`), and always give a hint and a Reset:
-1. Fill-in-the-blank / drag-and-drop code builders (drop blocks into slots; instant check).
+tool (31 remain after T12, from 38; list them by grepping for lessons without `<Scene|<CpuStepLab|<MemoryStrip|<ConceptLab|
+<PerspectivePlayground|<OwnershipScope`), and offer a hint and a Reset as optional extras:
+1. ~~Fill-in-the-blank / drag-and-drop code builders~~ **DONE (T12, branch `claude/interactives`).** "Code
+   blanks": data map `CODE_BLANKS` in `public/scripts/puzzle-labs.js`; mount with
+   `<ConceptLab lab="blanks-..." id="..." label="..." />`. To extend, add an entry (code lines with `{1}` markers,
+   a token `bank`, per-blank `answer` plus one plain-English `effects` line per piece worth trying, and a `why`
+   sentence). No JS changes. Used in lessons 2.8, 5.10, 6.6, 9.1, 13.6.
 2. Step-by-step code tracer with highlighted line and variable panel (extend the scene engine or
    the ownership tracer rather than writing another one).
-3. Node-and-edge editors: state machines and behaviour trees where the reader draws transitions and a
-   test input run shows the result (plain SVG and pointer events; no library needed).
+3. ~~Node-and-edge editors~~ **State machines DONE (T12).** "State machine builder": data map `STATE_MACHINES`
+   in the same file; mount with `<ConceptLab lab="fsm-..." ... />`. To extend, add an entry (states with x/y,
+   `triggers`, the complete `edges` with an optional `ifMissing` sentence each, `inputs`, `start`, `terminal`,
+   `actor`). Used in lessons 4.6 and 10.5. Behaviour trees are not done: they need a tree layout and a tick
+   trace, so extend the same file with a second engine rather than a new library.
 4. Real-time sliders that morph a figure (camera/FOV, angles, vectors, stride, endianness).
 5. Cost visualiser (scan time versus region size; sort or search step counts).
 6. Toy sandboxes with a Run button (a tiny emulated CPU or script runner; never run real lab binaries).
