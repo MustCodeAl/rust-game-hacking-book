@@ -49,6 +49,16 @@ add one by writing a function in `SIMS` and `<SimLab sim="...">`): `base-rate` (
 style. Performance was compared with the pre-session site at 4x CPU throttle: scroll median 16.7 ms, load
 blocking within noise (pages are about 4 KB gzip heavier on average because of the quiz pools).
 
+**Sign-in (Google/Discord/GitHub) is built but PARKED and not wired in (owner: do it later).** Files:
+`site/src/components/AccountControls.astro`, `site/src/scripts/account.js` (no library; Supabase over fetch;
+merge logic checked by `node site/scripts/check-account.mjs`), `site/src/data/account-config.json` (empty =
+renders nothing), `ACCOUNT_SETUP.md` (the owner's one-time Supabase steps and SQL). To finish: (1) the owner
+creates the Supabase project and fills the config; (2) add `import AccountControls ...` and `<AccountControls />`
+right after `<AudioControls />` in `site/src/components/ReaderTools.astro` and
+`site/src/components/overrides/ThemeSelect.astro`; (3) browser-test the full flow against a stand-in Supabase
+(route the project URL in Playwright: `/auth/v1/authorize` 302 to the page with `#access_token=...`,
+`/auth/v1/user`, `/rest/v1/progress` GET/POST) and then the real project; (4) publish. Not yet browser-tested.
+
 **Backlog from the owner's Brilliant.org wish list (not started unless listed above).** Prefer small,
 reusable, data-driven components over per-lesson code, add each to lessons that have no interactive
 tool (38 remain; list them by grepping for lessons without `<Scene|<CpuStepLab|<MemoryStrip|<ConceptLab|
