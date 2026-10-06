@@ -331,7 +331,120 @@ function tornRead(root) {
 	render();
 }
 
-const SIMS = { 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange, 'rva-offset': rvaOffset, 'torn-read': tornRead };
+// -------------------------------------------------------------- lost update
+function lostUpdate(root) {
+	header(root, 'Explore it', 'Two threads, one shared number: the order of their steps decides the result',
+		'The reward thread adds 500 and the purchase thread subtracts 300 from the same gold. Press the steps in any order, or turn on a lock, and watch the shared value and each thread’s private copy.');
+	const START = 1000, EXPECTED = 1200;
+	let gold, threads, lockHolder, log;
+	const spec = { reward: { name: 'Reward thread', delta: 500, sign: '+' }, purchase: { name: 'Purchase thread', delta: -300, sign: '−' } };
+	const lockBox = el('input'); lockBox.type = 'checkbox'; lockBox.id = 'sim-lock';
+	const lockLabel = el('label'); lockLabel.htmlFor = lockBox.id;
+	lockLabel.append(lockBox, document.createTextNode(' Each thread locks the gold from its read until its write'));
+	const board = el('div', 'sim-lab__cards');
+	const buttons = el('div', 'sim-lab__presets');
+	const logList = el('ol', 'concept-lab__steps');
+	const verdict = el('p', 'sim-lab__explain');
+	verdict.setAttribute('aria-live', 'polite');
+	const controls = el('div', 'sim-lab__controls');
+	controls.append(lockLabel);
+	root.append(controls, presets([
+		{ label: 'The lesson’s order', order: ['reward', 'purchase', 'reward', 'purchase', 'reward', 'purchase'] },
+		{ label: 'One finishes first', order: ['reward', 'reward', 'reward', 'purchase', 'purchase', 'purchase'] },
+	], item => { reset(); for (const who of item.order) step(who); render(); }), board, buttons, logList, verdict);
+	const labels = ['read the gold', 'calculate with its copy', 'write its result back'];
+	function reset() { gold = START; threads = { reward: { pc: 0, reg: null }, purchase: { pc: 0, reg: null } }; lockHolder = null; log = []; }
+	function blocked(who) { return lockBox.checked && lockHolder && lockHolder !== who && threads[who].pc === 0; }
+	function step(who) {
+		const th = threads[who];
+		if (th.pc >= 3 || blocked(who)) return false;
+		if (th.pc === 0) { if (lockBox.checked) lockHolder = who; th.reg = gold; log.push(`${spec[who].name} reads the gold: its copy is ${th.reg}.`); }
+		else if (th.pc === 1) { th.reg = th.reg + spec[who].delta; log.push(`${spec[who].name} calculates: its copy becomes ${th.reg}.`); }
+		else { gold = th.reg; if (lockHolder === who) lockHolder = null; log.push(`${spec[who].name} writes ${th.reg} into the shared gold.`); }
+		th.pc++;
+		return true;
+	}
+	function render() {
+		board.replaceChildren(
+			...[['Shared gold', String(gold), lockHolder ? `locked by the ${lockHolder} thread` : 'not locked'],
+				['Reward copy', threads.reward.reg === null ? '—' : String(threads.reward.reg), `step ${Math.min(threads.reward.pc, 3)} of 3`],
+				['Purchase copy', threads.purchase.reg === null ? '—' : String(threads.purchase.reg), `step ${Math.min(threads.purchase.pc, 3)} of 3`]]
+				.map(([name, value, note]) => { const c = el('div', 'concept-lab__result-card'); c.append(el('span', 'concept-lab__result-label', name), el('strong', 'concept-lab__result-value', value), el('small', 'concept-lab__result-note', note)); return c; }));
+		buttons.replaceChildren();
+		for (const who of ['reward', 'purchase']) {
+			const th = threads[who];
+			const b = el('button', 'concept-lab__example', th.pc >= 3 ? `${spec[who].name}: finished` : `${spec[who].name}: ${labels[th.pc]}${blocked(who) ? ' (waiting for the lock)' : ''}`);
+			b.type = 'button'; b.disabled = th.pc >= 3 || blocked(who);
+			b.addEventListener('click', () => { step(who); render(); });
+			buttons.append(b);
+		}
+		const restart = el('button', 'concept-lab__example', 'Start over'); restart.type = 'button';
+		restart.addEventListener('click', () => { reset(); render(); });
+		buttons.append(restart);
+		logList.replaceChildren(...log.map(line => el('li', '', line)));
+		const done = threads.reward.pc >= 3 && threads.purchase.pc >= 3;
+		verdict.textContent = done
+			? (gold === EXPECTED ? `Final gold is ${gold}, the correct ${START} + 500 − 300. Each calculation started from a value the other thread had already written, so nothing was lost.`
+				: `Final gold is ${gold}, not ${EXPECTED}. Both threads calculated from the same starting ${START}; the later write overwrote the earlier one, so ${gold === 700 ? 'the 500 reward was lost' : 'the 300 purchase was lost'}. Every step was correct on its own; only the order was wrong.`)
+			: `Expected total when both finish: ${START} + 500 − 300 = ${EXPECTED}. Press the thread buttons in different orders and see which orders give ${EXPECTED}.`;
+	}
+	lockBox.addEventListener('change', () => { reset(); render(); });
+	reset(); render();
+}
+
+// ------------------------------------------------------------- crash-safe save
+function crashSave(root) {
+	header(root, 'Explore it', 'What is left on disk if the game crashes at each moment?',
+		'Compare two ways to save the same character file. Slide the crash point along the steps and look at the files that survive.');
+	const OLD = ['xp=0', 'build=5,1,1,2'], NEW = ['xp=0', 'build=30,30,30,30'];
+	const strategies = {
+		inPlace: { name: 'Overwrite the file in place', steps: ['Open avatar.txt and empty it', 'Write the xp line', 'Write the build line (partly written)', 'Write the rest of the build line and close'] },
+		replace: { name: 'Write a temporary file, then replace', steps: ['Write the new bytes to a temporary file', 'Flush the temporary file and close it', 'Replace avatar.txt in one operation (the old one is kept as a backup)'] },
+	};
+	const choice = el('div', 'sim-lab__presets');
+	const names = Object.keys(strategies);
+	const radios = names.map(key => {
+		const label = el('label'); const input = el('input'); Object.assign(input, { type: 'radio', name: 'sim-save-strategy', value: key, checked: key === 'inPlace' });
+		label.append(input, document.createTextNode(' ' + strategies[key].name)); choice.append(label); return input;
+	});
+	const slider = el('input'); Object.assign(slider, { id: 'sim-crash', type: 'range', min: 0, step: 1, value: 2 });
+	const sliderLabel = el('label'); sliderLabel.htmlFor = slider.id;
+	const sliderText = el('output');
+	sliderLabel.append(el('span', '', 'The game crashes after…'), slider, sliderText);
+	const controls = el('div', 'sim-lab__controls'); controls.append(sliderLabel);
+	const stepsList = el('ol', 'concept-lab__steps');
+	const files = el('div', 'sim-lab__fields');
+	const verdict = el('p', 'sim-lab__explain'); verdict.setAttribute('aria-live', 'polite');
+	root.append(choice, controls, stepsList, files, verdict);
+	const chip = (name, lines, bad) => { const c = el('div', 'sim-lab__chip' + (bad ? ' sim-lab__chip--bad' : '')); c.append(el('span', '', name), el('code', '', lines.length ? lines.join('\n') : '(empty file)')); return c; };
+	function render() {
+		const key = radios.find(r => r.checked).value; const s = strategies[key];
+		slider.max = s.steps.length;
+		const k = Math.min(Number(slider.value), s.steps.length); slider.value = k;
+		sliderText.textContent = k === 0 ? 'nothing has happened yet' : `step ${k}: ${s.steps[k - 1]}`;
+		stepsList.replaceChildren(...s.steps.map((text, i) => el('li', '', (i < k ? '✓ ' : '· ') + text + (i === k - 1 && k < s.steps.length ? '   ← the crash comes right after this' : ''))));
+		let main, extra = [], bad = false, text;
+		if (key === 'inPlace') {
+			main = k === 0 ? OLD : k === 1 ? [] : k === 2 ? [NEW[0]] : k === 3 ? [NEW[0], 'build=30,3'] : NEW;
+			bad = k >= 1 && k <= 3;
+			text = k === 0 ? 'Nothing was touched, so the old file is intact.' : k === 4 ? 'The save finished: avatar.txt holds the new values.'
+				: 'The old file was emptied at step 1, so its bytes are gone. What is left is empty or half-written, and the game cannot load it. There is no copy to fall back to.';
+		} else {
+			main = k >= 3 ? NEW : OLD;
+			if (k >= 1 && k < 3) extra.push(chip('avatar.txt.tmp (temporary)', k === 1 ? ['xp=0', 'build=30,30,30,30 (maybe unflushed)'] : NEW, false));
+			if (k >= 3) extra.push(chip('avatar.txt.bak (backup)', OLD, false));
+			text = k >= 3 ? 'The replacement completed: avatar.txt is the whole new file and the old one is kept as a backup.'
+				: 'avatar.txt is still the complete old file, because the original was never touched. A leftover temporary file is harmless and is simply ignored or deleted next time.';
+		}
+		files.replaceChildren(chip('avatar.txt', main, bad), ...extra);
+		verdict.textContent = text;
+	}
+	slider.addEventListener('input', render);
+	radios.forEach(r => r.addEventListener('change', () => { slider.value = r.value === 'inPlace' ? 2 : 2; render(); }));
+	render();
+}
+
+const SIMS = { 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange, 'rva-offset': rvaOffset, 'torn-read': tornRead, 'lost-update': lostUpdate, 'crash-save': crashSave };
 
 export function mountSimLabs() {
 	for (const root of document.querySelectorAll('[data-sim-lab]')) {
