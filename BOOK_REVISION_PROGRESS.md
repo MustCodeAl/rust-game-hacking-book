@@ -1392,7 +1392,7 @@ reload keeps it, delete works at 420; in the 1280 marker mode the bubble must be
 `server-authority` (15.1): checked and unchecked server, verified at both widths. Not done: syncing reader comments to accounts,
 using the new kinds in lessons, KaTeX examples in `math` notes. No lab programs were run.
 
-## T21 — Design layer v2 (opt-in) (2026-10-06)
+## T21 — Design layer v2 (2026-10-06; now THE site theme, see T23)
 
 New modular stylesheet layer in `site/src/styles/design/` (tokens, layout, components, labs, subsystems, responsive, a11y-print,
 `index.css`), imported last in `customCss`. **Every rule is scoped to `:root[data-design="v2"]`, so the live site is unchanged unless a
@@ -1426,4 +1426,27 @@ Owner-reported bugs under Paper · Light, fixed in the classic styles (not only 
    so this was fixed by construction, not observed.
 5. **Sidebar active lesson**: 3px `border-inline-start` accent strip, square-left/rounded-right, raised surface, no outline box; keyboard
    focus gets a 2px accent ring (`reader.css`).
+No lab programs were run.
+
+## T23 — The design layer replaces the old theme (2026-10-06)
+
+Owner decision: no beta, no toggle; the design layer in `site/src/styles/design/` IS the live theme. `astro.config.mjs` always sets `data-design="v2"`
+(only a specificity anchor) and mirrors the reader-theme choices (`data-academy-*`) into `data-palette`, `data-brightness`, `data-bg`,
+`data-font-size`, `data-spacing`, `data-hovercards`, `data-page-grid`, `data-gradients`, `data-diagram-*`, `data-heading-boxes`, `data-motion`,
+`data-chat-position`. There is no opt-out; the Classic/New buttons and `?design=` switch were removed. What changed:
+- **Legacy token bridge** (end of `tokens.css`): the older `--ink/--paper/--night/--sidebar-*/--surface/--line/--link...` family is mapped to the v2
+  tokens with a high-specificity selector, so header, sidebar, search, cards, labs, quizzes and diagrams all follow the palette. Header text is
+  `--text-primary`; the sidebar is the palette's `--bg-sidebar` (paper `#f0e8d8`) with a hairline edge; the active lesson is a 3px accent strip + soft tint.
+- **`chrome.css`**: solid header (z 1000, no backdrop blur), the Reader theme panel is now an off-canvas sheet from the right under the header with a
+  scrim, soft accent-tint selected pills (no saturated rings), padding at the end of the scrolling columns so floating buttons never sit on links,
+  Notes in the bottom-right slot above the chat button, bottom-left chat clears the lesson list (`--chat-left`, set in CSS, used by `chat-widget.js`).
+- Home page keeps its own wide layout (the 720px column applies only where `data-has-sidebar`); hero code mock-up stays a warm dark card.
+- Code surfaces come from `code-theme.css` (palette x brightness x syntax), so "Match page" code (T22) works under v2.
+- Fixed: tabs were ovals, accordions had a duplicate chevron, the mobile menu button was hidden behind the new header, a mobile off-canvas rule hid
+  Starlight's popover drawer (removed).
+- **Margin comments**: titles ("TL;DR", "Narration", "Alternative", ...) are gone. Type is shown by colour and tint (`--note-hue` in `margin-notes.css`:
+  brief amber, alternative violet, narration cyan, context slate, clarify orange, inquiry indigo, praise green, action blue, code rose, math fuchsia,
+  mine neutral); the label stays as visually hidden text, `aria-label` and the hover `title`. Pin markers take the colour too.
+Checked in Chrome: no horizontal overflow on ten pages at 420/1280 px in four palette/brightness combinations; desktop sheet, phone drawer, margin notes
+(paper and midnight). Not checked: contrast ratios by measurement, tabs/accordion after the fix, every kit component in every palette, touch, Safari/Firefox.
 No lab programs were run.

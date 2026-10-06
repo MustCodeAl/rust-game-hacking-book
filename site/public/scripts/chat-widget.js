@@ -272,9 +272,18 @@
     return style;
   }
 
+  // A left-hand button and panel start to the right of the lesson list (the page sets --chat-left on the host) instead of over it.
+  function leftStyle() {
+    var style = document.createElement("style");
+    style.textContent =
+      "@media (min-width:641px){.c7-bubble{left:var(--chat-left,20px)!important;right:auto!important}" +
+        ".c7-panel{left:var(--chat-left,20px)!important;right:auto!important}}";
+    return style;
+  }
+
   // Lets the widget's attachShadow through as an open root, remembering it, and
   // returns the function that puts the original back.
-  function expose(capture, top) {
+  function expose(capture, top, left) {
     var original = Element.prototype.attachShadow;
     var restored = false;
     Element.prototype.attachShadow = function (init) {
@@ -284,6 +293,7 @@
       capture.shadow = shadow;
       shadow.appendChild(phoneStyle());
       if (top) shadow.appendChild(topStyle());
+      if (left) shadow.appendChild(leftStyle());
       return shadow;
     };
     return function restore() {
@@ -333,7 +343,7 @@
     script.setAttribute("data-placeholder", placeholder(null));
     script.setAttribute("data-welcome-message", welcome());
 
-    var restore = expose(capture, /^top/.test(corner));
+    var restore = expose(capture, /^top/.test(corner), /left$/.test(corner));
     mounted = { script: script, capture: capture, restore: restore, color: color, side: /^top/.test(corner) ? "top" : "bottom" };
     function finished() {
       restore();

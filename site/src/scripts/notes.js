@@ -200,7 +200,8 @@ export function mountNotes() {
 				aside.className = 'margin-note margin-note--mine';
 				aside.dataset.marginNote = ''; aside.dataset.kind = b.kind; aside.setAttribute('role', 'note');
 				aside.setAttribute('aria-label', LABELS[b.kind] || 'My note');
-				const p = document.createElement('p'); const strong = document.createElement('strong');
+				aside.title = LABELS[b.kind] || 'My note';
+				const p = document.createElement('p'); const strong = document.createElement('span'); strong.className = 'margin-note__type';
 				strong.textContent = (LABELS[b.kind] || 'My note') + ': ';
 				const x = document.createElement('button'); x.type = 'button'; x.className = 'margin-note__x'; x.textContent = '×'; x.setAttribute('aria-label', 'Delete this comment');
 				x.addEventListener('click', event => { event.stopPropagation(); saveBubbles(loadBubbles().filter(item => item.at !== b.at)); drawBubbles(); });
