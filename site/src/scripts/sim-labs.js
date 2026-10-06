@@ -318,10 +318,10 @@ function tornRead(root) {
 		if (checked) {
 			const ids = result.filter(r => r.id).map(r => r.id);
 			verdict.textContent = ids[0] !== ids[1]
-				? `The two id reads disagree (${ids[0]} then ${ids[1]}), so the swap happened while the tool was reading. It refuses this pair and tries again, instead of reporting a health value that belongs to someone else.`
-				: `Both id reads say enemy ${ids[0]}, and the health read happened between them, so the health ${health.health} really belongs to enemy ${ids[0]}. The id check does not stop the game from swapping, but it catches a swap during the read.`;
+				? `✅ The two id reads disagree (${ids[0]} then ${ids[1]}), so the swap happened while the tool was reading. It refuses this pair and tries again, instead of reporting a health value that belongs to someone else.`
+				: `✅ Both id reads say enemy ${ids[0]}, and the health read happened between them, so the health ${health.health} really belongs to enemy ${ids[0]}. The id check does not stop the game from swapping, but it catches a swap during the read.`;
 		} else if (pointerEra !== health.era) {
-			verdict.textContent = `The tool looked up enemy ${pointerEra}, but the health ${health.health} it reported belongs to enemy ${health.era}. Every read succeeded, yet together they describe no real enemy. Tick the id check above and the tool can notice.`;
+			verdict.textContent = `⚠️ The tool looked up enemy ${pointerEra}, but the health ${health.health} it reported belongs to enemy ${health.era}. Every read succeeded, yet together they describe no real enemy. Tick the id check above and the tool can notice.`;
 		} else {
 			verdict.textContent = `Here the swap fell outside the tool's reads, so the pointer and health agree (enemy ${health.era}, health ${health.health}). Move the swap between the two reads to see a torn pair. Enemy A's health (120) is only an illustration.`;
 		}
@@ -384,8 +384,8 @@ function lostUpdate(root) {
 		logList.replaceChildren(...log.map(line => el('li', '', line)));
 		const done = threads.reward.pc >= 3 && threads.purchase.pc >= 3;
 		verdict.textContent = done
-			? (gold === EXPECTED ? `Final gold is ${gold}, the correct ${START} + 500 − 300. Each calculation started from a value the other thread had already written, so nothing was lost.`
-				: `Final gold is ${gold}, not ${EXPECTED}. Both threads calculated from the same starting ${START}; the later write overwrote the earlier one, so ${gold === 700 ? 'the 500 reward was lost' : 'the 300 purchase was lost'}. Every step was correct on its own; only the order was wrong.`)
+			? (gold === EXPECTED ? `✅ Final gold is ${gold}, the correct ${START} + 500 − 300. Each calculation started from a value the other thread had already written, so nothing was lost.`
+				: `⚠️ Final gold is ${gold}, not ${EXPECTED}. Both threads calculated from the same starting ${START}; the later write overwrote the earlier one, so ${gold === 700 ? 'the 500 reward was lost' : 'the 300 purchase was lost'}. Every step was correct on its own; only the order was wrong.`)
 			: `Expected total when both finish: ${START} + 500 − 300 = ${EXPECTED}. Press the thread buttons in different orders and see which orders give ${EXPECTED}.`;
 	}
 	lockBox.addEventListener('change', () => { reset(); render(); });
@@ -427,14 +427,14 @@ function crashSave(root) {
 		if (key === 'inPlace') {
 			main = k === 0 ? OLD : k === 1 ? [] : k === 2 ? [NEW[0]] : k === 3 ? [NEW[0], 'build=30,3'] : NEW;
 			bad = k >= 1 && k <= 3;
-			text = k === 0 ? 'Nothing was touched, so the old file is intact.' : k === 4 ? 'The save finished: avatar.txt holds the new values.'
-				: 'The old file was emptied at step 1, so its bytes are gone. What is left is empty or half-written, and the game cannot load it. There is no copy to fall back to.';
+			text = k === 0 ? '✅ Nothing was touched, so the old file is intact.' : k === 4 ? '✅ The save finished: avatar.txt holds the new values.'
+				: '⚠️ The old file was emptied at step 1, so its bytes are gone. What is left is empty or half-written, and the game cannot load it. There is no copy to fall back to.';
 		} else {
 			main = k >= 3 ? NEW : OLD;
 			if (k >= 1 && k < 3) extra.push(chip('avatar.txt.tmp (temporary)', k === 1 ? ['xp=0', 'build=30,30,30,30 (maybe unflushed)'] : NEW, false));
 			if (k >= 3) extra.push(chip('avatar.txt.bak (backup)', OLD, false));
-			text = k >= 3 ? 'The replacement completed: avatar.txt is the whole new file and the old one is kept as a backup.'
-				: 'avatar.txt is still the complete old file, because the original was never touched. A leftover temporary file is harmless and is simply ignored or deleted next time.';
+			text = k >= 3 ? '✅ The replacement completed: avatar.txt is the whole new file and the old one is kept as a backup.'
+				: '✅ avatar.txt is still the complete old file, because the original was never touched. A leftover temporary file is harmless and is simply ignored or deleted next time.';
 		}
 		files.replaceChildren(chip('avatar.txt', main, bad), ...extra);
 		verdict.textContent = text;

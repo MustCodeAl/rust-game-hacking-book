@@ -1338,3 +1338,15 @@ the corner and smaller description text; scan simulator cards in a compact 4-acr
 the pointer walk's picture (it scrolls inside the lab on narrow screens instead of shrinking); consistent side
 margins for the simulations and visuals. Checked by screenshot at 460 and 1100 pixels and for horizontal overflow on
 28 lab pages at 320 and 375 pixels (none). Not changed: the long instruction paragraph above the sort boards.
+
+## T16 — Cheatsheets, feedback colours, highlighting, margin bubbles (2026-10-06)
+
+Cheatsheets: built from each lesson at build time (see HANDOFF_PLAN.md for the recipe); the 9.2 download was driven in
+Chromium (file name, 54 lines, source URL filled in, no overflow or errors). Feedback colours: quiz explanations and
+option buttons are green or red in light and dark themes (screenshots at 460 pixels), lab messages carry tones, and
+the 2.8 code-blank lab was driven through select blank, wrong piece, lesson piece (info, amber, green). Highlighting:
+12 highlighted spans in that lab's code; the tracer and pointer walk use the same tokenizer. Margin bubbles: measured at
+1280 pixels (alternating inline-end/inline-start floats, each next paragraph level with its bubble), 800 pixels
+(bubbles at 187 px wide) and 420 pixels (inline), no horizontal overflow. Checks: build, links 0 broken, quiz pools,
+account merge. Not checked: the other lab types in dark theme beyond the quiz, narration of bubbles, print of bubbles
+beyond the existing print rule. No lab programs were run.

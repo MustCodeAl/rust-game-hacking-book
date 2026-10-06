@@ -51,6 +51,50 @@ add one by writing a function in `SIMS` and `<SimLab sim="...">`): `base-rate` (
 style. Performance was compared with the pre-session site at 4x CPU throttle: scroll median 16.7 ms, load
 blocking within noise (pages are about 4 KB gzip heavier on average because of the quiz pools).
 
+**OWNER HAS ABOUT $7 OF CREDITS LEFT (end of the 2026-10-06 sessions). Prefer small, verified steps; at most one agent.**
+
+**Latest additions (all published unless `git log` says otherwise), with where to find them:**
+- **Downloadable cheatsheet per lesson** (`site/src/components/Cheatsheet.astro`, `site/src/lib/cheatsheet.mjs`,
+  wired in `components/overrides/MarkdownContent.astro`). Built at build time from the lesson text: TL;DR and alternative
+  margin notes, section outline, bold key terms with their defining sentence, short formulas, four self-check questions
+  with answers from the quiz pool. A collapsed section under the notes shows the Markdown and a button saves it as
+  `lesson-N.M-cheatsheet.md`. Quality is mechanical: lessons without margin comments get no "nutshell"; weak "key terms"
+  (a bold word whose sentence is not a definition) can appear. To improve it: tune `buildCheatsheet`, or hand-author a
+  `cheatsheet` frontmatter field per lesson and prefer it.
+- **Lab feedback colours** (appended near the end of `site/src/styles/learning-widgets.css`): tokens `--fb-good`
+  (green), `--fb-warn` (amber), `--fb-bad` (red), `--fb-info` (blue) with light and dark values; `[data-tone]` on lab
+  messages; quiz explanations are green for correct and red for not quite; quiz option buttons likewise. Tone comes from
+  `data-tone` set by a widget (`data-tone-explicit`, used by the code blanks) or inferred by `watchTones()` in
+  `public/scripts/learning-widgets.js` from a message that starts with a tick, "Not quite", etc.
+- **Code blanks (2.8 etc.) message boxes** (`public/scripts/puzzle-labs.js`, function `say`): selecting a blank or piece
+  gives a short blue prompt; placing the lesson's piece is green with the consequence; a different piece is amber with the
+  consequence; differing blanks stay outlined amber. The owner's complaint was that every message looked and read alike.
+- **Syntax highlighting in lab code**: a small tokenizer (`academyHighlight` / `academyGuessLang`, copied into
+  `learning-widgets.js` pointer-tracer, `puzzle-labs.js` code blanks and `src/scripts/code-trace.js`; keep the three
+  copies in step). Colours `.hl-k/s/c/n/f/t/l` use `--hl-*` tokens. Not applied to the state-machine, sort-board or
+  formula-builder widgets.
+- **Lab formatting pass** (`learning-widgets.css`, "Lab formatting pass"): compact headers, badge in the corner, 4-across
+  scan grid, readable pointer-walk text, consistent side margins for `SimLab` and `Visual`.
+- **Margin comments are speech bubbles** beside the passage, alternating right and left (`site/src/styles/margin-notes.css`,
+  script in `components/kit/MarginNote.astro` moves each note before the paragraph it follows and sets `data-side`).
+  Bubbles apply when the article column is at least 28rem wide; below that they stay inline. Printing is unchanged.
+- Per-lesson **Markdown notes** with export, **Continue reading** on the home page, **sign-in** (inert until configured),
+  **explorable simulations** (`src/scripts/sim-labs.js`: base-rate, page-table, checked-range, rva-offset, torn-read,
+  lost-update, crash-save), code tracers, sort boards, formula builders, cost/choice visuals, code blanks, state machine builder.
+
+**STILL TO DO, in rough priority (owner requests):**
+1. Margin comments for the 88 lessons after 5.5 (spec `site/scripts/margin-notes-spec.md`; find them with
+   `grep -L "<MarginNote" site/src/content/docs/pages/*/*.mdx`). One agent covered 45 lessons for roughly one agent-run.
+2. More animation-to-simulation conversions (owner: some animations are literal slide shows; they should be simulations
+   that explain a concept). Done: page-table, base-rate, checked-range, RVA, torn-read, lost-update, crash-save. Next:
+   server-authority, evidence-correlation, detector-input-window, edge-events, then review the other scenes one by one.
+3. Interactives for the ~20 lessons that still have none (list: lessons with no `<Scene|<ConceptLab|<SimLab|<CodeTrace|
+   <SortBoard|<FormulaBuilder|<Visual>`); behaviour trees and a scan-cost visual were not built.
+4. Review live-lab wording and layout the owner may still find confusing: the long instruction paragraph above the sort
+   boards, fill-in code lines that scroll sideways with no visible hint, the state-machine diagram that scrolls on phones.
+5. Sign-in needs the owner's Supabase project (`ACCOUNT_SETUP.md`); the flow passed a stand-in test only.
+6. Unverified anywhere: real touch devices, screen readers, Safari/Firefox, Edge and Chrome Reading mode, physical phone keyboard.
+
 **OWNER HAS ABOUT $15 OF CREDITS LEFT (2026-10-06). Prefer small, verified steps; no more than one agent.**
 
 **Added 2026-10-06 (all published unless noted):** per-lesson Markdown notes with export to .md for massCode

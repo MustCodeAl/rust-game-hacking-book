@@ -9,6 +9,36 @@
 (function () {
   "use strict";
 
+  // Small syntax highlighter for lab code (Rust, Lua, Python-like, assembly).
+  function academyGuessLang(text) {
+    if (/\b(mov|lea|push|pop|jmp)\b\s/.test(text)) return "asm";
+    if (/\b(local|function|then|elseif)\b/.test(text) && !/\bfn\b|\blet\b/.test(text)) return "lua";
+    if (/^\s*(def |for .* in .*:|#)/m.test(text) && !/[{};]/.test(text)) return "py";
+    return "rust";
+  }
+  function academyHighlight(text, lang) {
+    var KW = " fn let mut if else match return use struct enum impl for while in loop const pub as break continue local function end then elseif do not and or def import from mov lea push pop jmp call ret cmp add sub xor test nop ";
+    var LIT = " true false nil None Some Ok Err self null True False ";
+    var comment = lang === "lua" ? "--" : lang === "py" ? "#" : lang === "asm" ? ";" : "//";
+    var esc = function (s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
+    var span = function (k, s) { return '<span class="hl-' + k + '">' + esc(s) + "</span>"; };
+    var out = "", i = 0, m;
+    while (i < text.length) {
+      var rest = text.slice(i);
+      if (rest.indexOf(comment) === 0) { out += span("c", rest); break; }
+      if ((m = /^"(?:[^"\\]|\\.)*"|^'(?:[^'\\]|\\.)*'/.exec(rest))) { out += span("s", m[0]); i += m[0].length; continue; }
+      if (!/\w/.test(text.charAt(i - 1)) && (m = /^0x[0-9a-fA-F_]+|^\d[\d_.]*/.exec(rest))) { out += span("n", m[0]); i += m[0].length; continue; }
+      if ((m = /^[A-Za-z_]\w*/.exec(rest))) {
+        var w = m[0], after = rest.charAt(w.length);
+        var kind = KW.indexOf(" " + w + " ") >= 0 ? "k" : LIT.indexOf(" " + w + " ") >= 0 ? "l" : after === "(" ? "f" : /^[A-Z]/.test(w) ? "t" : "";
+        out += kind ? span(kind, w) : esc(w); i += w.length; continue;
+      }
+      out += esc(text.charAt(i)); i++;
+    }
+    return out;
+  }
+
+
   const { element, makeLabHeader } = window.AcademyLearning;
   const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -257,11 +287,12 @@
     code.setAttribute("role", "group");
     code.setAttribute("aria-label", `Code with ${answers.length} changeable pieces`);
     const blankButtons = [];
+    const codeLang = academyGuessLang(cfg.code.join("\n").replace(/\{\d+\}/g, "x"));
     cfg.code.forEach((line) => {
       const row = element("div", "code-blanks__line");
       line.split(/\{(\d+)\}/).forEach((part, i) => {
         if (i % 2 === 0) {
-          if (part) row.append(document.createTextNode(part));
+          if (part) { const piece = document.createElement("span"); piece.innerHTML = academyHighlight(part, codeLang); row.append(piece); }
           return;
         }
         const index = Number(part) - 1;
@@ -328,6 +359,17 @@
     body.append(code, effect, bank, summary, actions, why);
     root.append(body);
 
+    // One message box, three looks: info (a selection prompt), good (the lesson's
+    // choice), warn (a different choice and what it would do).
+    function say(text, tone) {
+      effect.textContent = text;
+      effect.setAttribute("data-tone", tone);
+      effect.setAttribute("data-tone-explicit", "1");
+    }
+
+    effect.setAttribute("data-tone", "info");
+    effect.setAttribute("data-tone-explicit", "1");
+
     function effectLine(index, token) {
       if (!token) return `Blank ${index + 1} is empty, so this line is unfinished. Pick a piece to see what it would do.`;
       const note = (cfg.blanks[index].effects || {})[token];
@@ -339,7 +381,7 @@
       blankButtons.forEach((button, i) => {
         const token = current[i];
         button.textContent = token || "    ";
-        button.className = "code-blanks__blank" + (token ? " is-filled" : "") + (marks[i] ? ` is-${marks[i]}` : "") + (pickedBlank === i ? " is-picked" : "");
+        button.className = "code-blanks__blank" + (token ? " is-filled" : "") + (marks[i] ? ` is-${marks[i]}` : "") + (pickedBlank === i ? " is-picked" : "") + (token && token !== answers[i] ? " is-differs" : "");
         const markNote = { match: ", matches the lesson", other: ", differs from the lesson", hint: ", filled in by the hint" }[marks[i]] || "";
         button.setAttribute("aria-pressed", pickedBlank === i ? "true" : "false");
         button.setAttribute("aria-label", `Blank ${i + 1} of ${answers.length}: ${token || "empty"}${markNote}. Press Enter to pick it, Delete to empty it.`);
@@ -361,7 +403,7 @@
       marks = [];
       pickedToken = null;
       pickedBlank = null;
-      effect.textContent = effectLine(index, token);
+      say(effectLine(index, token), !token ? "info" : token === answers[index] ? "good" : "warn");
       render();
       blankButtons[index].focus();
     }
@@ -372,26 +414,26 @@
     function onToken(token) {
       if (pickedBlank !== null) { place(pickedBlank, token); return; }
       pickedToken = pickedToken === token ? null : token;
-      effect.textContent = pickedToken === null ? "Pick a piece, then a blank." : `${token || "Empty"} is picked. Now choose a blank to put it in.`;
+      say(pickedToken === null ? "Pick a piece, then a blank." : `${token || "Empty"} selected. Choose a blank.`, "info");
       render();
     }
     function onBlank(index) {
       if (pickedToken !== null) { place(index, pickedToken); return; }
       pickedBlank = pickedBlank === index ? null : index;
-      effect.textContent = pickedBlank === null ? "Pick a piece, then a blank." : `Blank ${index + 1} is picked. Now choose a piece to put in it.`;
+      say(pickedBlank === null ? "Pick a piece, then a blank." : `Blank ${index + 1} selected${current[index] ? ` (holds ${current[index]})` : " (empty)"}. Choose a piece.`, "info");
       render();
     }
 
     showAnswer.addEventListener("click", () => {
       answers.forEach((a, i) => { current[i] = a; });
       marks = []; pickedToken = null; pickedBlank = null;
-      effect.textContent = `Here is the lesson's version. ${cfg.why}`;
+      say(`Here is the lesson's version. ${cfg.why}`, "good");
       render();
     });
     clearAll.addEventListener("click", () => {
       current.fill("");
       marks = []; pickedToken = null; pickedBlank = null;
-      effect.textContent = "All the blanks are empty. Pick a piece, then a blank, to build a version of your own.";
+      say("All the blanks are empty. Pick a piece, then a blank, to build a version of your own.", "info");
       render();
     });
     check.addEventListener("click", () => {
@@ -399,26 +441,26 @@
       const differs = marks.map((m, i) => (m === "other" ? String(i + 1) : "")).filter(Boolean);
       if (differs.length === 0) {
         sound("correct");
-        effect.textContent = `Every blank matches the lesson's version. ${cfg.why}`;
+        say(`Every blank matches the lesson's version. ${cfg.why}`, "good");
       } else {
-        effect.textContent = `Blank ${listWords(differs)} ${differs.length === 1 ? "works" : "work"} differently from the lesson's version. Click a blank to read what its piece would do, or ask for a hint.`;
+        say(`Blank ${listWords(differs)} ${differs.length === 1 ? "works" : "work"} differently from the lesson's version. Click a blank to read what its piece would do, or ask for a hint.`, "warn");
       }
       render();
     });
     hint.addEventListener("click", () => {
       const index = current.findIndex((token, i) => token !== answers[i]);
-      if (index === -1) { effect.textContent = "Nothing to hint: every blank already matches the lesson's version."; return; }
+      if (index === -1) { say("Nothing to hint: every blank already matches the lesson's version.", "good"); return; }
       current[index] = answers[index];
       marks = [];
       marks[index] = "hint";
       pickedToken = null; pickedBlank = null;
-      effect.textContent = "Hint. " + effectLine(index, answers[index]);
+      say("Hint. " + effectLine(index, answers[index]), "info");
       render();
     });
     root.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && (pickedToken !== null || pickedBlank !== null)) {
         pickedToken = null; pickedBlank = null;
-        effect.textContent = "Nothing is picked. Pick a piece, then a blank.";
+        say("Nothing is picked. Pick a piece, then a blank.", "info");
         render();
       }
     });

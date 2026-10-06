@@ -6,6 +6,9 @@ import Default from '@astrojs/starlight/components/MarkdownContent.astro';
 import LessonFinish from '../LessonFinish.astro';
 import Notes from '../Notes.astro';
 import ResumeReading from '../ResumeReading.astro';
+import Cheatsheet from '../Cheatsheet.astro';
+import { buildCheatsheet } from '../../lib/cheatsheet.mjs';
+import banks from '../../data/lesson-quiz-banks.json';
 import Quiz from '../Quiz.astro';
 import quizzes from '../../data/lesson-quizzes.json';
 
@@ -13,6 +16,16 @@ type LessonQuiz = { id: string; title: string; prompt: string; options: string; 
 const entry = Astro.locals.starlightRoute.entry;
 const chapter = entry.data.chapter;
 const quiz = chapter ? (quizzes as Record<string, LessonQuiz>)[chapter] : undefined;
+const cheat =
+	chapter && quiz
+		? buildCheatsheet({
+				body: entry.body,
+				title: entry.data.title,
+				lesson: chapter,
+				seed: { ...quiz, options: quiz.options.split('||'), answer: String(quiz.answer) },
+				bank: (banks as Record<string, { questions: any[] }>)[chapter]?.questions,
+			})
+		: undefined;
 ---
 
 <Default>
@@ -32,5 +45,6 @@ const quiz = chapter ? (quizzes as Record<string, LessonQuiz>)[chapter] : undefi
 	}
 	{chapter && <LessonFinish id={entry.id} lesson={chapter} />}
 	{chapter && <Notes id={entry.id} lesson={chapter} title={entry.data.title} />}
+	{chapter && cheat && <Cheatsheet lesson={chapter} title={entry.data.title} markdown={cheat} />}
 	{chapter && <ResumeReading id={entry.id} lesson={chapter} title={entry.data.title} />}
 </Default>

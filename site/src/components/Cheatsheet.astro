@@ -1,0 +1,44 @@
+---
+// A downloadable one-page summary of the lesson, made at build time from the
+// lesson's own text (src/lib/cheatsheet.mjs). The Markdown is shown in a
+// collapsed preview and the button saves it as a .md file.
+interface Props {
+	lesson: string;
+	title: string;
+	markdown: string;
+}
+const { lesson, title, markdown } = Astro.props;
+---
+
+<section class="lesson-cheat not-content print:hidden" data-lesson-cheat data-cheat-name={`lesson-${lesson}-cheatsheet.md`} data-reader-skip>
+	<details>
+		<summary>Cheatsheet for Lesson {lesson}</summary>
+		<p class="lesson-cheat__lead">A one-page summary of “{title}” you can keep beside your notes. Plain Markdown.</p>
+		<pre class="lesson-cheat__text" data-cheat-text tabindex="0">{markdown}</pre>
+		<button type="button" class="lesson-cheat__button" data-cheat-download>Download cheatsheet (.md)</button>
+	</details>
+</section>
+
+<script>
+	document.addEventListener('click', event => {
+		const button = event.target instanceof Element ? event.target.closest('[data-cheat-download]') : null;
+		const root = button?.closest('[data-lesson-cheat]');
+		const text = root?.querySelector('[data-cheat-text]')?.textContent;
+		if (!root || !text) return;
+		const link = document.createElement('a');
+		link.href = URL.createObjectURL(new Blob([text.replace('{{URL}}', location.origin + location.pathname)], { type: 'text/markdown;charset=utf-8' }));
+		link.download = root.getAttribute('data-cheat-name') || 'cheatsheet.md';
+		document.body.append(link);
+		link.click();
+		link.remove();
+		setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+	});
+</script>
+
+<style is:global>
+	.lesson-cheat { margin-block: 1.2rem; padding: 0.7rem 1rem; border: 1px solid var(--reader-line, var(--line)); border-radius: 12px; background: var(--reader-panel, var(--surface-alt)); }
+	.lesson-cheat > details > summary { cursor: pointer; font-weight: 650; color: var(--ink-strong); }
+	.lesson-cheat__lead { margin: 0.5rem 0; color: var(--ink-soft); font-size: 0.88em; }
+	.lesson-cheat__text { max-height: 18rem; margin: 0.4rem 0; padding: 0.7rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); font: 0.82rem/1.5 var(--mono); border: 1px solid var(--line); border-radius: 8px; background: var(--surface-alt, transparent); }
+	.lesson-cheat__button { padding: 0.3rem 0.8rem; color: var(--ink); font: inherit; font-size: 0.88em; background: var(--surface-alt, transparent); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+</style>

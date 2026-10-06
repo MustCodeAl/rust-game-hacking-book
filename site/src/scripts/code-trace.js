@@ -26,6 +26,36 @@
 // the example before touching anything. The last step's `say` should state the result
 // (it is also the caption shown with JavaScript off). Nothing here is graded.
 
+
+// Small syntax highlighter for lab code (Rust, Lua, Python-like, assembly).
+function academyGuessLang(text) {
+  if (/\b(mov|lea|push|pop|jmp)\b\s/.test(text)) return "asm";
+  if (/\b(local|function|then|elseif)\b/.test(text) && !/\bfn\b|\blet\b/.test(text)) return "lua";
+  if (/^\s*(def |for .* in .*:|#)/m.test(text) && !/[{};]/.test(text)) return "py";
+  return "rust";
+}
+function academyHighlight(text, lang) {
+  var KW = " fn let mut if else match return use struct enum impl for while in loop const pub as break continue local function end then elseif do not and or def import from mov lea push pop jmp call ret cmp add sub xor test nop ";
+  var LIT = " true false nil None Some Ok Err self null True False ";
+  var comment = lang === "lua" ? "--" : lang === "py" ? "#" : lang === "asm" ? ";" : "//";
+  var esc = function (s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
+  var span = function (k, s) { return '<span class="hl-' + k + '">' + esc(s) + "</span>"; };
+  var out = "", i = 0, m;
+  while (i < text.length) {
+    var rest = text.slice(i);
+    if (rest.indexOf(comment) === 0) { out += span("c", rest); break; }
+    if ((m = /^"(?:[^"\\]|\\.)*"|^'(?:[^'\\]|\\.)*'/.exec(rest))) { out += span("s", m[0]); i += m[0].length; continue; }
+    if (!/\w/.test(text.charAt(i - 1)) && (m = /^0x[0-9a-fA-F_]+|^\d[\d_.]*/.exec(rest))) { out += span("n", m[0]); i += m[0].length; continue; }
+    if ((m = /^[A-Za-z_]\w*/.exec(rest))) {
+      var w = m[0], after = rest.charAt(w.length);
+      var kind = KW.indexOf(" " + w + " ") >= 0 ? "k" : LIT.indexOf(" " + w + " ") >= 0 ? "l" : after === "(" ? "f" : /^[A-Z]/.test(w) ? "t" : "";
+      out += kind ? span(kind, w) : esc(w); i += w.length; continue;
+    }
+    out += esc(text.charAt(i)); i++;
+  }
+  return out;
+}
+
 const el = (tag, className, text) => {
 	const node = document.createElement(tag);
 	if (className) node.className = className;
@@ -643,10 +673,12 @@ function build(root, id) {
 
 	function renderCode() {
 		const lines = listing(trace, values);
+		const lang = academyGuessLang(lines.join('\n'));
 		codeList.replaceChildren(...lines.map((text, i) => {
 			const row = el('li', 'code-trace__line');
 			row.dataset.line = String(i);
-			row.append(el('span', 'code-trace__ln', String(i + 1)), el('code', '', text));
+			const codeEl = el('code', '', ''); codeEl.innerHTML = academyHighlight(text, lang);
+			row.append(el('span', 'code-trace__ln', String(i + 1)), codeEl);
 			return row;
 		}));
 	}
