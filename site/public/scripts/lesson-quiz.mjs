@@ -1,6 +1,8 @@
 import { choiceValues, drawBatch, fingerprint, isCorrect, restoreAttempt, shuffleOrder } from './quiz-session.mjs';
 
 const mounted = new WeakSet();
+// Optional sound: reading-audio.js plays these only when the reader has turned effects on.
+const sound = kind => document.dispatchEvent(new CustomEvent('academy:sound', { detail: { kind } }));
 const el = (tag, className, text) => {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -152,8 +154,9 @@ export function mountQuiz(root) {
     next.hidden = true;
     actions.append(check, next);
     stage.append(actions, feedback);
-    function reveal(value) {
+    function reveal(value, silent = false) {
       const correct = isCorrect(question, value);
+      if (!silent) sound(correct ? 'correct' : 'wrong');
       root.classList.add(correct ? 'is-correct' : 'is-incorrect');
       feedback.hidden = false;
       result.textContent = correct ? 'Correct.' : 'Not quite.';
@@ -182,12 +185,12 @@ export function mountQuiz(root) {
     });
     input?.addEventListener('keydown', event => { if (event.key === 'Enter') check.click(); });
     next.addEventListener('click', () => {
-      if (attempt.index === size - 1) attempt.complete = true;
+      if (attempt.index === size - 1) { attempt.complete = true; sound('finish'); }
       else attempt.index++;
       save();
       render();
     });
-    if (Object.hasOwn(attempt.responses, question.id)) reveal(attempt.responses[question.id]);
+    if (Object.hasOwn(attempt.responses, question.id)) reveal(attempt.responses[question.id], true);
     save();
   }
   function renderScore() {

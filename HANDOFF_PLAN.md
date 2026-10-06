@@ -5,6 +5,69 @@ read `CLAUDE.md`, `BOOK_REVISION_PLAN.md`, and `BOOK_REVISION_PROGRESS.md`.** Th
 Academy": a beginner (about 15 years old) book, Astro 7 + Starlight in `site/`, live at
 https://mustcodeal.github.io/rust-game-hacking-book/ (served from branch `gh-pages`).
 
+## Status and backlog — 2026-10-06 (second session; read this first)
+
+The owner has limited credits. Keep agents to three at a time, avoid re-reading whole lessons, and
+verify with the cheap checks below. `gh-pages` is the live branch; source is `codex/book-revision`.
+
+**Done and published (source `5f64d102`, Pages `635aa2a`):**
+- Every one of the 147 lessons has its own quiz pool of at least three times the batch size (3,064
+  questions; `check-lesson-quizzes.mjs` enforces it). Answer lengths are balanced by
+  `site/scripts/quiz-balance.mjs` (the correct choice must not be clearly longest, much longer, or much
+  shorter). Before this, the correct choice was the longest in 49% of questions; now 31%.
+- Four predict-then-check labs in lessons 3.8, 4.3, 4.5, 4.7 (framework: `PREDICT_LABS` in
+  `public/scripts/learning-widgets.js`; add a lab by adding an entry and `<ConceptLab lab="...">`).
+- Three CC0 figures (`public/assets/images/original/`, credited in `CREDITS.md`).
+
+**Done in the working tree after that (commit message says what is published; check `git log`):**
+- Context7 chat adds a visible `[Reading: lesson N "Title" (chapter ...), section "...", page /path]`
+  line to every message at send time (`referencePages` in `public/scripts/chat-widget.js`). Tested only
+  against a stand-in widget (the real widget host is blocked in the cloud sandbox); please confirm on
+  the live site that a sent message shows the line and that the widget still answers.
+- 13 more typing-practice snippets (now 31 `<SpeedType>` blocks, unique ids).
+- Answer sounds (right, wrong, quiz finished) and two more ambient loops (`night-keys`, `warm-hum`).
+  All sound is off by default and gated by the existing "effects" checkbox and volume; quiz and lab
+  buttons no longer also play the generic button tick. Regenerate audio with
+  `python3 scripts/make-reading-audio.py` (re-encoding changes the old MP3 bytes: restore
+  `soft-music.mp3` and `quiet-rain.mp3` from git afterwards).
+
+**In progress — concept-focused quiz rewrite (owner's request):** the 137 pools written on 2026-10-06 are
+too tied to each page's own code, names, and lab details (57% of the new questions, against 13% of the
+older ones). Procedure, all in `site/scripts/`: `quiz-rewrite-prep.py` (finds the 1,621 flagged
+questions), `quiz-rewrite-spec.md` (the instructions for whoever rewrites), `quiz-concept-check.mjs`
+(mechanical checker), `quiz-rewrite-merge.py`. Check `git log` / `BOOK_REVISION_PROGRESS.md` T11 to see
+whether the rewrite was merged; if not, run prep, give each of three agents about a third of the lessons,
+check every output with the checker, merge, rebuild, run `check-lesson-quizzes.mjs`, publish.
+
+**Backlog from the owner's Brilliant.org wish list (not started unless listed above).** Prefer small,
+reusable, data-driven components over per-lesson code, add each to lessons that have no interactive
+tool (38 remain; list them by grepping for lessons without `<Scene|<CpuStepLab|<MemoryStrip|<ConceptLab|
+<PerspectivePlayground|<OwnershipScope`), and always give a hint and a Reset:
+1. Fill-in-the-blank / drag-and-drop code builders (drop blocks into slots; instant check).
+2. Step-by-step code tracer with highlighted line and variable panel (extend the scene engine or
+   the ownership tracer rather than writing another one).
+3. Node-and-edge editors: state machines and behaviour trees where the reader draws transitions and a
+   test input run shows the result (plain SVG and pointer events; no library needed).
+4. Real-time sliders that morph a figure (camera/FOV, angles, vectors, stride, endianness).
+5. Cost visualiser (scan time versus region size; sort or search step counts).
+6. Toy sandboxes with a Run button (a tiny emulated CPU or script runner; never run real lab binaries).
+7. Choice-driven visuals: picking an answer changes a diagram so the reader sees why it is almost right.
+8. More CC0 images and short optional GIFs; every asset needs provenance in `CREDITS.md`.
+
+**Publishing hazards learned the hard way:**
+- `node scripts/publish-pages.mjs` from a machine without Chrome and CDN access publishes pages with
+  every diagram undrawn and without the 269 reader SVGs. The cache that prevents this is
+  `site/node_modules/.cache/academy-diagrams/<loader-hash>/<diagram-hash>.svg`. Refill it from the
+  published pages (`<pre data-diagram="HASH" data-processed="true">SVG</pre>`) before publishing; the
+  build log must say `reused 269` and `1 left`, not `drew 0, reused 0`. After publishing, compare
+  `git grep -l 'data-processed="true"' origin/gh-pages -- pages | wc -l` (114) with the previous commit.
+- Never `git checkout src/data` to undo work: it silently discards unrelated uncommitted data fixes.
+- A cloud container is temporary: commit and push often. The Pages domain cannot be fetched from the
+  sandbox, so verify a publish through `git show origin/gh-pages:<path>` and ask the owner to look.
+- Cheap checks: `cd site && bun run build`, `node scripts/check-lesson-quizzes.mjs`,
+  `python3 scripts/check-links.py dist`, `node scripts/check-chat-suggest.mjs`,
+  `node scripts/check-reading-audio.mjs`, `node scripts/quiz-balance.mjs <pool.json>`.
+
 ## Latest user requests — 2026-10-05
 
 These requests supersede conflicting details elsewhere in this handoff. Record

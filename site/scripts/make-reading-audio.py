@@ -70,7 +70,40 @@ def rain():
     return samples
 
 
+def night_keys():
+    # Sparse soft plucks on a pentatonic scale, one every 2 seconds, each with a
+    # slow decay that wraps around the loop point. Fixed pattern, no melody from
+    # an existing song.
+    scale = [57, 60, 62, 64, 67, 69, 72]
+    pattern = [0, 2, 4, 2, 5, 3, 1, 4, 2, 0, 3, 5, 4, 2, 6, 3]
+    samples = [0.0] * (RATE * LENGTH)
+    for step, degree in enumerate(pattern):
+        frequency = 440 * 2 ** ((scale[degree] - 69) / 12)
+        start = step * 2 * RATE
+        for sample in range(int(RATE * 3.6)):
+            time = sample / RATE
+            envelope = math.exp(-time * 1.7) * min(1, time / 0.01)
+            value = math.sin(2 * math.pi * frequency * time) + 0.25 * math.sin(4 * math.pi * frequency * time)
+            samples[(start + sample) % len(samples)] += value * envelope
+    return samples
+
+
+def warm_hum():
+    # Two slowly beating low drones with a soft overtone. Frequencies are whole
+    # cycles per loop so the file repeats without a click.
+    samples = []
+    for index in range(RATE * LENGTH):
+        time = index / RATE
+        swell = 0.8 + 0.2 * math.sin(2 * math.pi * time / 16)
+        value = math.sin(2 * math.pi * 55 * time) + math.sin(2 * math.pi * 55.5 * time)
+        value += 0.4 * math.sin(2 * math.pi * 82.5 * time) + 0.15 * math.sin(2 * math.pi * 110 * time)
+        samples.append(value * swell)
+    return samples
+
+
 if __name__ == "__main__":
     ROOT.mkdir(parents=True, exist_ok=True)
     render("soft-music", music())
     render("quiet-rain", rain())
+    render("night-keys", night_keys())
+    render("warm-hum", warm_hum())

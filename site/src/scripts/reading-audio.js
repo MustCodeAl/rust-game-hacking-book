@@ -58,7 +58,7 @@ export function mountReadingAudio() {
 		try {
 			await player.play();
 			if (attempt !== generation) return;
-			message = `${track === 'soft-music' ? 'Soft music' : 'Quiet rain'} playing.`;
+			message = `${({ 'soft-music': 'Soft music', 'quiet-rain': 'Quiet rain', 'night-keys': 'Night keys', 'warm-hum': 'Warm hum' })[track] || 'Background sound'} playing.`;
 		} catch {
 			if (attempt !== generation) return;
 			message = 'Sound could not start. Press Play to try again.';
@@ -73,21 +73,31 @@ export function mountReadingAudio() {
 			context ??= new AudioContext();
 			if (context.state === 'suspended') await context.resume();
 			if (!effects) return;
-			const tone = context.createOscillator();
-			const gain = context.createGain();
-			const now = context.currentTime;
-			tone.type = 'sine';
-			const duration = kind === 'chapter' ? 0.32 : kind === 'lesson' ? 0.22 : 0.12;
-			tone.frequency.setValueAtTime(kind === 'button' ? 440 : 523.25, now);
-			tone.frequency.exponentialRampToValueAtTime(kind === 'chapter' ? 1046.5 : kind === 'lesson' ? 783.99 : 660, now + duration * 0.5);
-			gain.gain.setValueAtTime(0, now);
-			gain.gain.linearRampToValueAtTime(volume / 100 * 0.035, now + 0.008);
-			gain.gain.exponentialRampToValueAtTime(0.0001, now + duration - 0.01);
-			tone.connect(gain);
-			gain.connect(context.destination);
-			tone.onended = () => { tone.disconnect(); gain.disconnect(); };
-			tone.start(now);
-			tone.stop(now + duration);
+			const notes = {
+				button: [[440, 660, 0.12]],
+				lesson: [[523.25, 783.99, 0.22]],
+				chapter: [[523.25, 1046.5, 0.32]],
+				correct: [[523.25, 523.25, 0.1], [659.25, 783.99, 0.16]],
+				wrong: [[246.94, 196, 0.2]],
+				finish: [[523.25, 523.25, 0.1], [659.25, 659.25, 0.1], [783.99, 1046.5, 0.24]],
+			}[kind] || [[440, 660, 0.12]];
+			let when = context.currentTime;
+			for (const [from, to, duration] of notes) {
+				const tone = context.createOscillator();
+				const gain = context.createGain();
+				tone.type = kind === 'wrong' ? 'triangle' : 'sine';
+				tone.frequency.setValueAtTime(from, when);
+				tone.frequency.exponentialRampToValueAtTime(to, when + duration * 0.5);
+				gain.gain.setValueAtTime(0, when);
+				gain.gain.linearRampToValueAtTime(volume / 100 * 0.035, when + 0.008);
+				gain.gain.exponentialRampToValueAtTime(0.0001, when + duration - 0.01);
+				tone.connect(gain);
+				gain.connect(context.destination);
+				tone.onended = () => { tone.disconnect(); gain.disconnect(); };
+				tone.start(when);
+				tone.stop(when + duration);
+				when += duration * 0.85;
+			}
 		} catch { /* Sound is optional; reading controls still work. */ }
 	}
 	for (const root of roots) {
@@ -116,8 +126,9 @@ export function mountReadingAudio() {
 	}
 	document.addEventListener('click', event => {
 		const button = event.target.closest('button');
-		if (button && !button.disabled && !button.closest('[data-reading-audio]') && !button.matches('[data-done-toggle], [data-chapter-done]')) chime();
+		if (button && !button.disabled && !button.closest('[data-reading-audio], .academy-quiz, .concept-lab') && !button.matches('[data-done-toggle], [data-chapter-done]')) chime();
 	});
+	document.addEventListener('academy:sound', event => chime(event.detail?.kind));
 	document.addEventListener('academy:completed', event => chime(event.detail?.kind === 'chapter' ? 'chapter' : 'lesson'));
 	window.addEventListener('pagehide', () => { stop(); if (context) context.close().catch(() => {}); });
 	render();
