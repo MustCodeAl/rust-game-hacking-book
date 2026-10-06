@@ -3721,6 +3721,8 @@ groups.”
 
 <MarginNote kind="brief">Each Next Scan only re-checks the old candidates and keeps the ones that now match, so the list shrinks every time.</MarginNote>
 
+<CodeTrace trace="scan-narrowing" />
+
 ## Repeat with a different change
 
 Make another controlled change with a different result. For example, recruit a
@@ -5442,6 +5444,8 @@ this instruction writes the gold you found.
 
 <MarginNote kind="alternative">Think of the register as where a street starts and the offset as the house number along it. Add them to find the door, then read what is inside.</MarginNote>
 
+<CodeTrace trace="sub-instruction" />
+
 ## Test with a reversible patch
 
 Copy the original instruction bytes first, so you can write them back. Then temporarily replace the **entire** subtraction instruction with <HoverCard kind="example" body="The length comes from the encoding. `sub [edx+4], eax` is the three bytes `29 42 04`, so it takes three `90` bytes. `sub [edx+0x1234], eax` is the six bytes `29 82 34 12 00 00`, so it takes six. The disassembly's bytes column shows the count.">the same number of `nop` bytes</HoverCard>.
@@ -5559,6 +5563,8 @@ Taken destination: 0x00CC_AF20
 Those destinations belong to one run of one build, and yours will not match.
 What carries over is the shape: two actions, two constants, two different
 branch targets, all from the same comparison chain.
+
+<CodeTrace trace="menu-dispatch" />
 
 Once each constant is matched to an action, the anonymous numbers become an
 enum:
@@ -6413,6 +6419,8 @@ stack pointer without undoing the change can make a later `ret` jump to garbage.
 These delayed failures are why a hook may appear to work once and crash later.
 
 <MarginNote kind="brief">The cave must leave the interrupted code as it found it: save state, run your logic, restore state, replay the removed instructions once, then jump back.</MarginNote>
+
+<CodeTrace trace="detour-roundtrip" />
 
 <Frame caption="The breakpoint firing inside the cave.">
 
@@ -9658,6 +9666,8 @@ lost. A slow frame runs several steps to catch up, and a quick one runs none.
 
 </Example>
 
+<CodeTrace trace="fixed-timestep" />
+
 What is drawn after a frame is usually partway between two steps. The 3.33 ms
 left over is 3.33 ÷ 16.67 = 20% of the way to the next step, and many engines
 blend the last two steps by that fraction, so motion looks smooth even though
@@ -12340,6 +12350,8 @@ fn nearest_enemy(player: Vec2, enemies: &[Vec2]) -> Option<Vec2> {
 This decision code has no raw memory access and can be unit-tested with made-up coordinates.
 
 <MarginNote kind="alternative">Picture drawing a circle around the player and growing it until it first touches an enemy. That enemy is the nearest one.</MarginNote>
+
+<CodeTrace trace="nearest-enemy" />
 
 ## Separate decision from action
 
@@ -16550,6 +16562,8 @@ enum BreakpointPhase {
 }
 ```
 
+<CodeTrace trace="breakpoint-cycle" />
+
 ## Distinguish your exceptions
 
 Not every breakpoint exception belongs to your debugger. Windows and the target may use breakpoints internally.
@@ -17224,6 +17238,8 @@ An error should not leave a forgotten recorder running. Cleanup is part of corre
 
 The ignored result on `-cancel` is deliberate: the original error remains the most useful explanation, and cancellation is a best-effort recovery after something already went wrong.
 
+<CodeTrace trace="etw-cleanup" />
+
 ## Record one repeatable action
 
 Build the helper:
@@ -17794,6 +17810,8 @@ Read in plain English, before any types are guessed, the call site says:
 2. It makes an indirect call through an imported function slot.
 3. It tests the low 32 bits of the result.
 4. Zero takes the success path; nonzero takes the failure path.
+
+<CodeTrace trace="call-site" />
 
 That supports a tentative contract:
 
@@ -18389,6 +18407,8 @@ process.write_exact(remote_path.address as usize, path_bytes)?;
 ```
 
 `Process::write_exact` checks the returned byte count from `WriteProcessMemory`. `RemoteAllocation::drop` pairs the successful allocation with `VirtualFreeEx` even when a later `?` returns early.
+
+<CodeTrace trace="loader-cleanup" />
 
 ## Verify every boundary
 
@@ -31857,6 +31877,8 @@ It cannot answer who created the original file. A hash does not create trust; it
 only *moves* trust from wherever you obtained the hash onto the bytes now on
 your disk.
 
+<Visual kind="hash-avalanche" />
+
 That distinction has practical teeth. If you download `mod.zip` and
 `mod.zip.sha256` from the same page, and someone is able to change that page,
 they can change both — and the two will agree perfectly:
@@ -31874,6 +31896,8 @@ Verification reports success and has proven nothing. A hash is only worth
 checking when it reached you by a route the attacker does not control: a signed
 release, a genuinely separate channel, or a value you recorded yourself from a
 copy you already had reason to trust.
+
+<Visual kind="hash-source" />
 
 An **Authenticode signature** connects the file's digest to a signing certificate and asks Windows to apply a trust policy. It can help answer:
 
@@ -33809,6 +33833,10 @@ Choose whether a budget resets per callback, per frame, or per whole script sess
 When a limit is crossed, stop that update, discard its uncommitted actions, and
 report the exact budget. Do not quietly continue with half-produced output.
 
+<Frame caption="Each budget has its own cap and its own reset window.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/script-budgets.svg`} width="480" height="270" style="width:480px;max-width:100%;height:auto;" alt="Seven separate budgets, each with its own cap and reset window: source and bytecode at script load, Lua memory per session, VM instructions per update, call frames per call chain, host callbacks, wall-clock work, and actions and logs per update." loading="lazy" decoding="async" />
+</Frame>
+
 ## Limit memory
 
 The lab host applies a four-mebibyte Lua allocation limit. The multiplication
@@ -33871,6 +33899,8 @@ flowchart TD
 Since the hook fires every 1,000 instructions and allows at most 100 calls, a script gets roughly 100,000 VM instructions per update before this particular budget stops it.
 
 The hook is not a stopwatch. Different instructions cost different amounts of real time, and host callbacks can do work between hooks. It is one defense against runaway Lua bytecode.
+
+<Visual kind="script-budget" />
 
 Reset the instruction allowance at a controlled host boundary, not from inside the script. If the hook counter is shared across updates, document that as a session budget; if each update gets a fresh allowance, also cap how often updates can be requested.
 
@@ -35440,6 +35470,8 @@ fn sha256(path: &Path) -> anyhow::Result<(u64, String)> {
 
 Streaming keeps memory use roughly constant. A 4 GB game archive does not require a 4 GB `Vec` just to calculate its fingerprint.
 
+<Visual kind="hash-memory" />
+
 ## Create without silently replacing trust
 
 The important file option is `create_new(true)`:
@@ -36104,6 +36136,10 @@ Windows event, file, process, thread, or snapshot object
 
 A handle entry also carries granted access rights. Two handles referring to the same process can permit different operations.
 
+<Frame caption="A handle is an index into this process’s table; each row holds rights and points to a kernel object.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/handle-table.svg`} width="480" height="230" style="width:480px;max-width:100%;height:auto;" alt="Two handle values, 0x12C and 0x134, are rows in the current process’s handle table. Each row stores access rights and points to the same process object; 0x12C allows query and read, 0x134 allows query only." loading="lazy" decoding="async" />
+</Frame>
+
 ## Handles have lifetimes
 
 Many APIs return a new handle that the caller owns. When the program is finished with it, the owner calls `CloseHandle`. Forgetting causes a **handle leak**. Repeated leaks can exhaust resources or keep files and processes alive longer than expected.
@@ -36143,6 +36179,8 @@ the object you meant. The failure appears later, in unrelated code, at a moment
 that depends on the exact order in which the program happened to allocate
 handles. That timing dependence is precisely why double-close bugs are so hard
 to reproduce and so easy to blame on the wrong component.
+
+<Visual kind="handle-close" />
 
 The ownership rule should be simple:
 
@@ -36217,6 +36255,8 @@ flowchart LR
     C --> D["drop(events)"]
     D --> E["handle_count(): after_drop"]
 ```
+
+<Visual kind="handle-count" />
 
 <Accordion title="Complete lab source: handle_raii.rs">
 
@@ -37102,6 +37142,8 @@ program. Microsoft may change the implementation path while preserving the Win32
 contract, which is why “calling a deeper layer” is usually less stable rather than
 more capable.
 
+<Visual kind="call-layer" />
+
 ## User mode and kernel mode are permission levels
 
 Most game code, application code, and Windows DLL code runs in **user mode**. A user-mode mistake should not be able to overwrite the kernel or another process merely by using a bad pointer.
@@ -37492,6 +37534,10 @@ the new thread's registers, and, if the new thread belongs to a different
 process, loads that process's top-level page-table address into `cr3`. The
 program never sees the switch. Its registers come back exactly as they were.
 
+<Frame caption="A context switch saves one thread’s registers, loads the next thread’s, and swaps page tables only across processes.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/context-switch.svg`} width="480" height="230" style="width:480px;max-width:100%;height:auto;" alt="Thread A stops running. The kernel saves its registers, loads thread B’s registers and, only if B is in a different process, loads B’s page-table address into cr3. Thread B then runs." loading="lazy" decoding="async" />
+</Frame>
+
 ### It manages every process's memory
 
 Each process has its own page tables, and only the kernel writes them.
@@ -37569,6 +37615,8 @@ Windows shows a stop code, such as `0x50` PAGE_FAULT_IN_NONPAGED_AREA or `0xD1`
 DRIVER_IRQL_NOT_LESS_OR_EQUAL, writes a crash dump of the whole machine if it
 can ([Lesson 11.12](/pages/10/08/) will capture a dump of one process), and
 restarts.
+
+<Visual kind="fault-ring" />
 
 This is why the book keeps its labs in user mode and inside a virtual machine.
 The [kernel trust lesson](/pages/11/05/) will make that design choice concrete
@@ -39567,6 +39615,8 @@ One list is only a snapshot. A useful defensive baseline also records:
 
 Compare snapshots after installing a game, hardware utility, or anti-cheat component. A new driver is not automatically malicious, but it deserves a reason and a trustworthy origin.
 
+<Visual kind="driver-baseline" />
+
 ## Windows protections worth keeping on
 
 **Memory integrity**, also called **HVCI**, uses virtualization-based security to enforce kernel code-integrity rules. The Microsoft vulnerable-driver blocklist prevents known risky drivers from loading when the relevant Windows protections or application-control policy enforce it.
@@ -40753,6 +40803,8 @@ choose a policy:
 Never hide loss. An analysis interval containing dropped decision events has
 lower evidentiary confidence.
 
+<Visual kind="queue-overload" />
+
 ## Turn a finding into a regression trace
 
 Save the smallest event fixture that demonstrates the failure:
@@ -41202,6 +41254,8 @@ activity trips it several times a minute. Set it above 412 and you have written
 a rule that almost nothing will ever trigger, including the condition you meant
 to catch. The distribution of “ordinary but unlucky” overlaps the distribution
 of “actually paused,” so no single number separates them cleanly.
+
+<Visual kind="timing-threshold" />
 
 Repetition gives stronger evidence than one sample, but does not reveal intent.
 Twenty slow samples from the same code path could reflect a persistent load,

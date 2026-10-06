@@ -14,6 +14,9 @@ https://creativecommons.org/publicdomain/zero/1.0/
 | `utf8-bytes.svg` | The word café as four characters and five UTF-8 bytes | hand-written SVG in this directory |
 | `record-stride.svg` | Records one stride apart and a field offset inside one | hand-written SVG in this directory |
 | `vector-distance.svg` | The 3-4-5 distance triangle between two points | hand-written SVG in this directory |
+| `handle-table.svg` | Two handle values as rows of one process's handle table, pointing to one kernel object | hand-written SVG in this directory |
+| `context-switch.svg` | The kernel saving one thread's registers, loading the next, and swapping page tables | hand-written SVG in this directory |
+| `script-budgets.svg` | Seven separate script budgets, each with its own cap and reset window | hand-written SVG in this directory |
 
 These files use original geometry and pixel designs. They contain no game
 screenshots, third-party sprites, copied illustrations, or commercial music.
