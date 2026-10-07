@@ -265,8 +265,17 @@ function mountBoard(root, board) {
 	root.append(head, body);
 
 	const invite = el('p', 'sort-board__invite');
-	invite.textContent = 'Try it: drag a chip into another zone, or tap a chip and then tap the zone. With a keyboard, press Enter on a chip, then use a zone’s Put here button, or press the number shown beside a zone name (1–' + board.zones.length + ') on a focused chip. Nothing is scored: dashed amber just means “different from the lesson’s version”.';
-	body.append(invite);
+	invite.textContent = 'Try moving a chip: drag it, or tap it then a zone. Amber marks a different choice; nothing is scored.';
+	const help = el('details', 'sort-board__help');
+	help.append(el('summary', '', 'Keyboard help'));
+	const keys = el('ul');
+	keys.append(
+		el('li', '', `Focus a chip and press a zone number (1–${board.zones.length}) to move it there.`),
+		el('li', '', 'Or press Enter on a chip, Tab to a zone’s Put here button, then press Enter.'),
+		el('li', '', 'Press Escape on a chip to cancel the selection.')
+	);
+	help.append(keys);
+	body.append(invite, help);
 
 	// ---- zones
 	const zoneEls = {};

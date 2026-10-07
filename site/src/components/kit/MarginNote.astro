@@ -18,7 +18,7 @@ const label = { brief: 'TL;DR', alternative: 'Alternative', narration: 'Narratio
 	const LEFT = ['alternative', 'clarification', 'code note', 'math'];
 	const content = document.querySelector('.sl-markdown-content');
 	const root = document.documentElement;
-	const NEED = 16.5 * 16;
+	const neededSpace = () => 16.5 * parseFloat(getComputedStyle(root).fontSize);
 	const isCode = (el: Element | null) => !!el && (el.matches('pre, .expressive-code, .kit-speedtype, .kit-github, .code-trace, .code-blanks, [data-code-trace]') || !!el.querySelector('pre, .expressive-code'));
 	let notes: HTMLElement[] = [];
 
@@ -28,6 +28,7 @@ const label = { brief: 'TL;DR', alternative: 'Alternative', narration: 'Narratio
 		const label = (note.getAttribute('aria-label') || '').toLowerCase();
 		const nearCode = isCode(note.previousElementSibling) || isCode(note.nextElementSibling) || (note.previousElementSibling?.querySelectorAll('code').length ?? 0) >= 2;
 		note.dataset.side = nearCode || LEFT.includes(label) ? 'left' : 'right';
+		note.dataset.preferredSide = note.dataset.side;
 		note.tabIndex = 0;
 		const before = note.previousElementSibling;
 		if (!note.classList.contains('margin-note--mine') && before && /^(P|UL|OL|BLOCKQUOTE)$/.test(before.tagName)) before.before(note);
@@ -43,8 +44,10 @@ const label = { brief: 'TL;DR', alternative: 'Alternative', narration: 'Narratio
 		notes.forEach(n => n.removeAttribute('data-open'));
 		if (open) note.dataset.open = 'true';
 	};
-	const spaceRight = () => { const toc = document.querySelector('.right-sidebar'); const edge = toc && toc.getBoundingClientRect().width > 0 ? toc.getBoundingClientRect().left : window.innerWidth; return edge - content!.getBoundingClientRect().right; };
-	const spaceLeft = () => { const bar = document.querySelector('.sidebar-pane, nav.sidebar'); const edge = bar && bar.getBoundingClientRect().width > 0 ? bar.getBoundingClientRect().right : 0; return content!.getBoundingClientRect().left - edge; };
+	// Expanded notes belong outside the reading column. Sidebars do not reduce
+	// the viewport gutter: counting them had collapsed the original desktop notes.
+	const spaceRight = () => window.innerWidth - content!.getBoundingClientRect().right;
+	const spaceLeft = () => content!.getBoundingClientRect().left;
 	const settle = () => {
 		const bottoms: Record<string, number> = { left: 0, right: 0 };
 		notes.forEach(note => {
@@ -59,17 +62,24 @@ const label = { brief: 'TL;DR', alternative: 'Alternative', narration: 'Narratio
 		if (!content) return;
 		notes = Array.from(content.querySelectorAll<HTMLElement>('[data-margin-note]'));
 		notes.forEach(adopt);
-		const right = spaceRight() >= NEED, left = spaceLeft() >= NEED;
+		const right = spaceRight() >= neededSpace(), left = spaceLeft() >= neededSpace();
+		notes.forEach(n => (n.dataset.side = n.dataset.preferredSide || 'right'));
 		notes.forEach(n => n.removeAttribute('data-open'));
 		if (window.innerWidth < 640) root.removeAttribute('data-note-mode');
 		else if (right && left) root.dataset.noteMode = 'margin';
 		else if (right) { notes.forEach(n => (n.dataset.side = 'right')); root.dataset.noteMode = 'margin'; }
+		else if (left) { notes.forEach(n => (n.dataset.side = 'left')); root.dataset.noteMode = 'margin'; }
 		else root.dataset.noteMode = 'pin';
 		if (root.dataset.noteMode) settle();
 	};
 	if (content) {
 		layout();
 		window.addEventListener('load', layout);
+		let pending = 0;
+		const scheduleLayout = () => { cancelAnimationFrame(pending); pending = requestAnimationFrame(layout); };
+		new ResizeObserver(scheduleLayout).observe(content);
+		document.addEventListener('academy:reader-preference', scheduleLayout);
+		new MutationObserver(scheduleLayout).observe(root, { attributes: true, attributeFilter: ['data-academy-sidebar', 'data-academy-toc'] });
 		window.addEventListener('gha:bubbles', layout);
 		window.addEventListener('resize', () => { clearTimeout((layout as any).t); (layout as any).t = setTimeout(layout, 150); });
 		document.addEventListener('click', event => {

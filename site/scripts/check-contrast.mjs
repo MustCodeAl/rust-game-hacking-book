@@ -16,6 +16,9 @@ for (const pal of ['paper','purple','midnight','forest','contrast']) for (const 
   const agg={};let total=0;
   for (const u of pages){
     await p.goto(base+u,{waitUntil:'domcontentloaded'});await p.waitForTimeout(600);
+    // Sample the settled palette, rather than an interpolated transition colour.
+    await p.addStyleTag({content:'*, *::before, *::after { transition: none !important; animation: none !important; }'});
+    await p.waitForTimeout(150);
     const res=await p.evaluate(()=>{
       const parse=c=>{const m=c.match(/rgba?\(([^)]+)\)/);if(m){const a=m[1].split(/[ ,\/]+/).map(Number);return [a[0],a[1],a[2],a[3]==null?1:a[3]]}
         const m2=c.match(/color\(srgb ([^)]+)\)/);if(m2){const a=m2[1].split(/[ \/]+/).map(Number);return [a[0]*255,a[1]*255,a[2]*255,a[3]==null?1:a[3]]}return null};

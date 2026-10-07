@@ -515,7 +515,74 @@ function serverAuthority(root) {
 	render();
 }
 
-const SIMS = { 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange, 'rva-offset': rvaOffset, 'torn-read': tornRead, 'lost-update': lostUpdate, 'crash-save': crashSave, 'input-edge': inputEdge, 'server-authority': serverAuthority };
+// ------------------------------------------------------------ report provenance
+function evidenceCorrelation(root) {
+	header(root, 'Explore it', 'How many events are behind the reports?',
+		'Try changing the event ID each source reports. Matching IDs describe the same event, so the ledger merges their deliveries and keeps their sources. A, B and C label toy events.');
+	const sources = ['Game log', 'Plugin', 'Player report', 'Later report'];
+	const initial = ['A', 'A', 'A', 'B'];
+	const controls = el('div', 'sim-lab__controls');
+	const inputs = sources.map((source, index) => {
+		const label = el('label', 'concept-lab__field');
+		const input = el('select', 'concept-lab__text-input');
+		input.id = `${root.id || 'sim-evidence-correlation'}-source-${index}`;
+		for (const id of ['A', 'B', 'C', '']) {
+			const option = el('option', '', id ? `Event ${id}` : 'No report');
+			option.value = id;
+			input.append(option);
+		}
+		input.value = initial[index];
+		label.htmlFor = input.id;
+		const name = el('span', 'concept-lab__field-label', source);
+		name.id = `${input.id}-label`;
+		input.setAttribute('aria-labelledby', name.id);
+		label.append(name, input);
+		controls.append(label);
+		input.addEventListener('change', render);
+		return input;
+	});
+	const cards = el('div', 'sim-lab__cards');
+	const ledger = el('div', 'sim-lab__fields');
+	ledger.setAttribute('aria-label', 'Event ledger with report sources');
+	const explain = el('p', 'sim-lab__explain');
+	explain.setAttribute('aria-live', 'polite');
+	const apply = item => { inputs.forEach((input, index) => { input.value = item.events[index]; }); render(); };
+	root.append(controls, presets([
+		{ label: 'Reset to lesson’s example', events: initial },
+		{ label: 'All four describe A', events: ['A', 'A', 'A', 'A'] },
+		{ label: 'Three event IDs', events: ['A', 'B', 'C', 'C'] },
+	], apply), cards, ledger, explain);
+	function render() {
+		const groups = new Map();
+		let deliveries = 0;
+		inputs.forEach((input, index) => {
+			if (!input.value) return;
+			deliveries += 1;
+			if (!groups.has(input.value)) groups.set(input.value, []);
+			groups.get(input.value).push(sources[index]);
+		});
+		cards.replaceChildren(...[
+			['Notifications delivered', String(deliveries), 'one per source that sent a report'],
+			['Distinct events recorded', String(groups.size), 'one per event ID'],
+		].map(([name, value, note]) => {
+			const card = el('div', 'concept-lab__result-card');
+			card.append(el('span', 'concept-lab__result-label', name), el('strong', 'concept-lab__result-value', value), el('small', 'concept-lab__result-note', note));
+			return card;
+		}));
+		ledger.replaceChildren(...Array.from(groups, ([id, origins]) => {
+			const chip = el('div', 'sim-lab__chip');
+			chip.append(el('span', '', `Event ${id}`), el('code', '', `${origins.length} ${origins.length === 1 ? 'delivery' : 'deliveries'}`), el('small', 'concept-lab__result-note', origins.join(', ')));
+			return chip;
+		}));
+		const copies = deliveries - groups.size;
+		explain.textContent = deliveries === 0
+			? 'No source sent a report, so there is nothing to record. Choose an event ID to add a notification.'
+			: `${deliveries} ${deliveries === 1 ? 'notification' : 'notifications'} describe ${groups.size} distinct ${groups.size === 1 ? 'event' : 'events'}. ${deliveries} deliveries − ${copies} repeated ${copies === 1 ? 'copy' : 'copies'} = ${groups.size} event ${groups.size === 1 ? 'record' : 'records'}. Merge matching IDs while keeping every report’s source. Different IDs still do not prove statistical independence or cheating.`;
+	}
+	render();
+}
+
+const SIMS = { 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange, 'rva-offset': rvaOffset, 'torn-read': tornRead, 'lost-update': lostUpdate, 'crash-save': crashSave, 'input-edge': inputEdge, 'server-authority': serverAuthority, 'evidence-correlation': evidenceCorrelation };
 
 export function mountSimLabs() {
 	for (const root of document.querySelectorAll('[data-sim-lab]')) {

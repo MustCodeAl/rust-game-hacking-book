@@ -5,6 +5,17 @@ read `CLAUDE.md`, `BOOK_REVISION_PLAN.md`, and `BOOK_REVISION_PROGRESS.md`.** Th
 Academy": a beginner (about 15 years old) book, Astro 7 + Starlight in `site/`, live at
 https://mustcodeal.github.io/rust-game-hacking-book/ (served from branch `gh-pages`).
 
+## Current checkpoint — 2026-10-07 (T29–T34; read before the older backlog)
+
+- Source is `codex/book-revision`; this machine's primary checkout is `gh-pages`. Work used `/private/tmp/gha-book-revision` so the generated checkout and unrelated local files were preserved. Use the source branch for future work. Never hand-edit or force-push Pages.
+- **Section A is complete:** all 25 comparisons in 24 lessons now show context, full Before, explanation, full Improved code by default, Show the diff, and a takeaway. Do not redo these.
+- **Reader 1.5 Primer:** nine optional typing/recall snippets plus three adjustable CodeTraces. `SpeedType` accepts authored recall fragments and semantic hints; separate copy/unaided recall keys preserve older records. See kit README and T32.
+- **Finished polish:** T27/T28 original default and Appearance tiers remain complete; T30 address/packet/scan labs; T34 SortBoard short invitation/optional keyboard help, overflow-only code-blanks cue, and editable evidence correlation in reader 15.6. The original evidence scene stays alongside its new SimLab so the diagram page count stays 114.
+- **Comments restored at owner's request:** expanded cards sit outside the reading column when viewport gutters fit. They can paint above the neighbouring sidebar; text width is unchanged. Narrow desktop gutters keep clickable pins, phones keep inline notes. Layout observes width/height and panel/preference changes; authored side preferences survive resizing. T34 records checks.
+- User asked to publish all completed work and conserve the last usage. Remaining: B original concepts, D full instruction reference, E remaining Rust idioms beyond the Primer, C chapter map/redirect and saved-key migration only after owner approval, and G remaining theme polish. Other open handoff items include margin-note coverage, original artwork and account sync for reader bubbles. None is claimed complete.
+- Original `_pages/2/05.md` confirms establishing context means following the target/action/function/object/caller relationship through Target → Identify → Understand → Change; it does not mean OS thread context. No files were moved or lesson IDs renumbered.
+- All verification/publication evidence and limitations are in T29–T34 at the bottom of `BOOK_REVISION_PROGRESS.md`. Physical touch, Safari/Firefox, screen readers, real Windows execution and live external services remain unverified. No lab programs were run.
+
 ## Status and backlog — 2026-10-06 (second session; read this first)
 
 The owner has limited credits. Keep agents to three at a time, avoid re-reading whole lessons, and
@@ -69,7 +80,7 @@ detailed notes so any AI can continue. Keep agents to one or two at a time; veri
   The authors' comments use only brief/alternative/narration so far; adding the new kinds to lessons is open work.
 - **Margin bubble side scheme** (`components/kit/MarginNote.astro`, `styles/margin-notes.css`): LEFT = "how it works": a note beside a
   code snippet, a note on a paragraph with several inline code terms, and every `alternative` note. RIGHT = "what to keep": `brief`
-  (TL;DR) and `narration` (asides). Where no true outer margin exists (the usual case) bubbles are 💬 markers that open over the text.
+  (TL;DR) and `narration` (asides). Where the viewport gutter cannot fit an expanded card, bubbles are 💬 markers that open over the text.
   If you add a new note kind, pick left or right by that rule (left = explains mechanism/code, right = summary/story) and document it here.
 - **Notes button** (`Notes.astro`, `scripts/notes.js`): reader can Move it between four corners, Hide it (thin edge tab; click the tab or
   press Alt+N to bring it back); choices are kept in `localStorage` key `gha-notes-ui`.
@@ -151,15 +162,7 @@ Check 375 and 1280 pixels, no horizontal overflow, no page errors.
   formula-builder widgets.
 - **Lab formatting pass** (`learning-widgets.css`, "Lab formatting pass"): compact headers, badge in the corner, 4-across
   scan grid, readable pointer-walk text, consistent side margins for `SimLab` and `Visual`.
-- **Margin comments never push the text** (`site/src/styles/margin-notes.css`; script in `components/kit/MarginNote.astro`).
-  The owner wants bubbles in the outer margin, not under the text and not shifting it. The script moves each note before the
-  paragraph it follows and measures the free space beside the text column (between the content and the left sidebar and the
-  right "On this page" column): if both sides have 16.5rem it hangs bubbles in the margins (`html[data-note-mode=margin]`,
-  alternating sides, overlapping ones stacked); if only the right has room all bubbles go right; otherwise (the usual case,
-  because Starlight's sidebars leave about 115px even at 1900px) each note becomes a small 💬 marker that opens a bubble over
-  the text on click or Enter (`data-note-mode=pin`); on phones (<640px) the plain inline note remains. If the owner still
-  wants true outer-margin bubbles at common widths, the layout would need the sidebars narrowed or the bubbles drawn over them.
-  Checked at 1900, 1280 and 420 pixels (no overflow). Not checked: the margin mode itself, because no tested width had room.
+- **Margin comments never push the text** (`site/src/styles/margin-notes.css`; script in `components/kit/MarginNote.astro`). Desktop comments now stay expanded outside the reading column when a 16.5rem viewport gutter fits. They paint above the neighbouring sidebar; the text does not shift. If both sides fit, the authored side is retained; if only one fits, it is used. Smaller gutters use clickable pins, and phones keep inline notes. A ResizeObserver plus panel/preference listeners updates geometry. Verified at 420 and 1280, including the visible desktop card; see T34.
 - Per-lesson **Markdown notes** with export, **Continue reading** on the home page, **sign-in** (inert until configured),
   **explorable simulations** (`src/scripts/sim-labs.js`: base-rate, page-table, checked-range, rva-offset, torn-read,
   lost-update, crash-save), code tracers, sort boards, formula builders, cost/choice visuals, code blanks, state machine builder.
