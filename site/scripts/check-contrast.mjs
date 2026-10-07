@@ -2,6 +2,7 @@
 // Serve dist with scripts/serve-dist.py. PLAYWRIGHT_PATH may point to an
 // external installation; CHROME_PATH selects locally installed Chrome.
 // Images, SVG text and gradient backgrounds are outside this audit's scope.
+// Audio/video fallback children are not painted by browsers with native media support.
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
@@ -26,7 +27,7 @@ for (const pal of ['paper','purple','midnight','forest','contrast']) for (const 
       const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
       let n;while(n=w.nextNode()){const t=n.nodeValue.trim();if(t.length<2)continue;const el=n.parentElement;if(!el||seen.has(el))continue;seen.add(el);
         const cs=getComputedStyle(el);if(cs.visibility==='hidden'||cs.display==='none'||+cs.opacity===0)continue;const r=el.getBoundingClientRect();if(r.width<2||r.height<2||r.bottom<0||r.top>document.documentElement.scrollHeight)continue;
-        if(el.closest('svg,[aria-hidden="true"],.sr-only,script,style,.mermaid,.katex')) continue;
+        if(el.closest('svg,audio,video,[aria-hidden="true"],.sr-only,script,style,.mermaid,.katex')) continue;
         const fg=parse(cs.color);if(!fg)continue;const bg=bgOf(el);const f=over(fg,bg);const L1=lum(f),L2=lum(bg);const ratio=(Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05);
         const size=parseFloat(cs.fontSize),bold=+cs.fontWeight>=700;const need=(size>=24||(size>=18.66&&bold))?3:4.5;
         if(ratio<need)out.push({sel:(el.tagName.toLowerCase()+'.'+(el.className&&el.className.baseVal===undefined?el.className:'').toString().split(' ').filter(Boolean).slice(0,2).join('.')),ratio:+ratio.toFixed(2),need,txt:t.slice(0,24)})}

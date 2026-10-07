@@ -325,6 +325,12 @@
     return { card, value };
   }
 
+  function addTypeBadge(card, text, kind = "int") {
+    const badge = element("span", "concept-lab__type-badge", text);
+    badge.dataset.kind = kind;
+    card.prepend(badge);
+  }
+
   function parseFourBytes(raw) {
     const cleaned = String(raw || "").trim().replace(/0x/gi, "");
     let parts = cleaned.split(/[\s,;:-]+/).filter(Boolean);
@@ -519,10 +525,8 @@
     );
 
     const body = element("div", "concept-lab__body");
-    const controls = element("div", "concept-lab__control-grid");
     const base = makeTextControl(`${labId}-base`, "Module base today", "0x7FF600000000");
     const offset = makeTextControl(`${labId}-offset`, "Relative virtual address (RVA)", "0x1200");
-    controls.append(base.label, offset.label);
     const error = element("p", "concept-lab__error");
     error.setAttribute("role", "alert");
     error.hidden = true;
@@ -533,36 +537,62 @@
     const offsetBlock = makeResult("RVA", "", "stable inside this build");
     const equals = element("span", "concept-lab__operator", "=");
     const liveBlock = makeResult("Live address", "", "use for this run");
+    baseBlock.value.replaceWith(base.label);
+    offsetBlock.value.replaceWith(offset.label);
+    addTypeBadge(baseBlock.card, "BASE");
+    addTypeBadge(offsetBlock.card, "OFFSET");
+    addTypeBadge(liveBlock.card, "ADDRESS", "endian");
     liveBlock.card.classList.add("concept-lab__result-card--accent");
     equation.append(baseBlock.card, plus, offsetBlock.card, equals, liveBlock.card);
+    const examples = element("div", "concept-lab__examples");
+    examples.append(element("span", "concept-lab__example-label", "Try:"));
+    const presets = [
+      ["First launch", "0x7FF600000000", "0x1200"],
+      ["New launch, same RVA", "0x7FF700000000", "0x1200"],
+      ["64-bit limit", "0xFFFFFFFFFFFFFFFF", "1"],
+    ].map(([label, baseValue, offsetValue]) => {
+      const button = element("button", "concept-lab__example", label);
+      button.type = "button";
+      button.setAttribute("aria-pressed", "false");
+      button.addEventListener("click", () => {
+        base.input.value = baseValue;
+        offset.input.value = offsetValue;
+        render();
+      });
+      examples.append(button);
+      return { button, baseValue, offsetValue };
+    });
     const takeaway = element(
       "p",
       "concept-lab__takeaway",
       "The RVA stays the same for this build. Re-read the module base after every launch, then rebuild the live address."
     );
-    body.append(controls, error, equation, takeaway);
+    takeaway.dataset.kind = "insight";
+    body.append(equation, examples, error, takeaway);
     root.append(body);
 
     function render() {
       const baseValue = parseAddressNumber(base.input.value);
       const offsetValue = parseAddressNumber(offset.input.value);
+      presets.forEach((preset) => {
+        const active = baseValue === parseAddressNumber(preset.baseValue) && offsetValue === parseAddressNumber(preset.offsetValue);
+        preset.button.classList.toggle("is-active", active);
+        preset.button.setAttribute("aria-pressed", String(active));
+      });
       if (baseValue === null || offsetValue === null) {
         error.textContent = "Use a decimal number or a hexadecimal number beginning with 0x.";
         error.hidden = false;
-        equation.hidden = true;
+        liveBlock.value.textContent = "Waiting for a number";
         return;
       }
       const liveValue = baseValue + offsetValue;
       if (baseValue > maxAddress || offsetValue > maxAddress || liveValue > maxAddress) {
         error.textContent = "That result does not fit in a 64-bit Windows address.";
         error.hidden = false;
-        equation.hidden = true;
+        liveBlock.value.textContent = "Does not fit";
         return;
       }
       error.hidden = true;
-      equation.hidden = false;
-      baseBlock.value.textContent = formatAddress(baseValue);
-      offsetBlock.value.textContent = formatAddress(offsetValue);
       liveBlock.value.textContent = formatAddress(liveValue);
     }
 
@@ -625,6 +655,7 @@
     results.append(direct.card, shortest.card);
     visual.append(dial, results);
     const takeaway = element("p", "concept-lab__takeaway concept-lab__angle-takeaway");
+    takeaway.dataset.kind = "insight";
     takeaway.setAttribute("aria-live", "polite");
     body.append(controls, visual, takeaway);
     root.append(body);
@@ -792,6 +823,7 @@
     const memory = element("div", "concept-lab__scan-memory");
     const status = element("p", "concept-lab__takeaway");
     const count = element("strong", "concept-lab__candidate-count");
+    status.dataset.kind = "insight";
     stages.forEach((stage, index) => {
       const button = element("button", "concept-lab__example", stage.label);
       button.type = "button";
@@ -848,6 +880,23 @@
     );
     const body = element("div", "concept-lab__body");
     const control = makeTextControl(`${labId}-bytes`, "Frame bytes in hexadecimal", "00 00 00 05 48 65 6C 6C 6F");
+    const header = element("fieldset", "concept-lab__packet-header");
+    header.append(element("legend", "", "Length header · big-endian u32"));
+    const byteStrip = element("div", "concept-lab__byte-strip");
+    const cells = [0, 1, 2, 3].map((index) => {
+      const cell = element("label", "concept-lab__byte");
+      const input = element("input", "concept-lab__byte-input");
+      input.type = "text";
+      input.maxLength = 2;
+      input.autocomplete = "off";
+      input.spellcheck = false;
+      input.setAttribute("aria-label", `Length byte +${index}, two hex digits`);
+      cell.append(element("small", "", `+${index}`), input);
+      byteStrip.append(cell);
+      return input;
+    });
+    header.append(byteStrip, element("p", "concept-lab__help", "The leftmost byte carries the most weight. Change 05 to 06 to ask for one more payload byte."));
+    const payloadControl = makeTextControl(`${labId}-payload`, "Payload bytes in hexadecimal", "48 65 6C 6C 6F");
     const examples = element("div", "concept-lab__examples");
     examples.append(element("span", "concept-lab__example-label", "Try a frame:"));
     [
@@ -858,25 +907,71 @@
       const button = element("button", "concept-lab__example", label);
       button.type = "button";
       button.dataset.frameBytes = bytes;
+      button.setAttribute("aria-pressed", "false");
       examples.append(button);
     });
     const controlRow = element("div", "concept-lab__control-row");
-    controlRow.append(control.label, examples);
+    controlRow.append(header, payloadControl.label, examples);
     const results = element("div", "concept-lab__results");
     const length = makeResult("Advertised length", "", "Maximum allowed: 1024 bytes");
     const available = makeResult("Bytes available", "", "After the four-byte header");
     const payload = makeResult("Decoded payload", "", "Printable ASCII preview");
+    addTypeBadge(length.card, "BE U32", "endian");
+    addTypeBadge(available.card, "BYTES");
+    addTypeBadge(payload.card, "ASCII", "float");
     results.append(length.card, available.card, payload.card);
     const status = element("p", "concept-lab__takeaway");
+    status.dataset.kind = "insight";
     status.setAttribute("aria-live", "polite");
     body.append(controlRow, results, status);
     root.append(body);
 
+    function setFrame(raw) {
+      const bytes = parseByteSequence(raw);
+      if (!bytes || bytes.length < 4) return;
+      const hex = bytes.map((byte) => byte.toString(16).toUpperCase().padStart(2, "0"));
+      cells.forEach((input, index) => { input.value = hex[index]; });
+      payloadControl.input.value = hex.slice(4).join(" ");
+      sync();
+    }
+
+    function sync() {
+      control.input.value = cells.map((input) => input.value.padStart(2, "0")).join(" ") + " " + payloadControl.input.value;
+      render();
+    }
+
+    cells.forEach((input, index) => {
+      input.addEventListener("focus", () => input.select());
+      input.addEventListener("input", () => {
+        input.value = input.value.replace(/[^0-9a-f]/gi, "").toUpperCase();
+        if (input.value.length === 2 && index < 3) cells[index + 1].focus();
+        sync();
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Backspace" && !input.value && index > 0) { event.preventDefault(); cells[index - 1].focus(); }
+        if (event.key === "ArrowLeft" && input.selectionStart === 0 && index > 0) { event.preventDefault(); cells[index - 1].focus(); }
+        if (event.key === "ArrowRight" && input.selectionStart === input.value.length && index < 3) { event.preventDefault(); cells[index + 1].focus(); }
+      });
+      input.addEventListener("paste", (event) => {
+        const raw = event.clipboardData ? event.clipboardData.getData("text") : "";
+        const parsed = parseByteSequence(raw);
+        if (!parsed || parsed.length < 4) return;
+        event.preventDefault();
+        setFrame(raw);
+      });
+    });
+
     function render() {
       const bytes = parseByteSequence(control.input.value);
+      examples.querySelectorAll("[data-frame-bytes]").forEach((button) => {
+        const preset = parseByteSequence(button.dataset.frameBytes);
+        const active = !!bytes && bytes.length === preset.length && bytes.every((byte, index) => byte === preset[index]);
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
       if (!bytes || bytes.length < 4) {
         results.hidden = true;
-        status.textContent = "❌ A frame needs at least the four-byte length header.";
+        status.textContent = "Use pairs of hex digits for the payload, such as 48 69. The four boxes above are the length header.";
         return;
       }
       const view = new DataView(Uint8Array.from(bytes.slice(0, 4)).buffer);
@@ -890,23 +985,23 @@
         .map((byte) => (byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : "·"))
         .join("") || "(empty)";
       if (declared > 1024) {
-        status.textContent = "❌ Reject it before allocating: the advertised length exceeds the 1024-byte limit.";
+        status.textContent = "⚠️ Reject this length before allocating: it exceeds the 1024-byte limit. A length field is a claim to validate.";
       } else if (payloadBytes.length < declared) {
-        status.textContent = `❌ Truncated frame: ${declared - payloadBytes.length} payload byte${declared - payloadBytes.length === 1 ? " is" : "s are"} missing.`;
+        status.textContent = `⚠️ This frame needs ${declared - payloadBytes.length} more payload byte${declared - payloadBytes.length === 1 ? "" : "s"}. Wait for the rest before decoding the complete message.`;
       } else if (payloadBytes.length > declared) {
         status.textContent = `⚠️ One complete frame is present, followed by ${payloadBytes.length - declared} extra byte${payloadBytes.length - declared === 1 ? "" : "s"} for the next frame.`;
       } else {
-        status.textContent = "✅ Valid frame: the bounded payload length exactly matches the available bytes.";
+        status.textContent = "The bounded length matches the available bytes: decode Hello from this frame. The header measures bytes, not visible characters.";
+        if (declared !== 5 || payload.value.textContent !== "Hello") status.textContent = "The bounded length matches the available bytes. The header measures bytes, not visible characters; this preview shows printable ASCII.";
       }
     }
-    control.input.addEventListener("input", render);
+    payloadControl.input.addEventListener("input", sync);
     examples.querySelectorAll("[data-frame-bytes]").forEach((button) => {
       button.addEventListener("click", () => {
-        control.input.value = button.dataset.frameBytes;
-        render();
+        setFrame(button.dataset.frameBytes);
       });
     });
-    render();
+    setFrame(control.input.value);
   }
 
 
@@ -1043,6 +1138,7 @@
 
     const steps = element("ol", "concept-lab__steps");
     const result = element("p", "concept-lab__takeaway");
+    result.dataset.kind = "insight";
     result.setAttribute("aria-live", "polite");
     const guessBox = element("details", "concept-lab__guess");
     guessBox.append(element("summary", "", "Want to guess first? (optional)"));
