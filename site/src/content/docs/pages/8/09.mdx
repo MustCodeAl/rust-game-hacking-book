@@ -9,11 +9,13 @@ sidebar:
   order: 13
   label: "7.13 In-Game Menus and Text Rendering"
 ---
+import Frame from '../../../../components/kit/Frame.astro';
 import { GitHub } from '../../../../components/kit';
 
 import LessonVideo from '../../../../components/LessonVideo.astro';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## A third option between a window and an overlay
 
@@ -28,6 +30,10 @@ AssaultCube's print function at `0x0041_9880` to label players. That function al
 the font, the scale, the screen size, and the right moment in the frame to
 draw. Calling it is the cheapest way to put a menu on screen, because the
 hard graphics work is done and you are only supplying strings.
+
+<Frame caption="Text uses an existing rendering context">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/text-render-context.svg`} width="480" height="206" alt="An in-game text function combines the supplied text and position with existing font and frame state." loading="lazy" decoding="async" />
+</Frame>
 
 The trade is that you are now running inside the game's render path, so
 the hook must finish quickly. A file read, sleep, or blocking channel receive
@@ -81,6 +87,8 @@ Lesson 6.8 contrasts the two ways such code is written: an **immediate-mode** in
 redraws every element on every frame from the current state, and a **retained-mode**
 interface keeps a tree of elements in memory and changes them when something happens.
 
+<MarginNote kind="alternative">Drawing location and interface storage are separate choices: the same saved menu settings can drive either a separate window or an in-game text pass.</MarginNote>
+
 ## Hook a per-frame site, then call the text function
 
 The obvious idea is to hook the text function itself. That is the one thing
@@ -99,6 +107,8 @@ recursion with no base case, the same failure as a wrapper that forwards to
 itself in [Lesson 7.3](/pages/5/03/#keep-the-original-function). Every nested
 call adds a stack frame, so the stack overflows while the hook is still trying
 to draw its first menu line.
+
+<MarginNote kind="narration">Calling the hooked text function from its own replacement never reaches a finished menu line; each attempt creates another unfinished call on the stack.</MarginNote>
 
 Hook a site that runs **once per frame** instead, and call the text function
 from there as an ordinary function:
@@ -230,6 +240,8 @@ list in a fraction of a second.
 
 What a menu needs is the *edge* — the frame where the key changed from up to
 down — which means remembering the previous frame:
+
+<MarginNote kind="brief">A menu advances on a press transition, rather than on every frame in which the key remains down.</MarginNote>
 
 ```rust
 let pressed = current.down && !previous.down;

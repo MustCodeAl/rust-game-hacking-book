@@ -11,6 +11,7 @@ sidebar:
 ---
 import { Steps } from '../../../../components/kit';
 import Scene from '../../../../components/Scene.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## “Copy these files” is not an uninstall plan
 
@@ -67,6 +68,8 @@ enum ChangeStatus {
 
 The distinction between `Create` and `Replace` prevents an uninstaller from deleting a file that existed before the mod.
 
+<MarginNote kind="brief">Creating a file and replacing one need different undo actions; an uninstaller must know which operation it performed.</MarginNote>
+
 ## Verify before replacement
 
 An install plan may be correct when created and stale five minutes later
@@ -86,9 +89,13 @@ fn may_replace(current: [u8; 32], expected: [u8; 32]) -> anyhow::Result<()> {
 
 This is an optimistic concurrency check. If the player updates the game or installs another mod between planning and installation, stop instead of overwriting an unexpected file.
 
+<MarginNote kind="narration">Another mod can change a file after planning. Rechecking its hash prevents your old plan from overwriting that newer work.</MarginNote>
+
 ## Write status durably
 
 An installer can crash after making a backup but before copying the replacement. The installer's manifest stores the transaction in recoverable stages:
+
+<MarginNote kind="alternative">The manifest is a recovery journal: each completed stage tells a restarted installer what already happened and which step can safely follow.</MarginNote>
 
 ```text
 Planned -> BackedUp -> Installed

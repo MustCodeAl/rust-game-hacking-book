@@ -9,9 +9,11 @@ sidebar:
   order: 7
   label: "11.7 Virtual Address Spaces and Page Protections"
 ---
+import Frame from '../../../../components/kit/Frame.astro';
 import { Accordion, Badge, Fields, GitHub, ResponseField, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## Memory is managed in pages
 
@@ -21,6 +23,10 @@ process has a changing map of pages, and each page has its own state and
 protection. We need both checks before interpreting a scanner failure.
 
 A process sees memory as a huge range of numbered virtual addresses. Windows does not manage that range one byte at a time. It groups adjacent addresses into fixed-size **pages**, commonly 4 KiB on x86 and x86-64 systems.
+
+<Frame caption="A handle does not make every page readable">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/page-read-checks.svg`} width="480" height="206" alt="Memory inspection checks process rights, page commitment and protection, and the actual returned byte count." loading="lazy" decoding="async" />
+</Frame>
 
 Pages that share the same state and protection are reported together as a **region**. A 200 KiB read-only region is therefore a run of many pages with matching rules, not one enormous hardware page.
 
@@ -38,6 +44,8 @@ Windows and the CPU use page tables to translate the virtual page into a
 physical frame when the page is present.
 
 For any page size, an address can be split into two pieces:
+
+<MarginNote kind="alternative">Split an address like a book reference: the virtual page selects the mapped page, and the offset picks a byte within it.</MarginNote>
 
 ```rust
 fn split_address(address: usize, page_size: usize) -> Option<(usize, usize)> {
@@ -76,6 +84,8 @@ in the game or scanner.
 ## State, type, and protection answer different questions
 
 Windows describes a region using three groups of facts — and they are independent axes, not a hierarchy:
+
+<MarginNote kind="brief">Region state, mapping type, and access protection describe different facts; check all relevant fields before reading.</MarginNote>
 
 ```mermaid
 flowchart TD
@@ -363,6 +373,8 @@ capture file has no running Windows process to translate addresses for it.
 ## Why a scanner skips some pages
 
 The memory scanner visits only committed, readable, non-guarded regions. That avoids predictable failures and reduces wasted work. A later `ReadProcessMemory` can still fail because the process continues running and page state can change between the query and read.
+
+<MarginNote kind="narration">A page can become unreadable between the map query and the read. A scanner needs to handle that ordinary race even after careful filtering.</MarginNote>
 
 This is another time-of-check/time-of-use race. A robust scanner treats a failed region read as a normal event, reports useful context, and continues when safe.
 

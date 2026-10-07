@@ -9,6 +9,8 @@ sidebar:
   order: 7
   label: "8.7 Shared Memory Between Processes"
 ---
+import MarginNote from '../../../../components/kit/MarginNote.astro';
+import Frame from '../../../../components/kit/Frame.astro';
 import { Accordion, Badge, GitHub, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -18,6 +20,10 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 The proxy copied messages between sockets. A supported game add-on and a separate visualizer could instead agree on a local shared byte region. The message still needs a layout and a lifetime; only the transport changes.
 
 Two running programs can both use the address `0x00400000`, yet those numbers can refer to completely different physical storage. Each process has its own virtual address space.
+
+<Frame caption="Readers and writers need the same exclusion">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/shared-record-lock.svg`} width="480" height="206" alt="A shared mutex excludes a reader while the writer updates multiple fields; both sides take it." loading="lazy" decoding="async" />
+</Frame>
 
 That separation is a safety feature. A map helper should not need to patch a game process merely to receive a supported event from a mod. Windows provides **interprocess communication**, or IPC, for programs that intentionally cooperate.
 
@@ -59,6 +65,8 @@ These terms describe different resources:
 
 Closing the handle and unmapping the view are separate cleanup operations. The lab uses `OwnedHandle` for the first and a small `MappedView` type with `Drop` for the second.
 
+
+<MarginNote kind="brief">The handle names the shared mapping; the view is the address where this process can access its bytes.</MarginNote>
 ## Paging-file-backed means no ordinary file is required
 
 `CreateFileMappingW` normally accepts a file handle. Passing `INVALID_HANDLE_VALUE` asks Windows for storage backed by the system paging file instead. We must provide a nonzero maximum size—in this lab, 4096 bytes.
@@ -75,6 +83,8 @@ Memory has no built-in `String` type. Both programs must agree on a layout:
 />
 
 The four-byte length makes embedded zero bytes unambiguous and lets the reader reject impossible sizes before creating a string slice.
+
+<MarginNote kind="alternative">Sharing storage is like sharing a notebook: agree on the page layout and on when a complete entry may be read.</MarginNote>
 
 This is the beginning of **serialization**: turning structured information into an agreed byte representation.
 
@@ -355,6 +365,8 @@ cargo run --release --target i686-pc-windows-msvc `
 
 Return to window one and press Enter. The mapping object disappears after the last handle closes, so another reader should then receive a clear “open the writer first” error.
 
+
+<MarginNote kind="narration">Both the reader and writer must take the same mutex; signalling an event does not exclude a partial read.</MarginNote>
 ## Where shared memory fits
 
 A Wesnoth add-on or game build could publish a tiny turn/event record. A separate visualizer could read it. The producer defines the shared-memory contract, so both sides agree on its layout and lifetime.

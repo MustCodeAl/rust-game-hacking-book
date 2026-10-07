@@ -9,7 +9,9 @@ sidebar:
   order: 2
   label: "14.2 Guest Execution and Address Translation"
 ---
+import Frame from '../../../../components/kit/Frame.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 [Lesson 14.1](/pages/14/03/) described what a hypervisor does: it runs a
 guest's instructions natively, takes control back through VM exits, and
@@ -55,6 +57,8 @@ own page tables turn a guest virtual address into a guest physical address,
 and the hypervisor's tables turn that into a host physical address, the real
 location in RAM. Here is one address going through both:
 
+<MarginNote kind="brief">Translate guest virtual to guest physical, then guest physical to host physical; keep the owner of each map explicit.</MarginNote>
+
 ```mermaid
 flowchart LR
     GVA["guest virtual<br/>0x0040_3A2C"] -->|"stage 1, the guest's tables<br/>page 0x403 to frame 0x1F7"| GPA["guest physical<br/>0x001F_7A2C"]
@@ -78,6 +82,10 @@ The offset is `0xA2C` = 10 × 256 + 2 × 16 + 12 = 2,560 + 32 + 12 = 2,604,
 safely less than 4,096. The page number is `0x403` = 4 × 256 + 3 = 1,027. As a
 check, page 1,027 starts at byte 1,027 × 4,096 = 4,206,592, and 4,206,592 +
 2,604 = 4,209,196, which is `0x0040_3A2C` written in decimal.
+
+<Frame caption="A guest address is translated twice">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/two-stage-address.svg`} width="480" height="206" alt="Guest page tables translate guest virtual to guest physical addresses, then EPT or NPT translates to host physical memory." loading="lazy" decoding="async" />
+</Frame>
 
 **Stage 1.** The guest kernel's page tables map guest virtual page `0x403` to
 guest physical frame `0x1F7`. A **frame** is a page-sized block of physical
@@ -121,10 +129,14 @@ physical address that comes out needs one more four-level stage-2 walk:
 20 + 4 = 24 memory reads to translate one address, where a machine without
 virtualization needs 4.
 
+<MarginNote kind="narration">The guest’s page-table entries themselves sit in guest physical memory, so reading those entries also requires second-stage translation.</MarginNote>
+
 The processor avoids paying that on every access with its **translation
 lookaside buffer** (TLB), a small cache of recent translations. The TLB keeps
 the final guest-virtual-to-host-physical answer, so a program that touches the
 same pages again, as programs mostly do, pays for the walk once.
+
+<MarginNote kind="alternative">The TLB is a notebook of recent final translations, avoiding a fresh walk through every table whenever the same page is used again.</MarginNote>
 
 ## How a program can tell it is in a virtual machine
 

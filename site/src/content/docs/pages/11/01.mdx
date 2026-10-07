@@ -9,9 +9,11 @@ sidebar:
   order: 1
   label: "12.1 DLL Identity and Search Order"
 ---
+import Frame from '../../../../components/kit/Frame.astro';
 import { Accordion, Badge, GitHub } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 The previous chapter treated the game as a running process. A process dump or
 module snapshot can list its DLLs, but a familiar DLL name alone does not prove
@@ -25,11 +27,19 @@ is the same: what did the tool actually observe and trust?
 
 A game may report that it loaded `opengl32.dll`, `zlib1.dll`, or another familiar name. The name alone does not say which file supplied the bytes. The full path, file hash, signer, architecture, and loaded range provide stronger identity.
 
+<MarginNote kind="brief">A DLL name is a clue; path, build, hash, architecture, and loaded range make the observation specific.</MarginNote>
+
 That matters for debugging as well as defense. Loading the wrong version of a legitimate DLL can cause missing exports, crashes, changed structure layouts, or code patterns that no longer match the ones this course uses.
 
+
+<Frame caption="A familiar basename is only the first clue">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/dll-identity.svg`} width="480" height="206" alt="The same DLL basename can identify different files; its resolved path and build identity distinguish them." loading="lazy" decoding="async" />
+</Frame>
 ## Imports begin a dependency graph
 
 The PE import table names DLLs and functions the image expects. The Windows loader must locate suitable DLL files, map them, resolve imported function addresses, and repeat the process for those DLLs' dependencies.
+
+<MarginNote kind="alternative">Module loading grows a dependency tree: each imported library can bring its own imports, so the final loaded set is larger than one executable’s list.</MarginNote>
 
 ```text
 game.exe
@@ -244,6 +254,8 @@ The module list is a moment-in-time view. A DLL may load or unload immediately a
 
 A DLL that loads and unloads between two snapshots appears in neither list, even
 though its code ran inside the game:
+
+<MarginNote kind="narration">Two clean snapshots can miss a DLL that ran and unloaded between them. Snapshot absence is therefore weaker than a complete history of loads.</MarginNote>
 
 ```mermaid
 sequenceDiagram

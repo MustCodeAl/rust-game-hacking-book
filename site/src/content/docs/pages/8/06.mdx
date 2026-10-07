@@ -9,8 +9,10 @@ sidebar:
   order: 7
   label: "6.7 Windows Input: Polling, Events, and Messages"
 ---
+import Frame from '../../../../components/kit/Frame.astro';
 import { Expandable, Fields, Panel, ParamField, Steps } from '../../../../components/kit';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## “Send a key” can mean three different things
 
@@ -52,7 +54,13 @@ debugging. ⌨️
 
 `GetAsyncKeyState` answers a state question: “is this key down at the instant I sample it?” `SendInput` submits input events to the desktop input pipeline. `SendMessageW` invokes a window-procedure message contract. Similar names do not put them on the same path.
 
+<MarginNote kind="brief">Choose input APIs by what the receiver consumes: sampled state, desktop input events, and window messages describe different things.</MarginNote>
+
 A game may combine several paths: Raw Input for aiming, ordinary window messages for menus, and polled key state for a developer console. Observe how the target consumes input before choosing an API. Sending `WM_KEYDOWN` to a window that reads device state is not a failed keyboard event; it is the wrong abstraction.
+
+<Frame caption="A held key is different from a fresh press">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/input-edge.svg`} width="480" height="206" alt="Comparing previous and current key state distinguishes a fresh press from a held key." loading="lazy" decoding="async" />
+</Frame>
 
 Always pair a down transition with an up transition, including cancellation and error paths. A state machine should own which synthetic inputs are currently held so shutdown can release exactly those inputs.
 
@@ -221,6 +229,8 @@ Do **not** use `result & 1 != 0` as a reliable “pressed once” event. Microso
 keeps that low bit for old compatibility, but another process can observe it
 first. Build your own edge detector from the trustworthy high bit:
 
+<MarginNote kind="alternative">An edge detector keeps two photographs of a button: the transition appears only when the newer photograph is down and the older one is up.</MarginNote>
+
 ```rust
 #[derive(Default)]
 struct KeyEdge {
@@ -256,6 +266,8 @@ Sampling can miss a very short press between polls. That is a property of pollin
 
 `SendInput` writes to the system input stream. It does not accept an `HWND`, so
 check that the target owns the foreground window before sending:
+
+<MarginNote kind="narration">A desktop-wide synthetic key can reach whichever application has focus. Rechecking the intended foreground window prevents an unrelated app from receiving the request.</MarginNote>
 
 ```rust
 use windows::Win32::{

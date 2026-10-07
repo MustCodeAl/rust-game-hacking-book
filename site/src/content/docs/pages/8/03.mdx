@@ -12,6 +12,7 @@ sidebar:
 import { Frame, GitHub, SpeedType, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## Typed code manages the machine-code boundary
 
@@ -62,6 +63,8 @@ them. A `PatchPlan` is only that description: constructing or validating it
 cannot modify the game. Equal lengths also mean the planned overwrite cannot
 silently spill beyond the verified instruction span:
 
+<MarginNote kind="alternative">A patch plan is a work order, not the work itself: it describes the exact starting bytes and replacement before touching memory.</MarginNote>
+
 ```rust
 #[derive(Debug)]
 struct PatchPlan {
@@ -82,6 +85,10 @@ impl PatchPlan {
     }
 }
 ```
+
+<Frame caption="Restoration needs the bytes that were replaced">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/patch-lifecycle.svg`} width="480" height="206" alt="A reversible patch records verified original bytes, installs temporary bytes, and restores the original after execution drains." loading="lazy" decoding="async" />
+</Frame>
 
 The planner performs no raw memory access. A disassembler should determine the whole-instruction span; never choose it by counting five arbitrary bytes.
 
@@ -209,6 +216,8 @@ impl Drop for AppliedPatch<'_> {
 
 `Drop` is a final safety net, not the only cleanup path. Call `restore` explicitly and report failures while the program can still react.
 
+<MarginNote kind="narration">A cleanup error can otherwise disappear during destruction. Explicit restoration gives the tool a chance to report which code remains changed.</MarginNote>
+
 ## Calculate jumps carefully
 
 A 5-byte relative jump stores a signed 32-bit displacement measured from the end of the jump:
@@ -267,6 +276,8 @@ Before any live patch, test:
 After every restoration test, read the hook span again and compare it with the
 captured original bytes. “The feature looks disabled” does not show that the
 machine code returned to its starting state; comparing the bytes does.
+
+<MarginNote kind="brief">Verify restoration by reading the original instruction span again; a disabled-looking feature is not enough evidence.</MarginNote>
 
 The first end-to-end target should be a tiny program with one known function.
 

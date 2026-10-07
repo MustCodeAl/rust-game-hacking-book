@@ -11,11 +11,14 @@ sidebar:
 ---
 import { GitHub } from '../../../../components/kit';
 import Scene from '../../../../components/Scene.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 
 ## External versus in-process
 
 An external tool uses Windows to cross a process boundary. An in-process library is loaded into the target and shares its virtual address space.
+
+<MarginNote kind="brief">Sharing the game’s address space removes a copying boundary, but object lifetimes and valid function signatures still matter.</MarginNote>
 
 The previous lesson reconstructed a DLL function's contract: how arguments
 arrive, what the result means, and who owns pointed-to data. The preceding
@@ -150,6 +153,8 @@ pub extern "system" fn gha_start(_argument: *mut std::ffi::c_void) -> u32 {
 
 This separates loading from initialization and prevents accidental double-starts.
 
+<MarginNote kind="alternative">Separate opening the workshop from starting its machinery: loading makes the DLL available, while the explicit start function begins its work.</MarginNote>
+
 ## Read known in-process data
 
 Wrap a verified field rather than exposing raw pointers everywhere:
@@ -279,6 +284,8 @@ At startup:
 ## Unloading is a protocol
 
 Background threads must stop before the DLL unloads. Use an atomic stop flag or a channel, wait for workers to exit from outside `DllMain`, restore patches, and then unload.
+
+<MarginNote kind="narration">If a worker returns into DLL code after that DLL unloads, even a correctly calculated feature can crash the host.</MarginNote>
 
 The important lesson is architectural: loading, running, stopping, and unloading are separate states. Model them deliberately instead of relying on global booleans and timing luck.
 

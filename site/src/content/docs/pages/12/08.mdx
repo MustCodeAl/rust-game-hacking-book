@@ -9,7 +9,9 @@ sidebar:
   order: 9
   label: "10.9 Values, Tables, Strings, and Garbage Collection"
 ---
+import Frame from '../../../../components/kit/Frame.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## Dynamic values still need a representation
 
@@ -59,6 +61,8 @@ When the host converts a `Vec` to Lua, it writes keys `1`, `2`, and `3`. When it
 ## Strings need ownership too
 
 Repeated source names and table keys can create many duplicate strings. An interpreter may **intern** strings: store one canonical copy and let values carry a small ID or shared reference.
+
+<MarginNote kind="alternative">Interning is a shared dictionary: repeated strings use the same entry ID instead of each keeping another identical copy.</MarginNote>
 
 ```mermaid
 flowchart LR
@@ -127,7 +131,15 @@ The cycle between the two unreachable tables keeps both reference counts above
 zero, but neither table can be reached from a root. A tracing collector can tell
 the difference because it asks about reachability, not just owner counts.
 
+<Frame caption="Reachability matters more than a reference cycle">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/reachable-objects.svg`} width="480" height="206" alt="A tracing collector follows references from roots and reclaims unreachable objects, including unreachable cycles." loading="lazy" decoding="async" />
+</Frame>
+
+<MarginNote kind="brief">A tracing collector asks whether roots can reach an object; positive reference counts alone cannot show that a cycle is still useful.</MarginNote>
+
 A host API that retains a Lua table may accidentally keep a large graph alive. Resource limits should measure actual interpreter memory, not merely the size of the source file.
+
+<MarginNote kind="narration">Holding one Lua table in the host can keep everything reachable from it alive. Small source files can still retain large object graphs.</MarginNote>
 
 ## Tables are capability containers
 

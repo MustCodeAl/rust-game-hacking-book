@@ -12,6 +12,7 @@ sidebar:
 import { Frame, GitHub, Panel } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## A wrapper records and forwards draw calls
 
@@ -36,6 +37,10 @@ The pinned Urban Terror implementation later in this lesson instead detours
 an instruction **inside** `glDrawElements`, so it has a narrower restoration
 opportunity. Keep that difference visible when comparing the two designs.
 
+
+<Frame caption="An observing wrapper preserves the draw">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/draw-forwarding.svg`} width="480" height="206" alt="A wrapper records an index count of nine and forwards the same arguments to the real OpenGL function." loading="lazy" decoding="async" />
+</Frame>
 ## What an indexed draw actually requests
 
 `glDrawElements(mode, count, element_type, indices)` asks OpenGL to consume an
@@ -52,6 +57,8 @@ The call does not directly identify a model. OpenGL combines those indices with
 the currently bound vertex attributes, textures, transforms, and other state. One
 character may require several draws—body, head, weapon, shadow—and one draw may
 contain many instances or a batch of unrelated objects.
+
+<MarginNote kind="brief">A draw request identifies submitted geometry and bound state, not one complete game object.</MarginNote>
 
 With `GL_TRIANGLES`, every complete group of three indices describes one submitted
 triangle. The indices may repeat vertices, and some triangles may be degenerate,
@@ -95,6 +102,8 @@ larger performance change than its own instruction count suggests.
 ## A hook sits on the program's critical path
 
 The render thread has a deadline: finish enough work for the next frame. A hook adds work to a path that may execute thousands of times per second. Even memory-safe code can cause stutter if it allocates, waits for a lock, formats strings, or writes files there.
+
+<MarginNote kind="narration">A tiny delay repeated for thousands of draws can consume the frame budget. Move formatting and disk writes away from the render thread.</MarginNote>
 
 Split the design into two rates:
 
@@ -153,6 +162,8 @@ The wrapper needs a way to reach the real OpenGL function after it has
 intercepted a call. Store the resolved function pointer once during setup;
 every draw can then forward through that saved pointer without another
 lookup on the render thread:
+
+<MarginNote kind="alternative">A forwarding wrapper is a receptionist with the original extension saved: recording the request must not route it back through the receptionist indefinitely.</MarginNote>
 
 ```rust
 use std::sync::OnceLock;

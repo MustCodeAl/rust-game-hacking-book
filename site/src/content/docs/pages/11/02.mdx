@@ -11,6 +11,7 @@ sidebar:
 ---
 import { GitHub, Steps, CodeGroup, Tab } from '../../../../components/kit';
 import Scene from '../../../../components/Scene.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## Loading a DLL is a coordinated operation
 
@@ -23,6 +24,8 @@ That creates a special rule: Windows calls `DllMain` while the loader lock is he
 ## Initialization is a dependency-order problem
 
 Each initialization step depends on other services already being ready. Import resolution depends on module loading; logging may depend on files, locks, or other DLLs; a hook may depend on the target module and worker state. `DllMain` runs inside the mechanism that is still satisfying some of those dependencies.
+
+<MarginNote kind="alternative">Initialization is a dependency ladder: logging, workers, and hooks belong on steps whose supporting services are already ready.</MarginNote>
 
 Draw the order before writing startup code:
 
@@ -132,6 +135,8 @@ It does not start the game lab, read memory, scan modules, or wait.
 
 The DLL exports a separate function named `gha_start`. The injector waits for its `LoadLibraryW` thread to finish first. Only then does it call `gha_start`, after the initial loader work has returned.
 
+<MarginNote kind="brief">Begin the DLL’s real work only after loading returns, using an explicit entry point with its own result.</MarginNote>
+
 ```mermaid
 sequenceDiagram
     participant I as Injector
@@ -194,6 +199,8 @@ pub extern "system" fn gha_stop(_argument: *mut c_void) -> u32 {
 ```
 
 The worker notices the flag, leaves its loop, releases any pressed input, and drops owned patches so their original bytes are restored. A loader callback should not wait for that worker while holding the loader lock.
+
+<MarginNote kind="narration">A stop flag can be set quickly, but waiting for the worker inside a loader callback can trap both sides behind the loader lock.</MarginNote>
 
 ## Why creating a thread in `DllMain` is still the wrong design here
 

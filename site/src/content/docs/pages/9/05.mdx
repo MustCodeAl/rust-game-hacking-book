@@ -9,8 +9,10 @@ sidebar:
   order: 6
   label: "9.6 Mod Archives and Safe Extraction"
 ---
+import Frame from '../../../../components/kit/Frame.astro';
 import { Steps, SpeedType } from '../../../../components/kit';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## An archive contains names, not trusted paths
 
@@ -50,6 +52,10 @@ The escape happens later, when the operating system resolves each `..` while
 opening the file. Absolute entry names are worse still: joining an absolute
 path onto a base discards the base completely, so the result is simply whatever
 path the archive asked for.
+
+<Frame caption="Decide the destination before writing">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/archive-containment.svg`} width="480" height="206" alt="An installer checks the path and proves the final destination stays inside its mod directory before extracting bytes." loading="lazy" decoding="async" />
+</Frame>
 
 Resolving the joined path one component at a time shows where it leaves the
 folder:
@@ -163,6 +169,8 @@ declared size is checked before copying and compared with the actual byte
 count afterward. The total cap and entry-count cap address different problems:
 many individually small entries can still exhaust disk space or time.
 
+<MarginNote kind="narration">A reader capped at the exact limit can hide excess bytes. Reading one extra byte lets the installer reject oversize output instead of accepting truncation.</MarginNote>
+
 This stage function demonstrates bounded extraction, not the whole mod
 installer. Before moving its files into the game, resolve case-insensitive
 collisions on the target filesystem, validate asset formats and the manifest,
@@ -184,6 +192,8 @@ Before extraction, set policy for:
 An archive with 50,000 tiny files can cause trouble even if every path is enclosed. Limits are part of parsing.
 
 Apply limits before and during extraction. Declared compressed and uncompressed sizes are claims from the archive; count the bytes actually written and maintain a checked running total. Stop with an error if either the declaration or the real output crosses policy.
+
+<MarginNote kind="brief">Check actual output sizes as well as declared sizes, and bound the archive’s total work before installation.</MarginNote>
 
 ```mermaid
 flowchart TD
@@ -207,6 +217,8 @@ more is caught by the count, not by the declaration.
 ## Stage, inspect, then install
 
 Do not unpack directly over a working game directory. Use this transaction:
+
+<MarginNote kind="alternative">Staging is an inspection table: unpack and validate there before carrying approved files into the working game directory.</MarginNote>
 
 <Steps>
 

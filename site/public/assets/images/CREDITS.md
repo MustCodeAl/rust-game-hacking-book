@@ -35,3 +35,55 @@ screenshots elsewhere in this directory.
 The animated input illustration starts as a still. Readers choose Play, can
 return to the still, and get no automatic motion. Listening editions retain
 the still picture and speak the surrounding explanation.
+
+## Handoff coverage figures — 7 October 2026
+
+These 45 original geometric figures are dedicated to CC0 1.0. Regenerate with `site/scripts/make-handoff-art.mjs`; descriptions and lesson placement are recorded in `site/src/data/handoff-figures.json`.
+
+| File in `original/` | Teaching purpose |
+|---|---|
+| `evidence-comparison.svg` | Compare one action at a time |
+| `cpu-memory-screen.svg` | An update and a drawing are separate work |
+| `purchase-branch.svg` | A comparison chooses the next operation |
+| `debugger-instant.svg` | A pause connects code with current state |
+| `detour-route.svg` | A detour must reconnect with normal execution |
+| `detour-preservation.svg` | A detour borrows state from its caller |
+| `object-pattern-clues.svg` | Several clues are stronger than one shape |
+| `collection-growth.svg` | A collection can outgrow its allocation |
+| `encoded-value.svg` | Stored bits and their meaning can differ |
+| `engine-snapshot-order.svg` | A system sees the version it was given |
+| `capture-queue.svg` | A short capture separates timing from storage |
+| `npc-decision-gates.svg` | A visible target must pass all three checks |
+| `export-resolution.svg` | A public name leads through an index |
+| `instruction-boundaries.svg` | Instruction lengths decide the next start |
+| `relative-call.svg` | A relative call uses the next address |
+| `patch-lifecycle.svg` | Restoration needs the bytes that were replaced |
+| `input-edge.svg` | A held key is different from a fresh press |
+| `owned-cleanup.svg` | Shutdown follows the dependencies backwards |
+| `draw-forwarding.svg` | An observing wrapper preserves the draw |
+| `bound-draw-state.svg` | Draw arguments are only part of the request |
+| `text-render-context.svg` | Text uses an existing rendering context |
+| `protocol-layers.svg` | Meaning comes after framing and decoding |
+| `shared-record-lock.svg` | Readers and writers need the same exclusion |
+| `pipe-message.svg` | A read can return only part of a message |
+| `archive-containment.svg` | Decide the destination before writing |
+| `authenticated-file.svg` | Encryption and authenticity travel together |
+| `binary-overwrite.svg` | Changing bytes need not move later fields |
+| `lua-table-keys.svg` | A Lua table maps keys to values |
+| `reachable-objects.svg` | Reachability matters more than a reference cycle |
+| `vm-frame-slices.svg` | Call frames partition one value stack |
+| `process-permission.svg` | A PID and a handle answer different questions |
+| `page-read-checks.svg` | A handle does not make every page readable |
+| `object-identity.svg` | An address is not a lifetime guarantee |
+| `dll-identity.svg` | A familiar basename is only the first clue |
+| `optional-api.svg` | Capability detection permits a clear fallback |
+| `capture-evidence.svg` | Successful translation is only one check |
+| `damage-boundary.svg` | Accepted state must stay inside its bounds |
+| `integrity-scope.svg` | A passing check describes only its coverage |
+| `command-boundary.svg` | A disabled button is not a command check |
+| `virtual-machine-views.svg` | A virtual device is backed by host work |
+| `two-stage-address.svg` | A guest address is translated twice |
+| `jtag-shift-register.svg` | Each clock moves one bit through the chain |
+| `detector-observation.svg` | Repeated input is an observation to explain |
+| `client-check-view.svg` | Each observer sees a limited part of a machine |
+| `process-location.svg` | Tool location changes the available observations |

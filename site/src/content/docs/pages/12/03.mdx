@@ -11,6 +11,7 @@ sidebar:
 ---
 import { Badge, Steps } from '../../../../components/kit';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## The host owns the interpreter
 
@@ -123,6 +124,8 @@ The single global `log` works for a first example, but a host with many
 functions needs an obvious boundary. Put those functions under one `game`
 table, so the next script call spells out who supplied the behavior:
 
+<MarginNote kind="alternative">The `game` table is a labelled service counter: grouping callbacks makes it clear which operations come from the host.</MarginNote>
+
 ```rust
 let game = lua.create_table()?;
 game.set("log", lua.create_function(|_, message: String| {
@@ -216,6 +219,8 @@ A clear host follows this order:
 
 Do not let a script run during partial API construction. Do not hold a mutable game-state lock across script execution. Give Lua a copied snapshot and collect requests for later processing.
 
+<MarginNote kind="narration">A script can call back into the host while it runs. Keeping an engine lock across that call can make otherwise valid work wait on itself.</MarginNote>
+
 This is a two-phase boundary. During **planning**, Lua reads an immutable snapshot and returns proposed actions. During **commit**, the host checks that the target, snapshot version, entity IDs, and game rules are still valid before acting. A plan based on an old snapshot is rejected instead of being applied to a different moment.
 
 ## Run all three useful scripts
@@ -234,6 +239,8 @@ cargo run --manifest-path lua-labs/Cargo.toml -- scripts/state_machine.lua
 ```
 
 The host prints accepted actions after the script returns. That delay is deliberate: Lua proposes data, and the host remains the authority that decides what happens.
+
+<MarginNote kind="brief">Lua proposes data; the host checks and applies the proposal after script execution returns successfully.</MarginNote>
 
 ## Why the host still needs validation
 

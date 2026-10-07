@@ -9,6 +9,8 @@ sidebar:
   order: 8
   label: "8.8 Named Pipes and Local Message Framing"
 ---
+import MarginNote from '../../../../components/kit/MarginNote.astro';
+import Frame from '../../../../components/kit/Frame.astro';
 import { Accordion, Badge, GitHub, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -18,6 +20,10 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 Shared memory in Lesson 8.7 gave two programs views of the same bytes, but a concurrent writer needed an additional timing agreement. For one request followed by one reply, a named pipe gives us a connection with an explicit read/write order.
 
 A **named pipe server** creates a known pipe name and waits. A **client** opens that name. After they connect, both sides can exchange bytes through ordinary Windows read and write calls.
+
+<Frame caption="A read can return only part of a message">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/pipe-message.svg`} width="480" height="206" alt="A framed named-pipe message accumulates its length and payload before parsing, even when reads return fragments." loading="lazy" decoding="async" />
+</Frame>
 
 This resembles a tiny network service, but the lab keeps both programs on the same Windows machine:
 
@@ -53,6 +59,8 @@ message kinds, payload encoding, and which requests to reject.
 
 Windows pipes can operate in **byte mode** or **message mode**.
 
+<MarginNote kind="brief">Message mode remembers write boundaries, but a small read buffer can still return only part of one message.</MarginNote>
+
 - Byte mode is a stream. One read can receive part of a write or data from several writes.
 - Message mode preserves message boundaries. A read receives one message, provided the buffer is large enough.
 
@@ -68,6 +76,8 @@ It still adds a four-byte length header. Why use both? Message mode keeps transp
 ## Treat IPC data like untrusted input
 
 “Local” does not mean “automatically trustworthy.” Another program in the same account or session might know or guess the pipe name.
+
+<MarginNote kind="alternative">A local sender is another program. Validate its lengths and contents just as you would a network sender.</MarginNote>
 
 The receiver checks all of these facts before making a `String`:
 
@@ -346,6 +356,8 @@ fn main() {
 ## Understand the connection race
 
 A client can open the pipe after `CreateNamedPipeW` creates it but just before the server calls `ConnectNamedPipe`. Windows then returns `ERROR_PIPE_CONNECTED`. That does not mean the connection failed—it means the client already won the race.
+
+<MarginNote kind="narration">A client can connect before the server starts waiting; that successful connection must not be mistaken for a failed session.</MarginNote>
 
 The match arm accepts only that documented condition and returns every other error:
 

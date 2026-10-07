@@ -9,8 +9,10 @@ sidebar:
   order: 10
   label: "10.10 Call Frames, Closures, and Upvalues"
 ---
+import Frame from '../../../../components/kit/Frame.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import { SpeedType } from '../../../../components/kit';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## A VM call needs bookkeeping
 
@@ -36,6 +38,10 @@ enum ResultCount {
 }
 ```
 
+<Frame caption="Call frames partition one value stack">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/vm-frame-slices.svg`} width="480" height="206" alt="Each VM call frame identifies a local range in a value stack and stores information needed to return to its caller." loading="lazy" decoding="async" />
+</Frame>
+
 <MemoryStrip
   column
   cells="index 0=caller's local 0|index 1=caller's local 1|base 2 →=callee's local 0|index 3=callee's local 1 (top)"
@@ -45,6 +51,8 @@ enum ResultCount {
 />
 
 `base` says where this function’s local area begins. Bytecode operands can refer to `base + local_index` rather than carrying raw pointers into the vector.
+
+<MarginNote kind="alternative">A frame’s base is its starting shelf position: local index zero means that frame’s first slot, not the first slot of the entire VM stack.</MarginNote>
 
 Lua allows multiple return values, so a caller may request an exact number or accept all produced results. Missing results become `nil`; unwanted extras can be discarded.
 
@@ -82,6 +90,8 @@ enum UpvalueLocation {
 ```
 
 Several closures may capture the same local, so they must share one upvalue cell. If each closure copies the number independently, updates will disagree and the Lua behavior will be wrong.
+
+<MarginNote kind="brief">Closures that capture the same local need one shared upvalue cell, so changes remain visible through every captured reference.</MarginNote>
 
 Follow `make_counter` through with slot numbers and it stops being abstract.
 Say its frame gets `base = 3`, so its single local `count` lives in stack slot
@@ -141,6 +151,8 @@ When `mlua` registers `game.log`, it builds a callable Lua value backed by a hos
 6. avoid letting a panic cross the language boundary.
 
 The callback should be short and bounded. A Lua instruction budget cannot interrupt arbitrary blocking work performed inside native host code.
+
+<MarginNote kind="narration">Counting Lua instructions does not bound a native callback stuck waiting for disk or a lock. Host callbacks need their own bounded behavior.</MarginNote>
 
 The Lua C API makes this boundary concrete with an indexed value stack. A
 native callback reads arguments from stack slots, validates them, pushes

@@ -9,7 +9,9 @@ sidebar:
   order: 9
   label: "6.9 Tool Architecture, Commands, and Cleanup"
 ---
+import Frame from '../../../../components/kit/Frame.astro';
 import SortBoard from '../../../../components/SortBoard.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 Several small labs can work on their own and still fail when combined.
 The input thread changes settings while a worker is reading them. Two features
@@ -35,6 +37,10 @@ Five prototypes can each work alone and still fail when combined. Common causes 
 Adding conditions to each feature does not settle who owns shared resources.
 An explicit architecture does: it names the stages, the data crossing between
 them, and the component responsible for cleanup.
+
+<Frame caption="Shutdown follows the dependencies backwards">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/owned-cleanup.svg`} width="480" height="206" alt="Shutdown stops admission, waits for users of a component, then restores state and releases it." loading="lazy" decoding="async" />
+</Frame>
 
 
 ## Give each module one game-hacking job
@@ -131,6 +137,8 @@ Three booleans named `show_health`, `show_gold`, and `show_both` could all
 become true after several clicks. Yet the display should select one mode.
 Store that choice as an enum alongside independent switches:
 
+<MarginNote kind="alternative">A display enum is like a radio-button group: exactly one mode is selected. Independent features behave like separate checkboxes.</MarginNote>
+
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum DisplayMode {
@@ -158,6 +166,8 @@ asking every handler to repair impossible combinations.
 A key press should request a change, not let the input thread reach into a
 feature while the worker is using it. The input side sends a small command;
 the worker applies it to its own settings:
+
+<MarginNote kind="brief">Let one worker change settings from queued commands, so input handlers cannot alter a feature halfway through its update.</MarginNote>
 
 ```rust
 enum Command {
@@ -260,6 +270,8 @@ new commands first, request worker shutdown, and wait for those workers to
 finish before restoring their patches and releasing handles. A restoration
 failure must remain visible; a vanished window is not proof that cleanup
 completed.
+
+<MarginNote kind="narration">The window may disappear before a worker exits. Waiting for that worker keeps its final operations from reaching already-released code or handles.</MarginNote>
 
 ## Keep version facts outside feature logic
 

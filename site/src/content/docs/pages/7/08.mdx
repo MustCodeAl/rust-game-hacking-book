@@ -9,10 +9,12 @@ sidebar:
   order: 8
   label: "5.8 Call Tracing and Bounded Logs"
 ---
+import Frame from '../../../../components/kit/Frame.astro';
 import { Badge, GitHub, Panel, Steps } from '../../../../components/kit';
 import LessonVideo from '../../../../components/LessonVideo.astro';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## Define the question
 
@@ -28,6 +30,8 @@ Choose:
 
 This scope is not just a performance setting. It gives the log a meaning. “These calls happened while one turn ended inside this verified module range” is a result you can reproduce. “The process called thousands of things” is mostly noise.
 
+<MarginNote kind="brief">A useful trace answers one bounded question; collecting everything can bury the behavior you wanted to understand.</MarginNote>
+
 ## What a `call` instruction really does
 
 A function call has two jobs:
@@ -36,6 +40,10 @@ A function call has two jobs:
 2. move the instruction pointer to the called function.
 
 On 32-bit x86, a common direct call begins with opcode `E8` followed by a signed 32-bit relative displacement. The CPU adds that displacement to the address immediately after the call. A disassembler performs this calculation and exposes the final target.
+
+<Frame caption="A relative call uses the next address">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/relative-call.svg`} width="480" height="206" alt="A five-byte call at hexadecimal 1000 adds displacement 20 to next address 1005 to reach target 1025." loading="lazy" decoding="async" />
+</Frame>
 
 <MemoryStrip
   cells="0x00401000=E8|0x00401001=4B|0x00401002=00|0x00401003=00|0x00401004=00"
@@ -129,6 +137,8 @@ A software breakpoint changes the first byte of an instruction to `0xCC`, the on
 
 One breakpoint hit is not enough. If the debugger immediately writes `0xCC` back at the same address and continues, the thread hits it forever. The logger temporarily restores the call and single-steps exactly one instruction:
 
+<MarginNote kind="alternative">Treat restore and re-arm as two separate stops: the original call needs a brief clear path before the breakpoint can watch it again.</MarginNote>
+
 ```mermaid
 stateDiagram-v2
     [*] --> Armed: call byte is 0xCC
@@ -193,6 +203,8 @@ fn logger_channel() -> (SyncSender<CallEvent>, mpsc::Receiver<CallEvent>) {
 ```
 
 The debugger thread uses `try_send`. If the writer is behind, increment a dropped-event counter rather than blocking the debug loop.
+
+<MarginNote kind="narration">When the writer falls behind, a visible dropped-event count tells you the log has gaps instead of making the paused game wait for disk.</MarginNote>
 
 A bounded channel creates **backpressure**: it gives the producer a fixed amount of space instead of allowing logs to consume memory forever. `try_send` makes the policy explicit. Losing a counted event is better than holding every target thread suspended while a disk writer catches up.
 

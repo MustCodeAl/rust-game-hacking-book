@@ -9,6 +9,7 @@ sidebar:
   order: 11
   label: "11.11 System Calls and Privilege Checks"
 ---
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Scene from '../../../../components/Scene.astro';
 
@@ -113,6 +114,8 @@ x64 calling convention passes a function's first argument in `rcx`, but
 `syscall` overwrites `rcx` with the return address, so the stub moves the
 argument to `r10` first, and the kernel knows to look for it there.
 
+<MarginNote kind="narration">The system-call instruction overwrites `rcx`, so the stub preserves the first argument in `r10`. Missing that move would change what the kernel receives.</MarginNote>
+
 The number in `eax` is a **system service number**, an index into the kernel's
 table of routines. The numbers are internal to Windows and change between
 builds, which is why this book never copies one into a program. In a debugger
@@ -171,10 +174,14 @@ the handle's rights and the rights it needs, and allows the operation only if
 every needed bit survived. `0x1010` AND `0x0010` = `0x0010`, the whole
 requirement, so the read is allowed.
 
+<MarginNote kind="alternative">An access mask is a stencil: retain the requested bits that were granted, then confirm every required bit survived.</MarginNote>
+
 `WriteProcessMemory` needs `PROCESS_VM_WRITE`, `0x0020`. That is 2 × 16 = 32 =
 2⁵, bit 5, and bit 5 of `0x1010` is 0, so `0x1010` AND `0x0020` = 0: denied,
 whatever the tool's author intended. The rights were fixed when the handle was
 created, and nothing done with the handle afterward can add to them.
+
+<MarginNote kind="brief">An existing handle keeps its granted rights; a later operation cannot add permissions by asking more forcefully.</MarginNote>
 
 **Only then does it copy.** The source address belongs to the game's address
 space and the destination buffer belongs to the tool's. The kernel must

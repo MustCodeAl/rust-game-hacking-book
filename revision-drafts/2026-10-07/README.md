@@ -5,7 +5,7 @@ The owner requested finish after the urgent repair; both agents then hit the
 account usage limit. Preserve the drafts rather than reporting unverified
 features as completed.
 
-Read HANDOFF_PLAN.md and T35–T38 in BOOK_REVISION_PROGRESS.md first. Source is
+Read HANDOFF_PLAN.md and T35–T40 in BOOK_REVISION_PROGRESS.md first. Source is
 `codex/book-revision`; publish only through the repository script. No existing
 lesson ID has been moved, and restructuring still needs the owner's approval.
 
@@ -37,19 +37,8 @@ lesson ID has been moved, and restructuring still needs the owner's approval.
   still need quiz pools, code compilation, trace-model verification,
   registration, first-use links and the full integration checks. Do not
   copy them into active content and publish without those steps.
-- `reader-sync/site/`: unfinished extraction of margin-note layout shared
-  by Notes and authored notes; global comment styling for pages without
-  authored notes; DOM-ready bubble rendering; legacy-compatible IDs and
-  deletion tombstones for account merge. **T38 now implements shared styling
-  and DOM-ready bubble rendering in active source; preserve those fixes.**
-  Shared layout extraction and account sync remain draft-only. Review all files as a unit, preserve
-  T36's pointer-events/restore stacking repair, inspect any package change,
-  and run actual Notes add/delete/hide/reload tests on an author-note-free
-  lesson with stalled external requests. The agent did not deliver a final
-  patch or verification receipt before its usage limit. **No tests are
-  claimed passed for this draft.**
+- `reader-sync/site/`: historical draft, superseded by active T39. Shared author/reader layout, global styling, DOM-ready comments, stable IDs, deletion tombstones and client account merge are integrated and checked. Preserve the active T36–T39 pointer/restore repairs; **do not copy this old draft over them**. T39 records the mock transport and actual browser checks. A real external provider is still unconfigured, and client merging is not server-atomic.
 
-Still open: broader wording audit beyond the four batches, remaining theme
-and widget polish, margin-note/artwork coverage, reader account sync,
+Still open: broader wording audit beyond the four batches, remaining widget coverage and scene/probability polish,
 cross-browser/accessibility checks, and the owner-approved chapter map plus
 redirect/key migration. No lab programs should be run during verification.

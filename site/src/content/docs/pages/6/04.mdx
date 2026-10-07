@@ -9,12 +9,15 @@ sidebar:
   order: 4
   label: "8.4 Protocol State Machines and Replay"
 ---
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Scene from '../../../../components/Scene.astro';
 
 ## A packet parser is only the first layer
 
 Parsing one message tells you what its bytes mean. A protocol also defines **when** that message is legal.
+
+<MarginNote kind="brief">Valid bytes can still request a transition that makes no sense in the current session.</MarginNote>
 
 A local Wesnoth test client might move through:
 
@@ -57,6 +60,8 @@ For a five-frame capture of one short session, starting from `Connected`:
 />
 
 Keep the raw log immutable and rebuild the model from it. If a parser or transition rule changes, you can replay the same log and see exactly which frame now produces a different result. Editing the stored “current state” by hand loses that history.
+
+<MarginNote kind="alternative">Think of the log as receipts and the session state as the current balance. Replay rebuilds the balance from those receipts.</MarginNote>
 
 Not every message is an event that happened exactly once. A **snapshot** can repeat a whole state, while an **acknowledgment** refers to an earlier request. A retransmitted request may appear twice. Store direction, sequence identifiers, and timing with each frame; without them, duplicate bytes cannot be told apart from duplicate actions. The real-time section below works through those identifiers in detail.
 
@@ -239,6 +244,8 @@ Useful negative replays include:
 - exceed the maximum accepted text length.
 
 The expected outcome is a precise error at a precise frame, never an out-of-bounds read or an infinite wait. Replaying `Greeting` twice, for example, stops at frame 1 with an `IllegalTransition` error for state `Greeted`, because the state machine has no `Greeting` arrow out of `Greeted`.
+
+<MarginNote kind="narration">A single changed field lets a rejected replay identify one failed assumption instead of several competing explanations.</MarginNote>
 
 A length larger than the available payload has to fail before any message is decoded:
 

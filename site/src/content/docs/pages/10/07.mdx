@@ -11,6 +11,7 @@ sidebar:
 ---
 import { Accordion, Badge, GitHub, CodeGroup, Tab } from '../../../../components/kit';
 import Visual from '../../../../components/Visual.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## One function call can cross several layers
 
@@ -20,6 +21,8 @@ API. The remaining question is where such a call goes when the tool asks the
 operating system to do something it cannot do directly.
 
 A call to a Windows function such as `VirtualQueryEx` does not instantly jump into the deepest part of Windows. It usually passes through layers.
+
+<MarginNote kind="alternative">Follow the call like a routed request: the public entry passes through implementation layers before a kernel service performs the privileged operation.</MarginNote>
 
 ```mermaid
 flowchart TD
@@ -73,6 +76,8 @@ The documented Win32 API is the part application developers are normally expecte
 
 Microsoft can change how a supported function is implemented while keeping its documented behavior. On modern Windows, an export in `kernel32.dll` may forward to another DLL such as `KernelBase.dll`. Your source code still calls the stable Win32 name.
 
+<MarginNote kind="brief">A documented Windows function can keep its contract while the DLLs and internal layers implementing it change.</MarginNote>
+
 A **forwarded export** is not a jump instruction the loader inserts. The export table entry itself can hold a string such as `KERNELBASE.CreateFileW` in place of a code address. When `GetProcAddress` resolves that entry, it reads the string, locates the named DLL, and looks up the function there instead — following another forward if that entry also happens to be one. Whoever asked for `kernel32!CreateFileW` never sees this redirection; they get back a usable address in `KernelBase.dll` either way, which is exactly why Microsoft can move an implementation between DLLs across Windows versions without breaking the caller's import:
 
 ```mermaid
@@ -97,6 +102,8 @@ Calling an undocumented entry point or copying a system-call number from one Win
 A DLL can publish an **export table**. Each exported name maps to an entry that the loader can resolve. `GetProcAddress` asks a loaded module for one of those exports.
 
 The returned address is a virtual address in the current process. Address Space Layout Randomization, or **ASLR**, means the same DLL can be mapped at a different base address in another process or after a reboot. Store the name or an RVA when that is the stable identity; do not paste a displayed absolute address into tomorrow's program.
+
+<MarginNote kind="narration">A printed export address belongs to this process and mapping. Reusing its name or verified relative location avoids assuming tomorrow’s mapping uses the same base.</MarginNote>
 
 ## Build the address inspector
 

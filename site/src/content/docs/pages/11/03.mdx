@@ -9,7 +9,9 @@ sidebar:
   order: 3
   label: "12.3 Dynamic Windows API Resolution"
 ---
+import Frame from '../../../../components/kit/Frame.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## Import tables are not the only way to call an API
 
@@ -22,11 +24,17 @@ Normally the Windows loader resolves a program's imports before `main`. Sometime
 
 This is useful compatibility work. It is not a reason to hide imports or replace well-supported APIs with undocumented ones.
 
+
+<Frame caption="Capability detection permits a clear fallback">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/optional-api.svg`} width="480" height="206" alt="An optional API is looked up in a trusted module; presence selects a correctly typed call and absence selects a fallback." loading="lazy" decoding="async" />
+</Frame>
 ## Detect the capability you need
 
 Do not infer one API's presence only from a Windows version string. Compatibility settings, servicing changes, and alternative implementations can make version checks lie about the capability that matters. Look up the documented export, validate the result, and take the fallback when it is absent.
 
 Presence still does not guarantee that one call will succeed. The handle may lack rights, the buffer may be too small, or the target may exit. Feature detection chooses a code path; normal error handling still applies inside that path.
+
+<MarginNote kind="brief">Finding an optional export chooses a capability path; the chosen call still needs ordinary error handling.</MarginNote>
 
 ## Define the contract from documentation and assembly
 
@@ -46,6 +54,8 @@ type QueryFullProcessImageNameW = unsafe extern "system" fn(
 ```
 
 The pointer type says more than “address of a function.” It records ABI, argument order, mutability, and result width.
+
+<MarginNote kind="alternative">A typed function pointer is a delivery contract, naming where arguments go and how results return—not merely an address to jump to.</MarginNote>
 
 `extern "system"` names a different calling convention on each of the two targets this course builds, so the same alias arranges the same four values in two different ways. On 32-bit x86 it means **stdcall**: the caller pushes the arguments from last to first, so when the function starts they sit just above the return address, one per 4-byte stack slot, and the function removes them itself before returning.
 
@@ -160,6 +170,8 @@ main module's path through `MODULEENTRY32W.szExePath`. It is a different
 observation: enumeration can fail across architecture or protection boundaries,
 and the module can change after the snapshot. Label the source and its limits
 instead of claiming that every fallback is simply a shorter path.
+
+<MarginNote kind="narration">A fallback may provide a different kind of observation with different limits. Label its source so later code does not silently assume the stronger API succeeded.</MarginNote>
 
 ```mermaid
 flowchart TD
