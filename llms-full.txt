@@ -5908,20 +5908,75 @@ The final field address is returned without reading another pointer. Keeping tha
 The change from loose arithmetic to a deliberate chain is easier to see as a
 diff:
 
+The original helper adds the root offset, two link offsets and the field offset as if they were all distances inside one allocation. Here those arguments describe a two-link pointer path: each intermediate slot stores the address of another object.
+
+```rust title="Before: add every offset without following pointers"
+fn read_gold(
+    process: &Process, module_base: usize, root_offset: usize,
+    first_link: usize, second_link: usize, field_offset: usize,
+) -> anyhow::Result<u32> {
+    let gold = process.read_u32(
+        module_base + root_offset + first_link + second_link + field_offset,
+    )?; // Wrong: no intermediate pointer is read.
+    Ok(gold)
+}
+```
+
+Separate **address arithmetic** from **dereferencing**. At each link, calculate the slot, read the pointer stored there, and reject null; only the final field is read as gold. These offsets are inputs recovered for your own exact lab build, not universal game addresses.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn read_gold(
+    process: &Process, module_base: usize, root_offset: usize,
+    first_link: usize, second_link: usize, field_offset: usize,
+) -> anyhow::Result<u32> {
+    let root = module_base.checked_add(root_offset)
+        .context("root address overflowed")?;
+    let mut object = process.read_pointer(root)?;
+    for offset in [first_link, second_link] {
+        anyhow::ensure!(object != 0, "null object pointer");
+        let slot = object.checked_add(offset).context("link address overflowed")?;
+        object = process.read_pointer(slot)?;
+    }
+    anyhow::ensure!(object != 0, "null final object pointer");
+    let field = object.checked_add(field_offset).context("field address overflowed")?;
+    let gold = process.read_u32(field)?;
+    Ok(gold)
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
- fn read_gold(process: &Process, module_base: usize) -> anyhow::Result<u32> {
--    let gold = process.read_u32(module_base + root + a + b + field)?;
-+    let root_address = module_base.checked_add(root_offset)
+ fn read_gold(
+     process: &Process, module_base: usize, root_offset: usize,
+     first_link: usize, second_link: usize, field_offset: usize,
+ ) -> anyhow::Result<u32> {
+-    let gold = process.read_u32(
+-        module_base + root_offset + first_link + second_link + field_offset,
+-    )?; // Wrong: no intermediate pointer is read.
++    let root = module_base.checked_add(root_offset)
 +        .context("root address overflowed")?;
-+    let mut object = process.read_pointer(root_address)?;
-+    object = process.read_pointer(object.checked_add(a)
-+        .context("first link overflowed")?)?;
-+    let field_address = object.checked_add(field_offset)
-+        .context("field address overflowed")?;
-+    let gold = process.read_u32(field_address)?;
++    let mut object = process.read_pointer(root)?;
++    for offset in [first_link, second_link] {
++        anyhow::ensure!(object != 0, "null object pointer");
++        let slot = object.checked_add(offset).context("link address overflowed")?;
++        object = process.read_pointer(slot)?;
++    }
++    anyhow::ensure!(object != 0, "null final object pointer");
++    let field = object.checked_add(field_offset).context("field address overflowed")?;
++    let gold = process.read_u32(field)?;
      Ok(gold)
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** adding an offset finds a slot; reading the pointer in that slot finds the next object.
 
 :::note[Why this version?]
 Offsets describe different jobs. `root_offset` locates
@@ -6891,8 +6946,36 @@ does not satisfy those promises.
 
 This distinction matters in a game-memory tool:
 
+This original example tries to load health by casting a remote address to a local Rust pointer. **Do not execute it:** the address belongs to another process, so the required local allocation and pointer-validity guarantees cannot be established.
+
+```rust title="Before: dereference an address from another process"
+fn read_health(process: &Process, remote_base: usize) -> Result<u32, ReadError> {
+    // SAFETY: cannot be established for a remote address; this is the bug.
+    let health = unsafe { *((remote_base as *const u8).offset(0x30).cast::<u32>()) };
+    Ok(health)
+}
+```
+
+Keep remote addresses as integers, use **checked addition** for the field offset, then let the process-reading wrapper copy the bytes into a local buffer. It returns a normal error if the remote read fails.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn read_health(process: &Process, remote_base: usize) -> Result<u32, ReadError> {
+    let health_address = remote_base.checked_add(0x30)
+        .ok_or(ReadError::AddressOverflow)?;
+    let health = process.read_u32(health_address)?;
+    Ok(health)
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn read_health(process: &Process, remote_base: usize) -> Result<u32, ReadError> {
+-    // SAFETY: cannot be established for a remote address; this is the bug.
 -    let health = unsafe { *((remote_base as *const u8).offset(0x30).cast::<u32>()) };
 +    let health_address = remote_base.checked_add(0x30)
 +        .ok_or(ReadError::AddressOverflow)?;
@@ -6900,6 +6983,11 @@ This distinction matters in a game-memory tool:
      Ok(health)
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** remote memory requires a process-aware copy; a cast does not move bytes across address spaces.
 
 ❌ The first version pretends memory owned by another process is part of this
 tool process's allocation. It is not. ✅ The second version treats the remote
@@ -7724,17 +7812,110 @@ for compatible handle families.
 
 The ownership improvement is small in code and large in behavior:
 
+The original helper opens a raw process handle, reads four gold bytes, then closes the handle. If the read fails or copies fewer than four bytes, `?` or `ensure!` returns before the closing line and leaks the handle. Both versions receive a discovered `ProcessEntry`, the requested rights, and the verified gold address; they use the linked lab library.
+
+```rust title="Before: close the handle only on success"
+use std::ffi::c_void;
+use gha_windows_labs::ProcessEntry;
+use windows::Win32::{
+    Foundation::CloseHandle,
+    System::{
+        Diagnostics::Debug::ReadProcessMemory,
+        Threading::{OpenProcess, PROCESS_ACCESS_RIGHTS},
+    },
+};
+
+fn load_gold(
+    entry: ProcessEntry,
+    rights: PROCESS_ACCESS_RIGHTS,
+    gold_address: usize,
+) -> anyhow::Result<u32> {
+    // SAFETY: a numeric PID is passed; Windows validates it and the requested rights.
+    let handle = unsafe { OpenProcess(rights, false, entry.id) }?;
+    let mut bytes = [0_u8; 4];
+    let mut bytes_read = 0;
+    // SAFETY: the handle is live and the local output buffer has four writable bytes.
+    // Windows validates the remote range; no local pointer to that range is dereferenced.
+    unsafe {
+        ReadProcessMemory(
+            handle, gold_address as *const c_void,
+            bytes.as_mut_ptr().cast(), bytes.len(), Some(&mut bytes_read),
+        )?; // An error returns before CloseHandle.
+    }
+    anyhow::ensure!(bytes_read == bytes.len(), "short read"); // Also skips cleanup.
+    // SAFETY: this helper owns the live handle and has not closed it yet.
+    unsafe { CloseHandle(handle) }?;
+    Ok(u32::from_le_bytes(bytes))
+}
+```
+
+**RAII** moves handle ownership into `Process`. Its `open_with_access` method requests the same rights, and `read_u32` requires a complete four-byte copy. Leaving the function drops the owner on success and on every early return, while the original error still reaches the caller.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+use gha_windows_labs::{Process, ProcessEntry};
+use windows::Win32::System::Threading::PROCESS_ACCESS_RIGHTS;
+
+fn load_gold(
+    entry: ProcessEntry,
+    rights: PROCESS_ACCESS_RIGHTS,
+    gold_address: usize,
+) -> anyhow::Result<u32> {
+    let process = Process::open_with_access(entry, rights)?;
+    let gold = process.read_u32(gold_address)?;
+    Ok(gold) // OwnedHandle::drop closes the handle on every return path.
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
- fn load_gold(process_id: u32, rights: PROCESS_ACCESS_RIGHTS) -> anyhow::Result<u32> {
--    let handle = OpenProcess(rights, false, process_id)?;
--    let gold = read_gold(handle)?;
--    CloseHandle(handle)?;
--    Ok(gold)
-+    let process = Process::open(process_id, rights)?;
-+    let gold = process.read_gold()?;
-+    Ok(gold) // OwnedHandle::drop closes the handle on every return path
+-use std::ffi::c_void;
+-use gha_windows_labs::ProcessEntry;
++use gha_windows_labs::{Process, ProcessEntry};
++use windows::Win32::System::Threading::PROCESS_ACCESS_RIGHTS;
+-use windows::Win32::{
+-    Foundation::CloseHandle,
+-    System::{
+-        Diagnostics::Debug::ReadProcessMemory,
+-        Threading::{OpenProcess, PROCESS_ACCESS_RIGHTS},
+-    },
+-};
+
+ fn load_gold(
+     entry: ProcessEntry,
+     rights: PROCESS_ACCESS_RIGHTS,
+     gold_address: usize,
+ ) -> anyhow::Result<u32> {
++    let process = Process::open_with_access(entry, rights)?;
++    let gold = process.read_u32(gold_address)?;
++    Ok(gold) // OwnedHandle::drop closes the handle on every return path.
+-    // SAFETY: a numeric PID is passed; Windows validates it and the requested rights.
+-    let handle = unsafe { OpenProcess(rights, false, entry.id) }?;
+-    let mut bytes = [0_u8; 4];
+-    let mut bytes_read = 0;
+-    // SAFETY: the handle is live and the local output buffer has four writable bytes.
+-    // Windows validates the remote range; no local pointer to that range is dereferenced.
+-    unsafe {
+-        ReadProcessMemory(
+-            handle, gold_address as *const c_void,
+-            bytes.as_mut_ptr().cast(), bytes.len(), Some(&mut bytes_read),
+-        )?; // An error returns before CloseHandle.
+-    }
+-    anyhow::ensure!(bytes_read == bytes.len(), "short read"); // Also skips cleanup.
+-    // SAFETY: this helper owns the live handle and has not closed it yet.
+-    unsafe { CloseHandle(handle) }?;
+-    Ok(u32::from_le_bytes(bytes))
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** cleanup belongs to the resource owner, so a new error path cannot skip it.
 
 :::note[Why this version?]
 Every use of `?` can return early. Manual cleanup at the
@@ -10803,6 +10984,47 @@ fn read_players(
 
 Compare that with silently skipping records that fail:
 
+The original helper reads each player and keeps only successful rows. A failed row disappears without an error, so the returned list can look complete even when the layout is wrong or the game changed during capture.
+
+```rust title="Before: silently skip failed player reads"
+fn read_players(
+    process: &Process,
+    table: usize,
+    count: usize,
+    layout: &PlayerLayout,
+) -> anyhow::Result<Vec<PlayerSnapshot>> {
+    let mut players = Vec::new();
+    for index in 0..count {
+        if let Ok(player) = read_player(process, table, index, layout) { // Errors disappear.
+            players.push(player);
+        }
+    }
+    Ok(players)
+}
+```
+
+Validate the known lab limit of sixteen players first, then **collect results** into one `Result<Vec<_>>`. Any failed read rejects the whole claimed snapshot instead of quietly shortening it.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn read_players(
+    process: &Process,
+    table: usize,
+    count: usize,
+    layout: &PlayerLayout,
+) -> anyhow::Result<Vec<PlayerSnapshot>> {
+    anyhow::ensure!(count <= 16, "unexpected player count: {count}");
+    (0..count)
+        .map(|index| read_player(process, table, index, layout))
+        .collect()
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn read_players(
      process: &Process,
@@ -10812,7 +11034,7 @@ Compare that with silently skipping records that fail:
  ) -> anyhow::Result<Vec<PlayerSnapshot>> {
 -    let mut players = Vec::new();
 -    for index in 0..count {
--        if let Ok(player) = read_player(process, table, index, layout) {
+-        if let Ok(player) = read_player(process, table, index, layout) { // Errors disappear.
 -            players.push(player);
 -        }
 -    }
@@ -10823,6 +11045,11 @@ Compare that with silently skipping records that fail:
 +        .collect()
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** return a complete trusted snapshot or a visible error, rather than disguising missing rows.
 
 :::note[Why this version?]
 A missing row means a bad layout, a changing process, or
@@ -11045,13 +11272,49 @@ In the code below, `observed` is the snapshot the caller approved. A fresh
 snapshot must match it before any write; afterward, a read-back must equal
 `replacement`. Each added line enforces one arrow in the diagram.
 
+The original helper writes to the gold address in a previously captured snapshot, then reports success. The target may have changed since that snapshot; the function also never checks what was stored.
+
+```rust title="Before: write through a cached snapshot"
+fn replace_gold(
+    process: &Process,
+    observed: Snapshot,
+    replacement: u32,
+) -> anyhow::Result<()> {
+    process.write_u32(observed.gold_address, replacement)?; // May be stale.
+    Ok(())
+}
+```
+
+A **guarded action** checks its precondition immediately before writing and its postcondition afterward. Matching snapshots reduce stale-address mistakes; they still cannot prevent the game changing between the check and the write.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn replace_gold(
+    process: &Process,
+    observed: Snapshot,
+    replacement: u32,
+) -> anyhow::Result<()> {
+    let current = stable_snapshot(process)?;
+    anyhow::ensure!(current == observed, "state changed; nothing was written");
+    process.write_u32(observed.gold_address, replacement)?;
+    let written = process.read_u32(observed.gold_address)?;
+    anyhow::ensure!(written == replacement, "write did not reach its postcondition");
+    Ok(())
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn replace_gold(
      process: &Process,
      observed: Snapshot,
      replacement: u32,
  ) -> anyhow::Result<()> {
--    process.write_u32(old_address, replacement)?;
+-    process.write_u32(observed.gold_address, replacement)?; // May be stale.
 +    let current = stable_snapshot(process)?;
 +    anyhow::ensure!(current == observed, "state changed; nothing was written");
 +    process.write_u32(observed.gold_address, replacement)?;
@@ -11060,6 +11323,11 @@ snapshot must match it before any write; afterward, a read-back must equal
      Ok(())
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** recheck the state you approved, then verify the result of the write.
 
 This is not a database transaction: Windows cannot automatically roll back the game. It is a **guarded action** with a checked precondition and postcondition. That pattern also fits toggles, patches, save editors, configuration tools, and mod installers.
 
@@ -42040,9 +42308,42 @@ leave the new variant out and the code does not compile. The denylist that
 would have needed extending forever has become a decision the compiler insists
 you make once.
 
+The original policy blocks only the command named `WriteMemory`; every other name passes, even when writes are disabled. The final `if` is the call-site fragment inside the lab's command handler: it shows the shared execution boundary where that decision is used.
+
+```rust title="Before: block only one command name"
+ fn policy(command: LabCommand, writes_allowed: bool) -> bool {
+     command != LabCommand::WriteMemory // Ignores the setting and other write commands.
+ }
+
+if policy(command, settings.writes_allowed) {
+    execute_at_shared_boundary(command)?;
+}
+```
+
+Classify the **effect** of each command once, then apply the setting to every state-changing effect. The enum and exhaustive match keep new command variants from silently falling outside the rule.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+ fn policy(command: LabCommand, writes_allowed: bool) -> bool {
+     match effect_of(command) {
+         Effect::ReadOnly => true,
+         Effect::ChangesState => writes_allowed,
+     }
+ }
+
+if policy(command, settings.writes_allowed) {
+    execute_at_shared_boundary(command)?;
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
 - fn policy(command: LabCommand, writes_allowed: bool) -> bool {
--     command != LabCommand::WriteMemory
+-     command != LabCommand::WriteMemory // Ignores the setting and other write commands.
 - }
 + fn policy(command: LabCommand, writes_allowed: bool) -> bool {
 +     match effect_of(command) {
@@ -42055,6 +42356,11 @@ you make once.
      execute_at_shared_boundary(command)?;
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** permission checks should follow what an operation does, not just what it is called.
 
 The regression test iterates over every state-changing enum variant. Adding a
 new variant then forces the programmer to classify it.

@@ -80,7 +80,23 @@ The wrapper itself is not magic. Its constructor must accept only a valid, owned
 
 The ownership improvement is small in code and large in behavior:
 
+The original helper opens a raw process handle, reads four gold bytes, then closes the handle. If the read fails or copies fewer than four bytes? or ensure! returns before the closing line and leaks the handle. Both versions receive a discovered ProcessEntry, the requested rights, and the verified gold address; they use the linked lab library.
+
+Before: close the handle only on success
+
+Code example. The code’s comments explain: SAFETY: a numeric P I D is passed; Windows validates it and the requested rights. SAFETY: the handle is live and the local output buffer has four writable bytes. Windows validates the remote range; no local pointer to that range is dereferenced. SAFETY: this helper owns the live handle and has not closed it yet.
+
+RAII moves handle ownership into Process. Its open_with_access method requests the same rights, and read_u32 requires a complete four-byte copy. Leaving the function drops the owner on success and on every early return, while the original error still reaches the caller.
+
+Improved code
+
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Show the diff
+
+Code example. The code’s comments explain: SAFETY: a numeric P I D is passed; Windows validates it and the requested rights. SAFETY: the handle is live and the local output buffer has four writable bytes. Windows validates the remote range; no local pointer to that range is dereferenced. SAFETY: this helper owns the live handle and has not closed it yet.
+
+Takeaway: cleanup belongs to the resource owner, so a new error path cannot skip it.
 
 Every use of ? can return early. Manual cleanup at the bottom is skipped by those early returns, while Drop runs when the owning value leaves scope. Keeping OwnedHandle private also prevents callers from copying the raw handle and closing it twice. The wrapper does not hide Windows errors; it only makes the cleanup rule automatic.
 

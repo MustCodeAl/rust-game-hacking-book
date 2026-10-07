@@ -154,7 +154,23 @@ Calling .offset() is already unsafe, even before dereferencing the result. Rust 
 
 This distinction matters in a game-memory tool:
 
+This original example tries to load health by casting a remote address to a local Rust pointer. Do not execute it: the address belongs to another process, so the required local allocation and pointer-validity guarantees cannot be established.
+
+Before: dereference an address from another process
+
+Code example. The code’s comments explain: SAFETY: cannot be established for a remote address; this is the bug.
+
+Keep remote addresses as integers, use checked addition for the field offset, then let the process-reading wrapper copy the bytes into a local buffer. It returns a normal error if the remote read fails.
+
+Improved code
+
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Show the diff
+
+Code example. The code’s comments explain: SAFETY: cannot be established for a remote address; this is the bug.
+
+Takeaway: remote memory requires a process-aware copy; a cast does not move bytes across address spaces.
 
 ❌ The first version pretends memory owned by another process is part of this tool process’s allocation. It is not. ✅ The second version treats the remote location as a checked integer address and asks Windows to copy the bytes into a local buffer. Use pointer .offset() only when you can prove the allocation and bounds; use checked address arithmetic for remote memory.
 
