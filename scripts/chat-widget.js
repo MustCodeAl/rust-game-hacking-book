@@ -232,8 +232,7 @@
   // ------------------------------------------------------------------
 
   function setting() {
-    // Top corners sat over the "On this page" controls, so an old saved top choice now means the bottom corner on the same side.
-    var value = (root.dataset.academyChat || "").replace(/^top/, "bottom");
+    var value = root.dataset.academyChat;
     return value === "off" || CORNERS.indexOf(value) !== -1 ? value : "bottom-right";
   }
 
@@ -281,9 +280,18 @@
     return style;
   }
 
+  // A top-right button and panel stop short of the contents column (the page sets --chat-right on the host) instead of covering "On this page".
+  function rightStyle() {
+    var style = document.createElement("style");
+    style.textContent =
+      "@media (min-width:641px){.c7-bubble{right:var(--chat-right,20px)!important;left:auto!important}" +
+        ".c7-panel{right:var(--chat-right,20px)!important;left:auto!important}}";
+    return style;
+  }
+
   // Lets the widget's attachShadow through as an open root, remembering it, and
   // returns the function that puts the original back.
-  function expose(capture, top, left) {
+  function expose(capture, top, left, right) {
     var original = Element.prototype.attachShadow;
     var restored = false;
     Element.prototype.attachShadow = function (init) {
@@ -294,6 +302,7 @@
       shadow.appendChild(phoneStyle());
       if (top) shadow.appendChild(topStyle());
       if (left) shadow.appendChild(leftStyle());
+      if (right) shadow.appendChild(rightStyle());
       return shadow;
     };
     return function restore() {
@@ -343,7 +352,7 @@
     script.setAttribute("data-placeholder", placeholder(null));
     script.setAttribute("data-welcome-message", welcome());
 
-    var restore = expose(capture, /^top/.test(corner), /left$/.test(corner));
+    var restore = expose(capture, /^top/.test(corner), /left$/.test(corner), corner === "top-right");
     mounted = { script: script, capture: capture, restore: restore, color: color, side: /^top/.test(corner) ? "top" : "bottom" };
     function finished() {
       restore();
