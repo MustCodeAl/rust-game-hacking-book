@@ -1517,3 +1517,21 @@ files are gone from `site/src/styles/design/`). What remains is in `base-tokens.
   dark|match|light; chat and Notes in four corners.
 Verified in Chrome: defaults equal the original on key computed styles; every choice changes only what it should; popover and side sheet both open, dock hides, no overflow at 420/1280.
 Not verified: touch devices, Safari/Firefox, depth choice across every lab type. No lab programs were run.
+
+## T28 — Settings tiers, softer lab tones, stepper hierarchy (2026-10-07)
+
+- **Settings tiers** (Reader theme panel): Basic (brightness, reading palette, text size, reading sound), Advanced (adds page background, hover cards, chat and Notes corners, settings panel,
+  sidebar/header contrast, reading width, table of contents tone, spacing, moving effects, code brightness, syntax colours, sign-in) and Detailed (everything else: depth, inline code,
+  floating buttons, gradients, all diagram options, animation speed, semantic colours, ligatures, colour key). `data-academy-tier` (`gha-settings-tier`, default basic), mirrored to
+  `data-settings-tier`; CSS in `design/drawer.css`. The old collapsible "Diagrams and reading layout" and "Animation playback" groups were flattened into the tiers.
+- **Toggle audit**: all 92 panel buttons were clicked in Chrome and each updates its setting and pressed state; effects were checked by computed style or pixel diff (brightness, palettes, background, code
+  mode, syntax, semantic, ligatures, grid, gradients, heading style, text size, spacing, sidebar/TOC hidden, hover cards, diagram label/fill/border/size, depth, surface, inline code, floating, TOC tone,
+  reading width, drawer, chat, Notes). No dead toggle was found; Reading width only shows at large screens (the content panel is bounded by the sidebars) and diagram label settings only show on diagrams with edge labels.
+- **Soft tones** (`learning-widgets.css`, "Tone boxes"): the explanation boxes in labs and steppers were a loud solid blue; they are now a quiet wash that fades into the panel with a thin accent bar, hairline and
+  rounded corners; the info colour is a calm slate-blue with normal ink text.
+- **Stepper hierarchy**: `academy.js` assigns `data-action` (primary / secondary / ghost) to lab buttons from their label or `data-scene-action`; `design/labs.css` styles them (Next primary, Previous outlined,
+  Reset and Show me quiet). Sliders have a thin track with an accent fill up to the thumb (`--fill` painted by `academy.js`). The code-trace footer is one structured row (buttons left, step count right, difference
+  note and tip below) and the watched memory bytes are one contiguous hex strip (also the `.mem-strip` figures).
+- Sidebar: keyboard focus on the active lesson no longer draws a box (tint plus underline instead).
+- Not done: the Byte Interpreter redesign in lesson 1.8 (byte boxes as inputs, preset chips, interpretation cards, takeaway callout) and the same for sibling labs; see the owner's brief in the chat history.
+No lab programs were run.

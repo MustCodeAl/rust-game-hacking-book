@@ -669,7 +669,10 @@ function build(root, id) {
 	diff.hidden = true;
 	const hint = el('p', 'code-trace__hint', 'Tip: the left and right arrow keys also step, and Reset puts everything back to the lesson’s example.');
 
-	root.append(head, controls, grid, say, nav, diff, hint);
+	// One structured bottom row: the buttons and the step count on a single line, the "different from the lesson" note under them, then the tip.
+	const footer = el('div', 'code-trace__footer');
+	footer.append(nav, diff, hint);
+	root.append(head, controls, grid, say, footer);
 
 	function renderCode() {
 		const lines = listing(trace, values);
