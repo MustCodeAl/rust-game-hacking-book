@@ -5,7 +5,7 @@ The owner requested finish after the urgent repair; both agents then hit the
 account usage limit. Preserve the drafts rather than reporting unverified
 features as completed.
 
-Read HANDOFF_PLAN.md and T35–T37 in BOOK_REVISION_PROGRESS.md first. Source is
+Read HANDOFF_PLAN.md and T35–T38 in BOOK_REVISION_PROGRESS.md first. Source is
 `codex/book-revision`; publish only through the repository script. No existing
 lesson ID has been moved, and restructuring still needs the owner's approval.
 
@@ -40,7 +40,9 @@ lesson ID has been moved, and restructuring still needs the owner's approval.
 - `reader-sync/site/`: unfinished extraction of margin-note layout shared
   by Notes and authored notes; global comment styling for pages without
   authored notes; DOM-ready bubble rendering; legacy-compatible IDs and
-  deletion tombstones for account merge. Review all files as a unit, preserve
+  deletion tombstones for account merge. **T38 now implements shared styling
+  and DOM-ready bubble rendering in active source; preserve those fixes.**
+  Shared layout extraction and account sync remain draft-only. Review all files as a unit, preserve
   T36's pointer-events/restore stacking repair, inspect any package change,
   and run actual Notes add/delete/hide/reload tests on an author-note-free
   lesson with stalled external requests. The agent did not deliver a final

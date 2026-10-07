@@ -9,10 +9,11 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
 const b=await chromium.launch({executablePath:process.env.CHROME_PATH || undefined});
 const base=(process.env.BOOK_BASE_URL || 'http://127.0.0.1:8766/rust-game-hacking-book/').replace(/\/?$/, '/');
 const pages=(process.env.CONTRAST_PAGES || 'pages/1/05/,pages/3/02/').split(',');
+const noteLessons=(process.env.CONTRAST_READER_NOTES || '').split(',').filter(Boolean);
 let failures=0;
 for (const pal of ['paper','purple','midnight','forest','contrast']) for (const mode of ['light','dark']) {
   const ctx=await b.newContext({viewport:{width:1280,height:900}});const p=await ctx.newPage();
-  await p.addInitScript(([pal,mode])=>{try{localStorage.clear();localStorage.setItem('gha-theme',pal);localStorage.setItem('gha-mode',mode);localStorage.setItem('starlight-theme',mode)}catch(e){}},[pal,mode]);
+  await p.addInitScript(([pal,mode,noteLessons])=>{try{localStorage.clear();localStorage.setItem('gha-theme',pal);localStorage.setItem('gha-mode',mode);localStorage.setItem('starlight-theme',mode);for(const id of noteLessons)localStorage.setItem('gha-bubbles:'+id,JSON.stringify([{at:1,heading:'',text:'Saved reader comment stays readable.',kind:'mine'}]))}catch(e){}},[pal,mode,noteLessons]);
   const agg={};let total=0;
   for (const u of pages){
     await p.goto(base+u,{waitUntil:'domcontentloaded'});await p.waitForTimeout(600);

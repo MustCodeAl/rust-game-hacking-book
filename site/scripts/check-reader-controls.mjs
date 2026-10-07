@@ -63,6 +63,37 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'no horizontal overflow');
     assert.deepEqual(errors, [], 'no page errors');
     console.log(`reader-controls: ${width}px sidebar/TOC and comments persistence pass.`);
+    // A lesson with no authored MarginNote still needs reader-note styling and controls.
+    await page.evaluate(() => localStorage.setItem('gha-bubbles:pages/10/02', JSON.stringify([
+      { at: 1, heading: '', text: 'A saved reader comment for the visibility check.', kind: 'mine' }
+    ])));
+    await page.goto(base + 'pages/10/02/', { waitUntil: 'domcontentloaded' });
+    const mine = page.locator('.margin-note--mine');
+    await mine.waitFor({ state: 'attached' });
+    assert.equal(await page.locator('[data-margin-note]:not(.margin-note--mine)').count(), 0, 'fixture has no author notes');
+    for (let i = 0; i < 3; i++) { await mine.scrollIntoViewIfNeeded(); await page.waitForTimeout(200); }
+    assert.equal(await mine.isVisible(), true, 'saved reader comment renders without the load event');
+    const styled = await mine.evaluate(node => parseFloat(getComputedStyle(node).paddingTop) > 0);
+    assert.ok(styled, 'reader-only note has shared margin styling');
+    const setComments = async value => {
+      if (width === 420) { await page.locator('.sl-menu-button').click(); clicks++; }
+      await page.locator('.theme-switcher__toggle:visible').first().click(); clicks++;
+      await page.locator(`.theme-switcher:visible [data-comments-choice="${value}"]`).first().click(); clicks++;
+      await page.keyboard.press('Escape');
+    };
+    await setComments('hide');
+    await mine.waitFor({ state: 'hidden' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await mine.waitFor({ state: 'attached' });
+    await mine.waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('gha-bubbles:pages/10/02'))[0].text), 'A saved reader comment for the visibility check.', 'hiding preserves the stored comment');
+    await setComments('show');
+    await mine.waitFor({ state: 'visible' });
+    for (let i = 0; i < 3; i++) { await mine.scrollIntoViewIfNeeded(); await page.waitForTimeout(200); }
+    if (output) await page.screenshot({ path: `${output}/reader-only-comments-${width}.png` });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'reader-only notes have no horizontal overflow');
+    assert.deepEqual(errors, [], 'reader-only notes have no page errors');
+    console.log(`reader-controls: ${width}px reader-only comments render, hide, persist and restore.`);
     await context.close();
   }
   console.log(`reader-controls: ${clicks} real button/link clicks; stalled external requests do not block controls.`);

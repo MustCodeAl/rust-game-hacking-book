@@ -223,8 +223,11 @@ export function mountNotes() {
 			drawBubbles();
 			status.textContent = 'Added beside ' + (heading ? '“' + heading.textContent.trim().slice(0, 40) + '”' : 'the start of the lesson') + '. Delete it with the × on the comment.';
 		});
-		window.addEventListener('load', drawBubbles);
-		if (document.readyState === 'complete') drawBubbles();
+		if (document.readyState === 'loading') {
+			document.addEventListener('DOMContentLoaded', drawBubbles, { once: true });
+		} else {
+			drawBubbles();
+		}
 
 		const setOpen = open => { panel.hidden = !open; fab.setAttribute('aria-expanded', String(open)); if (open) area.focus(); };
 		fab.addEventListener('click', () => { if (ui.hidden) { ui.hidden = false; applyUi(); return; } setOpen(panel.hidden); });
