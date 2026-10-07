@@ -37,6 +37,7 @@
     animationSpeed: { attribute: "academyAnimationSpeed", key: "gha-animation-speed", values: ["slow", "normal", "fast"], fallback: "normal", control: "data-animation-speed-choice" },
     headingStyle: { attribute: "academyHeadingStyle", key: "gha-heading-style", values: ["boxed", "plain"], fallback: "boxed", control: "data-heading-style-choice" },
     textSize: { attribute: "academyTextSize", key: "gha-text-size", values: ["small", "standard", "large"], fallback: "standard", control: "data-text-size-choice" },
+    tier: { attribute: "academyTier", key: "gha-settings-tier", values: ["basic", "advanced", "detailed"], fallback: "basic", control: "data-tier-choice" },
     drawer: { attribute: "academyDrawer", key: "gha-drawer", values: ["popover", "sheet"], fallback: "popover", control: "data-drawer-choice" },
     depth: { attribute: "academyDepth", key: "gha-depth", values: ["flat", "soft"], fallback: "flat", control: "data-depth-choice" },
     surface: { attribute: "academySurface", key: "gha-surface", values: ["default", "unified"], fallback: "default", control: "data-surface-choice" },
@@ -328,7 +329,7 @@
       "[data-background-choice], [data-semantic-choice], [data-ligature-choice], [data-theme-reset], " +
       "[data-diagram-background-choice], [data-diagram-fill-choice], [data-heading-style-choice], [data-text-size-choice], [data-spacing-choice], " +
       "[data-diagram-labels-choice], [data-diagram-borders-choice], [data-diagram-size-choice], [data-grid-choice], [data-cards-choice], [data-chat-choice], [data-gradients-choice], [data-motion-choice], [data-animation-speed-choice], " +
-      "[data-drawer-choice], [data-depth-choice], [data-surface-choice], [data-inline-code-choice], [data-floating-choice], [data-notes-choice], [data-toc-tone-choice], [data-measure-choice], [data-print-book], [data-panel-hide], [data-panel-show], .theme-switcher__toggle"
+      "[data-tier-choice], [data-drawer-choice], [data-depth-choice], [data-surface-choice], [data-inline-code-choice], [data-floating-choice], [data-notes-choice], [data-toc-tone-choice], [data-measure-choice], [data-print-book], [data-panel-hide], [data-panel-show], .theme-switcher__toggle"
     );
     if (!target) {
       closeThemeMenus(event.target.closest("[data-theme-switcher]"));
@@ -350,6 +351,7 @@
     if ("chatChoice" in data) return applyReaderChoice("chat", data.chatChoice);
     if ("gradientsChoice" in data) return applyReaderChoice("gradients", data.gradientsChoice);
     if ("motionChoice" in data) return applyReaderChoice("motion", data.motionChoice);
+    if ("tierChoice" in data) return applyReaderChoice("tier", data.tierChoice);
     if ("drawerChoice" in data) return applyReaderChoice("drawer", data.drawerChoice);
     if ("depthChoice" in data) return applyReaderChoice("depth", data.depthChoice);
     if ("surfaceChoice" in data) return applyReaderChoice("surface", data.surfaceChoice);
@@ -863,7 +865,64 @@
     window.addEventListener("hashchange", highlightGlossaryTarget);
   }
 
+  // ------------------------------------------------------------------
+  // Lab polish: slider fill and button roles
+  // ------------------------------------------------------------------
+
+  // A range input's track fills with the accent up to the thumb: the page paints --fill (a percentage) whenever a slider moves or appears.
+  function paintRange(input) {
+    var min = parseFloat(input.min) || 0;
+    var max = input.max === "" ? 100 : parseFloat(input.max);
+    var value = parseFloat(input.value);
+    var percent = max > min ? Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100)) : 0;
+    input.style.setProperty("--fill", percent.toFixed(1) + "%");
+  }
+
+  // Buttons in the labs get a role so the stepper reads as one primary action, one secondary, and quiet utilities. A lab or lesson can
+  // set data-action itself; this only fills in the ones nobody did, from the button's label.
+  var LAB_SELECTOR = ".concept-lab, .scene, .cpu-step, .ownership-scope, .projection-lab, .sort-board, .formula-builder, .sim-lab, .visual-lab, .code-trace";
+  var ACTION_RULES = [
+    ["primary", /^(next|run|step|play|start|continue|check( my)?( pieces| answer)?|apply|go)\b/i],
+    ["secondary", /^(previous|prev|back|undo)\b/i],
+    ["ghost", /^(reset|show|hint|clear|stop|restart|reveal|skip|start over|try again|retry)\b/i]
+  ];
+
+  var labPolishQueued = false;
+  function polishLabs() {
+    labPolishQueued = false;
+    document.querySelectorAll('input[type="range"]').forEach(paintRange);
+    document.querySelectorAll(LAB_SELECTOR.split(", ").map(function (selector) { return selector + " button"; }).join(", ")).forEach(function (button) {
+      if (button.dataset.action || button.closest(".academy-quiz")) return;
+      var scene = button.dataset.sceneAction;
+      if (scene) { button.dataset.action = scene === "prev" ? "secondary" : (scene === "restart" ? "ghost" : "primary"); return; }
+      if (button.matches('[role="tab"], [role="radio"], [aria-pressed], [draggable="true"], [class*="chip"], [class*="token"], [class*="tab"]')) return;
+      var label = (button.textContent || "").trim();
+      if (!label || label.length > 28) return;
+      for (var i = 0; i < ACTION_RULES.length; i += 1) {
+        if (ACTION_RULES[i][1].test(label)) { button.dataset.action = ACTION_RULES[i][0]; return; }
+      }
+    });
+  }
+  function queueLabPolish() {
+    if (labPolishQueued) return;
+    labPolishQueued = true;
+    window.requestAnimationFrame(polishLabs);
+  }
+  function initLabPolish() {
+    if (window.__academyLabPolish) return;
+    window.__academyLabPolish = true;
+    ["input", "change", "click", "keyup", "pointerup"].forEach(function (name) {
+      document.addEventListener(name, function (event) {
+        if (event.target && event.target.type === "range") paintRange(event.target);
+        queueLabPolish();
+      }, true);
+    });
+    new MutationObserver(queueLabPolish).observe(document.body, { childList: true, subtree: true });
+    polishLabs();
+  }
+
   function initializePageFeatures() {
+    initLabPolish();
     initThemeSwitcher();
     buildPanelRestoreTabs();
     refreshSemanticHighlighting();
