@@ -28,5 +28,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+class PreviewServer(http.server.ThreadingHTTPServer):
+    # A lesson can request many split scripts at once. The default backlog of
+    # five refused some local requests during the whole-book browser sweep.
+    request_queue_size = 64
+    daemon_threads = True
+
+
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8766
-http.server.ThreadingHTTPServer(('127.0.0.1', port), functools.partial(Handler, directory=DIST)).serve_forever()
+PreviewServer(('127.0.0.1', port), functools.partial(Handler, directory=DIST)).serve_forever()

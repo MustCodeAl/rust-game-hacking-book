@@ -11,13 +11,13 @@
 
   // Small syntax highlighter for lab code (Rust, Lua, Python-like, assembly).
   function academyGuessLang(text) {
-    if (/\b(mov|lea|push|pop|jmp)\b\s/.test(text)) return "asm";
+    if (/^\s*(?:[a-z_]\w*:\s*)?(mov|lea|push|pop|jmp|call|ret|cmp|add|sub|inc|dec|imul|idiv|test|nop|int3|movzx|movsx|shl|shr|sar|and|or|xor|not|movss|addss|mulss|cvtsi2ss|cvttss2si|comiss)\b(?:\s|$)/im.test(text)) return "asm";
     if (/\b(local|function|then|elseif)\b/.test(text) && !/\bfn\b|\blet\b/.test(text)) return "lua";
     if (/^\s*(def |for .* in .*:|#)/m.test(text) && !/[{};]/.test(text)) return "py";
     return "rust";
   }
   function academyHighlight(text, lang) {
-    var KW = " fn let mut if else match return use struct enum impl for while in loop const pub as break continue local function end then elseif do not and or def import from mov lea push pop jmp call ret cmp add sub xor test nop ";
+    var KW = " fn let mut if else match return use struct enum impl for while in loop const pub as break continue local function end then elseif do not and or def import from mov lea push pop jmp call ret cmp add sub inc dec imul idiv test nop int3 movzx movsx shl shr sar xor movss addss mulss cvtsi2ss cvttss2si comiss ";
     var LIT = " true false nil None Some Ok Err self null True False ";
     var comment = lang === "lua" ? "--" : lang === "py" ? "#" : lang === "asm" ? ";" : "//";
     var esc = function (s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
@@ -30,7 +30,7 @@
       if (!/\w/.test(text.charAt(i - 1)) && (m = /^0x[0-9a-fA-F_]+|^\d[\d_.]*/.exec(rest))) { out += span("n", m[0]); i += m[0].length; continue; }
       if ((m = /^[A-Za-z_]\w*/.exec(rest))) {
         var w = m[0], after = rest.charAt(w.length);
-        var kind = KW.indexOf(" " + w + " ") >= 0 ? "k" : LIT.indexOf(" " + w + " ") >= 0 ? "l" : after === "(" ? "f" : /^[A-Z]/.test(w) ? "t" : "";
+        var kind = KW.indexOf(" " + (lang === "asm" ? w.toLowerCase() : w) + " ") >= 0 ? "k" : LIT.indexOf(" " + w + " ") >= 0 ? "l" : after === "(" ? "f" : /^[A-Z]/.test(w) ? "t" : "";
         out += kind ? span(kind, w) : esc(w); i += w.length; continue;
       }
       out += esc(text.charAt(i)); i++;
@@ -201,9 +201,15 @@
   const STATE_MACHINES = {
     "fsm-lua-bot": {
       title: "What happens if an arrow goes missing?",
-      description: "This is the Lua bot from the lesson, already complete. Press Replay to watch six scripted inputs run through it, then try removing or adding an arrow to see what changes.",
+      description: "The complete bot already handles six inputs. Try removing an arrow and compare the replay below; Reset brings the lesson's version back.",
       actor: "the bot",
       viewBox: [700, 290],
+      compact: {
+        viewBox: [320, 485],
+        positions: { observe: [62, 45], choose: [248, 135], request: [62, 235], wait: [248, 335], stop: [62, 435] },
+        labels: { "snapshot stored": "snapshot", "candidate found": "found", "no candidate": "none", "request sent": "sent", "selection confirmed": "confirmed", "ticks reach 0": "timeout" },
+        bends: { "choose|no candidate": -48, "wait|selection confirmed": -48 },
+      },
       start: "observe",
       terminal: ["stop"],
       states: [
@@ -227,9 +233,15 @@
 
     "fsm-macro-loop": {
       title: "What happens if an arrow goes missing?",
-      description: "This is the recruitment macro from the lesson, already complete. Press Replay to watch six scripted inputs run through it, then try removing or adding an arrow to see what changes. (The lesson's Stopped state is left out to keep the picture readable; there, a stop request overrides every state.)",
+      description: "Try changing an arrow in this complete macro and compare the six-input replay. The lesson's stop request overrides every state; this picture leaves that extra state out.",
       actor: "the macro",
       viewBox: [680, 290],
+      compact: {
+        viewBox: [320, 395],
+        positions: { waiting: [160, 45], ready: [160, 135], acting: [160, 225], cooldown: [65, 340], recovering: [255, 340] },
+        labels: { "player available": "player", "enough resources": "resources", "action confirmed": "confirmed", "action failed": "failed", "timer elapsed": "timer", "state valid again": "valid" },
+        bends: { "cooldown|timer elapsed": -48, "recovering|state valid again": -48 },
+      },
       start: "waiting",
       states: [
         { id: "waiting", label: "Waiting", x: 58, y: 145 },
@@ -372,7 +384,8 @@
     const clearAll = actionButton("Empty the blanks");
     actions.append(showAnswer, check, hint, clearAll);
 
-    const why = element("p", "code-blanks__why");
+    const why = element("p", "concept-lab__takeaway code-blanks__why");
+    why.dataset.kind = "insight";
     why.append(element("strong", "", "Why the lesson's version works. "), document.createTextNode(cfg.why));
 
     body.append(codeWrap, effect, bank, summary, actions, why);
@@ -499,11 +512,12 @@
     const id = cleanId(root, "fsm");
     const NODE_W = 92;
     const NODE_H = 34;
-    const [W, H] = cfg.viewBox;
+    let [W, H] = cfg.viewBox;
+    let compact = false;
     root.replaceChildren(makeLabHeader("Explore the machine", cfg.title, cfg.description));
     const body = element("div", "concept-lab__body fsm");
 
-    const nodeMap = new Map(cfg.states.map((s) => [s.id, s]));
+    const nodeMap = new Map(cfg.states.map((s) => [s.id, { ...s }]));
     const name = (sid) => nodeMap.get(sid).label;
     const baseline = cfg.edges.map((e) => ({ ...e }));
     let edges = baseline.map((e) => ({ ...e }));
@@ -574,7 +588,9 @@
         const py = (B.x - A.x) / len;
         group.sort((a, b) => edgeKey(a).localeCompare(edgeKey(b)));
         group.forEach((e, k) => {
-          const off = group.length === 1 ? detour(A, B, px, py) : (k - (group.length - 1) / 2) * 40;
+          const off = compact && cfg.compact.bends[edgeKey(e)] !== undefined
+            ? cfg.compact.bends[edgeKey(e)]
+            : group.length === 1 ? detour(A, B, px, py) : (k - (group.length - 1) / 2) * 40;
           const mx = (A.x + B.x) / 2 + px * off;
           const my = (A.y + B.y) / 2 + py * off;
           const ctrl = { x: (A.x + B.x) / 2 + px * off * 2, y: (A.y + B.y) / 2 + py * off * 2 };
@@ -622,7 +638,8 @@
       nodeLayer.append(g);
     });
 
-    const scrollTip = element("p", "fsm__scroll-tip", "The picture is wider than a phone: swipe it sideways. The list of arrows at the bottom does the same job.");
+    const scrollTip = element("p", "fsm__scroll-tip", "Short arrow labels keep this picture readable. The list below shows each full input and lets you remove the same arrows.");
+    scrollTip.hidden = true;
     const status = element("p", "fsm__status");
     status.setAttribute("role", "status");
     const adder = element("div", "fsm__adder");
@@ -650,6 +667,7 @@
     actions.append(replayButton, hintButton, emptyButton, resetButton);
 
     const change = element("p", "concept-lab__takeaway fsm__change");
+    change.dataset.kind = "insight";
     change.setAttribute("role", "status");
 
     const traceHeading = element("p", "concept-lab__example-label fsm__trace-heading", "Replay of the scripted inputs");
@@ -684,12 +702,13 @@
         const g = geo.get(edgeKey(e));
         const hot = walked.has(edgeKey(e)) || selectedEdge === edgeKey(e);
         const group = svgEl("g", { class: "fsm__edge" + (selectedEdge === edgeKey(e) ? " is-selected" : "") + (walked.has(edgeKey(e)) ? " is-walked" : "") });
-        const labelWidth = e.on.length * 6.4 + 14;
+        const label = compact ? (cfg.compact.labels[e.on] || e.on) : e.on;
+        const labelWidth = label.length * 6.4 + 14;
         group.append(
           svgEl("path", { d: g.d, class: "fsm__hit" }),
           svgEl("path", { d: g.d, class: "fsm__line", "marker-end": `url(#${id}-arrow${hot ? "-hot" : ""})` }),
           svgEl("rect", { x: (g.lx - labelWidth / 2).toFixed(1), y: (g.ly - 10).toFixed(1), width: labelWidth.toFixed(1), height: 20, rx: 5, class: "fsm__label-box" }),
-          svgEl("text", { x: g.lx.toFixed(1), y: (g.ly + 4).toFixed(1), "text-anchor": "middle", class: "fsm__label" }, e.on)
+          svgEl("text", { x: g.lx.toFixed(1), y: (g.ly + 4).toFixed(1), "text-anchor": "middle", class: "fsm__label" }, label)
         );
         group.addEventListener("click", () => selectArrow(edgeKey(e)));
         edgeLayer.append(group);
@@ -766,6 +785,25 @@
     function draw() {
       drawEdges(); drawNodes(); drawTrace(); drawList(); drawControls();
     }
+
+    function fitDiagram() {
+      const nextCompact = !!cfg.compact && viewport.clientWidth < 34 * Number.parseFloat(getComputedStyle(root).fontSize);
+      if (nextCompact === compact && svg.dataset.fitted === "true") return;
+      compact = nextCompact;
+      [W, H] = compact ? cfg.compact.viewBox : cfg.viewBox;
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      svg.dataset.fitted = "true";
+      cfg.states.forEach((state) => {
+        const [x, y] = compact ? cfg.compact.positions[state.id] : [state.x, state.y];
+        Object.assign(nodeMap.get(state.id), { x, y });
+        nodeEls.get(state.id).setAttribute("transform", `translate(${x} ${y})`);
+      });
+      scrollTip.hidden = !compact;
+      drawEdges();
+    }
+    if (window.ResizeObserver) new ResizeObserver(fitDiagram).observe(viewport);
+    else window.addEventListener("resize", fitDiagram);
+    fitDiagram();
 
     // --- narration of what changed ----------------------------------------
     function describe() {

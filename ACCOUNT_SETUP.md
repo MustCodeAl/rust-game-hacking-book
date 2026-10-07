@@ -41,8 +41,9 @@ you set it up.
 
 ## What is stored
 
-One row per signed-in user: finished lessons, typing-practice bests, and quiz attempts
-(`public.progress.data`). No reading history, no e-mail, no name is written by this site. Supabase
+One row per signed-in user: finished lessons, typing-practice bests, quiz attempts,
+Markdown notes, margin comments, and the latest reading position
+(`public.progress.data`). The row contains no e-mail or name. Supabase
 itself keeps the sign-in identity. Signing out leaves progress in the browser. A user can ask you to
 delete their row (or delete the user in the Supabase dashboard; the row is removed with them).
 
@@ -50,13 +51,22 @@ delete their row (or delete the user in the Supabase dashboard; the row is remov
 
 - On sign-in and on each page load while signed in, local and cloud progress are **merged** (finished
   lessons are unioned, the faster typing result stays, a finished quiz attempt beats an unfinished one),
-  so nothing is lost on either side. Changes are saved about every 20 seconds, after a lesson is marked
-  done, and when the page is put away.
+  and the latest edit of each Markdown note is retained). Margin comments are merged individually
+  by stable ID. Legacy comments receive deterministic IDs; deleting a comment retains an
+  `{id, at, deleted: true}` record so an older device cannot bring it back.
+- Visible pages pull and merge remote progress every 20 seconds, including when local progress did
+  not change. Saving after a completed lesson or comment edit first reads and merges the remote
+  row. A pending request does not hide the controls or overwrite a later local note edit. The
+  latest reading position is kept, rather than a full sequence of visited pages.
 - Tokens come back in the URL fragment after the provider redirect and are removed from the address bar
   immediately; the session is kept in the browser's `localStorage` (`gha-account-session`).
 - The merge logic (`mergeProgress` in `account.js`) is covered by `node site/scripts/check-account.mjs`.
 
 ## Testing without a real project
 
-`site/scripts/check-account.mjs` tests the merge logic. A browser check with a stand-in Supabase was
-done by routing the project URL in Playwright (see BOOK_REVISION_PROGRESS.md, T13).
+`site/scripts/check-account.mjs` checks existing progress, legacy comment IDs, conflict/deletion
+handling, snapshot/application, and 512 three-device merge cases. Chromium checks exercise Notes
+and a stand-in account transport, including delayed requests and sign-out (see
+BOOK_REVISION_PROGRESS.md, T39). A configured external project and real provider login still need
+the owner's setup and verification. The client merge is not a server-side atomic transaction;
+simultaneous remote writes remain subject to the backend's row-update behavior.

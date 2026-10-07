@@ -63,14 +63,14 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'no horizontal overflow');
     assert.deepEqual(errors, [], 'no page errors');
     console.log(`reader-controls: ${width}px sidebar/TOC and comments persistence pass.`);
-    // A lesson with no authored MarginNote still needs reader-note styling and controls.
+    // The live lesson mixes its three authored notes with the reader comment.
     await page.evaluate(() => localStorage.setItem('gha-bubbles:pages/10/02', JSON.stringify([
       { at: 1, heading: '', text: 'A saved reader comment for the visibility check.', kind: 'mine' }
     ])));
     await page.goto(base + 'pages/10/02/', { waitUntil: 'domcontentloaded' });
     const mine = page.locator('.margin-note--mine');
     await mine.waitFor({ state: 'attached' });
-    assert.equal(await page.locator('[data-margin-note]:not(.margin-note--mine)').count(), 0, 'fixture has no author notes');
+    assert.equal(await page.locator('[data-margin-note]:not(.margin-note--mine)').count(), 3, 'live lesson keeps its authored notes');
     for (let i = 0; i < 3; i++) { await mine.scrollIntoViewIfNeeded(); await page.waitForTimeout(200); }
     assert.equal(await mine.isVisible(), true, 'saved reader comment renders without the load event');
     const styled = await mine.evaluate(node => parseFloat(getComputedStyle(node).paddingTop) > 0);
@@ -90,11 +90,61 @@ try {
     await setComments('show');
     await mine.waitFor({ state: 'visible' });
     for (let i = 0; i < 3; i++) { await mine.scrollIntoViewIfNeeded(); await page.waitForTimeout(200); }
-    if (output) await page.screenshot({ path: `${output}/reader-only-comments-${width}.png` });
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'reader-only notes have no horizontal overflow');
-    assert.deepEqual(errors, [], 'reader-only notes have no page errors');
-    console.log(`reader-controls: ${width}px reader-only comments render, hide, persist and restore.`);
+    if (output) await page.screenshot({ path: `${output}/mixed-comments-${width}.png` });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'mixed notes have no horizontal overflow');
+    assert.deepEqual(errors, [], 'mixed notes have no page errors');
+    console.log(`reader-controls: ${width}px mixed comments render, hide, persist and restore.`);
     await context.close();
+    const readerOnly = await browser.newContext({ viewport: { width, height: 1000 } });
+    await readerOnly.route('https://**/*', () => new Promise(() => {}));
+    await readerOnly.route('**/pages/10/02/', async route => {
+      const response = await route.fetch();
+      let html = await response.text();
+      const authored = /<aside\b(?=[^>]*\bdata-margin-note\b)[^>]*>[\s\S]*?<\/aside>/g;
+      assert.equal((html.match(authored) || []).length, 3, 'synthetic reader-only fixture starts from the live lesson');
+      html = html.replace(authored, '').replace(/<script\b(?=[^>]*\bsrc="[^"]*MarginNote\.astro_)[^>]*>[\s\S]*?<\/script>/g, '').replace('<body', '<body data-reader-fixture="author-free"');
+      await route.fulfill({ response, body: html });
+    });
+    await readerOnly.addInitScript(() => {
+      const key = 'gha-bubbles:pages/10/02';
+      if (localStorage.getItem(key) === null) localStorage.setItem(key, JSON.stringify([
+        { at: 1, heading: '', text: 'A saved reader comment for the visibility check.', kind: 'mine' }
+      ]));
+      window.addEventListener('DOMContentLoaded', () => {
+        const image = document.createElement('img'); image.src = 'https://reader-controls-stalled.invalid/pending.png'; image.hidden = true; document.body.append(image);
+      }, { once: true });
+    });
+    const only = await readerOnly.newPage(), onlyErrors = [];
+    only.setDefaultTimeout(10000);
+    only.on('pageerror', error => onlyErrors.push(error.message));
+    await only.goto(base + 'pages/10/02/', { waitUntil: 'domcontentloaded' });
+    const readerComment = only.locator('.margin-note--mine');
+    await readerComment.waitFor({ state: 'attached' });
+    assert.equal(await only.locator('[data-margin-note]:not(.margin-note--mine)').count(), 0, 'synthetic fixture removes authored asides before parsing');
+    assert.notEqual(await only.evaluate(() => document.readyState), 'complete', 'synthetic reader comments render before window.load');
+    await only.waitForFunction(() => document.querySelector('.margin-note--mine')?.dataset.adopted === 'true');
+    if (width === 1280) assert.ok(await only.evaluate(() => ['pin', 'margin'].includes(document.documentElement.dataset.noteMode)), 'Notes owns desktop layout on the synthetic reader-only page');
+    assert.ok(await readerComment.evaluate(node => parseFloat(getComputedStyle(node).paddingTop) > 0), 'synthetic reader-only comment has shared styles');
+    const chooseComments = async value => {
+      if (width === 420) { await only.locator('.sl-menu-button').click(); clicks++; }
+      await only.locator('.theme-switcher__toggle:visible').first().click(); clicks++;
+      await only.locator(`.theme-switcher:visible [data-comments-choice="${value}"]`).first().click(); clicks++;
+      await only.keyboard.press('Escape');
+    };
+    await chooseComments('hide');
+    await readerComment.waitFor({ state: 'hidden' });
+    await only.reload({ waitUntil: 'domcontentloaded' });
+    await readerComment.waitFor({ state: 'attached' });
+    await readerComment.waitFor({ state: 'hidden' });
+    assert.equal(await only.evaluate(() => JSON.parse(localStorage.getItem('gha-bubbles:pages/10/02'))[0].text), 'A saved reader comment for the visibility check.', 'synthetic fixture Hide preserves its comment');
+    await chooseComments('show');
+    await readerComment.waitFor({ state: 'visible' });
+    for (let i = 0; i < 3; i++) { await readerComment.scrollIntoViewIfNeeded(); await only.waitForTimeout(200); }
+    if (output) await only.screenshot({ path: `${output}/synthetic-reader-only-comments-${width}.png` });
+    assert.equal(await only.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'synthetic reader-only page has no horizontal overflow');
+    assert.deepEqual(onlyErrors, [], 'synthetic reader-only page has no errors');
+    console.log(`reader-controls: ${width}px synthetic author-free comments render, adopt shared layout, hide, persist and restore.`);
+    await readerOnly.close();
   }
   console.log(`reader-controls: ${clicks} real button/link clicks; stalled external requests do not block controls.`);
 } finally { await browser.close(); }

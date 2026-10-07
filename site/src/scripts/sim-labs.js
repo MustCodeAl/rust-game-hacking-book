@@ -447,7 +447,7 @@ function crashSave(root) {
 // ------------------------------------------------------------- input edges
 function inputEdge(root) {
 	header(root, 'Explore it', 'A held key versus a fresh press',
-		'Click frames to hold or release the key. A level rule acts on every frame the key is down; an edge rule acts only on the frame where it goes from up to down.');
+		'Try holding or releasing frames. Counting held frames includes every frame the key is down; counting fresh presses includes only transitions from up to down.');
 	const frames = [0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0];
 	const row = el('div', 'sim-lab__fields');
 	const cells = frames.map((_v, i) => {
@@ -473,11 +473,11 @@ function inputEdge(root) {
 			cells[i].setAttribute('aria-pressed', String(!!v));
 			cells[i].style.fontWeight = v ? '700' : '400';
 		});
-		cards.replaceChildren(...[['Frames with the key down', String(level), '■ held, ▲ the fresh press'], ['Level rule fires', String(level), 'once per frame held'], ['Edge rule fires', String(edge), 'once per fresh press']]
+		cards.replaceChildren(...[['Frames with the key down', String(level), '■ held, ▲ the fresh press'], ['Toggle on every held frame', String(level), 'one action per frame held'], ['Toggle only on fresh presses', String(edge), 'one action per transition to held']]
 			.map(([name, value, note]) => { const c = el('div', 'concept-lab__result-card'); c.append(el('span', 'concept-lab__result-label', name), el('strong', 'concept-lab__result-value', value), el('small', 'concept-lab__result-note', note)); return c; }));
-		explain.textContent = level === 0 ? 'The key is never down, so neither rule fires. Click some frames to hold it.'
-			: level === edge ? `Every press lasts one frame, so both rules fire ${edge} time${edge === 1 ? '' : 's'}. Hold the key for several frames in a row to pull them apart.`
-				: `The key is down for ${level} frames but pressed fresh only ${edge} time${edge === 1 ? '' : 's'}. A lamp toggled by the level rule flips ${level} times and ends up wherever the count lands; the edge rule flips it ${edge} time${edge === 1 ? '' : 's'}, once per press.`;
+		explain.textContent = level === 0 ? 'The key is never down, so neither counter records an action. Try holding a frame.'
+			: level === edge ? `Every press lasts one frame, so either counting method records ${edge} action${edge === 1 ? '' : 's'}. Hold the key for several frames in a row to pull them apart.`
+				: `The key is down for ${level} frames but pressed fresh only ${edge} time${edge === 1 ? '' : 's'}. Toggling a lamp on every held frame flips it ${level} times. Toggling only on fresh presses flips it ${edge} time${edge === 1 ? '' : 's'}, once per press.`;
 	}
 	render();
 }
@@ -508,7 +508,7 @@ function serverAuthority(root) {
 			? `⚠️ With no check the server trusts the client: a claimed move of ${jump.input.value} becomes the real position ${real}. Anything the client says becomes true, which is exactly what a modified client exploits.`
 			: allowed
 				? `✅ The move of ${jump.input.value} is within the server's limit of ${max}, so it is accepted. The server still decided; it just agreed.`
-				: `✅ The claimed move of ${jump.input.value} is over the limit of ${max}, so the server refuses it and keeps the player at ${real}. The client can ask for anything; the server's rule decides.`;
+				: `✅ The claimed move of ${jump.input.value} is over the limit of ${max}, so this toy server clamps the accepted movement to ${max} and stores position ${real}. Changing the client's claim does not change this limit.`;
 	}
 	[jump, limit].forEach(s => s.input.addEventListener('input', render));
 	check.addEventListener('change', render);
@@ -582,7 +582,292 @@ function evidenceCorrelation(root) {
 	render();
 }
 
-const SIMS = { 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange, 'rva-offset': rvaOffset, 'torn-read': tornRead, 'lost-update': lostUpdate, 'crash-save': crashSave, 'input-edge': inputEdge, 'server-authority': serverAuthority, 'evidence-correlation': evidenceCorrelation };
+// Pure models also let the author check boundary cases without running a lab.
+export function inputWindowModel(samples, previous = 0) {
+	let count = 0;
+	const steps = samples.map((current, index) => {
+		const before = previous;
+		const rising = current === 1 && before === 0;
+		if (rising) count += 1;
+		previous = current;
+		return { index, before, current, rising, count };
+	});
+	return { steps, presses: count, held: samples.filter(value => value === 1).length, previous };
+}
+
+function detectorInputWindow(root) {
+	header(root, 'Explore it', 'Count fresh presses inside a sample window',
+		'Try holding or releasing a sample. The counter adds a press only when the previous sample was released and the new one is held.');
+	const initial = [0, 1, 1, 0, 1];
+	const values = initial.slice();
+	const start = el('input'); start.type = 'checkbox'; start.id = `${root.id}-held-before`;
+	const startLabel = el('label'); startLabel.htmlFor = start.id;
+	startLabel.append(start, document.createTextNode(' The button was held before this window'));
+	const controls = el('div', 'sim-lab__controls'); controls.append(startLabel);
+	const samples = el('div', 'sim-lab__fields');
+	const cells = values.map((_value, index) => {
+		const button = el('button', 'concept-lab__example sim-lab__sample'); button.type = 'button';
+		button.addEventListener('click', () => { values[index] = values[index] ? 0 : 1; render(); });
+		samples.append(button); return button;
+	});
+	const cards = el('div', 'sim-lab__cards');
+	const trace = el('ol', 'sim-lab__execution');
+	const explain = el('p', 'sim-lab__explain concept-lab__takeaway'); explain.dataset.kind = 'insight'; explain.setAttribute('aria-live', 'polite');
+	root.append(controls, presets([
+		{ label: 'Reset: lesson’s samples', samples: initial, held: false },
+		{ label: 'One long hold', samples: [0, 1, 1, 1, 1], held: false },
+		{ label: 'Hold crosses the window', samples: [1, 1, 1, 1, 1], held: true },
+		{ label: 'Three taps', samples: [1, 0, 1, 0, 1], held: false },
+	], item => { values.splice(0, values.length, ...item.samples); start.checked = item.held; render(); }), samples, cards, trace, explain);
+	function render() {
+		const result = inputWindowModel(values, start.checked ? 1 : 0);
+		cells.forEach((button, index) => {
+			button.textContent = `${index + 1}: ${values[index] ? 'held · 1' : 'released · 0'}`;
+			button.setAttribute('aria-pressed', String(!!values[index]));
+		});
+		cards.replaceChildren(...[
+			['Held samples', String(result.held), 'commands that contain a held button'],
+			['Fresh presses', String(result.presses), 'observed transitions from 0 to 1'],
+		].map(([name, value, note]) => {
+			const card = el('div', 'concept-lab__result-card');
+			card.append(el('span', 'concept-lab__result-label', name), el('strong', 'concept-lab__result-value', value), el('small', 'concept-lab__result-note', note)); return card;
+		}));
+		trace.replaceChildren(...result.steps.map(step => el('li', '', `Sample ${step.index + 1}: previous ${step.before} → current ${step.current}; ${step.rising ? 'add one press' : 'add none'}; total ${step.count}.`)));
+		explain.textContent = `${result.held} held samples contain ${result.presses} fresh ${result.presses === 1 ? 'press' : 'presses'} in this window. A hold crossing the window starts with previous = 1, so it adds no new edge. This measures the observed input; it does not identify the software or prove cheating.`;
+	}
+	start.addEventListener('change', render); render();
+}
+
+export function behaviorTreeModel({ health, seen, distance, memory, combatFirst = false, running = true }) {
+	const trace = [];
+	const actionState = running ? 'running' : 'success';
+	const branches = combatFirst ? ['combat', 'flee', 'search', 'patrol'] : ['flee', 'combat', 'search', 'patrol'];
+	let action = 'patrol';
+	for (const branch of branches) {
+		if (branch === 'flee') {
+			const passes = health <= 25;
+			trace.push({ id: 'health', status: passes ? 'success' : 'failure', text: `Health ${health} ≤ 25: ${passes ? 'yes' : 'no'}.` });
+			if (!passes) { trace.push({ id: 'flee', status: 'failure', text: 'Flee sequence stops at its failed condition.' }); continue; }
+			action = 'flee';
+		} else if (branch === 'combat') {
+			const passes = seen >= 3;
+			trace.push({ id: 'seen', status: passes ? 'success' : 'failure', text: `Seen for ${seen} ticks ≥ 3: ${passes ? 'yes' : 'no'}.` });
+			if (!passes) { trace.push({ id: 'combat', status: 'failure', text: 'Combat sequence stops before inspecting the distance.' }); continue; }
+			const inRange = distance <= 1.5;
+			trace.push({ id: 'range', status: inRange ? 'success' : 'failure', text: `Distance ${distance.toFixed(1)} ≤ 1.5: ${inRange ? 'yes' : 'no'}.` });
+			if (!inRange) trace.push({ id: 'attack-path', status: 'failure', text: 'The attack sequence fails, so the inner selector tries chase.' });
+			action = inRange ? 'attack' : 'chase';
+		} else if (branch === 'search') {
+			trace.push({ id: 'memory', status: memory ? 'success' : 'failure', text: `A last known spot exists: ${memory ? 'yes' : 'no'}.` });
+			if (!memory) { trace.push({ id: 'search', status: 'failure', text: 'Search sequence stops without a remembered spot.' }); continue; }
+			action = 'search';
+		}
+		trace.push({ id: action === 'search' || action === 'flee' ? `${action}-action` : action, status: actionState, text: `${action[0].toUpperCase() + action.slice(1)} returns ${actionState}.` });
+		if (branch === 'combat') {
+			if (action === 'attack') trace.push({ id: 'attack-path', status: actionState, text: `The attack sequence returns ${actionState}.` });
+			trace.push({ id: 'choice', status: actionState, text: `The inner selector returns ${actionState} from ${action}.` });
+		}
+		trace.push({ id: branch, status: actionState, text: `${branch[0].toUpperCase() + branch.slice(1)} branch returns ${actionState}; the root selector stops here.` });
+		break;
+	}
+	return { action, status: actionState, branches, trace };
+}
+
+function behaviorTree(root) {
+	header(root, 'Explore it', 'Watch a priority tree choose one action',
+		'Try changing the guard’s health, sight history, or distance. This tree checks priorities from the top on every tick.');
+	const id = root.id || 'sim-behavior-tree';
+	const health = slider(`${id}-health`, 'Health remaining', 0, 100, 1, 30, value => `${value} health`);
+	const seen = slider(`${id}-seen`, 'Consecutive ticks seeing the player', 0, 5, 1, 3, value => `${value} ticks`);
+	const distance = slider(`${id}-distance`, 'Distance to the player', 0, 5, 0.1, 1, value => `${value.toFixed(1)} units`);
+	const memory = el('input'); memory.type = 'checkbox'; memory.id = `${id}-memory`; memory.checked = true;
+	const memoryLabel = el('label'); memoryLabel.htmlFor = memory.id; memoryLabel.append(memory, document.createTextNode(' A last known spot exists'));
+	const running = el('input'); running.type = 'checkbox'; running.id = `${id}-running`; running.checked = true;
+	const runningLabel = el('label'); runningLabel.htmlFor = running.id; runningLabel.append(running, document.createTextNode(' The chosen action is still running'));
+	const priorityLabel = el('label'); const priority = el('select', 'concept-lab__text-input'); priority.id = `${id}-priority`; priorityLabel.htmlFor = priority.id;
+	for (const [value, text] of [['health', 'Flee first'], ['combat', 'Combat first']]) { const option = el('option', '', text); option.value = value; priority.append(option); }
+	priorityLabel.append(el('span', '', 'Root priority order'), priority);
+	const controls = el('div', 'sim-lab__controls'); controls.append(health.wrap, seen.wrap, distance.wrap, memoryLabel, runningLabel, priorityLabel);
+	const tree = el('ol', 'sim-lab__tree'); tree.setAttribute('aria-label', 'Selector branches in the order checked');
+	const trace = el('ol', 'sim-lab__execution');
+	const explain = el('p', 'sim-lab__explain concept-lab__takeaway'); explain.dataset.kind = 'insight'; explain.setAttribute('aria-live', 'polite');
+	root.append(controls, presets([
+		{ label: 'Reset: attack nearby', health: 30, seen: 3, distance: 1, memory: true },
+		{ label: 'Low health', health: 20, seen: 3, distance: 1, memory: true },
+		{ label: 'Search the last spot', health: 30, seen: 0, distance: 3, memory: true },
+		{ label: 'No sight or memory', health: 30, seen: 0, distance: 3, memory: false },
+	], values => { health.input.value = values.health; seen.input.value = values.seen; distance.input.value = values.distance; memory.checked = values.memory; priority.value = 'health'; running.checked = true; [health, seen, distance].forEach(item => item.update()); render(); }), el('p', 'concept-lab__example-label', 'Root: selector — stop at the first child returning success or running'), tree, el('p', 'concept-lab__example-label', 'One tick through the tree'), trace, explain);
+	const descriptions = {
+		flee: { id: 'flee', title: 'Sequence: flee', children: [{ id: 'health', title: 'Condition: health ≤ 25' }, { id: 'flee-action', title: 'Action: flee' }] },
+		combat: { id: 'combat', title: 'Sequence: combat', children: [{ id: 'seen', title: 'Condition: seen for at least 3 ticks' }, {
+			id: 'choice', title: 'Selector: attack or chase', children: [
+				{ id: 'attack-path', title: 'Sequence: attack', children: [{ id: 'range', title: 'Condition: distance ≤ 1.5' }, { id: 'attack', title: 'Action: attack' }] },
+				{ id: 'chase', title: 'Action: chase' },
+			],
+		}] },
+		search: { id: 'search', title: 'Sequence: search', children: [{ id: 'memory', title: 'Condition: a last known spot exists' }, { id: 'search-action', title: 'Action: search there' }] },
+		patrol: { id: 'patrol', title: 'Action: patrol the route' },
+	};
+	function render() {
+		const result = behaviorTreeModel({ health: Number(health.input.value), seen: Number(seen.input.value), distance: Number(distance.input.value), memory: memory.checked, running: running.checked, combatFirst: priority.value === 'combat' });
+		const statuses = new Map(result.trace.map(item => [item.id, item.status]));
+		const drawNode = specification => {
+			const node = el('li'); node.dataset.status = statuses.get(specification.id) || 'not-visited';
+			node.append(el('span', '', `${specification.title} · ${statuses.get(specification.id) || 'not visited'}`));
+			if (specification.children) { const children = el('ul'); children.append(...specification.children.map(drawNode)); node.append(children); }
+			return node;
+		};
+		tree.replaceChildren(...result.branches.map(branch => drawNode(descriptions[branch])));
+		trace.replaceChildren(...result.trace.map(step => el('li', '', step.text)));
+		explain.textContent = `Chosen action: ${result.action}; result: ${result.status}. A sequence stops when a condition fails. A selector moves past failure, but stops at success or running. ${priority.value === 'combat' ? 'Putting combat first can make the guard fight even at low health. ' : ''}Sight history and the remembered spot belong to the blackboard; this one-tick tree does not invent or update them.`;
+	}
+	[health, seen, distance].forEach(item => item.input.addEventListener('input', render));
+	[memory, running, priority].forEach(input => input.addEventListener('change', render)); render();
+}
+
+export function scanCostModel({ mib, chunkKib, candidates, throughputMib, overheadUs }) {
+	const bytes = mib * 1048576;
+	const chunk = chunkKib * 1024;
+	const calls = Math.ceil(bytes / chunk);
+	const laterBytes = candidates * 4;
+	const firstMs = bytes / (throughputMib * 1048576) * 1000 + calls * overheadUs / 1000;
+	const laterMs = laterBytes / (throughputMib * 1048576) * 1000 + candidates * overheadUs / 1000;
+	return { bytes, calls, laterBytes, laterCalls: candidates, firstMs, laterMs, ratio: candidates ? bytes / laterBytes : null };
+}
+
+function scanCost(root) {
+	header(root, 'Explore it', 'Fewer bytes, fewer reads, or both?',
+		'Try changing the readable region or the surviving candidates. These illustrative estimates separate copying bytes from paying for each read call.');
+	const id = root.id || 'sim-scan-cost';
+	const sizes = [0, 1, 18, 40000, 1000000];
+	const region = slider(`${id}-region`, 'Readable memory', 100, 800, 100, 400, value => `${value} MiB`);
+	const chunk = slider(`${id}-chunk`, 'First-pass copy chunk', 4, 1024, 4, 64, value => `${value} KiB`);
+	const count = slider(`${id}-candidates`, 'Surviving four-byte candidates', 0, 4, 1, 3, value => fmt(sizes[value]));
+	const throughput = slider(`${id}-throughput`, 'Assumed copying rate', 50, 1000, 50, 500, value => `${value} MiB/s`);
+	const overhead = slider(`${id}-overhead`, 'Assumed overhead per read', 0, 100, 5, 15, value => `${value} microseconds`);
+	const controls = el('div', 'sim-lab__controls'); controls.append(region.wrap, chunk.wrap, count.wrap, throughput.wrap, overhead.wrap);
+	const cards = el('div', 'sim-lab__cards');
+	const bars = el('div', 'sim-lab__cost-bars');
+	const explain = el('p', 'sim-lab__explain concept-lab__takeaway'); explain.dataset.kind = 'insight'; explain.setAttribute('aria-live', 'polite');
+	root.append(controls, presets([
+		{ label: 'Reset: 400 MiB, 40,000 candidates', count: 3, chunk: 64, overhead: 15 },
+		{ label: 'Only 18 candidates', count: 2, chunk: 64, overhead: 15 },
+		{ label: 'Copying cost alone', count: 3, chunk: 64, overhead: 0 },
+	], item => { region.input.value = 400; throughput.input.value = 500; count.input.value = item.count; chunk.input.value = item.chunk; overhead.input.value = item.overhead; [region, chunk, count, throughput, overhead].forEach(control => control.update()); render(); }), cards, bars, explain);
+	function render() {
+		const result = scanCostModel({ mib: Number(region.input.value), chunkKib: Number(chunk.input.value), candidates: sizes[Number(count.input.value)], throughputMib: Number(throughput.input.value), overheadUs: Number(overhead.input.value) });
+		cards.replaceChildren(...[
+			['First-pass bytes', fmt(result.bytes), `${fmt(result.calls)} bounded chunk reads`],
+			['Filter-pass bytes', fmt(result.laterBytes), `${fmt(result.laterCalls)} separate four-byte reads`],
+		].map(([name, value, note]) => { const card = el('div', 'concept-lab__result-card'); card.append(el('span', 'concept-lab__result-label', name), el('strong', 'concept-lab__result-value', value), el('small', 'concept-lab__result-note', note)); return card; }));
+		const maximum = Math.max(result.firstMs, result.laterMs, 1);
+		bars.replaceChildren(...[['First pass', result.firstMs], ['Filter pass', result.laterMs]].map(([name, time]) => {
+			const row = el('div', 'sim-lab__cost-row'); const bar = el('meter'); bar.min = 0; bar.max = maximum; bar.value = time; bar.setAttribute('aria-label', `${name}: ${time.toFixed(2)} milliseconds in this model`);
+			row.append(el('span', '', name), bar, el('strong', '', `${time.toFixed(2)} ms`)); return row;
+		}));
+		explain.textContent = `${result.ratio === null ? 'No candidates means no later reads.' : `The filter copies about ${fmt(result.ratio)} times fewer bytes.`} Estimated time = bytes ÷ copying rate + read calls × per-call overhead. A separate call for every candidate can consume most of the savings; batching adjacent reads can help. These are chosen assumptions, not measured Windows timings, and omit decoding, faults, scheduling, and changed or unreadable memory.`;
+	}
+	[region, chunk, count, throughput, overhead].forEach(control => control.input.addEventListener('input', render)); render();
+}
+
+// A deliberately small AL/BL interpreter: integer arithmetic and the zero flag.
+// No eval, binary execution, memory access, privileged instructions, or APIs.
+export function toyAssemblyModel(source, limit = 64) {
+	const registers = { al: 0, bl: 0 };
+	const instructions = [];
+	const labels = new Map();
+	const rows = String(source).split(/\r?\n/);
+	if (source.length > 4096 || rows.length > 128) return { registers, zero: false, trace: [], error: 'Keep the program under 128 source lines and 4,096 characters.' };
+	for (let index = 0; index < rows.length; index += 1) {
+		const text = rows[index].split(';')[0].trim().toLowerCase();
+		if (!text) continue;
+		const label = /^([a-z_][a-z0-9_]*):$/.exec(text);
+		if (label) {
+			if (labels.has(label[1])) return { registers, zero: false, trace: [], error: `Line ${index + 1}: label ${label[1]} is defined twice.` };
+			labels.set(label[1], instructions.length); continue;
+		}
+		const match = /^(mov|add|sub|xor|cmp|inc|dec|jz|jnz|jmp|nop)\b\s*(.*)$/.exec(text);
+		if (!match) return { registers, zero: false, trace: [], error: `Line ${index + 1}: use only the supported instructions listed below.` };
+		const args = match[2] ? match[2].split(',').map(part => part.trim()) : [];
+		const op = match[1];
+		const expected = /^(mov|add|sub|xor|cmp)$/.test(op) ? 2 : op === 'nop' ? 0 : 1;
+		if (args.length !== expected || args.some(arg => !arg)) return { registers, zero: false, trace: [], error: `Line ${index + 1}: ${op.toUpperCase()} needs ${expected} ${expected === 1 ? 'operand' : 'operands'}.` };
+		if (instructions.length >= 64) return { registers, zero: false, trace: [], error: 'Keep the program to at most 64 instructions.' };
+		instructions.push({ op, args, sourceLine: index + 1, text });
+	}
+	const number = text => /^(?:0x[0-9a-f]+|\d+)$/.test(text) ? Number(text) : NaN;
+	for (const instruction of instructions) {
+		const { op, args, sourceLine } = instruction;
+		if (op.startsWith('j')) {
+			if (!labels.has(args[0])) return { registers, zero: false, trace: [], error: `Line ${sourceLine}: label ${args[0]} does not exist.` };
+		} else if (op !== 'nop') {
+			if (!Object.hasOwn(registers, args[0])) return { registers, zero: false, trace: [], error: `Line ${sourceLine}: the destination must be AL or BL.` };
+			if (args.length === 2 && !Object.hasOwn(registers, args[1]) && !(Number.isInteger(number(args[1])) && number(args[1]) >= 0 && number(args[1]) <= 255)) return { registers, zero: false, trace: [], error: `Line ${sourceLine}: use AL, BL, or an immediate from 0 to 255.` };
+		}
+	}
+	const trace = [];
+	let zero = false;
+	let pc = 0;
+	const stepLimit = Math.max(1, Math.min(64, Math.trunc(limit) || 64));
+	while (pc < instructions.length && trace.length < stepLimit) {
+		const instruction = instructions[pc];
+		const { op, args } = instruction;
+		const destination = args[0];
+		const operand = args.length === 2 ? (Object.hasOwn(registers, args[1]) ? registers[args[1]] : number(args[1])) : null;
+		let next = pc + 1;
+		let jumped = false;
+		if (op === 'mov') registers[destination] = operand;
+		else if (op === 'cmp') zero = registers[destination] === operand;
+		else if (op === 'jmp' || (op === 'jz' && zero) || (op === 'jnz' && !zero)) { next = labels.get(destination); jumped = true; }
+		else if (['add', 'sub', 'xor', 'inc', 'dec'].includes(op)) {
+			const old = registers[destination];
+			const result = op === 'add' ? old + operand : op === 'sub' ? old - operand : op === 'xor' ? old ^ operand : op === 'inc' ? old + 1 : old - 1;
+			registers[destination] = (result + 256) % 256;
+			zero = registers[destination] === 0;
+		}
+		trace.push({ ...instruction, al: registers.al, bl: registers.bl, zero, next, jumped });
+		pc = next;
+	}
+	return { registers, zero, trace, error: pc < instructions.length ? `Stopped after ${stepLimit} instructions. A loop may still be running; change it and run again.` : null, complete: pc >= instructions.length };
+}
+
+function toyAssembly(root) {
+	header(root, 'Explore it', 'Run a small register program',
+		'Try changing an instruction, then Run. This page interprets a tiny AL/BL model; it does not run a lab program or real machine code.');
+	const programs = [
+		{ label: 'Countdown', source: 'mov al, 3\ncount:\n  dec al\n  jnz count\nmov bl, 7' },
+		{ label: 'Byte wraps', source: 'mov al, 255\nadd al, 1\nmov bl, al' },
+		{ label: 'Branch skips', source: 'mov al, 5\ncmp al, 5\njz done\nmov bl, 99\ndone:\nnop' },
+	];
+	const field = el('label', 'concept-lab__field');
+	const input = el('textarea', 'sim-lab__program-text'); input.id = `${root.id || 'sim-toy-assembly'}-program`; input.value = programs[0].source; input.spellcheck = false; input.autocomplete = 'off'; field.htmlFor = input.id;
+	field.append(el('span', 'concept-lab__field-label', 'Program · semicolon starts a comment'), input);
+	const actions = el('div', 'concept-lab__examples');
+	const run = el('button', 'concept-lab__example', 'Run'); run.type = 'button'; run.dataset.action = 'primary';
+	const reset = el('button', 'concept-lab__example', 'Reset'); reset.type = 'button'; reset.dataset.action = 'ghost';
+	const clear = el('button', 'concept-lab__example', 'Clear'); clear.type = 'button'; clear.dataset.action = 'ghost'; actions.append(run, reset, clear);
+	const cards = el('div', 'sim-lab__cards');
+	const trace = el('ol', 'sim-lab__execution'); trace.setAttribute('aria-label', 'Register values after each executed instruction');
+	const explain = el('p', 'sim-lab__explain concept-lab__takeaway'); explain.dataset.kind = 'insight'; explain.setAttribute('aria-live', 'polite');
+	const help = el('details', 'sim-lab__help'); help.append(el('summary', '', 'Supported instructions and model limits'), el('p', '', 'AL and BL hold unsigned values from 0 to 255. MOV copies without changing the zero flag. ADD, SUB, XOR, INC and DEC wrap to one byte and set zero from the result. CMP compares without changing registers. JZ jumps when zero is set; JNZ when it is clear. JMP always jumps, and NOP changes nothing. A label is a name on its own line ending in a colon. This model omits other flags, memory, the stack, instruction encoding and timing. Reaching the end stops; each run resets both registers and the zero flag to zero, and executes at most 64 instructions.'));
+	root.append(field, presets(programs, program => { input.value = program.source; render(); }), actions, cards, trace, explain, help);
+	function render() {
+		const result = toyAssemblyModel(input.value);
+		cards.replaceChildren(...[['AL', result.registers.al], ['BL', result.registers.bl], ['Zero flag', result.zero ? 1 : 0]].map(([name, value]) => {
+			const card = el('div', 'concept-lab__result-card'); const badge = el('span', 'concept-lab__type-badge', name === 'Zero flag' ? 'FLAG' : 'U8');
+			card.append(badge, el('span', 'concept-lab__result-label', name), el('strong', 'concept-lab__result-value', String(value))); return card;
+		}));
+		trace.replaceChildren(...result.trace.map(step => el('li', '', `Source line ${step.sourceLine}: ${step.text} → AL ${step.al}, BL ${step.bl}, zero ${step.zero ? 1 : 0}${step.jumped ? '; branch taken' : ''}.`)));
+		explain.dataset.tone = result.error ? 'warn' : 'info'; explain.dataset.toneExplicit = '1';
+		explain.textContent = result.error || (result.trace.length === 0 ? 'The program is empty. Try MOV AL, 3, or choose a preset to restore a worked example.' : `${result.trace.length} instructions executed. AL = ${result.registers.al}; BL = ${result.registers.bl}. The log follows execution order, so a loop visits the same source lines more than once. Change a value or branch to compare.`);
+	}
+	run.addEventListener('click', render);
+	reset.addEventListener('click', () => { input.value = programs[0].source; render(); });
+	clear.addEventListener('click', () => { input.value = ''; render(); input.focus(); });
+	input.addEventListener('input', () => { explain.dataset.tone = 'info'; explain.textContent = 'The program changed. Choose Run to update the register values and execution log.'; }); render();
+}
+
+const SIMS = { 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange, 'rva-offset': rvaOffset, 'torn-read': tornRead, 'lost-update': lostUpdate, 'crash-save': crashSave, 'input-edge': inputEdge, 'server-authority': serverAuthority, 'evidence-correlation': evidenceCorrelation, 'detector-input-window': detectorInputWindow, 'behavior-tree': behaviorTree, 'scan-cost': scanCost, 'toy-assembly': toyAssembly };
 
 export function mountSimLabs() {
 	for (const root of document.querySelectorAll('[data-sim-lab]')) {

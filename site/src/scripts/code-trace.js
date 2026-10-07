@@ -31,13 +31,13 @@ import { ORIGINAL_TRACES } from './original-traces.js';
 
 // Small syntax highlighter for lab code (Rust, Lua, Python-like, assembly).
 function academyGuessLang(text) {
-  if (/\b(mov|lea|push|pop|jmp)\b\s/.test(text)) return "asm";
+  if (/^\s*(?:[a-z_]\w*:\s*)?(mov|lea|push|pop|jmp|call|ret|cmp|add|sub|inc|dec|imul|idiv|test|nop|int3|movzx|movsx|shl|shr|sar|and|or|xor|not|movss|addss|mulss|cvtsi2ss|cvttss2si|comiss)\b(?:\s|$)/im.test(text)) return "asm";
   if (/\b(local|function|then|elseif)\b/.test(text) && !/\bfn\b|\blet\b/.test(text)) return "lua";
   if (/^\s*(def |for .* in .*:|#)/m.test(text) && !/[{};]/.test(text)) return "py";
   return "rust";
 }
 function academyHighlight(text, lang) {
-  var KW = " fn let mut if else match return use struct enum impl for while in loop const pub as break continue local function end then elseif do not and or def import from mov lea push pop jmp call ret cmp add sub xor test nop ";
+  var KW = " fn let mut if else match return use struct enum impl for while in loop const pub as break continue local function end then elseif do not and or def import from mov lea push pop jmp call ret cmp add sub inc dec imul idiv test nop int3 movzx movsx shl shr sar xor movss addss mulss cvtsi2ss cvttss2si comiss ";
   var LIT = " true false nil None Some Ok Err self null True False ";
   var comment = lang === "lua" ? "--" : lang === "py" ? "#" : lang === "asm" ? ";" : "//";
   var esc = function (s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
@@ -50,7 +50,7 @@ function academyHighlight(text, lang) {
     if (!/\w/.test(text.charAt(i - 1)) && (m = /^0x[0-9a-fA-F_]+|^\d[\d_.]*/.exec(rest))) { out += span("n", m[0]); i += m[0].length; continue; }
     if ((m = /^[A-Za-z_]\w*/.exec(rest))) {
       var w = m[0], after = rest.charAt(w.length);
-      var kind = KW.indexOf(" " + w + " ") >= 0 ? "k" : LIT.indexOf(" " + w + " ") >= 0 ? "l" : after === "(" ? "f" : /^[A-Z]/.test(w) ? "t" : "";
+      var kind = KW.indexOf(" " + (lang === "asm" ? w.toLowerCase() : w) + " ") >= 0 ? "k" : LIT.indexOf(" " + w + " ") >= 0 ? "l" : after === "(" ? "f" : /^[A-Z]/.test(w) ? "t" : "";
       out += kind ? span(kind, w) : esc(w); i += w.length; continue;
     }
     out += esc(text.charAt(i)); i++;

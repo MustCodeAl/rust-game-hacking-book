@@ -4,6 +4,9 @@
 // edit of a note wins). Export writes plain Markdown that opens in massCode or
 // any other notes app.
 
+import { bubbleRecords, deleteBubble, newBubbleId } from './bubble-records.js';
+import { mountMarginNotes } from './margin-notes.js';
+
 const PREFIX = 'gha-note:';
 const read = key => { try { return window.localStorage.getItem(key); } catch { return null; } };
 const parse = text => { try { return JSON.parse(text); } catch { return null; } };
@@ -105,6 +108,11 @@ function download(filename, text) {
 
 // ------------------------------------------------------------------- the box
 export function mountNotes() {
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', mountNotes, { once: true });
+		return;
+	}
+	mountMarginNotes();
 	for (const root of document.querySelectorAll('[data-lesson-notes]')) {
 		if (root.dataset.noteReady === 'true') continue;
 		root.dataset.noteReady = 'true';
@@ -126,6 +134,7 @@ export function mountNotes() {
 		const words = () => (area.value.trim() ? area.value.trim().split(/\s+/).length : 0);
 		const refresh = () => { summary.textContent = area.value.trim() ? `· ${words()}w` : ''; };
 		const save = () => {
+			clearTimeout(timer); timer = 0;
 			try {
 				window.localStorage.setItem(key, JSON.stringify({ text: area.value, at: Date.now(), title, lesson }));
 				status.textContent = 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' in this browser.';
@@ -152,7 +161,7 @@ export function mountNotes() {
 			status.textContent = 'Exported as a Markdown file.';
 		});
 		root.querySelector('[data-note-export-all]').addEventListener('click', () => {
-			clearTimeout(timer); if (area.value.trim()) save();
+			if (timer || area.value.trim()) save();
 			const notes = allNotes();
 			if (!notes.length) { status.textContent = 'You have no notes to export yet.'; return; }
 			const base = location.origin + location.pathname.replace(/pages\/.*$/, '');
@@ -169,6 +178,7 @@ export function mountNotes() {
 			status.textContent = 'Note cleared.';
 		});
 		refresh();
+		const setOpen = open => { panel.hidden = !open; fab.setAttribute('aria-expanded', String(open)); if (open) area.focus(); };
 
 		// Where the button sits, and whether it is hidden, are the reader's choice (kept in this browser).
 		const UI = 'gha-notes-ui';
@@ -190,24 +200,32 @@ export function mountNotes() {
 		// Reader-made margin comments: pinned to the section being read, shown beside the text like the authors' notes.
 		const BKEY = 'gha-bubbles:' + id;
 		const LABELS = { mine: 'My note', context: 'Context', clarify: 'Clarification', inquiry: 'Wonder', praise: 'Well spotted', action: 'Try this', code: 'Code note', math: 'Math' };
-		const loadBubbles = () => { const v = parse(read(BKEY) || '[]'); return Array.isArray(v) ? v : []; };
-		const saveBubbles = list => { try { window.localStorage.setItem(BKEY, JSON.stringify(list)); } catch { /* optional */ } };
+		const loadBubbles = () => bubbleRecords(read(BKEY) || '[]');
+		const saveBubbles = list => {
+			try { window.localStorage.setItem(BKEY, JSON.stringify(bubbleRecords(list))); } catch { /* optional */ }
+			window.dispatchEvent(new Event('gha:bubbles-change'));
+		};
 		const drawBubbles = () => {
 			document.querySelectorAll('.margin-note--mine').forEach(n => n.remove());
-			for (const b of loadBubbles()) {
+			const records = loadBubbles().filter(b => !b.deleted).sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
+			for (const b of records) {
 				const anchor = (b.heading && document.getElementById(b.heading)) || document.querySelector('.sl-markdown-content > :first-child');
 				if (!anchor) continue;
 				let spot = anchor.nextElementSibling;
 				while (spot && spot.tagName !== 'P') spot = spot.nextElementSibling;
 				const aside = document.createElement('aside');
 				aside.className = 'margin-note margin-note--mine';
-				aside.dataset.marginNote = ''; aside.dataset.kind = b.kind; aside.setAttribute('role', 'note');
+				aside.dataset.marginNote = ''; aside.dataset.bubbleId = b.id; aside.dataset.kind = b.kind; aside.setAttribute('role', 'note');
 				aside.setAttribute('aria-label', LABELS[b.kind] || 'My note');
 				aside.title = LABELS[b.kind] || 'My note';
 				const p = document.createElement('p'); const strong = document.createElement('span'); strong.className = 'margin-note__type';
 				strong.textContent = (LABELS[b.kind] || 'My note') + ': ';
 				const x = document.createElement('button'); x.type = 'button'; x.className = 'margin-note__x'; x.textContent = '×'; x.setAttribute('aria-label', 'Delete this comment');
-				x.addEventListener('click', event => { event.stopPropagation(); saveBubbles(loadBubbles().filter(item => item.at !== b.at)); drawBubbles(); });
+				x.addEventListener('click', event => {
+					event.stopPropagation();
+					saveBubbles(loadBubbles().map(item => item.id === b.id ? deleteBubble(item) : item));
+					drawBubbles();
+				});
 				p.append(strong, document.createTextNode(b.text + ' '), x); aside.append(p);
 				(spot || anchor).before(aside);
 			}
@@ -219,17 +237,25 @@ export function mountNotes() {
 			const text = (selected || lines[lines.length - 1] || '').slice(0, 240);
 			if (!text) { status.textContent = 'Write something, or select part of the note, then press Add.'; return; }
 			const heading = sectionNow();
-			saveBubbles([...loadBubbles(), { at: Date.now(), heading: heading ? heading.id : '', text, kind: root.querySelector('[data-note-kind]').value }]);
+			saveBubbles([...loadBubbles(), { id: newBubbleId(), at: Date.now(), heading: heading ? heading.id : '', text, kind: root.querySelector('[data-note-kind]').value }]);
 			drawBubbles();
 			status.textContent = 'Added beside ' + (heading ? '“' + heading.textContent.trim().slice(0, 40) + '”' : 'the start of the lesson') + '. Delete it with the × on the comment.';
 		});
-		if (document.readyState === 'loading') {
-			document.addEventListener('DOMContentLoaded', drawBubbles, { once: true });
-		} else {
-			drawBubbles();
-		}
-
-		const setOpen = open => { panel.hidden = !open; fab.setAttribute('aria-expanded', String(open)); if (open) area.focus(); };
+		// The DOM-ready mount above renders saved comments while external requests may still be pending.
+		drawBubbles();
+		const refreshSyncedNote = () => {
+			// Do not replace an edit whose debounce has not saved yet.
+			if (timer) return;
+			const next = parse(read(key) || 'null');
+			area.value = next && typeof next.text === 'string' ? next.text : '';
+			refresh();
+			if (!preview.hidden) show('preview');
+		};
+		window.addEventListener('gha:progress-sync', () => { drawBubbles(); refreshSyncedNote(); });
+		window.addEventListener('storage', event => {
+			if (event.key === BKEY || event.key === null) drawBubbles();
+			if (event.key === key || event.key === null) refreshSyncedNote();
+		});
 		fab.addEventListener('click', () => { if (ui.hidden) { ui.hidden = false; applyUi(); return; } setOpen(panel.hidden); });
 		root.querySelector('[data-note-close]').addEventListener('click', () => { setOpen(false); fab.focus(); });
 		panel.addEventListener('keydown', event => { if (event.key === 'Escape') { setOpen(false); fab.focus(); } });
