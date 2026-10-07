@@ -9,7 +9,7 @@ sidebar:
   order: 3
   label: "5.3 DLL Exports and Forwarded Names"
 ---
-import { Accordion, GitHub } from '../../../../components/kit';
+import { Accordion, GitHub, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
@@ -75,22 +75,63 @@ The optional header is shaped differently for 32-bit PE32 and 64-bit PE32+. The 
 
 Hard-coding one screenshot's “export table is 0x78 after the PE signature” is brittle because that shortcut mixes header landmarks and assumes one layout.
 
+The original helper assumes the export directory starts 96 bytes into every optional header. That matches PE32, but PE32+ puts it at 112. `u32_at` is the bounded four-byte reader used by the parser; `magic` identifies the header format.
+
+```rust title="Before: assume one optional-header layout"
+fn export_rva(bytes: &[u8], optional_offset: usize, magic: u16)
+    -> anyhow::Result<u32>
+{
+    let export_directory = optional_offset + 96; // Assumes PE32.
+    let export_rva = u32_at(bytes, export_directory)?;
+    Ok(export_rva)
+}
+```
+
+**Format-aware parsing** chooses the documented landmark for the detected format, rejects unknown formats, and checks the offset calculation before reading. The complete parser also verifies that directory entry zero is declared present.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn export_rva(bytes: &[u8], optional_offset: usize, magic: u16)
+    -> anyhow::Result<u32>
+{
+    let directory_offset = match magic {
+        0x10b => 96,
+        0x20b => 112,
+        _ => anyhow::bail!("unsupported PE format"),
+    };
+    let export_directory = optional_offset.checked_add(directory_offset)
+        .context("export-directory offset overflowed")?;
+    let export_rva = u32_at(bytes, export_directory)?;
+    Ok(export_rva)
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn export_rva(bytes: &[u8], optional_offset: usize, magic: u16)
      -> anyhow::Result<u32>
  {
--    let export_directory = pe_offset + 0x78;
+-    let export_directory = optional_offset + 96; // Assumes PE32.
 +    let directory_offset = match magic {
 +        0x10b => 96,
 +        0x20b => 112,
-+        _ => bail!("unsupported PE format"),
++        _ => anyhow::bail!("unsupported PE format"),
 +    };
 +    let export_directory = optional_offset.checked_add(directory_offset)
 +        .context("export-directory offset overflowed")?;
-+    let export_rva = u32_at(bytes, export_directory)?;
+     let export_rva = u32_at(bytes, export_directory)?;
      Ok(export_rva)
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** select a format's layout before calculating a field offset.
 
 The program also checks `NumberOfRvaAndSizes` before reading directory entry zero. If the field is absent, reading entry zero would cross the file's declared header.
 

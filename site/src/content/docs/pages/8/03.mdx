@@ -9,7 +9,7 @@ sidebar:
   order: 4
   label: "6.4 Detours and Reversible Patches"
 ---
-import { Frame, GitHub, SpeedType } from '../../../../components/kit';
+import { Frame, GitHub, SpeedType, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -110,10 +110,40 @@ fn verify_hook(process: &Process, plan: &PatchPlan) -> anyhow::Result<()> {
 
 Do not turn a mismatch into a force option:
 
+The original helper writes the replacement immediately, then runs the feature. It neither checks the live instructions nor retains an owner that can restore them when the feature stops or returns an error. This is a teaching wrapper excerpt: `AppliedPatch::apply` must capture verified original bytes and install through a code-writing boundary; the buildable in-process lab below uses `LocalPatch` for that role.
+
+```rust title="Before: write a detour with no owned restoration"
+fn run_detour(process: &Process, plan: &PatchPlan) -> anyhow::Result<()> {
+    process.write_exact(plan.hook, &plan.replacement)?; // No check or restoration owner.
+    run_feature_until_stopped()?;
+    Ok(())
+}
+```
+
+**Validate before writing**, then hold an `AppliedPatch` owner for the whole enabled period. Explicit restoration reports a failure; dropping the owner provides a final best-effort attempt if an earlier operation fails.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn run_detour(process: &Process, plan: &PatchPlan) -> anyhow::Result<()> {
+    plan.validate().map_err(anyhow::Error::msg)?;
+    verify_hook(process, plan)?;
+    let mut applied = AppliedPatch::apply(process, plan)?;
+    // Keep `applied` alive for the entire period when the detour is enabled.
+    run_feature_until_stopped()?;
+    applied.restore()?;
+    Ok(())
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn run_detour(process: &Process, plan: &PatchPlan) -> anyhow::Result<()> {
--    process.write_exact(plan.hook, &plan.replacement)?;
-+    plan.validate()?;
+-    process.write_exact(plan.hook, &plan.replacement)?; // No check or restoration owner.
++    plan.validate().map_err(anyhow::Error::msg)?;
 +    verify_hook(process, plan)?;
 +    let mut applied = AppliedPatch::apply(process, plan)?;
 +    // Keep `applied` alive for the entire period when the detour is enabled.
@@ -122,6 +152,11 @@ Do not turn a mismatch into a force option:
      Ok(())
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** reject mismatched instructions and keep their original bytes owned until restoration finishes.
 
 :::note[Why this version?]
 The expected bytes are a tiny build fingerprint. If they
@@ -421,21 +456,86 @@ fn install_terrain_hook() -> Result<LocalPatch> {
 Here is the important difference between “the address worked once” and a hook
 whose assumptions are visible:
 
+The original helper follows the lab's local player and side pointers, then writes gold using unchecked integer addition. These constants describe one verified offline build. **This is unsafe code:** the caller must guarantee that every addressed field stays live, initialized, aligned and accessible for the entire operation.
+
+```rust title="Before: follow unchecked local object addresses"
+/// # Safety
+/// Call only inside the verified 32-bit build while these local fields remain
+/// initialized, live, aligned and accessible. Serialize this operation with
+/// game updates and guarantee exclusive writable access to the gold field.
+unsafe fn set_gold(amount: u32) -> Result<()> {
+    // SAFETY: the caller guarantees the root slot is live and aligned.
+    let player = unsafe { ptr::read_volatile(PLAYER_ROOT as *const u32) } as usize;
+    let side_slot = player + GAME_OFFSET; // May overflow before the access.
+    // SAFETY: the caller must guarantee this computed local slot is valid.
+    let side = unsafe { *(side_slot as *const u32) } as usize;
+    // SAFETY: the caller must guarantee the local gold field remains writable.
+    unsafe { *((side + GOLD_OFFSET) as *mut u32) = amount };
+    Ok(())
+}
+```
+
+**Checked arithmetic** and null checks reject obvious invalid addresses before access. They do not prove pointer validity, prevent concurrent game writes or make volatile access safe; the caller's lifetime and build guarantees remain necessary.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+/// # Safety
+/// Call only inside the verified 32-bit build while these local fields remain
+/// initialized, live, aligned and accessible. Serialize this operation with
+/// game updates and guarantee exclusive writable access to the gold field.
+unsafe fn set_gold(amount: u32) -> Result<()> {
+    // SAFETY: the caller guarantees the root slot is live and aligned.
+    let player = unsafe { ptr::read_volatile(PLAYER_ROOT as *const u32) } as usize;
+    anyhow::ensure!(player != 0, "current player pointer is null");
+    let side_slot = player.checked_add(GAME_OFFSET)
+        .context("side-pointer address overflowed")?;
+    // SAFETY: the caller guarantees this local slot remains live and aligned.
+    let side = unsafe { ptr::read_volatile(side_slot as *const u32) } as usize;
+    anyhow::ensure!(side != 0, "current side pointer is null");
+    let gold_address = side.checked_add(GOLD_OFFSET)
+        .context("gold address overflowed")?;
+    // SAFETY: the caller guarantees exclusive writable access to this live field.
+    unsafe { ptr::write_volatile(gold_address as *mut u32, amount) };
+    Ok(())
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
+ /// # Safety
+ /// Call only inside the verified 32-bit build while these local fields remain
+ /// initialized, live, aligned and accessible. Serialize this operation with
+ /// game updates and guarantee exclusive writable access to the gold field.
  unsafe fn set_gold(amount: u32) -> Result<()> {
-     let player = ptr::read_volatile(PLAYER_ROOT as *const u32) as usize;
--    let side = *(player.add(GAME_OFFSET) as *const u32) as usize;
--    *((side + GOLD_OFFSET) as *mut u32) = amount;
-+    let side_pointer_address = player.checked_add(GAME_OFFSET)
+     // SAFETY: the caller guarantees the root slot is live and aligned.
+     let player = unsafe { ptr::read_volatile(PLAYER_ROOT as *const u32) } as usize;
+-    let side_slot = player + GAME_OFFSET; // May overflow before the access.
++    anyhow::ensure!(player != 0, "current player pointer is null");
++    let side_slot = player.checked_add(GAME_OFFSET)
 +        .context("side-pointer address overflowed")?;
-+    let side = ptr::read_volatile(side_pointer_address as *const u32) as usize;
+-    // SAFETY: the caller must guarantee this computed local slot is valid.
++    // SAFETY: the caller guarantees this local slot remains live and aligned.
+-    let side = unsafe { *(side_slot as *const u32) } as usize;
++    let side = unsafe { ptr::read_volatile(side_slot as *const u32) } as usize;
+-    // SAFETY: the caller must guarantee the local gold field remains writable.
+-    unsafe { *((side + GOLD_OFFSET) as *mut u32) = amount };
 +    anyhow::ensure!(side != 0, "current side pointer is null");
 +    let gold_address = side.checked_add(GOLD_OFFSET)
 +        .context("gold address overflowed")?;
-+    ptr::write_volatile(gold_address as *mut u32, amount);
++    // SAFETY: the caller guarantees exclusive writable access to this live field.
++    unsafe { ptr::write_volatile(gold_address as *mut u32, amount) };
      Ok(())
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** arithmetic checks supplement an unsafe memory contract; they cannot replace it.
 
 :::note[Why this version?]
 `checked_add` prevents a bad pointer plus offset from
@@ -447,7 +547,7 @@ boundary are still required. `LocalPatch` then owns the separate responsibility
 of restoring the original instructions.
 :::
 
-This is not pseudocode. The complete definitions of [`LocalPatch` and
+The complete cave above is buildable source. The definitions of [`LocalPatch` and
 `near_jump`](/windows-labs/src/windows_impl/local_patch.rs), including
 `VirtualProtect`, `FlushInstructionCache`, and automatic restoration, are part
 of the project. The exact cave above lives in [`game_hooks.rs`](/windows-labs/src/windows_impl/game_hooks.rs).

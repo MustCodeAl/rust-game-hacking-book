@@ -10,7 +10,7 @@ sidebar:
   label: "8.3 Message Parsing and Serialization"
 ---
 import SpeedType from '../../../../components/kit/SpeedType.astro';
-import { Frame, GitHub } from '../../../../components/kit';
+import { Frame, GitHub, CodeGroup, Tab } from '../../../../components/kit';
 
 import ConceptLab from '../../../../components/ConceptLab.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -141,10 +141,40 @@ impl<'a> Cursor<'a> {
 
 This cursor replaces direct indexing and hopeful conversion:
 
+The original parser takes four header bytes, trusts their length, and indexes the payload. **This is a failure example:** a short header or a length beyond the captured buffer can panic; extra bytes are silently accepted.
+
+```rust title="Before: index directly into an untrusted frame"
+fn parse_payload(bytes: &[u8]) -> Result<&[u8], ParseError> {
+    let length = u32::from_be_bytes(bytes[0..4].try_into().unwrap()); // Short header panics.
+    let payload = &bytes[4..4 + length as usize]; // Trusts the claimed boundary.
+    Ok(payload)
+}
+```
+
+The **bounded cursor** makes every read fallible and advances only after a valid range has been obtained. Requiring the cursor to finish at the end rejects trailing bytes in this one-frame format.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn parse_payload(bytes: &[u8]) -> Result<&[u8], ParseError> {
+    let mut cursor = Cursor { bytes, position: 0 };
+    let length = cursor.u32_be()? as usize;
+    let payload = cursor.take(length)?;
+    if cursor.position != bytes.len() {
+        return Err(ParseError::TrailingBytes);
+    }
+    Ok(payload)
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn parse_payload(bytes: &[u8]) -> Result<&[u8], ParseError> {
--    let length = u32::from_be_bytes(bytes[0..4].try_into().unwrap());
--    let payload = &bytes[4..4 + length as usize];
+-    let length = u32::from_be_bytes(bytes[0..4].try_into().unwrap()); // Short header panics.
+-    let payload = &bytes[4..4 + length as usize]; // Trusts the claimed boundary.
 +    let mut cursor = Cursor { bytes, position: 0 };
 +    let length = cursor.u32_be()? as usize;
 +    let payload = cursor.take(length)?;
@@ -154,6 +184,11 @@ This cursor replaces direct indexing and hopeful conversion:
      Ok(payload)
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** treat malformed input as a parse error, and check the complete frame boundary.
 
 :::note[Why this version?]
 Network input is allowed to be short, oversized, or

@@ -9,7 +9,7 @@ sidebar:
   order: 8
   label: "9.8 File Hashes and Digital Signatures"
 ---
-import { Accordion, GitHub, Frame } from '../../../../components/kit';
+import { Accordion, GitHub, Frame, CodeGroup, Tab } from '../../../../components/kit';
 import Visual from '../../../../components/Visual.astro';
 
 ## A hash and a signature answer different questions
@@ -131,15 +131,44 @@ Treat the result as one fact:
 
 ## `WinVerifyTrust` returns a status code, not a `Result`
 
-The Win32 function returns a `LONG`. Microsoft says only exact zero means the requested trust action succeeded. Do not use HRESULT-style “success if nonnegative” logic.
+The Win32 function returns a `LONG`. [Microsoft's return-value contract](https://learn.microsoft.com/en-us/windows/win32/api/wintrust/nf-wintrust-winverifytrust#return-value) says only exact zero means the requested trust action succeeded. Do not use HRESULT-style “success if nonnegative” logic.
+
+The original helper treats every nonnegative status as trusted, following a rule used for some other Windows status types. `WinVerifyTrust` has a different contract: only exactly zero reports success.
+
+```rust title="Before: accept every nonnegative trust status"
+fn explain_trust(status: i32) {
+    if status >= 0 { println!("trusted"); } // Incorrect for WinVerifyTrust.
+    else { println!("trust check failed with status {status:#010x}"); }
+}
+```
+
+Use **the function's own success contract**, and keep every unknown nonzero status visible as a failure. A successful offline check still has the policy limits described below.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn explain_trust(status: i32) {
+    if status == 0 { println!("trusted"); }
+    else { println!("trust check failed with status {status:#010x}"); }
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
 
 ```diff
  fn explain_trust(status: i32) {
--    if status >= 0 { println!("trusted"); }
+-    if status >= 0 { println!("trusted"); } // Incorrect for WinVerifyTrust.
 +    if status == 0 { println!("trusted"); }
      else { println!("trust check failed with status {status:#010x}"); }
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** do not reuse another API's success test just because both results are integers.
 
 Known nonzero values help us print plain-English explanations. Unknown statuses remain failures and are printed in hexadecimal for investigation.
 

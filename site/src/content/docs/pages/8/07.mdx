@@ -9,7 +9,7 @@ sidebar:
   order: 8
   label: "6.8 Menus as State and Command Interfaces"
 ---
-import { GitHub, Steps } from '../../../../components/kit';
+import { GitHub, Steps, CodeGroup, Tab } from '../../../../components/kit';
 import SortBoard from '../../../../components/SortBoard.astro';
 
 ## A menu is a control surface, not the hack itself
@@ -118,16 +118,59 @@ stores the setting between frames; the widget does not.
 
 This is why low-level work must not happen unconditionally in `ui`:
 
+This intentionally bad menu variant draws a slider and immediately writes its current value to the owned lab process. It assumes a `Process` in `self.process` and a verified `FOV_ADDRESS`; the real course menu below only sends commands. Immediate-mode UI redraws repeatedly, so repainting the bad variant repeats that side effect.
+
+```rust title="Before: write memory whenever the menu redraws"
+impl MenuApp {
+    fn draw_settings(&mut self, ui: &mut egui::Ui) -> anyhow::Result<()> {
+        ui.add(egui::Slider::new(&mut self.settings.field_of_view, 30.0..=140.0));
+        self.process.write_exact(
+            FOV_ADDRESS, &self.settings.field_of_view.to_le_bytes(),
+        )?; // Every frame.
+        Ok(())
+    }
+}
+```
+
+Make the **user event** explicit: clicking Apply sends one command to the worker. The worker still validates the request and reports whether it was applied; queuing a command is not proof that a write succeeded.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+impl MenuApp {
+    fn draw_settings(&mut self, ui: &mut egui::Ui) -> anyhow::Result<()> {
+        ui.add(egui::Slider::new(&mut self.settings.field_of_view, 30.0..=140.0));
+        if ui.button("Apply changes").clicked() {
+            self.commands.send(Command::Apply(self.settings.clone()))?; // One request.
+        }
+        Ok(())
+    }
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
- fn draw_settings(&mut self, ui: &mut egui::Ui) -> anyhow::Result<()> {
-     ui.add(egui::Slider::new(&mut self.settings.field_of_view, 30.0..=140.0));
--    process.write_f32(FOV_ADDRESS, self.settings.field_of_view)?; // every frame ❌
-+    if ui.button("Apply changes").clicked() {
-+        self.commands.send(Command::Apply(self.settings.clone()))?; // once ✅
-+    }
-     Ok(())
+ impl MenuApp {
+     fn draw_settings(&mut self, ui: &mut egui::Ui) -> anyhow::Result<()> {
+         ui.add(egui::Slider::new(&mut self.settings.field_of_view, 30.0..=140.0));
+-        self.process.write_exact(
+-            FOV_ADDRESS, &self.settings.field_of_view.to_le_bytes(),
+-        )?; // Every frame.
++        if ui.button("Apply changes").clicked() {
++            self.commands.send(Command::Apply(self.settings.clone()))?; // One request.
++        }
+         Ok(())
+     }
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** a redraw displays state; an explicit command requests a state change.
 
 The first version repeats a side effect merely because the menu repainted. The
 second version names the user action that triggers one update.

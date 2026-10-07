@@ -9,7 +9,7 @@ sidebar:
   order: 9
   label: "5.9 Event Tracing for Windows"
 ---
-import { Accordion, GitHub, Steps } from '../../../../components/kit';
+import { Accordion, GitHub, Steps, CodeGroup, Tab } from '../../../../components/kit';
 import CodeTrace from '../../../../components/CodeTrace.astro';
 
 ## Observation without a breakpoint
@@ -124,7 +124,7 @@ fn main() -> anyhow::Result<()> {
     if let Err(error) = io::stdin().read_line(&mut answer) {
         let _ = run_wpr(&[std::ffi::OsStr::new("-cancel")]);
         return Err(error)
-            .context("could not read Enter; the trace was cancelled");
+            .context("could not read Enter; trace cancellation requested");
     }
 
     let stop_result = run_wpr(&[
@@ -152,19 +152,66 @@ fn main() {
 
 Starting a trace creates system state that outlives the first `wpr.exe` process. If reading from the terminal fails or stopping the session fails, the helper asks WPR to cancel.
 
+The original helper starts WPR, waits for Enter, then stops the recording. If the terminal read fails, `?` returns early and the recording session remains active. `run_wpr` is the command wrapper from the complete helper above.
+
+```rust title="Before: return early without cancelling a trace"
+fn record_trace(output: &Path) -> anyhow::Result<()> {
+    run_wpr(&[OsStr::new("-start"), OsStr::new("GeneralProfile")])?;
+    let mut answer = String::new();
+    io::stdin().read_line(&mut answer)?; // An error skips the stop command.
+    run_wpr(&[OsStr::new("-stop"), output.as_os_str()])?;
+    Ok(())
+}
+```
+
+Handle that early-return boundary explicitly and request **best-effort cleanup** before returning the original input error. The same cleanup request is made if stopping fails. Cancellation itself can fail, so the returned error says that it was requested rather than claiming it succeeded.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn record_trace(output: &Path) -> anyhow::Result<()> {
+    run_wpr(&[OsStr::new("-start"), OsStr::new("GeneralProfile")])?;
+    let mut answer = String::new();
+    if let Err(error) = io::stdin().read_line(&mut answer) {
+        let _ = run_wpr(&[OsStr::new("-cancel")]);
+        return Err(error).context("could not read Enter; trace cancellation requested");
+    }
+    let stop_result = run_wpr(&[OsStr::new("-stop"), output.as_os_str()]);
+    if stop_result.is_err() {
+        let _ = run_wpr(&[OsStr::new("-cancel")]);
+    }
+    stop_result?;
+    Ok(())
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn record_trace(output: &Path) -> anyhow::Result<()> {
      run_wpr(&[OsStr::new("-start"), OsStr::new("GeneralProfile")])?;
      let mut answer = String::new();
--    io::stdin().read_line(&mut answer)?;
+-    io::stdin().read_line(&mut answer)?; // An error skips the stop command.
 +    if let Err(error) = io::stdin().read_line(&mut answer) {
 +        let _ = run_wpr(&[OsStr::new("-cancel")]);
-+        return Err(error).context("the trace was cancelled");
++        return Err(error).context("could not read Enter; trace cancellation requested");
 +    }
-     run_wpr(&[OsStr::new("-stop"), output.as_os_str()])?;
+-    run_wpr(&[OsStr::new("-stop"), output.as_os_str()])?;
++    let stop_result = run_wpr(&[OsStr::new("-stop"), output.as_os_str()]);
++    if stop_result.is_err() {
++        let _ = run_wpr(&[OsStr::new("-cancel")]);
++    }
++    stop_result?;
      Ok(())
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** every operation that starts persistent state needs a cleanup path for later failures.
 
 ### Why this version?
 

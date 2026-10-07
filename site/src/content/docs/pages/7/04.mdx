@@ -9,7 +9,7 @@ sidebar:
   order: 4
   label: "5.4 Byte Signatures and Pattern Scanning"
 ---
-import { Accordion, Badge, Frame, GitHub, Panel, Steps } from '../../../../components/kit';
+import { Accordion, Badge, Frame, GitHub, Panel, Steps, CodeGroup, Tab } from '../../../../components/kit';
 
 import Scene from '../../../../components/Scene.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
@@ -142,14 +142,48 @@ fn matches_at(bytes: &[u8], offset: usize, pattern: &[PatternByte]) -> bool {
 
 The safe matcher makes wildcard meaning and range failure explicit:
 
+The original matcher accepts an exact byte pattern and compares each byte by direct indexing. A candidate near the buffer end can panic, and the byte list has no separate way to express a wildcard.
+
+```rust title="Before: compare exact bytes through direct indexes"
+fn matches_at(bytes: &[u8], offset: usize, pattern: &[u8]) -> bool {
+    for index in 0..pattern.len() {
+        if pattern[index] != bytes[offset + index] { // May pass the buffer end.
+            return false;
+        }
+    }
+    true
+}
+```
+
+Request the **complete bounded window** first. Then compare each byte with a `PatternByte` enum item: `Exact` requires equality, while `Any` still consumes one byte but accepts any value. An empty pattern is excluded by the caller's pattern validation.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn matches_at(bytes: &[u8], offset: usize, pattern: &[PatternByte]) -> bool {
+    let Some(window) = bytes.get(offset..offset.saturating_add(pattern.len())) else {
+        return false;
+    };
+    window.iter().zip(pattern).all(|(found, expected)| {
+        matches!(expected, PatternByte::Any)
+            || matches!(expected, PatternByte::Exact(value) if value == found)
+    })
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
- fn matches_at(bytes: &[u8], offset: usize, pattern: &[PatternByte]) -> bool {
+-fn matches_at(bytes: &[u8], offset: usize, pattern: &[u8]) -> bool {
 -    for index in 0..pattern.len() {
--        if pattern[index] != bytes[offset + index] {
+-        if pattern[index] != bytes[offset + index] { // May pass the buffer end.
 -            return false;
 -        }
 -    }
 -    true
++fn matches_at(bytes: &[u8], offset: usize, pattern: &[PatternByte]) -> bool {
 +    let Some(window) = bytes.get(offset..offset.saturating_add(pattern.len())) else {
 +        return false;
 +    };
@@ -159,6 +193,11 @@ The safe matcher makes wildcard meaning and range failure explicit:
 +    })
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** validate a complete candidate range before comparing its contents.
 
 :::note[Why this version?]
 The direct indexes can panic near the end of the buffer,

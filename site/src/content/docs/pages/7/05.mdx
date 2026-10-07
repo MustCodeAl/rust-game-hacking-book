@@ -9,7 +9,7 @@ sidebar:
   order: 5
   label: "5.5 Memory Regions and Value Scanning"
 ---
-import { Accordion, Badge, Frame, GitHub, Panel, Steps } from '../../../../components/kit';
+import { Accordion, Badge, Frame, GitHub, Panel, Steps, CodeGroup, Tab } from '../../../../components/kit';
 
 import ConceptLab from '../../../../components/ConceptLab.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -217,32 +217,73 @@ fn keep(filter: &Filter, previous: u32, current: u32) -> bool {
 
 The enum replaces a stringly typed filter:
 
-```diff
-- fn keep(kind: &str, previous: u32, current: u32) -> bool {
--     if kind == "changed" { return current != previous; }
--     if kind == "same" { return current == previous; }
--     false
-- }
-+ enum Filter {
-+     Equal(u32),
-+     Increased,
-+     Decreased,
-+     Changed,
-+     Unchanged,
-+ }
-+
-+ fn keep(filter: &Filter, previous: u32, current: u32) -> bool {
-+     match filter {
-+         Filter::Equal(value) => current == *value,
-+         Filter::Increased => current > previous,
-+         Filter::Decreased => current < previous,
-+         Filter::Changed => current != previous,
-+         Filter::Unchanged => current == previous,
-+     }
-+ }
+The original helper recognizes two strings and returns `false` for every other spelling. A typo silently removes candidates instead of identifying an unsupported rule.
 
- candidates.retain(|candidate| keep(&filter, candidate.previous, candidate.current));
+```rust title="Before: choose a scan filter with text"
+fn keep(kind: &str, previous: u32, current: u32) -> bool {
+    if kind == "changed" { return current != previous; }
+    if kind == "same" { return current == previous; }
+    false // Misspellings silently look like a filter that kept nothing.
+}
 ```
+
+An **enum with data** represents only supported filters. Its exhaustive `match` requires a decision for every variant; `Equal(u32)` carries the number to compare with.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+enum Filter {
+    Equal(u32),
+    Increased,
+    Decreased,
+    Changed,
+    Unchanged,
+}
+
+fn keep(filter: &Filter, previous: u32, current: u32) -> bool {
+    match filter {
+        Filter::Equal(value) => current == *value,
+        Filter::Increased => current > previous,
+        Filter::Decreased => current < previous,
+        Filter::Changed => current != previous,
+        Filter::Unchanged => current == previous,
+    }
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
+```diff
+-fn keep(kind: &str, previous: u32, current: u32) -> bool {
+-    if kind == "changed" { return current != previous; }
+-    if kind == "same" { return current == previous; }
+-    false // Misspellings silently look like a filter that kept nothing.
+-}
++enum Filter {
++    Equal(u32),
++    Increased,
++    Decreased,
++    Changed,
++    Unchanged,
++}
++
++fn keep(filter: &Filter, previous: u32, current: u32) -> bool {
++    match filter {
++        Filter::Equal(value) => current == *value,
++        Filter::Increased => current > previous,
++        Filter::Decreased => current < previous,
++        Filter::Changed => current != previous,
++        Filter::Unchanged => current == previous,
++    }
++}
+```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** use a finite type for a finite set of rules, and let the compiler check every case.
 
 :::note[Why this version?]
 A misspelled string silently behaves like an unknown

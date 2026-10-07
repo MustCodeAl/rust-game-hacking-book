@@ -9,7 +9,7 @@ sidebar:
   order: 6
   label: "7.6 Aim Geometry and Target Selection"
 ---
-import { Frame, GitHub, Panel, SpeedType } from '../../../../components/kit';
+import { Frame, GitHub, Panel, SpeedType, CodeGroup, Tab } from '../../../../components/kit';
 
 import LessonVideo from '../../../../components/LessonVideo.astro';
 
@@ -189,20 +189,65 @@ fn angles_to(camera: Vec3, target: Vec3) -> Option<Angles> {
 
 The math helpers avoid two tempting shortcuts:
 
+The original helper divides by the forward axis to estimate yaw and pitch, then subtracts the current yaw directly. It loses quadrant information and can ask for a nearly full turn when the short turn crosses the angle wrap point. For this comparison the caller supplies validated, distinct positions and finite current angles; `angles_to` above shows the position checks.
+
+```rust title="Before: derive angles by dividing one axis"
+fn aim_error(camera: Vec3, target: Vec3, current: Angles) -> Angles {
+    let delta = target.subtract(camera);
+    let yaw = (delta.y / delta.x).atan().to_degrees(); // Loses the quadrant.
+    let pitch = (delta.z / delta.x).atan().to_degrees();
+    let yaw_error = yaw - current.yaw; // Can request the long turn.
+    Angles { yaw: yaw_error, pitch: pitch - current.pitch }
+}
+```
+
+Use `atan2` to retain both axis signs, `hypot` for horizontal distance, and **angle normalization** to keep yaw error within one half-turn of zero. Preserve current yaw when the target is directly above or below, because that direction has no unique horizontal heading.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn aim_error(camera: Vec3, target: Vec3, current: Angles) -> Angles {
+    let delta = target.subtract(camera);
+    let horizontal = delta.x.hypot(delta.y);
+    let yaw = if horizontal < f32::EPSILON {
+        current.yaw // Directly above or below: horizontal heading is unconstrained.
+    } else {
+        delta.y.atan2(delta.x).to_degrees()
+    };
+    let pitch = delta.z.atan2(horizontal).to_degrees();
+    let yaw_error = (yaw - current.yaw + 180.0)
+        .rem_euclid(360.0) - 180.0;
+    Angles { yaw: yaw_error, pitch: pitch - current.pitch }
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn aim_error(camera: Vec3, target: Vec3, current: Angles) -> Angles {
      let delta = target.subtract(camera);
--    let yaw = (delta.y / delta.x).atan().to_degrees();
--    let pitch = (delta.z / delta.x).atan().to_degrees();
--    let yaw_error = yaw - current.yaw;
+-    let yaw = (delta.y / delta.x).atan().to_degrees(); // Loses the quadrant.
 +    let horizontal = delta.x.hypot(delta.y);
-+    let yaw = delta.y.atan2(delta.x).to_degrees();
++    let yaw = if horizontal < f32::EPSILON {
++        current.yaw // Directly above or below: horizontal heading is unconstrained.
++    } else {
++        delta.y.atan2(delta.x).to_degrees()
++    };
+-    let pitch = (delta.z / delta.x).atan().to_degrees();
 +    let pitch = delta.z.atan2(horizontal).to_degrees();
+-    let yaw_error = yaw - current.yaw; // Can request the long turn.
 +    let yaw_error = (yaw - current.yaw + 180.0)
 +        .rem_euclid(360.0) - 180.0;
      Angles { yaw: yaw_error, pitch: pitch - current.pitch }
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** preserve the coordinate information first, then normalize equivalent directions before comparing them.
 
 :::note[Why this version?]
 Division loses which quadrant the target occupies and

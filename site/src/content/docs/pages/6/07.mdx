@@ -9,7 +9,7 @@ sidebar:
   order: 7
   label: "8.7 Shared Memory Between Processes"
 ---
-import { Accordion, Badge, GitHub } from '../../../../components/kit';
+import { Accordion, Badge, GitHub, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -78,11 +78,41 @@ The four-byte length makes embedded zero bytes unambiguous and lets the reader r
 
 This is the beginning of **serialization**: turning structured information into an agreed byte representation.
 
+The original reader treats the first zero byte as the end of UTF-8 text. A legitimate embedded zero therefore shortens the message. The improved format uses the four-byte length header shown above; the writer must use that same format too.
+
+```rust title="Before: stop text at the first zero byte"
+fn read_text(bytes: &[u8]) -> anyhow::Result<&str> {
+    let end = bytes.iter().position(|byte| *byte == 0)
+        .unwrap_or(bytes.len()); // A zero inside the text looks like its end.
+    Ok(std::str::from_utf8(&bytes[..end])?)
+}
+```
+
+Validate that a complete header exists **before slicing**, then check its declared length against the remaining mapping. The length describes payload bytes, not the mapping's zero padding.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn read_text(bytes: &[u8]) -> anyhow::Result<&str> {
+    anyhow::ensure!(bytes.len() >= HEADER_BYTES, "shared-memory header is truncated");
+    let length = u32::from_le_bytes(bytes[..HEADER_BYTES].try_into()?) as usize;
+    anyhow::ensure!(length <= bytes.len() - HEADER_BYTES,
+        "shared-memory length is larger than its mapping");
+    let payload = &bytes[HEADER_BYTES..HEADER_BYTES + length];
+    Ok(std::str::from_utf8(payload)?)
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn read_text(bytes: &[u8]) -> anyhow::Result<&str> {
 -    let end = bytes.iter().position(|byte| *byte == 0)
--        .unwrap_or(bytes.len());
+-        .unwrap_or(bytes.len()); // A zero inside the text looks like its end.
 -    Ok(std::str::from_utf8(&bytes[..end])?)
++    anyhow::ensure!(bytes.len() >= HEADER_BYTES, "shared-memory header is truncated");
 +    let length = u32::from_le_bytes(bytes[..HEADER_BYTES].try_into()?) as usize;
 +    anyhow::ensure!(length <= bytes.len() - HEADER_BYTES,
 +        "shared-memory length is larger than its mapping");
@@ -90,6 +120,11 @@ This is the beginning of **serialization**: turning structured information into 
 +    Ok(std::str::from_utf8(payload)?)
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** agree on an explicit length format at both ends, and validate the header before trusting it.
 
 One hazard is worth naming here, even though this one-shot lab sidesteps it by
 writing only once. Shared memory gives two processes access to the same bytes.

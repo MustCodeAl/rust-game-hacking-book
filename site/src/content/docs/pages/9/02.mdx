@@ -9,7 +9,7 @@ sidebar:
   order: 2
   label: "9.2 Save Formats and Safe Editing"
 ---
-import { Accordion, Badge, Frame, GitHub, Steps, SpeedType } from '../../../../components/kit';
+import { Accordion, Badge, Frame, GitHub, Steps, SpeedType, CodeGroup, Tab } from '../../../../components/kit';
 import Scene from '../../../../components/Scene.astro';
 import SimLab from '../../../../components/SimLab.astro';
 
@@ -129,13 +129,13 @@ use std::{fs, io::Write, path::Path};
 
 fn atomic_replace(path: &Path, contents: &[u8]) -> anyhow::Result<()> {
     let temporary = path.with_extension("gha-new");
-
-    {
-        let mut file = fs::File::create(&temporary)?;
-        file.write_all(contents)?;
-        file.sync_all()?;
-    }
-
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)?;
+    file.write_all(contents)?;
+    file.sync_all()?;
+    drop(file);
     fs::rename(&temporary, path)?;
     Ok(())
 }
@@ -143,11 +143,46 @@ fn atomic_replace(path: &Path, contents: &[u8]) -> anyhow::Result<()> {
 
 The important change is that the original path is not used as scratch space:
 
+The original helper writes directly to the closed game's disposable save file. Opening it for replacement truncates the old contents before the new data is completely written, so a failure can leave a partial save.
+
+```rust title="Before: overwrite the original save in place"
+fn atomic_replace(path: &Path, contents: &[u8]) -> anyhow::Result<()> {
+    fs::write(path, contents)?; // Truncates the original before writing finishes.
+    Ok(())
+}
+```
+
+Use **prepare then replace**: exclusively create a sibling temporary file, write and flush it, close its handle, then request replacement. With [`create_new(true)`](https://doc.rust-lang.org/std/fs/struct.OpenOptions.html#method.create_new), a leftover temporary file causes an error instead of being overwritten; inspect or remove it before retrying.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn atomic_replace(path: &Path, contents: &[u8]) -> anyhow::Result<()> {
+    let temporary = path.with_extension("gha-new");
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)?;
+    file.write_all(contents)?;
+    file.sync_all()?;
+    drop(file);
+    fs::rename(&temporary, path)?;
+    Ok(())
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn atomic_replace(path: &Path, contents: &[u8]) -> anyhow::Result<()> {
--    fs::write(path, contents)?;
+-    fs::write(path, contents)?; // Truncates the original before writing finishes.
 +    let temporary = path.with_extension("gha-new");
-+    let mut file = fs::File::create(&temporary)?;
++    let mut file = fs::OpenOptions::new()
++        .write(true)
++        .create_new(true)
++        .open(&temporary)?;
 +    file.write_all(contents)?;
 +    file.sync_all()?;
 +    drop(file);
@@ -155,6 +190,11 @@ The important change is that the original path is not used as scratch space:
      Ok(())
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** construct the complete replacement away from the original, and keep a backup until the game accepts it.
 
 :::note[Why this version?]
 Writing directly truncates the original before the new
