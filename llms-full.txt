@@ -35517,6 +35517,39 @@ fn sha256(path: &Path) -> anyhow::Result<(u64, String)> {
 
 `read` returns the number of buffer bytes filled. A return value of zero means end of file. Only `&buffer[..count]` goes into the hash; hashing the unused remainder would produce the wrong answer.
 
+The original helper reads the entire file into one byte vector, then hashes it. A large archive therefore needs an equally large temporary allocation; `Path`, `File`, `Sha256` and the hash traits are the same helpers used above.
+
+```rust title="Before: read the whole file"
+fn sha256(path: &Path) -> anyhow::Result<String> {
+    let mut hasher = Sha256::new();
+    let bytes = std::fs::read(path)?;
+    hasher.update(bytes);
+    Ok(format!("{:x}", hasher.finalize()))
+}
+```
+
+The improvement is **streaming**: reuse one buffer, and feed only the bytes filled by each read into the hasher. The digest still describes the complete file.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn sha256(path: &Path) -> anyhow::Result<String> {
+    let mut hasher = Sha256::new();
+    let mut file = File::open(path)?;
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let count = file.read(&mut buffer)?;
+        if count == 0 { break; }
+        hasher.update(&buffer[..count]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn sha256(path: &Path) -> anyhow::Result<String> {
      let mut hasher = Sha256::new();
@@ -35532,6 +35565,11 @@ fn sha256(path: &Path) -> anyhow::Result<(u64, String)> {
      Ok(format!("{:x}", hasher.finalize()))
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** hash large inputs in bounded chunks instead of keeping a second copy of the file in memory.
 
 ### Why this version?
 
@@ -36006,14 +36044,48 @@ These course tools use several process rights:
 
 `PROCESS_ALL_ACCESS` is not a convenient “make it work” flag. It requests many unrelated powers and makes failures harder to diagnose.
 
+The original helper asks Windows for every process right just to query an executable path. `OwnedHandle` owns the returned handle, and `query_full_process_image_name` is the path-query helper below.
+
+```rust title="Before: ask for every process right"
+fn query_process_path(pid: u32) -> windows::core::Result<PathBuf> {
+    // SAFETY: OpenProcess accepts a numeric PID; errors are returned normally.
+    let process = unsafe { OpenProcess(PROCESS_ALL_ACCESS, false, pid) }?;
+    let process = OwnedHandle::from_raw(process)?;
+    query_full_process_image_name(process.raw())
+}
+```
+
+**Least privilege** means requesting only the capability the next call uses. Windows still checks whether the caller may receive that right.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn query_process_path(pid: u32) -> windows::core::Result<PathBuf> {
+    // SAFETY: OpenProcess accepts a numeric PID; errors are returned normally.
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }?;
+    let process = OwnedHandle::from_raw(process)?;
+    query_full_process_image_name(process.raw())
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn query_process_path(pid: u32) -> windows::core::Result<PathBuf> {
--    let process = OpenProcess(PROCESS_ALL_ACCESS, false, pid)?;
-+    let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)?;
+     // SAFETY: OpenProcess accepts a numeric PID; errors are returned normally.
+-    let process = unsafe { OpenProcess(PROCESS_ALL_ACCESS, false, pid) }?;
++    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }?;
      let process = OwnedHandle::from_raw(process)?;
      query_full_process_image_name(process.raw())
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** match the handle rights to the operation you actually need.
 
 ### Why this version?
 
@@ -36389,22 +36461,64 @@ The iterator returns `Result<OwnedHandle>` for every event. `collect::<Result<Ve
 
 That is the important improvement over manual cleanup:
 
+The original helper creates events and stores raw `HANDLE` values. If a later creation fails, `?` returns before the earlier handles are closed; dropping a vector of raw handles does not call `CloseHandle`. Even success makes cleanup the caller's job.
+
+```rust title="Before: accumulate raw event handles"
+fn create_events(count: usize) -> windows::core::Result<Vec<HANDLE>> {
+    let mut raw_handles = Vec::new();
+    for _ in 0..count {
+        // SAFETY: all pointer arguments are absent; Windows returns the handle.
+        let raw = unsafe { CreateEventW(None, false, false, None) }?;
+        raw_handles.push(raw); // A later error leaks the earlier events.
+    }
+    Ok(raw_handles)
+}
+```
+
+**RAII** gives each successful creation an owner immediately. Collecting the results drops those owners if a later item fails; success returns a vector whose owners close the events when dropped.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn create_events(count: usize) -> windows::core::Result<Vec<OwnedHandle>> {
+    (0..count)
+        .map(|_| {
+            // SAFETY: all pointer arguments are absent; Windows returns the handle.
+            let raw = unsafe { CreateEventW(None, false, false, None) }?;
+            OwnedHandle::from_raw(raw)
+        })
+        .collect() // Earlier owners are dropped if a later creation fails.
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
- fn create_events(count: usize) -> windows::core::Result<Vec<OwnedHandle>> {
+-fn create_events(count: usize) -> windows::core::Result<Vec<HANDLE>> {
 -    let mut raw_handles = Vec::new();
 -    for _ in 0..count {
--        raw_handles.push(CreateEventW(None, false, false, None)?);
--        // Every error return here would need a manual CloseHandle loop.
+-        // SAFETY: all pointer arguments are absent; Windows returns the handle.
+-        let raw = unsafe { CreateEventW(None, false, false, None) }?;
+-        raw_handles.push(raw); // A later error leaks the earlier events.
 -    }
 -    Ok(raw_handles)
++fn create_events(count: usize) -> windows::core::Result<Vec<OwnedHandle>> {
 +    (0..count)
 +        .map(|_| {
++            // SAFETY: all pointer arguments are absent; Windows returns the handle.
 +            let raw = unsafe { CreateEventW(None, false, false, None) }?;
 +            OwnedHandle::from_raw(raw)
 +        })
 +        .collect() // Earlier owners are dropped if a later creation fails.
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** put each acquired resource into its cleanup owner before acquiring the next one.
 
 ### Why this version?
 
@@ -36714,16 +36828,56 @@ fn main() {
 
 `false` in `open_by_name(&process_name, false)` is important. It means the wrapper requests query and read rights without `PROCESS_VM_OPERATION` or `PROCESS_VM_WRITE`.
 
+The original helper opens a writable process handle even though it only lists module regions. In this course wrapper, `true` requests write-related rights; `print_regions` only formats the returned metadata.
+
+```rust title="Before: open a writable handle to inspect pages"
+fn inspect_module(process_name: String, module_name: String) -> anyhow::Result<()> {
+    let process = Process::open_by_name(&process_name, true)?;
+    let (module_base, module_size) = process.module(&module_name)?;
+    let regions = process.regions(module_base, module_base + module_size)?;
+    print_regions(&regions);
+    Ok(())
+}
+```
+
+Request observation rights with `false`. Also use **checked arithmetic** for the module end, so an invalid size cannot wrap the region boundary.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn inspect_module(process_name: String, module_name: String) -> anyhow::Result<()> {
+    let process = Process::open_by_name(&process_name, false)?;
+    let (module_base, module_size) = process.module(&module_name)?;
+    let module_end = module_base.checked_add(module_size)
+        .context("module end overflowed")?;
+    let regions = process.regions(module_base, module_end)?;
+    print_regions(&regions);
+    Ok(())
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn inspect_module(process_name: String, module_name: String) -> anyhow::Result<()> {
 -    let process = Process::open_by_name(&process_name, true)?;
 +    let process = Process::open_by_name(&process_name, false)?;
      let (module_base, module_size) = process.module(&module_name)?;
-     let regions = process.regions(module_base, module_base + module_size)?;
+-    let regions = process.regions(module_base, module_base + module_size)?;
++    let module_end = module_base.checked_add(module_size)
++        .context("module end overflowed")?;
++    let regions = process.regions(module_base, module_end)?;
      print_regions(&regions);
      Ok(())
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** an inspection tool should request inspection rights and reject an overflowing range.
 
 ### Why this version?
 
@@ -37354,16 +37508,55 @@ Both DLLs are already present in a normal Windows console process. `GetModuleHan
 
 PE export names are byte strings. The `s!` macro creates a terminated static `PCSTR`. DLL file names use Windows wide strings, so `GetModuleHandleW` receives values from the `w!` macro instead.
 
+This original attempt mixes byte strings and wide strings. It is intentionally a **non-compiling example**: the Windows bindings reject the wrong parameter types before any call runs.
+
+```rust title="Before: rejected string widths"
+fn resolve_virtual_query() -> windows::core::Result<FARPROC> {
+    // SAFETY: static terminated strings outlive lookup; widths must match the API.
+    let kernel32 = unsafe { GetModuleHandleW(s!("kernel32.dll")) }?;
+
+    // SAFETY: the borrowed module stays loaded during this export lookup.
+    let address = unsafe { GetProcAddress(kernel32, w!("VirtualQueryEx")) };
+    address.ok_or_else(windows::core::Error::from_win32)
+}
+```
+
+Use `w!` for the wide DLL filename and `s!` for the byte-encoded export name. Both strings are static and terminated; the DLL handle is borrowed for the lookup.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn resolve_virtual_query() -> windows::core::Result<FARPROC> {
+    // SAFETY: static terminated strings outlive lookup; widths must match the API.
+    let kernel32 = unsafe { GetModuleHandleW(w!("kernel32.dll")) }?;
+
+    // SAFETY: the borrowed module stays loaded during this export lookup.
+    let address = unsafe { GetProcAddress(kernel32, s!("VirtualQueryEx")) };
+    address.ok_or_else(windows::core::Error::from_win32)
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn resolve_virtual_query() -> windows::core::Result<FARPROC> {
+     // SAFETY: static terminated strings outlive lookup; widths must match the API.
 -    let kernel32 = unsafe { GetModuleHandleW(s!("kernel32.dll")) }?;
 +    let kernel32 = unsafe { GetModuleHandleW(w!("kernel32.dll")) }?;
 
+     // SAFETY: the borrowed module stays loaded during this export lookup.
 -    let address = unsafe { GetProcAddress(kernel32, w!("VirtualQueryEx")) };
 +    let address = unsafe { GetProcAddress(kernel32, s!("VirtualQueryEx")) };
      address.ok_or_else(windows::core::Error::from_win32)
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** the API's string type determines the encoding, even when both arguments look like ordinary names.
 
 The types make the two encodings visible instead of silently mixing them.
 
@@ -38646,6 +38839,35 @@ You may see examples that call `CreateThread` directly from `DLL_PROCESS_ATTACH`
 
 The explicit `gha_start` contract is easier to reason about and test:
 
+The original loader callback starts a worker and installs hooks during `DLL_PROCESS_ATTACH`. That puts initialization under the loader lock, where a worker that needs DLL loading can deadlock.
+
+```rust title="Before: start work during the loader callback"
+ unsafe extern "system" fn DllMain(_dll: HINSTANCE, reason: u32, _: *mut c_void) -> BOOL {
+     if reason == DLL_PROCESS_ATTACH { start_worker_and_install_hooks(); }
+     BOOL::from(true)
+ }
+```
+
+Move that work to an **explicit startup boundary**. The injector waits for loading to finish, then calls `gha_start`; its result reports whether course initialization succeeded.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+ unsafe extern "system" fn DllMain(_dll: HINSTANCE, _reason: u32, _: *mut c_void) -> BOOL {
+     BOOL::from(true) // Only loader-safe work happens under the loader lock.
+ }
+
+ #[unsafe(no_mangle)]
+ pub extern "system" fn gha_start(_argument: *mut c_void) -> u32 {
+     // The injector calls this only after its LoadLibraryW thread has finished.
+     start_worker_and_install_hooks().map_or(2, |_| 0)
+ }
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
 - unsafe extern "system" fn DllMain(_dll: HINSTANCE, reason: u32, _: *mut c_void) -> BOOL {
 -     if reason == DLL_PROCESS_ATTACH { start_worker_and_install_hooks(); }
@@ -38661,6 +38883,11 @@ The explicit `gha_start` contract is easier to reason about and test:
 +     start_worker_and_install_hooks().map_or(2, |_| 0)
 + }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** finish loader notification before starting work that may depend on other DLLs.
 
 ### Why this version?
 

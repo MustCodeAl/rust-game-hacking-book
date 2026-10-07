@@ -68,7 +68,23 @@ The iterator returns Result<OwnedHandle> for every event. collect::<Result<Vec<_
 
 That is the important improvement over manual cleanup:
 
-Code example. The code’s comments explain: Every error return here would need a manual CloseHandle loop.
+The original helper creates events and stores raw HANDLE values. If a later creation fails? returns before the earlier handles are closed; dropping a vector of raw handles does not call CloseHandle. Even success makes cleanup the caller’s job.
+
+Before: accumulate raw event handles
+
+Code example. The code’s comments explain: SAFETY: all pointer arguments are absent; Windows returns the handle.
+
+RAII gives each successful creation an owner immediately. Collecting the results drops those owners if a later item fails; success returns a vector whose owners close the events when dropped.
+
+Improved code
+
+Code example. The code’s comments explain: SAFETY: all pointer arguments are absent; Windows returns the handle.
+
+Show the diff
+
+Code example. The code’s comments explain: SAFETY: all pointer arguments are absent; Windows returns the handle. SAFETY: all pointer arguments are absent; Windows returns the handle.
+
+Takeaway: put each acquired resource into its cleanup owner before acquiring the next one.
 
 Section: Why this version?.
 
