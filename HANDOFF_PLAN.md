@@ -5,18 +5,19 @@ read `CLAUDE.md`, `BOOK_REVISION_PLAN.md`, and `BOOK_REVISION_PROGRESS.md`.** Th
 Academy": a beginner (about 15 years old) book, Astro 7 + Starlight in `site/`, live at
 https://mustcodeal.github.io/rust-game-hacking-book/ (served from branch `gh-pages`).
 
-## Current checkpoint — 2026-10-07 (T29–T34; read before the older backlog)
+## Current checkpoint — 2026-10-07 (T29–T36; read before the older backlog)
 
-Website changes published from source `dd92d3cd` to Pages `c4707ced`; post-publication links 0 broken, processed-diagram page count 114. The public Primer contains all nine recall blocks and three traces. Later root documentation receipts do not change the generated site.
+Website changes published from source `95815ad9` to Pages `185a98c7`; post-publication links 0 broken, processed-diagram page count 114. Live Chromium checks pass at 420/1280: actual TOC navigation, sidebar/TOC Hide and Restore, and comment Show/Hide with reload persistence. T35's concrete server explanation is also live. Later root documentation receipts do not change the generated site.
 
 - Source is `codex/book-revision`; this machine's primary checkout is `gh-pages`. Work used `/private/tmp/gha-book-revision` so the generated checkout and unrelated local files were preserved. Use the source branch for future work. Never hand-edit or force-push Pages.
 - **Section A is complete:** all 25 comparisons in 24 lessons now show context, full Before, explanation, full Improved code by default, Show the diff, and a takeaway. Do not redo these.
 - **Reader 1.5 Primer:** nine optional typing/recall snippets plus three adjustable CodeTraces. `SpeedType` accepts authored recall fragments and semantic hints; separate copy/unaided recall keys preserve older records. See kit README and T32.
 - **Finished polish:** T27/T28 original default and Appearance tiers remain complete; T30 address/packet/scan labs; T34 SortBoard short invitation/optional keyboard help, overflow-only code-blanks cue, and editable evidence correlation in reader 15.6. The original evidence scene stays alongside its new SimLab so the diagram page count stays 114.
 - **Comments restored at owner's request:** expanded cards sit outside the reading column when viewport gutters fit. They can paint above the neighbouring sidebar; text width is unchanged. Narrow desktop gutters keep clickable pins, phones keep inline notes. Layout observes width/height and panel/preference changes; authored side preferences survive resizing. T34 records checks.
-- User asked to publish all completed work and conserve the last usage. Remaining: B original concepts, D full instruction reference, E remaining Rust idioms beyond the Primer, C chapter map/redirect and saved-key migration only after owner approval, and G remaining theme polish. Other open handoff items include margin-note coverage, original artwork and account sync for reader bubbles. None is claimed complete.
+- **T36 repaired the owner-reported button regression:** the raised reading frame now passes clicks through its empty gutter, and restore tabs paint above the widened article. Basic Appearance now includes Margin comments Show/Hide, original default Show, without deleting stored comments.
+- The owner resumed all unfinished work and requests prompt publication of every completed batch. Remaining: B original concepts (draft ready), D full instruction reference (draft ready), E remaining Rust idioms beyond the Primer (draft in progress), C chapter map/redirect and saved-key migration only after owner approval, and G remaining theme polish. Other open handoff items include margin-note coverage, original artwork and account sync for reader bubbles. None is claimed complete.
 - Original `_pages/2/05.md` confirms establishing context means following the target/action/function/object/caller relationship through Target → Identify → Understand → Change; it does not mean OS thread context. No files were moved or lesson IDs renumbered.
-- All verification/publication evidence and limitations are in T29–T34 at the bottom of `BOOK_REVISION_PROGRESS.md`. Physical touch, Safari/Firefox, screen readers, real Windows execution and live external services remain unverified. No lab programs were run.
+- All verification/publication evidence and limitations are in T29–T36 at the bottom of `BOOK_REVISION_PROGRESS.md`. Physical touch, Safari/Firefox, screen readers, real Windows execution and live external services remain unverified. No lab programs were run.
 
 ## Status and backlog — 2026-10-06 (second session; read this first)
 
