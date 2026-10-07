@@ -6,6 +6,8 @@ The detours in Lesson 6.4 changed instruction bytes at a verified site. Sometime
 
 Your program can call MessageBoxW without knowing where user32.dll will load. The P E, portable executable, import data says, “I need this named function.” The Windows loader finds its live address and writes that address into the Import Address Table, or IAT.
 
+In brief: An IAT hook changes a module’s imported destination; it does not rewrite every call to that function throughout the process.
+
 Later, a normal imported call follows the pointer stored in that table:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
@@ -27,6 +29,8 @@ The replacement must accept the same arguments and use the same Windows calling 
 Code example. The code’s comments explain: 🔁 SAFETY: install() saved the original pointer from this exact IAT slot. 🛡️ SAFETY: the signature and Windows A B I, application binary interface, match MessageBoxW.
 
 extern "system" tells the compiler to use the calling convention Windows expects. If the convention, parameter sizes, or return type are wrong, the stack or registers can be interpreted incorrectly.
+
+Narration: The address may be right while the call is wrong: mismatched argument sizes can make the replacement interpret unrelated register or stack contents.
 
 Section: Find the import directory.
 
@@ -53,6 +57,8 @@ Step 7 is the one that surprises people: each imported D L L, dynamic link libra
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 Before the module is loaded, both arrays hold the same name references. During loading, Windows resolves each name and writes the resulting live address into the matching IAT slot, leaving the lookup table alone. That is exactly why you walk the two together: the lookup table still records which function this entry is, while the IAT records where that function currently lives. Searching the IAT by itself gives you addresses with no names attached; searching the lookup table by itself gives you names with nothing to patch.
+
+Alternative: Read the import tables like paired columns: one identifies the requested name, while the other holds its resolved address.
 
 (Some binaries ship without the separate lookup table. In a loaded image, the IAT has already been overwritten with live function addresses, so it cannot be treated as a list of name RVAs. This name-based lab refuses that case with a clear error. Handling it would require a different, independently verified way to identify the desired slot.)
 

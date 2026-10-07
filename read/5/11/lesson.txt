@@ -34,6 +34,8 @@ Direct3D 9 keeps render state on the device as a large set of individually setta
 
 Direct3D 11 replaces most of that with immutable state objects created up front and bound as a unit: a blend state, a depth-stencil state, a rasterizer state. From a DrawIndexed hook you retrieve what is bound with the context’s Get calls — OMGetBlendState, OMGetDepthStencilState, PSGetShader, IAGetVertexBuffers — and then read the description back off the object.
 
+Alternative: Direct3D 11 state objects are saved configuration bundles: the context binds a bundle, and a draw uses whichever bundle is currently attached.
+
 Two practical consequences follow, and they catch people out:
 
 Those Get calls hand you a reference. COM Get* methods call AddRef on what they return, increasing the object’s reference count by one. Each successful query therefore creates one matching Release obligation. On a path that runs thousands of times per second, forgetting even one release causes a steady leak. Put the returned pointer in a Rust wrapper whose Drop calls Release; then an early return cannot skip cleanup. Lesson 11.6 later applies the same ownership idea to Windows handles.
@@ -46,11 +48,15 @@ You cannot ask a draw call what it is drawing. You can group draws by properties
 
 Every one of these is a proxy: an observable clue that may correlate with the category we care about, without being the category itself. A shader shared by characters and crates does not distinguish them. Lesson 13.7 later returns to the risks of treating a proxy as proof. Test a grouping by changing something you control — move, equip a different weapon, walk into another room — and check that the group changes the way the label says it should. A label that matched in one frame can be an accident of what that frame happened to draw.
 
+In brief: Draw properties are category clues that need testing, rather than proof that a particular game object was drawn.
+
 Section: Draw a frame boundary around your samples.
 
 DrawIndexed fires many times per frame; Present fires once. Recording draws without frame boundaries produces a stream you cannot reason about, because you cannot tell where one frame’s ordering ends.
 
 Number the frames in the Present hook from Lesson 7.10, and tag each draw sample with the current frame number. The draw index within a frame is then meaningful, which is what makes “the UI is the last eleven draws” a statement you can check rather than an impression.
+
+Narration: Without frame numbers, a late UI draw from one frame can appear next to an early world draw from the next, hiding their real order.
 
 Bound both the samples per frame and the frames retained, exactly as in Lesson 4.11. An unbounded recorder attached to a render loop will consume memory faster than you expect and will change the frame times you were trying to measure.
 

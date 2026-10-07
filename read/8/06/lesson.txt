@@ -14,6 +14,8 @@ Section: State, events, and messages are not interchangeable.
 
 GetAsyncKeyState answers a state question: “is this key down at the instant I sample it?” SendInput submits input events to the desktop input pipeline. SendMessageW invokes a window-procedure message contract. Similar names do not put them on the same path.
 
+In brief: Choose input APIs by what the receiver consumes: sampled state, desktop input events, and window messages describe different things.
+
 A game may combine several paths: Raw Input for aiming, ordinary window messages for menus, and polled key state for a developer console. Observe how the target consumes input before choosing an A P I, application programming interface. Sending WM_KEYDOWN to a window that reads device state is not a failed keyboard event; it is the wrong abstraction.
 
 Always pair a down transition with an up transition, including cancellation and error paths. A state machine should own which synthetic inputs are currently held so shutdown can release exactly those inputs.
@@ -62,6 +64,8 @@ Code example. The code’s comments explain: 🛡️ SAFETY: every VIRTUAL_KEY v
 
 Do not use result & 1 not equal to 0 as a reliable “pressed once” event. Microsoft keeps that low bit for old compatibility, but another process can observe it first. Build your own edge detector from the trustworthy high bit:
 
+Alternative: An edge detector keeps two photographs of a button: the transition appears only when the newer photograph is down and the older one is up.
+
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 Poll at a modest rate such as every 8–16 milliseconds. A tight loop wastes a C P U, central processing unit, core. A zero result can also mean the desktop is inactive or Windows integrity rules prevent the query; “zero” does not prove a keyboard is broken.
@@ -71,6 +75,8 @@ Sampling can miss a very short press between polls. That is a property of pollin
 Section: Gate synthetic input to the intended window.
 
 SendInput writes to the system input stream. It does not accept an HWND, so check that the target owns the foreground window before sending:
+
+Narration: A desktop-wide synthetic key can reach whichever application has focus. Rechecking the intended foreground window prevents an unrelated app from receiving the request.
 
 Code example. The code’s comments explain: 🛡️ These calls return copied identifiers; neither keeps our pointers.
 

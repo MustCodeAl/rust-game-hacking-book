@@ -14,6 +14,8 @@ Section: A worked translation.
 
 Lesson 14.1 split a guest’s address translation into two stages. The guest’s own page tables turn a guest virtual address into a guest physical address, and the hypervisor’s tables turn that into a host physical address, the real location in R A M, random access memory. Here is one address going through both:
 
+In brief: Translate guest virtual to guest physical, then guest physical to host physical; keep the owner of each map explicit.
+
 Pages are 4 KiB, which is 4 times 1,024 equals 4,096 bytes. Since 2 to the power of 12 equals 4,096, the lowest 12 bits of an address choose a byte within its page, the offset, and all the bits above them name the page. Each hex digit stands for 4 bits, so the 12 offset bits are exactly the last three hex digits; Lesson 11.7 made the same split. Take the guest virtual address shown here:
 
 The offset is hexadecimal A 2 C equals 10 times 256 + 2 times 16 + 12 equals 2,560 + 32 + 12 equals 2,604, safely less than 4,096. The page number is hexadecimal 4 0 3 equals 4 times 256 + 3 equals 1,027. As a check, page 1,027 starts at byte 1,027 times 4,096 equals the large number shown, and the large number shown + 2,604 equals the large number shown, which is this value written in decimal.
@@ -30,7 +32,11 @@ Section: What two stages cost.
 
 Real translation is not one table lookup per stage but a four-level walk (Lesson 12.7), and with two stages the walks multiply. The guest’s page tables live in guest physical memory, so each of the four entries the processor reads during the guest’s walk sits at a guest physical address that must first go through a four-level stage-2 walk. Each guest level therefore costs 4 reads to find its table plus 1 read of the entry itself, 4 + 1 equals 5 reads, and 4 times 5 equals 20 reads for the whole stage-1 walk. The guest physical address that comes out needs one more four-level stage-2 walk: 20 + 4 equals 24 memory reads to translate one address, where a machine without virtualization needs 4.
 
+Narration: The guest’s page-table entries themselves sit in guest physical memory, so reading those entries also requires second-stage translation.
+
 The processor avoids paying that on every access with its translation lookaside buffer (TLB), a small cache of recent translations. The TLB keeps the final guest-virtual-to-host-physical answer, so a program that touches the same pages again, as programs mostly do, pays for the walk once.
+
+Alternative: The TLB is a notebook of recent final translations, avoiding a fresh walk through every table whenever the same page is used again.
 
 Section: How a program can tell it is in a virtual machine.
 

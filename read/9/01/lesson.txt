@@ -124,6 +124,8 @@ Section: Parse in two stages.
 
 First prove the bytes are structurally safe to read. Then decide whether the decoded values make sense for the game.
 
+In brief: Check byte boundaries before interpreting game meaning: a plausible character value cannot make a truncated record safe to read.
+
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 A file can pass one stage and fail the other. A well-formed save might refer to an unknown unit type, while a familiar unit name can appear inside a truncated file. Keeping the stages separate produces precise errors and stops friendly-looking text from bypassing boundary checks.
@@ -152,6 +154,8 @@ A data model specifies the values, relationships, and constraints that matter to
 
 The Flare line build=5,1,1,2 illustrates the separation. At the game level, the first value is the Physical attribute. At the format level, it is the first comma-separated number in a particular named field. At the byte level, the digit 5 occupies a position in encoded text. A raw byte search cannot by itself recover the attribute’s role or prove that an unrelated occurrence of the digit is the same field.
 
+Alternative: Follow three labels for one value: its game meaning, its named format field, and the encoded bytes. Finding one label does not identify the others.
+
 Different storage models expose different relationships:
 
 These are options, not a claim that every game uses a database or every map needs a graph database. Choose a model for the questions and updates it must support. The storage implementation then chooses a byte representation and access structures. A parser or query interface hides some lower-level details, but its constraints still affect the layer above.
@@ -161,6 +165,8 @@ Section: Persistent records, caches, and indexes have different jobs.
 A durable save or database record is intended to survive a restart. A cache stores a result that can be obtained again, such as a decoded texture, to avoid repeating expensive work. A search index is an extra structure that helps find records matching a key, keyword, or filter without checking everything from the beginning each time.
 
 Suppose a mod changes a texture file. The game may still display its previously decoded copy until the asset is reloaded or the cache is invalidated. Editing the durable source and changing a cached representation are therefore different operations. Conversely, deleting a rebuildable cache is different from deleting the player’s only save.
+
+Narration: A texture file can change while the game keeps showing an older decoded copy. Reloading distinguishes a failed edit from a stale cache.
 
 Indexes need to remain consistent with the data they describe, and caches need a policy for becoming stale. When an edit appears to have no effect, check which representation the game currently reads before concluding that the edit failed. The running object, its serialized record, and an access structure can all describe related information while having different lifetimes.
 

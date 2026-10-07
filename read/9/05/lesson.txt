@@ -40,6 +40,8 @@ Code example. The code’s comments explain: The caller supplies a fresh name un
 
 The per-entry limit, 64 times 1,024 times 1,024 equals the large number shown bytes (64 MiB), bounds one decompressed file; Urban Terror’s .pk3 asset archives are ZIP files under another extension. take(MAX_ENTRY + 1) allows one extra byte solely to detect an oversized entry. A simple take(MAX_ENTRY) would silently write a truncated file and could make the archive appear to have been extracted. The declared size is checked before copying and compared with the actual byte count afterward. The total cap and entry-count cap address different problems: many individually small entries can still exhaust disk space or time.
 
+Narration: A reader capped at the exact limit can hide excess bytes. Reading one extra byte lets the installer reject oversize output instead of accepting truncation.
+
 This stage function demonstrates bounded extraction, not the whole mod installer. Before moving its files into the game, resolve case-insensitive collisions on the target filesystem, validate asset formats and the manifest, show the replacement plan, and retain originals for uninstall.
 
 Section: Validate more than the path.
@@ -66,11 +68,15 @@ An archive with 50,000 tiny files can cause trouble even if every path is enclos
 
 Apply limits before and during extraction. Declared compressed and uncompressed sizes are claims from the archive; count the bytes actually written and maintain a checked running total. Stop with an error if either the declaration or the real output crosses policy.
 
+In brief: Check actual output sizes as well as declared sizes, and bound the archive’s total work before installation.
+
 The declared size is checked first because it costs nothing, but only the counted bytes are trusted: an entry that declares 10 bytes and then produces more is caught by the count, not by the declaration.
 
 Section: Stage, inspect, then install.
 
 Do not unpack directly over a working game directory. Use this transaction:
+
+Alternative: Staging is an inspection table: unpack and validate there before carrying approved files into the working game directory.
 
 create a new staging directory;
 

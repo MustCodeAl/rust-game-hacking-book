@@ -8,6 +8,8 @@ The simple pattern scanner is intentionally single-threaded. Its next advanced s
 
 Only the capture phase touches the running Wesnoth process. Workers scan ordinary Vec<u8> buffers owned by the scanner.
 
+In brief: Copy from the target first; let workers search the owned buffers so matching does not depend on extra live process reads.
+
 That separation improves more than speed:
 
 a page cannot disappear halfway through a worker comparison;
@@ -51,6 +53,8 @@ Code example. The surrounding prose explains this example; the full lesson conta
 No region is handed out twice. When the index passes the slice, the worker finishes.
 
 Fetching the next index when a worker becomes free is dynamic scheduling. It is better than permanently giving worker 1 the first quarter of regions and worker 2 the second quarter: a worker that receives several tiny regions can continue helping while another scans a large one.
+
+Alternative: A shared work basket lets the next free worker take another region, instead of leaving it idle behind a finished fixed assignment.
 
 Region sizes can still be badly uneven. If measurement later justifies splitting one large snapshot into fixed-size chunks, adjacent chunks must overlap by pattern.len() - 1 bytes or a pattern crossing the boundary can disappear. The merge step must then remove duplicate addresses from the overlap. Faster scheduling is not correct if it creates blind spots.
 
@@ -129,6 +133,8 @@ merging and sorting remain;
 small modules may fit in cache and finish faster on one thread.
 
 Measure the capture and scan phases separately with Instant. If capture dominates, adding workers cannot solve that bottleneck. This is Amdahl’s law: total speedup is capped by the fraction of the work that stays serial, no matter how many workers you add to the rest. Concretely, if capture takes 80 percent of the run and scanning the other 20 percent, parallelizing the scan perfectly still only shrinks that 20 percent. Ten workers cannot beat roughly a 1.25x overall speedup, because the 80 percent you didn’t parallelize is still there.
+
+Narration: If copying takes longer than matching, faster matching will barely change the total waiting time. Time both phases before adding workers.
 
 For course-sized modules, the architecture lesson is more important than the benchmark number.
 

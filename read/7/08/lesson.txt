@@ -18,6 +18,8 @@ a maximum number of events.
 
 This scope is not just a performance setting. It gives the log a meaning. “These calls happened while one turn ended inside this verified module range” is a result you can reproduce. “The process called thousands of things” is mostly noise.
 
+In brief: A useful trace answers one bounded question; collecting everything can bury the behavior you wanted to understand.
+
 Section: What a call instruction really does.
 
 A function call has two jobs:
@@ -66,6 +68,8 @@ Section: The two-event breakpoint cycle.
 
 One breakpoint hit is not enough. If the debugger immediately writes hexadecimal C C back at the same address and continues, the thread hits it forever. The logger temporarily restores the call and single-steps exactly one instruction:
 
+Alternative: Treat restore and re-arm as two separate stops: the original call needs a brief clear path before the breakpoint can watch it again.
+
 At the breakpoint event, Windows reports the address of int3. The logger:
 
 confirms the address belongs to its breakpoint map;
@@ -103,6 +107,8 @@ The debug loop and the log writer run at different speeds. A bounded channel hol
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 The debugger thread uses try_send. If the writer is behind, increment a dropped-event counter rather than blocking the debug loop.
+
+Narration: When the writer falls behind, a visible dropped-event count tells you the log has gaps instead of making the paused game wait for disk.
 
 A bounded channel creates backpressure: it gives the producer a fixed amount of space instead of allowing logs to consume memory forever. try_send makes the policy explicit. Losing a counted event is better than holding every target thread suspended while a disk writer catches up.
 

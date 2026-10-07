@@ -8,7 +8,11 @@ Section: Why the kernel owns every device.
 
 Suppose two programs could drive the same disk controller directly. One writes the number of the sector it wants; a microsecond later the other overwrites it with a different sector; the first program receives the wrong data. Worse, a program could point the controller’s copying engine at another process’s memory. Devices hold state that everyone shares, and many can copy data to or from physical R A M, random access memory,, so the operating system coordinates who may operate them and which buffers they may reach. The later D M A, direct memory access, lesson examines those memory controls in detail.
 
+Narration: Two uncoordinated callers can overwrite the device’s current command. The driver’s shared request path keeps one program’s transfer from becoming another program’s operation.
+
 Instead, Windows coordinates access through a driver stack. The I/O manager checks the caller’s handle and sends the request onward; the receiving driver must still validate the operation, lengths, and buffers it uses. This division matters: an access check on a handle does not prove that the request’s contents are safe for a device.
+
+In brief: Permission to open a device and validation of one request’s contents are separate checks.
 
 Windows represents each device as a device object, and several drivers can stack on one device:
 
@@ -39,6 +43,8 @@ A DeviceIoControl request is checked twice. Each control code declares the right
 Section: Registers: how a driver talks to hardware.
 
 A device exposes a small set of registers: storage locations inside the device that software reads to learn the device’s state and writes to give it commands. On a modern PC most devices expose their registers through memory-mapped I/O: the registers answer to a range of physical addresses, as if they were memory. When the processor reads or writes one of those addresses, the access goes to the device instead of to R A M. The driver asks the kernel to map that physical range into kernel virtual addresses, and then reads and writes it with ordinary load and store instructions. x86 also has an older mechanism, port I/O, with its own in and out instructions; the classic PS/2 keyboard controller answers at ports hexadecimal 6 0 and hexadecimal 6 4.
+
+Alternative: A device register can act like a doorbell or status window: the same-looking memory access may command hardware rather than store an ordinary byte.
 
 The toy keypad, modeled loosely on that PS/2 controller, has four registers, each 4 bytes wide, one after another:
 

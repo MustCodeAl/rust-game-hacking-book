@@ -34,6 +34,8 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 The first line exists because of the first thing syscall does. The Windows x64 calling convention passes a function’s first argument in r c x, but syscall overwrites r c x with the return address, so the stub moves the argument to r 1 0 first, and the kernel knows to look for it there.
 
+Narration: The system-call instruction overwrites r c x, so the stub preserves the first argument in r 1 0. Missing that move would change what the kernel receives.
+
 The number in e a x is a system service number, an index into the kernel’s table of routines. The numbers are internal to Windows and change between builds, which is why this book never copies one into a program. In a debugger the stub also shows a test and a jump to an older entry instruction, int 2Eh, that some configurations use; either way, the processor arrives at an address the kernel chose.
 
 Section: Crossing over.
@@ -50,7 +52,11 @@ The handle must carry the right the operation needs. The kernel finds the handle
 
 The test is a single AND. The kernel keeps only the bits that are set in both the handle’s rights and the rights it needs, and allows the operation only if every needed bit survived. hexadecimal 1 0 1 0 AND hexadecimal 0 0 1 0 equals hexadecimal 0 0 1 0, the whole requirement, so the read is allowed.
 
+Alternative: An access mask is a stencil: retain the requested bits that were granted, then confirm every required bit survived.
+
 WriteProcessMemory needs PROCESS_VM_WRITE, hexadecimal 0 0 2 0. That is 2 times 16 equals 32 equals 2 to the power of 5, bit 5, and bit 5 of hexadecimal 1 0 1 0 is 0, so hexadecimal 1 0 1 0 AND hexadecimal 0 0 2 0 equals 0: denied, whatever the tool’s author intended. The rights were fixed when the handle was created, and nothing done with the handle afterward can add to them.
+
+In brief: An existing handle keeps its granted rights; a later operation cannot add permissions by asking more forcefully.
 
 Only then does it copy. The source address belongs to the game’s address space and the destination buffer belongs to the tool’s. The kernel must interpret each in the correct process context while copying; the exact internal mapping and copy strategy is a Windows implementation detail. If a page becomes unavailable during the operation, the A P I, application programming interface, may report a failed or partial read. The caller must check the returned byte count instead of assuming that asking for four bytes means four arrived.
 

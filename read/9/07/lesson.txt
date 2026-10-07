@@ -26,6 +26,8 @@ A digital signature is a number computed from a file’s hash with a secret key,
 
 That needs public-key cryptography, where keys are made in pairs. The private key never leaves the publisher. The public key is given to everyone; for Authenticode it travels inside the publisher’s certificate. The pair has one property that makes everything work: a signature made with the private key is accepted by the matching public key and by no other, and knowing the public key does not let anyone work out the private one.
 
+Alternative: The signing key makes the approval mark; the matching public key checks it. Checking does not require handing everyone the signing secret.
+
 Walk the two ways it can fail. Change one byte of the file and your machine computes a different hash, so the signature no longer matches it. Replace the signature with one the attacker made using their own key pair, and it only checks out against the attacker’s public key, whose certificate Windows does not trust.
 
 A comparison often used for public keys is an open padlock: you hand out as many as you like and keep the only key, so anyone can lock a box for you and only you can open it. That picture describes encrypting a message to someone. A signature runs the other way: only the private-key holder can make one, and anyone can check it. Nothing is hidden, either; a signed file stays perfectly readable. The signature only proves which key approved these exact bytes.
@@ -44,6 +46,8 @@ Section: WinVerifyTrust returns a status code, not a Result.
 
 The Win32 function returns a LONG. Microsoft’s return-value contract says only exact zero means the requested trust action succeeded. Do not use HRESULT-style “success if nonnegative” logic.
 
+In brief: Interpret each A P I, application programming interface,’s documented return contract; for this trust check, success is exactly zero.
+
 The original helper treats every nonnegative status as trusted, following a rule used for some other Windows status types. WinVerifyTrust has a different contract: only exactly zero reports success.
 
 Before: accept every nonnegative trust status
@@ -60,7 +64,7 @@ Show the diff
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Takeaway: do not reuse another A P I, application programming interface,’s success test just because both results are integers.
+Takeaway: do not reuse another A P I’s success test just because both results are integers.
 
 Known nonzero values help us print plain-English explanations. Unknown statuses remain failures and are printed in hexadecimal for investigation.
 
@@ -83,6 +87,8 @@ WTD_REVOKE_NONE skips revocation checking in this offline classroom run;
 WTD_CACHE_ONLY_URL_RETRIEVAL avoids network retrieval in this reproducible lab.
 
 Those last two choices have a tradeoff: the result does not include a fresh revocation check. A release pipeline with network access should define and test a stricter revocation policy instead of treating this offline classroom result as the final word.
+
+Narration: An offline trust result cannot include a fresh revocation check. Record that limitation alongside the result rather than silently treating it as current approval.
 
 Section: Build the combined inspector.
 

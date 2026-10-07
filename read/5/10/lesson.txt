@@ -26,6 +26,8 @@ You will find lists of “magic” Direct3D vtable indices online. Take the numb
 
 The rule is that a vtable begins with the methods of the interfaces it inherits, in inheritance order, each in declaration order. IDXGISwapChain inherits like this:
 
+Alternative: Derive a vtable like a numbered family list: inherited entries come first, then the new interface’s own methods in declaration order.
+
 3 + 4 + 1 equals 8. Present is index 8, and now you know why, which means you can work out ResizeBuffers the same way instead of searching for it.
 
 The same count applied to ID3D11DeviceContext gives IUnknown (3) plus ID3D11DeviceChild (4) equals 7, then the context’s own methods in declaration order: VSSetConstantBuffers, PSSetShaderResources, PSSetShader, PSSetSamplers, VSSetShader, and then DrawIndexed at index 12.
@@ -52,6 +54,8 @@ The target here is your own program. Write a minimal Direct3D 11 program — a w
 
 The vtable commonly lives on a protected page: the program can read the slot, but a normal write fails. VirtualProtect temporarily makes the pointer-sized slot writable. Save both the original pointer and the previous protection, write the replacement, then restore the protection immediately. A shared vtable slot can affect every object using that table in this process, so the experiment must also restore the pointer when it ends:
 
+Narration: Several objects can use the same vtable. Changing one shared slot may therefore redirect more than the temporary object used to locate it.
+
 Code example. The code’s comments explain: 🛡️ SAFETY: `slot` points into the vtable read from a live swap chain, the index was derived from the interface declaration, and the original pointer is stored so `Drop` can put it back.
 
 Restore the previous protection rather than leaving the page writable. A page you widened stays widened for the life of the process. This short code shows the two protection changes and the pointer swap; a complete hook guard must also roll back if the second protection change fails. Lesson 6.4 applies the same verification and rollback reasoning to patched instruction bytes.
@@ -59,6 +63,8 @@ Restore the previous protection rather than leaving the page writable. A page yo
 Section: The replacement must match the A B I exactly.
 
 A COM method has a hidden first parameter — the interface pointer, the same this you met in Lesson 3.4 — and uses the system convention:
+
+In brief: A COM method receives its interface pointer before the visible arguments; the replacement must include that hidden receiver.
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 

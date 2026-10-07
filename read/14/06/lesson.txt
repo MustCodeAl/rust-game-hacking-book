@@ -38,6 +38,8 @@ An interpreter pays for fetching and decoding every time an instruction runs, ty
 
 A dynamic recompiler, also called a J I T, just in time compilation, (just-in-time compiler), removes most of that repetition. The first time guest code runs, it translates it into host machine code and stores the translation; every later time, it runs the stored host code directly. It translates a block, a run of instructions that ends at a jump, because after a jump the next instruction could be anywhere:
 
+Alternative: A dynamic recompiler keeps a translated recipe for a guest-code block, instead of decoding the same recipe again on every loop iteration.
+
 With a recompiler, the 1,000 passes of that loop cost 5 decodes and 1,000 runs of native code instead of 5,000 decodes. Consoles whose CPUs execute hundreds of millions of instructions per second, such as the GameCube and the PlayStation 2, are emulated with recompilers, as in the Dolphin and PCSX2 emulators, because an interpreter cannot keep up.
 
 The speed has two costs:
@@ -58,6 +60,8 @@ Section: Timing and cycle counting.
 
 Inside a real console, the C P U, the picture chip, and the sound chip all run at the same time, each from its own clock. Older games depended on that timing exactly. A game might change a picture-chip register partway down the screen to split it into a scrolling playfield and a fixed status bar; if the emulated C P U reaches that write too early or too late, the split lands on the wrong line. So emulators count cycles and keep the parts in step: run the C P U for a slice of cycles, advance the other chips by the same amount of time, and repeat.
 
+Narration: A device write at the wrong emulated cycle can move a screen split to the wrong line, even if the final register value is correct.
+
 Suppose the toy console’s clock runs at 1.2 MHz, which is the large number shown cycles per second, and the screen redraws 60 times a second. Each frame then lasts the large number shown divided by 60 equals 20,000 cycles. The emulator’s frame loop runs instructions until 20,000 cycles are used, draws the frame, and waits until 1/60 of a second of real time has passed, so the game plays at its original speed on a host that could run it thousands of times faster.
 
 An instruction cannot stop halfway, so a frame can end slightly past its budget. The emulator then takes the extra cycles off the next frame, which keeps the average exact. Lesson 14.8 ends a frame partway through a program and works out the numbers.
@@ -75,6 +79,8 @@ Section: Save states: the whole machine as bytes.
 A save state is everything the machine is, written out: every register, all of R A M, the I/O registers, and the emulator’s own timing position. Loading one overwrites all of it, so the machine carries on as though nothing had happened. A game’s own save file, like the ones in Lesson 9.2, stores only what the game chooses, in the game’s format. A save state works for any game, at any instant, even in the middle of a frame.
 
 The registers matter as much as R A M. Partway through a calculation, a new value may exist only in a register, not yet stored to memory, so a snapshot of R A M alone would lose it. Reading a save state back is parsing input from outside the program, so emulators check its length and fields the way Lesson 9.2 checks a save file. Real emulators also store a version number, because the layout changes as the emulator does, and a state saved by one version may not load in another. Lesson 14.8 catches the toy console at exactly such a moment and writes its state out byte by byte.
+
+In brief: A save state needs registers and timing state as well as R A M, because unfinished work may not have reached memory yet.
 
 Section: Why emulated games are easy to inspect.
 

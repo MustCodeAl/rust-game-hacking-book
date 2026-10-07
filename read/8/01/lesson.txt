@@ -4,6 +4,8 @@ Section: External versus in-process.
 
 An external tool uses Windows to cross a process boundary. An in-process library is loaded into the target and shares its virtual address space.
 
+In brief: Sharing the game’s address space removes a copying boundary, but object lifetimes and valid function signatures still matter.
+
 The previous lesson reconstructed a D L L, dynamic link library, function’s contract: how arguments arrive, what the result means, and who owns pointed-to data. The preceding chapter showed how code and imports become a running image. Here we create the other side of that boundary: a Rust library loaded as a guest inside one exact game build. We will follow its loading and cleanup, learn how detours and import hooks redirect calls, and give the tool input and menus. The chapter closes by putting those pieces into an architecture with one owner for each resource and an explicit cleanup path.
 
 The two routes reach the same bytes through different doors:
@@ -58,6 +60,8 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 This separates loading from initialization and prevents accidental double-starts.
 
+Alternative: Separate opening the workshop from starting its machinery: loading makes the D L L available, while the explicit start function begins its work.
+
 Section: Read known in-process data.
 
 Wrap a verified field rather than exposing raw pointers everywhere:
@@ -111,6 +115,8 @@ only then enable the lab feature.
 Section: Unloading is a protocol.
 
 Background threads must stop before the D L L unloads. Use an atomic stop flag or a channel, wait for workers to exit from outside DllMain, restore patches, and then unload.
+
+Narration: If a worker returns into D L L code after that D L L unloads, even a correctly calculated feature can crash the host.
 
 The important lesson is architectural: loading, running, stopping, and unloading are separate states. Model them deliberately instead of relying on global booleans and timing luck.
 

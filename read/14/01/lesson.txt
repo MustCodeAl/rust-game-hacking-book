@@ -42,6 +42,8 @@ jumps to an address held in a processor setting that only ring 0 can change. The
 
 Step 3 is what makes the design safe. A program chooses when to request a service, never an arbitrary kernel instruction to run. The processor enters a kernel-controlled path, which identifies the requested service and checks its untrusted arguments. This is the controlled crossing promised in Chapter 11, now seen from the processor’s side.
 
+In brief: A system call enters a kernel-chosen service path; it does not let the caller pick arbitrary privileged instructions to execute.
+
 Section: Follow one call into the kernel and back.
 
 Take a read like the ones in Lesson 11.5: a handle to the game opened with only query and read rights, and a request for 4 bytes at address shown here. Here is the whole round trip:
@@ -68,9 +70,13 @@ A computer has a handful of processor cores and, at any moment, hundreds or thou
 
 When a running thread stops to wait for input, a lock, or a timer, or when its turn is interrupted, the scheduler can pick another thread. Changing threads is a context switch: the kernel saves the old thread’s registers into its context, loads the new thread’s registers, and, if the new thread belongs to a different process, loads that process’s top-level page-table address into c r 3. The program never sees the switch. Its registers come back exactly as they were.
 
+Alternative: A context switch changes the bookmark and working registers for an execution path; changing processes also selects that process’s memory map.
+
 Section: It manages every process’s memory.
 
 Each process has its own page tables, and only the kernel writes them. Reserving an address range and committing storage are distinct operations, as Lesson 11.7 showed. Even after a page is committed, Windows may assign its physical frame only on first access. That access faults, the kernel supplies a zeroed page so old data cannot leak between processes, updates the mapping, and retries the instruction. The game normally never sees this handled fault. Lesson 11.7 looked at the result from outside, and Lesson 12.7 will examine how physical memory fits beneath that view.
+
+Narration: A first-access page fault can be normal: the kernel supplies the page and retries the instruction. A fault does not always mean the game has crashed.
 
 Section: It handles interrupts.
 

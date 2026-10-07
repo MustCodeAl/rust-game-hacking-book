@@ -6,6 +6,8 @@ The course tool can now name a process, open and own a limited handle, inspect p
 
 A call to a Windows function such as VirtualQueryEx does not instantly jump into the deepest part of Windows. It usually passes through layers.
 
+Alternative: Follow the call like a routed request: the public entry passes through implementation layers before a kernel service performs the privileged operation.
+
 Use three separate ideas: contract, implementation path, and privilege transition. Win32 documents the contract application code may rely on. User-mode DLLs implement or forward that contract. A system-call instruction performs the controlled C P U, central processing unit, transition for work that requires kernel privilege.
 
 The boxes are software layers, not necessarily four separate processes. kernel32.dll and ntdll.dll are mapped into the same user-mode process as our program. Microsoft may change the implementation path while preserving the Win32 contract, which is why “calling a deeper layer” is usually less stable rather than more capable.
@@ -36,6 +38,8 @@ CreateFileMappingW for a shared-memory object.
 
 Microsoft can change how a supported function is implemented while keeping its documented behavior. On modern Windows, an export in kernel32.dll may forward to another D L L such as KernelBase.dll. Your source code still calls the stable Win32 name.
 
+In brief: A documented Windows function can keep its contract while the DLLs and internal layers implementing it change.
+
 A forwarded export is not a jump instruction the loader inserts. The export table entry itself can hold a string such as KERNELBASE.CreateFileW in place of a code address. When GetProcAddress resolves that entry, it reads the string, locates the named D L L, and looks up the function there instead — following another forward if that entry also happens to be one. Whoever asked for kernel32!CreateFileW never sees this redirection; they get back a usable address in KernelBase.dll either way, which is exactly why Microsoft can move an implementation between DLLs across Windows versions without breaking the caller’s import:
 
 Section: Native APIs sit closer to the system call.
@@ -53,6 +57,8 @@ Section: D L L exports are names offered to other code.
 A D L L can publish an export table. Each exported name maps to an entry that the loader can resolve. GetProcAddress asks a loaded module for one of those exports.
 
 The returned address is a virtual address in the current process. Address Space Layout Randomization, or A S L R, address space layout randomization,, means the same D L L can be mapped at a different base address in another process or after a reboot. Store the name or an R V A, relative virtual address, when that is the stable identity; do not paste a displayed absolute address into tomorrow’s program.
+
+Narration: A printed export address belongs to this process and mapping. Reusing its name or verified relative location avoids assuming tomorrow’s mapping uses the same base.
 
 Section: Build the address inspector.
 

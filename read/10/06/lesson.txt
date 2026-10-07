@@ -32,6 +32,8 @@ Section: Scheduling is not the same as parallel execution.
 
 Windows schedules runnable threads by giving them turns on C P U cores. On one core, threads can interleave: one runs, pauses, and another runs. On several cores, some threads can also run truly in parallel. The program must be correct under both possibilities.
 
+In brief: Thread correctness must survive both interleaved turns on one core and simultaneous work on several cores.
+
 Suppose the update thread changes a player record in two steps while an overlay thread reads between them:
 
 The overlay may observe a combination that was never a complete game state. This is an interleaving problem. “It worked ten times” does not prove it is safe, because the scheduler may choose a different order on the next run.
@@ -41,6 +43,8 @@ Section: A race that loses an update.
 A bug whose result depends on which thread happens to run first is a race condition. The torn read above is one. The most common kind loses a write.
 
 “Add 500 gold” is one line of source code, but the C P U does it in three steps: read the value into a register, add, and write the result back. Put two threads on the same gold field, one adding a 500-gold quest reward and one taking 300 for a purchase, and let the scheduler interleave them:
+
+Narration: Two writers can each read the old gold before either stores its result. Neither write is torn, yet the final value can still lose one update.
 
 The player should have 1,000 + 500 minus 300 equals 1,200 and has 700. The reward vanished, because the purchase thread wrote a result computed from a value that was already out of date. Most runs interleave harmlessly, with one thread finishing before the other starts, which is why a race can pass every test and still fail for a player.
 
@@ -109,6 +113,8 @@ This course’s debugger uses the debugger event model. It does not randomly fre
 Section: A stack records nested work.
 
 When function A calls function B, the program must remember where B should return. Arguments, saved registers, local variables, and return information may be stored in a stack frame.
+
+Alternative: A call stack is a chain of unfinished jobs: each frame keeps enough information to resume the job that called it.
 
 A stack trace walks from the current frame toward older callers. Optimized code can inline functions, omit frame pointers, move values into registers, or reuse stack slots, so the neat classroom picture is a guide rather than a promise.
 

@@ -26,6 +26,8 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Each layer answers a different question. T C P delivers ordered bytes, not chat messages. Framing finds one complete compressed unit. Gzip recovers plain bytes. UTF-8 and W M L give those bytes text structure. Only the game-level schema says that sender, room, and message form a chat event.
 
+In brief: Framing, compression, text encoding, syntax, and session meaning can each fail independently.
+
 This separation is a debugging tool. If the first four bytes advertise an impossible size, inspect framing. If decompression fails, inspect the wrapper and payload. If W M L is malformed, inspect serialization. If valid W M L is ignored by the game, inspect the expected message fields and connection state. Calling every failure a “packet problem” hides the layer that actually broke.
 
 Section: Read with a cursor.
@@ -34,7 +36,7 @@ The four-byte length at the front of the captured frame must be read before the 
 
 Code example. The code’s comments explain: 📏 Calculate and validate the complete range before changing position. A failed read therefore cannot leave the parser half-advanced. 📦 The protocol says network byte order (big-endian), regardless of the little-endian x86 C P U, central processing unit, running the game.
 
-This cursor replaces direct indexing and hopeful conversion:
+Alternative: The cursor is a bookmark: every accepted field advances it only after its bytes fit.
 
 The original parser takes four header bytes, trusts their length, and indexes the payload. This is a failure example: a short header or a length beyond the captured buffer can panic; extra bytes are silently accepted.
 
@@ -133,6 +135,8 @@ Feed the serializer one sender and one message, then give its frame to the decod
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 Also test an empty input, a truncated gzip member, an oversized length, invalid UTF-8 after decompression, extra trailing bytes, and rejected quote/newline characters.
+
+Narration: Encoding then decoding your own message checks consistency; captured fixtures also check whether both directions share the same mistaken assumption.
 
 A round trip proves that the encoder produces something this decoder accepts. It does not prove compatibility by itself, because two functions could share the same mistake. Keep at least one captured fixture from the real local session and verify that the decoder accepts it. Then send an encoded message to the controlled server and confirm that another capture has the expected four-byte prefix and gzip header.
 

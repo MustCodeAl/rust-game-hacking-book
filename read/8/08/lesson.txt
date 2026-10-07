@@ -12,6 +12,8 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Every feature receives the same owned set of fields from one bounded observation pass. If the radar reads the player list on one pass while the overlay independently reads the camera matrix a few milliseconds later, the features describe different updates, and markers can land where enemies used to be. Bundling the fields means both features use the same captured values. It does not make the reads atomic: the game can update an entity between two reads within that pass. Validate the resulting snapshot and, if the game exposes a tick or generation counter, check it before and after the copy or retry when it changes.
 
+In brief: Sharing one captured set prevents features from using different copies; it does not prove the game stayed unchanged during capture.
+
 The camera matrix and viewport travel with the players for that exact reason. Projecting this frame’s positions through last frame’s camera is wrong in a way that looks almost right — everything is drawn slightly behind where it belongs, worst when you turn quickly, which makes it easy to blame the projection maths instead of the timing.
 
 Vec<PlayerSnapshot> is owned rather than borrowed, so nothing here points back into the game. A feature holding a reference into an entity the game then frees is the stale-pointer failure from Lesson 1.8, arriving through the back door. Copy once, then let every feature read from the copy.
@@ -27,6 +29,8 @@ Only patching or hooking features need setup or restoration in enable and disabl
 Section: Model configuration with enums.
 
 Three booleans named show_teammates, show_opponents, and show_everyone could all become true after a sequence of clicks. Yet the overlay can display only one of those modes at a time. Store that choice as one enum value, alongside the independent radar and debug switches:
+
+Alternative: Use one selector for mutually exclusive overlay modes, and separate switches for independent features that can operate together.
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -49,6 +53,8 @@ That local decision is valid only when the rest of the snapshot remains sound. A
 Section: Shut down in reverse order.
 
 Do not unload code while another thread may still execute it. Restoration must also happen on the thread or render boundary that owns the changed state. Stop the worker, wait for it to finish, and remove only the hooks this tool installed. A render callback may still be executing after the menu closes.
+
+Narration: Closing the controls can leave a render callback in flight. Removing its code before that call finishes turns cleanup into a crash.
 
 Section: Keep verified graphics facts with their target build.
 

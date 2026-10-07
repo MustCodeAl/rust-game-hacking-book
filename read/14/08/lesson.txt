@@ -8,9 +8,13 @@ A DeviceIoControl request carries more parameters than a read. These are the par
 
 The toy control code uses buffered I/O. Its method bits tell the I/O manager to copy the caller’s input into a kernel system buffer before the driver runs, then copy the output back after completion. With this method, the driver works on that buffer rather than the program’s pointer. It still has to respect the lengths: the output length says how many bytes the caller’s buffer can hold, and writing even one byte more would overrun kernel memory.
 
+In brief: Buffered I/O provides a kernel buffer, but the driver must still respect input and output lengths.
+
 Section: A control code is four fields in one number.
 
 A control code is a 32-bit number that packs four fields, built by a macro called CTL_CODE:
+
+Alternative: A packed control code has labelled bit compartments: shifts place each field in its compartment, and masks recover those fields separately.
 
 bits 16 to 31, the device type: values from hexadecimal 8 0 0 0 up belong to hardware vendors, lower ones to Microsoft;
 
@@ -79,6 +83,8 @@ Section: Simulate a device and its driver.
 The lab toy_driver_lab.rs builds the toy keypad and a driver for it as an ordinary user-mode program. Nothing in it touches hardware or the kernel: the register block is a Rust struct, the interrupt line is a bool, and an IRP is a small struct in a queue. What it keeps from the real thing are the rules described in Lesson 12.4 and here.
 
 The device’s register read shows DATA’s side effect in one line:
+
+Narration: Reading DATA consumes queued events, so repeatedly reading it for inspection can change which events the driver receives next.
 
 Code example. The code’s comments explain: Reading DATA is not a pure read: it removes the front event.
 

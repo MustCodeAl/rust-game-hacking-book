@@ -14,6 +14,8 @@ glDrawElements(mode, count, element_type, indices) asks OpenGL to consume an ord
 
 The call does not directly identify a model. OpenGL combines those indices with the currently bound vertex attributes, textures, transforms, and other state. One character may require several draws—body, head, weapon, shadow—and one draw may contain many instances or a batch of unrelated objects.
 
+In brief: A draw request identifies submitted geometry and bound state, not one complete game object.
+
 With GL_TRIANGLES, every complete group of three indices describes one submitted triangle. The indices may repeat vertices, and some triangles may be degenerate, clipped, back-face culled, or hidden by depth. Therefore:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
@@ -33,6 +35,8 @@ This overlap explains why a debugger pause or synchronous query can create a muc
 Section: A hook sits on the program’s critical path.
 
 The render thread has a deadline: finish enough work for the next frame. A hook adds work to a path that may execute thousands of times per second. Even memory-safe code can cause stutter if it allocates, waits for a lock, formats strings, or writes files there.
+
+Narration: A tiny delay repeated for thousands of draws can consume the frame budget. Move formatting and disk writes away from the render thread.
 
 Split the design into two rates:
 
@@ -55,6 +59,8 @@ In an older fixed-function renderer, transforms and arrays may be ordinary OpenG
 Section: Keep the original function.
 
 The wrapper needs a way to reach the real OpenGL function after it has intercepted a call. Store the resolved function pointer once during setup; every draw can then forward through that saved pointer without another lookup on the render thread:
+
+Alternative: A forwarding wrapper is a receptionist with the original extension saved: recording the request must not route it back through the receptionist indefinitely.
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 

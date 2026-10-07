@@ -28,6 +28,8 @@ Section: Reset comes before the Rust entry point.
 
 On this Cortex-M system, reset does not mean “call whichever function happens to be named main.” The core obtains startup values from a vector table. Its first entry contains the initial stack pointer; its second contains the reset-handler address. Later entries describe exception and interrupt handlers. The table contains values and addresses, rather than a sequence of application instructions. The Cortex-M memory-layout walkthrough shows how these entries fit into an image.
 
+Alternative: The vector table is a startup directory of addresses: the processor reads where the stack and reset handler begin, rather than executing the entries as instructions.
+
 The reset handler runs startup code. Among its jobs is preparing writable static data so Rust can safely use it. The linker groups program contents into sections. Placement in the image happens before execution; reset-time initialization then prepares particular writable ranges:
 
 For example, a writable counter that must start at 7 needs both a working location in R A M and an initial value in the image. Startup copies the 7 before the application uses the counter. A counter starting at zero needs a reserved R A M range, but the image need not carry a long run of zero bytes: startup can write the zeros. The linker and runtime agree on where these ranges begin and end. Local variables are separate; a compiler can keep them in registers or on the stack as the program executes.
@@ -95,6 +97,8 @@ You can obtain the source files from those links and the configuration link belo
 Section: The target and the layout answer different questions.
 
 The Rust target is thumbv7m-none-eabi. It describes the Armv7-M architecture, bare-metal environment, and calling convention suitable for this Cortex-M3. It does not identify which pins the board wires to an LED or where a different chip keeps its flash. The Rust target documentation describes the C P U, central processing unit, requirements.
+
+In brief: The compilation target specifies the processor environment; the board configuration supplies its particular memory layout and peripherals.
 
 The memory.x linker configuration supplies our board model’s layout:
 
@@ -169,6 +173,8 @@ Polling checks an input repeatedly; an interrupt runs a handler when a configure
 Section: Debugging changes timing too.
 
 Firmware debugging has two places to inspect: the rule and its hardware integration. The library tests in the project check that holding a press does not toggle repeatedly and that a fresh controller starts with fresh state. They do not establish that a physical button is wired correctly. The QEMU run tests the compiled ARM image and its startup, but does not test a real board’s electrical behaviour.
+
+Narration: An emulated run can verify startup and compiled control behavior while missing a reversed physical pin or noisy button. Keep board observations distinct from emulator results.
 
 When a real device behaves differently, record the chip, board revision, toolchain, image version, and input conditions. Compare the intended state transition with the observed one. Then check the boundary responsible for that input or output: pin polarity, debounce timing, timer rate, or register setup. Changing the control rule to compensate for a wiring mistake hides the cause.
 
