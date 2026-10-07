@@ -7,6 +7,8 @@ https://mustcodeal.github.io/rust-game-hacking-book/ (served from branch `gh-pag
 
 ## Current checkpoint — 2026-10-07 (T29–T34; read before the older backlog)
 
+Website changes published from source `dd92d3cd` to Pages `c4707ced`; post-publication links 0 broken, processed-diagram page count 114. The public Primer contains all nine recall blocks and three traces. Later root documentation receipts do not change the generated site.
+
 - Source is `codex/book-revision`; this machine's primary checkout is `gh-pages`. Work used `/private/tmp/gha-book-revision` so the generated checkout and unrelated local files were preserved. Use the source branch for future work. Never hand-edit or force-push Pages.
 - **Section A is complete:** all 25 comparisons in 24 lessons now show context, full Before, explanation, full Improved code by default, Show the diff, and a takeaway. Do not redo these.
 - **Reader 1.5 Primer:** nine optional typing/recall snippets plus three adjustable CodeTraces. `SpeedType` accepts authored recall fragments and semantic hints; separate copy/unaided recall keys preserve older records. See kit README and T32.

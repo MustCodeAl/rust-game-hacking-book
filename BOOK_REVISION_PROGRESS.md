@@ -1614,3 +1614,8 @@ Lesson 1.8's Byte Interpreter (`learning-widgets.js` `initializeByteLens`, last 
 - Browser harness had intermittent waits for deferred controls during combined cold visits; focused page checks and the earlier complete integrated run passed. Cached-navigation initialization reliability is not claimed. Safari/Firefox, physical touch, screen-reader output, real Windows/Rust execution and live external chat/account services remain unverified. No lab programs were run.
 - Updated HANDOFF_PLAN's current checkpoint and comment behavior, explicitly excluding already-finished original design/Appearance work from the backlog. Remaining B concepts, D instruction reference, E idioms, C owner-approved map/migrations and G polish are recorded there. TokenSave retrieval saved about 3,257 tokens in the final regression investigation; source worktree reads used absolute paths because the served graph is gh-pages.
 - Source and generated-site publication follow this entry. Verify the receipt in git history: a clean source push, regular generated Pages push, 0 broken links and 114 processed-diagram pages are required.
+
+
+### T34 publication receipt (2026-10-07)
+
+Published all completed website changes from source `dd92d3cd` (including T32 `3c29ed3` and T33 `3078029`) to generated `gh-pages` `c4707ced` with the repository publishing script; exit 0 and regular push, no force push. Post-publication: 318 pages / **0 broken links**, processed diagram page count **114**, clean source tree. Fetched the public Primer and confirmed nine recall metadata blocks and all three new trace IDs are live. This receipt only changes root handoff/progress documentation; it does not change the generated website.
