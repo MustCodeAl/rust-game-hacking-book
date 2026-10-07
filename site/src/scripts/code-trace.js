@@ -28,6 +28,7 @@
 
 
 import { ORIGINAL_TRACES } from './original-traces.js';
+import { HANDOFF_TRACES } from './handoff-traces.js';
 
 // Small syntax highlighter for lab code (Rust, Lua, Python-like, assembly).
 function academyGuessLang(text) {
@@ -84,6 +85,7 @@ function recorder() {
 // ---------------------------------------------------------------- traces
 export const TRACES = {
   ...ORIGINAL_TRACES,
+  ...HANDOFF_TRACES,
   'rust-dash-branch': {
     title: 'A comparison chooses whether stamina changes',
     intro: 'Start with 12 stamina and a cost of 4. Change either input, then step through the path the comparison selects.',
