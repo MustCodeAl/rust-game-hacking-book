@@ -1,0 +1,224 @@
+---
+title: "Rust: Collections, Bounds, and Bytes"
+description: "Read iterator chains, overlapping windows, complete records, explicit byte conversion, integer limits, and C layout."
+chapter: "1.12"
+minutes: 24
+author: "attilathedud"
+date: "2026-10-07"
+sidebar:
+  order: 12
+  label: "1.12 Rust: Collections, Bounds, and Bytes"
+---
+import CodeTrace from '../../../../components/CodeTrace.astro';
+import { MarginNote, SpeedType } from '../../../../components/kit';
+
+A memory reader and a packet parser both receive sequences of bytes.
+Before using those bytes, they need to check the available length, decide
+how to group elements, and choose the numeric interpretation. Ordinary
+Rust collections let us learn those decisions in a small local example.
+The [previous lesson](/pages/1/13/) explains the `Option` and `Result`
+values returned when a check fails.
+
+## Read an iterator chain one item at a time
+
+An **iterator** yields a sequence of items on demand. `filter` keeps items
+that satisfy a predicate, `map` transforms each kept item, and `fold`
+combines items into one running answer. The closures describe those
+operations; a consuming operation such as `fold` drives the sequence.
+
+<SpeedType id="rust-filter-map-fold" title="Keep, transform, and add" recall={[{text:"filter(|cost| *cost <= budget)",hint:"Keep costs that fit the unchanged per-item budget; the predicate borrows each item."},{text:"map(|cost| cost * 2)",hint:"Double each cost that passed the predicate."},{text:"fold(0, |sum, cost| sum + cost)",hint:"Start at zero and accumulate each transformed cost."}]}>
+
+```rust
+fn doubled_total(budget: u32) -> u32 {
+    let prices = [3_u32, 8, 12];
+    prices.into_iter()
+        .filter(|cost| *cost <= budget)
+        .map(|cost| cost * 2)
+        .fold(0, |sum, cost| sum + cost)
+}
+```
+
+</SpeedType>
+
+For a budget of 8, `filter` keeps 3 and 8, `map` produces 6 and 16, and
+`fold` produces 22. This is a query, not a purchase: each price is checked
+against the same unchanged budget. It does not ask whether buying all the
+items together would be affordable.
+
+`into_iter` consumes this array and yields its `u32` values. `filter`
+passes a reference to its predicate so an item can still be yielded after
+the check; `*cost` reads the borrowed number. `map` then receives each
+kept number by value. If you need to borrow the collection instead, start
+with `.iter()`; for copyable numbers, `.iter().copied()` yields values
+while keeping the original collection.
+
+<CodeTrace trace="idiom-filter-map-fold" />
+
+## Use `windows` for neighboring samples
+
+Suppose three position samples are 2, 6, and 10. We want each change
+between adjacent samples. `windows(2)` yields borrowed slices `[2, 6]`
+and `[6, 10]`. They overlap because the middle sample belongs to both
+neighbor pairs.
+
+```rust
+fn movement_deltas(positions: &[i32]) -> Vec<i32> {
+    positions.windows(2)
+        .map(|pair| pair[1] - pair[0])
+        .collect()
+}
+```
+
+Every yielded window has exactly two elements, so its two indexes are
+valid. The example's small coordinates also keep the subtraction in
+`i32` range; arbitrary external coordinates need a checked subtraction
+or a wider type. `collect` consumes the iterator into a new `Vec<i32>`.
+A slice shorter than the window size yields no windows. A zero window
+size would panic, so validate a reader-supplied size before calling it.
+
+<CodeTrace trace="idiom-windows" />
+
+## Use `chunks_exact` for complete records
+
+`chunks_exact(2)` divides a buffer into separate two-byte groups.
+Unlike windows, the groups do not overlap. A final single byte does not
+form a complete record. Rust exposes it through `remainder()` so the
+parser can decide whether to reject it or buffer it for later.
+
+```rust
+fn decode_records(bytes: &[u8]) -> Result<Vec<u16>, &'static str> {
+    let records = bytes.chunks_exact(2);
+    if !records.remainder().is_empty() {
+        return Err("partial record");
+    }
+    Ok(records
+        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+        .collect())
+}
+```
+
+The buffer `[4, 0, 9, 0]` decodes as two little-endian numbers, 4 and 9.
+Appending `255` makes this complete-packet parser return an error. For a
+stream being received in pieces, keeping that byte for the next read may
+be appropriate; [Lesson 8.1](/pages/6/01/) explains that distinction.
+This function fixes the group size at two. A zero size would panic.
+
+<MarginNote kind="clarify">chunks_exact does not certify that the entire buffer contains complete records. Checking the remainder supplies that guarantee.</MarginNote>
+
+<CodeTrace trace="idiom-chunks" />
+
+## Check slice bounds before decoding a number
+
+A **slice** borrows a contiguous sequence and includes its length.
+`bytes[3]` assumes index 3 exists; it panics if that assumption is false.
+`bytes.get(3)` instead returns `Some(&byte)` or `None`. The same checked
+operation accepts a range: `get(..4)` asks for the first four bytes.
+
+<SpeedType id="rust-read-bounded-gold" title="Decode four checked bytes" recall={[{text:"bytes.get(..4)?",hint:"Ask for a checked four-byte prefix; return None if it is too short."},{text:"try_into().ok()?",hint:"Convert the slice into an exact array and keep only a successful conversion."},{text:"u32::from_le_bytes(raw)",hint:"Interpret the low byte first without relying on the host CPU."}]}>
+
+```rust
+fn read_gold(bytes: &[u8]) -> Option<u32> {
+    let raw: [u8; 4] = bytes.get(..4)?.try_into().ok()?;
+    Some(u32::from_le_bytes(raw))
+}
+```
+
+</SpeedType>
+
+The range check establishes the length. `try_into` produces an exact
+`[u8; 4]` array from that slice; `.ok()` turns its `Result` into an
+`Option`, and `?` exits if it is missing. `from_le_bytes` interprets
+`[0x2C, 0x01, 0, 0]` as 300. `300_u32.to_le_bytes()` reverses that
+conversion and produces the same four bytes. Use `from_be_bytes` and
+`to_be_bytes` when the format says the high byte comes first.
+
+Reading the first four bytes leaves any later bytes unused. A format
+that requires exactly four bytes must also check the total length.
+Byte conversion interprets a number; it does not decide whether that
+number is a valid health amount, length, or address.
+
+<CodeTrace trace="idiom-byte-conversion" />
+
+## Choose how integer limits are handled
+
+An unsigned eight-bit value, `u8`, holds 0 through 255. The mathematical
+sum `250 + 10` is 260 and does not fit. Rust supplies explicit arithmetic
+policies so the programmer chooses the intended behavior:
+
+```rust
+let count = 250_u8;
+let checked = count.checked_add(10);       // None
+let wrapping = count.wrapping_add(10);     // 4
+let saturating = count.saturating_add(10); // 255
+```
+
+`checked_*` reports that an answer cannot be represented. `wrapping_*`
+keeps the low bits, making this sum 4 after passing 255. `saturating_*`
+stops at the type's limit. Use checked arithmetic for a size or balance
+that must be rejected if it overflows; wrapping for an intentionally
+cyclic counter; saturating for a bounded meter.
+
+Plain integer overflow may panic when overflow checks are enabled or
+wrap when disabled. Explicit methods make the behavior independent of
+that build setting. Saturation is to the type limit: a game with maximum
+health 100 still needs a separate clamp to 100, even if health is a `u8`.
+
+<CodeTrace trace="idiom-integer-safety" />
+
+## Separate in-memory layout from a file format
+
+Rust's ordinary struct representation does not promise a C field layout.
+`#[repr(C)]` requests the target platform's C ordering and alignment:
+
+```rust
+#[repr(C)]
+struct Record {
+    tag: u8,
+    gold: u32,
+    zone: u16,
+}
+```
+
+On the Windows x64 target used in this book, `tag` is at offset 0,
+`gold` at offset 4, and `zone` at offset 8. Three padding bytes align
+`gold`; two tail padding bytes make the full size 12. The same fields
+written consecutively into a file would occupy only 7 bytes. Padding
+is part of the type's memory layout, not an implied serialized field.
+
+```rust
+let gold_offset = std::mem::offset_of!(Record, gold);
+let record_size = std::mem::size_of::<Record>();
+let record_alignment = std::mem::align_of::<Record>();
+```
+
+These operations measure the compiled type on the current target.
+`repr(C)` does not select byte order, prove that remote bytes contain
+valid field values, or make every C++ class compatible with this struct.
+Decode external file or packet fields explicitly rather than copying
+the raw bytes of a Rust struct, including its padding.
+
+<MarginNote kind="code">An offset describes where a field is within a particular layout. Keep the target architecture and format version with that offset.</MarginNote>
+
+<CodeTrace trace="idiom-layout" />
+
+## Cheatsheet: sequences and representations
+
+| Need | Expression | Boundary to check |
+| --- | --- | --- |
+| Keep selected items | `.filter(predicate)` | Predicate borrows its item. |
+| Transform each item | `.map(function)` | Runs as the iterator is consumed. |
+| Accumulate an answer | `.fold(start, combine)` | Arithmetic must fit or use an explicit policy. |
+| Compare neighbors | `.windows(n)` | `n` must be positive; windows overlap. |
+| Decode fixed records | `.chunks_exact(n)` | `n` must be positive; inspect the remainder. |
+| Borrow checked elements | `.get(index_or_range)` | Returns `None` outside the bounds. |
+| Convert an exact field | `from_le_bytes` / `to_le_bytes` | Follow the format's byte order and width. |
+| Reject overflow | `checked_*` | Caller handles `None`. |
+| Cycle through bit patterns | `wrapping_*` | Wraparound must be intended. |
+| Stop at the type limit | `saturating_*` | The game limit may be smaller. |
+| Match C layout | `#[repr(C)]` | Target alignment and padding still apply. |
+
+The [Iterator reference](https://doc.rust-lang.org/std/iter/trait.Iterator.html),
+[slice reference](https://doc.rust-lang.org/std/primitive.slice.html), and
+[type-layout reference](https://doc.rust-lang.org/reference/type-layout.html)
+give the complete definitions. Next, [borrows and interfaces](/pages/1/15/)
+explain how functions share this data without losing its owner.

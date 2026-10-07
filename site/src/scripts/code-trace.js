@@ -31,6 +31,7 @@ import { ORIGINAL_TRACES } from './original-traces.js';
 import { HANDOFF_TRACES } from './handoff-traces.js';
 import { SCENE_TRACES } from './scene-traces.js';
 import { ASSEMBLY_TRACES } from './assembly-traces.js';
+import { RUST_IDIOM_TRACES } from './rust-idiom-traces.js';
 
 // Small syntax highlighter for lab code (Rust, Lua, Python-like, assembly).
 function academyGuessLang(text) {
@@ -89,6 +90,7 @@ export const TRACES = {
   ...ORIGINAL_TRACES,
   ...SCENE_TRACES,
   ...ASSEMBLY_TRACES,
+  ...RUST_IDIOM_TRACES,
   ...HANDOFF_TRACES,
   'rust-dash-branch': {
     title: 'A comparison chooses whether stamina changes',
