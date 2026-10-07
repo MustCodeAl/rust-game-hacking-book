@@ -10,7 +10,7 @@ sidebar:
   label: "3.1 Safe Boundaries for Game Memory"
 ---
 import SpeedType from '../../../../components/kit/SpeedType.astro';
-import { GitHub } from '../../../../components/kit';
+import { GitHub, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import OwnershipScope from '../../../../components/OwnershipScope.astro';
@@ -401,8 +401,36 @@ does not satisfy those promises.
 
 This distinction matters in a game-memory tool:
 
+This original example tries to load health by casting a remote address to a local Rust pointer. **Do not execute it:** the address belongs to another process, so the required local allocation and pointer-validity guarantees cannot be established.
+
+```rust title="Before: dereference an address from another process"
+fn read_health(process: &Process, remote_base: usize) -> Result<u32, ReadError> {
+    // SAFETY: cannot be established for a remote address; this is the bug.
+    let health = unsafe { *((remote_base as *const u8).offset(0x30).cast::<u32>()) };
+    Ok(health)
+}
+```
+
+Keep remote addresses as integers, use **checked addition** for the field offset, then let the process-reading wrapper copy the bytes into a local buffer. It returns a normal error if the remote read fails.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn read_health(process: &Process, remote_base: usize) -> Result<u32, ReadError> {
+    let health_address = remote_base.checked_add(0x30)
+        .ok_or(ReadError::AddressOverflow)?;
+    let health = process.read_u32(health_address)?;
+    Ok(health)
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn read_health(process: &Process, remote_base: usize) -> Result<u32, ReadError> {
+-    // SAFETY: cannot be established for a remote address; this is the bug.
 -    let health = unsafe { *((remote_base as *const u8).offset(0x30).cast::<u32>()) };
 +    let health_address = remote_base.checked_add(0x30)
 +        .ok_or(ReadError::AddressOverflow)?;
@@ -410,6 +438,11 @@ This distinction matters in a game-memory tool:
      Ok(health)
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** remote memory requires a process-aware copy; a cast does not move bytes across address spaces.
 
 ❌ The first version pretends memory owned by another process is part of this
 tool process's allocation. It is not. ✅ The second version treats the remote

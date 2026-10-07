@@ -9,7 +9,7 @@ sidebar:
   order: 3
   label: "3.3 How External Tools Read Game Memory"
 ---
-import { Fields, GitHub, ParamField, ResponseField } from '../../../../components/kit';
+import { Fields, GitHub, ParamField, ResponseField, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Scene from '../../../../components/Scene.astro';
@@ -213,17 +213,110 @@ for compatible handle families.
 
 The ownership improvement is small in code and large in behavior:
 
+The original helper opens a raw process handle, reads four gold bytes, then closes the handle. If the read fails or copies fewer than four bytes, `?` or `ensure!` returns before the closing line and leaks the handle. Both versions receive a discovered `ProcessEntry`, the requested rights, and the verified gold address; they use the linked lab library.
+
+```rust title="Before: close the handle only on success"
+use std::ffi::c_void;
+use gha_windows_labs::ProcessEntry;
+use windows::Win32::{
+    Foundation::CloseHandle,
+    System::{
+        Diagnostics::Debug::ReadProcessMemory,
+        Threading::{OpenProcess, PROCESS_ACCESS_RIGHTS},
+    },
+};
+
+fn load_gold(
+    entry: ProcessEntry,
+    rights: PROCESS_ACCESS_RIGHTS,
+    gold_address: usize,
+) -> anyhow::Result<u32> {
+    // SAFETY: a numeric PID is passed; Windows validates it and the requested rights.
+    let handle = unsafe { OpenProcess(rights, false, entry.id) }?;
+    let mut bytes = [0_u8; 4];
+    let mut bytes_read = 0;
+    // SAFETY: the handle is live and the local output buffer has four writable bytes.
+    // Windows validates the remote range; no local pointer to that range is dereferenced.
+    unsafe {
+        ReadProcessMemory(
+            handle, gold_address as *const c_void,
+            bytes.as_mut_ptr().cast(), bytes.len(), Some(&mut bytes_read),
+        )?; // An error returns before CloseHandle.
+    }
+    anyhow::ensure!(bytes_read == bytes.len(), "short read"); // Also skips cleanup.
+    // SAFETY: this helper owns the live handle and has not closed it yet.
+    unsafe { CloseHandle(handle) }?;
+    Ok(u32::from_le_bytes(bytes))
+}
+```
+
+**RAII** moves handle ownership into `Process`. Its `open_with_access` method requests the same rights, and `read_u32` requires a complete four-byte copy. Leaving the function drops the owner on success and on every early return, while the original error still reaches the caller.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+use gha_windows_labs::{Process, ProcessEntry};
+use windows::Win32::System::Threading::PROCESS_ACCESS_RIGHTS;
+
+fn load_gold(
+    entry: ProcessEntry,
+    rights: PROCESS_ACCESS_RIGHTS,
+    gold_address: usize,
+) -> anyhow::Result<u32> {
+    let process = Process::open_with_access(entry, rights)?;
+    let gold = process.read_u32(gold_address)?;
+    Ok(gold) // OwnedHandle::drop closes the handle on every return path.
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
- fn load_gold(process_id: u32, rights: PROCESS_ACCESS_RIGHTS) -> anyhow::Result<u32> {
--    let handle = OpenProcess(rights, false, process_id)?;
--    let gold = read_gold(handle)?;
--    CloseHandle(handle)?;
--    Ok(gold)
-+    let process = Process::open(process_id, rights)?;
-+    let gold = process.read_gold()?;
-+    Ok(gold) // OwnedHandle::drop closes the handle on every return path
+-use std::ffi::c_void;
+-use gha_windows_labs::ProcessEntry;
++use gha_windows_labs::{Process, ProcessEntry};
++use windows::Win32::System::Threading::PROCESS_ACCESS_RIGHTS;
+-use windows::Win32::{
+-    Foundation::CloseHandle,
+-    System::{
+-        Diagnostics::Debug::ReadProcessMemory,
+-        Threading::{OpenProcess, PROCESS_ACCESS_RIGHTS},
+-    },
+-};
+
+ fn load_gold(
+     entry: ProcessEntry,
+     rights: PROCESS_ACCESS_RIGHTS,
+     gold_address: usize,
+ ) -> anyhow::Result<u32> {
++    let process = Process::open_with_access(entry, rights)?;
++    let gold = process.read_u32(gold_address)?;
++    Ok(gold) // OwnedHandle::drop closes the handle on every return path.
+-    // SAFETY: a numeric PID is passed; Windows validates it and the requested rights.
+-    let handle = unsafe { OpenProcess(rights, false, entry.id) }?;
+-    let mut bytes = [0_u8; 4];
+-    let mut bytes_read = 0;
+-    // SAFETY: the handle is live and the local output buffer has four writable bytes.
+-    // Windows validates the remote range; no local pointer to that range is dereferenced.
+-    unsafe {
+-        ReadProcessMemory(
+-            handle, gold_address as *const c_void,
+-            bytes.as_mut_ptr().cast(), bytes.len(), Some(&mut bytes_read),
+-        )?; // An error returns before CloseHandle.
+-    }
+-    anyhow::ensure!(bytes_read == bytes.len(), "short read"); // Also skips cleanup.
+-    // SAFETY: this helper owns the live handle and has not closed it yet.
+-    unsafe { CloseHandle(handle) }?;
+-    Ok(u32::from_le_bytes(bytes))
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** cleanup belongs to the resource owner, so a new error path cannot skip it.
 
 :::note[Why this version?]
 Every use of `?` can return early. Manual cleanup at the

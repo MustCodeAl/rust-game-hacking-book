@@ -9,7 +9,7 @@ sidebar:
   order: 3
   label: "4.3 From One Player to a Game-State Snapshot"
 ---
-import { Frame, SpeedType } from '../../../../components/kit';
+import { Frame, SpeedType, CodeGroup, Tab } from '../../../../components/kit';
 import ConceptLab from '../../../../components/ConceptLab.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
@@ -203,6 +203,47 @@ fn read_players(
 
 Compare that with silently skipping records that fail:
 
+The original helper reads each player and keeps only successful rows. A failed row disappears without an error, so the returned list can look complete even when the layout is wrong or the game changed during capture.
+
+```rust title="Before: silently skip failed player reads"
+fn read_players(
+    process: &Process,
+    table: usize,
+    count: usize,
+    layout: &PlayerLayout,
+) -> anyhow::Result<Vec<PlayerSnapshot>> {
+    let mut players = Vec::new();
+    for index in 0..count {
+        if let Ok(player) = read_player(process, table, index, layout) { // Errors disappear.
+            players.push(player);
+        }
+    }
+    Ok(players)
+}
+```
+
+Validate the known lab limit of sixteen players first, then **collect results** into one `Result<Vec<_>>`. Any failed read rejects the whole claimed snapshot instead of quietly shortening it.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn read_players(
+    process: &Process,
+    table: usize,
+    count: usize,
+    layout: &PlayerLayout,
+) -> anyhow::Result<Vec<PlayerSnapshot>> {
+    anyhow::ensure!(count <= 16, "unexpected player count: {count}");
+    (0..count)
+        .map(|index| read_player(process, table, index, layout))
+        .collect()
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn read_players(
      process: &Process,
@@ -212,7 +253,7 @@ Compare that with silently skipping records that fail:
  ) -> anyhow::Result<Vec<PlayerSnapshot>> {
 -    let mut players = Vec::new();
 -    for index in 0..count {
--        if let Ok(player) = read_player(process, table, index, layout) {
+-        if let Ok(player) = read_player(process, table, index, layout) { // Errors disappear.
 -            players.push(player);
 -        }
 -    }
@@ -223,6 +264,11 @@ Compare that with silently skipping records that fail:
 +        .collect()
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** return a complete trusted snapshot or a visible error, rather than disguising missing rows.
 
 :::note[Why this version?]
 A missing row means a bad layout, a changing process, or

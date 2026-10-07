@@ -9,7 +9,7 @@ sidebar:
   order: 6
   label: "13.6 Control Gaps in Toy Defenses"
 ---
-import { GitHub, Steps } from '../../../../components/kit';
+import { GitHub, Steps, CodeGroup, Tab } from '../../../../components/kit';
 import ConceptLab from '../../../../components/ConceptLab.astro';
 
 The earlier chapters showed how a value, hook, or object layout can
@@ -117,9 +117,42 @@ leave the new variant out and the code does not compile. The denylist that
 would have needed extending forever has become a decision the compiler insists
 you make once.
 
+The original policy blocks only the command named `WriteMemory`; every other name passes, even when writes are disabled. The final `if` is the call-site fragment inside the lab's command handler: it shows the shared execution boundary where that decision is used.
+
+```rust title="Before: block only one command name"
+ fn policy(command: LabCommand, writes_allowed: bool) -> bool {
+     command != LabCommand::WriteMemory // Ignores the setting and other write commands.
+ }
+
+if policy(command, settings.writes_allowed) {
+    execute_at_shared_boundary(command)?;
+}
+```
+
+Classify the **effect** of each command once, then apply the setting to every state-changing effect. The enum and exhaustive match keep new command variants from silently falling outside the rule.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+ fn policy(command: LabCommand, writes_allowed: bool) -> bool {
+     match effect_of(command) {
+         Effect::ReadOnly => true,
+         Effect::ChangesState => writes_allowed,
+     }
+ }
+
+if policy(command, settings.writes_allowed) {
+    execute_at_shared_boundary(command)?;
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
 - fn policy(command: LabCommand, writes_allowed: bool) -> bool {
--     command != LabCommand::WriteMemory
+-     command != LabCommand::WriteMemory // Ignores the setting and other write commands.
 - }
 + fn policy(command: LabCommand, writes_allowed: bool) -> bool {
 +     match effect_of(command) {
@@ -132,6 +165,11 @@ you make once.
      execute_at_shared_boundary(command)?;
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** permission checks should follow what an operation does, not just what it is called.
 
 The regression test iterates over every state-changing enum variant. Adding a
 new variant then forces the programmer to classify it.

@@ -9,7 +9,7 @@ sidebar:
   order: 7
   label: "2.7 Why Addresses Move"
 ---
-import { Frame } from '../../../../components/kit';
+import { Frame, CodeGroup, Tab } from '../../../../components/kit';
 
 import ConceptLab from '../../../../components/ConceptLab.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
@@ -204,20 +204,75 @@ The final field address is returned without reading another pointer. Keeping tha
 The change from loose arithmetic to a deliberate chain is easier to see as a
 diff:
 
+The original helper adds the root offset, two link offsets and the field offset as if they were all distances inside one allocation. Here those arguments describe a two-link pointer path: each intermediate slot stores the address of another object.
+
+```rust title="Before: add every offset without following pointers"
+fn read_gold(
+    process: &Process, module_base: usize, root_offset: usize,
+    first_link: usize, second_link: usize, field_offset: usize,
+) -> anyhow::Result<u32> {
+    let gold = process.read_u32(
+        module_base + root_offset + first_link + second_link + field_offset,
+    )?; // Wrong: no intermediate pointer is read.
+    Ok(gold)
+}
+```
+
+Separate **address arithmetic** from **dereferencing**. At each link, calculate the slot, read the pointer stored there, and reject null; only the final field is read as gold. These offsets are inputs recovered for your own exact lab build, not universal game addresses.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn read_gold(
+    process: &Process, module_base: usize, root_offset: usize,
+    first_link: usize, second_link: usize, field_offset: usize,
+) -> anyhow::Result<u32> {
+    let root = module_base.checked_add(root_offset)
+        .context("root address overflowed")?;
+    let mut object = process.read_pointer(root)?;
+    for offset in [first_link, second_link] {
+        anyhow::ensure!(object != 0, "null object pointer");
+        let slot = object.checked_add(offset).context("link address overflowed")?;
+        object = process.read_pointer(slot)?;
+    }
+    anyhow::ensure!(object != 0, "null final object pointer");
+    let field = object.checked_add(field_offset).context("field address overflowed")?;
+    let gold = process.read_u32(field)?;
+    Ok(gold)
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
- fn read_gold(process: &Process, module_base: usize) -> anyhow::Result<u32> {
--    let gold = process.read_u32(module_base + root + a + b + field)?;
-+    let root_address = module_base.checked_add(root_offset)
+ fn read_gold(
+     process: &Process, module_base: usize, root_offset: usize,
+     first_link: usize, second_link: usize, field_offset: usize,
+ ) -> anyhow::Result<u32> {
+-    let gold = process.read_u32(
+-        module_base + root_offset + first_link + second_link + field_offset,
+-    )?; // Wrong: no intermediate pointer is read.
++    let root = module_base.checked_add(root_offset)
 +        .context("root address overflowed")?;
-+    let mut object = process.read_pointer(root_address)?;
-+    object = process.read_pointer(object.checked_add(a)
-+        .context("first link overflowed")?)?;
-+    let field_address = object.checked_add(field_offset)
-+        .context("field address overflowed")?;
-+    let gold = process.read_u32(field_address)?;
++    let mut object = process.read_pointer(root)?;
++    for offset in [first_link, second_link] {
++        anyhow::ensure!(object != 0, "null object pointer");
++        let slot = object.checked_add(offset).context("link address overflowed")?;
++        object = process.read_pointer(slot)?;
++    }
++    anyhow::ensure!(object != 0, "null final object pointer");
++    let field = object.checked_add(field_offset).context("field address overflowed")?;
++    let gold = process.read_u32(field)?;
      Ok(gold)
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** adding an offset finds a slot; reading the pointer in that slot finds the next object.
 
 :::note[Why this version?]
 Offsets describe different jobs. `root_offset` locates

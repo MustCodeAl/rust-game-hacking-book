@@ -9,7 +9,7 @@ sidebar:
   order: 4
   label: "4.4 Why Snapshots Need Guarded Actions"
 ---
-import { Accordion, Badge, GitHub, SpeedType } from '../../../../components/kit';
+import { Accordion, Badge, GitHub, SpeedType, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Scene from '../../../../components/Scene.astro';
@@ -143,13 +143,49 @@ In the code below, `observed` is the snapshot the caller approved. A fresh
 snapshot must match it before any write; afterward, a read-back must equal
 `replacement`. Each added line enforces one arrow in the diagram.
 
+The original helper writes to the gold address in a previously captured snapshot, then reports success. The target may have changed since that snapshot; the function also never checks what was stored.
+
+```rust title="Before: write through a cached snapshot"
+fn replace_gold(
+    process: &Process,
+    observed: Snapshot,
+    replacement: u32,
+) -> anyhow::Result<()> {
+    process.write_u32(observed.gold_address, replacement)?; // May be stale.
+    Ok(())
+}
+```
+
+A **guarded action** checks its precondition immediately before writing and its postcondition afterward. Matching snapshots reduce stale-address mistakes; they still cannot prevent the game changing between the check and the write.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn replace_gold(
+    process: &Process,
+    observed: Snapshot,
+    replacement: u32,
+) -> anyhow::Result<()> {
+    let current = stable_snapshot(process)?;
+    anyhow::ensure!(current == observed, "state changed; nothing was written");
+    process.write_u32(observed.gold_address, replacement)?;
+    let written = process.read_u32(observed.gold_address)?;
+    anyhow::ensure!(written == replacement, "write did not reach its postcondition");
+    Ok(())
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn replace_gold(
      process: &Process,
      observed: Snapshot,
      replacement: u32,
  ) -> anyhow::Result<()> {
--    process.write_u32(old_address, replacement)?;
+-    process.write_u32(observed.gold_address, replacement)?; // May be stale.
 +    let current = stable_snapshot(process)?;
 +    anyhow::ensure!(current == observed, "state changed; nothing was written");
 +    process.write_u32(observed.gold_address, replacement)?;
@@ -158,6 +194,11 @@ snapshot must match it before any write; afterward, a read-back must equal
      Ok(())
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** recheck the state you approved, then verify the result of the write.
 
 This is not a database transaction: Windows cannot automatically roll back the game. It is a **guarded action** with a checked precondition and postcondition. That pattern also fits toggles, patches, save editors, configuration tools, and mod installers.
 
