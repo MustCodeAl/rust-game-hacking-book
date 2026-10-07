@@ -1,0 +1,824 @@
+diff --git a/site/src/content/docs/pages/1/01.mdx b/site/src/content/docs/pages/1/01.mdx
+--- a/site/src/content/docs/pages/1/01.mdx
++++ b/site/src/content/docs/pages/1/01.mdx
+@@ -18,8 +18,8 @@
+ there. You do not need to look up its missing foundations before you begin.
+ 
+ The nine lessons in this opening chapter connect four views of one game
+-action: the computer runs instructions, the game applies a rule, Rust
+-expresses the rule, and memory holds the changing state. A Windows lab and
++action: the computer runs instructions, the game checks whether a purchase is affordable, Rust expresses that check
++and subtraction, and memory holds the changing state. A Windows lab and
+ a gold scan then make those ideas visible. The chapter ends with that first
+ scan; the next chapter follows the value into the code that changes it.
+ Read the sequence as a tutorial; later, the concept lessons are also places
+@@ -97,7 +97,7 @@
+ Write down what you **know**, what you **do not know**, and what you are
+ **assuming**. For the jump question, you know which button you pressed and
+ whether the character visibly rose. You do not yet know whether the game
+-received the input or which rule allowed the jump. “The character was standing
++received the input or which grounded-state or cooldown check allowed the jump. “The character was standing
+ on the ground” may be an assumption until you check the starting position.
+ These distinctions keep an attractive explanation from silently becoming a
+ fact.
+@@ -149,7 +149,7 @@
+ choose what to investigate first. Simplicity does not prove an explanation
+ true; a more complicated cause may fit a later observation better.
+ 
+-<MarginNote kind="narration">Checking the cheap explanation first saves time. A missed button press takes seconds to rule out; a theory about hidden game rules can take an afternoon.</MarginNote>
++<MarginNote kind="narration">Checking the cheap explanation first saves time. A missed button press takes seconds to rule out; a theory about a hidden jump condition can take an afternoon.</MarginNote>
+ 
+ ## Correct mistakes immediately
+ 
+diff --git a/site/src/content/docs/pages/1/04.mdx b/site/src/content/docs/pages/1/04.mdx
+--- a/site/src/content/docs/pages/1/04.mdx
++++ b/site/src/content/docs/pages/1/04.mdx
+@@ -1,6 +1,6 @@
+ ---
+ title: "Programming Fundamentals"
+-description: "Build a small Rust rule and use it to understand variables, logic, test cases, collections, and ways to organize code."
++description: "Build a guarded gold-purchase function and use it to understand variables, branches, test cases, collections, and ways to organize code."
+ chapter: "1.4"
+ minutes: 40
+ author: "attilathedud"
+@@ -208,20 +208,22 @@
+ Two other descriptions concern where a name is usable and how long its
+ storage exists. A **local** name belongs to a scope such as one function.
+ People often use **global** for a name available outside a single function,
+-although the language's visibility rules still control which code can use
+-it. A Rust **static** item has storage for the entire program run. That
++although the language's visibility controls which code can use it. A Rust **static** item has storage for the entire program run. That
+ storage duration does not by itself mean its contents can never change;
+-Rust has separate rules for access and mutation. See the
++Rust separately checks how code obtains shared or editable access; a long
++lifetime does not grant permission to mutate. See the
+ [Rust Reference's static-item explanation](https://doc.rust-lang.org/reference/items/static-items.html)
+-when you need those rules. Our purchase calculation needs only its supplied
++for the complete access requirements. Our purchase calculation needs only its supplied
+ inputs, so it does not need a shared global gold value.
+ 
+-## Check the rule at its boundaries
++<span id="check-the-rule-at-its-boundaries" aria-hidden="true" />
++
++## Check affordability at the price boundary
+ 
+ The ordinary 100-gold purchase is a useful **baseline case**, sometimes
+ informally called a base case. In recursive algorithms, “base case” has a more
+ specific meaning: a case solved directly without another recursive call.
+-For this purchase rule, we are checking ordinary and unusual inputs. It is not
++For this affordability check, we are checking ordinary and unusual inputs. It is not
+ enough to check only that example. An **edge case** exercises an unusual
+ end of the allowed range, such as having zero gold. A **boundary case**
+ checks where a decision changes: just below, exactly at, and just above
+@@ -242,10 +244,10 @@
+ Changing it to `>` would reject that purchase. The free-item case also
+ shows the limitation already mentioned: unchanged gold alone cannot tell
+ us whether a purchase happened. The Rust Primer demonstrates an automated
+-test for its own game rule; Hacking Fundamentals will test a small rule
+-for permitting a memory write.
+-
+-<MarginNote kind="alternative">Test a rule like checking a ruler mark: look just before, exactly at, and just after the line. Mistakes such as using greater than instead of at least hide there.</MarginNote>
++test for its stamina check; Hacking Fundamentals will check the conditions
++that permit a memory write.
++
++<MarginNote kind="alternative">Amounts just below, equal to, and above the price reveal where affordability changes. They catch a mistaken greater-than check where at-least was intended.</MarginNote>
+ 
+ ## A data structure organizes values
+ 
+@@ -283,11 +285,11 @@
+ gold field. `ada.health` reads her health. The dot selects a field
+ from this particular record.
+ 
+-The pair `health` and `max_health` has a rule: a valid player's
+-health should be between zero and the maximum. For Ada, 80 is within
++The pair `health` and `max_health` has a required relationship: a valid
++player's health must be between zero and the maximum. For Ada, 80 is within
+ 0 to 100. If a mistaken update made health 120 while the maximum
+-stayed 100, the record would violate that rule. We will name this
+-kind of rule an **invariant** below. For now, check the relationship
++stayed 100, the record would violate that relationship. We will call
++such a condition an **invariant** below. For now, check the relationship
+ instead of trusting either field alone.
+ 
+ ## Apply one operation to several players
+@@ -323,12 +325,12 @@
+ becomes 15. If Bo had only 10, his gold would stay 10 because the
+ function's comparison would reject that purchase. The same named
+ operation works for both players; adding a third record would not
+-require writing a third purchase rule.
++require writing another affordability check and subtraction.
+ 
+ <MemoryStrip
+   cells="Ada before=100|Ada after=75|Bo before=40|Bo after=15"
+   groups="0-1:first loop pass|2-3:second loop pass"
+-  caption="One 25-gold purchase rule visits two records and produces two results."
++  caption="The same guarded 25-gold subtraction visits two records and produces two results."
+ />
+ 
+ The `Player` record groups fields belonging to **one** player; the array
+@@ -345,7 +347,7 @@
+ | Ada | 100 | 25 | 75 | 80/100 |
+ | Bo | 40 | 25 | 15 | 50/80 |
+ 
+-The same purchase rule visits each record. It changes gold, not health.
++The same purchase function visits each record. It changes gold, not health.
+ [The Rust Primer](/pages/1/05/#grow-one-runner-into-the-full-two-runner-program)
+ runs a separate stamina-based program with two runners and shows how Rust
+ lends each record to a function in turn.
+@@ -467,12 +469,14 @@
+     Next -->|no| Neighbor["a tile or connected neighbor? grid or graph"]
+ ```
+ 
+-## Programming paradigms: ways to organize the same rule
++<span id="programming-paradigms-ways-to-organize-the-same-rule" aria-hidden="true" />
++
++## Programming paradigms: ways to organize a purchase
+ 
+ A **programming paradigm** is a style for organizing instructions and
+ responsibilities. It does not change what a purchase means. Ada still
+ starts with 100 gold, pays 25 if she can, and ends with 75. The styles
+-answer a different question: *where should that rule live, and how should
++answer a different question: *where should the affordability check and subtraction live, and how should
+ other code use it?*
+ 
+ | Style | Main idea | Our purchase example |
+@@ -480,7 +484,7 @@
+ | Procedural or imperative | Write the steps that change state | Check gold, then subtract cost. |
+ | Object-oriented | Put related data and behavior together | A `Player` has gold and a `buy` method. |
+ | Functional | Calculate an output from inputs without changing hidden state | `spend_if_possible(100, 25)` returns 75. |
+-| Event-driven | Run a handler when something happens | A Buy click calls the purchase rule. |
++| Event-driven | Run a handler when something happens | A Buy click calls the purchase function. |
+ 
+ ### Procedural: follow the steps
+ 
+@@ -494,8 +498,8 @@
+ ```
+ 
+ That is often the clearest way to begin. It becomes awkward only if every
+-screen and bot copies the same purchase steps, because one later rule
+-change would have to be repeated everywhere. Our named function solves
++screen and bot copies the same purchase steps, because a later change to the affordability check
++would have to be repeated everywhere. Our named function solves
+ that duplication.
+ 
+ <MarginNote kind="narration">If ten screens each copy the purchase steps, one price change means ten edits, and missing one leaves the screens disagreeing. A named function keeps a single copy.</MarginNote>
+@@ -540,7 +544,7 @@
+ updates and draws while no one clicks. [Lesson 6.7](/pages/8/06/)
+ explains Windows messages and game loops; [Lesson 4.10](/pages/4/07/)
+ compares events with checking for changes on a schedule. For now, notice
+-that the event-driven style decides **when** the familiar purchase rule
++that the event-driven style decides **when** the purchase calculation
+ runs.
+ 
+ One game can use all four styles: an event calls a handler, which asks a
+@@ -550,15 +554,17 @@
+ ## An abstraction hides details behind a smaller interface
+ 
+ Calling `spend_if_possible(100, 25)` lets another part of the program use
+-the purchase rule without repeating its branch and subtraction. That is
++the purchase calculation without repeating its branch and subtraction. That is
+ an **abstraction**: <HoverCard kind="example" body="`vec.push(65)` is an abstraction too. The caller asks for one more item; how the vector finds room, and moves its items if it must grow, stays hidden.">a smaller interface hides useful steps</HoverCard>. It still has
+ to keep its promise. If the caller and function disagree about the
+ inputs, the friendly name does not repair the mistake. [Lesson 6.1](/pages/3/08/) later explains source-level APIs and machine-level
+ ABIs when we begin calling compiled game functions.
+ 
+-## An invariant is a rule valid state must keep true
+-
+-The earlier health rule is an **invariant**: when player state is valid,
++<span id="an-invariant-is-a-rule-valid-state-must-keep-true" aria-hidden="true" />
++
++## An invariant is a condition valid state keeps true
++
++The earlier health-range requirement is an **invariant**: when player state is valid,
+ `health <= max_health` must hold. A small function can check it:
+ 
+ ```rust
+@@ -569,11 +575,11 @@
+ 
+ For our `u32` values, zero is already the smallest possible number. If
+ Ada has 80 health and a maximum of 100, the function returns `true`; for
+-120 and 100 it returns `false`. The purchase rule has its own condition:
+-only subtract a cost when the player can pay. <HoverCard kind="example" body="A growable list in memory keeps `begin <= end <= capacity_end`: its used part can never reach past the storage allocated for it. Lesson 3.6 checks that rule on recovered bytes.">An invariant</HoverCard> gives you a
++120 and 100 it returns `false`. The purchase function has its own condition:
++only subtract a cost when the player can pay. <HoverCard kind="example" body="A growable list in memory keeps `begin <= end <= capacity_end`: its used part can never reach past the storage allocated for it. Lesson 3.6 checks those pointer bounds on recovered bytes.">An invariant</HoverCard> gives you a
+ concrete check when unfamiliar state or a recovered field might be wrong.
+ [Lesson 13.1](/pages/13/01/)
+-uses such rules in deeper game-state investigations.
++uses such conditions to distinguish valid and invalid game state.
+ 
+ ## Follow the data through unfamiliar code
+ 
+@@ -600,9 +606,9 @@
+ 
+ A vector keeps a growing history; a hash map answers a lookup by key;
+ a queue keeps pending actions in arrival order. A visible “Gold: 75”
+-label can be separate from the `gold` field the rule reads. Procedural,
++label can be separate from the `gold` field the calculation reads. Procedural,
+ object-oriented, functional, and event-driven styles can organize the
+-same rule in different places, while `valid_health` checks that player
++same check and subtraction in different places, while `valid_health` checks that player
+ health stays within its allowed range.
+ 
+ [The Rust Primer](/pages/1/05/) uses a different game action to make the
+diff --git a/site/src/content/docs/pages/1/08.mdx b/site/src/content/docs/pages/1/08.mdx
+--- a/site/src/content/docs/pages/1/08.mdx
++++ b/site/src/content/docs/pages/1/08.mdx
+@@ -171,8 +171,7 @@
+ 
+ ### Byte order, and why hex dumps look backwards
+ 
+-Once a value spans several boxes, the CPU needs a rule for which box holds which
+-part.
++Once a value spans several boxes, the value needs a byte order: which box holds the low byte, then the next byte, and so on.
+ 
+ Think about the decimal number 1,234. The leading 1 is worth the most — it means
+ a thousand. The trailing 4 is worth the least. The bytes inside a multi-byte
+@@ -230,7 +229,7 @@
+ The third one does not follow automatically from the first two, and this is the
+ single most important idea in the lesson. Those bytes only become the number 100
+ once something decides to read four boxes, treat them as one whole number, and
+-use little-endian byte order. Read the same boxes with a different set of rules
++use little-endian byte order. Read the same boxes with a different type or byte order
+ and the very same bytes mean something else, as the next section shows.
+ 
+ So never treat "address" and "value" as the same word. An address tells you
+@@ -297,8 +296,7 @@
+ 
+ The `u32` reading uses only what this lesson has covered: written most
+ significant first, the bytes are `0x41200000`, and a calculator turns that into
+-1,092,616,192. The `f32` reading follows rules for its three parts that are not
+-covered here; [Lesson 3.2](/pages/3/09/#fractions-how-an-f32-splits-its-32-bits)
++1,092,616,192. The `f32` reading decodes a sign, an exponent, and a fraction; those calculations are not covered here, so [Lesson 3.2](/pages/3/09/#fractions-how-an-f32-splits-its-32-bits)
+ works through them bit by bit, all the way to 10.0. What matters now is that
+ nothing in memory changed between the two readings. Only the type did.
+ 
+@@ -323,7 +321,7 @@
+ 
+ Each value is four bytes, which is why the labels go up by 4 and not by 1.
+ 
+-Text and lists add their own rules on top. <HoverCard kind="reference" href="/pages/3/07/" body="Lesson 3.8 shows how text becomes bytes in UTF-8, UTF-16, and null-terminated C strings.">A C string</HoverCard> just runs until it hits a
++Text and lists need additional layout information: where the data starts and how its end is found. <HoverCard kind="reference" href="/pages/3/07/" body="Lesson 3.8 shows how text becomes bytes in UTF-8, UTF-16, and null-terminated C strings.">A C string</HoverCard> just runs until it hits a
+ zero byte. Other kinds of string store a pointer and a length. A growable list
+ usually stores a pointer to its contents plus a length and a capacity. The code
+ that reads a string or list is what tells you which layout a game uses.
+diff --git a/site/src/content/docs/pages/1/09.mdx b/site/src/content/docs/pages/1/09.mdx
+--- a/site/src/content/docs/pages/1/09.mdx
++++ b/site/src/content/docs/pages/1/09.mdx
+@@ -152,7 +152,7 @@
+ 
+ | What happens | Likely meaning |
+ |---|---|
+-| the number and purchase rules change | strong candidate for game-play state |
++| the amount changes and the next purchase uses that amount | strong candidate for game-play state |
+ | only the text changes | likely a display copy |
+ | the value changes back on the next update | another system recomputes or owns it |
+ | nothing visible changes | unrelated value or a copy used elsewhere |
+diff --git a/site/src/content/docs/pages/1/10.mdx b/site/src/content/docs/pages/1/10.mdx
+--- a/site/src/content/docs/pages/1/10.mdx
++++ b/site/src/content/docs/pages/1/10.mdx
+@@ -17,7 +17,7 @@
+ The debugger shows instructions and addresses, while the programmer wrote
+ functions, fields, and variable names. Why are those two views different?
+ And why can an address found by a memory scan move after a restart even
+-though the game still applies the same rule?
++though the game still checks affordability and subtracts the same cost?
+ 
+ These differences come from the stages that turn source into a running
+ process. First, distinguish several ways a language implementation can
+@@ -138,7 +138,7 @@
+ files by the Microsoft toolchain used for these Windows C++ examples. Two
+ of its decisions matter throughout this book.
+ 
+-First, it chooses a compiled layout according to the language's rules.
++First, it chooses field order, padding, and alignment under the language's layout requirements.
+ For an example player structure, it may leave unused bytes between fields
+ <HoverCard kind="example" body="In a C or C++ structure, a one-byte field followed by a four-byte field normally puts the second at offset 4, so the 3 bytes between them are padding: 1 + 3 = 4.">so each field starts at an address suited to its type</HoverCard>. Those gaps are
+ **padding**, explored in the later [object-layout lesson](/pages/3/03/).
+@@ -265,7 +265,7 @@
+ 
+ That last row is the one Lesson 11.4 turns into a migration procedure. In
+ this fixed-order example, inserting a field moves the later fields and
+-leaves the earlier ones in place. Other layout rules can change more, so
++leaves the earlier ones in place. A different field-order or alignment requirement can change more, so
+ measure the new build rather than assuming the same shift everywhere:
+ 
+ <MarginNote kind="narration">That is why an old offset note can break after a game patch: one added field is enough to shift every field that follows it.</MarginNote>
+@@ -309,5 +309,4 @@
+ 
+ We now know why a debugger can show addresses and transformed operations
+ instead of the source's original names. [How Assembly Describes a Running
+-Game](/pages/2/02/) gives those operations a readable vocabulary and follows
+-a small rule through its comparisons, branches, and arithmetic.
++Game](/pages/2/02/) gives those operations a readable vocabulary and follows a gold purchase through its comparison, branch, and subtraction.
+diff --git a/site/src/content/docs/pages/1/11.mdx b/site/src/content/docs/pages/1/11.mdx
+--- a/site/src/content/docs/pages/1/11.mdx
++++ b/site/src/content/docs/pages/1/11.mdx
+@@ -1,13 +1,13 @@
+ ---
+-title: "Game Engines: Where the Rules Live"
+-description: "Separate the reusable engine from the game built on it, follow one frame and the clocks that drive it, the entities and the scenes inside it, see which engine each course game uses, and learn why where a rule lives decides how you change it."
++title: "Game Engines: Input, Simulation, and Rendering"
++description: "Follow input, movement, collisions, timers, and drawing through an engine; distinguish live state from the code and files that produce it."
+ chapter: "4.1"
+ minutes: 35
+ author: "attilathedud"
+ date: "2026-09-24"
+ sidebar:
+   order: 1
+-  label: "4.1 Game Engines: Where the Rules Live"
++  label: "4.1 Game Engines: Input, Simulation, and Rendering"
+ ---
+ import { CardGrid, Column, Columns, Example, HoverCard, LinkCard, Math, Tooltip } from '../../../../components/kit';
+ import MarginNote from '../../../../components/kit/MarginNote.astro';
+@@ -15,20 +15,21 @@
+ 
+ The previous chapters followed values into instructions and turned remote
+ bytes into typed objects and collections. The next question is larger:
+-which system owns those objects, applies the rules, and updates the world?
+-A rule could come from native code, a script, or loaded game data. To choose
+-where to observe or change it, first separate the game's particular rules
+-from the machinery that runs them.
+-
+-The game loop reads input, applies rules, changes state, and draws the
+-result. Games need other machinery too: something loads the level, stores
++which system moves them, resolves collisions, applies damage, and advances timers?
++A health update might be native code, a cooldown calculation a script, and a
++unit's starting health loaded from a data file. Finding the relevant function
++or definition starts with separating game-specific behavior from the engine
++services that execute it.
++
++The game loop reads input, checks whether actions are allowed, updates
++positions and health, and draws the result. Games need other machinery too: something loads the level, stores
+ objects, and calls the renderer. A **game engine** supplies much of this
+ reusable machinery. Knowing where it stops and the game begins tells you
+ which technique in this book will work on a given problem.
+ 
+ ## An engine is reusable game machinery
+ 
+-Many games need the same kinds of machinery, even when their rules and art are
++Many games need the same kinds of machinery, even when their weapons, maps, and art are
+ different:
+ 
+ - a **game loop** that reads input, updates the world, and draws a frame, over
+@@ -42,11 +43,13 @@
+ Not every game needs every item: a text adventure may have no renderer or
+ collision system. For games that do need these pieces, reusing them can save
+ substantial work. A game about tanks and a game about farming can share the
+-machinery while supplying different rules and content.
++window, input, loading, and rendering machinery while supplying different
++behavior: armor damage for tanks, crop growth for farming.
+ 
+ A **game engine** is that reusable machinery: the software that runs the loop,
+ draws the frames, loads the files, and manages the objects, on which a
+-particular game's content and rules are built.
++particular game's content and behavior—such as what a hit does or what a unit
++costs—are built.
+ 
+ A spreadsheet program is a useful comparison, because it holds up when you push
+ on it. The program supplies the grid, the formulas, and the recalculation; each
+@@ -116,15 +119,15 @@
+ 1. **Gather input.** Ask the operating system which keys, buttons, and mouse
+    movements happened since the last pass, and turn them into actions
+    (Lesson 1.3).
+-2. **Update the world.** Run the game's rules: move things, check contacts, count
+-   timers down, let characters decide.
++2. **Update the world.** Move objects, resolve contacts, apply damage, count
++   timers down, and choose character actions.
+ 3. **Draw.** Build the picture of the world as it is now.
+ 4. **Present.** Hand the finished picture to the display, and, with vertical
+    sync on, wait for the display's next refresh.
+ 
+ ```mermaid
+ flowchart LR
+-    I["input<br/>keys, mouse, pad"] --> U["update<br/>rules, physics, timers"]
++    I["input<br/>keys, mouse, pad"] --> U["update<br/>movement, damage, timers"]
+     U --> R["render<br/>draw the world"]
+     R --> P["present<br/>show the frame"]
+     P --> I
+@@ -171,9 +174,9 @@
+ What is drawn after a frame is usually partway between two steps. The 3.33 ms
+ left over is 3.33 ÷ 16.67 = 20% of the way to the next step, and many engines
+ blend the last two steps by that fraction, so motion looks smooth even though
+-the rules advance in coarse steps (Lesson 4.7 shows how that blend is computed).
+-
+-This tells you something when you scan memory. A value the rules change moves
++the simulation advances in fixed steps (Lesson 4.7 shows how that blend is computed).
++
++This tells you something when you scan memory. A value the simulation changes moves
+ once per step, and a value the drawing code keeps (an on-screen animation timer,
+ an interpolated position) can change once per frame. Counting how often a value
+ changes tells you which loop owns it.
+@@ -189,7 +192,7 @@
+ 
+ The delta time an update receives is not always the time that really passed. Engines
+ keep two clocks. **Real time** is the <Tooltip tip="The time a clock on a wall shows. It keeps running whatever the game does, so pausing the game cannot stop it.">wall clock</Tooltip>: it never stops, and a loading
+-spinner or a menu animation uses it. **Game time** is what the rules use. Each frame
++spinner or a menu animation uses it. **Game time** is the clock used for simulated movement and cooldowns. Each frame
+ the engine takes the real time since the last frame, limits it to a maximum, and
+ multiplies it by a **time scale**:
+ 
+@@ -211,7 +214,7 @@
+ 
+ </Example>
+ 
+-The limit protects the rules from a frame that stalled. A laptop that sleeps, or a
++The limit bounds the simulation time added after a stalled frame. A laptop that sleeps, or a
+ window held still by the mouse for 3 seconds, would otherwise hand the next update a
+ delta of 3.0 s. A ball moving 150 pixels a second would jump 150 × 3.0 = 450 pixels
+ at once, straight through any wall, and a fixed-step loop would owe 3.0 ÷ (1/60) =
+@@ -320,7 +323,7 @@
+ stretch, which is what Lesson 3.6 called a component pool. A system walks that
+ stretch from start to end, and a scan finds the whole run at once.
+ 
+-Engines add a few rules around this:
++Entity updates also need coordination:
+ 
+ - A system should not add or remove entities while it is looping over them, or the
+   loop could skip some and visit others twice. Instead it queues **commands**
+@@ -366,7 +369,7 @@
+ 
+ The games in this book cover most of the ways a game can relate to its engine:
+ 
+-| Game | Engine | Where most of its rules live |
++| Game | Engine | Typical places to inspect behavior and configuration |
+ |---|---|---|
+ | Wesnoth 1.14.9 | its own engine, written for this game | C++ engine code, WML data files, Lua scripts |
+ | AssaultCube 1.2.0.2 | Cube, an open-source engine | C++ engine code |
+@@ -378,11 +381,14 @@
+ Empyrean Campaign from Lesson 9.2 is a content package the engine loads. Swap the
+ content package and the same executable runs a different game.
+ 
+-## Where a rule lives decides how you change it
+-
+-Here is the most useful thing to take from this lesson. Every rule in a game
+-lives in one of a few places, and the place decides which part of this book
+-applies — and how long your change lasts.
++<span id="where-a-rule-lives-decides-how-you-change-it" aria-hidden="true" />
++
++## Find the source of a behavior or value
++
++A spending calculation is implemented in code; a price or starting health
++value may come from a data file or script. Identify that source before changing
++a live value. It tells you which technique applies and when the game might
++replace your edit with a newly calculated or loaded value.
+ 
+ Wesnoth shows two of them side by side:
+ 
+@@ -399,27 +405,28 @@
+   They come from a unit definition in a WML data file. Change one unit's hit points
+   in memory and that single unit changes. Recruit another of the same type and it
+   arrives with the file's value, because every new unit is built from the definition
+-  on disk. Change the file instead, and every unit of that type created afterwards
+-  has the new value.
++  on disk. Change the definition file instead, and units created after the game reloads
++  that edited definition use the new value.
+ 
+   </Column>
+ </Columns>
+ 
+ ```mermaid
+ flowchart LR
+-    W["your file edit"] -.->|"changes every unit<br/>created afterwards"| D
++    W["your file edit"] -.->|"affects units created<br/>after definition reload"| D
+     D["unit type in a WML file:<br/>defines its hit points"] -->|"each recruit is<br/>built from it"| U1["unit in memory"]
+     D --> U2["unit in memory"]
+     D --> U3["the next recruit"]
+     M["your memory edit"] -.->|"changes only this unit"| U1
+ ```
+ 
+-Neither change is wrong. They answer different questions, and knowing which one
+-you are making saves an afternoon of wondering why a change "didn't stick."
+-
+-<MarginNote kind="brief">A rule's home decides how you change it. A memory edit lasts for one run, while a data-file edit applies each time the file loads.</MarginNote>
+-
+-| Where the rule lives | What you change | Where this book covers it |
++Choose according to whether you want to change one live unit or the definition
++that future units will load. That distinction explains why a memory edit can be
++overwritten while a reloaded definition produces the change again.
++
++<MarginNote kind="brief">Changing one live unit affects that instance. Changing its type definition affects units created from it after the edited definition is loaded.</MarginNote>
++
++| Source layer | What you change | Where this book covers it |
+ |---|---|---|
+ | a data file | the file, before the game loads it | Chapter 9 |
+ | a script | the script, or what the host lets it do | Chapter 10 |
+@@ -497,7 +504,7 @@
+ reply     = velocity x becomes −150, and x is moved back to 800 − 8 = 792
+ ```
+ 
+-Nothing in that step names Breakout. It is the movement and contact rules of
++Nothing in that step names Breakout. It is the position update and wall-collision response from
+ Lesson 1.3 run by systems over entities, in the order the engine's loop calls
+ them.
+ 
+@@ -547,10 +554,10 @@
+ ## Where the change belongs
+ 
+ An engine supplies reusable machinery; the game adds its particular
+-rules and content. A library responds when your code calls it, while an
++weapon values, damage routines, missions, and content. A library responds when your code calls it, while an
+ engine also calls game code at the points it controls. The course games
+-use different engines, so a rule may live in data, a script, native
+-code, or managed code. A memory edit lasts for a running process; a
++use different engines, so a health update or unit definition may live in data,
++a script, native code, or managed code. A memory edit lasts for a running process; a
+ data-file edit can persist when the file is loaded again. Engine
+ consoles and debug commands expose named state that can help identify
+ the right layer before changing it.
+diff --git a/site/src/content/docs/pages/1/12.mdx b/site/src/content/docs/pages/1/12.mdx
+--- a/site/src/content/docs/pages/1/12.mdx
++++ b/site/src/content/docs/pages/1/12.mdx
+@@ -15,8 +15,8 @@
+ 
+ Your computer can run a game, a web browser, and a program that pretends to be a
+ console from 1985. Nobody built it separately for each job. Why can one machine
+-run all of them? And why can no tool ever tell you, for certain, what an
+-arbitrary program will do?
++run all of them? And why can no checker always decide whether an arbitrary program will
++eventually stop on a given input?
+ 
+ We have seen a host run scripts and limit the work they can do. Before
+ opening the virtual machine that executes them, consider why one program
+@@ -38,12 +38,12 @@
+ - a **head** that sits over one cell at a time and can read or overwrite it;
+ - a **state**, which is a single named setting the machine is in, such as
+   `carry` or `done`;
+-- a **rule table** that says, for every combination of current state and symbol
++- a **transition table**, often called a rule table, that says, for every combination of current state and symbol
+   under the head, what to write, which way to move, and which state comes next.
+ 
+ That mechanism is a **Turing machine**. It runs by repeating one step: look up
+-the rule for the current state and the symbol under the head, write, move one
+-cell left or right or stay put, and switch state. When no rule matches, the
++the table row for the current state and the symbol under the head, write, move one
++cell left or right or stay put, and switch state. When no row matches, the
+ machine stops. The usual word for stopping is **halting**.
+ 
+ Here is a complete machine that adds one to a binary number. It starts in state
+@@ -55,7 +55,7 @@
+ | `carry` | `0` | `1` | stay | `done` |
+ | `carry` | blank | `1` | stay | `done` |
+ 
+-The state `done` has no rules, so reaching it halts the machine. Put `1011`
++The state `done` has no matching table rows, so reaching it halts the machine. Put `1011`
+ (eleven) on the tape, with blank cells, drawn `_`, on either side. The
+ highlighted cell is the one under the head:
+ 
+@@ -81,12 +81,12 @@
+   cells="=_|=1|head=1|=0|=0|=_"
+   marks="2"
+   groups="1-4:1100, which is twelve"
+-  caption="State `done` has no rules, so the machine halts."
++  caption="State `done` has no matching row, so the machine halts."
+ />
+ 
+ This is ordinary school addition. Adding one to a 1 gives 0 and carries one to
+ the left; adding the carry to a 0 gives 1 and the carry is used up. The third
+-rule handles `111`: the carry runs past the leftmost digit into a blank cell,
++row handles `111`: the carry runs past the leftmost digit into a blank cell,
+ and the machine writes a new leading 1, giving `1000`.
+ 
+ Three rows are the whole program, yet they handle a number of any length.
+@@ -104,7 +104,7 @@
+ | the tape | memory |
+ | where the head is | an address |
+ | the current state | the CPU's registers, including the instruction pointer |
+-| the rule table | the program, carried out through the CPU's instruction set |
++| the transition table | the program, carried out through the CPU's instruction set |
+ | one step | one instruction |
+ 
+ These are analogies, not identical parts. Two differences matter:
+@@ -122,10 +122,10 @@
+ 
+ ## The universal machine: programs are data
+ 
+-Turing's most important idea came next. A rule table is itself only a list of
++Turing's most important idea came next. A transition table is itself only a list of
+ symbols, so it can be written onto a tape like anything else. He then described
+ a single machine, the **universal Turing machine**, that reads another
+-machine's rule table from its tape and carries out that machine's steps one by
++machine's transition table from its tape and carries out that machine's steps one by
+ one. One fixed machine can therefore imitate every other machine. To change what
+ it does, you change what is on the tape, not the machine.
+ 
+@@ -177,7 +177,7 @@
+ can, given enough time and memory. In their idealized forms, general-purpose
+ languages such as Rust, C++, Lua, and assembly qualify. So do some systems
+ nobody designed as computers. Conway's Game of Life, a grid of cells that live
+-or die by four simple rules, can be arranged to compute anything in this sense.
++or die according to neighboring live-cell counts, can be arranged to compute anything in this sense.
+ Players have also built working processors inside Minecraft out of redstone
+ circuits; any one build is still limited by the game's actual resources.
+ 
+@@ -256,7 +256,7 @@
+   loop, exists because a host cannot know in advance whether a script will ever
+   finish. All it can decide is how long it is willing to wait.
+ 
+-The practical rule follows directly. Reading code tells you what *might*
++The practical distinction follows directly. Reading code tells you what *might*
+ happen. Running it under control, on a specific input, tells you what *did*
+ happen on that input. That is why the lessons pair reading code with running
+ it.
+@@ -266,10 +266,11 @@
+ <Badge text="Any computer" variant="success" />
+ 
+ The portable lab [`turing_machine_lab.rs`](/rust-labs/src/bin/turing_machine_lab.rs)
+-is a short Turing machine simulator. Its rule tables are plain text that the
++is a short Turing machine simulator. Its transition tables are plain text that the
+ simulator reads when it starts. One fixed program can therefore run different
+ machines described by its input, within the lab's finite memory and step
+-budget. That demonstrates the universal-machine idea without claiming that the
++budget. In the Rust source, `machine.rules` names the map of transition-table
++rows. That demonstrates the universal-machine idea without claiming that the
+ lab itself has an unbounded tape.
+ 
+ <GitHub path="rust-labs/src/bin/turing_machine_lab.rs" />
+@@ -280,7 +281,7 @@
+ carry _ -> 1 S done    # ran off the left end: write a new leading 1
+ ```
+ 
+-The heart of the simulator is the step loop. It looks up a rule, gives up if the
++The heart of the simulator is the step loop. It looks up a matching transition row, gives up if the
+ budget is spent, and otherwise writes, moves, and switches state:
+ 
+ ```rust
+@@ -314,25 +315,25 @@
+ ```
+ 
+ The lab adds one to three numbers, including `111` so you can watch the carry
+-run off the end. Then it runs a one-rule machine that writes 1s forever and
+-stops it with a budget. Finally, it feeds the simulator a malformed rule table to
++run off the end. Then it runs a machine with one repeating transition that writes 1s forever and
++stops it with a budget. Finally, it feeds the simulator a malformed transition table to
+ show that a program which is only data still has to be validated before it
+ runs. The tests beside it check every number from 0 to 64 and the budget edge
+ case.
+ 
+ Another small machine could flip every digit of a binary number,
+-turning `1011` into `0100`. It needs only two rules, because the machine
+-halts when it reaches a blank that no rule mentions. Starting at the
+-leftmost digit, it takes four rule steps to flip four digits and then
++turning `1011` into `0100`. It needs only two transition rows, because the machine
++halts when it reaches a blank with no matching table row. Starting at the
++leftmost digit, it applies four transitions to flip four digits and then
+ stops when the head reaches the blank.
+ 
+ ## What the model explains
+ 
+-A Turing machine has a tape, a head, a state, and a rule table. Its
+-three-rule incrementer carries left until it can turn a 0 into a 1;
++A Turing machine has a tape, a head, a state, and a transition table. Its
++three-row incrementer carries left until it can turn a 0 into a 1;
+ if the carry runs off the left end, a new 1 is needed. Computer memory,
+ addresses, registers, and instructions play roles analogous to tape,
+-head position, state, and rules. Stored programs let a debugger place a
++head position, state, and transitions. Stored programs let a debugger place a
+ breakpoint by replacing an instruction byte. A mod with a script is
+ executable behavior, and no general tool can decide whether every
+ possible program halts. Disassemblers, decompilers, scanners, and step
+diff --git a/site/src/content/docs/pages/2/01.mdx b/site/src/content/docs/pages/2/01.mdx
+--- a/site/src/content/docs/pages/2/01.mdx
++++ b/site/src/content/docs/pages/2/01.mdx
+@@ -15,7 +15,7 @@
+ The first scan showed where gold might be stored. This chapter follows that
+ lead into instructions. A debugger first makes the running program visible;
+ the build process explains why that view differs from source code; assembly
+-then gives us the vocabulary to trace a rule. From there we recover a path
++then gives us the vocabulary to trace a purchase check and its subtraction. From there we recover a path
+ to state after addresses move and examine what a temporary control-flow
+ detour must preserve. The debugger lessons can also be revisited by tool
+ action: read assembly, set a breakpoint, follow a caller, or check an address
+@@ -242,10 +242,7 @@
+ that decision as a comparison, branch, and subtraction. In a debugger,
+ you see those pieces and the current register values instead of the
+ original variable names. Check both an affordable and an unaffordable
+-attempt: if the subtraction runs only in the first case, you have
+-evidence for the proposed rule. Before learning the assembly vocabulary,
+-we need to explain why the programmer's named rule becomes this different
+-machine-level view.
++attempt: if the subtraction runs only in the first case, you have evidence that affordability guards the write. Before learning the assembly vocabulary, we need to explain how a named purchase function becomes this machine-level view.
+ 
+ ## A safe first session
+ 
+diff --git a/site/src/content/docs/pages/2/03.mdx b/site/src/content/docs/pages/2/03.mdx
+--- a/site/src/content/docs/pages/2/03.mdx
++++ b/site/src/content/docs/pages/2/03.mdx
+@@ -47,7 +47,7 @@
+ 
+ Repeating the same action shows whether the breakpoint is useful. A useful breakpoint fires at a consistent point for the behavior you are studying. A noisy breakpoint may still be correct, but it needs a stronger filter such as a specific thread, object pointer, call site, or condition.
+ 
+-This is the difference between a **trace** and an **explanation**. A trace records what executed. An explanation connects that execution to a game rule and survives repeated tests.
++This is the difference between a **trace** and an **explanation**. A trace records what executed. An explanation shows why the input and current state selected that path, and survives repeated tests.
+ 
+ ## Memory breakpoints
+ 
+@@ -267,5 +267,5 @@
+ 
+ The next lesson uses x64dbg's built-in breakpoint controls rather than a
+ custom debugger. Start with the gold address, watch a write, and use the
+-paused registers and instruction to test the purchase rule. The enum
++paused registers and instruction to check whether affordability guards the gold write. The enum
+ becomes useful later when we write our own event-handling code.
+diff --git a/site/src/content/docs/pages/2/04.mdx b/site/src/content/docs/pages/2/04.mdx
+--- a/site/src/content/docs/pages/2/04.mdx
++++ b/site/src/content/docs/pages/2/04.mdx
+@@ -255,4 +255,4 @@
+ specific instruction and the register values from one recruitment.
+ The reversible patch checked its effect, but the instruction may also
+ run for other gold-changing actions. [Lesson 2.6](/pages/2/05/)
+-follows the call path to find which rule brought execution here.
++follows the call path to identify which event, caller, and affordability check selected this gold write.
+diff --git a/site/src/content/docs/pages/3/01.mdx b/site/src/content/docs/pages/3/01.mdx
+--- a/site/src/content/docs/pages/3/01.mdx
++++ b/site/src/content/docs/pages/3/01.mdx
+@@ -25,11 +25,13 @@
+ fields, and text show what those values can mean inside a game. DLL call
+ contracts return later when our code enters the process itself.
+ 
+-## Start with one boundary rule
++<span id="start-with-one-boundary-rule" aria-hidden="true" />
++
++## Keep raw-pointer work at a checked boundary
+ 
+ Game tooling needs low-level control: exact integer sizes, raw bytes, operating-system APIs, and sometimes pointers. Most of the program can still use compile-time checked ownership and types.
+ 
+-The guiding rule is:
++Keep the two responsibilities separate:
+ 
+ > Write safe code for the algorithm. Put unavoidable raw-pointer work in one small wrapper, document its assumptions, and return an ordinary owned type.
+ 
+@@ -458,7 +460,7 @@
+ 
+ ## Set up a Windows project
+ 
+-The boundary rules become easier to test in a small executable. Create a
++Those pointer checks and ownership guarantees become easier to inspect in a small executable. Create a
+ separate Cargo project for the external-memory examples; `cargo new` makes
+ its source file and manifest, and `cd` selects that project for later builds.
+ 
+diff --git a/site/src/content/docs/pages/3/02.mdx b/site/src/content/docs/pages/3/02.mdx
+--- a/site/src/content/docs/pages/3/02.mdx
++++ b/site/src/content/docs/pages/3/02.mdx
+@@ -161,7 +161,7 @@
+ Two handles can therefore name the same object while granting different
+ permissions.
+ 
+-That gives a handle four rules:
++That gives a handle four requirements:
+ 
+ 1. **Scope:** a handle value is normally meaningful only in the process whose
+    handle table contains it. `DuplicateHandle` can deliberately create another.
+@@ -323,7 +323,7 @@
+ bottom is skipped by those early returns, while `Drop` runs when the owning
+ value leaves scope. Keeping `OwnedHandle` private also prevents callers from
+ copying the raw handle and closing it twice. The wrapper does not hide Windows
+-errors; it only makes the cleanup rule automatic.
++errors; it only closes the owned handle automatically when its owner leaves scope.
+ :::
+ 
+ <GitHub path="windows-labs/src/windows_impl/process.rs" />
+diff --git a/site/src/content/docs/pages/3/04.mdx b/site/src/content/docs/pages/3/04.mdx
+--- a/site/src/content/docs/pages/3/04.mdx
++++ b/site/src/content/docs/pages/3/04.mdx
+@@ -30,7 +30,7 @@
+ 
+ For example, both State and Strategy may delegate through a function table.
+ State usually represents behavior that changes as an object moves through a
+-lifecycle. Strategy usually selects one replaceable rule. Observed transitions
++lifecycle. Strategy usually selects one replaceable calculation or action, such as how a weapon chooses its aim point. Observed transitions
+ and call sites matter more than the table shape.
+ 
+ In your own tool, use a pattern after repeated change exposes a real
+@@ -129,7 +129,7 @@
+     Chase --> Idle: loses the player
+ ```
+ 
+-Each arrow is a moment when the owner's behavior pointer changes. If it changes when an enemy moves from idle to chase to attack, “state” is a useful name. If it changes when a weapon changes its aiming rule, “strategy” may fit better. The bytes do not care which textbook word you choose; behavior over time is the deciding clue.
++Each arrow is a moment when the owner's behavior pointer changes. If it changes when an enemy moves from idle to chase to attack, “state” is a useful name. If it changes when a weapon changes its aim-point calculation, “strategy” may fit better. The bytes do not care which textbook word you choose; behavior over time is the deciding clue.
+ 
+ ### Observer
+ 
+diff --git a/site/src/content/docs/pages/3/06.mdx b/site/src/content/docs/pages/3/06.mdx
+--- a/site/src/content/docs/pages/3/06.mdx
++++ b/site/src/content/docs/pages/3/06.mdx
+@@ -27,7 +27,7 @@
+ 
+ Searching memory for the number `125` may fail because that representation never exists for long. A better question is:
+ 
+-> Which instruction produces the value that the health bar or damage rule uses?
++> Which instruction produces the value that the health bar displays or the damage calculation reads?
+ 
+ In a debug build, place a breakpoint near the rendering or gameplay function, then step backward through the data flow. A small decode might compile into operations like:
+ 
+diff --git a/site/src/content/docs/pages/3/07.mdx b/site/src/content/docs/pages/3/07.mdx
+--- a/site/src/content/docs/pages/3/07.mdx
++++ b/site/src/content/docs/pages/3/07.mdx
+@@ -227,6 +227,5 @@
+ 
+ We can now interpret a game's primitive values, objects, collections, and
+ text without confusing their representation with their meaning. The next
+-chapter asks how those pieces form a changing world. [Game Engines: Where
+-the Rules Live](/pages/1/11/) starts by separating the engine's reusable
+-machinery from the rules and content of one game.
++chapter asks how those pieces form a changing world. [Game Engines: Input, Simulation, and Rendering](/pages/1/11/) starts by separating the engine's reusable
++machinery from one game's movement, damage, timers, and content.

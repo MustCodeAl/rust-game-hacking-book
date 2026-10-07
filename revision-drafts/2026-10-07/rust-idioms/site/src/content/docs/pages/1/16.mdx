@@ -1,0 +1,195 @@
+---
+title: "Rust: Cleanup and Helpful Errors"
+description: "Use scope-bound cleanup, Drop, structured library errors, and application context without hiding failures."
+chapter: "1.14"
+minutes: 22
+author: "attilathedud"
+date: "2026-10-07"
+sidebar:
+  order: 14
+  label: "1.14 Rust: Cleanup and Helpful Errors"
+---
+import CodeTrace from '../../../../components/CodeTrace.astro';
+import { MarginNote, SpeedType } from '../../../../components/kit';
+
+The [previous lesson](/pages/1/15/) gave values clear owners and useful
+interfaces. Ownership also answers a practical question: **who releases a
+resource when a function finishes early?** Error handling answers another:
+**what can the caller learn from that failure?** We connect both here using
+local data. The examples do not open another process or change executable code.
+
+## Let an owner pair acquisition with cleanup
+
+Suppose a function temporarily changes a byte in its own buffer. Before it
+returns, it must put back the old value. Writing the restore statement at
+every return is easy to get wrong when another failure path is added.
+
+Rust's **RAII** pattern puts cleanup in the owner of a resource. The name
+comes from “Resource Acquisition Is Initialization”: creating an owner
+establishes its responsibility; leaving its scope ends that responsibility.
+Owned files and lock guards already use this pattern. A custom guard can use
+`Drop` to perform a small cleanup action when the guard leaves scope.
+
+<SpeedType id="rust-scoped-byte-guard" title="Pair the saved value with its owner" recall={[{text:"impl Drop for ByteGuard<'_>",hint:"Implement the cleanup trait for the borrowing guard."},{text:"*self.byte = self.saved;",hint:"Write the saved value back through the guard's exclusive borrow."},{text:"Err(\"stopped early\")",hint:"Report the early return as a failure rather than panicking."}]}>
+
+```rust
+struct ByteGuard<'a> {
+    byte: &'a mut u8,
+    saved: u8,
+}
+
+impl<'a> ByteGuard<'a> {
+    fn replace(byte: &'a mut u8, replacement: u8) -> Self {
+        let saved = *byte;
+        *byte = replacement;
+        Self { byte, saved }
+    }
+}
+
+impl Drop for ByteGuard<'_> {
+    fn drop(&mut self) {
+        *self.byte = self.saved;
+    }
+}
+
+fn inspect(byte: &mut u8, stop_early: bool) -> Result<(), &'static str> {
+    let guard = ByteGuard::replace(byte, 90);
+    println!("temporary value: {}", *guard.byte);
+    if stop_early {
+        return Err("stopped early");
+    }
+    Ok(())
+}
+
+fn main() {
+    let mut byte = 75;
+    let result = inspect(&mut byte, true);
+    println!("result: {result:?}; restored byte: {byte}");
+}
+```
+
+The guard holds the exclusive borrow and saves `75`. It temporarily stores
+`90`. Whether `inspect` returns `Ok(())` or the early `Err`, normal scope exit
+drops the guard and restores `75`. `main` can borrow the byte again after
+`inspect` returns. This example's cleanup cannot fail: it writes through a
+valid exclusive reference to a local byte.
+
+<CodeTrace trace="idiom-drop-guard" />
+
+<MarginNote kind="code">A guard owns one cleanup responsibility. Do not derive `Copy` for an owning handle or guard: copying it could make two owners release the same resource.</MarginNote>
+
+`Drop` is not a universal recovery guarantee. Destructors normally run on
+ordinary returns and panic unwinding; an abort, process termination, or
+deliberately forgotten owner can skip them. A remote-memory patch also has
+thread, memory-protection, and write-failure conditions that this local guard
+does not address. The [handle owner in Lesson 3.1](/pages/3/01/) and
+[hook removal in Lesson 6.10](/pages/13/05/) show those separate responsibilities.
+
+## Make fallible cleanup explicit
+
+The trait method has the signature `fn drop(&mut self)`. It cannot return a
+`Result` to the caller. If releasing a resource can fail in a way the caller
+must act on, provide an explicit `close`, `finish`, or `restore` operation
+that returns `Result`; keep `Drop` as the final fallback appropriate for that
+resource. Avoid panicking in a destructor, especially while another panic is
+already unwinding.
+
+For a buffered file, for example, an explicit `flush()` or `sync_all()` can
+report an I/O failure. Merely letting the file owner leave scope does not
+prove that a save reached durable storage. The required completion step
+depends on what your caller is trying to guarantee.
+
+<MarginNote kind="clarify">“The owner was dropped” and “the operation succeeded” answer different questions. Return an observable result when successful completion matters.</MarginNote>
+
+## A library error names the failure
+
+A library caller may need to handle invalid text differently from an
+out-of-range number. Returning a structured error enum preserves that
+distinction. The `thiserror` crate derives the standard error implementation
+and formats the message you supply. It does not change how `Result` or `?`
+works.
+
+```rust
+use std::num::ParseIntError;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum AmountError {
+    #[error("amount is not an unsigned integer")]
+    Parse(#[from] ParseIntError),
+    #[error("amount {value} exceeds the maximum {maximum}")]
+    TooLarge { value: u16, maximum: u16 },
+}
+
+pub fn parse_amount(text: &str, maximum: u16) -> Result<u16, AmountError> {
+    let value = text.parse::<u16>()?;
+    if value > maximum {
+        return Err(AmountError::TooLarge { value, maximum });
+    }
+    Ok(value)
+}
+```
+
+For `"oops"`, parsing produces `ParseIntError`; `#[from]` supplies the
+conversion that `?` needs to return `AmountError::Parse`. For `"80"` with a
+maximum of `60`, parsing succeeds but the range check returns `TooLarge`.
+For `"40"`, the caller receives `Ok(40)`. `u16` first limits representable
+values; `maximum` then limits the amounts this application accepts.
+
+<CodeTrace trace="idiom-error-layers" />
+
+`thiserror` is an external dependency. Add it to the small example project's
+manifest with `cargo add thiserror`; a library exposing this error type keeps
+the enum in its public interface. The derive requires `Debug`, and
+`#[from]` also identifies the underlying error as a source.
+
+## An application adds the operation that failed
+
+A command-line program usually cares about presenting a useful chain of
+causes. It can use `anyhow` at that boundary while the library keeps its
+structured errors. `Context` adds the operation the program was attempting.
+
+```rust
+use anyhow::{Context, Result};
+
+fn main() -> Result<()> {
+    let text = std::env::args()
+        .nth(1)
+        .context("usage: amount-viewer <amount>")?;
+    let value = parse_amount(&text, 60)
+        .context("could not read the requested amount")?;
+    println!("accepted amount: {value}");
+    Ok(())
+}
+```
+
+This `main` uses `parse_amount` from the preceding listing. Add `anyhow`
+with `cargo add anyhow`. When `parse_amount` fails, the context describes
+the attempted operation and preserves the original error underneath it.
+The `Option` returned by `.nth(1)` also accepts `.context(...)`: an absent
+argument becomes a useful failure instead of an unchecked `unwrap()`.
+
+Context should add information. “Could not read the requested amount” tells
+the user which operation failed; repeating “error happened” at every layer
+does not. Keep `thiserror` enums when callers need to match cases. Use
+`anyhow` or a similar context wrapper at an application boundary when a
+reportable cause chain is the main need.
+
+<MarginNote kind="brief">An error enum names a cause. Application context names the attempted operation. `?` connects the layers without converting failure into a made-up success.</MarginNote>
+
+## Cheatsheet
+
+| Need | Pattern | Limit to remember |
+| --- | --- | --- |
+| Release one owned resource at scope exit | An owner or guard with `Drop` | Abort and process termination may skip cleanup. |
+| Temporarily change borrowed local data | A guard holds `&mut T` and saved state | Remote writes have additional failure and concurrency conditions. |
+| Report failed completion | Explicit `finish` / `close` / `restore` returning `Result` | `Drop` itself has no returned result. |
+| Let library callers distinguish causes | Structured enum, optionally derived with `thiserror` | The public variants become part of the interface. |
+| Explain an application operation | `anyhow::Context` around a `Result` or `Option` | Add useful context while retaining the original cause. |
+| Stop on the first failure | `?` | Its error must convert to the function's return error. |
+
+The official [Drop documentation](https://doc.rust-lang.org/stable/std/ops/trait.Drop.html),
+[thiserror documentation](https://docs.rs/thiserror/latest/thiserror/), and
+[anyhow documentation](https://docs.rs/anyhow/latest/anyhow/) define these
+contracts. Later lessons apply them to files, process handles, and reversible
+changes to your own test targets.

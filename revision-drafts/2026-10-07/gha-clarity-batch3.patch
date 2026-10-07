@@ -1,0 +1,351 @@
+diff --git a/site/src/content/docs/pages/5/06.mdx b/site/src/content/docs/pages/5/06.mdx
+--- a/site/src/content/docs/pages/5/06.mdx
++++ b/site/src/content/docs/pages/5/06.mdx
+@@ -559,8 +559,7 @@
+ The validated snapshots, angle calculations, and synthetic tests above are
+ the core of this lesson. The pinned AssaultCube implementation below puts
+ those calculations inside the DLL and hook boundary from
+-[Lesson 6.4](/pages/8/03/). Keep the target check, worker lifetime, and
+-restoration rules from that lesson around this game-specific code.
++[Lesson 6.4](/pages/8/03/). Keep the target check, worker lifetime, and verified-byte restoration procedure from that lesson around this game-specific code.
+ 
+ The in-process update resolves the list, chooses the nearest live entity, and writes the calculated angles:
+ 
+@@ -628,8 +627,7 @@
+ Run it every few milliseconds in the injected worker. In a local match with idle bots, the view should lock to the nearest live player and switch after that bot dies. The `+90°` correction is target-specific and comes from AssaultCube starting forward at 90 degrees.
+ 
+ Notice that this exact implementation ranks horizontal world distance, while
+-`best_target` above ranks angular error. That is an intentional contrast, not two
+-names for the same rule. Replace the score only after deciding which behavior the
++`best_target` above ranks angular error. That is an intentional contrast, not two names for the same target-ranking calculation. Replace the score only after deciding which behavior the
+ tool should implement.
+ 
+ <LessonVideo
+diff --git a/site/src/content/docs/pages/5/07.mdx b/site/src/content/docs/pages/5/07.mdx
+--- a/site/src/content/docs/pages/5/07.mdx
++++ b/site/src/content/docs/pages/5/07.mdx
+@@ -306,8 +306,7 @@
+ 
+ ## Camera motion: shake, follow, orbit, and zoom
+ 
+-The camera has more layers than recoil. Each is a rule that changes where the camera is or
+-where it looks.
++The camera has more layers than recoil. Each calculates a position or viewing direction: shake adds an offset, follow tracks a subject, orbit rotates around a point, and zoom changes the framing.
+ 
+ - **Shake** is a short random offset that fades. With an amplitude of 4 pixels that fades
+   to 0 over 0.5 s, the largest offset at 0.1 s is `4 × (1 − 0.1 ÷ 0.5) = 3.2` pixels, at 0.25 s it is
+diff --git a/site/src/content/docs/pages/5/08.mdx b/site/src/content/docs/pages/5/08.mdx
+--- a/site/src/content/docs/pages/5/08.mdx
++++ b/site/src/content/docs/pages/5/08.mdx
+@@ -1,13 +1,13 @@
+ ---
+-title: "Radar Coordinates and Visibility Rules"
+-description: "Follow entities through radar filtering, coordinate transforms, scale, clipping, and marker rules."
++title: "Radar Coordinates and Marker Filtering"
++description: "Follow team and alive filters, local coordinate transforms, radar scale, range clipping, and elevation markers."
+ chapter: "7.8"
+ minutes: 23
+ author: "attilathedud"
+ date: "2026-07-30"
+ sidebar:
+   order: 8
+-  label: "7.8 Radar Coordinates and Visibility Rules"
++  label: "7.8 Radar Coordinates and Marker Filtering"
+ ---
+ import { Frame, GitHub, Panel } from '../../../../components/kit';
+ import Scene from '../../../../components/Scene.astro';
+@@ -32,7 +32,7 @@
+ ```mermaid
+ flowchart LR
+     E["Enumerate"] --> V["Validate"]
+-    V --> F["Filter by radar rules"]
++    V --> F["Filter by team and alive state"]
+     F --> T["World → local-relative"]
+     T --> R["Rotate into radar basis"]
+     R --> S["Scale + clip"]
+@@ -74,7 +74,7 @@
+ 
+ The radar loop probably visits both and applies a condition before drawing.
+ 
+-Use two contrasting entities because one example cannot reveal a rule. A
++Use two contrasting entities because one example cannot distinguish a team filter from an alive, range, or icon check. A
+ teammate and opponent that are both alive, active, and nearby differ mainly by
+ team, which makes the experiment more specific.
+ 
+@@ -109,7 +109,9 @@
+ The list order, object layout, and exact checks are target-specific. Repeatedly
+ inspect the same two records and note which branch chooses different paths.
+ 
+-## Write the rule before changing it
++<span id="write-the-rule-before-changing-it" aria-hidden="true" />
++
++## Write the team filter before changing it
+ 
+ Two records with different team IDs can reach the same drawing function, so
+ first state the filter we think the radar uses. The function below receives
+@@ -135,12 +137,12 @@
+ }
+ ```
+ 
+-This plain function helps verify your reconstructed rule against several recorded entities.
++This plain function helps verify your reconstructed team filter against several recorded entities.
+ 
+ Keep “allowed to appear” separate from “has a drawable marker.” An entity can pass
+ team and alive filters but still fail coordinate validation, be outside range, or
+ have no icon. One boolean that merges all stages is difficult to reverse because a
+-missing marker no longer tells you which rule rejected it.
++missing marker no longer tells you which filter or coordinate check rejected it.
+ 
+ ## Convert world position to radar position
+ 
+@@ -210,7 +212,9 @@
+ 
+ <Scene name="radar-marker" />
+ 
+-## Height needs an explicit visual rule
++<span id="height-needs-an-explicit-visual-rule" aria-hidden="true" />
++
++## Show elevation separately from horizontal position
+ 
+ A top-down radar discards one world axis. That is a projection, not proof that
+ height is irrelevant. Floors above and below may share the same 2D position.
+@@ -220,7 +224,7 @@
+ 
+ ## Prefer a separate lab display
+ 
+-Instead of patching the game’s team condition, use your copied snapshots to print or draw a separate local observer. That keeps the original rules intact and makes your model easy to compare.
++Instead of patching the game’s team condition, use your copied snapshots to print or draw a separate local observer. That leaves the game's own marker filtering and drawing untouched and makes your model easy to compare.
+ 
+ <Frame caption="A radar-filter experiment.">
+ 
+@@ -230,7 +234,7 @@
+ 
+ ## Patch the actual AssaultCube radar branch
+ 
+-The radar pipeline and pure team rule above explain what the branch controls.
++The radar pipeline and pure team filter above explain what the branch controls.
+ The following automated branch patch applies the verified patch ownership
+ from [Lesson 6.4](/pages/8/03/) to one pinned build.
+ 
+diff --git a/site/src/content/docs/pages/5/09.mdx b/site/src/content/docs/pages/5/09.mdx
+--- a/site/src/content/docs/pages/5/09.mdx
++++ b/site/src/content/docs/pages/5/09.mdx
+@@ -149,7 +149,7 @@
+ polygon; it is not discarded merely because one vertex is outside.
+ 
+ Point labels are simpler: if their single anchor lies outside, reject or clamp the
+-label according to the UI rule. Do not use a point-label rejection rule to reason
++label according to the chosen off-screen-label behavior. Do not use a point-label boundary check to reason
+ about whether an entire triangle should render.
+ 
+ The playground below uses one declared convention so every sign and axis has a
+@@ -282,7 +282,7 @@
+ }
+ ```
+ 
+-The positive-`w` rule belongs to the projection convention described above. Some
++The positive-`w` front-facing test belongs to the projection convention described above. Some
+ pipelines use a different sign. Determine the front-facing half-space with a point
+ known to be directly ahead. The small epsilon avoids enormous coordinates near the
+ camera plane, but it is a policy threshold in clip-space units, not a universal
+diff --git a/site/src/content/docs/pages/5/10.mdx b/site/src/content/docs/pages/5/10.mdx
+--- a/site/src/content/docs/pages/5/10.mdx
++++ b/site/src/content/docs/pages/5/10.mdx
+@@ -67,7 +67,7 @@
+ as a hint and derive it yourself, because the derivation takes a minute and
+ tells you immediately when a list is talking about a different interface.
+ 
+-The rule is that a vtable begins with the methods of the interfaces it
++The method order follows the inherited interface layout: a vtable begins with the methods of the interfaces it
+ inherits, in inheritance order, each in declaration order. `IDXGISwapChain`
+ inherits like this:
+ 
+diff --git a/site/src/content/docs/pages/5/11.mdx b/site/src/content/docs/pages/5/11.mdx
+--- a/site/src/content/docs/pages/5/11.mdx
++++ b/site/src/content/docs/pages/5/11.mdx
+@@ -209,4 +209,4 @@
+ GPU to do.
+ 
+ Lesson 7.12 uses these graphics observations alongside memory snapshots,
+-feature toggles, and cleanup rules to assemble one reliable local tool.
++feature toggles, and verified restoration and shutdown order to assemble one reliable local tool.
+diff --git a/site/src/content/docs/pages/6/07.mdx b/site/src/content/docs/pages/6/07.mdx
+--- a/site/src/content/docs/pages/6/07.mdx
++++ b/site/src/content/docs/pages/6/07.mdx
+@@ -359,7 +359,7 @@
+ 
+ A Wesnoth add-on or game build could publish a tiny turn/event record. A separate visualizer could read it. The producer defines the shared-memory contract, so both sides agree on its layout and lifetime.
+ 
+-The one-shot lab avoids concurrent writes. A real design needs synchronization—perhaps a named mutex or events—plus a version field, sequence number, and rules for partial updates. Never put passwords or secret tokens in a mapping protected only by a convenient name.
++The one-shot lab avoids concurrent writes. A concurrent design could hold the same named mutex while the writer updates a record and while the reader copies it; the reader would then avoid mixing old and new fields. Both sides also need a shared format version and an agreed sequence-number meaning. A notification event alone announces readiness; it does not by itself protect the copy. Never put passwords or secret tokens in a mapping protected only by a convenient name.
+ 
+ The buildable source is [`shared_memory_lab.rs`](/windows-labs/src/bin/shared_memory_lab.rs).
+ 
+diff --git a/site/src/content/docs/pages/7/01.mdx b/site/src/content/docs/pages/7/01.mdx
+--- a/site/src/content/docs/pages/7/01.mdx
++++ b/site/src/content/docs/pages/7/01.mdx
+@@ -36,8 +36,7 @@
+ 
+ The layouts differ because sections have separate file and virtual alignments,
+ zero-initialized data may occupy memory without taking equal file space, and Windows
+-may apply relocations and resolve imports after mapping. A section row is the rule
+-for converting a location in one layout to the corresponding location in the other;
++may apply relocations and resolve imports after mapping. A section row supplies the mapping information for converting a location in one layout to the corresponding location in the other;
+ the numbers are related but not interchangeable.
+ 
+ <MarginNote kind="alternative">Think of printed page numbers versus e-book page numbers: one text, two numbers, and a contents table converts between them. The section table does that job.</MarginNote>
+diff --git a/site/src/content/docs/pages/7/03.mdx b/site/src/content/docs/pages/7/03.mdx
+--- a/site/src/content/docs/pages/7/03.mdx
++++ b/site/src/content/docs/pages/7/03.mdx
+@@ -443,7 +443,7 @@
+ 4. Is the file PE32 or PE32+, and does that match the game build?
+ 5. Can the same DLL name from two game installations have different exports?
+ 
+-Do not call an export merely because its name looks interesting. A name does not reveal the complete function signature, ownership rules, calling convention, or whether the API is intended for outside use.
++Do not call an export merely because its name looks interesting. A name does not reveal the complete function signature, responsibility for allocation and cleanup, calling convention, or whether the API is intended for outside use.
+ 
+ The complete parser is [`export_inspector.rs`](/windows-labs/src/bin/export_inspector.rs).
+ 
+diff --git a/site/src/content/docs/pages/7/04.mdx b/site/src/content/docs/pages/7/04.mdx
+--- a/site/src/content/docs/pages/7/04.mdx
++++ b/site/src/content/docs/pages/7/04.mdx
+@@ -37,7 +37,7 @@
+ | Opcode | Which operation to perform, such as subtract or call | Often |
+ | ModR/M and SIB | Which registers and addressing shape to use | Often |
+ | Displacement | A field offset or distance from another address | Sometimes |
+-| Immediate | A number stored directly inside the instruction | Depends on the rule |
++| Immediate | A number stored directly inside the instruction | Depends on what the number controls |
+ | Relative target | How far a call or jump travels | Often changes when code moves |
+ 
+ Suppose two supported builds both subtract a value and then load a nearby field. The instruction *shape* may stay recognizable while the relative call target between those instructions moves. A useful signature keeps the stable shape and places wildcards over the changing target bytes.
+@@ -202,8 +202,7 @@
+ :::note[Why this version?]
+ The direct indexes can panic near the end of the buffer,
+ while `get` turns an incomplete window into `false`. `PatternByte` prevents a
+-magic byte such as `0x00` from secretly meaning “wildcard.” `zip` and `all`
+-state the rule directly: each discovered byte must satisfy its corresponding
++magic byte such as `0x00` from secretly meaning “wildcard.” `zip` and `all` express the matching condition directly: each discovered byte must satisfy its corresponding
+ pattern item.
+ :::
+ 
+diff --git a/site/src/content/docs/pages/7/05.mdx b/site/src/content/docs/pages/7/05.mdx
+--- a/site/src/content/docs/pages/7/05.mdx
++++ b/site/src/content/docs/pages/7/05.mdx
+@@ -33,7 +33,7 @@
+ The Windows calls are only the outer shell. Candidate filtering uses checked local slices.
+ 
+ :::note
+-🔎 A filter pass re-reads only the addresses already on the candidate list, so it can remove candidates but never add them. If the list grows, the program rescanned memory instead of filtering; if it stops shrinking, check the value type, the range, and the filtering rule.
++🔎 A filter pass re-reads only the addresses already on the candidate list, so it can remove candidates but never add them. If the list grows, the program rescanned memory instead of filtering; if it stops shrinking, check the value type, the range, and the selected equal, changed, increased, or decreased comparison.
+ :::
+ 
+ ## What the scanner is searching
+@@ -217,7 +217,7 @@
+ 
+ The enum replaces a stringly typed filter:
+ 
+-The original helper recognizes two strings and returns `false` for every other spelling. A typo silently removes candidates instead of identifying an unsupported rule.
++The original helper recognizes two strings and returns `false` for every other spelling. A typo silently removes candidates instead of identifying an unsupported scan comparison.
+ 
+ ```rust title="Before: choose a scan filter with text"
+ fn keep(kind: &str, previous: u32, current: u32) -> bool {
+@@ -283,13 +283,13 @@
+ </Tab>
+ </CodeGroup>
+ 
+-**Takeaway:** use a finite type for a finite set of rules, and let the compiler check every case.
++**Takeaway:** use a finite type for a finite set of scan comparisons, and let the compiler check every case.
+ 
+ :::note[Why this version?]
+ A misspelled string silently behaves like an unknown
+ filter. An enum can contain only supported states, and an exhaustive `match`
+ makes the compiler point out every place that needs updating when a new filter
+-is added. Passing `&Filter` borrows the rule because the comparison does not
++is added. Passing `&Filter` borrows the comparison choice because the comparison does not
+ need to consume or copy it.
+ :::
+ 
+@@ -327,7 +327,7 @@
+ 
+ A scan for a common value such as zero can produce millions of matches. Refuse or require a narrower range rather than exhausting memory.
+ 
+-Limits are correctness rules:
++Each limit prevents a specific failure:
+ 
+ - a chunk limit bounds each allocation and Windows copy;
+ - a region limit avoids one suspicious mapping monopolizing the scan;
+@@ -373,7 +373,7 @@
+ 
+ The UI should show the old and new value and require an explicit action.
+ 
+-The second read closes a **time-of-check/time-of-use** gap. The candidate matched during the last filter, but the game kept running afterward. If the current value no longer equals `candidate.previous`, the address may be stale or the rule may have changed; the write must stop rather than overwrite newer state.
++The second read closes a **time-of-check/time-of-use** gap. The candidate matched during the last filter, but the game kept running afterward. If the current value no longer equals `candidate.previous`, the address may be stale or the game may have updated that field; the write must stop rather than overwrite newer state.
+ 
+ <MarginNote kind="alternative">Like glancing at a traffic light and then closing your eyes: the colour may change before you move. Re-check at the moment you act.</MarginNote>
+ 
+diff --git a/site/src/content/docs/pages/7/06.mdx b/site/src/content/docs/pages/7/06.mdx
+--- a/site/src/content/docs/pages/7/06.mdx
++++ b/site/src/content/docs/pages/7/06.mdx
+@@ -216,7 +216,7 @@
+ - a set of visited addresses;
+ - range checks;
+ - branch-target extraction;
+-- a rule for whether to follow calls.
++- an explicit choice to enter callees or continue after calls.
+ 
+ Start linear. Add control flow only after the basic decoder and bounds are solid.
+ 
+diff --git a/site/src/content/docs/pages/8/02.mdx b/site/src/content/docs/pages/8/02.mdx
+--- a/site/src/content/docs/pages/8/02.mdx
++++ b/site/src/content/docs/pages/8/02.mdx
+@@ -103,7 +103,7 @@
+     D --> E["Drop::drop calls VirtualFreeEx"]
+ ```
+ 
+-`RemoteAllocation` puts that cleanup rule in one Rust type. It stores the
++`RemoteAllocation` ties remote-memory release to one Rust owner's lifetime. It stores the
+ process handle and remote address, then its `Drop` method releases the address
+ whether the caller finishes normally or returns early with an error.
+ 
+diff --git a/site/src/content/docs/pages/8/03.mdx b/site/src/content/docs/pages/8/03.mdx
+--- a/site/src/content/docs/pages/8/03.mdx
++++ b/site/src/content/docs/pages/8/03.mdx
+@@ -250,7 +250,7 @@
+ - a 32-bit DLL loads into a 32-bit process;
+ - a 64-bit DLL loads into a 64-bit process;
+ - saved instructions may use instruction-pointer-relative addressing;
+-- registers and stack rules differ by architecture.
++- register roles, stack-slot widths, alignment, and calling conventions differ across targets.
+ 
+ This is why copying a detour from a video or another game version is unreliable.
+ 
+@@ -581,7 +581,7 @@
+ 
+ ## Reuse the same detour for a live text field
+ 
+-The first hook changes a game value at a terrain-description event. The next case starts from a different observation: the game passes a live text pointer to its print function. The patch manager, checked relative jump, saved bytes, and restoration rule stay the same; the cave changes what it reads and writes.
++The first hook changes a game value at a terrain-description event. The next case starts from a different observation: the game passes a live text pointer to its print function. The patch manager, checked relative jump, saved bytes, and verified restoration procedure stay the same; the cave changes what it reads and writes.
+ 
+ Now use the real target. On the **Den of Onis** map, right-click a Ford tile and open **Terrain Description**. Search for a distinctive part of the description, then change the first letter of each candidate until the displayed text changes. In the book’s run, the live string began at `0x10CE996B`.
+ 
+diff --git a/site/src/content/docs/pages/8/05.mdx b/site/src/content/docs/pages/8/05.mdx
+--- a/site/src/content/docs/pages/8/05.mdx
++++ b/site/src/content/docs/pages/8/05.mdx
+@@ -13,7 +13,7 @@
+ import ConceptLab from '../../../../components/ConceptLab.astro';
+ 
+ This is an optional performance study after the chapter's pattern scanner,
+-memory scanner, and debugger. None of them requires multiple workers. Lesson 5.4 searched one copied code range at a time; here we keep its matching rule
++memory scanner, and debugger. None of them requires multiple workers. Lesson 5.4 searched one copied code range at a time; here we keep its exact-byte and wildcard comparisons
+ and change only how several stable ranges are searched. That separates the
+ concurrency question from whether a byte pattern really identifies the
+ intended instruction.
+@@ -53,7 +53,7 @@
+ 
+ For this scanner:
+ 
+-| Promise | Concrete game-tool rule |
++| Promise | Concrete guarantee |
+ |---|---|
+ | safety | no worker reads changing remote memory |
+ | safety | the global result cap is never exceeded |

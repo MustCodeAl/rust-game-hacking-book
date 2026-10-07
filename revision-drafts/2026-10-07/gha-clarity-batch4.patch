@@ -1,0 +1,362 @@
+diff --git a/site/src/content/docs/pages/8/06.mdx b/site/src/content/docs/pages/8/06.mdx
+--- a/site/src/content/docs/pages/8/06.mdx
++++ b/site/src/content/docs/pages/8/06.mdx
+@@ -119,7 +119,7 @@
+ consumes `WM_KEYDOWN` as its gameplay input. See Microsoft's
+ [`GetMessageW`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmessagew)
+ and [`PeekMessageW`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-peekmessagew)
+-references for their return and queue rules.
++references for their return values and queue behavior.
+ 
+ The callback must also return promptly. While a window procedure is
+ busy reading a large file or waiting on a network request, other
+@@ -248,7 +248,7 @@
+ 
+ Poll at a modest rate such as every 8–16 milliseconds. A tight loop wastes a
+ CPU core. A zero result can also mean the desktop is inactive or Windows
+-integrity rules prevent the query; “zero” does not prove a keyboard is broken.
++integrity-level restrictions prevent the query; “zero” does not prove a keyboard is broken.
+ 
+ Sampling can miss a very short press between polls. That is a property of polling, not a reason to trust the ambiguous low bit. For a tool hotkey, choose a comfortable key and polling interval, then test focus changes, key repeat, and shutdown while held.
+ 
+@@ -439,7 +439,7 @@
+ 
+ <Panel title="Other input and window APIs">
+ 
+-| Question | Relevant APIs | Lesson rule |
++| Question | Relevant APIs | Check to make |
+ |---|---|---|
+ | Which top-level window belongs to my PID? | `EnumWindows`, `GetWindowThreadProcessId` | Match the process, not a changeable title |
+ | Where is the drawable client area on screen? | `GetClientRect`, `ClientToScreen`, `GetDpiForWindow` | Recalculate after move, resize, or DPI change |
+diff --git a/site/src/content/docs/pages/8/07.mdx b/site/src/content/docs/pages/8/07.mdx
+--- a/site/src/content/docs/pages/8/07.mdx
++++ b/site/src/content/docs/pages/8/07.mdx
+@@ -355,10 +355,7 @@
+ - save and restore the game's graphics state if drawing inside its renderer;
+ - keep the target's update thread free of file I/O, sleeping, and channel waits.
+ 
+-Build the control model first. Rendering it in a different place should not
+-rewrite the rules for ownership, commands, or cleanup. The
+-[tool-architecture lesson](/pages/8/10/) brings those rules together with
+-snapshots, feature lifecycles, version checks, and failure handling. Chapter 7
++Build the control model first. Each feature still needs an owner, a defined set of commands, and a way to restore any bytes it changes when the menu moves into the game. The [tool-architecture lesson](/pages/8/10/) combines those responsibilities with snapshots, feature lifecycles, version checks, and failure handling. Chapter 7
+ then follows the camera and drawing state that an in-game display would need.
+ 
+ ## Reference
+diff --git a/site/src/content/docs/pages/8/08.mdx b/site/src/content/docs/pages/8/08.mdx
+--- a/site/src/content/docs/pages/8/08.mdx
++++ b/site/src/content/docs/pages/8/08.mdx
+@@ -268,5 +268,4 @@
+ action, and restoration result, separate from the visible menu. Those records
+ let a failed cleanup remain inspectable even after its UI closes.
+ 
+-The next lesson draws the menu inside the game's frame. Its placement changes;
+-the ownership, commands, and restoration rules still apply.
++The next lesson draws the menu inside the game's frame. Each feature still needs one owner, commands that report their outcome, and verified restoration of any changed bytes.
+diff --git a/site/src/content/docs/pages/8/10.mdx b/site/src/content/docs/pages/8/10.mdx
+--- a/site/src/content/docs/pages/8/10.mdx
++++ b/site/src/content/docs/pages/8/10.mdx
+@@ -20,7 +20,7 @@
+ The DLL, hook, input, and menu lessons have supplied the pieces. This lesson
+ gives each piece an owner and a place in the tool's control flow. We will use
+ a small monitor of a local player's health and gold to express the design;
+-the same rules later support camera snapshots and rendering features.
++the same separation of ownership, observations, and commands later supports camera snapshots and rendering features.
+ 
+ ## Combining code exposes hidden problems
+ 
+@@ -48,15 +48,14 @@
+ ```text
+ target.rs   identify the executable, build, modules, and supported addresses
+ observe.rs  turn verified Win32 reads into local snapshots
+-decide.rs   apply pure feature rules to a snapshot
++decide.rs   compute alarms and feature decisions from a snapshot
+ apply.rs    own guarded writes, patches, hooks, and restoration
+ ui.rs       turn user events into commands and display acknowledgements
+ main.rs     connect those pieces and control their lifetime
+ ```
+ 
+ Each file has one main reason to change. A new game build mostly changes
+-`target.rs`. A redesigned menu mostly changes `ui.rs`. A safer restoration rule
+-belongs in `apply.rs`, not in every checkbox handler.
++`target.rs`. A redesigned menu mostly changes `ui.rs`. An additional check before restoring changed bytes belongs in `apply.rs`, not in every checkbox handler.
+ 
+ <SortBoard board="module-jobs" label="Explore which stage owns each job" />
+ 
+@@ -150,8 +149,7 @@
+ 
+ One `DisplayMode` value cannot hold two variants at once. The independent
+ `watch_health` and `log_changes` switches may both be enabled because those
+-activities can run together. The type follows the actual rule rather than
+-asking every handler to repair impossible combinations.
++activities can run together. The enum permits only one display mode at a time, while separate switches permit both activities. Each handler receives a state the types can represent without contradictory display modes.
+ 
+ ## Route input as commands
+ 
+@@ -320,7 +318,7 @@
+ ## Test patch decisions without launching the game
+ 
+ Do not make every test launch AssaultCube and call `ReadProcessMemory`. Put a
+-small trait between the patch-verification rule and Windows. The real tool uses
++small trait between the instruction-byte comparison and the Windows memory-read API. The real tool uses
+ a `Process`-backed reader; a fast test uses bytes stored inside the test:
+ 
+ ```rust
+@@ -357,7 +355,7 @@
+ the live instruction bytes do not match the supported build?” It does not need
+ a running match to answer that. Separate Windows-only checks can verify handle
+ ownership and byte copying. When one fails, you know whether the problem is the
+-build-verification rule or the `ReadProcessMemory` boundary. 🧪
++comparison with the supported build or the `ReadProcessMemory` call. 🧪
+ 
+ A one-shot memory scanner can print its matches directly. A long-running
+ in-process menu should log the same fields for every state change:
+@@ -371,7 +369,7 @@
+ 
+ Combining separate features into one DLL is what the original course called
+ the **multihack**. The useful engineering question is whether the combination
+-preserves every feature's ownership and cleanup rules.
++preserves each feature's resource owner and completes its shutdown and restoration.
+ 
+ A multifeature tool is ready when:
+ 
+diff --git a/site/src/content/docs/pages/8/11.mdx b/site/src/content/docs/pages/8/11.mdx
+--- a/site/src/content/docs/pages/8/11.mdx
++++ b/site/src/content/docs/pages/8/11.mdx
+@@ -27,15 +27,12 @@
+     D["device events<br/>key W goes down;<br/>left stick reads 0.8 up"] --> S["input state<br/>W is down;<br/>stick axis is 0.8"]
+     S --> B["bindings<br/>W or stick up<br/>means MoveForward"]
+     B --> A["actions<br/>MoveForward = 1.0<br/>or 0.8"]
+-    A --> R["game rules<br/>move the player"]
++    A --> R["movement simulation<br/>move the player"]
+ ```
+ 
+ The device layer is what the operating system reports: a key went down, the mouse
+ moved 12 <Tooltip tip="A count is the smallest step a mouse can report. A mouse set to 800 counts per inch reports 800 counts when it moves one inch, so 12 counts is 12 ÷ 800 = 0.015 inch.">counts</Tooltip>, a stick reads 0.8. The state layer is the engine's own copy of
+-those facts, refreshed once per frame. The action layer is what the game's rules
+-use, and it is the only layer that knows the player's settings. That is why one
+-game accepts a keyboard, a controller, and a remapped key for the same jump, and
+-why the rules never mention a key.
++those facts, refreshed once per frame. The action layer converts them using the player's bindings and settings. Movement and jump code then consume named actions rather than physical keys. The same jump can therefore come from a keyboard, a controller, or a remapped key without changing the jump calculation.
+ 
+ ## Buttons: down, just pressed, and just released
+ 
+@@ -101,7 +98,7 @@
+ <Example title="A press that no step sees">
+ 
+ The game draws at 144 frames a second, so a frame is 1000 ÷ 144 = 6.94 ms, and runs
+-its rules in 60 Hz steps, which are due every 16.67 ms. The engine runs the steps
++movement and collision updates in 60 Hz steps, which are due every 16.67 ms. The engine runs the steps
+ that are owed at the start of each frame:
+ 
+ | Frame | Starts at | Steps run | Just pressed in this frame |
+@@ -117,10 +114,10 @@
+ 
+ </Example>
+ 
+-The repair is to stop treating the edge as the thing the rules read. The input
++The repair is to keep a press available until a simulation step can consume it. The input
+ system turns a press into an event or an **intent**, such as "jump requested", that
+ stays in the queue until a step consumes it, exactly once. Many engines suggest
+-doing this for any rule that runs in fixed steps.
++doing this for input-sensitive updates that run in fixed steps.
+ 
+ ## Sticks and triggers: values between −1 and 1
+ 
+diff --git a/site/src/content/docs/pages/9/01.mdx b/site/src/content/docs/pages/9/01.mdx
+--- a/site/src/content/docs/pages/9/01.mdx
++++ b/site/src/content/docs/pages/9/01.mdx
+@@ -48,7 +48,7 @@
+ If a supported mod file can express your idea, use it. File-based changes are easier to inspect, share, version, and undo than live memory patches.
+ 
+ :::note
+-🗂️ **Parser rule:** copy the original, parse into named fields, validate every boundary, then write a new file. Keep the untouched source as your way back.
++🗂️ **Safe editing sequence:** copy the original, parse into named fields, validate every boundary, then write a new file. Keep the untouched source as your way back.
+ :::
+ 
+ <Frame caption="A game world built from many resources: textures, models, sounds, and maps.">
+@@ -229,9 +229,11 @@
+   label="Explore the magic-byte check by changing one piece"
+ />
+ 
+-## A file format is a rule for slicing bytes
+-
+-A file is only a numbered sequence of bytes. A **format** is the fixed rule that says where one field ends and the next begins, and how to read the bytes in between — as text, as a count, as an offset into the same file, and so on. Two parsers that apply the same rule to the same bytes must agree on every field, or one of them has the format wrong.
++<span id="a-file-format-is-a-rule-for-slicing-bytes" aria-hidden="true" />
++
++## A file format defines fields and byte boundaries
++
++A file is only a numbered sequence of bytes. Its **format** defines where each field begins and ends, and what its bytes mean: text, a count, an offset into the same file, and so on. For example, a four-byte count and a four-byte offset occupy the same space but mean different things. Two parsers using the same format must agree on the fields in the same bytes.
+ 
+ The Flare line `build=5,1,1,2` is a small text-format example. A parser finds
+ the line's `=`, treats `build` as the field name, splits the right side at
+@@ -250,8 +252,7 @@
+ That sketch describes one possible binary layout, not the layout of Flare's
+ text save. A PNG begins with the fixed bytes shown above; a different binary
+ format might begin with a count telling its parser how many records follow.
+-For either format, the boundary rule has to come from the format, not from a
+-guess based on the file extension.
++For either format, field sizes and boundaries have to come from its documented layout, not a guess based on the file extension.
+ 
+ Text formats use character encodings and visible separators. Binary formats use fixed fields, lengths, offsets, and flags. Neither kind is automatically safer or simpler; both need a parser that rejects impossible sizes and missing fields.
+ 
+@@ -348,7 +349,7 @@
+ 
+ ## A reversible file workflow
+ 
+-The preceding rules become easier to remember as one file journey. The
++These editing steps become easier to remember as one file journey. The
+ starting hash identifies the untouched original; the diff shows exactly what
+ the serializer changed; the disposable profile tells us whether the game
+ accepts the new representation:
+diff --git a/site/src/content/docs/pages/9/03.mdx b/site/src/content/docs/pages/9/03.mdx
+--- a/site/src/content/docs/pages/9/03.mdx
++++ b/site/src/content/docs/pages/9/03.mdx
+@@ -282,8 +282,7 @@
+ 
+ ## Models: reading a glTF file
+ 
+-A texture is one image. A 3D model is several arrays of numbers plus the rules that join
+-them. **glTF** is an open format for 3D models and scenes from the Khronos Group, the same
++A texture is one image. A 3D model contains arrays of vertex positions and other attributes, plus indices and references that connect them into surfaces and scenes. **glTF** is an open format for 3D models and scenes from the Khronos Group, the same
+ group that maintains OpenGL, and it is a good example because it is plain about its own
+ structure. A glTF model is a **JSON** description of what is in the model, in `.gltf` text
+ with its binary data alongside, or all packed in one `.glb` file. Reading it is the
+@@ -385,7 +384,7 @@
+ works out the volume at each ear from that ear's own distance. Take a gap of 2, so the
+ ears are at `(−1, 0, 0)` and `(1, 0, 0)`, and the same sound at `(3, 4, 0)`. The left ear
+ is `√((3 − (−1))² + 4²) = √32 = 5.66` away and the right ear is
+-`√((3 − 1)² + 4²) = √20 = 4.47` away. With the `1 ÷ distance` rule the left ear hears
++`√((3 − 1)² + 4²) = √20 = 4.47` away. Using the `1 ÷ distance` attenuation formula, the left ear hears
+ 1 ÷ 5.66 = 0.177 and the right ear 1 ÷ 4.47 = 0.224. The right ear is louder by a factor
+ of 0.224 ÷ 0.177 = 1.26, much less than the factor of 4 (0.16 ÷ 0.04) that the simple
+ pan gave, because two ears this close together differ little in distance.
+diff --git a/site/src/content/docs/pages/9/07.mdx b/site/src/content/docs/pages/9/07.mdx
+--- a/site/src/content/docs/pages/9/07.mdx
++++ b/site/src/content/docs/pages/9/07.mdx
+@@ -133,7 +133,7 @@
+ 
+ The Win32 function returns a `LONG`. [Microsoft's return-value contract](https://learn.microsoft.com/en-us/windows/win32/api/wintrust/nf-wintrust-winverifytrust#return-value) says only exact zero means the requested trust action succeeded. Do not use HRESULT-style “success if nonnegative” logic.
+ 
+-The original helper treats every nonnegative status as trusted, following a rule used for some other Windows status types. `WinVerifyTrust` has a different contract: only exactly zero reports success.
++The original helper treats every nonnegative status as trusted, confusing this result with status types whose nonnegative values indicate success. `WinVerifyTrust` has a different contract: only exactly zero reports success.
+ 
+ ```rust title="Before: accept every nonnegative trust status"
+ fn explain_trust(status: i32) {
+diff --git a/site/src/content/docs/pages/9/08.mdx b/site/src/content/docs/pages/9/08.mdx
+--- a/site/src/content/docs/pages/9/08.mdx
++++ b/site/src/content/docs/pages/9/08.mdx
+@@ -282,7 +282,9 @@
+ checksum, so it does not prove who created the contents. A MAC or AEAD tag makes a
+ different promise because producing a valid tag requires the secret key.
+ 
+-## Practical rules
++<span id="practical-rules" aria-hidden="true" />
++
++## Choose and validate an authenticated format
+ 
+ - ✅ Use a reviewed AEAD implementation.
+ - ✅ Generate a fresh nonce as required by the algorithm.
+@@ -295,7 +297,6 @@
+ 
+ The file lessons have now taken a saved value from readable text to binary
+ fields, mod assets, archives, integrity checks, and encrypted payloads. Each
+-format has its own rules, but the shared habit is to identify the bytes, parse
+-them within bounds, verify the expected form, and keep a way back. Chapter 10
++format defines its own fields, boundaries, and validation checks. The shared habit is to identify the bytes, parse them within bounds, verify the expected form, and keep a way back. Chapter 10
+ follows a different kind of game mod: a Lua script that the game deliberately
+ loads and runs through a limited host interface.
+diff --git a/site/src/content/docs/pages/10/01.mdx b/site/src/content/docs/pages/10/01.mdx
+--- a/site/src/content/docs/pages/10/01.mdx
++++ b/site/src/content/docs/pages/10/01.mdx
+@@ -76,7 +76,7 @@
+ - an **access token**, describing the process security context;
+ - user-mode bookkeeping structures, including the PEB and one TEB per thread.
+ 
+-The operating system owns the rules. The process can read much of its own user-mode state, but that does not make every internal field a stable public API.
++Windows creates and manages these resources, checks access to protected objects, and schedules threads. A process can read much of its own user-mode state, but an internal Windows field can change between versions even when its address is readable. Prefer a documented API when one provides the information you need.
+ 
+ ## A process is machine state plus managed resources
+ 
+@@ -144,8 +144,7 @@
+ 
+ This is not ordinary game data. `fs:` and `gs:` tell the CPU to use a
+ segment-relative address associated with the current thread. `0x30` and
+-`0x60` are offsets in *different Windows layouts*, not a universal rule to
+-double a structure offset when moving from 32 to 64 bits. Wider pointers and
++`0x60` are offsets in *different Windows layouts*, not an instruction to double every structure offset when moving from 32 to 64 bits. Wider pointers and
+ alignment help explain why layouts change; the actual offsets come from the
+ layout being examined. Treat these internal structures as an observation in
+ a particular architecture and Windows build, not as a public API contract.
+@@ -204,7 +203,7 @@
+ 
+ ## Snapshot does not mean frozen process
+ 
+-The list is stable, but the process is still running. A DLL could unload after the snapshot was created. That produces an important rule:
++The list is stable, but the process is still running. A DLL could unload after the snapshot was created. A snapshot therefore has a time limit:
+ 
+ > Enumeration tells you what existed during the snapshot. A later read must still be allowed to fail.
+ 
+diff --git a/site/src/content/docs/pages/10/02.mdx b/site/src/content/docs/pages/10/02.mdx
+--- a/site/src/content/docs/pages/10/02.mdx
++++ b/site/src/content/docs/pages/10/02.mdx
+@@ -61,7 +61,7 @@
+ the small text format ambiguous. If this game-file manifest grows to store mod
+ IDs, signatures, several hashes, or nested package information, move to a
+ defined format such as JSON, CBOR, or a signed catalog. The lab stays text-only
+-so you can see every parsing rule.
++so you can see the separators, field meanings, and rejected input forms.
+ 
+ ## Hash in chunks, not one giant allocation
+ 
+diff --git a/site/src/content/docs/pages/10/03.mdx b/site/src/content/docs/pages/10/03.mdx
+--- a/site/src/content/docs/pages/10/03.mdx
++++ b/site/src/content/docs/pages/10/03.mdx
+@@ -22,7 +22,7 @@
+ 
+ A process ID identifies a running process. It does not grant access to that process. To ask Windows for a usable process **handle**, a program calls `OpenProcess` with an **access mask**: a group of bits describing the operations it wants.
+ 
+-Windows compares that request with the process security rules. The call either returns a handle carrying the granted rights or fails with an error:
++Windows checks whether the caller may obtain those rights to the target process. The call either returns a handle carrying the granted rights or fails with an error:
+ 
+ ```mermaid
+ flowchart TD
+@@ -66,7 +66,7 @@
+ <ResponseField name="return value" type="handle, or an error">
+ 
+ A handle carrying the granted rights, or an error such as “access denied” when
+-the target's security rules refuse the request. Close a handle you no longer need.
++Windows refuses the requested access. Close a handle you no longer need.
+ 
+ </ResponseField>
+ </Fields>
+@@ -89,7 +89,7 @@
+ 
+ ## The target has a security descriptor
+ 
+-A process object also has a security descriptor. Its **DACL**—Discretionary Access Control List—describes which trustees may receive which rights. When `OpenProcess` runs, Windows checks the requested rights against this information and other protection rules.
++A process object also has a security descriptor. Its **DACL**—Discretionary Access Control List—describes which trustees may receive which rights. When `OpenProcess` runs, Windows checks the requested rights against this information and the restrictions on protected processes.
+ 
+ This explains a common beginner mistake: “I found the PID, so why did reading memory fail?” Finding and opening are separate steps with different permissions.
+ 
+@@ -274,7 +274,7 @@
+ 
+ - the target runs under another account or at a higher integrity level;
+ - the DACL does not grant the requested rights;
+-- the process is protected by stronger Windows rules;
++- Windows restricts access because the target is a protected process;
+ - the process exited between enumeration and `OpenProcess`;
+ - the PID was reused after the old process ended;
+ - the caller requested more rights than the job required.
+diff --git a/site/src/content/docs/pages/10/04.mdx b/site/src/content/docs/pages/10/04.mdx
+--- a/site/src/content/docs/pages/10/04.mdx
++++ b/site/src/content/docs/pages/10/04.mdx
+@@ -83,7 +83,7 @@
+ 
+ > One owner closes one owned handle exactly once. Borrowers may use it temporarily but never close it.
+ 
+-The word **owned** matters because not every handle-shaped value follows the same cleanup rule. Some APIs return pseudo-handles or borrowed handles that must not be passed to `CloseHandle`; other APIs use specialized cleanup functions. The wrapper constructor should document which API created the value and which function releases it.
++The word **owned** matters because not every handle-shaped value is released with `CloseHandle`. Some APIs return pseudo-handles or borrowed handles that must not be passed to `CloseHandle`; other APIs use specialized cleanup functions. The wrapper constructor should document which API created the value and which function releases it.
+ 
+ Model those categories with different types instead of one universal `HANDLE` wrapper. A type that always closes is safe only for resources whose contract says the caller owns a closable handle.
+ 

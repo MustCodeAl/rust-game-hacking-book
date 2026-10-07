@@ -1,0 +1,479 @@
+diff --git a/site/src/content/docs/pages/3/08.mdx b/site/src/content/docs/pages/3/08.mdx
+--- a/site/src/content/docs/pages/3/08.mdx
++++ b/site/src/content/docs/pages/3/08.mdx
+@@ -1,6 +1,6 @@
+ ---
+ title: "What a DLL Function Promises Its Caller"
+-description: "Infer an exported function's parameters, calling convention, result, and ownership rules before wrapping it in a small typed API."
++description: "Infer an exported function's parameters, calling convention, result, and responsibility for memory cleanup before wrapping it in a small typed API."
+ chapter: "6.1"
+ minutes: 28
+ author: "attilathedud"
+@@ -33,7 +33,7 @@
+ - whether the call changes global state;
+ - whether it is safe to call more than once.
+ 
+-Reconstructing those rules is **interface reversing**. We will practice on this book's own Windows DLL, where the source is available afterward for checking our conclusions.
++Recovering that call contract is **interface reversing**. We will practice on this book's own Windows DLL, where the source is available afterward for checking our conclusions.
+ 
+ ## Reconstruct four parts of every boundary
+ 
+diff --git a/site/src/content/docs/pages/3/09.mdx b/site/src/content/docs/pages/3/09.mdx
+--- a/site/src/content/docs/pages/3/09.mdx
++++ b/site/src/content/docs/pages/3/09.mdx
+@@ -358,7 +358,7 @@
+ 
+ Zero needs its own pattern because it has no leading 1 to hide.
+ 
+-The exponent-0 rule also explains what the bytes for an integer 100 mean as a
++The special exponent-zero decoding also explains what the bytes for an integer 100 mean as a
+ float. Read `64 00 00 00` as an `f32` and, most significant first, it is
+ `0x00000064`: sign 0, exponent field 0, fraction 100 out of 8,388,608. With the
+ hidden digit off and the power fixed at 2⁻¹²⁶, the value is 100 ÷ 8,388,608 ×
+@@ -457,7 +457,7 @@
+ />
+ 
+ Rust's `usize`, the pointer-sized whole number from [Lesson 3.1](/pages/3/01/),
+-follows the same rule: 4 bytes in a 32-bit program, 8 in a 64-bit one. So a
++has the same width: 4 bytes in a 32-bit program, 8 in a 64-bit one. So a
+ 64-bit tool reading a 32-bit game's pointers must read 4 bytes for each one,
+ even though its own `usize` is 8.
+ 
+@@ -491,5 +491,5 @@
+ depending on the width and interpretation selected by the code. Knowing
+ that representation still does not prove which object the bytes belong
+ to or whether its address remains valid. [How External Tools Read Game
+-Memory](/pages/3/02/) combines these numeric rules with the safe boundary:
++Memory](/pages/3/02/) combines these widths, byte orders, and encodings with the safe boundary:
+ copy a checked byte range first, then interpret the local result.
+diff --git a/site/src/content/docs/pages/4/03.mdx b/site/src/content/docs/pages/4/03.mdx
+--- a/site/src/content/docs/pages/4/03.mdx
++++ b/site/src/content/docs/pages/4/03.mdx
+@@ -66,7 +66,7 @@
+ 
+ If the row stride includes padding, `y * width + x` is wrong even when the first row looks perfect. The byte address becomes `base + y * row_stride + x * element_size`. Verify it with tiles on different rows and near both edges of the map.
+ 
+-Visibility is often a **derived view** of terrain, units, teams, and line-of-sight rules. A cached visibility layer can be useful to read without being the source of truth, because the game rebuilds it from those inputs. What matters is which system recomputes it and when.
++Visibility is often a **derived view** of terrain, units, teams, and line-of-sight checks for range and blocking terrain. A cached visibility layer can be useful to read without being the source of truth, because the game rebuilds it from those inputs. What matters is which system recomputes it and when.
+ 
+ <MarginNote kind="alternative">Think of fog as a sheet of tracing paper over the map: the terrain underneath is shared, but each player has their own sheet showing what they have seen.</MarginNote>
+ 
+diff --git a/site/src/content/docs/pages/4/04.mdx b/site/src/content/docs/pages/4/04.mdx
+--- a/site/src/content/docs/pages/4/04.mdx
++++ b/site/src/content/docs/pages/4/04.mdx
+@@ -124,7 +124,7 @@
+ 
+ Impossible combinations disappear. We cannot accidentally be both `Acting` and `Cooldown`.
+ 
+-<MarginNote kind="alternative">Think of a traffic light: it is red, amber or green, never two at once. An enum gives the bot's state the same one-at-a-time rule.</MarginNote>
++<MarginNote kind="alternative">Think of a traffic light: it is red, amber or green, never two at once. An enum likewise represents exactly one bot state at a time.</MarginNote>
+ 
+ ## Keep observations separate
+ 
+diff --git a/site/src/content/docs/pages/4/06.mdx b/site/src/content/docs/pages/4/06.mdx
+--- a/site/src/content/docs/pages/4/06.mdx
++++ b/site/src/content/docs/pages/4/06.mdx
+@@ -207,8 +207,7 @@
+ 
+ The heuristic must not overestimate if you want the cheapest-path guarantee.
+ For movement costs with a different verified minimum, multiply Manhattan
+-distance by that minimum. If a legal move can cost zero, the safe estimate
+-from this rule is zero. The search priority is:
++distance by that minimum. If a legal move can cost zero, the safe estimate from this scaling is zero. The search priority is:
+ 
+ ```text
+ priority = cost already paid + estimated cost remaining
+@@ -219,7 +218,7 @@
+ cost still decides whether a newly found route improves an old one. If the
+ game permits diagonal moves, Manhattan distance can overestimate: `(0,0)` to
+ `(1,1)` might be one diagonal move while Manhattan counts two. Choose an
+-estimate that matches the actual movement rules.
++estimate that matches the permitted moves and their minimum costs.
+ 
+ Do not include hidden enemy positions in the heuristic. A legitimate observer should plan from information the local game state actually reveals.
+ 
+diff --git a/site/src/content/docs/pages/4/07.mdx b/site/src/content/docs/pages/4/07.mdx
+--- a/site/src/content/docs/pages/4/07.mdx
++++ b/site/src/content/docs/pages/4/07.mdx
+@@ -60,25 +60,23 @@
+ 
+ A snapshot contains **level facts**: “the menu is open” or “gold equals 145.” An event describes an **edge** between two accepted snapshots: “the menu opened” or “gold increased by 25.”
+ 
+-That difference controls behavior. A level-triggered rule such as `if menu_open { click() }` may click on every poll. An edge-triggered rule acts only on the transition from closed to open. Neither form is always better:
++That difference controls behavior. A level-triggered check such as `if menu_open { click() }` may click on every poll. A transition-triggered handler acts only on the transition from closed to open. Neither form is always better:
+ 
+ - use a level fact to keep a safety condition true, such as “stop while the target is absent”;
+ - use an edge event for one-time work, such as recording that a turn began;
+ - use both when an action needs a starting event and an ongoing confirmation.
+ 
+-Here are six polls of `menu_open` and what each kind of rule does with them:
++Here are six polls of `menu_open` and what each kind of check does with them:
+ 
+ <MemoryStrip
+   cells="poll 1=false|poll 2=false|poll 3=true|poll 4=true|poll 5=true|poll 6=false"
+   marks="2|5"
+-  groups="2-4:level rule: clicks on 3 polls"
++  groups="2-4:while-open check: clicks on 3 polls"
+   groups2="2-2:edge: `MenuOpened`|5-5:edge: `MenuClosed`"
+-  caption="The level rule fires on every poll where the menu is open, so one opening produces three clicks. The edge rule compares each poll with the one before and fires only at the two highlighted polls, where the value changed."
++  caption="Checking the current menu-open state can click three times. Comparing adjacent samples instead reports MenuOpened once and MenuClosed once at the two highlighted polls."
+ />
+ 
+-A held button has the same distinction. In this picture, each rule toggles a
+-lamp when it fires. The level rule fires on every pressed sample. The
+-fresh-press rule fires only when released becomes pressed.
++A held button has the same distinction. In this picture, each input check toggles a lamp when it fires. Checking the pressed state fires on every held sample; detecting a new press fires only when released becomes pressed.
+ 
+ <MotionPicture
+   id="input-edge"
+@@ -86,8 +84,8 @@
+   motion="/assets/images/original/input-edge.gif"
+   width={360}
+   height={182}
+-  alt="A held button makes the level rule toggle a lamp repeatedly. A fresh-press rule toggles it once."
+-  caption="The six samples use the same false, false, true, true, true, false pattern shown above. Playback is slowed to show each poll. The level rule toggles three times; the new-press rule toggles once."
++  alt="A held button makes a pressed-state check toggle a lamp repeatedly. A new-press check toggles it once."
++  caption="The six samples use the same false, false, true, true, true, false pattern shown above. Playback is slowed to show each poll. Checking held state toggles three times; detecting a new press toggles once."
+ />
+ 
+ <SimLab sim="input-edge" label="Explore a held key versus a fresh press" />
+@@ -240,8 +238,7 @@
+ 2 × 50 = 100 milliseconds, after the first. That first poll can itself arrive up
+ to 50 milliseconds after the real change, so every genuine change reaches the
+ bot 100 to 150 milliseconds late. “Three polls” means nothing without the
+-polling rate: at 100 polls per second the gaps are 10 milliseconds, and the
+-same rule costs only 20 to 30 milliseconds.
++polling rate: at 100 polls per second the gaps are 10 milliseconds, and the same three-poll debounce adds only 20 to 30 milliseconds.
+ 
+ That delay is cheap for “the match ended” and far too slow for “an enemy
+ appeared.” Choose the requirement per value rather than once for the whole bot,
+diff --git a/site/src/content/docs/pages/4/08.mdx b/site/src/content/docs/pages/4/08.mdx
+--- a/site/src/content/docs/pages/4/08.mdx
++++ b/site/src/content/docs/pages/4/08.mdx
+@@ -130,7 +130,7 @@
+ }
+ ```
+ 
+-Dropping an event sounds bad, but silently pausing every target thread can be worse. The important rule is **make loss visible**. The final report prints both written and dropped counts.
++Dropping an event sounds bad, but silently pausing every target thread can be worse. **Report sample loss explicitly.** The final report prints both written and dropped counts.
+ 
+ Picture the queue as 128 numbered spaces between the sampler and the writer.
+ Suppose the writer stalls while 127 spaces are occupied. The next sample takes
+diff --git a/site/src/content/docs/pages/4/09.mdx b/site/src/content/docs/pages/4/09.mdx
+--- a/site/src/content/docs/pages/4/09.mdx
++++ b/site/src/content/docs/pages/4/09.mdx
+@@ -15,7 +15,7 @@
+ import MarginNote from '../../../../components/kit/MarginNote.astro';
+ 
+ Recording a guard's movement tells us when it turned, chased, or stopped. It
+-does not explain why. To recover that rule, follow the information the game
++does not explain why. To reconstruct how the guard chooses its action, follow the information the game
+ gave the guard, the decision it made from that information, and the action
+ that followed.
+ 
+@@ -24,7 +24,7 @@
+ A **non-player character** (NPC) is any character the game controls rather than
+ a person: a guard, a shopkeeper, an enemy soldier. In games, “AI” means the code
+ that picks what an NPC does next. It is usually far simpler than the AI in the
+-news: a handful of rules, checked quickly, many times per second.
++news: a small set of distance, visibility, health, and timing checks, evaluated many times per second.
+ 
+ The portable lab [`npc_brain_lab.rs`](/rust-labs/src/bin/npc_brain_lab.rs)
+ builds one such character, a guard, and this lesson follows it piece by piece.
+@@ -105,8 +105,7 @@
+ ## Decide: a finite-state machine
+ 
+ The guard's behavior is a finite-state machine, the same structure
+-[Lesson 4.6](/pages/4/04/) uses for a macro: a fixed set of named states and a
+-rule for each move between them. The guard has five states:
++[Lesson 4.6](/pages/4/04/) uses for a macro: a fixed set of named states and a condition for each transition between them. The guard has five states:
+ 
+ - **Patrol:** walk the route. The lab's route is a single point, the guard's
+   post at (0, 0), so patrolling means standing there.
+@@ -220,7 +219,7 @@
+ | 15 | no | 0 | 5 | `Patrol` | (2, 0) |
+ | 16 | no | 0 | 6 | `Patrol` | (1, 0) |
+ 
+-Every row follows from the rules above:
++Every row follows from the perception checks and state transitions above:
+ 
+ - **Ticks 1 and 2:** the player is 5 away, straight ahead, and in the open, so
+   all three checks pass, but `seen_for` is only 1, then 2.
+@@ -276,7 +275,7 @@
+ ### What editing the state byte would do
+ 
+ Take a toy program you wrote yourself, or an offline single-player game running
+-in your lab VM, whose guard follows the lab's rules. Changing the state byte
++in your lab VM, whose guard uses the five-state implementation above. Changing the state byte
+ between two ticks has very different effects depending on the value:
+ 
+ - **Write 4 (Flee) mid-chase:** on the next tick `decide` sees Flee, and nothing
+@@ -293,11 +292,10 @@
+ 
+ The pattern behind those results: the state is an output the game recomputes
+ from its inputs every tick. An edit to the output survives only when the inputs
+-agree with it, as `seen_for` did not in the second case. An edit to an input
+-that the rules read, such as writing 20 into `health`, changes behavior for as
++agree with it, as `seen_for` did not in the second case. An edit to an input that the decision code reads, such as writing 20 into `health`, changes behavior for as
+ long as the input holds, here by sending the guard into Flee on the next tick.
+ 
+-<MarginNote kind="narration">A value that snaps back after you change it is usually an output. The real control is an input the rules read, so look one step earlier.</MarginNote>
++<MarginNote kind="narration">A value that snaps back after you change it is usually an output. The real control is an input the decision code reads, so look one step earlier.</MarginNote>
+ 
+ ## Why online NPCs are out of reach
+ 
+@@ -325,8 +323,7 @@
+ 
+ The first command prints the sixteen-tick run from the table above, then five
+ situations scored by the utility system from
+-[Lesson 4.13](/pages/4/10/#choose-among-actions-utility-scoring). The tests pin
+-down each rule on its own, from the reaction delay and the search timeout to
++[Lesson 4.13](/pages/4/10/#choose-among-actions-utility-scoring). The tests check each decision case separately, from the reaction delay and the search timeout to
+ low health overriding every state, the three perception checks, and the utility
+ choices.
+ 
+@@ -335,5 +332,5 @@
+ tests will fail after that change, because they pin the delay at 3 ticks.
+ Compare the new trace with the old one, then restore the constant to 3
+ so the tests describe the program again. [Lesson 4.13](/pages/4/10/)
+-explains the sensing calculations and alternate decision rules that
++explains the sensing calculations and behavior-tree and utility-selection algorithms that
+ this trace treats as black boxes.
+diff --git a/site/src/content/docs/pages/4/10.mdx b/site/src/content/docs/pages/4/10.mdx
+--- a/site/src/content/docs/pages/4/10.mdx
++++ b/site/src/content/docs/pages/4/10.mdx
+@@ -232,7 +232,7 @@
+ 25% it drinks a potion. Changing one number in a formula moves one of those
+ switch points, and that is how designers tune utility AI.
+ 
+-<MarginNote kind="alternative">Think of a talent show: every option gets a score for the current situation and the judge picks the highest. Change a scoring rule and the winner changes.</MarginNote>
++<MarginNote kind="alternative">Think of a talent show: every option gets a score for the current situation and the judge picks the highest. Change a score weight or formula and the winner changes.</MarginNote>
+ 
+ The demo also varies the situation, all at a health of 0.3 except where it says
+ healthy:
+@@ -361,7 +361,7 @@
+ 
+ A byte's 8 bits give 2⁸ = 256 different values, 0 to 255, but only 0 to 4 mean
+ anything to the guard's code. Write 9 into the state byte of a toy program that
+-follows the lab's rules, and the result depends on how the compiler built the
++uses the lab's five-state guard, and the result depends on how the compiler built the
+ `switch` statement that picks a branch for each state. Compilers often turn a
+ `switch` over small numbers into a table of jump targets, one code address per
+ value. If the compiled code checks the range first, 9 goes to a default branch.
+diff --git a/site/src/content/docs/pages/4/11.mdx b/site/src/content/docs/pages/4/11.mdx
+--- a/site/src/content/docs/pages/4/11.mdx
++++ b/site/src/content/docs/pages/4/11.mdx
+@@ -201,7 +201,7 @@
+ ```
+ 
+ `0.8` is the cosine of roughly 37 degrees, so the target sits about 37 degrees
+-off the centre of view. If the rule is “visible within a 45-degree cone,” you
++off the centre of view. If visibility accepts directions at most 45 degrees from the centre of view, you
+ never need `acos` at all: compare the dot product against `cos(45°)`, which is
+ about `0.707`, and anything above that threshold is inside the cone. Comparing
+ cosines is cheaper than converting to angles, and it sidesteps the rounding
+@@ -241,7 +241,7 @@
+ reshapes `t` before it is used, so the motion can begin gently, end gently, or
+ both. Here are four reshapings, with the value each gives at five moments:
+ 
+-| Curve | Rule | t = 0 | t = 0.25 | t = 0.5 | t = 0.75 | t = 1 |
++| Curve | Formula | t = 0 | t = 0.25 | t = 0.5 | t = 0.75 | t = 1 |
+ |---|---|---|---|---|---|---|
+ | linear | `t` | 0 | 0.25 | 0.5 | 0.75 | 1 |
+ | ease in (starts slowly) | `t × t` | 0 | 0.0625 | 0.25 | 0.5625 | 1 |
+@@ -354,7 +354,7 @@
+ Move B to span x from 5 to 9 and they no longer do: 4 is less than 5, so one axis
+ is enough to rule out contact.
+ 
+-These cheap tests are why a game's touch rules can differ from its pictures, as
++These cheap tests are why a game's collision tests can differ from its pictures, as
+ Lesson 1.3 noted. Lesson 7.5 tests rays against such shapes, and Lesson 7.2 uses
+ them to skip drawing things that are out of view.
+ 
+diff --git a/site/src/content/docs/pages/5/01.mdx b/site/src/content/docs/pages/5/01.mdx
+--- a/site/src/content/docs/pages/5/01.mdx
++++ b/site/src/content/docs/pages/5/01.mdx
+@@ -285,8 +285,8 @@
+ ## What a matrix actually does
+ 
+ A **matrix** is a rectangular table of numbers. By itself that is just storage.
+-What makes it useful is one fixed rule for combining it with a point, and the
+-rule is smaller than it looks.
++Matrix-vector multiplication turns it into a transform: multiply each row by
++the point components and add the products to make one output component.
+ 
+ ```rust
+ #[derive(Clone, Copy, Debug)]
+@@ -444,7 +444,7 @@
+ A system that reads the turret's world position between the second and third rows
+ gets the previous frame's answer. A tank that moves 60 units a second advances
+ 60 × (1 ÷ 60) = 1 unit in a frame, so a marker drawn from the stale copy trails the
+-turret by exactly 1 unit. A rule that must see the new value in the same frame has to
++turret by exactly 1 unit. A system that needs the new value in the same frame has to
+ run after the rebuild, or work out the world position itself from the local numbers,
+ as above.
+ 
+@@ -613,8 +613,7 @@
+ the other cameras (its **order**). A split screen, a minimap, a rear-view mirror, and
+ a security monitor inside the game each use another camera. A camera that draws into
+ an off-screen image makes a texture that a material can then show on a mirror or a
+-monitor. Every formula in this lesson works for each camera separately, with one
+-rule: use that camera's viewport, not the window's.
++monitor. Every formula in this lesson works for each camera separately, using that camera's viewport rather than the whole window.
+ 
+ <Example title="A 1920 × 1080 window with two players and a minimap">
+ 
+@@ -635,8 +634,7 @@
+ The minimap's viewport lies inside player 2's, so the minimap must draw later. The
+ camera with the lower order draws first, and a later camera can paint over what is
+ already there instead of clearing it, which is how a minimap sits on top of the main
+-picture. Which objects each camera draws is decided by the visibility rules in
+-Lesson 7.2.
++picture. Which objects each camera draws is decided by the layer filters, culling, and visibility tests in Lesson 7.2.
+ 
+ In memory, a game with several cameras can hold several view-projection matrices. The
+ one that belongs to the picture you draw over is the one that changes when you turn
+diff --git a/site/src/content/docs/pages/5/02.mdx b/site/src/content/docs/pages/5/02.mdx
+--- a/site/src/content/docs/pages/5/02.mdx
++++ b/site/src/content/docs/pages/5/02.mdx
+@@ -63,7 +63,7 @@
+ - clipping trims or rejects primitives outside the camera's clip volume;
+ - rasterization finds the pixel-sized **fragments** covered by each primitive;
+ - a fragment shader computes candidate colors and other outputs;
+-- depth, stencil, and blending rules decide how candidates affect stored pixels.
++- depth/stencil tests and blending decide how candidates affect stored pixels.
+ 
+ A fragment is not yet a final pixel. Several triangles may produce fragments for
+ the same pixel, and tests may reject most of them.
+@@ -241,7 +241,7 @@
+ 
+ </Frame>
+ 
+-That visual result proves a rendering rule changed; it does **not** prove which objects a call represents. You still need classification tests.
++That visual result shows the depth-test behavior changed; it does **not** prove which objects a call represents. You still need classification tests.
+ 
+ ## Transparency and draw order
+ 
+@@ -261,7 +261,7 @@
+ Because the mix uses what is already there, order matters. Swap two see-through
+ layers and the result changes. So engines draw all the solid objects first, with depth
+ writes on, and then the see-through ones from the farthest to the nearest, with depth
+-writes off, as described above. Other blend modes use a different rule: **additive**
++writes off, as described above. Other blend modes combine colors differently: **additive**
+ blending simply adds the colours, which suits glows and sparks.
+ 
+ Two-dimensional games rely on exactly this. A sprite is a picture with transparent
+@@ -382,7 +382,7 @@
+   rectangle is drawn with a shader that reads it. **Bloom** blurs the brightest parts and
+   adds them back, and **colour grading** remaps colours. **Tone mapping** compresses
+   **HDR** (high dynamic range) values, where lighting can produce colours above 1.0, into
+-  the 0 to 1 range a display can show. A simple rule, `c ÷ (1 + c)`, turns a value of
++  the 0 to 1 range a display can show. A simple tone-mapping formula, `c ÷ (1 + c)`, turns a value of
+   4.0 into 0.8, a value of 1.0 into 0.5, and a value of 0.5 into 0.33, so bright values
+   are squeezed more than dim ones.
+ - **Render to texture.** A pass can draw into an off-screen texture, not the screen.
+@@ -406,7 +406,7 @@
+ look equally bright. **HDR** rendering draws into a texture whose channels are wider
+ and floating-point, commonly 16 bits each, so the difference survives until the
+ tone-mapping step at the end compresses the result into the 0 to 1 range of the
+-display. With the `c ÷ (1 + c)` rule from above, the wall becomes 1.4 ÷ 2.4 = 0.58 and
++display. With the `c ÷ (1 + c)` tone-mapping formula above, the wall becomes 1.4 ÷ 2.4 = 0.58 and
+ the lamp 12 ÷ 13 = 0.92: still different, and both displayable.
+ 
+ The wider pixels cost memory. A 1920 × 1080 picture has 1920 × 1080 = 2,073,600 pixels.
+@@ -498,9 +498,8 @@
+ 
+ For memory work this means a game's positions can exist twice, once in each world. The
+ render copy is overwritten from the main copy at every extract, so editing it changes
+-the picture only until the next extract, while editing the main copy changes the rules
+-and the picture together. A hook on a draw call (Lesson 7.10) sees the render copy, and
+-the game's rules see the main one. Lesson 7.12 shows how to avoid mixing values from
++the picture only until the next extract, while editing the main copy changes state used by the simulation and future drawing. A hook on a draw call (Lesson 7.10) sees the render copy, and
++the movement and damage calculations read the main one. Lesson 7.12 shows how to avoid mixing values from
+ different frames.
+ 
+ ## Two-dimensional rendering uses the same pipeline
+@@ -544,7 +543,7 @@
+ 
+ Forgetting restoration can break the entire frame, menus, or later effects.
+ 
+-A restore guard makes the cleanup rule explicit:
++A restore guard returns the previous graphics state when its owner leaves scope:
+ 
+ ```rust
+ struct RestoreOnDrop<F: FnOnce()>(Option<F>);
+diff --git a/site/src/content/docs/pages/5/03.mdx b/site/src/content/docs/pages/5/03.mdx
+--- a/site/src/content/docs/pages/5/03.mdx
++++ b/site/src/content/docs/pages/5/03.mdx
+@@ -349,7 +349,7 @@
+ 16.67 ÷ 0.004 = 4,167 cubes. Halving the window's pixel count tells you which processor
+ is the limit: if the frame time does not change, the CPU, not the GPU, is the bottleneck.
+ 
+-This is a classification problem. A threshold such as `count > 500` separates the examples you observed, not necessarily the concept “player.” Test it against weapons, detailed scenery, menus, different models, and different graphics settings. Report false positives (something your rule caught that is not a player) and false negatives (a player your rule missed) instead of quietly turning a correlation into a definition.
++This is a classification problem. A threshold such as `count > 500` separates the examples you observed, not necessarily the concept “player.” Test it against weapons, detailed scenery, menus, different models, and different graphics settings. Report false positives (something your classifier caught that is not a player) and false negatives (a player your classifier missed) instead of quietly turning a correlation into a definition.
+ 
+ ## Turn the wrapper into the actual Urban Terror wallhack
+ 
+diff --git a/site/src/content/docs/pages/5/04.mdx b/site/src/content/docs/pages/5/04.mdx
+--- a/site/src/content/docs/pages/5/04.mdx
++++ b/site/src/content/docs/pages/5/04.mdx
+@@ -43,8 +43,7 @@
+ fixed-function path used here, disabling selected arrays and textures reduces the
+ number of active contributors so the diagnostic color is easier to interpret.
+ 
+-Alpha does not automatically mean transparency. Blending must be enabled with a
+-specific source/destination rule, and draw order still matters. Likewise, RGB
++Alpha does not automatically mean transparency. Blending must be enabled with specific source/destination blend factors and a combination formula, and draw order still matters. Likewise, RGB
+ values may be interpreted as linear light or sRGB-encoded display values. A debug
+ color only needs to be distinctive, but exact color comparison requires knowing
+ the framebuffer's color-space conversion.
+@@ -53,8 +52,7 @@
+ 
+ Before changing a draw's color, turn what we observed into an explicit
+ category. In this course build, the first trial labels a draw with more than
+-500 indices as `OtherPlayer`; all other draws remain `Unknown`. The rule
+-will be judged by the colored results, not assumed true because it compiled:
++500 indices as `OtherPlayer`; all other draws remain `Unknown`. This index-count classifier will be judged by the colored results, not assumed true because it compiled:
+ 
+ ```rust
+ #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+@@ -121,7 +119,7 @@
+ asks “of all player draws, how many did it find?” If a denominator is zero, report
+ the metric as undefined instead of inventing a perfect score.
+ 
+-Keep the recorded samples separate from the classifier implementation. Then a new rule can be scored against the same samples, so a change in precision or recall comes from the rule and not from a different capture.
++Keep the recorded samples separate from the classifier implementation. Then a new classifier can be scored against the same samples, so a change in precision or recall comes from the classifier and not from a different capture.
+ 
+ <SortBoard board="colored-vs-player" label="Explore precision and recall on a small capture" />
+ 
+@@ -175,7 +173,7 @@
+ 
+ ## Understand the build-specific Urban Terror fallback
+ 
+-The pure classifier and whole-draw restoration rule above are the general
++The pure classifier and restoration of the original whole-draw state above are the general
+ lesson. The following fallback is an optional exact-build in-process case.
+ It applies the hook lifecycle from [Lesson 6.4](/pages/8/03/) at a less
+ convenient point inside the draw function.
+@@ -283,8 +281,7 @@
+ may draw many categories through a shared material pass.
+ 
+ When color appears twice, through a mirror, or only in a shadow, add the current
+-framebuffer, shader/program, and pass position to the draw sample before changing
+-the category rule.
++framebuffer, shader/program, and pass position to the draw sample before changing the category predicate.
+ 
+ ## Identify a category with more than one number
+ 
+diff --git a/site/src/content/docs/pages/5/05.mdx b/site/src/content/docs/pages/5/05.mdx
+--- a/site/src/content/docs/pages/5/05.mdx
++++ b/site/src/content/docs/pages/5/05.mdx
+@@ -86,7 +86,7 @@
+ 
+ The broad phase quickly rejects distant regions. The narrow phase computes more
+ exact intersections. The query then chooses the smallest nonnegative hit parameter
+-and applies rules such as collision masks and ignored entities.
++and filters hits by collision masks and excluded entities.
+ 
+ A sphere intersection illustrates the math. For sphere center `c`, radius `r`,
+ ray origin `o`, and normalized direction `d`, substitute `o + td` into the sphere

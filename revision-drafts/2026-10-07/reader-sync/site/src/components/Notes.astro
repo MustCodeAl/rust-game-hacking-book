@@ -1,0 +1,97 @@
+---
+// A reader's own notes for one lesson, written in Markdown and kept in this
+// browser (and in their account when sign-in is configured). Behaviour is in
+// src/scripts/notes.js: autosave, a safe preview, and export to a .md file
+// that opens in massCode or any notes app.
+interface Props {
+	/** The lesson's URL id, such as "pages/1/10". */
+	id: string;
+	/** The displayed lesson number, such as "2.2". */
+	lesson: string;
+	title: string;
+}
+const { id, lesson, title } = Astro.props;
+---
+
+<section class="lesson-notes not-content print:hidden" data-lesson-notes data-note-id={id} data-note-lesson={lesson} data-note-title={title} data-reader-skip>
+	<button type="button" class="lesson-notes__fab" data-note-open aria-expanded="false" aria-controls={`notes-panel-${lesson}`}>
+		📝 Notes <span data-note-summary></span>
+	</button>
+	<div class="lesson-notes__panel" id={`notes-panel-${lesson}`} role="dialog" aria-label={`Notes for Lesson ${lesson}`} hidden>
+		<div class="lesson-notes__head">
+			<strong>Notes · Lesson {lesson}</strong>
+			<span class="lesson-notes__tools">
+				<button type="button" data-note-move title="Move this button to another corner">⇄ Move</button>
+				<button type="button" data-note-hide title="Hide the notes button (a thin tab stays at the edge)">Hide</button>
+				<button type="button" class="lesson-notes__close" data-note-close aria-label="Close notes">×</button>
+			</span>
+		</div>
+		<div class="lesson-notes__tabs" role="tablist" aria-label="Note view">
+			<button type="button" role="tab" aria-selected="true" data-note-tab="write">Write</button>
+			<button type="button" role="tab" aria-selected="false" data-note-tab="preview">Preview</button>
+		</div>
+		<textarea
+			data-note-text
+			rows="7"
+			maxlength="50000"
+			aria-label={`Notes for Lesson ${lesson}, in Markdown`}
+			placeholder="Write anywhere on the page. Use the buttons below to point at the part you are reading."
+			spellcheck="true"></textarea>
+		<div class="lesson-notes__preview" data-note-preview hidden></div>
+		<div class="lesson-notes__actions">
+			<button type="button" data-note-ref>Insert reference to this part</button>
+			<button type="button" data-note-quote>Quote what I selected</button>
+		</div>
+		<div class="lesson-notes__actions">
+			<select data-note-kind aria-label="Kind of margin comment">
+				<option value="mine">My note</option><option value="context">Context</option><option value="clarify">Clarification</option>
+				<option value="inquiry">Wonder</option><option value="praise">Well spotted</option><option value="action">Try this</option>
+				<option value="code">Code note</option><option value="math">Math</option>
+			</select>
+			<button type="button" data-note-bubble title="Pin the selected text (or the last line) as a margin comment at the section you are reading">Add as margin comment</button>
+		</div>
+		<div class="lesson-notes__actions">
+			<button type="button" data-note-export>Export (.md)</button>
+			<button type="button" data-note-export-all>Export all notes</button>
+			<button type="button" data-note-clear>Clear</button>
+		</div>
+		<p class="lesson-notes__status" data-note-status role="status" aria-live="polite">Plain Markdown, saved in this browser.</p>
+	</div>
+</section>
+
+<script>
+	import { mountNotes } from '../scripts/notes.js';
+	mountNotes();
+</script>
+
+<style is:global>
+	.lesson-notes__tools { display: inline-flex; align-items: center; gap: 4px; }
+	.lesson-notes__tools button:not(.lesson-notes__close) { padding: 0.1rem 0.5rem; color: var(--ink); font: inherit; font-size: 0.75em; background: transparent; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; }
+	/* Corner choices: br (default), bl, tr, tl. */
+	.lesson-notes[data-corner='bl'] .lesson-notes__fab { right: auto; left: 1rem; bottom: 1rem; }
+	.lesson-notes[data-corner='bl'] .lesson-notes__panel { right: auto; left: 1rem; bottom: 4.2rem; }
+	.lesson-notes[data-corner='tr'] .lesson-notes__fab { bottom: auto; top: 4.8rem; }
+	.lesson-notes[data-corner='tr'] .lesson-notes__panel { bottom: auto; top: 8rem; max-height: calc(100vh - 9rem); }
+	.lesson-notes[data-corner='tl'] .lesson-notes__fab { right: auto; left: 1rem; bottom: auto; top: 4.8rem; }
+	.lesson-notes[data-corner='tl'] .lesson-notes__panel { right: auto; left: 1rem; bottom: auto; top: 8rem; max-height: calc(100vh - 9rem); }
+	/* Hidden: only a thin tab at the screen edge remains; click it to bring the button back. */
+	.lesson-notes[data-hidden='true'] .lesson-notes__fab { width: 0.7rem; min-height: 2.6rem; padding: 0; overflow: hidden; font-size: 0; opacity: 0.45; border-radius: 8px 0 0 8px; right: 0; }
+	.lesson-notes[data-hidden='true'][data-corner='bl'] .lesson-notes__fab, .lesson-notes[data-hidden='true'][data-corner='tl'] .lesson-notes__fab { right: auto; left: 0; border-radius: 0 8px 8px 0; }
+	@media print { .lesson-notes { display: none !important; } }
+	.lesson-notes__fab { position: fixed; right: 1rem; bottom: 5.4rem; z-index: 40; padding: 0.5rem 0.9rem; color: var(--ink-strong); font: inherit; font-size: 0.9rem; font-weight: 650; background: var(--reader-panel, var(--surface-alt)); border: 1px solid var(--chapter-accent, var(--line)); border-radius: 999px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); cursor: pointer; }
+	.lesson-notes__fab [data-note-summary] { font-weight: 400; color: var(--ink-soft); font-size: 0.85em; }
+	.lesson-notes__panel { position: fixed; right: 1rem; bottom: 8.6rem; z-index: 41; display: grid; gap: 0.45rem; width: min(24rem, calc(100vw - 2rem)); max-height: calc(100vh - 10.5rem); overflow: auto; padding: 0.7rem 0.8rem; background: var(--reader-panel, var(--surface-alt)); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28); }
+	.lesson-notes__panel[hidden] { display: none; }
+	.lesson-notes__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+	.lesson-notes__close { padding: 0 0.5rem; color: var(--ink); font-size: 1.3rem; line-height: 1.2; background: none; border: 0; cursor: pointer; }
+	.lesson-notes__tabs { display: flex; gap: 6px; }
+	.lesson-notes__tabs button, .lesson-notes__actions button { padding: 0.25rem 0.65rem; color: var(--ink); font: inherit; font-size: 0.82em; background: var(--surface-alt, transparent); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+	.lesson-notes__tabs button[aria-selected='true'] { color: var(--chapter-ink, var(--ink-strong)); border-color: var(--chapter-accent); background: var(--chapter-tint, transparent); font-weight: 650; }
+	.lesson-notes textarea { box-sizing: border-box; width: 100%; min-height: 8rem; padding: 0.55rem; color: var(--ink); font: 0.88rem/1.5 var(--mono); border: 1px solid var(--line); border-radius: 8px; background: var(--surface-alt, transparent); resize: vertical; }
+	.lesson-notes__preview { min-height: 8rem; padding: 0.3rem 0.7rem; overflow-wrap: anywhere; border: 1px dashed var(--line); border-radius: 8px; }
+	.lesson-notes__preview[hidden], .lesson-notes textarea[hidden] { display: none; }
+	.lesson-notes__preview pre { overflow: auto; padding: 0.5rem; border: 1px solid var(--line); border-radius: 6px; font-family: var(--mono); font-size: 0.85em; }
+	.lesson-notes__preview blockquote { margin: 0.4rem 0; padding-left: 0.8rem; border-left: 3px solid var(--chapter-accent); color: var(--ink-soft); }
+	.lesson-notes__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+	.lesson-notes__status { margin: 0; color: var(--ink-soft); font-size: 0.78em; }
+</style>

@@ -1,0 +1,247 @@
+---
+title: "Rust: Borrowed Views and Useful Interfaces"
+description: "Connect lifetimes, typed offsets, From and Into, Display, derived traits, generic capabilities, and validated builders."
+chapter: "1.13"
+minutes: 24
+author: "attilathedud"
+date: "2026-10-07"
+sidebar:
+  order: 13
+  label: "1.13 Rust: Borrowed Views and Useful Interfaces"
+---
+import CodeTrace from '../../../../components/CodeTrace.astro';
+import { MarginNote, SpeedType } from '../../../../components/kit';
+
+The [previous lesson](/pages/1/14/) used checked slices and iterator
+queries. Those functions also made promises about access: some borrowed
+an existing collection, while others returned a newly owned result.
+Here we name those relationships and give functions interfaces that say
+which kinds of values they can accept.
+
+## A lifetime describes how borrows are related
+
+Suppose a function returns the first `count` bytes of its input. The
+returned slice points into the caller's buffer; it does not own a copy.
+
+<SpeedType id="rust-borrowed-prefix" title="Return a bounded view" recall={[{text:"bytes: &'a [u8]",hint:"Borrow a byte slice and name the lifetime of that borrow."},{text:"Option<&'a [u8]>",hint:"An optional returned view borrows from the same input lifetime."},{text:"bytes.get(..count)",hint:"Check that the requested prefix lies inside the input slice."}]}>
+
+```rust
+fn prefix<'a>(bytes: &'a [u8], count: usize) -> Option<&'a [u8]> {
+    bytes.get(..count)
+}
+
+fn main() {
+    let buffer = [10_u8, 20, 30, 40];
+    if let Some(view) = prefix(&buffer, 2) {
+        println!("{view:?}");
+    }
+}
+```
+
+</SpeedType>
+
+`'a` is a **lifetime parameter**. The repeated name says the returned
+borrow is tied to the input borrow. It does not keep the buffer alive
+longer. The compiler rejects using the view after the buffer is gone or
+changing the borrowed elements while that shared view is still in use.
+Here the view ends after its print, and the caller retains the buffer.
+
+With one borrowed input, Rust can infer this relationship. The shorter
+signature `fn prefix(bytes: &[u8], count: usize) -> Option<&[u8]>`
+expresses the same borrowing relationship. Explicit names become useful
+when several borrowed inputs make the relationship ambiguous, or when a
+struct keeps a borrow. Lifetimes describe validity, not a number of seconds.
+
+<MarginNote kind="clarify">Writing a lifetime on a reference does not manufacture storage. Returning a reference to a function's own temporary array still fails: that array is gone when the function returns.</MarginNote>
+
+<CodeTrace trace="idiom-borrowed-slice" />
+
+## Give numbers different types when they mean different things
+
+An RVA is an offset within a loaded module. A virtual address identifies
+a location in a process. Both can be represented with integers, but
+interchanging them produces a different question. A **newtype** wraps an
+existing value in a distinct type:
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Rva(u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct VirtualAddress(usize);
+
+fn resolve(base: VirtualAddress, offset: Rva) -> Option<VirtualAddress> {
+    base.0.checked_add(offset.0 as usize).map(VirtualAddress)
+}
+```
+
+`Rva(512)` and `VirtualAddress(512)` have different types even though their
+numbers agree. `resolve` cannot receive them in the opposite order. `.0`
+reads a tuple struct's first field. The check rejects overflow; a real
+reader must still validate the address against the intended process and
+memory region.
+
+Handles benefit from the same distinction. A `ProcessHandle` and a
+`ModuleHandle` should not become interchangeable just because both are
+machine-sized values. An **owned** process handle must also close exactly
+once, so it must not derive `Copy`: a numeric copy would duplicate the
+cleanup duty. [Handle ownership](/pages/10/04/) develops that wrapper and
+its `Drop` implementation. A borrowed handle view has a different duty
+from an owned handle.
+
+## Let `derive` generate ordinary trait implementations
+
+`#[derive(...)]` asks the compiler to generate the listed capabilities
+from the fields. `Debug` supports diagnostic `{:?}` output; `PartialEq`
+supports equality comparisons; `Eq` marks equality without exceptional
+cases such as floating-point NaN. `Clone` provides explicit `.clone()`;
+`Copy` permits an implicit value copy and requires `Clone`.
+
+For `Rva`, copying its plain integer is harmless. For `String`, an
+explicit clone allocates a separate owned string, so `String` does not
+implement `Copy`. Derived capabilities are not permission checks or
+address validation. If a field cannot implement a requested trait, the
+derive fails to compile.
+
+## Convert with `From` and `Into`; format with `Display`
+
+`From` describes an infallible conversion into your type. Implementing
+`From<u32> for Rva` also makes `u32` implement `Into<Rva>`.
+
+```rust
+impl From<u32> for Rva {
+    fn from(value: u32) -> Self { Self(value) }
+}
+
+impl std::fmt::Display for Rva {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RVA 0x{:X}", self.0)
+    }
+}
+
+fn main() {
+    let offset: Rva = 512_u32.into();
+    println!("{offset}"); // RVA 0x200
+}
+```
+
+The destination annotation chooses what `.into()` constructs. This
+conversion simply names a number's role; it does not check a module's
+size. Use `TryFrom` and a `Result` when a conversion may fail.
+
+`Display` controls user-facing `{}` formatting and `.to_string()`.
+`Debug` answers a different question: what should a diagnostic view of
+this value look like? You implement `Display` yourself because the best
+label cannot be inferred from a struct's fields. `write!` writes into
+the supplied formatter and reports a formatting error if its destination
+fails; it does not print directly to the terminal.
+
+<CodeTrace trace="idiom-newtype-display" />
+
+## A trait describes a capability
+
+A **trait** names behavior that several types can provide. A fixture can
+supply invented gold values; another implementation can obtain a checked
+snapshot. A caller that only needs the gold does not need to know which
+storage system provided it.
+
+```rust
+trait GoldReader {
+    fn gold(&self) -> Option<u32>;
+}
+
+struct Fixture(u32);
+impl GoldReader for Fixture {
+    fn gold(&self) -> Option<u32> { Some(self.0) }
+}
+
+struct Missing;
+impl GoldReader for Missing {
+    fn gold(&self) -> Option<u32> { None }
+}
+
+fn affordable(reader: &impl GoldReader, price: u32) -> bool {
+    reader.gold().is_some_and(|gold| gold >= price)
+}
+```
+
+The `&self` method borrows its implementation for reading. In this
+argument position, `impl GoldReader` means “one concrete type that
+implements this trait.” Each call can use a different concrete type;
+the function's body uses the promised method. A longer spelling uses a
+generic parameter: `fn affordable<R: GoldReader>(reader: &R, price: u32)`.
+Both express the same capability requirement here.
+
+For `Fixture(20)` and price 12, the answer is true. For `Missing`,
+`is_some_and` returns false without calling its closure. A trait makes
+the interface reusable; it does not ensure that every implementation
+returns accurate data or has permission to read a process.
+
+<CodeTrace trace="idiom-trait-reader" />
+
+## Accumulate choices with a builder
+
+A **builder** stores construction choices, then checks them before
+producing the finished object. It is useful when a tool has several
+optional settings. A simple object with two obvious required fields
+usually needs only a constructor.
+
+```rust
+#[derive(Debug)]
+struct Sampler { limit: usize, label: String }
+
+struct SamplerBuilder { limit: usize, label: String }
+
+impl Default for SamplerBuilder {
+    fn default() -> Self { Self { limit: 1, label: "sample".into() } }
+}
+
+impl SamplerBuilder {
+    fn limit(mut self, value: usize) -> Self { self.limit = value; self }
+    fn label(mut self, value: impl Into<String>) -> Self {
+        self.label = value.into();
+        self
+    }
+    fn build(self) -> Result<Sampler, &'static str> {
+        if self.limit == 0 { return Err("limit must be positive"); }
+        Ok(Sampler { limit: self.limit, label: self.label })
+    }
+}
+```
+
+Each setting method takes ownership of the draft and returns the updated
+draft. That enables the chain below. `impl Into<String>` accepts a string
+literal or an owned `String` and stores an owned label. `build` validates
+the limit once; the object is not ready before it succeeds.
+
+```rust
+let sampler = SamplerBuilder::default().limit(3).label("gold").build();
+```
+
+The builder itself does not start a worker or read memory. It only
+constructs a validated configuration. A zero limit returns an error that
+the caller can handle.
+
+<MarginNote kind="brief">Use types to distinguish roles, traits to name capabilities, and builders to gather choices. Each serves a different purpose.</MarginNote>
+
+<CodeTrace trace="idiom-builder" />
+
+## Cheatsheet: access and interfaces
+
+| Need | Rust expression | Meaning |
+| --- | --- | --- |
+| Return a borrowed view | `&'a [u8]` | View cannot outlive its input owner. |
+| Distinguish integer roles | `struct Rva(u32);` | A new type, not a renamed integer. |
+| Generate diagnostics/equality | `#[derive(Debug, PartialEq, Eq)]` | Implements supported capabilities from fields. |
+| Permit cheap implicit copies | `Copy` plus `Clone` | Appropriate only when copying does not duplicate ownership duties. |
+| Convert infallibly | `From<T>` / `.into()` | Destination type defines the conversion. |
+| Convert with validation | `TryFrom<T>` / `.try_into()` | Caller handles a possible failure. |
+| Write a user-facing label | `impl Display` | Used by `{}` and `.to_string()`. |
+| Ask for a capability | `&impl GoldReader` | Borrows a concrete trait implementation. |
+| Gather optional settings | `Builder::default().choice(...).build()` | Validate before producing the ready object. |
+
+See the official [From](https://doc.rust-lang.org/std/convert/trait.From.html),
+[Display](https://doc.rust-lang.org/std/fmt/trait.Display.html), and
+[lifetime](https://doc.rust-lang.org/book/ch10-03-lifetime-syntax.html)
+references for details. Next, [cleanup and error layers](/pages/1/16/)
+connect an owned resource to the scope responsible for releasing it.
