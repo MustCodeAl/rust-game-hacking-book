@@ -1,0 +1,71 @@
+Rust: Borrowed Views and Useful Interfaces
+
+The previous lesson used checked slices and iterator queries. Those functions also made promises about access: some borrowed an existing collection, while others returned a newly owned result. Here we name those relationships and give functions interfaces that say which kinds of values they can accept.
+
+Section: A lifetime describes how borrows are related.
+
+Suppose a function returns the first count bytes of its input. The returned slice points into the caller’s buffer; it does not own a copy.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+'a is a lifetime parameter. The repeated name says the returned borrow is tied to the input borrow. It does not keep the buffer alive longer. The compiler rejects using the view after the buffer is gone or changing the borrowed elements while that shared view is still in use. Here the view ends after its print, and the caller retains the buffer.
+
+With one borrowed input, Rust can infer this relationship. The shorter signature fn prefix(bytes: &[u8], count: usize) to Option<&[u8]> expresses the same borrowing relationship. Explicit names become useful when several borrowed inputs make the relationship ambiguous, or when a struct keeps a borrow. Lifetimes describe validity, not a number of seconds.
+
+Clarification: Writing a lifetime on a reference does not manufacture storage. Returning a reference to a function’s own temporary array still fails: that array is gone when the function returns.
+
+Section: Give numbers different types when they mean different things.
+
+An R V A, relative virtual address, is an offset within a loaded module. A virtual address identifies a location in a process. Both can be represented with integers, but interchanging them produces a different question. A newtype wraps an existing value in a distinct type:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Rva(512) and VirtualAddress(512) have different types even though their numbers agree. resolve cannot receive them in the opposite order. .0 reads a tuple struct’s first field. The check rejects overflow; a real reader must still validate the address against the intended process and memory region.
+
+Handles benefit from the same distinction. A ProcessHandle and a ModuleHandle should not become interchangeable just because both are machine-sized values. An owned process handle must also close exactly once, so it must not derive Copy: a numeric copy would duplicate the cleanup duty. Handle ownership develops that wrapper and its Drop implementation. A borrowed handle view has a different duty from an owned handle.
+
+Section: Let derive generate ordinary trait implementations.
+
+#[derive(...)] asks the compiler to generate the listed capabilities from the fields. Debug supports diagnostic {:?} output; PartialEq supports equality comparisons; Eq marks equality without exceptional cases such as floating-point NaN. Clone provides explicit .clone(); Copy permits an implicit value copy and requires Clone.
+
+For Rva, copying its plain integer is harmless. For String, an explicit clone allocates a separate owned string, so String does not implement Copy. Derived capabilities are not permission checks or address validation. If a field cannot implement a requested trait, the derive fails to compile.
+
+Section: Convert with From and Into; format with Display.
+
+From describes an infallible conversion into your type. Implementing From<u32> for Rva also makes u32 implement Into<Rva>.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The destination annotation chooses what .into() constructs. This conversion simply names a number’s role; it does not check a module’s size. Use TryFrom and a Result when a conversion may fail.
+
+Display controls user-facing {} formatting and .to_string(). Debug answers a different question: what should a diagnostic view of this value look like? You implement Display yourself because the best label cannot be inferred from a struct’s fields. write! writes into the supplied formatter and reports a formatting error if its destination fails; it does not print directly to the terminal.
+
+Section: A trait describes a capability.
+
+A trait names behavior that several types can provide. A fixture can supply invented gold values; another implementation can obtain a checked snapshot. A caller that only needs the gold does not need to know which storage system provided it.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The &self method borrows its implementation for reading. In this argument position, impl GoldReader means “one concrete type that implements this trait.” Each call can use a different concrete type; the function’s body uses the promised method. A longer spelling uses a generic parameter: fn affordable<R: GoldReader>(reader: &R, price: u32). Both express the same capability requirement here.
+
+For Fixture(20) and price 12, the answer is true. For Missing, is_some_and returns false without calling its closure. A trait makes the interface reusable; it does not ensure that every implementation returns accurate data or has permission to read a process.
+
+Section: Accumulate choices with a builder.
+
+A builder stores construction choices, then checks them before producing the finished object. It is useful when a tool has several optional settings. A simple object with two obvious required fields usually needs only a constructor.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Each setting method takes ownership of the draft and returns the updated draft. That enables the chain below. impl Into<String> accepts a string literal or an owned String and stores an owned label. build validates the limit once; the object is not ready before it succeeds.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The builder itself does not start a worker or read memory. It only constructs a validated configuration. A zero limit returns an error that the caller can handle.
+
+In brief: Use types to distinguish roles, traits to name capabilities, and builders to gather choices. Each serves a different purpose.
+
+Section: Cheatsheet: access and interfaces.
+
+See the official From, Display, and lifetime references for details. Next, cleanup and error layers connect an owned resource to the scope responsible for releasing it.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/15/

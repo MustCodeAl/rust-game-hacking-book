@@ -2513,6 +2513,24 @@ gets, and a return value says what came back. [Hacking
 Fundamentals](/pages/1/06/) applies the same programming concepts to a
 different game's observed behavior.
 
+## Choose the next Rust idea when you need it
+
+You have now seen names, branches, loops, ownership and fallible results.
+The following lessons take one group of those ideas further with small
+worked examples, adjustable traces and optional recall practice:
+
+- [Optional values and decisions](/pages/1/13/) explains combinators,
+  question mark, data-carrying enums and pattern matching.
+- [Collections, bounds and bytes](/pages/1/14/) follows iterator chains,
+  complete records, byte order, integer limits and target layout.
+- [Borrowed views and interfaces](/pages/1/15/) connects lifetimes,
+  typed offsets, conversions, traits, formatting and builders.
+- [Cleanup and helpful errors](/pages/1/16/) pairs a local guard with
+  restoration, then distinguishes library causes from application context.
+
+Use the link that answers your current question. Later memory and tool
+lessons also point back to the relevant idea when it first appears.
+
 ---
 ## Lesson 1.6 — Hacking Fundamentals
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/06/
@@ -4173,6 +4191,843 @@ then investigate any flags or branches that use it.
 | Move bits left or right | `<<` / `>>` on unsigned values | Outgoing bits are discarded. |
 | Wrap outgoing bits around | `rotate_left` / `rotate_right` | Rotation stays inside the type's width. |
 | Decode a packed field | Mask, then shift | A declared field boundary gives the bits meaning. |
+
+---
+## Lesson 1.11 — Rust: Missing Values, Failures, and States
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/13/
+Category: Game Hacking Foundations
+Estimated reading time: 22 minutes
+Summary: Follow Option and Result through closures, early returns, and pattern matching, then represent game states with enums.
+
+The [Rust Primer](/pages/1/05/) introduced `Some`, `None`, `Ok`, and `Err`.
+Here we follow those shapes through several operations. An inventory slot
+may be missing, a purchase may fail, and a dash may be cooling down. Each
+case deserves a value that tells the caller what happened.
+
+The examples use ordinary arrays and numbers in an invented game. The
+traces simulate those examples in the page; changing a control never reads
+or writes another program's memory. Every trace starts with a worked run.
+Typing and recall practice are optional.
+
+## Transform a present value with `map`
+
+An `Option<u32>` contains a number or contains no number. `map` applies a
+function to the number inside `Some`, then puts the answer back in `Some`.
+For `None`, it returns `None` without calling the function.
+
+```rust
+let price = Some(8_u32);
+let doubled = price.map(|n| n * 2); // Some(16)
+```
+
+`|n| n * 2` is a **closure**: a small function written where it is needed.
+The bars name its input; the expression computes its output. A closure may
+also borrow values from the surrounding scope, such as `budget` below.
+Closures are functions with capture; they do not run merely because you
+write them down.
+
+## Chain another optional operation with `and_then`
+
+The next calculation can itself have no answer: an unsigned subtraction
+cannot represent a negative amount. `and_then` calls a function returning
+another `Option`, and keeps a single layer of `Some` or `None`.
+
+<SpeedType id="rust-option-chain" title="Follow an optional price" recall={[{text:"costs.get(slot).copied()",hint:"Check the slot, then copy a present numeric price out of the borrowed result."},{text:"map(|n| n * 2)",hint:"Transform a present price into double that price."},{text:"and_then(|n| budget.checked_sub(n))",hint:"Chain a calculation that can itself have no answer."}]}>
+
+```rust
+fn quoted_balance(slot: usize, budget: u32) -> Result<u32, &'static str> {
+    let costs = [4_u32, 8, 12];
+    let price = costs.get(slot).copied();
+    let doubled = price.map(|n| n * 2);
+    let left = doubled.and_then(|n| budget.checked_sub(n));
+    left.ok_or("not affordable")
+}
+```
+
+</SpeedType>
+
+With slot 1 and budget 20, the sequence is `Some(8)` → `Some(16)` →
+`Some(4)` → `Ok(4)`. With slot 4, `get` returns `None`; both closures are
+skipped. `ok_or` turns a missing answer into an error with a reason. This
+example deliberately gives the same reason for a missing item and a high
+price. Use distinct error variants when callers need to distinguish them.
+
+<MarginNote kind="code">A closure returning a plain number fits map. A closure returning Option fits and_then. Using map for the latter would produce a nested Option.</MarginNote>
+
+<CodeTrace trace="idiom-option-chain" />
+
+## Carry a failure reason through `Result`
+
+`Result::map` changes an `Ok` value and leaves `Err` alone. `map_err` changes
+an error and leaves `Ok` alone. `and_then` chains another operation that can
+return an error. The success path keeps flowing; the first error passes
+through without running later success closures.
+
+```rust
+fn doubled_score(reading: Result<u8, &'static str>) -> Result<u8, &'static str> {
+    reading
+        .map(|n| u16::from(n) * 2)
+        .and_then(|n| u8::try_from(n).map_err(|_| "score too large"))
+}
+```
+
+Widening to `u16` before multiplication gives room for double any `u8`.
+`try_from` checks whether that answer fits back into `u8`. Converting an
+error with `map_err` is an explicit choice: here the exact numeric
+conversion error is replaced with a short domain description.
+
+<CodeTrace trace="idiom-result-combinators" />
+
+## Let `?` return the first error
+
+`?` takes the value out of `Ok` so the next line can use it. On `Err`, it
+returns from the enclosing function immediately, converting the error to
+the function's error type through `From` when necessary. It does not
+retry, recover, or turn an error into a default value.
+
+<SpeedType id="rust-fallible-purchase" title="Stop a purchase on its first failure" recall={[{text:"map_err(|_| \"bad cost\")?",hint:"Give a parsing failure a domain reason, then return early on that failure."},{text:"checked_sub(cost).ok_or(\"not enough gold\")?",hint:"Reject an unsigned underflow, attach its reason, and continue only on success."}]}>
+
+```rust
+fn buy(text: &str, gold: u32) -> Result<u32, &'static str> {
+    let cost = text.parse::<u32>().map_err(|_| "bad cost")?;
+    let left = gold.checked_sub(cost).ok_or("not enough gold")?;
+    Ok(left)
+}
+```
+
+</SpeedType>
+
+The default trace buys a 4-gold item with 12 gold. Invalid text stops before
+subtraction; an excessive cost stops before `Ok(left)`. Returning zero gold
+after an exact-price purchase is still success.
+
+<CodeTrace trace="idiom-result-chain" />
+
+## Give each state only the data it needs
+
+Separate `ready: bool` and `ticks: u32` fields permit contradictory
+combinations such as “ready with five cooldown ticks.” An **enum with
+data** puts the alternatives into one value:
+
+```rust
+enum Dash {
+    Ready,
+    Cooling { ticks: u32 },
+}
+
+fn tick(state: Dash) -> Dash {
+    match state {
+        Dash::Cooling { ticks } if ticks > 1 => Dash::Cooling { ticks: ticks - 1 },
+        Dash::Cooling { .. } => Dash::Ready,
+        Dash::Ready => Dash::Ready,
+    }
+}
+```
+
+`Cooling` carries a count. `Ready` carries none. `tick` takes ownership of
+the old state and returns the next one. The guard `if ticks > 1` adds a
+condition to the first matching pattern; the following arm handles the
+remaining cooldown counts. `..` means those fields are not needed here.
+
+<CodeTrace trace="idiom-state-enum" />
+
+## Use patterns for shape and guards for conditions
+
+`let else` names values from the expected shape and exits otherwise.
+Its `else` branch must diverge: for example, return from the function.
+`matches!` asks whether a value matches a pattern and produces a `bool`.
+A **match guard** checks an additional condition after a pattern matches.
+
+```rust
+fn next_action(player_health: Option<u32>) -> &'static str {
+    let Some(health) = player_health else { return "no player"; };
+    let alive = matches!(health, 1..=100);
+    match health {
+        n if n < 25 && alive => "heal",
+        0 => "respawn",
+        _ => "wait",
+    }
+}
+```
+
+`1..=100` includes both endpoints. A player at zero health does not take
+the healing arm, because `alive` is false. The final `_` catches other
+numeric values. For an enum representing distinct application states,
+prefer named arms so adding a new variant requires a deliberate decision.
+
+<MarginNote kind="brief">A pattern identifies the value's shape. A guard tests a condition. The selected arm produces an answer; only one arm runs.</MarginNote>
+
+<CodeTrace trace="idiom-patterns" />
+
+## Cheatsheet: outcomes and states
+
+| Need | Expression | What it does |
+| --- | --- | --- |
+| Change an optional success | `option.map(f)` | Runs `f` only for `Some`. |
+| Chain optional work | `option.and_then(f)` | `f` returns `Option`; no extra nesting. |
+| Supply a missing-value reason | `option.ok_or(error)` | Produces `Result`. |
+| Change a failure reason | `result.map_err(f)` | Runs `f` only for `Err`. |
+| Chain fallible work | `result.and_then(f)` | `f` returns `Result`. |
+| Leave on failure | `result?` | Continues with success or returns the error. |
+| Store distinct states | `enum` with data | Each variant carries its own fields. |
+| Bind or exit | `let Pattern = value else { return ...; };` | Rejects the wrong shape early. |
+| Ask about a pattern | `matches!(value, pattern)` | Produces `bool`. |
+| Refine an arm | `pattern if condition => ...` | Checks the guard before selecting the arm. |
+
+Use the [Option](https://doc.rust-lang.org/std/option/enum.Option.html) and
+[Result](https://doc.rust-lang.org/std/result/enum.Result.html) references
+to check exact signatures. Next, [collections and bytes](/pages/1/14/)
+connect these outcome shapes to bounded buffers and repeated work.
+
+---
+## Lesson 1.12 — Rust: Collections, Bounds, and Bytes
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/14/
+Category: Game Hacking Foundations
+Estimated reading time: 24 minutes
+Summary: Read iterator chains, overlapping windows, complete records, explicit byte conversion, integer limits, and C layout.
+
+A memory reader and a packet parser both receive sequences of bytes.
+Before using those bytes, they need to check the available length, decide
+how to group elements, and choose the numeric interpretation. Ordinary
+Rust collections let us learn those decisions in a small local example.
+The [previous lesson](/pages/1/13/) explains the `Option` and `Result`
+values returned when a check fails.
+
+## Read an iterator chain one item at a time
+
+An **iterator** yields a sequence of items on demand. `filter` keeps items
+that satisfy a predicate, `map` transforms each kept item, and `fold`
+combines items into one running answer. The closures describe those
+operations; a consuming operation such as `fold` drives the sequence.
+
+<SpeedType id="rust-filter-map-fold" title="Keep, transform, and add" recall={[{text:"filter(|cost| *cost <= budget)",hint:"Keep costs that fit the unchanged per-item budget; the predicate borrows each item."},{text:"map(|cost| cost * 2)",hint:"Double each cost that passed the predicate."},{text:"fold(0, |sum, cost| sum + cost)",hint:"Start at zero and accumulate each transformed cost."}]}>
+
+```rust
+fn doubled_total(budget: u32) -> u32 {
+    let prices = [3_u32, 8, 12];
+    prices.into_iter()
+        .filter(|cost| *cost <= budget)
+        .map(|cost| cost * 2)
+        .fold(0, |sum, cost| sum + cost)
+}
+```
+
+</SpeedType>
+
+For a budget of 8, `filter` keeps 3 and 8, `map` produces 6 and 16, and
+`fold` produces 22. This is a query, not a purchase: each price is checked
+against the same unchanged budget. It does not ask whether buying all the
+items together would be affordable.
+
+`into_iter` consumes this array and yields its `u32` values. `filter`
+passes a reference to its predicate so an item can still be yielded after
+the check; `*cost` reads the borrowed number. `map` then receives each
+kept number by value. If you need to borrow the collection instead, start
+with `.iter()`; for copyable numbers, `.iter().copied()` yields values
+while keeping the original collection.
+
+<CodeTrace trace="idiom-filter-map-fold" />
+
+## Use `windows` for neighboring samples
+
+Suppose three position samples are 2, 6, and 10. We want each change
+between adjacent samples. `windows(2)` yields borrowed slices `[2, 6]`
+and `[6, 10]`. They overlap because the middle sample belongs to both
+neighbor pairs.
+
+```rust
+fn movement_deltas(positions: &[i32]) -> Vec<i32> {
+    positions.windows(2)
+        .map(|pair| pair[1] - pair[0])
+        .collect()
+}
+```
+
+Every yielded window has exactly two elements, so its two indexes are
+valid. The example's small coordinates also keep the subtraction in
+`i32` range; arbitrary external coordinates need a checked subtraction
+or a wider type. `collect` consumes the iterator into a new `Vec<i32>`.
+A slice shorter than the window size yields no windows. A zero window
+size would panic, so validate a reader-supplied size before calling it.
+
+<CodeTrace trace="idiom-windows" />
+
+## Use `chunks_exact` for complete records
+
+`chunks_exact(2)` divides a buffer into separate two-byte groups.
+Unlike windows, the groups do not overlap. A final single byte does not
+form a complete record. Rust exposes it through `remainder()` so the
+parser can decide whether to reject it or buffer it for later.
+
+```rust
+fn decode_records(bytes: &[u8]) -> Result<Vec<u16>, &'static str> {
+    let records = bytes.chunks_exact(2);
+    if !records.remainder().is_empty() {
+        return Err("partial record");
+    }
+    Ok(records
+        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+        .collect())
+}
+```
+
+The buffer `[4, 0, 9, 0]` decodes as two little-endian numbers, 4 and 9.
+Appending `255` makes this complete-packet parser return an error. For a
+stream being received in pieces, keeping that byte for the next read may
+be appropriate; [Lesson 8.1](/pages/6/01/) explains that distinction.
+This function fixes the group size at two. A zero size would panic.
+
+<MarginNote kind="clarify">chunks_exact does not certify that the entire buffer contains complete records. Checking the remainder supplies that guarantee.</MarginNote>
+
+<CodeTrace trace="idiom-chunks" />
+
+## Check slice bounds before decoding a number
+
+A **slice** borrows a contiguous sequence and includes its length.
+`bytes[3]` assumes index 3 exists; it panics if that assumption is false.
+`bytes.get(3)` instead returns `Some(&byte)` or `None`. The same checked
+operation accepts a range: `get(..4)` asks for the first four bytes.
+
+<SpeedType id="rust-read-bounded-gold" title="Decode four checked bytes" recall={[{text:"bytes.get(..4)?",hint:"Ask for a checked four-byte prefix; return None if it is too short."},{text:"try_into().ok()?",hint:"Convert the slice into an exact array and keep only a successful conversion."},{text:"u32::from_le_bytes(raw)",hint:"Interpret the low byte first without relying on the host CPU."}]}>
+
+```rust
+fn read_gold(bytes: &[u8]) -> Option<u32> {
+    let raw: [u8; 4] = bytes.get(..4)?.try_into().ok()?;
+    Some(u32::from_le_bytes(raw))
+}
+```
+
+</SpeedType>
+
+The range check establishes the length. `try_into` produces an exact
+`[u8; 4]` array from that slice; `.ok()` turns its `Result` into an
+`Option`, and `?` exits if it is missing. `from_le_bytes` interprets
+`[0x2C, 0x01, 0, 0]` as 300. `300_u32.to_le_bytes()` reverses that
+conversion and produces the same four bytes. Use `from_be_bytes` and
+`to_be_bytes` when the format says the high byte comes first.
+
+Reading the first four bytes leaves any later bytes unused. A format
+that requires exactly four bytes must also check the total length.
+Byte conversion interprets a number; it does not decide whether that
+number is a valid health amount, length, or address.
+
+<CodeTrace trace="idiom-byte-conversion" />
+
+## Choose how integer limits are handled
+
+An unsigned eight-bit value, `u8`, holds 0 through 255. The mathematical
+sum `250 + 10` is 260 and does not fit. Rust supplies explicit arithmetic
+policies so the programmer chooses the intended behavior:
+
+```rust
+let count = 250_u8;
+let checked = count.checked_add(10);       // None
+let wrapping = count.wrapping_add(10);     // 4
+let saturating = count.saturating_add(10); // 255
+```
+
+`checked_*` reports that an answer cannot be represented. `wrapping_*`
+keeps the low bits, making this sum 4 after passing 255. `saturating_*`
+stops at the type's limit. Use checked arithmetic for a size or balance
+that must be rejected if it overflows; wrapping for an intentionally
+cyclic counter; saturating for a bounded meter.
+
+Plain integer overflow may panic when overflow checks are enabled or
+wrap when disabled. Explicit methods make the behavior independent of
+that build setting. Saturation is to the type limit: a game with maximum
+health 100 still needs a separate clamp to 100, even if health is a `u8`.
+
+<CodeTrace trace="idiom-integer-safety" />
+
+## Separate in-memory layout from a file format
+
+Rust's ordinary struct representation does not promise a C field layout.
+`#[repr(C)]` requests the target platform's C ordering and alignment:
+
+```rust
+#[repr(C)]
+struct Record {
+    tag: u8,
+    gold: u32,
+    zone: u16,
+}
+```
+
+On the Windows x64 target used in this book, `tag` is at offset 0,
+`gold` at offset 4, and `zone` at offset 8. Three padding bytes align
+`gold`; two tail padding bytes make the full size 12. The same fields
+written consecutively into a file would occupy only 7 bytes. Padding
+is part of the type's memory layout, not an implied serialized field.
+
+```rust
+let gold_offset = std::mem::offset_of!(Record, gold);
+let record_size = std::mem::size_of::<Record>();
+let record_alignment = std::mem::align_of::<Record>();
+```
+
+These operations measure the compiled type on the current target.
+`repr(C)` does not select byte order, prove that remote bytes contain
+valid field values, or make every C++ class compatible with this struct.
+Decode external file or packet fields explicitly rather than copying
+the raw bytes of a Rust struct, including its padding.
+
+<MarginNote kind="code">An offset describes where a field is within a particular layout. Keep the target architecture and format version with that offset.</MarginNote>
+
+<CodeTrace trace="idiom-layout" />
+
+## Cheatsheet: sequences and representations
+
+| Need | Expression | Boundary to check |
+| --- | --- | --- |
+| Keep selected items | `.filter(predicate)` | Predicate borrows its item. |
+| Transform each item | `.map(function)` | Runs as the iterator is consumed. |
+| Accumulate an answer | `.fold(start, combine)` | Arithmetic must fit or use an explicit policy. |
+| Compare neighbors | `.windows(n)` | `n` must be positive; windows overlap. |
+| Decode fixed records | `.chunks_exact(n)` | `n` must be positive; inspect the remainder. |
+| Borrow checked elements | `.get(index_or_range)` | Returns `None` outside the bounds. |
+| Convert an exact field | `from_le_bytes` / `to_le_bytes` | Follow the format's byte order and width. |
+| Reject overflow | `checked_*` | Caller handles `None`. |
+| Cycle through bit patterns | `wrapping_*` | Wraparound must be intended. |
+| Stop at the type limit | `saturating_*` | The game limit may be smaller. |
+| Match C layout | `#[repr(C)]` | Target alignment and padding still apply. |
+
+The [Iterator reference](https://doc.rust-lang.org/std/iter/trait.Iterator.html),
+[slice reference](https://doc.rust-lang.org/std/primitive.slice.html), and
+[type-layout reference](https://doc.rust-lang.org/reference/type-layout.html)
+give the complete definitions. Next, [borrows and interfaces](/pages/1/15/)
+explain how functions share this data without losing its owner.
+
+---
+## Lesson 1.13 — Rust: Borrowed Views and Useful Interfaces
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/15/
+Category: Game Hacking Foundations
+Estimated reading time: 24 minutes
+Summary: Connect lifetimes, typed offsets, From and Into, Display, derived traits, generic capabilities, and validated builders.
+
+The [previous lesson](/pages/1/14/) used checked slices and iterator
+queries. Those functions also made promises about access: some borrowed
+an existing collection, while others returned a newly owned result.
+Here we name those relationships and give functions interfaces that say
+which kinds of values they can accept.
+
+## A lifetime describes how borrows are related
+
+Suppose a function returns the first `count` bytes of its input. The
+returned slice points into the caller's buffer; it does not own a copy.
+
+<SpeedType id="rust-borrowed-prefix" title="Return a bounded view" recall={[{text:"bytes: &'a [u8]",hint:"Borrow a byte slice and name the lifetime of that borrow."},{text:"Option<&'a [u8]>",hint:"An optional returned view borrows from the same input lifetime."},{text:"bytes.get(..count)",hint:"Check that the requested prefix lies inside the input slice."}]}>
+
+```rust
+fn prefix<'a>(bytes: &'a [u8], count: usize) -> Option<&'a [u8]> {
+    bytes.get(..count)
+}
+
+fn main() {
+    let buffer = [10_u8, 20, 30, 40];
+    if let Some(view) = prefix(&buffer, 2) {
+        println!("{view:?}");
+    }
+}
+```
+
+</SpeedType>
+
+`'a` is a **lifetime parameter**. The repeated name says the returned
+borrow is tied to the input borrow. It does not keep the buffer alive
+longer. The compiler rejects using the view after the buffer is gone or
+changing the borrowed elements while that shared view is still in use.
+Here the view ends after its print, and the caller retains the buffer.
+
+With one borrowed input, Rust can infer this relationship. The shorter
+signature `fn prefix(bytes: &[u8], count: usize) -> Option<&[u8]>`
+expresses the same borrowing relationship. Explicit names become useful
+when several borrowed inputs make the relationship ambiguous, or when a
+struct keeps a borrow. Lifetimes describe validity, not a number of seconds.
+
+<MarginNote kind="clarify">Writing a lifetime on a reference does not manufacture storage. Returning a reference to a function's own temporary array still fails: that array is gone when the function returns.</MarginNote>
+
+<CodeTrace trace="idiom-borrowed-slice" />
+
+## Give numbers different types when they mean different things
+
+An RVA is an offset within a loaded module. A virtual address identifies
+a location in a process. Both can be represented with integers, but
+interchanging them produces a different question. A **newtype** wraps an
+existing value in a distinct type:
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Rva(u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct VirtualAddress(usize);
+
+fn resolve(base: VirtualAddress, offset: Rva) -> Option<VirtualAddress> {
+    base.0.checked_add(offset.0 as usize).map(VirtualAddress)
+}
+```
+
+`Rva(512)` and `VirtualAddress(512)` have different types even though their
+numbers agree. `resolve` cannot receive them in the opposite order. `.0`
+reads a tuple struct's first field. The check rejects overflow; a real
+reader must still validate the address against the intended process and
+memory region.
+
+Handles benefit from the same distinction. A `ProcessHandle` and a
+`ModuleHandle` should not become interchangeable just because both are
+machine-sized values. An **owned** process handle must also close exactly
+once, so it must not derive `Copy`: a numeric copy would duplicate the
+cleanup duty. [Handle ownership](/pages/10/04/) develops that wrapper and
+its `Drop` implementation. A borrowed handle view has a different duty
+from an owned handle.
+
+## Let `derive` generate ordinary trait implementations
+
+`#[derive(...)]` asks the compiler to generate the listed capabilities
+from the fields. `Debug` supports diagnostic `{:?}` output; `PartialEq`
+supports equality comparisons; `Eq` marks equality without exceptional
+cases such as floating-point NaN. `Clone` provides explicit `.clone()`;
+`Copy` permits an implicit value copy and requires `Clone`.
+
+For `Rva`, copying its plain integer is harmless. For `String`, an
+explicit clone allocates a separate owned string, so `String` does not
+implement `Copy`. Derived capabilities are not permission checks or
+address validation. If a field cannot implement a requested trait, the
+derive fails to compile.
+
+## Convert with `From` and `Into`; format with `Display`
+
+`From` describes an infallible conversion into your type. Implementing
+`From<u32> for Rva` also makes `u32` implement `Into<Rva>`.
+
+```rust
+impl From<u32> for Rva {
+    fn from(value: u32) -> Self { Self(value) }
+}
+
+impl std::fmt::Display for Rva {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RVA 0x{:X}", self.0)
+    }
+}
+
+fn main() {
+    let offset: Rva = 512_u32.into();
+    println!("{offset}"); // RVA 0x200
+}
+```
+
+The destination annotation chooses what `.into()` constructs. This
+conversion simply names a number's role; it does not check a module's
+size. Use `TryFrom` and a `Result` when a conversion may fail.
+
+`Display` controls user-facing `{}` formatting and `.to_string()`.
+`Debug` answers a different question: what should a diagnostic view of
+this value look like? You implement `Display` yourself because the best
+label cannot be inferred from a struct's fields. `write!` writes into
+the supplied formatter and reports a formatting error if its destination
+fails; it does not print directly to the terminal.
+
+<CodeTrace trace="idiom-newtype-display" />
+
+## A trait describes a capability
+
+A **trait** names behavior that several types can provide. A fixture can
+supply invented gold values; another implementation can obtain a checked
+snapshot. A caller that only needs the gold does not need to know which
+storage system provided it.
+
+```rust
+trait GoldReader {
+    fn gold(&self) -> Option<u32>;
+}
+
+struct Fixture(u32);
+impl GoldReader for Fixture {
+    fn gold(&self) -> Option<u32> { Some(self.0) }
+}
+
+struct Missing;
+impl GoldReader for Missing {
+    fn gold(&self) -> Option<u32> { None }
+}
+
+fn affordable(reader: &impl GoldReader, price: u32) -> bool {
+    reader.gold().is_some_and(|gold| gold >= price)
+}
+```
+
+The `&self` method borrows its implementation for reading. In this
+argument position, `impl GoldReader` means “one concrete type that
+implements this trait.” Each call can use a different concrete type;
+the function's body uses the promised method. A longer spelling uses a
+generic parameter: `fn affordable<R: GoldReader>(reader: &R, price: u32)`.
+Both express the same capability requirement here.
+
+For `Fixture(20)` and price 12, the answer is true. For `Missing`,
+`is_some_and` returns false without calling its closure. A trait makes
+the interface reusable; it does not ensure that every implementation
+returns accurate data or has permission to read a process.
+
+<CodeTrace trace="idiom-trait-reader" />
+
+## Accumulate choices with a builder
+
+A **builder** stores construction choices, then checks them before
+producing the finished object. It is useful when a tool has several
+optional settings. A simple object with two obvious required fields
+usually needs only a constructor.
+
+```rust
+#[derive(Debug)]
+struct Sampler { limit: usize, label: String }
+
+struct SamplerBuilder { limit: usize, label: String }
+
+impl Default for SamplerBuilder {
+    fn default() -> Self { Self { limit: 1, label: "sample".into() } }
+}
+
+impl SamplerBuilder {
+    fn limit(mut self, value: usize) -> Self { self.limit = value; self }
+    fn label(mut self, value: impl Into<String>) -> Self {
+        self.label = value.into();
+        self
+    }
+    fn build(self) -> Result<Sampler, &'static str> {
+        if self.limit == 0 { return Err("limit must be positive"); }
+        Ok(Sampler { limit: self.limit, label: self.label })
+    }
+}
+```
+
+Each setting method takes ownership of the draft and returns the updated
+draft. That enables the chain below. `impl Into<String>` accepts a string
+literal or an owned `String` and stores an owned label. `build` validates
+the limit once; the object is not ready before it succeeds.
+
+```rust
+let sampler = SamplerBuilder::default().limit(3).label("gold").build();
+```
+
+The builder itself does not start a worker or read memory. It only
+constructs a validated configuration. A zero limit returns an error that
+the caller can handle.
+
+<MarginNote kind="brief">Use types to distinguish roles, traits to name capabilities, and builders to gather choices. Each serves a different purpose.</MarginNote>
+
+<CodeTrace trace="idiom-builder" />
+
+## Cheatsheet: access and interfaces
+
+| Need | Rust expression | Meaning |
+| --- | --- | --- |
+| Return a borrowed view | `&'a [u8]` | View cannot outlive its input owner. |
+| Distinguish integer roles | `struct Rva(u32);` | A new type, not a renamed integer. |
+| Generate diagnostics/equality | `#[derive(Debug, PartialEq, Eq)]` | Implements supported capabilities from fields. |
+| Permit cheap implicit copies | `Copy` plus `Clone` | Appropriate only when copying does not duplicate ownership duties. |
+| Convert infallibly | `From<T>` / `.into()` | Destination type defines the conversion. |
+| Convert with validation | `TryFrom<T>` / `.try_into()` | Caller handles a possible failure. |
+| Write a user-facing label | `impl Display` | Used by `{}` and `.to_string()`. |
+| Ask for a capability | `&impl GoldReader` | Borrows a concrete trait implementation. |
+| Gather optional settings | `Builder::default().choice(...).build()` | Validate before producing the ready object. |
+
+See the official [From](https://doc.rust-lang.org/std/convert/trait.From.html),
+[Display](https://doc.rust-lang.org/std/fmt/trait.Display.html), and
+[lifetime](https://doc.rust-lang.org/book/ch10-03-lifetime-syntax.html)
+references for details. Next, [cleanup and error layers](/pages/1/16/)
+connect an owned resource to the scope responsible for releasing it.
+
+---
+## Lesson 1.14 — Rust: Cleanup and Helpful Errors
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/16/
+Category: Game Hacking Foundations
+Estimated reading time: 22 minutes
+Summary: Use scope-bound cleanup, Drop, structured library errors, and application context without hiding failures.
+
+The [previous lesson](/pages/1/15/) gave values clear owners and useful
+interfaces. Ownership also answers a practical question: **who releases a
+resource when a function finishes early?** Error handling answers another:
+**what can the caller learn from that failure?** We connect both here using
+local data. The examples do not open another process or change executable code.
+
+## Let an owner pair acquisition with cleanup
+
+Suppose a function temporarily changes a byte in its own buffer. Before it
+returns, it must put back the old value. Writing the restore statement at
+every return is easy to get wrong when another failure path is added.
+
+Rust's **RAII** pattern puts cleanup in the owner of a resource. The name
+comes from “Resource Acquisition Is Initialization”: creating an owner
+establishes its responsibility; leaving its scope ends that responsibility.
+Owned files and lock guards already use this pattern. A custom guard can use
+`Drop` to perform a small cleanup action when the guard leaves scope.
+
+<SpeedType id="rust-scoped-byte-guard" title="Pair the saved value with its owner" recall={[{text:"impl Drop for ByteGuard<'_>",hint:"Implement the cleanup trait for the borrowing guard."},{text:"*self.byte = self.saved;",hint:"Write the saved value back through the guard's exclusive borrow."},{text:"Err(\"stopped early\")",hint:"Report the early return as a failure rather than panicking."}]}>
+
+```rust
+struct ByteGuard<'a> {
+    byte: &'a mut u8,
+    saved: u8,
+}
+
+impl<'a> ByteGuard<'a> {
+    fn replace(byte: &'a mut u8, replacement: u8) -> Self {
+        let saved = *byte;
+        *byte = replacement;
+        Self { byte, saved }
+    }
+}
+
+impl Drop for ByteGuard<'_> {
+    fn drop(&mut self) {
+        *self.byte = self.saved;
+    }
+}
+
+fn inspect(byte: &mut u8, stop_early: bool) -> Result<(), &'static str> {
+    let guard = ByteGuard::replace(byte, 90);
+    println!("temporary value: {}", *guard.byte);
+    if stop_early {
+        return Err("stopped early");
+    }
+    Ok(())
+}
+
+fn main() {
+    let mut byte = 75;
+    let result = inspect(&mut byte, true);
+    println!("result: {result:?}; restored byte: {byte}");
+}
+```
+
+</SpeedType>
+
+The guard holds the exclusive borrow and saves `75`. It temporarily stores
+`90`. Whether `inspect` returns `Ok(())` or the early `Err`, normal scope exit
+drops the guard and restores `75`. `main` can borrow the byte again after
+`inspect` returns. This example's cleanup cannot fail: it writes through a
+valid exclusive reference to a local byte.
+
+<CodeTrace trace="idiom-drop-guard" />
+
+<MarginNote kind="code">A guard owns one cleanup responsibility. Do not derive `Copy` for an owning handle or guard: copying it could make two owners release the same resource.</MarginNote>
+
+`Drop` is not a universal recovery guarantee. Destructors normally run on
+ordinary returns and panic unwinding; an abort, process termination, or
+deliberately forgotten owner can skip them. A remote-memory patch also has
+thread, memory-protection, and write-failure conditions that this local guard
+does not address. The [handle owner in Lesson 3.1](/pages/3/01/) and
+[hook removal in Lesson 6.10](/pages/13/05/) show those separate responsibilities.
+
+## Make fallible cleanup explicit
+
+The trait method has the signature `fn drop(&mut self)`. It cannot return a
+`Result` to the caller. If releasing a resource can fail in a way the caller
+must act on, provide an explicit `close`, `finish`, or `restore` operation
+that returns `Result`; keep `Drop` as the final fallback appropriate for that
+resource. Avoid panicking in a destructor, especially while another panic is
+already unwinding.
+
+For a buffered file, for example, an explicit `flush()` or `sync_all()` can
+report an I/O failure. Merely letting the file owner leave scope does not
+prove that a save reached durable storage. The required completion step
+depends on what your caller is trying to guarantee.
+
+<MarginNote kind="clarify">“The owner was dropped” and “the operation succeeded” answer different questions. Return an observable result when successful completion matters.</MarginNote>
+
+## A library error names the failure
+
+A library caller may need to handle invalid text differently from an
+out-of-range number. Returning a structured error enum preserves that
+distinction. The `thiserror` crate derives the standard error implementation
+and formats the message you supply. It does not change how `Result` or `?`
+works.
+
+```rust
+use std::num::ParseIntError;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum AmountError {
+    #[error("amount is not an unsigned integer")]
+    Parse(#[from] ParseIntError),
+    #[error("amount {value} exceeds the maximum {maximum}")]
+    TooLarge { value: u16, maximum: u16 },
+}
+
+pub fn parse_amount(text: &str, maximum: u16) -> Result<u16, AmountError> {
+    let value = text.parse::<u16>()?;
+    if value > maximum {
+        return Err(AmountError::TooLarge { value, maximum });
+    }
+    Ok(value)
+}
+```
+
+For `"oops"`, parsing produces `ParseIntError`; `#[from]` supplies the
+conversion that `?` needs to return `AmountError::Parse`. For `"80"` with a
+maximum of `60`, parsing succeeds but the range check returns `TooLarge`.
+For `"40"`, the caller receives `Ok(40)`. `u16` first limits representable
+values; `maximum` then limits the amounts this application accepts.
+
+<CodeTrace trace="idiom-error-layers" />
+
+`thiserror` is an external dependency. Add it to the small example project's
+manifest with `cargo add thiserror`; a library exposing this error type keeps
+the enum in its public interface. The derive requires `Debug`, and
+`#[from]` also identifies the underlying error as a source.
+
+## An application adds the operation that failed
+
+A command-line program usually cares about presenting a useful chain of
+causes. It can use `anyhow` at that boundary while the library keeps its
+structured errors. `Context` adds the operation the program was attempting.
+
+```rust
+use anyhow::{Context, Result};
+
+fn main() -> Result<()> {
+    let text = std::env::args()
+        .nth(1)
+        .context("usage: amount-viewer <amount>")?;
+    let value = parse_amount(&text, 60)
+        .context("could not read the requested amount")?;
+    println!("accepted amount: {value}");
+    Ok(())
+}
+```
+
+This `main` uses `parse_amount` from the preceding listing. Add `anyhow`
+with `cargo add anyhow`. When `parse_amount` fails, the context describes
+the attempted operation and preserves the original error underneath it.
+The `Option` returned by `.nth(1)` also accepts `.context(...)`: an absent
+argument becomes a useful failure instead of an unchecked `unwrap()`.
+
+Context should add information. “Could not read the requested amount” tells
+the user which operation failed; repeating “error happened” at every layer
+does not. Keep `thiserror` enums when callers need to match cases. Use
+`anyhow` or a similar context wrapper at an application boundary when a
+reportable cause chain is the main need.
+
+<MarginNote kind="brief">An error enum names a cause. Application context names the attempted operation. `?` connects the layers without converting failure into a made-up success.</MarginNote>
+
+## Cheatsheet
+
+| Need | Pattern | Limit to remember |
+| --- | --- | --- |
+| Release one owned resource at scope exit | An owner or guard with `Drop` | Abort and process termination may skip cleanup. |
+| Temporarily change borrowed local data | A guard holds `&mut T` and saved state | Remote writes have additional failure and concurrency conditions. |
+| Report failed completion | Explicit `finish` / `close` / `restore` returning `Result` | `Drop` itself has no returned result. |
+| Let library callers distinguish causes | Structured enum, optionally derived with `thiserror` | The public variants become part of the interface. |
+| Explain an application operation | `anyhow::Context` around a `Result` or `Option` | Add useful context while retaining the original cause. |
+| Stop on the first failure | `?` | Its error must convert to the function's return error. |
+
+The official [Drop documentation](https://doc.rust-lang.org/stable/std/ops/trait.Drop.html),
+[thiserror documentation](https://docs.rs/thiserror/latest/thiserror/), and
+[anyhow documentation](https://docs.rs/anyhow/latest/anyhow/) define these
+contracts. Later lessons apply them to files, process handles, and reversible
+changes to your own test targets.
 
 ---
 ## Lesson 2.1 — What a Debugger Can Reveal
@@ -7783,6 +8638,9 @@ those representations into local values; objects, collections, encoded
 fields, and text show what those values can mean inside a game. DLL call
 contracts return later when our code enters the process itself.
 
+The Rust primer extension explains [ownership, typed handles and cleanup](/pages/1/15/) with a small local
+example before those ideas are applied here. Its [cleanup companion](/pages/1/16/) shows why ordinary early returns still drop an owner.
+
 ## Start with one boundary rule
 
 Game tooling needs low-level control: exact integer sizes, raw bytes, operating-system APIs, and sometimes pointers. Most of the program can still use compile-time checked ownership and types.
@@ -8351,6 +9209,9 @@ far end, while the pointer's own size stays fixed.
 
 This lesson proves both, one bit at a time, until you can work out every number
 yourself. It also explains how a whole number stores a minus sign.
+
+The Rust primer extension explains [checked slices, explicit byte order and field layout](/pages/1/14/) with a small local
+example before those ideas are applied here.
 
 ## Every bit position is a power of two
 
@@ -16835,6 +17696,9 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/7/04/
 Category: Executable Files and Runtime Analysis
 Estimated reading time: 35 minutes
 Summary: See how byte patterns locate candidate instructions across known builds, and why wildcards and semantic checks matter.
+
+The Rust primer extension explains [bounded slices and overlapping scan windows](/pages/1/14/) with a small local
+example before those ideas are applied here.
 
 ## Why patterns help
 
@@ -38948,6 +39812,9 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/10/04/
 Category: Windows Process Internals
 Estimated reading time: 25 minutes
 Summary: Windows handles are capabilities with lifetimes. Rust ownership and RAII make leaks and double closes easier to prevent.
+
+The Rust primer extension explains [one owner’s cleanup duty and fallible completion](/pages/1/16/) with a small local
+example before those ideas are applied here.
 
 ## A handle is not a pointer
 

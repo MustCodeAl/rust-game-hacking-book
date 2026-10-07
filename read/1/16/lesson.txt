@@ -1,0 +1,53 @@
+Rust: Cleanup and Helpful Errors
+
+The previous lesson gave values clear owners and useful interfaces. Ownership also answers a practical question: who releases a resource when a function finishes early? Error handling answers another: what can the caller learn from that failure? We connect both here using local data. The examples do not open another process or change executable code.
+
+Section: Let an owner pair acquisition with cleanup.
+
+Suppose a function temporarily changes a byte in its own buffer. Before it returns, it must put back the old value. Writing the restore statement at every return is easy to get wrong when another failure path is added.
+
+Rust’s RAII pattern puts cleanup in the owner of a resource. The name comes from “Resource Acquisition Is Initialization”: creating an owner establishes its responsibility; leaving its scope ends that responsibility. Owned files and lock guards already use this pattern. A custom guard can use Drop to perform a small cleanup action when the guard leaves scope.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The guard holds the exclusive borrow and saves 75. It temporarily stores 90. Whether inspect returns Ok(()) or the early Err, normal scope exit drops the guard and restores 75. main can borrow the byte again after inspect returns. This example’s cleanup cannot fail: it writes through a valid exclusive reference to a local byte.
+
+Code note: A guard owns one cleanup responsibility. Do not derive Copy for an owning handle or guard: copying it could make two owners release the same resource.
+
+Drop is not a universal recovery guarantee. Destructors normally run on ordinary returns and panic unwinding; an abort, process termination, or deliberately forgotten owner can skip them. A remote-memory patch also has thread, memory-protection, and write-failure conditions that this local guard does not address. The handle owner in Lesson 3.1 and hook removal in Lesson 6.10 show those separate responsibilities.
+
+Section: Make fallible cleanup explicit.
+
+The trait method has the signature fn drop(&mut self). It cannot return a Result to the caller. If releasing a resource can fail in a way the caller must act on, provide an explicit close, finish, or restore operation that returns Result; keep Drop as the final fallback appropriate for that resource. Avoid panicking in a destructor, especially while another panic is already unwinding.
+
+For a buffered file, for example, an explicit flush() or sync_all() can report an I/O failure. Merely letting the file owner leave scope does not prove that a save reached durable storage. The required completion step depends on what your caller is trying to guarantee.
+
+Clarification: “The owner was dropped” and “the operation succeeded” answer different questions. Return an observable result when successful completion matters.
+
+Section: A library error names the failure.
+
+A library caller may need to handle invalid text differently from an out-of-range number. Returning a structured error enum preserves that distinction. The thiserror crate derives the standard error implementation and formats the message you supply. It does not change how Result or ? works.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+For "oops", parsing produces ParseIntError; #[from] supplies the conversion that ? needs to return AmountError::Parse. For "80" with a maximum of 60, parsing succeeds but the range check returns TooLarge. For "40", the caller receives Ok(40). u16 first limits representable values; maximum then limits the amounts this application accepts.
+
+thiserror is an external dependency. Add it to the small example project’s manifest with cargo add thiserror; a library exposing this error type keeps the enum in its public interface. The derive requires Debug, and #[from] also identifies the underlying error as a source.
+
+Section: An application adds the operation that failed.
+
+A command-line program usually cares about presenting a useful chain of causes. It can use anyhow at that boundary while the library keeps its structured errors. Context adds the operation the program was attempting.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+This main uses parse_amount from the preceding listing. Add anyhow with cargo add anyhow. When parse_amount fails, the context describes the attempted operation and preserves the original error underneath it. The Option returned by .nth(1) also accepts .context(...): an absent argument becomes a useful failure instead of an unchecked unwrap().
+
+Context should add information. “Could not read the requested amount” tells the user which operation failed; repeating “error happened” at every layer does not. Keep thiserror enums when callers need to match cases. Use anyhow or a similar context wrapper at an application boundary when a reportable cause chain is the main need.
+
+In brief: An error enum names a cause. Application context names the attempted operation. ? connects the layers without converting failure into a made-up success.
+
+Section: Cheatsheet.
+
+The official Drop documentation, thiserror documentation, and anyhow documentation define these contracts. Later lessons apply them to files, process handles, and reversible changes to your own test targets.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/16/

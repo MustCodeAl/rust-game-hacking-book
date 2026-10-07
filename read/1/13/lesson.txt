@@ -1,0 +1,63 @@
+Rust: Missing Values, Failures, and States
+
+The Rust Primer introduced Some, None, Ok, and Err. Here we follow those shapes through several operations. An inventory slot may be missing, a purchase may fail, and a dash may be cooling down. Each case deserves a value that tells the caller what happened.
+
+The examples use ordinary arrays and numbers in an invented game. The traces simulate those examples in the page; changing a control never reads or writes another program’s memory. Every trace starts with a worked run. Typing and recall practice are optional.
+
+Section: Transform a present value with map.
+
+An Option<u32> contains a number or contains no number. map applies a function to the number inside Some, then puts the answer back in Some. For None, it returns None without calling the function.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+|n| n * 2 is a closure: a small function written where it is needed. The bars name its input; the expression computes its output. A closure may also borrow values from the surrounding scope, such as budget below. Closures are functions with capture; they do not run merely because you write them down.
+
+Section: Chain another optional operation with and_then.
+
+The next calculation can itself have no answer: an unsigned subtraction cannot represent a negative amount. and_then calls a function returning another Option, and keeps a single layer of Some or None.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+With slot 1 and budget 20, the sequence is Some(8) to Some(16) to Some(4) to Ok(4). With slot 4, get returns None; both closures are skipped. ok_or turns a missing answer into an error with a reason. This example deliberately gives the same reason for a missing item and a high price. Use distinct error variants when callers need to distinguish them.
+
+Code note: A closure returning a plain number fits map. A closure returning Option fits and_then. Using map for the latter would produce a nested Option.
+
+Section: Carry a failure reason through Result.
+
+Result::map changes an Ok value and leaves Err alone. map_err changes an error and leaves Ok alone. and_then chains another operation that can return an error. The success path keeps flowing; the first error passes through without running later success closures.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Widening to u16 before multiplication gives room for double any u8. try_from checks whether that answer fits back into u8. Converting an error with map_err is an explicit choice: here the exact numeric conversion error is replaced with a short domain description.
+
+Section: Let ? return the first error.
+
+? takes the value out of Ok so the next line can use it. On Err, it returns from the enclosing function immediately, converting the error to the function’s error type through From when necessary. It does not retry, recover, or turn an error into a default value.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The default trace buys a 4-gold item with 12 gold. Invalid text stops before subtraction; an excessive cost stops before Ok(left). Returning zero gold after an exact-price purchase is still success.
+
+Section: Give each state only the data it needs.
+
+Separate ready: bool and ticks: u32 fields permit contradictory combinations such as “ready with five cooldown ticks.” An enum with data puts the alternatives into one value:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Cooling carries a count. Ready carries none. tick takes ownership of the old state and returns the next one. The guard if ticks greater than 1 adds a condition to the first matching pattern; the following arm handles the remaining cooldown counts. .. means those fields are not needed here.
+
+Section: Use patterns for shape and guards for conditions.
+
+let else names values from the expected shape and exits otherwise. Its else branch must diverge: for example, return from the function. matches! asks whether a value matches a pattern and produces a bool. A match guard checks an additional condition after a pattern matches.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+1..=100 includes both endpoints. A player at zero health does not take the healing arm, because alive is false. The final _ catches other numeric values. For an enum representing distinct application states, prefer named arms so adding a new variant requires a deliberate decision.
+
+In brief: A pattern identifies the value’s shape. A guard tests a condition. The selected arm produces an answer; only one arm runs.
+
+Section: Cheatsheet: outcomes and states.
+
+Use the Option and Result references to check exact signatures. Next, collections and bytes connect these outcome shapes to bounded buffers and repeated work.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/13/

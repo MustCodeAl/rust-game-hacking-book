@@ -1,0 +1,71 @@
+Rust: Collections, Bounds, and Bytes
+
+A memory reader and a packet parser both receive sequences of bytes. Before using those bytes, they need to check the available length, decide how to group elements, and choose the numeric interpretation. Ordinary Rust collections let us learn those decisions in a small local example. The previous lesson explains the Option and Result values returned when a check fails.
+
+Section: Read an iterator chain one item at a time.
+
+An iterator yields a sequence of items on demand. filter keeps items that satisfy a predicate, map transforms each kept item, and fold combines items into one running answer. The closures describe those operations; a consuming operation such as fold drives the sequence.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+For a budget of 8, filter keeps 3 and 8, map produces 6 and 16, and fold produces 22. This is a query, not a purchase: each price is checked against the same unchanged budget. It does not ask whether buying all the items together would be affordable.
+
+into_iter consumes this array and yields its u32 values. filter passes a reference to its predicate so an item can still be yielded after the check; *cost reads the borrowed number. map then receives each kept number by value. If you need to borrow the collection instead, start with .iter(); for copyable numbers.iter().copied() yields values while keeping the original collection.
+
+Section: Use windows for neighboring samples.
+
+Suppose three position samples are 2, 6, and 10. We want each change between adjacent samples. windows(2) yields borrowed slices [2, 6] and [6, 10]. They overlap because the middle sample belongs to both neighbor pairs.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Every yielded window has exactly two elements, so its two indexes are valid. The example’s small coordinates also keep the subtraction in i32 range; arbitrary external coordinates need a checked subtraction or a wider type. collect consumes the iterator into a new Vec<i32>. A slice shorter than the window size yields no windows. A zero window size would panic, so validate a reader-supplied size before calling it.
+
+Section: Use chunks_exact for complete records.
+
+chunks_exact(2) divides a buffer into separate two-byte groups. Unlike windows, the groups do not overlap. A final single byte does not form a complete record. Rust exposes it through remainder() so the parser can decide whether to reject it or buffer it for later.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The buffer [4, 0, 9, 0] decodes as two little-endian numbers, 4 and 9. Appending 255 makes this complete-packet parser return an error. For a stream being received in pieces, keeping that byte for the next read may be appropriate; Lesson 8.1 explains that distinction. This function fixes the group size at two. A zero size would panic.
+
+Clarification: chunks_exact does not certify that the entire buffer contains complete records. Checking the remainder supplies that guarantee.
+
+Section: Check slice bounds before decoding a number.
+
+A slice borrows a contiguous sequence and includes its length. bytes[3] assumes index 3 exists; it panics if that assumption is false. bytes.get(3) instead returns Some(&byte) or None. The same checked operation accepts a range: get(..4) asks for the first four bytes.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The range check establishes the length. try_into produces an exact [u8; 4] array from that slice; .ok() turns its Result into an Option, and ? exits if it is missing. from_le_bytes interprets [hexadecimal 2 C, hexadecimal 0 1, 0, 0] as 300. 300_u32.to_le_bytes() reverses that conversion and produces the same four bytes. Use from_be_bytes and to_be_bytes when the format says the high byte comes first.
+
+Reading the first four bytes leaves any later bytes unused. A format that requires exactly four bytes must also check the total length. Byte conversion interprets a number; it does not decide whether that number is a valid health amount, length, or address.
+
+Section: Choose how integer limits are handled.
+
+An unsigned eight-bit value, u8, holds 0 through 255. The mathematical sum 250 + 10 is 260 and does not fit. Rust supplies explicit arithmetic policies so the programmer chooses the intended behavior:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+checked_* reports that an answer cannot be represented. wrapping_* keeps the low bits, making this sum 4 after passing 255. saturating_* stops at the type’s limit. Use checked arithmetic for a size or balance that must be rejected if it overflows; wrapping for an intentionally cyclic counter; saturating for a bounded meter.
+
+Plain integer overflow may panic when overflow checks are enabled or wrap when disabled. Explicit methods make the behavior independent of that build setting. Saturation is to the type limit: a game with maximum health 100 still needs a separate clamp to 100, even if health is a u8.
+
+Section: Separate in-memory layout from a file format.
+
+Rust’s ordinary struct representation does not promise a C field layout. #[repr(C)] requests the target platform’s C ordering and alignment:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+On the Windows x64 target used in this book, tag is at offset 0, gold at offset 4, and zone at offset 8. Three padding bytes align gold; two tail padding bytes make the full size 12. The same fields written consecutively into a file would occupy only 7 bytes. Padding is part of the type’s memory layout, not an implied serialized field.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+These operations measure the compiled type on the current target. repr(C) does not select byte order, prove that remote bytes contain valid field values, or make every C++ class compatible with this struct. Decode external file or packet fields explicitly rather than copying the raw bytes of a Rust struct, including its padding.
+
+Code note: An offset describes where a field is within a particular layout. Keep the target architecture and format version with that offset.
+
+Section: Cheatsheet: sequences and representations.
+
+The Iterator reference, slice reference, and type-layout reference give the complete definitions. Next, borrows and interfaces explain how functions share this data without losing its owner.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/14/
