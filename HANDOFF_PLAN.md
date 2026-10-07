@@ -90,6 +90,9 @@ One integrated layer in `site/src/styles/design/` on top of the original styles;
 `src/components/overrides/ThemeSelect.astro` (buttons) and the head-script bridge in `astro.config.mjs` (mirrors them to explicit `data-*` attributes). No arbitrary hex codes or px in
 new rules; use the legacy tokens (`--ink`, `--paper`, `--line`, `--rust`, ...) and rem/em.
 
+### Content plans (see `CONTENT_PLAN.md`)
+The owner asked for plans, to be done by a later AI: diff code blocks that lack context (show the original code and an explanation first, then the diff), concepts from the original book that are missing (bubbling, establishing context, calls and returns, classes, restoring instructions, instruction set reference, bit arithmetic and shifting), reorganising the chapters (folder paths do not match reader numbers), more assembly instructions, more Rust idioms. The original book is in git at commit `d65b5883` (`_pages/*/*.md`).
+
 ### Prioritized plan
 1. **Images and GIFs everywhere** (owner request, unmet): add 2 or 3 original CC0 SVG figures per chapter (about 40 more), each placed
    in a `<Frame caption>` right after the paragraph it illustrates, hand-written SVG 480 wide (see existing ones), rows added to
