@@ -7,7 +7,7 @@ https://mustcodeal.github.io/rust-game-hacking-book/ (served from branch `gh-pag
 
 ## Current checkpoint — 2026-10-07 (T29–T38; read before the older backlog)
 
-Website changes published from source `f7711f90` (verified content `6b918fa`) to Pages `440875a1`; deployment success and public bit lesson confirmed. Post-publication links 0 broken, processed-diagram page count 114. T35's concrete server explanation and T36's button repair are live. T38's additional reader-only comment fix is verified and publishing next. Later root documentation receipts do not change the generated site.
+Website changes published from source `3647906e` to Pages `8ded7e7f`; publisher and GitHub deployment succeed. Post-publication links 0 broken, processed-diagram page count 114. Final live Chromium at 420/1280 passes 25 actual clicks: TOC navigation, sidebar/TOC Hide and Restore, and author/reader-only comment Show/Hide with reload persistence. Public reader script matches the final build, and T37's bit lesson is live. Later root documentation receipts do not change the generated site.
 
 - Source is `codex/book-revision`; this machine's primary checkout is `gh-pages`. Work used `/private/tmp/gha-book-revision` so the generated checkout and unrelated local files were preserved. Use the source branch for future work. Never hand-edit or force-push Pages.
 - **Section A is complete:** all 25 comparisons in 24 lessons now show context, full Before, explanation, full Improved code by default, Show the diff, and a takeaway. Do not redo these.
