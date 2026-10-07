@@ -1,0 +1,210 @@
+---
+title: "Bits, Masks, Shifts, and Rotations"
+description: "Read a byte by its bit positions, select flags with masks, and distinguish discarded shift bits from wrapped rotation bits."
+chapter: "1.10"
+minutes: 22
+author: "attilathedud"
+date: "2026-10-07"
+sidebar:
+  order: 10
+  label: "1.10 Bits, Masks, Shifts, and Rotations"
+---
+import CodeTrace from '../../../../components/CodeTrace.astro';
+import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
+
+[Lesson 1.8](/pages/1/08/) explained how bytes hold a health number.
+Sometimes a program uses the positions inside one byte separately. One
+position can record “door open,” another “lamp on,” and another “alarm active.”
+To inspect or change just one of them, we need **bitwise operations**:
+operations on corresponding bit positions rather than on whole decimal values.
+
+## A bit's position gives it a weight
+
+A **bit** is either 0 or 1. An unsigned byte has eight positions, numbered
+from 0 on the right to 7 on the left. Position `i` contributes `2^i` when
+its bit is 1. The byte `00000101` has positions 2 and 0 set, so it represents
+4 + 1 = 5. Binary literals in Rust begin with `0b`.
+
+<MemoryStrip
+  cells="bit 7: 128=0|bit 6: 64=0|bit 5: 32=0|bit 4: 16=0|bit 3: 8=0|bit 2: 4=1|bit 1: 2=0|bit 0: 1=1"
+  marks="5|7"
+  caption="00000101 has two set bits. Its decimal value is 5, not the count of its set bits."
+/>
+
+The number 5 alone does not tell us whether it means five coins or two
+enabled flags. That meaning comes from the code and format using the byte.
+For our invented status format, bit 0 means door open, bit 1 means lamp on,
+and bit 2 means alarm active. The other five positions are reserved and
+start at zero. Status 5 therefore means door open and alarm active.
+
+<MarginNote kind="brief">Bit positions run from 0 at the right. A byte's numeric value is the sum of its set-bit weights; flag meanings come from a declared format.</MarginNote>
+
+## A mask chooses positions
+
+A **mask** is a bit pattern used to select positions. A mask of `00000100`
+selects bit 2, whose weight is 4. **AND**, written `&` in Rust, keeps a bit
+at 1 only when both corresponding input bits are 1:
+
+```text
+status:  00000101   5
+mask:    00000100   4
+AND:     00000100   4
+```
+
+For this format, `status & 0b00000100` isolates the alarm bit. Testing whether
+that result is nonzero tells us whether the alarm is active:
+
+```rust
+let status: u8 = 0b00000101;
+let alarm_mask: u8 = 0b00000100;
+let alarm_active: bool = (status & alarm_mask) != 0; // true
+```
+
+For a mask containing several 1 bits, “nonzero” means **any** selected bit
+is set. To require **all** selected bits, compare the result with the mask.
+With mask `00000011`, status 5 has only the door bit, so `status & mask`
+is 1: nonzero, but not equal to 3. A zero mask selects nothing.
+
+The bitwise `&` above produces a number. Boolean `&&` combines true/false
+conditions, such as “enough gold and item in stock.” They answer different
+questions and accept different operand types.
+
+## Set, clear, and flip a flag
+
+Four operations explain the common edits. A 0 in a mask preserves the
+input position for OR and XOR. AND preserves positions where its mask is 1.
+
+| Operation | Rust expression | Effect on one selected bit |
+| --- | --- | --- |
+| AND | `value & mask` | Keep only selected 1 bits |
+| OR | `value \| mask` | Set selected bits to 1 |
+| XOR | `value ^ mask` | Flip selected bits |
+| NOT | `!value` | Flip every bit within the value's type |
+
+For our status byte, setting the lamp uses OR with bit 1. Clearing the alarm
+uses AND with a mask that has **zero** at bit 2 and ones everywhere else.
+NOT constructs that clearing mask. XOR toggles the door bit:
+
+```rust
+let status: u8 = 0b00000101;          // Door and alarm are on.
+let lamp_on = status | 0b00000010;   // 00000111: all three are on.
+let alarm_off = status & !0b00000100; // 00000001: only door is on.
+let door_flipped = status ^ 0b00000001; // 00000100: only alarm is on.
+```
+
+These are three separate calculations from the same starting status. They
+do not successively update one variable. OR sets an already-set bit to 1
+again; XOR would switch it off. Applying the same XOR mask twice returns
+the original value.
+
+Width matters for NOT. Flipping `00000101` as a `u8` gives `11111010`, decimal
+250. A 32-bit value has 32 positions to flip. A bit pattern must be interpreted
+with its type and width, just as a memory scan must choose its field width.
+
+<MarginNote kind="brief">Set with OR, clear with AND and an inverted mask, toggle with XOR. NOT flips the positions in the operand's type, so record the width.</MarginNote>
+
+## Explore an operation before stepping through it
+
+The starting example isolates the alarm bit: 5 AND 4 gives 4. Change the
+byte, mask, or operation below. Use “Show me the result” whenever you want
+the endpoint, then step back to inspect the selected positions. Mask and
+count controls remain visible for comparison; each explanation states which
+inputs the operation uses.
+
+<CodeTrace trace="original-bit-operations" />
+
+## Shifts move positions and discard bits
+
+A **logical shift** moves bits left or right, fills the newly opened positions
+with zeros, and discards bits that leave the chosen width. In Rust, `<<` shifts
+left; `>>` on an unsigned integer shifts right. For an eight-bit value:
+
+```text
+start:         00000101   5
+shift left 1:  00001010  10
+shift right 1: 00000010   2
+```
+
+A left shift by one doubles the unsigned numeric value **when the result
+fits**. A right shift by one divides it by two and drops the fractional part.
+But `10000001` shifted left by one becomes `00000010`: the original high
+bit was discarded. It does not become the wider number 258.
+
+```rust
+let byte: u8 = 0b10000001;
+let left: u8 = byte << 1;  // 00000010, decimal 2.
+let right: u8 = byte >> 1; // 01000000, decimal 64.
+```
+
+Our controls restrict the count to 0–7 for an eight-bit shift. A zero count
+leaves the byte unchanged. Do not assume that a count of eight is a portable
+way to produce zero: count validity and machine count handling depend on the
+operation and language. Rust's
+[`checked_shl` and `checked_shr`](https://doc.rust-lang.org/stable/std/primitive.u8.html#method.checked_shl)
+return `None` for a count at least the type's width. They check the **count**;
+they do not report every bit discarded by a valid shift.
+
+## Rotations wrap bits instead of discarding them
+
+A **rotation** moves bits in one direction but carries the outgoing bits to
+the opposite end of the same width. Rotate `10000001` left once and its
+leading 1 reappears at the right:
+
+```text
+start:          10000001  129
+shift left 1:   00000010    2
+rotate left 1:  00000011    3
+rotate right 1: 11000000  192
+```
+
+Rust provides stable integer methods for this:
+
+```rust
+let byte: u8 = 0b10000001;
+let left = byte.rotate_left(1);   // 00000011, decimal 3.
+let right = byte.rotate_right(1); // 11000000, decimal 192.
+```
+
+A rotation preserves the number of set bits, though their positions and the
+numeric value can change. Rotating a byte by eight positions returns the
+original byte. These methods and their distinction from shifts are documented
+in the [Rust `u8` reference](https://doc.rust-lang.org/stable/std/primitive.u8.html#method.rotate_left).
+
+<MarginNote kind="brief">A shift discards outgoing bits and introduces zeros. A rotation wraps outgoing bits around within the same width.</MarginNote>
+
+## Packed fields use masks and shifts together
+
+Suppose an invented byte stores an item kind in its upper four bits and a
+quantity in its lower four. `10100011` means kind 10 and quantity 3. A field
+is **packed** when it occupies selected bit positions rather than a whole
+byte of its own.
+
+```rust
+let packed: u8 = 0b10100011;
+let quantity = packed & 0b00001111; // Keep low four bits: 3.
+let kind = packed >> 4;            // Move high four bits down: 10.
+```
+
+The mask selects; the shift moves selected positions to weights starting at
+one. These operations explain a packed value only after evidence establishes
+its field boundaries. “A byte equals 163” alone does not prove this format.
+Bit order within the number and byte order across several memory addresses
+are separate questions; [Lesson 1.8](/pages/1/08/) develops byte order.
+
+When [Lesson 2.3](/pages/2/02/) introduces assembly, recognize the same ideas
+in `and`, `or`, `xor`, `shl`, and `shr`. Track the operand width and the result,
+then investigate any flags or branches that use it.
+
+## Cheatsheet
+
+| Intent | Operation | Example |
+| --- | --- | --- |
+| Check any chosen flag | `value & mask != 0` | At least one selected bit is set. |
+| Check all chosen flags | `value & mask == mask` | Every selected bit is set. |
+| Set chosen bits | `value | mask` | Other positions stay as they were. |
+| Clear chosen bits | `value & !mask` | Invert a mask of the same width first. |
+| Toggle chosen bits | `value ^ mask` | Apply twice to recover the starting value. |
+| Move bits left or right | `<<` / `>>` on unsigned values | Outgoing bits are discarded. |
+| Wrap outgoing bits around | `rotate_left` / `rotate_right` | Rotation stays inside the type's width. |
+| Decode a packed field | Mask, then shift | A declared field boundary gives the bits meaning. |

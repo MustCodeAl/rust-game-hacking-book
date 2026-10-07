@@ -10,6 +10,8 @@ sidebar:
   label: "6.10 Hooks as Live Control-Flow Changes"
 ---
 import Scene from '../../../../components/Scene.astro';
+import CodeTrace from '../../../../components/CodeTrace.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 
 The tool now has an owner for its commands, features, and cleanup. A hook
@@ -36,7 +38,7 @@ control-flow graph — it changes where a single instruction leads. Every
 difficulty in this lesson comes from doing that to a graph other threads are
 walking at the same time.
 
-So the rule to hold on to is:
+The installation invariant is:
 
 > The hook is either completely absent or completely working. There is never a
 > moment when a call can find half of it.
@@ -76,6 +78,38 @@ There should be no `HalfPatched` state visible to executing threads.
 | Lifetime | Callback state and trampoline outlive every user | Removal frees memory while a callback runs |
 
 A successful single-threaded test proves almost none of these under load.
+
+## Restoring state and replaying instructions are separate work
+
+A detour can replace the bytes of an operation that the original path still
+needs to perform. Its trampoline must execute the displaced work with its
+original meaning, then continue at the first whole instruction after the
+replaced span. Saving and restoring a register does not perform that work.
+
+Consider a toy path that loads gold, adds a bonus, and stores the result.
+The detour replaces the addition with a jump. Its observer temporarily uses
+`EAX`, so preserving the incoming value prevents that scratch calculation
+from changing the bonus's input. **Replay** means executing the displaced
+addition exactly once before continuation. Try the three deliberate mistakes:
+no replay, two replays, or leaving the temporary register change in place.
+
+<CodeTrace trace="original-displaced-replay" />
+
+The successful case preserves one register and replays one addition. It is
+only a computation model. A real trampoline also has to preserve live flags
+and required machine state, relocate address-dependent operands, satisfy the
+calling convention, and survive concurrent entry. The five contracts above
+remain necessary even if the toy's final number matches.
+
+There is a third operation at removal: **restore the original patch-site
+bytes** after callers can no longer enter or remain in the detour. That puts
+the original code path back. Replaying displaced work during a call,
+preserving machine state during observer work, and restoring bytes during
+removal happen at different times and solve different problems.
+
+<MarginNote kind="brief">Preserve the observer's live inputs, replay displaced work once per call, and restore original patch bytes during safe removal. None substitutes for the other two.</MarginNote>
+
+**Restoration cheatsheet:** preserve live register/flag inputs; replay displaced work exactly once; restore original patch bytes only during safe removal. These are three separate jobs.
 
 ## Decode before deciding patch length
 

@@ -16,7 +16,7 @@ import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 Imagine an offline game whose display shows 100 gold. Buying an item for
 25 changes the display to 75. The screen shows the result, but it does
-not identify the rule or the
+not identify the affordability check, subtraction, or
 stored value that caused it. **Game hacking** in this book means
 investigating that behavior and making a deliberate, testable change to
 the game or its data.
@@ -26,7 +26,7 @@ the game or its data.
 An observation is what you can actually see: after a 25-gold purchase,
 the display changes from 100 to 75. An explanation is a **hypothesis**:
 perhaps a four-byte value in the game's memory stores the gold used by
-the purchase rule. Other explanations are possible. The game may keep a
+the purchase handler. Other explanations are possible. The game may keep a
 display copy, recalculate gold from other data, or let a server decide
 the result. A matching number is therefore a candidate, not a conclusion.
 
@@ -45,7 +45,7 @@ a candidate. Neither tool supplies the meaning by itself.
 ## Four steps for a controlled experiment
 
 One way to keep the work in order is to split it into four steps. Treat them as
-a suggestion to adapt, not a rule the rest of the book relies on:
+a useful order to adapt when new evidence changes the question:
 
 <Steps>
 
@@ -61,7 +61,7 @@ understand or locate a different copy:
 
 ```mermaid
 flowchart TD
-    I["1. Identify<br/>one behavior you can repeat"] --> U["2. Understand<br/>the rules it should follow"]
+    I["1. Identify<br/>one behavior you can repeat"] --> U["2. Understand<br/>the checks and calculations involved"]
     U --> L["3. Locate<br/>the data and the code"]
     L --> C["4. Change<br/>one thing, then measure"]
     C -->|"only the text changed:<br/>you found a display copy"| L
@@ -92,7 +92,7 @@ axis, or toggling one graphics setting. Avoid changing several things at once.
 
 ## 2. Understand how the behavior should work
 
-Before searching memory, work out the rule the game appears to follow.
+Before searching memory, predict the checks and calculation the game appears to use.
 For this lesson's 25-gold purchase, our first guess is:
 
 ```text
@@ -108,7 +108,7 @@ Try the same idea on another behavior. For health, a first guess might be:
 new_health = max(0, old_health - damage)
 ```
 
-The rule also implies conditions that should always hold:
+For this health model, record further predictions you can test:
 
 ```text
 0 <= health <= max_health
@@ -126,7 +126,8 @@ flowchart TD
     S --> B["resize the health bar: derived display"]
 ```
 
-These rules help distinguish a value used by the game's rules from text,
+These predictions help distinguish the health used for later damage and
+defeat decisions from text,
 animation state, or a cached display value.
 
 This self-contained Rust fragment makes the distinction visible:
@@ -140,11 +141,11 @@ if gold >= 25 {
 ```
 
 Now `displayed_gold` is still 100, but `gold` is 75. Changing the copy
-would not make a later purchase use 100 gold; the rule reads `gold`.
+would not make a later purchase use 100 gold; the next affordability check reads `gold`.
 A real game may refresh its display differently, so the
-experiment must establish which value the rule actually reads.
+experiment must establish which value the purchase handler actually reads.
 
-At this stage the rules are guesses. The game may apply armor, difficulty
+At this stage these checks and formulas are hypotheses. The game may apply armor, difficulty
 scaling, or delayed damage, or a server may own the result, and any of these
 would break the simple formula.
 
@@ -186,7 +187,7 @@ current value before changing anything.
 ## 3. Locate the data and code
 
 Use the least complicated technique that can answer the question. A
-**breakpoint** is a debugger rule that pauses execution at a chosen
+**breakpoint** is a configured debugger stop that pauses execution at a chosen
 instruction or memory access; we will use one only after learning the
 debugger.
 
@@ -321,7 +322,7 @@ the pause, while the later sampling lesson shows how to limit recording delays.
 ## Use tests and types for quick feedback
 
 Separate code that decides *what should happen* from code that performs a
-Windows API call. In this toy rule, a write is allowed only when the
+Windows API call. In this toy decision function, a write is allowed only when the
 current value still matches the value we expected and the replacement is
 at most 10,000. That limit is an example policy for this exercise, not a
 universal gold limit. Pure logic like this can be tested without
@@ -390,7 +391,7 @@ Start documentation with the question, the tool's purpose, and its limits.
 Then show the route through the experiment before detailing each step. A
 reader needs to know which file or command to begin with, what result to
 expect, and what a failure means. Define names consistently: if `gold` means
-the rule's stored amount, call the screen copy `displayed_gold` throughout.
+the amount used by the purchase check, call the screen copy `displayed_gold` throughout.
 
 Keep a compact experiment record:
 
@@ -419,10 +420,10 @@ for a current promise.
 
 ## What a candidate address tells you
 
-A matching address is a lead. A repeatable behavior and an expected rule
+A matching address is a lead. A repeatable action and a predicted check or calculation
 give it meaning; controlled changes and a breakpoint narrow the lead.
-A reversible edit tests whether that address affects the game rule or
-only a copy. The compiler and tests check the tool's logic, while the
+A reversible edit tests whether that address changes the amount a purchase reads or
+only a displayed copy. The compiler and tests check the tool's logic, while the
 debugger observes what the running game actually does.
 
 [Lesson 1.7](/pages/1/07/) prepares a repeatable Windows lab. Lesson 1.8

@@ -6,6 +6,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseHTML } from 'linkedom';
 import { adaptReaderArticle, collectReadableBlocks, plainLessonText, showReaderVariant } from '../src/lib/reader-text.mjs';
+import { getLessonIndex } from '../src/data/lesson-index.mjs';
 
 const directory = join(dirname(fileURLToPath(import.meta.url)), '../dist/read');
 const pictureDirectory = join(directory, '../assets/reader');
@@ -57,5 +58,6 @@ for (const folder of readdirSync(directory, { withFileTypes: true })) {
     diagrams += narration.filter((block) => block.media).length;
   }
 }
-if (lessons !== 147) throw new Error(`Expected 147 listening editions, found ${lessons}.`);
+const expected = getLessonIndex().length;
+if (lessons !== expected) throw new Error(`Expected ${expected} listening editions, found ${lessons}.`);
 console.log(`reader-editions: published ${lessons} listening articles and TXT files; ${blocks} blocks, ${diagrams} preserved visuals (silent during narration).`);

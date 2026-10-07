@@ -1,13 +1,13 @@
 ---
-title: "Tracing a Game Rule Through Its Callers"
+title: "Tracing an Action Through Its Callers"
 description: "Follow callers and dependencies from one gold-changing instruction to the menu decision that caused it."
 chapter: "2.6"
-minutes: 23
+minutes: 28
 author: "attilathedud"
 date: "2026-07-30"
 sidebar:
   order: 6
-  label: "2.6 Tracing a Game Rule Through Its Callers"
+  label: "2.6 Tracing an Action Through Its Callers"
 ---
 import { Frame } from '../../../../components/kit';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
@@ -43,6 +43,43 @@ Now you are back in the caller. Repeat this carefully to move from the low-level
 When x86 executes `call`, it places a return address on the stack before jumping to the callee. That address points to the instruction the caller expects to run next. A debugger’s call stack combines return addresses with known module ranges and function information to show the nested route that reached the breakpoint.
 
 The call stack a debugger shows is a reconstruction, and it may be incomplete. Optimizations can inline functions, reuse stack space, or omit traditional frame pointers. Confirm an important caller by returning to it or placing a breakpoint at its call site and reproducing the action.
+
+## Establish context by following the observed call chain
+
+Here, **establishing context** means connecting a stored change to the
+specific player, requested action, operands, and checks that caused it.
+At the gold write, knowing “subtract 25” is incomplete: is that an item
+price, a fine, or a different player's payment?
+
+The original course called the move from a small helper toward its callers
+**bubbling**. Treat that name as a method, not a promise that every caller
+has a recoverable source name. Record each confirmed level:
+
+**Context cheatsheet:** keep these levels together when following a write toward its callers.
+
+| Level | Question it can answer | Evidence to keep |
+| --- | --- | --- |
+| Gold write | Which field changed, and by how much? | Receiver address, amount, before/after values |
+| Spending helper | Which check allowed the subtraction? | Taken comparison and its operands |
+| Purchase handler | What did the amount mean? | Item price passed to the helper |
+| Action dispatcher | What requested this handler? | Selected command and matching call site |
+
+Reproduce one action, confirm its write, inspect the caller, and repeat until
+you can explain that action. Compare a second action that shares the helper:
+it can reach the same write for a different reason. A breakpoint above the
+shared helper needs that caller context to distinguish them.
+
+<CodeTrace trace="original-bubbling" />
+
+The final steps inspect a recorded path; they do not rewind or repeat a
+purchase. In a live debugger, **Run until return** executes the rest of the
+current function. **Step over** executes a call and pauses after it returns;
+**Step into** follows its executed instructions. None undoes previous writes.
+Note the current values again after running, and distinguish an inferred call
+stack from a call site you reproduced. Inlining and tail calls can remove an
+ordinary call/return boundary.
+
+<MarginNote kind="brief">Bubbling follows confirmed callers toward the action. Keep the player, arguments, checks, and result together so one shared helper is not mistaken for one feature.</MarginNote>
 
 ## Recognize dispatcher code
 
@@ -101,7 +138,7 @@ The gold instruction tells you **where** a change happens. The menu dispatcher t
 
 That distinction matters:
 
-- patching the subtraction changes one cost rule;
+- patching the subtraction changes the stored cost result;
 - changing a branch may select a different feature;
 - hooking the dispatcher lets you observe every menu action.
 
@@ -121,7 +158,7 @@ This is also a lesson about **abstraction levels**. The subtraction is a low-lev
 
 Compilers can move calculations away from the source statement that inspired them. The instruction immediately above the anchor may be unrelated, while the important value was loaded twenty instructions earlier or passed by the caller. Track one value and one decision at a time.
 
-A practical stopping rule is: stop tracing callers when you can name the input, the decision, and the observable result in plain English. Going farther may reveal the whole menu framework, but it no longer answers the focused gold question.
+A practical stopping condition is: stop tracing callers when you can name the input, the decision, and the observable result in plain English. Going farther may reveal the whole menu framework, but it no longer answers the focused gold question.
 
 <MarginNote kind="alternative">Think of tracing a delivery: who ordered it is the caller, where the goods came from is data, and which check let it ship is the branch.</MarginNote>
 
@@ -199,16 +236,16 @@ if candidate_action == 3:       # Recruit in all three trials
     subtract gold
 ```
 
-## From a write to a menu rule
+## From a write to a menu action
 
 The gold write supplied a known starting instruction. Its return address and
 call stack led to the caller; recruiting and opening Terrain Description
 supplied contrasting cases for the menu branch. The small pseudocode model
 names only behavior those cases supported. That route from an observed write
-to a caller, branch, and named rule also works when the compiler has removed
+to a caller, branch, and named action also works when the compiler has removed
 the original source names.
 
-That explanation names a rule, but the address of its instruction still belongs
+That explanation identifies the action and its checks, but the address of its instruction still belongs
 to one run. The next question is how to find the same game state after a restart:
 why addresses move, and which relationships between objects can survive the
 move. Once those are clear, we can return to changing control flow itself.

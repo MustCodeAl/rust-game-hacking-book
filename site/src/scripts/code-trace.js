@@ -27,6 +27,8 @@
 // (it is also the caption shown with JavaScript off). Nothing here is graded.
 
 
+import { ORIGINAL_TRACES } from './original-traces.js';
+
 // Small syntax highlighter for lab code (Rust, Lua, Python-like, assembly).
 function academyGuessLang(text) {
   if (/\b(mov|lea|push|pop|jmp)\b\s/.test(text)) return "asm";
@@ -81,6 +83,7 @@ function recorder() {
 
 // ---------------------------------------------------------------- traces
 export const TRACES = {
+  ...ORIGINAL_TRACES,
   'rust-dash-branch': {
     title: 'A comparison chooses whether stamina changes',
     intro: 'Start with 12 stamina and a cost of 4. Change either input, then step through the path the comparison selects.',

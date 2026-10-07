@@ -50,6 +50,7 @@ try {
     await page.keyboard.press('Escape');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.documentElement.dataset.comments === 'hide');
+    await page.locator('[data-margin-note]').first().waitFor({ state: 'hidden' });
     assert.equal(await page.locator('[data-margin-note]').first().isVisible(), false, 'hidden choice survives reload');
     if (width === 420) { await page.locator('.sl-menu-button').click(); clicks++; }
     await toggle.click(); clicks++;
