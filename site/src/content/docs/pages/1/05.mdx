@@ -2,7 +2,7 @@
 title: "Rust Primer: Logic in Code"
 description: "Express programming logic in Rust: name state, choose a path, repeat work, group values, borrow safely, and handle missing or failed results."
 chapter: "1.5"
-minutes: 48
+minutes: 55
 author: "attilathedud"
 date: "2026-09-28"
 sidebar:
@@ -12,6 +12,7 @@ sidebar:
 import { HoverCard, SpeedType, Frame } from '../../../../components/kit';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import OwnershipScope from '../../../../components/OwnershipScope.astro';
+import CodeTrace from '../../../../components/CodeTrace.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 This lesson gives Rust syntax a purpose. A program runs steps in order,
@@ -29,6 +30,8 @@ why the same rule can serve several records.
 | Which values belong together? | `struct`, collections, and `enum`. |
 | Who can read or change a value? | `&`, `&mut`, ownership, and methods. |
 | What if a value is missing or an operation fails? | `Option`, `Result`, and `?`. |
+
+The traces below open with a worked example. Change a value or step through a branch to see why the result changes. Typing practice is optional: **Practise typing** keeps the code visible; **Recall practice** blanks selected names and logic after you have read the explanation. Hints and a reveal control are always available.
 
 ## Give the code a place to run
 
@@ -76,11 +79,15 @@ flowchart LR
 Start with three values, each with a distinct job. The statements run from
 top to bottom; later statements can use names created earlier:
 
+<SpeedType id="rust-name-state" title="Name and compare stamina" recall={[{"text": "mut", "hint": "This binding receives a later assignment."}, {"text": "u32", "hint": "Choose an unsigned 32-bit whole-number type."}, {"text": "stamina >= cost", "hint": "A dash is possible when the available amount covers its cost."}]}>
+
 ```rust
 let mut stamina: u32 = 12;
 let cost = 4_u32;
 let can_dash = stamina >= cost;
 ```
+
+</SpeedType>
 
 `let` binds a name. `mut` permits a later assignment to `stamina`.
 The `: u32` is an explicit type; the `_u32` on `4` gives the literal
@@ -97,6 +104,8 @@ stamina = stamina - cost; // first calculate 12 - 4, then store 8
 The assignment above <HoverCard kind="caution" body="Without a check, a `u32` that would go below zero does not become negative. A debug build stops with a subtract-with-overflow panic; a release build wraps around, so 2 − 4 gives 4,294,967,294.">assumes the runner has enough stamina</HoverCard>. To express a rule with
 two possible paths, use `if` and `else`:
 
+<SpeedType id="rust-select-dash" title="Choose the dash branch" recall={[{"text": "can_dash", "hint": "Use the boolean computed from the stamina and cost."}, {"text": "stamina - cost", "hint": "Subtract the requested amount from the available amount."}]}>
+
 ```rust
 if can_dash {
     stamina = stamina - cost;
@@ -105,17 +114,25 @@ if can_dash {
 }
 ```
 
+</SpeedType>
+
 With 12 stamina, the first branch runs and stamina becomes 8. The `else` branch
 would run for 2 stamina and a 4-stamina cost. The braces group the statements
 belonging to each path. This is **selection**: test a condition, then run
 the matching branch. Later, `match` and `if let` will select by the shape
 of a result instead of a true/false condition.
 
+<CodeTrace trace="rust-dash-branch" label="Explore the guarded dash branch" />
+
+Move the stamina below the cost, then step forward. The failed branch keeps the original amount; a comparison chooses the path before any subtraction.
+
 ## Repetition: apply the same rule to several inputs
 
 A `for` loop repeats a body for each item in a collection. Here the loop
 tries three dash costs in order, carrying the current stamina into the next
 attempt:
+
+<SpeedType id="rust-loop-costs" title="Carry stamina through a loop" recall={[{"text": "stamina >= cost", "hint": "Check the current amount before subtracting this cost."}, {"text": "stamina -= cost", "hint": "Update the same binding using subtraction assignment."}]}>
 
 ```rust
 let mut stamina = 12_u32;
@@ -127,12 +144,20 @@ for cost in [4, 10, 2] {
 // stamina is 6: use 4, skip 10, use 2
 ```
 
+</SpeedType>
+
 `stamina -= cost` is short for `stamina = stamina - cost`. The trace is 12 → 8;
 10 needs more stamina than remains, so stamina stays 8; using 2 leaves 6. The code
 shows **repetition** without writing the dash check three times.
 
+<CodeTrace trace="rust-dash-loop" label="Explore three dash costs in order" />
+
+The watched amount belongs to one runner throughout the loop. Change its starting value to 16: all three costs now fit and the final amount is zero.
+
 Use `for` when there is a collection to visit. Use `while` when the
 condition determines whether another pass is needed:
+
+<SpeedType id="rust-while-attempts" title="Stop after three attempts" recall={[{"text": "attempts < 3", "hint": "Continue only while the counter is below the limit."}, {"text": "attempts += 1", "hint": "Advance the counter once per pass."}]}>
 
 ```rust
 let mut attempts = 0;
@@ -143,7 +168,11 @@ while attempts < 3 {
 // prints Attempt 1, Attempt 2, Attempt 3
 ```
 
+</SpeedType>
+
 Use `loop` when the body decides exactly when to stop:
+
+<SpeedType id="rust-loop-break" title="Leave a loop at zero" recall={[{"text": "remaining == 0", "hint": "Test whether the remaining amount has reached zero."}, {"text": "break", "hint": "Leave this loop immediately."}, {"text": "remaining -= 1", "hint": "Reduce the amount once per pass."}]}>
 
 ```rust
 let mut remaining = 2;
@@ -154,6 +183,8 @@ loop {
     remaining -= 1;
 }
 ```
+
+</SpeedType>
 
 The important question is always **what makes the repetition stop?**
 The `for` example ends after its three costs, the `while` example ends
@@ -382,7 +413,7 @@ The complete program uses a separate `dash(runner, 4)` function. Rust
 also lets us attach behavior to the `Runner` type in an `impl` block.
 This alternative method performs the same guarded subtraction:
 
-<SpeedType id="runner-impl" title="Type the Runner methods">
+<SpeedType id="runner-impl" title="Type the Runner methods" recall={[{"text": "&mut self, cost: u32", "hint": "Borrow this runner for editing and accept an unsigned cost."}, {"text": "self.stamina < cost", "hint": "Reject a cost larger than the current amount."}, {"text": "self.stamina - cost", "hint": "Spend the cost from this runner’s field."}]}>
 
 ```rust
 impl Runner {
@@ -488,6 +519,8 @@ A loop is useful when you want to show each step. An **iterator** can
 express the same repeated question as a short pipeline. Count how many
 runners have enough stamina for a 4-point dash:
 
+<SpeedType id="rust-filter-ready" title="Count runners with enough stamina" recall={[{"text": "filter", "hint": "Keep only values that satisfy a condition."}, {"text": "*stamina >= 4", "hint": "Read the borrowed number and compare it with the dash cost."}, {"text": "count", "hint": "Consume the kept items and return how many there are."}]}>
+
 ```rust
 let stamina_samples = [8_u32, 3, 6];
 let ready = stamina_samples
@@ -497,6 +530,8 @@ let ready = stamina_samples
     .count();
 println!("{ready} runners can dash"); // 2
 ```
+
+</SpeedType>
 
 `.iter()` walks borrowed values from the array, `.copied()` makes cheap
 `u32` copies, `filter` keeps the values that satisfy the condition, and
@@ -547,11 +582,15 @@ the result has the `Some` shape, and give its inner value the name
 The same idea can report a dash that cannot be made. A missing
 answer needs a different shape from a valid result of zero:
 
+<SpeedType id="rust-checked-stamina" title="Return a possible remaining amount" recall={[{"text": "stamina: u32, cost: u32", "hint": "Accept the available amount and the requested amount, both unsigned 32-bit values."}, {"text": "Option<u32>", "hint": "The answer may contain an unsigned number or no number."}, {"text": "checked_sub", "hint": "Use subtraction that reports when the answer does not fit."}]}>
+
 ```rust
 fn remaining_after_dash(stamina: u32, cost: u32) -> Option<u32> {
     stamina.checked_sub(cost)
 }
 ```
+
+</SpeedType>
 
 `checked_sub` gives `Some(8)` for `(12, 4)`, because the subtraction
 fits in `u32`. It gives `None` for `(2, 4)`, because an unsigned value
@@ -563,6 +602,10 @@ it will receive. In Rust, the last expression without a semicolon is
 the returned value; here that expression is the `checked_sub` result.
 
 <MarginNote kind="narration">Signalling failure with a special number such as minus one lets a caller forget to check it. An Option makes the caller deal with None before using the value.</MarginNote>
+
+<CodeTrace trace="rust-checked-option" label="Explore Some zero and a missing answer" />
+
+The default run returns `Some(0)`. Lower stamina below the cost and the result becomes `None`; it never manufactures a negative unsigned value.
 
 Another common Rust type, `Result`, represents either a success (`Ok`)
 or an error (`Err`) when the reason for failure matters. The
@@ -605,7 +648,7 @@ Sometimes a function has several steps, and each step can fail. Rust's
 `?` keeps the successful value moving through the sequence and returns
 an error immediately when that step fails:
 
-<SpeedType id="read-dash-cost" title="Type the dash-cost parser">
+<SpeedType id="read-dash-cost" title="Type the dash-cost parser" recall={[{"text": "text: &str", "hint": "Borrow the input text without taking ownership."}, {"text": "parse::<u32>()?", "hint": "Parse an unsigned number, continuing on success and returning early on error."}, {"text": "Ok(cost)", "hint": "Wrap the successful amount in the success variant."}]}>
 
 ```rust
 fn read_dash_cost(text: &str) -> Result<u32, std::num::ParseIntError> {

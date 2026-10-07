@@ -81,6 +81,70 @@ function recorder() {
 
 // ---------------------------------------------------------------- traces
 export const TRACES = {
+  'rust-dash-branch': {
+    title: 'A comparison chooses whether stamina changes',
+    intro: 'Start with 12 stamina and a cost of 4. Change either input, then step through the path the comparison selects.',
+    code: ['let mut stamina = start;', 'let cost = dash_cost;', 'if stamina >= cost {', '    stamina -= cost;', '} else {', '    println!("Rest first");', '}'],
+    inputs: [
+      { id: 'start', label: 'Starting stamina', type: 'range', min: 0, max: 16, step: 1, value: 12 },
+      { id: 'dash_cost', label: 'Dash cost', type: 'range', min: 1, max: 8, step: 1, value: 4 },
+    ],
+    run({ start, dash_cost }) {
+      const { steps, push } = recorder();
+      push(0, `The runner starts with ${start} stamina. This binding can change because it uses mut.`, { start, dash_cost, stamina: start });
+      push(1, `This dash costs ${dash_cost}. Naming the cost does not spend it.`, { cost: dash_cost });
+      const fits = start >= dash_cost;
+      push(2, `${start} >= ${dash_cost} is ${fits}. Only the selected branch runs.`, { can_dash: fits });
+      if (fits) push(3, `The check passed, so subtract ${dash_cost} and store ${start - dash_cost}.`, { stamina: start - dash_cost, path: 'dash' });
+      else push(5, 'The cost is too high. Print the message and leave stamina unchanged.', { path: 'rest' });
+      push(6, `The branch ends with ${fits ? start - dash_cost : start} stamina. ${fits ? 'The guarded subtraction spent the cost.' : 'No subtraction ran on the failed path.'}`);
+      return steps;
+    },
+  },
+  'rust-dash-loop': {
+    title: 'The next attempt uses the amount left by the previous one',
+    intro: 'The costs are 4, 10, and 2. Step through the worked example, then change the starting amount to see which attempts fit.',
+    code: ['let mut stamina = start;', 'for cost in [4_u32, 10, 2] {', '    if stamina >= cost {', '        stamina -= cost;', '    }', '}', '// the loop has finished'],
+    inputs: [{ id: 'start', label: 'Starting stamina', type: 'range', min: 0, max: 16, step: 1, value: 12 }],
+    run({ start }) {
+      const { steps, push } = recorder();
+      let stamina = start;
+      const costs = [4, 10, 2];
+      const memory = (current) => ({ title: 'Three costs visited in order', cells: costs.map((cost, i) => ({ label: 'attempt ' + (i + 1), value: String(cost), note: i === current ? 'current cost' : '' })) });
+      push(0, `Begin with ${stamina} stamina. A new pass does not reset this binding.`, { start, stamina }, memory(-1));
+      costs.forEach((cost, i) => {
+        push(1, `Pass ${i + 1} takes cost ${cost} from the collection.`, { cost, attempt: i + 1 }, memory(i));
+        const fits = stamina >= cost;
+        push(2, `${stamina} >= ${cost} is ${fits}. Test the amount remaining now.`, { can_dash: fits });
+        if (fits) { stamina -= cost; push(3, `Spend ${cost}; ${stamina} stamina remains.`, { stamina }); }
+        else push(4, `Skip this subtraction because ${cost} is more than ${stamina}. The loop still visits the next cost.`);
+      });
+      push(6, `All three costs have been visited. The final stamina is ${stamina}.`, {}, memory(-1));
+      return steps;
+    },
+  },
+  'rust-checked-option': {
+    title: 'Some zero is different from no answer',
+    intro: 'The default stamina equals the cost. Step through Some(0), then lower stamina to see the None path.',
+    code: ['let remaining = stamina.checked_sub(cost);', 'match remaining {', '    Some(left) => println!("Left: {left}"),', '    None => println!("Not enough stamina"),', '}'],
+    inputs: [
+      { id: 'stamina', label: 'Available stamina', type: 'range', min: 0, max: 12, step: 1, value: 4 },
+      { id: 'cost', label: 'Requested cost', type: 'range', min: 0, max: 8, step: 1, value: 4 },
+    ],
+    run({ stamina, cost }) {
+      const { steps, push } = recorder();
+      push(0, `Ask for ${stamina} minus ${cost} without allowing an unsigned underflow.`, { stamina, cost });
+      const fits = stamina >= cost;
+      const remaining = fits ? `Some(${stamina - cost})` : 'None';
+      push(0, fits ? `The answer fits, so checked_sub returns ${remaining}. Zero is a valid number.` : 'The mathematical answer is below zero. checked_sub returns None instead of wrapping.', { remaining });
+      push(1, `match selects the arm for the ${fits ? 'Some' : 'None'} shape.`);
+      if (fits) push(2, `The Some arm names the number left and prints ${stamina - cost}.`, { left: stamina - cost, output: `Left: ${stamina - cost}` });
+      else push(3, 'The None arm has no number to unwrap. It prints a message.', { output: 'Not enough stamina' });
+      push(4, fits ? `The result is ${remaining}; the caller can use the stored number.` : 'The result is None; the caller handles the missing answer explicitly.');
+      return steps;
+    },
+  },
+
 	// Lesson 1.9: what Next Scan does to the candidate list.
 	'scan-narrowing': {
 		title: 'What Next Scan does with each candidate',

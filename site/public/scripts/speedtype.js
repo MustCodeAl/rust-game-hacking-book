@@ -7,7 +7,8 @@
 // and shows words per minute (five characters count as a word), accuracy, time,
 // and the reader's best for that snippet. Nothing is sent anywhere; the best is
 // kept in this browser. The code block itself is copied, not changed, so the page
-// reads, prints, and searches as before.
+// reads, prints, and searches as before. Authored recall fragments add a second
+// optional mode: blanks replace those fragments in the copy until they are typed.
 (function () {
   "use strict";
 
@@ -46,6 +47,16 @@
 
   function readBest(id) {
     try { return JSON.parse(storageGet(STORAGE + id) || "null"); } catch (error) { return null; }
+  }
+
+  function readRecall(root) {
+    try {
+      var fragments = JSON.parse(root.dataset.speedtypeRecall || "[]");
+      return Array.isArray(fragments) ? fragments.filter(function (fragment) {
+        return fragment && typeof fragment.text === "string" && /[!-~]/.test(fragment.text) &&
+          typeof fragment.hint === "string" && fragment.hint.trim();
+      }) : [];
+    } catch (error) { return []; }
   }
 
   // ------------------------------------------------------------------
@@ -95,15 +106,41 @@
     return seq;
   }
 
-  function open(root, block, starter) {
+  // Match against the real code, using UTF-16 offsets just like indexOf. The
+  // sequence uses code points, so counting sequence items would skew a match
+  // after an emoji. Keep whitespace and automatically filled characters visible.
+  function addRecall(seq, fragments) {
+    var source = "";
+    var offsets = seq.map(function (item) {
+      var offset = source.length;
+      source += item.ch;
+      return offset;
+    });
+    fragments.forEach(function (fragment) {
+      var start = source.indexOf(fragment.text);
+      while (start !== -1) {
+        var end = start + fragment.text.length;
+        seq.forEach(function (item, index) {
+          if (offsets[index] >= start && offsets[index] < end && !item.auto &&
+            !/\s/.test(item.ch) && !item.recallHint) item.recallHint = fragment.hint;
+        });
+        start = source.indexOf(fragment.text, start + 1);
+      }
+    });
+  }
+
+  function open(root, block, starter, fragments) {
     if (active) active.close();
     var id = root.dataset.speedtypeId || "snippet";
     var title = root.dataset.speedtypeTitle || "this code";
+    var recallMode = !!(fragments && fragments.length);
+    var bestId = id + (recallMode ? ":recall" : "");
 
     var panel = el("div", "kit-speedtype__panel");
     panel.setAttribute("role", "group");
-    panel.setAttribute("aria-label", "Typing practice: " + title);
+    panel.setAttribute("aria-label", (recallMode ? "Recall practice: " : "Typing practice: ") + title);
     panel.setAttribute("data-speedtype-active", "");
+    panel.dataset.speedtypeMode = recallMode ? "recall" : "copy";
 
     var stats = el("div", "kit-speedtype__stats");
     var wpmOut = el("strong", null, "0");
@@ -116,6 +153,8 @@
       item.appendChild(document.createTextNode(" " + pair[0]));
       stats.appendChild(item);
     });
+    var modeOut = recallMode ? el("span", "kit-speedtype__mode", "Unaided recall") : null;
+    if (modeOut) stats.appendChild(modeOut);
     var track = el("div", "kit-speedtype__progress");
     var bar = el("span");
     track.appendChild(bar);
@@ -127,20 +166,34 @@
     copy.querySelectorAll(".copy, button, [data-code]").forEach(function (extra) { extra.remove(); });
     copy.classList.add("kit-speedtype__code");
     var seq = buildSequence(copy);
+    if (recallMode) addRecall(seq, fragments);
 
     var input = el("textarea", "kit-speedtype__input");
     input.value = SENTINEL;
     input.rows = 1;
-    input.setAttribute("aria-label", "Typing field for " + title + ". Type the code that is shown. Enter starts a new line and the indentation is filled in. Backspace corrects. Escape closes.");
+    input.setAttribute("aria-label", "Typing field for " + title + (recallMode ? ". Type the whole snippet, filling the underscores from memory. Hint gives a clue for the current or next blank; Show hidden code reveals the answers. Both mark this run as assisted." : ". Type the code that is shown.") + " Enter starts a new line and the indentation is filled in. Backspace corrects. Escape closes.");
     ["autocomplete", "autocorrect", "autocapitalize", "spellcheck"].forEach(function (name) {
       input.setAttribute(name, name === "autocapitalize" ? "none" : "off");
     });
     input.setAttribute("data-gramm", "false");
 
-    var hint = el("p", "kit-speedtype__hint", "Click here and type the code. A wrong key flashes and waits. Enter starts a new line and fills in the indentation. Backspace corrects, Esc closes.");
+    var hint = el("p", "kit-speedtype__hint", recallMode ? "Type the whole snippet, filling the underscores from memory. Correct characters appear; spaces and indentation stay in place. Hint or Show hidden code marks this run as assisted. Enter starts a new line, Backspace corrects, Esc closes." : "Click here and type the code. A wrong key flashes and waits. Enter starts a new line and fills in the indentation. Backspace corrects, Esc closes.");
+    var clue = recallMode ? el("p", "kit-speedtype__clue") : null;
+    if (clue) {
+      clue.setAttribute("role", "status");
+      clue.setAttribute("aria-live", "polite");
+      clue.setAttribute("aria-atomic", "true");
+    }
     var result = el("p", "kit-speedtype__result");
     result.setAttribute("role", "status");
     var actions = el("div", "kit-speedtype__actions");
+    var help = recallMode ? button("Hint", "kit-speedtype__action") : null;
+    var reveal = recallMode ? button("Show hidden code", "kit-speedtype__action") : null;
+    if (help) actions.appendChild(help);
+    if (reveal) {
+      reveal.setAttribute("aria-pressed", "false");
+      actions.appendChild(reveal);
+    }
     var again = button("Start over", "kit-speedtype__action");
     var done = button("Back to reading", "kit-speedtype__action");
     actions.appendChild(again);
@@ -157,6 +210,7 @@
     panel.appendChild(track);
     panel.appendChild(shell);
     panel.appendChild(hint);
+    if (clue) panel.appendChild(clue);
     panel.appendChild(result);
     panel.appendChild(actions);
 
@@ -169,10 +223,41 @@
     var ticker = 0;
     var current = null;
     var finished = false;
+    var answersVisible = false;
+    var assisted = false;
     var typeable = seq.filter(function (item) { return !item.auto; }).length;
 
     function setState(index, state) {
-      seq[index].el.dataset.s = state;
+      var item = seq[index];
+      item.el.dataset.s = state;
+      if (item.recallHint) {
+        var masked = state === "todo" && !answersVisible;
+        item.el.textContent = masked ? "_" : item.ch;
+        item.el.toggleAttribute("data-recall-hidden", masked);
+      }
+    }
+
+    function markAssisted() {
+      assisted = true;
+      modeOut.textContent = "Assisted recall";
+    }
+
+    function showHint() {
+      var next = seq.slice(pos).find(function (item) { return item.recallHint; });
+      if (next) {
+        markAssisted();
+        clue.textContent = "Hint: " + next.recallHint;
+      } else clue.textContent = "All hidden fragments are complete. Start over to practise them again.";
+      input.focus({ preventScroll: true });
+    }
+
+    function toggleAnswers() {
+      answersVisible = !answersVisible;
+      if (answersVisible && !finished) markAssisted();
+      reveal.textContent = answersVisible ? "Hide answers" : "Show hidden code";
+      reveal.setAttribute("aria-pressed", String(answersVisible));
+      seq.forEach(function (item, index) { setState(index, item.el.dataset.s); });
+      input.focus({ preventScroll: true });
     }
 
     function mark() {
@@ -226,7 +311,7 @@
     function begin() {
       if (begun) return;
       begun = window.performance.now();
-      hint.hidden = true;
+      hint.hidden = !recallMode;
       ticker = window.setInterval(paint, 250);
     }
 
@@ -238,12 +323,13 @@
       var speed = wpm(typeable);
       var acc = accuracy();
       paint();
-      var previous = readBest(id);
-      var better = !previous || speed > previous.wpm;
-      if (better) storageSet(STORAGE + id, JSON.stringify({ wpm: speed, acc: acc }));
-      result.textContent = "Finished: " + speed + " words per minute, " + acc + "% accuracy, " + clock(seconds()) + ", " +
+      var previous = readBest(bestId);
+      var better = !assisted && (!previous || speed > previous.wpm);
+      if (better) storageSet(STORAGE + bestId, JSON.stringify({ wpm: speed, acc: acc }));
+      result.textContent = (recallMode ? (assisted ? "Finished recall (assisted): " : "Finished recall: ") : "Finished: ") + speed + " words per minute, " + acc + "% accuracy, " + clock(seconds()) + ", " +
         errors + (errors === 1 ? " mistake." : " mistakes.") +
-        (previous ? (better ? " A new best; the last was " + previous.wpm + "." : " Your best is " + previous.wpm + ".") : " That is your first time on this one.");
+        (assisted ? " This assisted run does not change your unaided recall best." :
+          (previous ? (better ? " A new best; the last was " + previous.wpm + "." : " Your best is " + previous.wpm + ".") : " That is your first time on this one."));
       result.dataset.done = "true";
       panel.dataset.done = "true";
       starter.updateBest();
@@ -310,9 +396,10 @@
       if (key === "Backspace") { event.preventDefault(); back(); return; }
       if (key === "Enter") { event.preventDefault(); enter(); return; }
       if (key === "Tab") {
-        if (finished) return;
-        event.preventDefault();
-        tab();
+        if (!event.shiftKey && !finished && seq[pos] && seq[pos].ch === "\t") {
+          event.preventDefault();
+          tab();
+        }
         return;
       }
       if (key.length === 1 && !event.ctrlKey && !event.metaKey) {
@@ -343,7 +430,14 @@
 
     function reset() {
       window.clearInterval(ticker);
-      seq.forEach(function (item) { item.el.dataset.s = "todo"; delete item.el.dataset.bad; });
+      answersVisible = false; assisted = false;
+      if (recallMode) {
+        modeOut.textContent = "Unaided recall";
+        clue.textContent = "";
+        reveal.textContent = "Show hidden code";
+        reveal.setAttribute("aria-pressed", "false");
+      }
+      seq.forEach(function (item, index) { setState(index, "todo"); delete item.el.dataset.bad; });
       pos = 0; keys = 0; errors = 0; begun = 0; ended = 0; finished = false;
       result.textContent = "";
       delete result.dataset.done;
@@ -364,7 +458,7 @@
       starter.node.hidden = false;
       delete document.documentElement.dataset.typing;
       active = null;
-      starter.node.querySelector("button").focus();
+      starter.button.focus();
     }
 
     input.addEventListener("keydown", onKeydown);
@@ -377,6 +471,8 @@
     });
     input.addEventListener("blur", function () { paused.hidden = finished; delete panel.dataset.focus; });
     shell.addEventListener("click", function () { input.focus({ preventScroll: true }); });
+    if (help) help.addEventListener("click", showHint);
+    if (reveal) reveal.addEventListener("click", toggleAnswers);
     again.addEventListener("click", reset);
     done.addEventListener("click", close);
     function onHide() { if (document.hidden && !finished && begun) input.blur(); }
@@ -387,6 +483,7 @@
     block.parentNode.insertBefore(panel, block.nextSibling);
     document.documentElement.dataset.typing = "true";
     active = { close: close };
+    seq.forEach(function (item, index) { setState(index, "todo"); });
     skipAuto();
     mark();
     paint();
@@ -400,21 +497,36 @@
     if (!block || !block.querySelector(".ec-line .code")) return;
     root.dataset.speedtypeReady = "true";
     var id = root.dataset.speedtypeId || "snippet";
+    var fragments = readRecall(root);
     var wrap = el("div", "kit-speedtype__bar");
     var start = button("⌨ Practise typing this", "kit-speedtype__start");
     var best = el("span", "kit-speedtype__best");
+    var recallStart = fragments.length ? button("Recall practice", "kit-speedtype__start") : null;
+    var recallBest = fragments.length ? el("span", "kit-speedtype__best") : null;
     wrap.appendChild(start);
     wrap.appendChild(best);
+    if (recallStart) {
+      wrap.appendChild(recallStart);
+      wrap.appendChild(recallBest);
+    }
     root.appendChild(wrap);
     var starter = {
       node: wrap,
+      button: start,
       updateBest: function () {
         var saved = readBest(id);
         best.textContent = saved ? "Your best: " + saved.wpm + " wpm, " + saved.acc + "% accuracy" : "";
+        if (recallBest) {
+          var recalled = readBest(id + ":recall");
+          recallBest.textContent = recalled ? "Recall best (unaided): " + recalled.wpm + " wpm, " + recalled.acc + "% accuracy" : "";
+        }
       },
     };
     starter.updateBest();
     start.addEventListener("click", function () { open(root, block, starter); });
+    if (recallStart) recallStart.addEventListener("click", function () {
+      open(root, block, { node: wrap, button: recallStart, updateBest: starter.updateBest }, fragments);
+    });
   }
 
   function init() {

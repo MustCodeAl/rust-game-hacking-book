@@ -51,6 +51,35 @@ decoration; if the page reads as well without it, leave it out.
 - **Maths needs no dollar-sign care.** Only `$$ ... $$` is maths, so a price or a
   shell variable is safe.
 
+## Optional recall practice
+
+`SpeedType` keeps the complete code visible for reading and offers copy typing.
+Add `recall` only to a short snippet the lesson has already explained. It adds a
+separate **Recall practice** button, which blanks every exact occurrence of the
+authored fragments in the practice copy. Names, parameter lists, conditions and
+calculations can all be fragments; spaces, line breaks and automatic indentation
+remain visible. Give each fragment a semantic clue rather than its answer.
+
+````mdx
+<SpeedType id="primer-remaining" title="Remaining stamina" recall={[
+  { text: 'stamina: u32, cost: u32', hint: 'Take the available amount and the amount to spend as unsigned inputs.' },
+  { text: 'checked_sub', hint: 'Use subtraction that reports when the answer does not fit.' },
+]}>
+```rust
+fn remaining(stamina: u32, cost: u32) -> Option<u32> {
+    stamina.checked_sub(cost)
+}
+```
+</SpeedType>
+````
+
+Correct characters reveal themselves; Backspace and Start over restore blanks.
+Hint gives the current or next fragment's clue. Show hidden code / Hide answers
+is always available. Hints and answer reveals mark that run as assisted, so it
+cannot replace the snippet's separate unaided recall best. Copy-typing bests keep
+their existing storage keys. Nothing is sent to a service, and reading, search,
+printing and the no-script code block remain complete.
+
 ## Hover cards
 
 `<HoverCard kind="example" body="...">words</HoverCard>`: the words stay in the text, `body` is
