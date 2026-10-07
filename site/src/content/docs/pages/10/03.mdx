@@ -9,7 +9,7 @@ sidebar:
   order: 5
   label: "11.5 Process Access Rights"
 ---
-import { Accordion, Badge, Fields, GitHub, Panel, ParamField, ResponseField } from '../../../../components/kit';
+import { Accordion, Badge, Fields, GitHub, Panel, ParamField, ResponseField, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -113,14 +113,48 @@ These course tools use several process rights:
 
 `PROCESS_ALL_ACCESS` is not a convenient “make it work” flag. It requests many unrelated powers and makes failures harder to diagnose.
 
+The original helper asks Windows for every process right just to query an executable path. `OwnedHandle` owns the returned handle, and `query_full_process_image_name` is the path-query helper below.
+
+```rust title="Before: ask for every process right"
+fn query_process_path(pid: u32) -> windows::core::Result<PathBuf> {
+    // SAFETY: OpenProcess accepts a numeric PID; errors are returned normally.
+    let process = unsafe { OpenProcess(PROCESS_ALL_ACCESS, false, pid) }?;
+    let process = OwnedHandle::from_raw(process)?;
+    query_full_process_image_name(process.raw())
+}
+```
+
+**Least privilege** means requesting only the capability the next call uses. Windows still checks whether the caller may receive that right.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn query_process_path(pid: u32) -> windows::core::Result<PathBuf> {
+    // SAFETY: OpenProcess accepts a numeric PID; errors are returned normally.
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }?;
+    let process = OwnedHandle::from_raw(process)?;
+    query_full_process_image_name(process.raw())
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn query_process_path(pid: u32) -> windows::core::Result<PathBuf> {
--    let process = OpenProcess(PROCESS_ALL_ACCESS, false, pid)?;
-+    let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)?;
+     // SAFETY: OpenProcess accepts a numeric PID; errors are returned normally.
+-    let process = unsafe { OpenProcess(PROCESS_ALL_ACCESS, false, pid) }?;
++    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }?;
      let process = OwnedHandle::from_raw(process)?;
      query_full_process_image_name(process.raw())
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** match the handle rights to the operation you actually need.
 
 ### Why this version?
 

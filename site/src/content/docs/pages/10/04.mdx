@@ -9,7 +9,7 @@ sidebar:
   order: 6
   label: "11.6 Handle Ownership and Lifetimes"
 ---
-import { Accordion, Badge, Frame, GitHub } from '../../../../components/kit';
+import { Accordion, Badge, Frame, GitHub, CodeGroup, Tab } from '../../../../components/kit';
 import Visual from '../../../../components/Visual.astro';
 
 ## A handle is not a pointer
@@ -219,22 +219,64 @@ The iterator returns `Result<OwnedHandle>` for every event. `collect::<Result<Ve
 
 That is the important improvement over manual cleanup:
 
+The original helper creates events and stores raw `HANDLE` values. If a later creation fails, `?` returns before the earlier handles are closed; dropping a vector of raw handles does not call `CloseHandle`. Even success makes cleanup the caller's job.
+
+```rust title="Before: accumulate raw event handles"
+fn create_events(count: usize) -> windows::core::Result<Vec<HANDLE>> {
+    let mut raw_handles = Vec::new();
+    for _ in 0..count {
+        // SAFETY: all pointer arguments are absent; Windows returns the handle.
+        let raw = unsafe { CreateEventW(None, false, false, None) }?;
+        raw_handles.push(raw); // A later error leaks the earlier events.
+    }
+    Ok(raw_handles)
+}
+```
+
+**RAII** gives each successful creation an owner immediately. Collecting the results drops those owners if a later item fails; success returns a vector whose owners close the events when dropped.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn create_events(count: usize) -> windows::core::Result<Vec<OwnedHandle>> {
+    (0..count)
+        .map(|_| {
+            // SAFETY: all pointer arguments are absent; Windows returns the handle.
+            let raw = unsafe { CreateEventW(None, false, false, None) }?;
+            OwnedHandle::from_raw(raw)
+        })
+        .collect() // Earlier owners are dropped if a later creation fails.
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
- fn create_events(count: usize) -> windows::core::Result<Vec<OwnedHandle>> {
+-fn create_events(count: usize) -> windows::core::Result<Vec<HANDLE>> {
 -    let mut raw_handles = Vec::new();
 -    for _ in 0..count {
--        raw_handles.push(CreateEventW(None, false, false, None)?);
--        // Every error return here would need a manual CloseHandle loop.
+-        // SAFETY: all pointer arguments are absent; Windows returns the handle.
+-        let raw = unsafe { CreateEventW(None, false, false, None) }?;
+-        raw_handles.push(raw); // A later error leaks the earlier events.
 -    }
 -    Ok(raw_handles)
++fn create_events(count: usize) -> windows::core::Result<Vec<OwnedHandle>> {
 +    (0..count)
 +        .map(|_| {
++            // SAFETY: all pointer arguments are absent; Windows returns the handle.
 +            let raw = unsafe { CreateEventW(None, false, false, None) }?;
 +            OwnedHandle::from_raw(raw)
 +        })
 +        .collect() // Earlier owners are dropped if a later creation fails.
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** put each acquired resource into its cleanup owner before acquiring the next one.
 
 ### Why this version?
 

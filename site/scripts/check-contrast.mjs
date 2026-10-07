@@ -1,14 +1,20 @@
-// Contrast audit: text vs effective background on two lessons in all 5 palettes x light/dark. Needs dist served on :8766 (python3 scripts/serve-dist.py 8766)
-// and Playwright at /opt/node22/lib/node_modules/playwright. Prints only failing combinations (WCAG AA: 4.5, or 3 for large text). Ignores images and gradients.
-import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
-const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
-const pages=['pages/1/05/','pages/3/02/'];
+// Audit all 5 palettes x light/dark (WCAG AA: 4.5, or 3 for large text).
+// Serve dist with scripts/serve-dist.py. PLAYWRIGHT_PATH may point to an
+// external installation; CHROME_PATH selects locally installed Chrome.
+// Images, SVG text and gradient backgrounds are outside this audit's scope.
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
+const b=await chromium.launch({executablePath:process.env.CHROME_PATH || undefined});
+const base=(process.env.BOOK_BASE_URL || 'http://127.0.0.1:8766/rust-game-hacking-book/').replace(/\/?$/, '/');
+const pages=(process.env.CONTRAST_PAGES || 'pages/1/05/,pages/3/02/').split(',');
+let failures=0;
 for (const pal of ['paper','purple','midnight','forest','contrast']) for (const mode of ['light','dark']) {
   const ctx=await b.newContext({viewport:{width:1280,height:900}});const p=await ctx.newPage();
   await p.addInitScript(([pal,mode])=>{try{localStorage.clear();localStorage.setItem('gha-theme',pal);localStorage.setItem('gha-mode',mode);localStorage.setItem('starlight-theme',mode)}catch(e){}},[pal,mode]);
   const agg={};let total=0;
   for (const u of pages){
-    await p.goto('http://localhost:8766/rust-game-hacking-book/'+u,{waitUntil:'load'});await p.waitForTimeout(600);
+    await p.goto(base+u,{waitUntil:'domcontentloaded'});await p.waitForTimeout(600);
     const res=await p.evaluate(()=>{
       const parse=c=>{const m=c.match(/rgba?\(([^)]+)\)/);if(m){const a=m[1].split(/[ ,\/]+/).map(Number);return [a[0],a[1],a[2],a[3]==null?1:a[3]]}
         const m2=c.match(/color\(srgb ([^)]+)\)/);if(m2){const a=m2[1].split(/[ \/]+/).map(Number);return [a[0]*255,a[1]*255,a[2]*255,a[3]==null?1:a[3]]}return null};
@@ -29,6 +35,8 @@ for (const pal of ['paper','purple','midnight','forest','contrast']) for (const 
   }
   const worst=Object.values(agg).sort((a,b)=>a.ratio-b.ratio).slice(0,5).map(r=>`${r.sel} ${r.ratio}<${r.need} x${r.n} "${r.txt}"`);
   console.log(pal,mode,'fails',total,'|',worst.join(' ; '));
+  failures+=total;
   await ctx.close();
 }
 await b.close();
+if (failures) process.exitCode=1;

@@ -9,7 +9,7 @@ sidebar:
   order: 9
   label: "11.9 From Win32 Calls to Kernel Services"
 ---
-import { Accordion, Badge, GitHub } from '../../../../components/kit';
+import { Accordion, Badge, GitHub, CodeGroup, Tab } from '../../../../components/kit';
 import Visual from '../../../../components/Visual.astro';
 
 ## One function call can cross several layers
@@ -185,16 +185,55 @@ Both DLLs are already present in a normal Windows console process. `GetModuleHan
 
 PE export names are byte strings. The `s!` macro creates a terminated static `PCSTR`. DLL file names use Windows wide strings, so `GetModuleHandleW` receives values from the `w!` macro instead.
 
+This original attempt mixes byte strings and wide strings. It is intentionally a **non-compiling example**: the Windows bindings reject the wrong parameter types before any call runs.
+
+```rust title="Before: rejected string widths"
+fn resolve_virtual_query() -> windows::core::Result<FARPROC> {
+    // SAFETY: static terminated strings outlive lookup; widths must match the API.
+    let kernel32 = unsafe { GetModuleHandleW(s!("kernel32.dll")) }?;
+
+    // SAFETY: the borrowed module stays loaded during this export lookup.
+    let address = unsafe { GetProcAddress(kernel32, w!("VirtualQueryEx")) };
+    address.ok_or_else(windows::core::Error::from_win32)
+}
+```
+
+Use `w!` for the wide DLL filename and `s!` for the byte-encoded export name. Both strings are static and terminated; the DLL handle is borrowed for the lookup.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn resolve_virtual_query() -> windows::core::Result<FARPROC> {
+    // SAFETY: static terminated strings outlive lookup; widths must match the API.
+    let kernel32 = unsafe { GetModuleHandleW(w!("kernel32.dll")) }?;
+
+    // SAFETY: the borrowed module stays loaded during this export lookup.
+    let address = unsafe { GetProcAddress(kernel32, s!("VirtualQueryEx")) };
+    address.ok_or_else(windows::core::Error::from_win32)
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn resolve_virtual_query() -> windows::core::Result<FARPROC> {
+     // SAFETY: static terminated strings outlive lookup; widths must match the API.
 -    let kernel32 = unsafe { GetModuleHandleW(s!("kernel32.dll")) }?;
 +    let kernel32 = unsafe { GetModuleHandleW(w!("kernel32.dll")) }?;
 
+     // SAFETY: the borrowed module stays loaded during this export lookup.
 -    let address = unsafe { GetProcAddress(kernel32, w!("VirtualQueryEx")) };
 +    let address = unsafe { GetProcAddress(kernel32, s!("VirtualQueryEx")) };
      address.ok_or_else(windows::core::Error::from_win32)
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** the API's string type determines the encoding, even when both arguments look like ordinary names.
 
 The types make the two encodings visible instead of silently mixing them.
 

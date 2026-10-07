@@ -9,7 +9,7 @@ sidebar:
   order: 3
   label: "11.3 Build Identity and Versioned Evidence"
 ---
-import { Badge, GitHub } from '../../../../components/kit';
+import { Badge, GitHub, CodeGroup, Tab } from '../../../../components/kit';
 import Visual from '../../../../components/Visual.astro';
 
 ## A version label is not enough
@@ -98,6 +98,39 @@ fn sha256(path: &Path) -> anyhow::Result<(u64, String)> {
 
 `read` returns the number of buffer bytes filled. A return value of zero means end of file. Only `&buffer[..count]` goes into the hash; hashing the unused remainder would produce the wrong answer.
 
+The original helper reads the entire file into one byte vector, then hashes it. A large archive therefore needs an equally large temporary allocation; `Path`, `File`, `Sha256` and the hash traits are the same helpers used above.
+
+```rust title="Before: read the whole file"
+fn sha256(path: &Path) -> anyhow::Result<String> {
+    let mut hasher = Sha256::new();
+    let bytes = std::fs::read(path)?;
+    hasher.update(bytes);
+    Ok(format!("{:x}", hasher.finalize()))
+}
+```
+
+The improvement is **streaming**: reuse one buffer, and feed only the bytes filled by each read into the hasher. The digest still describes the complete file.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn sha256(path: &Path) -> anyhow::Result<String> {
+    let mut hasher = Sha256::new();
+    let mut file = File::open(path)?;
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let count = file.read(&mut buffer)?;
+        if count == 0 { break; }
+        hasher.update(&buffer[..count]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn sha256(path: &Path) -> anyhow::Result<String> {
      let mut hasher = Sha256::new();
@@ -113,6 +146,11 @@ fn sha256(path: &Path) -> anyhow::Result<(u64, String)> {
      Ok(format!("{:x}", hasher.finalize()))
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** hash large inputs in bounded chunks instead of keeping a second copy of the file in memory.
 
 ### Why this version?
 

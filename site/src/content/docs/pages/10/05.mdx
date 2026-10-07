@@ -9,7 +9,7 @@ sidebar:
   order: 7
   label: "11.7 Virtual Address Spaces and Page Protections"
 ---
-import { Accordion, Badge, Fields, GitHub, ResponseField } from '../../../../components/kit';
+import { Accordion, Badge, Fields, GitHub, ResponseField, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 
@@ -270,16 +270,56 @@ fn main() {
 
 `false` in `open_by_name(&process_name, false)` is important. It means the wrapper requests query and read rights without `PROCESS_VM_OPERATION` or `PROCESS_VM_WRITE`.
 
+The original helper opens a writable process handle even though it only lists module regions. In this course wrapper, `true` requests write-related rights; `print_regions` only formats the returned metadata.
+
+```rust title="Before: open a writable handle to inspect pages"
+fn inspect_module(process_name: String, module_name: String) -> anyhow::Result<()> {
+    let process = Process::open_by_name(&process_name, true)?;
+    let (module_base, module_size) = process.module(&module_name)?;
+    let regions = process.regions(module_base, module_base + module_size)?;
+    print_regions(&regions);
+    Ok(())
+}
+```
+
+Request observation rights with `false`. Also use **checked arithmetic** for the module end, so an invalid size cannot wrap the region boundary.
+
+<CodeGroup>
+<Tab label="Improved code">
+
+```rust
+fn inspect_module(process_name: String, module_name: String) -> anyhow::Result<()> {
+    let process = Process::open_by_name(&process_name, false)?;
+    let (module_base, module_size) = process.module(&module_name)?;
+    let module_end = module_base.checked_add(module_size)
+        .context("module end overflowed")?;
+    let regions = process.regions(module_base, module_end)?;
+    print_regions(&regions);
+    Ok(())
+}
+```
+
+</Tab>
+<Tab label="Show the diff">
+
 ```diff
  fn inspect_module(process_name: String, module_name: String) -> anyhow::Result<()> {
 -    let process = Process::open_by_name(&process_name, true)?;
 +    let process = Process::open_by_name(&process_name, false)?;
      let (module_base, module_size) = process.module(&module_name)?;
-     let regions = process.regions(module_base, module_base + module_size)?;
+-    let regions = process.regions(module_base, module_base + module_size)?;
++    let module_end = module_base.checked_add(module_size)
++        .context("module end overflowed")?;
++    let regions = process.regions(module_base, module_end)?;
      print_regions(&regions);
      Ok(())
  }
 ```
+
+</Tab>
+</CodeGroup>
+
+**Takeaway:** an inspection tool should request inspection rights and reject an overflowing range.
 
 ### Why this version?
 
