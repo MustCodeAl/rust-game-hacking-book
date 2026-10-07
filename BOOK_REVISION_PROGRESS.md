@@ -1502,3 +1502,18 @@ Owner decision: the original look is the 100% default. The "refined" overhaul (T
 - Removed: the lesson-list light/dark control (replaced by surface contrast).
 Verified in Chrome: default identical to the original on key computed values; each toggle changes only what it should; no horizontal overflow on ten pages at 420/1280.
 Not verified: refined style after this re-anchoring (spot-checked computed only), every component in refined style, touch devices, Safari/Firefox. No lab programs were run.
+
+## T27 — One integrated design (no duplicate "refined" mode) (2026-10-07)
+
+Owner rule: no parallel interfaces. Anything objectively better is the default; anything that is taste is ONE drawer choice whose default is the original. The `data-ui` "Interface
+style" switch and the whole refined layer (palette tokens, Inter typography, component/lab/diagram re-skins, light chrome) were deleted (T21 to T26 describe that history; the
+files are gone from `site/src/styles/design/`). What remains is in `base-tokens.css`, `layout.css`, `chrome.css`, `variants.css`, `drawer.css`, `responsive.css`, `a11y-print.css`.
+- **Now default for everyone (objective)**: static pagination only, no edge chevrons, one dock slot with room at the end of side panels, active lesson accent strip, muted done
+  checks, slim scrollbars, dashed glossary/hover-card underlines with a help cursor, softer pressed pills in the appearance panel (no saturated ring), eased and disabled states on
+  lab buttons, blurred search scrim, themed range sliders, `color-scheme` follows the page, **Reading sound labels readable inside the dark panel (they were invisible)**, and
+  the floating Notes and chat buttons hide while the appearance panel is open (they used to overlap its edge).
+- **Drawer choices (preference, default first)**: Sidebar and header contrast original|unified; Inline code classic|soft; Floating buttons docked|minimal; Depth flat|soft (faint shadows,
+  1px hover lift on diagram nodes, cards, lab buttons); Settings panel popover|side sheet; Table of contents match page|light|dark; Reading width narrow|standard|wide; Code brightness
+  dark|match|light; chat and Notes in four corners.
+Verified in Chrome: defaults equal the original on key computed styles; every choice changes only what it should; popover and side sheet both open, dock hides, no overflow at 420/1280.
+Not verified: touch devices, Safari/Firefox, depth choice across every lab type. No lab programs were run.
