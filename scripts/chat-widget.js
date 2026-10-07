@@ -289,6 +289,15 @@
     return style;
   }
 
+  // The "minimal" floating-buttons choice sets --chat-scale and --chat-opacity on the host; the button shrinks and fades until pointed at.
+  function floatStyle() {
+    var style = document.createElement("style");
+    style.textContent =
+      ".c7-bubble{scale:var(--chat-scale,1);opacity:var(--chat-opacity,1);transition:opacity .2s ease,scale .2s ease}" +
+      ".c7-bubble:hover,.c7-bubble:focus-visible{opacity:1;scale:1}";
+    return style;
+  }
+
   // Lets the widget's attachShadow through as an open root, remembering it, and
   // returns the function that puts the original back.
   function expose(capture, top, left, right) {
@@ -300,6 +309,7 @@
       capture.host = this;
       capture.shadow = shadow;
       shadow.appendChild(phoneStyle());
+      shadow.appendChild(floatStyle());
       if (top) shadow.appendChild(topStyle());
       if (left) shadow.appendChild(leftStyle());
       if (right) shadow.appendChild(rightStyle());
