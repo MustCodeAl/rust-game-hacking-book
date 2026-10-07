@@ -1,3 +1,5 @@
+import { probabilityBoard } from './probability-board.js';
+
 // Explorable simulations (see components/SimLab.astro). Each one opens with a
 // worked example and its explanation already showing; the reader changes the
 // numbers to see why the result moves. Nothing is graded or required.
@@ -867,7 +869,8 @@ function toyAssembly(root) {
 	input.addEventListener('input', () => { explain.dataset.tone = 'info'; explain.textContent = 'The program changed. Choose Run to update the register values and execution log.'; }); render();
 }
 
-const SIMS = { 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange, 'rva-offset': rvaOffset, 'torn-read': tornRead, 'lost-update': lostUpdate, 'crash-save': crashSave, 'input-edge': inputEdge, 'server-authority': serverAuthority, 'evidence-correlation': evidenceCorrelation, 'detector-input-window': detectorInputWindow, 'behavior-tree': behaviorTree, 'scan-cost': scanCost, 'toy-assembly': toyAssembly };
+const SIMS = {
+  'probability-board': root => probabilityBoard(root, { el, header, slider, presets }), 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange, 'rva-offset': rvaOffset, 'torn-read': tornRead, 'lost-update': lostUpdate, 'crash-save': crashSave, 'input-edge': inputEdge, 'server-authority': serverAuthority, 'evidence-correlation': evidenceCorrelation, 'detector-input-window': detectorInputWindow, 'behavior-tree': behaviorTree, 'scan-cost': scanCost, 'toy-assembly': toyAssembly };
 
 export function mountSimLabs() {
 	for (const root of document.querySelectorAll('[data-sim-lab]')) {
