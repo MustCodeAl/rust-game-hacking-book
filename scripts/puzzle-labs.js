@@ -286,6 +286,25 @@
     const code = element("div", "code-blanks__code");
     code.setAttribute("role", "group");
     code.setAttribute("aria-label", `Code with ${answers.length} changeable pieces`);
+    const codeWrap = element("div", "code-blanks__code-wrap");
+    const scrollHint = element("p", "code-blanks__scroll-hint",
+      "↔ Scroll sideways for the full line. Keyboard: focus the code, then use ← / →.");
+    scrollHint.id = `${id}-scroll-hint`;
+    scrollHint.hidden = true;
+    codeWrap.append(code, scrollHint);
+    let overflowObserver = null;
+    function updateOverflow() {
+      if (!code.isConnected) { overflowObserver?.disconnect(); return; }
+      const overflows = code.scrollWidth > code.clientWidth + 1;
+      scrollHint.hidden = !overflows;
+      if (overflows) {
+        code.tabIndex = 0;
+        code.setAttribute("aria-describedby", scrollHint.id);
+      } else {
+        code.removeAttribute("tabindex");
+        code.removeAttribute("aria-describedby");
+      }
+    }
     const blankButtons = [];
     const codeLang = academyGuessLang(cfg.code.join("\n").replace(/\{\d+\}/g, "x"));
     cfg.code.forEach((line) => {
@@ -356,7 +375,7 @@
     const why = element("p", "code-blanks__why");
     why.append(element("strong", "", "Why the lesson's version works. "), document.createTextNode(cfg.why));
 
-    body.append(code, effect, bank, summary, actions, why);
+    body.append(codeWrap, effect, bank, summary, actions, why);
     root.append(body);
 
     // One message box, three looks: info (a selection prompt), good (the lesson's
@@ -396,6 +415,7 @@
         ? "This is the lesson's working version."
         : `This version differs from the lesson's in blank ${listWords(differs.map(String))}. Show the answer puts the lesson's version back.`;
       summary.classList.toggle("is-working", differs.length === 0);
+      updateOverflow();
     }
 
     function place(index, token) {
@@ -465,6 +485,11 @@
       }
     });
     render();
+    if (window.ResizeObserver) {
+      overflowObserver = new ResizeObserver(updateOverflow);
+      overflowObserver.observe(code);
+    }
+    document.fonts?.ready.then(updateOverflow);
   }
 
   // ---------------------------------------------------------------------------

@@ -40,7 +40,23 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Do not turn a mismatch into a force option:
 
+The original helper writes the replacement immediately, then runs the feature. It neither checks the live instructions nor retains an owner that can restore them when the feature stops or returns an error. This is a teaching wrapper excerpt: AppliedPatch::apply must capture verified original bytes and install through a code-writing boundary; the buildable in-process lab below uses LocalPatch for that role.
+
+Before: write a detour with no owned restoration
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Validate before writing, then hold an AppliedPatch owner for the whole enabled period. Explicit restoration reports a failure; dropping the owner provides a final best-effort attempt if an earlier operation fails.
+
+Improved code
+
 Code example. The code’s comments explain: Keep `applied` alive for the entire period when the detour is enabled.
+
+Show the diff
+
+Code example. The code’s comments explain: Keep `applied` alive for the entire period when the detour is enabled.
+
+Takeaway: reject mismatched instructions and keep their original bytes owned until restoration finishes.
 
 The expected bytes are a tiny build fingerprint. If they differ, the planned jump may split a different instruction or replay the wrong behavior. Equal lengths keep the resume address stable. Finally, the AppliedPatch value represents the fact that the process is currently changed; when that value is restored or dropped, it still has the original bytes needed to undo the patch.
 
@@ -136,11 +152,27 @@ Code example. The code’s comments explain: / Follow Wesnoth's real pointer pat
 
 Here is the important difference between “the address worked once” and a hook whose assumptions are visible:
 
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+The original helper follows the lab’s local player and side pointers, then writes gold using unchecked integer addition. These constants describe one verified offline build. This is unsafe code: the caller must guarantee that every addressed field stays live, initialized, aligned and accessible for the entire operation.
+
+Before: follow unchecked local object addresses
+
+Code example. The code’s comments explain: / # Safety / Call only inside the verified 32-bit build while these local fields remain / initialized, live, aligned and accessible. Serialize this operation with / game updates and guarantee exclusive writable access to the gold field. SAFETY: the caller guarantees the root slot is live and aligned. SAFETY: the caller must guarantee this computed local slot is valid. SAFETY: the caller must guarantee the local gold field remains writable.
+
+Checked arithmetic and null checks reject obvious invalid addresses before access. They do not prove pointer validity, prevent concurrent game writes or make volatile access safe; the caller’s lifetime and build guarantees remain necessary.
+
+Improved code
+
+Code example. The code’s comments explain: / # Safety / Call only inside the verified 32-bit build while these local fields remain / initialized, live, aligned and accessible. Serialize this operation with / game updates and guarantee exclusive writable access to the gold field. SAFETY: the caller guarantees the root slot is live and aligned. SAFETY: the caller guarantees this local slot remains live and aligned. SAFETY: the caller guarantees exclusive writable access to this live field.
+
+Show the diff
+
+Code example. The code’s comments explain: / # Safety / Call only inside the verified 32-bit build while these local fields remain / initialized, live, aligned and accessible. Serialize this operation with / game updates and guarantee exclusive writable access to the gold field. SAFETY: the caller guarantees the root slot is live and aligned. SAFETY: the caller must guarantee this computed local slot is valid. SAFETY: the caller guarantees this local slot remains live and aligned. SAFETY: the caller must guarantee the local gold field remains writable. SAFETY: the caller guarantees exclusive writable access to this live field.
+
+Takeaway: arithmetic checks supplement an unsafe memory contract; they cannot replace it.
 
 checked_add prevents a bad pointer plus offset from wrapping around to a believable low address. The null check turns “no active side” into an ordinary error. Volatile access tells the compiler that this memory can change outside the compiler’s view, but it does not make an invalid pointer safe. That is why the build check, pointer path, and narrow unsafe boundary are still required. LocalPatch then owns the separate responsibility of restoring the original instructions.
 
-This is not pseudocode. The complete definitions of LocalPatch and near_jump, including VirtualProtect, FlushInstructionCache, and automatic restoration, are part of the project. The exact cave above lives in game_hooks.rs.
+The complete cave above is buildable source. The definitions of LocalPatch and near_jump, including VirtualProtect, FlushInstructionCache, and automatic restoration, are part of the project. The exact cave above lives in game_hooks.rs.
 
 Build it as 32-bit because the naked function uses x86 registers and the target stores four-byte pointers:
 
