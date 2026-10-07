@@ -37,7 +37,8 @@
     animationSpeed: { attribute: "academyAnimationSpeed", key: "gha-animation-speed", values: ["slow", "normal", "fast"], fallback: "normal", control: "data-animation-speed-choice" },
     headingStyle: { attribute: "academyHeadingStyle", key: "gha-heading-style", values: ["boxed", "plain"], fallback: "boxed", control: "data-heading-style-choice" },
     textSize: { attribute: "academyTextSize", key: "gha-text-size", values: ["small", "standard", "large"], fallback: "standard", control: "data-text-size-choice" },
-    ui: { attribute: "academyUi", key: "gha-ui", values: ["classic", "refined"], fallback: "classic", control: "data-ui-choice" },
+    drawer: { attribute: "academyDrawer", key: "gha-drawer", values: ["popover", "sheet"], fallback: "popover", control: "data-drawer-choice" },
+    depth: { attribute: "academyDepth", key: "gha-depth", values: ["flat", "soft"], fallback: "flat", control: "data-depth-choice" },
     surface: { attribute: "academySurface", key: "gha-surface", values: ["default", "unified"], fallback: "default", control: "data-surface-choice" },
     inlineCode: { attribute: "academyInlineCode", key: "gha-inline-code", values: ["classic", "soft"], fallback: "classic", control: "data-inline-code-choice" },
     floating: { attribute: "academyFloating", key: "gha-floating", values: ["docked", "minimal"], fallback: "docked", control: "data-floating-choice" },
@@ -327,7 +328,7 @@
       "[data-background-choice], [data-semantic-choice], [data-ligature-choice], [data-theme-reset], " +
       "[data-diagram-background-choice], [data-diagram-fill-choice], [data-heading-style-choice], [data-text-size-choice], [data-spacing-choice], " +
       "[data-diagram-labels-choice], [data-diagram-borders-choice], [data-diagram-size-choice], [data-grid-choice], [data-cards-choice], [data-chat-choice], [data-gradients-choice], [data-motion-choice], [data-animation-speed-choice], " +
-      "[data-ui-choice], [data-surface-choice], [data-inline-code-choice], [data-floating-choice], [data-notes-choice], [data-toc-tone-choice], [data-measure-choice], [data-print-book], [data-panel-hide], [data-panel-show], .theme-switcher__toggle"
+      "[data-drawer-choice], [data-depth-choice], [data-surface-choice], [data-inline-code-choice], [data-floating-choice], [data-notes-choice], [data-toc-tone-choice], [data-measure-choice], [data-print-book], [data-panel-hide], [data-panel-show], .theme-switcher__toggle"
     );
     if (!target) {
       closeThemeMenus(event.target.closest("[data-theme-switcher]"));
@@ -349,7 +350,8 @@
     if ("chatChoice" in data) return applyReaderChoice("chat", data.chatChoice);
     if ("gradientsChoice" in data) return applyReaderChoice("gradients", data.gradientsChoice);
     if ("motionChoice" in data) return applyReaderChoice("motion", data.motionChoice);
-    if ("uiChoice" in data) return applyReaderChoice("ui", data.uiChoice);
+    if ("drawerChoice" in data) return applyReaderChoice("drawer", data.drawerChoice);
+    if ("depthChoice" in data) return applyReaderChoice("depth", data.depthChoice);
     if ("surfaceChoice" in data) return applyReaderChoice("surface", data.surfaceChoice);
     if ("inlineCodeChoice" in data) return applyReaderChoice("inlineCode", data.inlineCodeChoice);
     if ("floatingChoice" in data) return applyReaderChoice("floating", data.floatingChoice);
