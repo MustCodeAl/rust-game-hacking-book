@@ -1,6 +1,6 @@
 # Preserved revision drafts — 2026-10-07
 
-These files are outside the site's content tree. They are **not deployed**.
+These historical drafts are outside the site’s content tree. **D is integrated and published in T43; do not reapply its patch.** Other statuses are listed below.
 The owner requested finish after the urgent repair; both agents then hit the
 account usage limit. Preserve the drafts rather than reporting unverified
 features as completed.
@@ -11,13 +11,12 @@ lesson ID has been moved, and restructuring still needs the owner's approval.
 
 ## Ready for integration checks
 
-- `gha-assembly-reference.patch`: new stable paths `pages/2/10–12`, reader
+- `gha-assembly-reference.patch`: **integrated and verified in T43; do not reapply.** New stable paths `pages/2/10–12`, reader
   2.11–2.13, 33 adjustable instruction traces. Register `ASSEMBLY_TRACES` in
   `code-trace.js`; extend its assembly language detection and keywords for
   bit/SSE instructions. Split each pool's first question into its seed and
   merge the other fourteen into its bank. Agent semantic checks are recorded
-  in `gha-assembly-verification.md`; the full Astro/browser/contrast checks
-  were **not run by root** on these lessons.
+  in `gha-assembly-verification.md`; root’s final Astro/browser/contrast checks pass; see T43 for evidence.
 - `gha-clarity-batch1–4.patch`: 58 existing lessons replace unspecified
   “rules” with concrete checks, transitions, calculations, and responsibilities.
   Old heading anchors are retained. Recheck patch application against T37;

@@ -1,0 +1,173 @@
+---
+title: "Instruction Reference: Scalar Floating-Point Values"
+description: "Trace speed, position, numeric conversions, and NaN comparisons using the SSE instructions common in game code."
+chapter: "2.13"
+minutes: 20
+author: "Game Hacking Academy"
+date: "2026-10-07"
+sidebar:
+  order: 13
+  label: "2.13 Scalar Floating-Point Values"
+---
+import CodeTrace from '../../../../components/CodeTrace.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
+
+Gold and ammo are often integers. Speed, position, and time are often **floating-point numbers**, which can represent fractions. This reference follows one float at a time in a fictional **owned, resettable game**. Every trace starts with a worked example; changing it is optional exploration.
+
+These examples use the **legacy two-operand SSE instructions** in 32-bit x86, with Intel syntax. Their `v...` AVX relatives have different operand and upper-register rules. A real instruction reference must match the encoding you are actually reading. The links below point to the corresponding entries in revision 093 of [Intel's official instruction manual](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html).
+
+## Find an operation
+
+| Instruction | Worked example | Intel entry |
+|---|---|---|
+| `movss` | [Copy one speed value](#movss) | [MOVSS](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=820) |
+| `addss` | [Add a movement step](#addss) | [ADDSS](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=142) |
+| `mulss` | [Scale speed](#mulss) | [MULSS](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=853) |
+| `cvtsi2ss` | [Convert integer points to float](#cvtsi2ss) | [CVTSI2SS](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=356) |
+| `cvttss2si` | [Truncate float points to integer](#cvttss2si) | [CVTTSS2SI](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=373) |
+| `comiss` | [Compare speed with a limit](#comiss) | [COMISS](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=319) |
+
+## One float inside a wider register
+
+An **XMM register** holds 128 bits. A **binary32**, or single-precision float, occupies 32 bits. **Scalar** means these instructions operate on one float in the low 32 bits, rather than calculating four floats together. The rest of the register still exists; do not assume every scalar instruction clears it.
+
+The suffix `ss` stands for scalar single precision. Memory labels such as `[speed]` denote valid four-byte fields in our toy game. `xmm` below means an XMM register, `m32` a four-byte memory source, and `r32` a general-purpose 32-bit register.
+
+Floating-point encoding differs from signed integer encoding. Copying the four bytes of an integer does not convert its numeric value into a float. A **conversion** calculates a new representation. Some values need rounding because a fixed-size format cannot represent every number exactly.
+
+**MXCSR** is a control/status register for SSE floating-point work. It records rounding direction, exception masks, and floating-point status. It is separate from integer ZF/SF/CF/OF. The arithmetic traces use round-to-nearest, ties-to-even, and ordinary finite binary32 inputs. They show selected effects, not a complete floating-point environment.
+
+<MarginNote kind="brief">Track the low float, the untouched upper bits, and the kind of flags involved. A 128-bit register does not mean that this instruction uses every bit as one large number.</MarginNote>
+
+## Copies and arithmetic
+
+### movss
+
+**Meaning:** copy one binary32 value between a low XMM field and another register or memory.
+
+**Legacy forms:** `movss xmm, xmm/m32`, `movss m32, xmm`. **Effects:** register-to-register copies replace the low 32 bits and preserve the destination's upper 96 bits. A memory load into XMM clears those upper 96 bits. A memory store writes only four bytes. Integer arithmetic flags are unchanged.
+
+```nasm
+movss xmm0, [speed]
+movss xmm1, xmm0
+movss [shown_speed], xmm1
+```
+
+<CodeTrace trace="asm-movss" />
+
+Takeaway: distinguish a scalar load, register copy, and store before describing the rest of the register.
+
+### addss
+
+**Meaning:** add the source's low float to the destination's low float.
+
+**Legacy form:** `addss xmm, xmm/m32`. **Effects:** write the low 32-bit floating result, rounded according to MXCSR; preserve the upper 96 XMM bits and integer arithmetic flags. It may record or raise floating-point exceptions. It does not write source memory.
+
+```nasm
+movss xmm0, [position]
+addss xmm0, [movement_step]
+movss [position], xmm0
+```
+
+<CodeTrace trace="asm-addss" />
+
+Takeaway: float addition does not produce an integer carry flag for a following `jc`.
+
+### mulss
+
+**Meaning:** multiply the destination's low float by the source's low float.
+
+**Legacy form:** `mulss xmm, xmm/m32`. **Effects:** write the low binary32 result using MXCSR rounding; preserve the upper 96 bits and integer arithmetic flags. Floating-point status and possible exceptions belong to MXCSR.
+
+```nasm
+movss xmm0, [speed]
+mulss xmm0, [speed_factor]
+movss [speed], xmm0
+```
+
+<CodeTrace trace="asm-mulss" />
+
+Takeaway: changing a multiplier changes the computed speed; it does not change the encoding into an integer operation.
+
+## Numeric conversion
+
+### cvtsi2ss
+
+**Meaning:** convert a signed integer into one single-precision floating-point value.
+
+**Legacy 32-bit form:** `cvtsi2ss xmm, r32/m32`. **Effects:** write the low binary32 value, preserve the upper 96 XMM bits and integer flags, and leave the integer source unchanged. MXCSR rounding applies when the integer cannot be represented exactly. For example, nearest, ties-to-even rounding converts 16,777,217 to 16,777,216.
+
+```nasm
+mov eax, [score_int]
+cvtsi2ss xmm0, eax
+movss [score_float], xmm0
+```
+
+<CodeTrace trace="asm-cvtsi2ss" />
+
+<MarginNote kind="code">A four-byte copy preserves the original bit pattern. A numeric conversion aims to preserve its value in a different format, which can require different bits and rounding.</MarginNote>
+
+Takeaway: an integer that fits 32 bits does not necessarily fit exactly into a binary32 float.
+
+### cvttss2si
+
+**Meaning:** convert a binary32 value into a signed integer by truncating toward zero.
+
+**Legacy 32-bit form:** `cvttss2si r32, xmm/m32`. **Effects:** write the integer destination, preserve the float source and integer comparison flags. The `tt` form truncates regardless of MXCSR's rounding direction. Thus 2.75 becomes 2, and −2.75 becomes −2.
+
+NaN or an out-of-range result causes an invalid-operation condition. If the MXCSR invalid exception is masked, this 32-bit form writes the indefinite integer `0x80000000`; if unmasked, it raises an exception. That bit pattern also represents the valid signed minimum, so checking only the output bits is insufficient. The trace explicitly assumes the invalid exception is masked.
+
+```nasm
+movss xmm0, [score_float]
+cvttss2si eax, xmm0
+mov [score_int], eax
+```
+
+<CodeTrace trace="asm-cvttss2si" />
+
+Takeaway: choose the conversion's rounding behavior deliberately and validate the numeric range.
+
+## Comparison and unordered values
+
+### comiss
+
+**Meaning:** compare two low binary32 values and report their ordering in integer flags.
+
+**Legacy form:** `comiss xmm, xmm/m32`. **Effects:** preserve both float operands; set ZF/PF/CF as below and clear OF/SF/AF when the comparison completes. A NaN is **unordered**, not less, equal, or greater. `comiss` signals invalid operation for a NaN. With that exception masked, it produces unordered flags; with it unmasked, the exception prevents the flag update.
+
+| Completed comparison | ZF | PF | CF |
+|---|---|---|---|
+| left greater than right | 0 | 0 | 0 |
+| left less than right | 0 | 0 | 1 |
+| left equal to right | 1 | 0 | 0 |
+| unordered, with invalid masked | 1 | 1 | 1 |
+
+```nasm
+movss xmm0, [speed]
+comiss xmm0, [limit]
+jp reject_invalid       ; unordered must be handled first
+jb wait_for_speed       ; ordered and below the limit
+; otherwise: ordered and at least the limit
+```
+
+The two labels name exit paths outside this excerpt. Notice that `jp` reads PF, which marks unordered here. Once unordered is excluded, unsigned-style `jb`/`ja` conditions can describe float ordering; signed-integer `jl`/`jg` do not interpret these flags correctly.
+
+<CodeTrace trace="asm-comiss" />
+
+<MarginNote kind="clarify">ZF is one for both equality and unordered. A jump-if-equal used alone can mistake a NaN for an equal value. Check the comparison's complete contract, including its exception state.</MarginNote>
+
+Takeaway: a float comparison has four outcomes and its own flag rules.
+
+## Cheatsheet
+
+| Need | Instruction and limitation |
+|---|---|
+| Copy one float | `movss`; upper-bit behavior depends on memory versus register source. |
+| Add or scale a float | `addss`/`mulss`; binary32 rounding and MXCSR status apply. |
+| Integer to float | `cvtsi2ss`; large integers may round. |
+| Float to signed integer | `cvttss2si`; truncate toward zero and handle invalid/out-of-range input. |
+| Compare floats | `comiss`; handle unordered/exception behavior before equality or ordering. |
+| Understand flag provenance | Arithmetic SSE status lives in MXCSR; completed `comiss` updates ZF/PF/CF. |
+| Understand register width | Scalar operations use one low 32-bit value inside 128-bit XMM storage. |
+
+Keep this reference beside [Camera Frames and Projection](/rust-game-hacking-book/pages/5/01/) and [Coordinates, Vectors, and Directions](/rust-game-hacking-book/pages/4/11/). Their geometry depends on numeric values, not just the four bytes used to represent them.

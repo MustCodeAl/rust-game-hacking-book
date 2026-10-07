@@ -1,0 +1,372 @@
+---
+title: "Instruction Reference: Decisions, Stack, and Bits"
+description: "Explore comparisons, branches, call stacks, masks, shifts, and debugger stops one instruction at a time."
+chapter: "2.12"
+minutes: 35
+author: "Game Hacking Academy"
+date: "2026-10-07"
+sidebar:
+  order: 12
+  label: "2.12 Decisions, Stack, and Bits"
+---
+import CodeTrace from '../../../../components/CodeTrace.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
+
+A function does more than calculate values: it chooses a path, calls other functions, and returns to the right place. These worked examples use a fictional **owned, resettable 32-bit x86 game**, Intel syntax, and valid toy memory labels. The traces are small teaching models; they do not execute machine code or attach to a process.
+
+Start with [values and arithmetic](/rust-game-hacking-book/pages/2/10/) if registers, brackets, or ZF/SF/CF/OF are unfamiliar. Each example is already populated. Changing an input is optional exploration, not a test.
+
+## Find an operation
+
+| Instruction | Worked example | Intel entry |
+|---|---|---|
+| `cmp` | [Compare gold without spending](#cmp) | [CMP](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=279) |
+| `test` | [Inspect a status bit](#test) | [TEST](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=1424) |
+| `jmp` | [Skip a path](#jmp) | [JMP](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=622) |
+| `jcc` family | [Choose by flags](#jcc) | [Jcc](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=617) |
+| `call` | [Save where to resume](#call) | [CALL](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=239) |
+| `ret` | [Resume the caller](#ret) | [RET](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=1272) |
+| `push` | [Save a value](#push) | [PUSH](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=1225) |
+| `pop` | [Restore a value](#pop) | [POP](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=1101) |
+| `shl` | [Shift left](#shl) | [Shifts](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=1306) |
+| `shr` | [Shift right with zeros](#shr) | [Shifts](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=1306) |
+| `sar` | [Shift right with the sign](#sar) | [Shifts](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=1306) |
+| `and` | [Keep selected bits](#and) | [AND](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=178) |
+| `or` | [Set selected bits](#or) | [OR](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=866) |
+| `xor` | [Toggle selected bits](#xor) | [XOR](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=2287) |
+| `not` | [Invert the word](#not) | [NOT](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=864) |
+| `nop` | [Continue without a data operation](#nop) | [NOP](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=863) |
+| `int3` | [Enter breakpoint handling](#int3) | [INT3](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=585) |
+
+`reg`, `imm`, and `r/m` retain their meanings from the previous reference: register, encoded number, and register-or-memory. The forms below are common 32-bit forms, not the entire instruction set. [Intel's manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html) give encoding, exception, mode, and special-form details.
+
+## Comparisons and paths
+
+### cmp
+
+**Meaning:** subtract for comparison, keep the flags, and discard the numeric result.
+
+**Common forms:** `cmp reg, r/m/imm`, `cmp memory, reg/imm`. **Effects:** read operands without writing either; set OF, SF, ZF, AF, CF, and PF as a subtraction would.
+
+```nasm
+mov eax, [gold]
+cmp eax, 25
+mov ecx, eax             ; gold was not spent
+```
+
+<CodeTrace trace="asm-cmp" />
+
+Takeaway: the flags changed; the compared gold did not.
+
+### test
+
+**Meaning:** compute a bitwise AND for comparison, then discard its numeric result.
+
+**Common forms:** `test r/m, reg` or `test r/m, imm`. **Effects:** leave operands unchanged; set ZF, SF, and PF from the temporary AND, clear CF/OF, and leave AF undefined. `test eax, eax` asks whether the complete value is zero; `test eax, 4` examines bit 2.
+
+```nasm
+mov eax, [status]
+test eax, 4              ; bit 2 means stunned here
+mov ecx, eax             ; all status bits survive
+```
+
+<CodeTrace trace="asm-test" />
+
+Takeaway: a mask can inspect a field without deleting its other bits.
+
+### jmp
+
+**Meaning:** continue at another instruction unconditionally.
+
+**Common near forms:** `jmp label` uses an encoded relative displacement; `jmp reg32/memory32` reads an indirect destination. **Effects:** change the instruction pointer; do not create a return address or alter arithmetic flags. Memory-indirect forms read the pointer.
+
+```nasm
+mov eax, 5
+jmp ready
+mov eax, 99              ; skipped on this path
+ready: mov [ammo], eax
+```
+
+<CodeTrace trace="asm-jmp" />
+
+Takeaway: a nearby instruction is not necessarily an executed instruction.
+
+### jcc
+
+**Meaning:** jump only when the selected flag condition is true; otherwise continue with the next instruction.
+
+`jcc` is a name for the family, not a literal mnemonic to type. **Common form:** a specific conditional mnemonic such as `jb label`. **Effects:** read the specified flags and potentially change the instruction pointer; preserve registers, arithmetic flags, and game memory. Short and near relative forms have different reach and encoded lengths.
+
+```nasm
+mov eax, [gold]
+cmp eax, 25
+jb cannot_buy            ; unsigned gold is below cost
+sub eax, 25              ; taken only on the other path
+```
+
+Here `cannot_buy` names an exit path outside the excerpt. The interactive shows both paths completely and lets you change the conditional mnemonic.
+
+<CodeTrace trace="asm-jcc" />
+
+| Mnemonic and common aliases | Condition | Interpretation after `cmp left, right` |
+|---|---|---|
+| `je` / `jz` | ZF = 1 | equal |
+| `jne` / `jnz` | ZF = 0 | unequal |
+| `jb` / `jnae` / `jc` | CF = 1 | unsigned below / carry |
+| `jae` / `jnb` / `jnc` | CF = 0 | unsigned at least / no carry |
+| `jbe` / `jna` | CF = 1 or ZF = 1 | unsigned below or equal |
+| `ja` / `jnbe` | CF = 0 and ZF = 0 | unsigned above |
+| `jl` / `jnge` | SF ≠ OF | signed less |
+| `jge` / `jnl` | SF = OF | signed at least |
+| `jle` / `jng` | ZF = 1 or SF ≠ OF | signed less or equal |
+| `jg` / `jnle` | ZF = 0 and SF = OF | signed greater |
+| `jo` / `jno` | OF = 1 / OF = 0 | signed overflow present / absent |
+| `js` / `jns` | SF = 1 / SF = 0 | top result bit set / clear |
+| `jp` / `jpe`, `jnp` / `jpo` | PF = 1 / PF = 0 | even / odd low-byte parity |
+
+`jcxz`/`jecxz` test a counter register rather than these flags. Do not apply this table blindly to them, or to flags produced by a floating-point comparison in the next reference.
+
+<MarginNote kind="clarify">A signed less-than test needs both SF and OF. SF by itself can mislead when subtraction overflowed. Unsigned ordering instead uses carry/borrow and zero.</MarginNote>
+
+Takeaway: find the producer of the flags and the type intended by the branch before naming the condition.
+
+## Calls, returns, and saved values
+
+The **stack** is a thread's working storage for active calls and temporary data. In these ordinary 32-bit examples it grows toward lower addresses. Saving four bytes lowers `esp` by four; removing them advances it by four. Real functions also follow a calling convention for arguments, saved registers, alignment, and cleanup.
+
+### call
+
+**Meaning:** save where execution should resume, then enter another function.
+
+**Common near forms:** `call label` or `call reg32/memory32`. **Effects:** push the address immediately after the call onto the stack, update `esp`, and change the instruction pointer. A near call does not itself change arithmetic flags. The callee's instructions can change registers, flags, and memory afterward.
+
+```nasm
+mov eax, [gold]
+call grant_coin          ; our helper adds one in eax
+mov [gold], eax          ; resume here after its ret
+```
+
+<CodeTrace trace="asm-call" />
+
+Takeaway: a call saves a continuation; it does not guarantee what the helper will return or preserve.
+
+### ret
+
+**Meaning:** read the saved return address from the stack and resume the caller there.
+
+**Common near forms:** `ret`; `ret imm16` additionally removes a fixed argument-byte count after popping the return address. **Effects:** update the instruction pointer and `esp`; leave arithmetic flags alone. Returning a value in `eax` is a calling-convention choice, not work performed by `ret` itself.
+
+```nasm
+grant_coin:
+add eax, 1
+ret                     ; eax was changed by add, not ret
+```
+
+<CodeTrace trace="asm-ret" />
+
+Takeaway: an unbalanced stack can make `ret` read data as an address; restoring one register is not enough.
+
+### push
+
+**Meaning:** place a value on top of the stack.
+
+**Common 32-bit forms:** `push reg32/memory32/imm`. **Effects:** lower `esp` by four and write the saved value there; preserve ordinary arithmetic flags. These widths are specific to this example: a normal 64-bit push usually uses an eight-byte slot.
+
+```nasm
+mov ebx, [health]
+push ebx                ; preserve this value
+mov ebx, 0              ; temporary work
+pop ebx
+mov [health], ebx
+```
+
+<CodeTrace trace="asm-push" />
+
+Takeaway: stack storage can preserve a value while its register is reused.
+
+### pop
+
+**Meaning:** copy the top stack value to a destination and remove that slot from the active stack.
+
+**Common forms:** `pop reg32/memory32`. **Effects:** read stack memory, write the destination, and normally advance `esp` by four. Arithmetic flags survive. Special destinations involving `esp` need their exact manual rules; the example uses `ebx`. The old memory bytes are not erased.
+
+```nasm
+mov ebx, [health]
+push ebx
+mov ebx, 0
+pop ebx                 ; recover the last saved value
+mov [health], ebx
+```
+
+<CodeTrace trace="asm-pop" />
+
+<MarginNote kind="brief">A stack is last-in, first-out. Keep the return address in the right place and reverse your temporary saves in the right order. Popped bytes may remain in memory without being live stack data.</MarginNote>
+
+Takeaway: removing a slot changes which bytes are active, not whether those bytes still contain an old value.
+
+## Shifts and masks
+
+### shl
+
+**Meaning:** shift bits left, filling the newly opened low positions with zeros.
+
+**Common forms:** `shl r/m32, imm8` or `shl r/m32, cl`; `sal` is an alias. **Effects:** write the operand; CF records the last bit shifted out, ZF/SF/PF describe the result, and AF is undefined for a nonzero effective count. OF has a defined shift result only for a count of one. An effective count of zero preserves value and flags. For a 32-bit operand, the count is masked to its low five bits.
+
+```nasm
+mov eax, [packed_value]
+shl eax, 1
+mov [packed_value], eax
+```
+
+<CodeTrace trace="asm-shl" />
+
+Takeaway: left shifting resembles multiplication by a power of two only while the needed bits are retained.
+
+### shr
+
+**Meaning:** shift bits right, filling the newly opened high positions with zeros.
+
+**Common forms:** `shr r/m32, imm8` or `shr r/m32, cl`. **Effects:** write the operand and use the shift flag/count rules above; for a one-bit shift, OF receives the old highest bit. An unsigned value is divided by a power of two with the discarded fractional part lost.
+
+```nasm
+mov eax, [packed_value]
+shr eax, 1
+mov [packed_value], eax
+```
+
+<CodeTrace trace="asm-shr" />
+
+Takeaway: zero-fill right shift does not preserve a negative signed value's sign.
+
+### sar
+
+**Meaning:** shift bits right while repeating the original sign bit in the new high positions.
+
+**Common forms:** `sar r/m32, imm8` or `sar r/m32, cl`. **Effects:** write the operand and follow the shift flag/count rules; for a one-bit shift, OF is cleared. Signed negative values round toward minus infinity when low bits are discarded. That differs from `idiv` truncation toward zero: −3 shifted right once becomes −2, but −3 divided by 2 becomes −1.
+
+```nasm
+mov eax, [signed_delta]
+sar eax, 1
+mov [signed_delta], eax
+```
+
+<CodeTrace trace="asm-sar" />
+
+Takeaway: sign preservation and rounding are both part of a signed shift's meaning.
+
+### and
+
+**Meaning:** keep a one bit only where both input bits are one.
+
+**Common forms:** `and reg, r/m/imm`, `and memory, reg/imm`. **Effects:** write the destination; clear CF/OF, set ZF/SF/PF from the result, and leave AF undefined.
+
+```nasm
+mov eax, [status]
+and eax, 3              ; keep only bits 0 and 1
+mov [status], eax
+```
+
+<CodeTrace trace="asm-and" />
+
+Takeaway: `and` writes the masked word; `test` only inspects a temporary masked result.
+
+### or
+
+**Meaning:** set a result bit when either input bit is one.
+
+**Common forms:** `or reg, r/m/imm`, `or memory, reg/imm`. **Effects:** write the destination; clear CF/OF, set ZF/SF/PF from the result, and leave AF undefined.
+
+```nasm
+mov eax, [status]
+or eax, 4               ; ensure bit 2 is set
+mov [status], eax
+```
+
+<CodeTrace trace="asm-or" />
+
+Takeaway: setting a bit twice with `or` leaves it set both times.
+
+### xor
+
+**Meaning:** set a result bit when its two input bits differ.
+
+**Common forms:** `xor reg, r/m/imm`, `xor memory, reg/imm`. **Effects:** write the destination; clear CF/OF, set ZF/SF/PF from the result, and leave AF undefined. `xor eax, eax` produces zero and changes flags; it is not interchangeable with every use of `mov eax, 0`.
+
+```nasm
+mov eax, [status]
+xor eax, 4              ; toggle bit 2
+mov [status], eax
+```
+
+<CodeTrace trace="asm-xor" />
+
+Takeaway: toggling a bit twice returns it to its original state.
+
+### not
+
+**Meaning:** invert every bit of the operand.
+
+**Common form:** `not r/m`. **Effects:** write the register or memory operand and preserve all arithmetic flags. This is bitwise complement, not a Boolean comparison.
+
+```nasm
+mov eax, [status]
+not eax                 ; invert all 32 bits here
+mov [status], eax
+```
+
+<CodeTrace trace="asm-not" />
+
+Takeaway: `not` flips the entire selected width, including bits a small diagram may not show.
+
+## Continuing and pausing
+
+### nop
+
+**Meaning:** advance to the next instruction without performing a game-data operation.
+
+**Common form:** `nop`; multi-byte no-op encodings also exist. **Effects:** leave general registers, arithmetic flags, and game memory unchanged; execution still advances and takes time. Replacing code with no-ops must preserve whole instruction boundaries and the surrounding program's assumptions.
+
+```nasm
+mov eax, [ammo]
+nop
+sub eax, 1              ; this later instruction still runs
+mov [ammo], eax
+```
+
+<CodeTrace trace="asm-nop" />
+
+Takeaway: doing nothing for one instruction does not stop the following instructions.
+
+### int3
+
+**Meaning:** raise the breakpoint exception used by a debugger.
+
+**Form here:** `int3`, the one-byte `CC` instruction. **Effects:** transfer control through exception handling; the saved instruction pointer is after that byte. Hardware and the operating system manage exception-entry state, rather than producing an ordinary arithmetic comparison result. A debugger may pause and inspect the saved context; an unhandled exception can end the program.
+
+```nasm
+mov eax, [ammo]
+int3                    ; owned debug build, intentional stop
+sub eax, 1
+mov [ammo], eax
+```
+
+<CodeTrace trace="asm-int3" />
+
+<MarginNote kind="context">A debugger that temporarily replaces another instruction's first byte has extra work: restore the byte, move execution back to the original instruction, step it, and re-arm safely. The deliberate `int3` here is already part of our toy code.</MarginNote>
+
+Takeaway: a breakpoint is an exception with a continuation decision, not an automatic no-op.
+
+## Cheatsheet
+
+| Question | Useful operation or rule |
+|---|---|
+| Equal or affordable? | `cmp` sets subtraction flags; pick signed or unsigned `jcc` deliberately. |
+| Is this bit present? | `test value, mask` keeps the original value. |
+| Where does execution go? | `jmp` always redirects; `jcc` reads a condition; neither creates a return address. |
+| Where does the helper return? | Near `call` saves the continuation; `ret` consumes it. |
+| How is a temporary value preserved? | Balance `push`/`pop` and the convention's other stack work. |
+| How do bits move? | `shl` fills low bits with zero; `shr` fills high bits with zero; `sar` repeats the sign. |
+| Which bit operation is needed? | `and` keeps, `or` sets, `xor` toggles, `not` inverts. |
+| Why did execution stop? | `nop` continues; `int3` enters breakpoint-exception handling. |
+
+Next, [read the scalar floating-point reference](/rust-game-hacking-book/pages/2/12/). For debugger handling rather than intentional breakpoint instructions, see [Debug Events and Software Breakpoints](/rust-game-hacking-book/pages/7/07/).

@@ -1,0 +1,249 @@
+---
+title: "Instruction Reference: Values and Integer Arithmetic"
+description: "Look up common x86 value operations, then explore each one with a worked trace."
+chapter: "2.11"
+minutes: 28
+author: "Game Hacking Academy"
+date: "2026-10-07"
+sidebar:
+  order: 11
+  label: "2.11 Values and Integer Arithmetic"
+---
+import CodeTrace from '../../../../components/CodeTrace.astro';
+import MarginNote from '../../../../components/kit/MarginNote.astro';
+
+Use this reference when an instruction in your **own resettable lab** is unfamiliar. Start with its plain-English meaning, then follow its worked trace. You can change the inputs; nothing needs to be memorized or completed before continuing.
+
+These examples use **32-bit x86, Intel syntax**: destination first. A label such as `[gold]` stands for a valid address in our fictional game. It is not an address to paste into another process. The forms below cover common general-purpose uses, rather than every encoding or special-register form.
+
+The authoritative details are in [Intel's Software Developer's Manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html), especially Volume 2. The links in this table open the relevant entry in revision 093 of the instruction reference. A mnemonic names an operation; it does not identify one fixed opcode or instruction length.
+
+## Find an operation
+
+| Instruction | Worked example | Intel entry |
+|---|---|---|
+| `mov` | [Copy ammo](#mov) | [MOV](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=731) |
+| `lea` | [Calculate a player's field address](#lea) | [LEA](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=665) |
+| `add` | [Add a gold reward](#add) | [ADD](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=132) |
+| `sub` | [Spend gold](#sub) | [SUB](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=1388) |
+| `inc` | [Count a coin](#inc) | [INC](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=575) |
+| `dec` | [Use one ammo](#dec) | [DEC](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=380) |
+| `imul` | [Multiply a signed reward](#imul) | [IMUL](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=569) |
+| `idiv` | [Share a signed coin total](#idiv) | [IDIV](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=566) |
+| `movzx` | [Widen an unsigned byte](#movzx) | [MOVZX](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=833) |
+| `movsx` | [Widen a signed byte](#movsx) | [MOVSX](https://cdrdv2-public.intel.com/929352/325383-093-sdm-vol-2abcd.pdf#page=823) |
+
+In the forms below, `reg` means a register, `imm` means a number encoded in the instruction, and `r/m` means either a register **or** a memory operand. Memory uses brackets. The operand widths must match the selected instruction form; `byte ptr`, `word ptr`, and `dword ptr` make one, two, or four bytes explicit.
+
+## Addressing: base + index × scale + displacement
+
+An expression such as `[esi+ecx*4+8]` identifies a location. `esi` is the **base**, `ecx` is an **index**, `4` is the **scale**, and `8` is the **displacement**, a fixed extra distance in bytes. In these usual 32-bit addressing forms, the encoded scale is 1, 2, 4, or 8; some base/index combinations have encoding restrictions.
+
+With base `0x1000`, index `2`, and a scale of `4`, the address is `0x1000 + 2×4 + 8 = 0x1010`. A `mov` with this memory source reads bytes there. A `lea` with the same expression only calculates the address.
+
+Addresses do not declare record sizes. If each player occupies 16 bytes, an index must advance by 16 bytes per player, perhaps by an earlier multiplication. Also distinguish operand size from address size: reading a four-byte field does not mean that four bytes make up the whole object.
+
+<MarginNote kind="code">Brackets name a location; the surrounding instruction tells you whether that location is read, written, or only calculated. An offset is evidence about a field, not proof of its name or type.</MarginNote>
+
+## Flags: four different questions
+
+Many integer operations update bits in `eflags`. The trace panels use these names:
+
+| Flag | What it records for ordinary addition/subtraction |
+|---|---|
+| **ZF**, zero | The stored-width result is zero. |
+| **SF**, sign | The result's highest bit is one. That bit is the sign when the value is interpreted as signed. |
+| **CF**, carry | Addition carried out of the unsigned width, or subtraction needed an unsigned borrow. |
+| **OF**, overflow | The mathematical signed result cannot fit the selected signed width. |
+
+CF and OF answer different questions. Adding one to `0xFFFFFFFF` wraps the 32-bit result to zero and sets CF, while signed −1 + 1 fits and does not set OF. Adding one to `0x7FFFFFFF` sets OF because signed 2,147,483,648 does not fit, while the unsigned sum fits and does not set CF.
+
+Some entries also mention **PF**: it reports even parity in the low result byte for these integer operations. **AF** records carry or borrow from bit 3 into bit 4. These two exist even when a game rule does not use them. An **undefined** flag is not an answer you may rely on; it is not a promise of zero. A **preserved** flag still describes an earlier operation.
+
+<MarginNote kind="brief">Track which instruction most recently wrote the flag you need. A later copy may preserve a useful comparison; a later arithmetic operation may replace it.</MarginNote>
+
+## Copies and addresses
+
+### mov
+
+**Meaning:** copy a value from the source to the destination, leaving the source available.
+
+**Common forms:** `mov reg, reg/imm/memory`, `mov memory, reg/imm`. Ordinary `mov` does not copy memory directly to memory. **Effects:** write the destination register or memory at the selected width; leave arithmetic flags unchanged.
+
+```nasm
+mov eax, [ammo]          ; load the four-byte field
+mov ecx, eax            ; copy the register value
+mov [display_ammo], ecx  ; store the copy
+```
+
+<CodeTrace trace="asm-mov" />
+
+Takeaway: a copy can change a destination without changing its source or the last comparison.
+
+### lea
+
+**Meaning:** calculate the effective address described by the source expression.
+
+**Common form:** `lea reg, [base+index*scale+displacement]`. **Effects:** write a register; do not read the addressed game bytes or change arithmetic flags. It can also serve as arithmetic when the expression is useful as a number.
+
+```nasm
+mov esi, 0x1000          ; toy player-array base
+mov ecx, 2              ; third player's index
+shl ecx, 2              ; pre-scale: 2 becomes 8
+lea eax, [esi+ecx*4+8]   ; base + 2*16 + field offset
+```
+
+<CodeTrace trace="asm-lea" />
+
+Takeaway: computing where a field would be does not prove that a live, valid object exists there.
+
+## Arithmetic and boundaries
+
+### add
+
+**Meaning:** add the source to the destination and keep the selected-width result.
+
+**Common forms:** `add reg, r/m/imm`, `add memory, reg/imm`. **Effects:** write the destination and set OF, SF, ZF, AF, CF, and PF from the addition. The CPU does not automatically reject an overflowing game reward.
+
+```nasm
+mov eax, [gold]
+add eax, 10             ; add a reward
+mov [gold], eax
+```
+
+<CodeTrace trace="asm-add" />
+
+Takeaway: the result bits and overflow flags are separate pieces of evidence.
+
+### sub
+
+**Meaning:** subtract the source from the destination and keep the selected-width result.
+
+**Common forms:** `sub reg, r/m/imm`, `sub memory, reg/imm`. **Effects:** write the destination and set OF, SF, ZF, AF, CF, and PF. For subtraction, CF reports an unsigned borrow.
+
+```nasm
+mov eax, [gold]
+sub eax, 25             ; no affordability guard here
+mov [gold], eax
+```
+
+<CodeTrace trace="asm-sub" />
+
+Takeaway: subtraction alone does not enforce affordability; look for the check and branch that guard it.
+
+### inc
+
+**Meaning:** add one to the destination.
+
+**Common form:** `inc r/m`. **Effects:** write the operand and update OF, SF, ZF, AF, and PF, while **preserving CF**. It differs from `add ..., 1` when later code needs carry.
+
+```nasm
+mov eax, [coins_collected]
+inc eax
+mov [coins_collected], eax
+```
+
+<CodeTrace trace="asm-inc" />
+
+Takeaway: the carry flag after `inc` belongs to earlier code.
+
+### dec
+
+**Meaning:** subtract one from the destination.
+
+**Common form:** `dec r/m`. **Effects:** write the operand and update OF, SF, ZF, AF, and PF, while **preserving CF**. Zero can become the unsigned maximum if no guard prevents it.
+
+```nasm
+mov eax, [ammo]
+dec eax
+mov [ammo], eax
+```
+
+<CodeTrace trace="asm-dec" />
+
+Takeaway: a preserved CF is not a fresh underflow test for the decrement.
+
+### imul
+
+**Meaning:** multiply signed integers.
+
+**Common 32-bit forms:** `imul r/m32` writes the full product to `edx:eax`; `imul reg32, r/m32` multiplies the destination by the source; `imul reg32, r/m32, imm` multiplies the source by the immediate. The latter two keep the low 32 bits in the named register. **Effects:** CF and OF tell whether that low result represents the full signed product; SF, ZF, AF, and PF are undefined. No source memory is written by these forms.
+
+```nasm
+mov eax, [base_reward]
+imul eax, eax, 3        ; triple the signed reward
+mov [reward], eax
+```
+
+<CodeTrace trace="asm-imul" />
+
+Takeaway: check the form before assuming which registers hold the product.
+
+### idiv
+
+**Meaning:** divide a signed double-width dividend by the source, producing a quotient and a remainder.
+
+**Common 32-bit form:** `idiv r/m32` divides `edx:eax` by that register or memory value; the quotient goes to `eax`, the remainder to `edx`. There is no immediate-divisor form. `cdq` first sign-extends a signed `eax` into `edx:eax`. **Effects:** quotient truncates toward zero; arithmetic flags are undefined. A zero divisor or a quotient that does not fit raises a divide-error exception rather than an overflow flag. The trace models the zero-divisor case; signed-minimum divided by −1 is another failing boundary.
+
+```nasm
+mov eax, [coin_total]
+cdq                     ; prepare the signed dividend
+mov ecx, [player_count]
+idiv ecx                ; requires a valid nonzero divisor
+mov [share], eax
+```
+
+<CodeTrace trace="asm-idiv" />
+
+<MarginNote kind="clarify">For 32-bit division, stale `edx` bits change the dividend even when `eax` looks correct. Signed division needs sign extension; unsigned `div` usually needs a different preparation.</MarginNote>
+
+Takeaway: identify the implicit dividend, validate the divisor, and make a new comparison before relying on flags.
+
+## Widening a field
+
+### movzx
+
+**Meaning:** copy a smaller value into a wider register and fill the added high bits with zero.
+
+**Common forms here:** `movzx reg32, r/m8` or `movzx reg32, r/m16`. **Effects:** write only the wider destination; preserve flags and source memory. Byte `FF` becomes `000000FF`, numeric 255.
+
+```nasm
+mov bl, [ammo_byte]
+movzx eax, bl
+mov [ammo_dword], eax
+```
+
+<CodeTrace trace="asm-movzx" />
+
+Takeaway: zero extension preserves the value of a small unsigned field.
+
+### movsx
+
+**Meaning:** copy a smaller signed value into a wider register while repeating its sign bit into the added high bits.
+
+**Common forms here:** `movsx reg32, r/m8` or `movsx reg32, r/m16`. **Effects:** write only the wider destination; preserve flags and source memory. Byte `FF` becomes `FFFFFFFF`, signed −1.
+
+```nasm
+mov bl, [signed_step]
+movsx eax, bl
+mov [movement_delta], eax
+```
+
+<CodeTrace trace="asm-movsx" />
+
+Takeaway: widening the same source byte with a different rule can change its meaning.
+
+## Cheatsheet
+
+| Need | Read the instruction this way |
+|---|---|
+| Copy a value | `mov` writes a destination; source and flags survive. |
+| Calculate a location | `lea` computes an address without reading the field. |
+| Update a total | `add`/`sub` write a result and fresh arithmetic flags. |
+| Count by one | `inc`/`dec` update most arithmetic flags but preserve CF. |
+| Multiply signed values | `imul` forms choose implicit or explicit destinations; CF/OF report signed truncation. |
+| Divide signed values | `idiv r/m32` uses `edx:eax`, returns quotient/remainder, and may raise divide error. |
+| Widen a field | `movzx` fills with zeros; `movsx` repeats the sign bit. |
+| Interpret a boundary | CF is unsigned carry/borrow; OF is signed overflow. |
+
+Next, [follow decisions, stack operations, and bits](/rust-game-hacking-book/pages/2/11/). For numeric formats before these instructions, revisit [How Bytes Become Numbers and Pointers](/rust-game-hacking-book/pages/3/09/).
