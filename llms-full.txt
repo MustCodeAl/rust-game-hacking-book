@@ -572,26 +572,27 @@ return to bytes and addresses just before the first memory scan in
 ## Lesson 1.3 — Game Fundamentals
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/03/
 Category: Game Hacking Foundations
-Estimated reading time: 34 minutes
-Summary: Follow actions through a game's entities, rules, space, and time; distinguish live state, display copies, server decisions, saves, and bytes.
+Estimated reading time: 39 minutes
+Summary: Follow actions through a game's entities, checks, space, and time; distinguish live state, display copies, server decisions, saves, and bytes.
 
 Lesson 1.2 followed a game action through the CPU and a simple loop. To
 understand why a displayed number changes, we need a model of the game
-around it: what the player does, which rule runs, what the game remembers,
+around it: what the player does, which check or calculation runs, what the game remembers,
 and what it shows. The byte-level memory model comes just before our first
 scan in Lesson 1.9.
 
 Our small game has players, coins, and a shop. Call one player Ada. We will
 follow her purchases and movement, then ask what the game must keep while
 she plays and what it must save when she leaves. The examples describe
-chosen rules for this game; another game can model the same activity
+chosen checks and updates for this game; another game can model the same activity
 differently.
 
 ## A game turns actions into a changing world
 
-A player supplies **input**, such as buying an item or pressing a movement
-key. The game applies **rules** to its current **state**—the information it
-remembers about the world. It then draws or plays an **output** that the
+A player supplies **input**, such as clicking the Buy button or pressing a
+movement key. The game interprets that input as a requested action. It checks
+its current **state**—the information it remembers about the world—and
+calculates any accepted change. It then draws or plays an **output** that the
 player can perceive. A common game loop repeats those steps as play
 continues:
 
@@ -604,22 +605,24 @@ flowchart TD
 ```
 
 The example takes the successful purchase path. If the player has only 10
-gold and the item costs 25, the rule leaves gold unchanged. The screen
+gold and the item costs 25, the affordability check fails and gold stays 10. The screen
 reports what the game decided; it does not decide the purchase itself.
 Later in this lesson we will see why the screen may even hold a separate
 copy of that result.
 
 Games can also update enemies, timers, motion, or music without a fresh
-button press. The important cycle is that rules read the current world,
-change it, and produce something the player can observe. An **engine** is
-<HoverCard kind="example" body="Unity, Unreal Engine, and Godot are engines, and so is Bevy, an open-source engine written in Rust. Each supplies the loop, the drawing, and the loading; the game supplies the rules.">reusable software for common game jobs</HoverCard>. It commonly supplies the repeating
+button press. On each update, the game can subtract time from a countdown, move a projectile
+by its speed and elapsed time, or choose an enemy action. It then draws the
+changed world or plays a sound. An **engine** is
+<HoverCard kind="example" body="Unity, Unreal Engine, and Godot are engines, and so is Bevy, an open-source engine written in Rust. Each supplies the loop, the drawing, and the loading; the game supplies its prices, movement calculations, and decisions.">reusable software for common game jobs</HoverCard>. It commonly supplies the repeating
 loop, drawing, and loading resources such as images and sounds; the game
-supplies particular rules such as the price of an item. Finding the right place to
+supplies particular behavior, such as looking up an item price and rejecting
+a purchase when gold is below that price. Finding the right place to
 change a game starts by asking which side owns the behavior. [Lesson 4.1](/pages/1/11/) develops that boundary.
 
 A game remembers more than one number. It might track one player's gold,
 current health, and maximum health at the same time. How can it keep those
-values together and apply the same rule to many players?
+values together and apply the same calculation to many players?
 
 ## One player has related values
 
@@ -636,7 +639,7 @@ player:
 The labels tell us what each value means. If the player buys an item for 25
 gold, gold becomes 75, while health stays 80. If the player then takes 20
 damage, health becomes 60, while gold stays 75. The changes belong to one
-player, but each rule uses a different part of that player's state.
+player, but the purchase uses gold and the damage calculation uses health.
 
 A group of related named values is a **record**. Each value inside it is
 a **field**. The record lets the program talk about a player's gold without
@@ -684,7 +687,7 @@ need not occupy one uninterrupted block of memory.
 An entity also has a **lifetime**: the interval from its creation to its
 removal. A coin entity stops being available after Ada picks it up. A later
 coin can reuse its storage without being the same coin. Some games reuse
-IDs too, so an ID is meaningful only within the identity rules of that
+IDs too, so an ID is meaningful only within the identifier assignment and reuse policy of that
 game. Later memory lessons develop how to recognize a currently valid
 entity; the first question is already useful: does this information still
 belong to the thing we intended to observe?
@@ -710,6 +713,42 @@ state belonging to her running instance. A definition's default and an
 instance's current value can be equal when the instance starts, then
 diverge during play.
 
+## A class defines fields and methods; an instance holds values
+
+In a language such as C++, a **class** describes a kind of object: which
+fields it has and which operations can use those fields. A function called
+through an object is a **method**. A player instance is one particular
+object created from that definition. Ada and Bo can use the same `damage`
+method while holding different health values.
+
+This explanatory pseudocode names the receiver `self`: the specific instance
+whose method was called. It is a sketch, not runnable Rust or C++:
+
+```text
+class Player:
+    gold
+    health
+    damage(amount):
+        self.health = max(0, self.health - amount)
+
+Ada = Player(gold=75, health=60)
+Bo = Player(gold=40, health=50)
+Ada.damage(20)   # Ada's health becomes 40; Bo's stays 50.
+```
+
+`max(0, value)` selects whichever is larger, so damage cannot make health
+negative in this model. `Ada.damage(20)` chooses Ada as `self`; it does not
+subtract 20 from every Player. A class definition does not mean that all
+instances share one set of field values. Games can also organize data using
+components rather than one class per entity, as we saw above.
+
+Choose a player or a damage amount below. Read the result first if useful,
+then step through how the receiver selects the changed field.
+
+<CodeTrace trace="original-class-instance" />
+
+<MarginNote kind="brief">A class defines fields and methods. Each instance holds its own field values; the receiver identifies which instance a method uses.</MarginNote>
+
 ## One record becomes several players
 
 For the table below, add a second player called Bo.
@@ -729,7 +768,7 @@ with headings. A compiled game stores values as bytes; the labels here tell
 read those bytes.
 
 Suppose both players collect one coin. We could write “Ada's gold becomes
-76; Bo's gold becomes 41.” For many players, repeating a single rule is
+76; Bo's gold becomes 41.” For many players, repeating one calculation is
 simpler:
 
 ```text
@@ -738,11 +777,11 @@ for each player in the collection:
 ```
 
 That repeated pass is a **loop**. One pass handles Ada (75 becomes 76);
-the next handles Bo (40 becomes 41). The rule stays the same when the
+the next handles Bo (40 becomes 41). The add-one calculation stays the same when the
 collection grows. This is the reason to introduce a collection and a loop,
 rather than a list of data-structure names to memorize.
 
-<MarginNote kind="alternative">Think of a spreadsheet: write one formula, copy it down every row, and the same rule covers two players or two hundred.</MarginNote>
+<MarginNote kind="alternative">Think of a spreadsheet: write one formula, copy it down every row, and the same calculation covers two players or two hundred.</MarginNote>
 
 ```mermaid
 flowchart TD
@@ -750,6 +789,8 @@ flowchart TD
     Ada --> Bo["Bo: 40 → 41"]
     Bo --> More["next player, if any"]
 ```
+
+**Class cheatsheet:** a class defines fields and operations; an instance holds one object’s current values; the receiver selects which instance a method changes.
 
 ## The same idea in Rust
 
@@ -759,7 +800,7 @@ player values; it does not yet run a purchase or create a player:
 
 ```rust
 struct Player {
-    gold: u32,        // Amount the purchase rule can spend.
+    gold: u32,        // Amount an accepted purchase can spend.
     health: u32,      // Current health after damage or healing.
     max_health: u32,  // Upper limit for a health update.
 }
@@ -779,24 +820,24 @@ tool has to infer fields from the bytes and the instructions that use them.
 [Lessons 3.4–3.6](/pages/3/03/) develop that recovery in detail, including
 alternative layouts and objects that move or disappear.
 
-## Rules connect fields
+## Checks keep health inside its permitted range
 
 Having fields together also lets the game check relationships between them.
 Ada's health of 60 fits her maximum of 100. A health value of 120 with a
-maximum of 100 would violate the simple rule
+maximum of 100 would exceed the permitted range
 
 ```text
 0 <= health <= max_health
 ```
 
 Here, `<=` means “less than or equal to”: health must be at least zero and
-no greater than the maximum. Our damage and healing rules should keep it
+no greater than the maximum. Our damage and healing calculations should keep it
 inside that range.
 
-We do not need a new data structure to explain this rule. It is a
+We do not need a new data structure to express this condition. It is a
 relationship the game should preserve when it applies damage or healing.
 Lesson 1.4 keeps both fields in its working player record. Later chapters
-call a rule that must remain true an **invariant** and show how to test one
+call a condition that must remain true an **invariant** and show how to test one
 when recovering a game's data.
 
 An address alone does not prove that a player record is still the same
@@ -811,9 +852,9 @@ We have said “Ada buys an item,” but a computer first receives something
 more mechanical: a mouse click, a key press, or a controller button. The
 game maps that input to an **action**, such as “buy this item” or “move
 right.” Keeping the action separate from its physical input allows the
-same rule to work with several devices and different key bindings.
+same purchase handler to work with several devices and different key bindings.
 
-An action is a request. The purchase rule still checks the price and Ada's
+An action is a request. The purchase handler still compares the price with Ada's
 gold before accepting it. Context matters too: pressing the right arrow
 might move Ada during play but select the next item while a shop menu is
 open. The same physical input can request different actions in different
@@ -822,7 +863,7 @@ parts of the game.
 A game also distinguishes a button being **pressed now** from being
 **held down**. In our game, one press of the buy button requests one
 purchase. Holding the movement button requests continued movement. If the
-purchase rule ran on every update while the button was held, one press
+purchase handler ran on every update while the button was held, one press
 could accidentally buy many items. This makes the input's timing part of
 the behavior we need to understand.
 
@@ -833,7 +874,7 @@ two-dimensional world, use two numbers: `x` for horizontal position and
 `y` for vertical position. Together, `(x, y)` are **coordinates**. Our
 example chooses positive `x` toward the right, positive `y` upward, and
 one unit as one tile's width. These are conventions chosen for this world,
-not rules every engine shares.
+not conventions every engine shares.
 
 Ada starts at `(2, 3)`. Moving one unit right gives `(3, 3)`: `x` changes
 from 2 to 3 and `y` stays 3. These are **world coordinates**, describing
@@ -866,7 +907,7 @@ move until we know how much time those updates represent.
 
 ## The world updates between pictures
 
-The work that advances movement, health, timers, and other rules is the
+The work that advances movement, health, timers, and other changing state is the
 **simulation**. The work that makes an image of the current world is
 **rendering**. One displayed picture is a **frame**. A simulation update
 is often called a **tick**. These names let us distinguish advancing the
@@ -892,7 +933,7 @@ enemy can act. The player does not need to press a new button for each
 change. A pause menu might stop the simulation while still rendering the
 menu, so a visible animation is not proof that every game timer is running.
 
-## Collisions connect movement to rules
+## Contact tests can block movement, award gold, or apply damage
 
 Our movement calculation proposes a new position. It has not yet checked
 whether Ada would pass through a wall or touch a coin. The game gives
@@ -910,13 +951,13 @@ different questions.
 Detecting contact and deciding its consequence are separate jobs. A wall
 blocks movement. A coin allows movement but awards gold and removes its
 own entity. A trap allows movement but applies damage. All three can
-begin with a contact test and then follow different game rules.
+begin with a contact test and then produce different changes to the world.
 
 A **physics system** can calculate motion using speed, forces, gravity,
-and contact responses. A game can also use simple movement rules without
+and contact responses. A game can also use simple movement calculations without
 a general physics system. The drawn image and the collision shape may
 have different sizes or levels of detail, so touching an image is not
-always the same as touching the shape the rules test.
+always the same as touching the shape the contact test uses.
 
 ## Modes and events organize change
 
@@ -927,18 +968,17 @@ ignored. After a two-second wait, she enters respawning. Placing her at
 the spawn point and restoring her health makes her alive again.
 
 A change between modes is a **transition**. A set of allowed modes and
-rules for moving between them is a **state machine**. Here, “state” names
+conditions and actions for moving between them is a **state machine**. Here, “state” names
 one behavior mode. Earlier, “game state” meant all the information the
 game remembers, including gold, health, position, and this mode. The mode
 is one part of that larger state.
 
 For this example, the game changes Ada's mode while keeping her player
 identity. A different game could remove the old character entity and
-create another. The visible respawn alone does not tell us which lifetime
-rule it uses.
+create another. The visible respawn alone does not tell us whether it reused the player record or created another.
 
 The game can also announce a particular occurrence: “Ada collected coin
-42.” Such an occurrence is an **event**. The coin rule can award one gold,
+42.” Such an occurrence is an **event**. The pickup handler can award one gold,
 then notify the sound system and the display so they can play a pickup
 sound and show the changed amount. Those systems can react to the same
 event without each deciding whether the coin was available.
@@ -955,17 +995,17 @@ gold again. Chapter 4 develops decisions and events in more detail.
 After Ada collects a coin, the game may store 76 as her current gold and
 also prepare the text `"Gold: 76"` for the screen. The text is derived
 from the number, but it is not necessarily the number that the purchase
-rule reads.
+handler reads.
 
 ```mermaid
 flowchart LR
     Input["Ada collects one coin"] --> State["gameplay gold: 75 becomes 76"]
-    State --> Rule["purchase rule reads 76"]
+    State --> Rule["purchase check reads 76"]
     State --> Display["display text: Gold: 76"]
 ```
 
 If someone changes only the display text to `"Gold: 999"`, the screen may
-show 999 while the purchase rule still sees 76. Changing a displayed copy
+show 999 while the purchase check still sees 76. Changing a displayed copy
 can affect appearance without changing gameplay. This is why observing a
 matching number in memory is only the start of an investigation. Later
 lessons compare what changes after a purchase with what the game actually
@@ -973,16 +1013,18 @@ uses to decide whether the purchase is allowed.
 
 ## Which copy decides the result?
 
-In our local example, the purchase rule reads Ada's gameplay gold. That
-value is **authoritative** for the purchase: the rule accepts it as the
+In our local example, the purchase check reads Ada's gameplay gold. That
+value is **authoritative** for the purchase: the check uses it as the
 amount Ada actually has. The display copy reports the result but does
 not decide it. Authority describes this role, not a special numeric type.
 
 In a multiplayer game, a **client** is the program a player uses to take
-part. A **server** is a program that <HoverCard kind="reference" href="/pages/6/01/" body="Lesson 8.1 follows a move from a game client to a server and back as framed bytes.">coordinates the shared game</HoverCard>. A common
-design lets the client send “Ada requests this item” while the server
-looks up the item's price and checks its own gold value before accepting
-or rejecting the request.
+part. A **server** is a program that receives player requests over a connection,
+checks them against the shared game state it maintains, and sends accepted
+results to the participating clients. In a common shop design, the client
+sends the item ID Ada wants. The server looks up that item's price, compares
+it with the gold it stores for Ada, and either rejects the request or
+subtracts the price and records the purchased item. <HoverCard kind="reference" href="/pages/6/01/" body="Lesson 8.1 follows a move request from a game client to a server and back as framed bytes.">Lesson 8.1 follows such requests and replies.</HoverCard>
 Different games divide responsibility differently, so the important
 question is which side has authority over this particular decision.
 
@@ -993,7 +1035,7 @@ The display's 999 did not give the server more gold. A network delay can
 also leave a client temporarily showing an older result, even when
 neither program has a bug.
 
-<MarginNote kind="narration">This is why servers do not trust a number a client shows: the client only sends a request, and the server checks it against its own copy.</MarginNote>
+<MarginNote kind="narration">In this shop design, the server uses the item ID to find a price and checks its own stored gold. The client's displayed amount does not pass or fail that check.</MarginNote>
 
 Some clients show an expected result before the server replies so an
 action feels responsive. If the server rejects the action, the client
@@ -1030,13 +1072,13 @@ develops save files and other game resources.
 
 We can now connect the meanings we have used. First, a designer chooses
 an idea from a real or imagined world: a character owns coins and can
-spend them. The game represents the parts its rules need as entities and
+spend them. The game represents the information its calculations need as entities and
 fields, such as player ID 17 with 76 gold. This chosen representation is
 a **game-data model**. Ada's health number likewise models how the game's
-damage rules work; it is not a complete description of a person's body.
+damage and healing calculations use; it is not a complete description of a person's body.
 
 To save that information or send it to another program, the game chooses
-a **format**: rules specifying which fields are included and how to write
+a **format**: a specification of which fields are included and how to write
 and read them. A save might include gold and collected coins. A movement
 message might include only a player ID and the requested direction. They
 serve different purposes, so they need not contain the same information
@@ -1068,7 +1110,7 @@ The animation follows the meaning through those design choices. Live
 fields in RAM are already represented by bytes too; a game does not have
 to turn its whole world into a save file on every tick. In memory, code
 uses a known layout and types. In a save or message, code uses that
-format's rules. Lesson 1.8 develops the memory representation in detail.
+format's field order, widths, and encodings. Lesson 1.8 develops the memory representation in detail.
 
 Keep two questions separate when investigating a value: **how is it
 represented?** and **what role does it have?** A number stored as four
@@ -1080,7 +1122,8 @@ authority or tell us when it was last updated.
 
 ## How the game pieces fit
 
-Ada's input requests an action. Rules check her current state and update
+Ada's input requests an action. Purchase checks and damage calculations read
+her current state and update
 the relevant fields. Simulation advances that world through time;
 rendering shows a view of it. Identity tells the game which entity a value
 belongs to, components organize its responsibilities, and assets can be
@@ -1094,12 +1137,12 @@ game model explains the information; its memory layout or save/message
 format explains how code represents it as bytes.
 
 We have described the update in words. [Lesson 1.4](/pages/1/04/) turns the
-same player's values and rules into a small Rust program.
+same player's values and calculations into a small Rust program.
 
 ## Where these ideas continue
 
 <CardGrid>
-  <LinkCard title="Game Engines: Where the Rules Live" description="The loop, the entities, and the scenes as an engine runs them." href="/pages/1/11/" />
+  <LinkCard title="Game Engines: Input, Simulation, and Rendering" description="The loop, the entities, and the scenes as an engine runs them." href="/pages/1/11/" />
   <LinkCard title="Coordinates, Vectors, and Directions" description="Positions, directions, and blending over time." href="/pages/4/11/" />
   <LinkCard title="Messages, Streams, and Multiplayer" description="How a client and a server share one game." href="/pages/6/01/" />
   <LinkCard title="Game Files and Live Memory" description="Saves, assets, and what a game keeps after it closes." href="/pages/9/01/" />
@@ -2458,7 +2501,7 @@ Summary: Turn observed game behavior into repeatable experiments, test a small t
 
 Imagine an offline game whose display shows 100 gold. Buying an item for
 25 changes the display to 75. The screen shows the result, but it does
-not identify the rule or the
+not identify the affordability check, subtraction, or
 stored value that caused it. **Game hacking** in this book means
 investigating that behavior and making a deliberate, testable change to
 the game or its data.
@@ -2468,7 +2511,7 @@ the game or its data.
 An observation is what you can actually see: after a 25-gold purchase,
 the display changes from 100 to 75. An explanation is a **hypothesis**:
 perhaps a four-byte value in the game's memory stores the gold used by
-the purchase rule. Other explanations are possible. The game may keep a
+the purchase handler. Other explanations are possible. The game may keep a
 display copy, recalculate gold from other data, or let a server decide
 the result. A matching number is therefore a candidate, not a conclusion.
 
@@ -2487,7 +2530,7 @@ a candidate. Neither tool supplies the meaning by itself.
 ## Four steps for a controlled experiment
 
 One way to keep the work in order is to split it into four steps. Treat them as
-a suggestion to adapt, not a rule the rest of the book relies on:
+a useful order to adapt when new evidence changes the question:
 
 <Steps>
 
@@ -2503,7 +2546,7 @@ understand or locate a different copy:
 
 ```mermaid
 flowchart TD
-    I["1. Identify<br/>one behavior you can repeat"] --> U["2. Understand<br/>the rules it should follow"]
+    I["1. Identify<br/>one behavior you can repeat"] --> U["2. Understand<br/>the checks and calculations involved"]
     U --> L["3. Locate<br/>the data and the code"]
     L --> C["4. Change<br/>one thing, then measure"]
     C -->|"only the text changed:<br/>you found a display copy"| L
@@ -2534,7 +2577,7 @@ axis, or toggling one graphics setting. Avoid changing several things at once.
 
 ## 2. Understand how the behavior should work
 
-Before searching memory, work out the rule the game appears to follow.
+Before searching memory, predict the checks and calculation the game appears to use.
 For this lesson's 25-gold purchase, our first guess is:
 
 ```text
@@ -2550,7 +2593,7 @@ Try the same idea on another behavior. For health, a first guess might be:
 new_health = max(0, old_health - damage)
 ```
 
-The rule also implies conditions that should always hold:
+For this health model, record further predictions you can test:
 
 ```text
 0 <= health <= max_health
@@ -2568,7 +2611,8 @@ flowchart TD
     S --> B["resize the health bar: derived display"]
 ```
 
-These rules help distinguish a value used by the game's rules from text,
+These predictions help distinguish the health used for later damage and
+defeat decisions from text,
 animation state, or a cached display value.
 
 This self-contained Rust fragment makes the distinction visible:
@@ -2582,11 +2626,11 @@ if gold >= 25 {
 ```
 
 Now `displayed_gold` is still 100, but `gold` is 75. Changing the copy
-would not make a later purchase use 100 gold; the rule reads `gold`.
+would not make a later purchase use 100 gold; the next affordability check reads `gold`.
 A real game may refresh its display differently, so the
-experiment must establish which value the rule actually reads.
+experiment must establish which value the purchase handler actually reads.
 
-At this stage the rules are guesses. The game may apply armor, difficulty
+At this stage these checks and formulas are hypotheses. The game may apply armor, difficulty
 scaling, or delayed damage, or a server may own the result, and any of these
 would break the simple formula.
 
@@ -2628,7 +2672,7 @@ current value before changing anything.
 ## 3. Locate the data and code
 
 Use the least complicated technique that can answer the question. A
-**breakpoint** is a debugger rule that pauses execution at a chosen
+**breakpoint** is a configured debugger stop that pauses execution at a chosen
 instruction or memory access; we will use one only after learning the
 debugger.
 
@@ -2763,7 +2807,7 @@ the pause, while the later sampling lesson shows how to limit recording delays.
 ## Use tests and types for quick feedback
 
 Separate code that decides *what should happen* from code that performs a
-Windows API call. In this toy rule, a write is allowed only when the
+Windows API call. In this toy decision function, a write is allowed only when the
 current value still matches the value we expected and the replacement is
 at most 10,000. That limit is an example policy for this exercise, not a
 universal gold limit. Pure logic like this can be tested without
@@ -2832,7 +2876,7 @@ Start documentation with the question, the tool's purpose, and its limits.
 Then show the route through the experiment before detailing each step. A
 reader needs to know which file or command to begin with, what result to
 expect, and what a failure means. Define names consistently: if `gold` means
-the rule's stored amount, call the screen copy `displayed_gold` throughout.
+the amount used by the purchase check, call the screen copy `displayed_gold` throughout.
 
 Keep a compact experiment record:
 
@@ -2861,10 +2905,10 @@ for a current promise.
 
 ## What a candidate address tells you
 
-A matching address is a lead. A repeatable behavior and an expected rule
+A matching address is a lead. A repeatable action and a predicted check or calculation
 give it meaning; controlled changes and a breakpoint narrow the lead.
-A reversible edit tests whether that address affects the game rule or
-only a copy. The compiler and tests check the tool's logic, while the
+A reversible edit tests whether that address changes the amount a purchase reads or
+only a displayed copy. The compiler and tests check the tool's logic, while the
 debugger observes what the running game actually does.
 
 [Lesson 1.7](/pages/1/07/) prepares a repeatable Windows lab. Lesson 1.8
@@ -2876,7 +2920,7 @@ separate game action with its own starting value and observed result.
 ## Lesson 1.7 — A Windows Lab You Can Reset
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/07/
 Category: Game Hacking Foundations
-Estimated reading time: 16 minutes
+Estimated reading time: 20 minutes
 Summary: Set up a Windows virtual machine with the compiler, debugger, memory scanner, course code, and recovery snapshots.
 
 Before using a scanner or debugger on the course game, set up a place
@@ -3077,6 +3121,36 @@ VBoxManage export "Game Lab" --output GameLab.ova
 VBoxManage import GameLab.ova
 ```
 
+## A snapshot rewinds one VM; a clone creates a second VM
+
+Use a **snapshot** to return one VM to recorded files and settings. Use a
+**clone** when you want a separate experiment copy beside the baseline.
+VirtualBox offers two disk arrangements: a **full clone** copies the
+dependent virtual disks; a **linked clone** writes into its own differencing
+disks while relying on source base disks. Keep that base available. The
+[VirtualBox cloning guide](https://docs.oracle.com/en/virtualization/virtualbox/7.2/user/working-with-vms.html#cloning-virtual-machines)
+describes these choices and its network-adapter address policy.
+
+Disk separation is one boundary. Before starting both copies, review their
+network adapter MAC addresses, guest host names and fixed IP settings, and
+host sharing. A MAC address identifies an adapter on its local network;
+cloning disk content alone does not make all copied network settings unique.
+Changes in a shared host folder are outside the guest disk snapshot.
+
+The model below changes an invented save in an experiment copy, then resets
+it. Choose how the copy was prepared and inspect the disk dependency.
+
+<CodeTrace trace="original-vm-branch" />
+
+Keep the baseline stopped while preparing a named experiment copy. Start
+from the recorded course build and your own resettable test program or
+save. A separate VM supports comparison and recovery; it does not prove
+that network peers or host files are isolated.
+
+<MarginNote kind="brief">Snapshots recover one VM. Full and linked clones make second VMs; a linked clone still needs its source base disks. Check networking and host sharing separately.</MarginNote>
+
+**Recovery cheatsheet:** a snapshot rewinds one VM; a full clone copies its virtual disks; a linked clone keeps a dependency on its base disks. Host sharing and networking need separate checks.
+
 ## What a result depends on
 
 When you later record an **address** (a location in the running game), an
@@ -3210,6 +3284,9 @@ that sits `i` places from the right:
 
 With every bit set, a byte holds 128 + 64 + 32 + 16 + 8 + 4 + 2 + 1 = 255. With
 none set, it holds 0. So a byte has exactly 256 possible values, 0 to 255.
+
+[Lesson 1.10](/pages/1/17/) uses those positions to inspect flags, build masks,
+and compare shifts with rotations.
 
 ### Why everything is in hex
 
@@ -3870,6 +3947,209 @@ and what decides whether the player can afford it? [What a Debugger Can
 Reveal](/pages/2/01/) begins Chapter 2 with that question. We will pause the
 program at the change, then learn how source code becomes the instructions
 the debugger shows.
+
+---
+## Lesson 1.10 — Bits, Masks, Shifts, and Rotations
+Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/1/17/
+Category: Game Hacking Foundations
+Estimated reading time: 22 minutes
+Summary: Read a byte by its bit positions, select flags with masks, and distinguish discarded shift bits from wrapped rotation bits.
+
+[Lesson 1.8](/pages/1/08/) explained how bytes hold a health number.
+Sometimes a program uses the positions inside one byte separately. One
+position can record “door open,” another “lamp on,” and another “alarm active.”
+To inspect or change just one of them, we need **bitwise operations**:
+operations on corresponding bit positions rather than on whole decimal values.
+
+## A bit's position gives it a weight
+
+A **bit** is either 0 or 1. An unsigned byte has eight positions, numbered
+from 0 on the right to 7 on the left. Position `i` contributes `2^i` when
+its bit is 1. The byte `00000101` has positions 2 and 0 set, so it represents
+4 + 1 = 5. Binary literals in Rust begin with `0b`.
+
+<MemoryStrip
+  cells="bit 7: 128=0|bit 6: 64=0|bit 5: 32=0|bit 4: 16=0|bit 3: 8=0|bit 2: 4=1|bit 1: 2=0|bit 0: 1=1"
+  marks="5|7"
+  caption="00000101 has two set bits. Its decimal value is 5, not the count of its set bits."
+/>
+
+The number 5 alone does not tell us whether it means five coins or two
+enabled flags. That meaning comes from the code and format using the byte.
+For our invented status format, bit 0 means door open, bit 1 means lamp on,
+and bit 2 means alarm active. The other five positions are reserved and
+start at zero. Status 5 therefore means door open and alarm active.
+
+<MarginNote kind="brief">Bit positions run from 0 at the right. A byte's numeric value is the sum of its set-bit weights; flag meanings come from a declared format.</MarginNote>
+
+## A mask chooses positions
+
+A **mask** is a bit pattern used to select positions. A mask of `00000100`
+selects bit 2, whose weight is 4. **AND**, written `&` in Rust, keeps a bit
+at 1 only when both corresponding input bits are 1:
+
+```text
+status:  00000101   5
+mask:    00000100   4
+AND:     00000100   4
+```
+
+For this format, `status & 0b00000100` isolates the alarm bit. Testing whether
+that result is nonzero tells us whether the alarm is active:
+
+```rust
+let status: u8 = 0b00000101;
+let alarm_mask: u8 = 0b00000100;
+let alarm_active: bool = (status & alarm_mask) != 0; // true
+```
+
+For a mask containing several 1 bits, “nonzero” means **any** selected bit
+is set. To require **all** selected bits, compare the result with the mask.
+With mask `00000011`, status 5 has only the door bit, so `status & mask`
+is 1: nonzero, but not equal to 3. A zero mask selects nothing.
+
+The bitwise `&` above produces a number. Boolean `&&` combines true/false
+conditions, such as “enough gold and item in stock.” They answer different
+questions and accept different operand types.
+
+## Set, clear, and flip a flag
+
+Four operations explain the common edits. A 0 in a mask preserves the
+input position for OR and XOR. AND preserves positions where its mask is 1.
+
+| Operation | Rust expression | Effect on one selected bit |
+| --- | --- | --- |
+| AND | `value & mask` | Keep only selected 1 bits |
+| OR | `value \| mask` | Set selected bits to 1 |
+| XOR | `value ^ mask` | Flip selected bits |
+| NOT | `!value` | Flip every bit within the value's type |
+
+For our status byte, setting the lamp uses OR with bit 1. Clearing the alarm
+uses AND with a mask that has **zero** at bit 2 and ones everywhere else.
+NOT constructs that clearing mask. XOR toggles the door bit:
+
+```rust
+let status: u8 = 0b00000101;          // Door and alarm are on.
+let lamp_on = status | 0b00000010;   // 00000111: all three are on.
+let alarm_off = status & !0b00000100; // 00000001: only door is on.
+let door_flipped = status ^ 0b00000001; // 00000100: only alarm is on.
+```
+
+These are three separate calculations from the same starting status. They
+do not successively update one variable. OR sets an already-set bit to 1
+again; XOR would switch it off. Applying the same XOR mask twice returns
+the original value.
+
+Width matters for NOT. Flipping `00000101` as a `u8` gives `11111010`, decimal
+250. A 32-bit value has 32 positions to flip. A bit pattern must be interpreted
+with its type and width, just as a memory scan must choose its field width.
+
+<MarginNote kind="brief">Set with OR, clear with AND and an inverted mask, toggle with XOR. NOT flips the positions in the operand's type, so record the width.</MarginNote>
+
+## Explore an operation before stepping through it
+
+The starting example isolates the alarm bit: 5 AND 4 gives 4. Change the
+byte, mask, or operation below. Use “Show me the result” whenever you want
+the endpoint, then step back to inspect the selected positions. Mask and
+count controls remain visible for comparison; each explanation states which
+inputs the operation uses.
+
+<CodeTrace trace="original-bit-operations" />
+
+## Shifts move positions and discard bits
+
+A **logical shift** moves bits left or right, fills the newly opened positions
+with zeros, and discards bits that leave the chosen width. In Rust, `<<` shifts
+left; `>>` on an unsigned integer shifts right. For an eight-bit value:
+
+```text
+start:         00000101   5
+shift left 1:  00001010  10
+shift right 1: 00000010   2
+```
+
+A left shift by one doubles the unsigned numeric value **when the result
+fits**. A right shift by one divides it by two and drops the fractional part.
+But `10000001` shifted left by one becomes `00000010`: the original high
+bit was discarded. It does not become the wider number 258.
+
+```rust
+let byte: u8 = 0b10000001;
+let left: u8 = byte << 1;  // 00000010, decimal 2.
+let right: u8 = byte >> 1; // 01000000, decimal 64.
+```
+
+Our controls restrict the count to 0–7 for an eight-bit shift. A zero count
+leaves the byte unchanged. Do not assume that a count of eight is a portable
+way to produce zero: count validity and machine count handling depend on the
+operation and language. Rust's
+[`checked_shl` and `checked_shr`](https://doc.rust-lang.org/stable/std/primitive.u8.html#method.checked_shl)
+return `None` for a count at least the type's width. They check the **count**;
+they do not report every bit discarded by a valid shift.
+
+## Rotations wrap bits instead of discarding them
+
+A **rotation** moves bits in one direction but carries the outgoing bits to
+the opposite end of the same width. Rotate `10000001` left once and its
+leading 1 reappears at the right:
+
+```text
+start:          10000001  129
+shift left 1:   00000010    2
+rotate left 1:  00000011    3
+rotate right 1: 11000000  192
+```
+
+Rust provides stable integer methods for this:
+
+```rust
+let byte: u8 = 0b10000001;
+let left = byte.rotate_left(1);   // 00000011, decimal 3.
+let right = byte.rotate_right(1); // 11000000, decimal 192.
+```
+
+A rotation preserves the number of set bits, though their positions and the
+numeric value can change. Rotating a byte by eight positions returns the
+original byte. These methods and their distinction from shifts are documented
+in the [Rust `u8` reference](https://doc.rust-lang.org/stable/std/primitive.u8.html#method.rotate_left).
+
+<MarginNote kind="brief">A shift discards outgoing bits and introduces zeros. A rotation wraps outgoing bits around within the same width.</MarginNote>
+
+## Packed fields use masks and shifts together
+
+Suppose an invented byte stores an item kind in its upper four bits and a
+quantity in its lower four. `10100011` means kind 10 and quantity 3. A field
+is **packed** when it occupies selected bit positions rather than a whole
+byte of its own.
+
+```rust
+let packed: u8 = 0b10100011;
+let quantity = packed & 0b00001111; // Keep low four bits: 3.
+let kind = packed >> 4;            // Move high four bits down: 10.
+```
+
+The mask selects; the shift moves selected positions to weights starting at
+one. These operations explain a packed value only after evidence establishes
+its field boundaries. “A byte equals 163” alone does not prove this format.
+Bit order within the number and byte order across several memory addresses
+are separate questions; [Lesson 1.8](/pages/1/08/) develops byte order.
+
+When [Lesson 2.3](/pages/2/02/) introduces assembly, recognize the same ideas
+in `and`, `or`, `xor`, `shl`, and `shr`. Track the operand width and the result,
+then investigate any flags or branches that use it.
+
+## Cheatsheet
+
+| Intent | Operation | Example |
+| --- | --- | --- |
+| Check any chosen flag | `value & mask != 0` | At least one selected bit is set. |
+| Check all chosen flags | `value & mask == mask` | Every selected bit is set. |
+| Set chosen bits | `value | mask` | Other positions stay as they were. |
+| Clear chosen bits | `value & !mask` | Invert a mask of the same width first. |
+| Toggle chosen bits | `value ^ mask` | Apply twice to recover the starting value. |
+| Move bits left or right | `<<` / `>>` on unsigned values | Outgoing bits are discarded. |
+| Wrap outgoing bits around | `rotate_left` / `rotate_right` | Rotation stays inside the type's width. |
+| Decode a packed field | Mask, then shift | A declared field boundary gives the bits meaning. |
 
 ---
 ## Lesson 2.1 — What a Debugger Can Reveal
@@ -4775,6 +5055,10 @@ this lesson:
   caption="Gold 20 compared with price 25: 20 − 25 needs a borrow. CF = 1 makes `jb` jump. SF differs from OF, which makes `jl` jump as well."
 />
 
+[Lesson 1.10](/pages/1/17/) develops bit masks, shifts, and rotations before
+we use their assembly forms. It is a useful optional detour when these
+operations are new to you.
+
 ## Calls, returns, and the stack
 
 `call` jumps into a function and remembers where to return. `ret` goes back.
@@ -4817,6 +5101,32 @@ belongs to the caller's next instruction; it is separate from the address of
 `calculate_damage`:
 
 <Scene name="call-and-return" />
+
+### A nested call returns to its immediate caller
+
+An ordinary near `ret` does not search for “the main program.” It takes the
+return address currently on top of the stack. If `main` calls `add_bonus`,
+and `add_bonus` calls `add_one`, the first return goes to `add_bonus`; its
+return goes to `main`. The **last-in, first-out** order keeps these two
+continuations separate.
+
+The labels below stand for addresses in a simplified 32-bit x86 example.
+Each near call saves one four-byte return address; each plain `ret` removes
+one. There are no stack arguments or saved local registers in this model.
+Change the starting score and watch the two slots as well as `ESP`.
+
+<CodeTrace trace="original-nested-return" />
+
+The returned-to instruction is the one after the matching call, not the
+instruction that made the call. Also, popping a slot moves the stack pointer;
+it does not clear the old bytes. Those bytes alone are no longer evidence
+that the return address is still part of the active stack.
+
+<MarginNote kind="brief">Nested returns unwind one call at a time. `ret` uses the top return address; releasing a stack slot does not erase its bytes.</MarginNote>
+
+
+
+**Call/return cheatsheet:** `call` records where execution should resume; nested calls add newer return slots; `ret` uses the newest active slot. A calling convention separately specifies arguments, preserved registers, and stack requirements.
 
 ## Calling conventions are agreements between functions
 
@@ -5547,10 +5857,10 @@ run for other gold-changing actions. [Lesson 2.6](/pages/2/05/)
 follows the call path to find which rule brought execution here.
 
 ---
-## Lesson 2.6 — Tracing a Game Rule Through Its Callers
+## Lesson 2.6 — Tracing an Action Through Its Callers
 Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/2/05/
 Category: Instructions, Debuggers, and Addresses
-Estimated reading time: 23 minutes
+Estimated reading time: 28 minutes
 Summary: Follow callers and dependencies from one gold-changing instruction to the menu decision that caused it.
 
 Finding one instruction is useful. Understanding the surrounding feature is better.
@@ -5583,6 +5893,43 @@ Now you are back in the caller. Repeat this carefully to move from the low-level
 When x86 executes `call`, it places a return address on the stack before jumping to the callee. That address points to the instruction the caller expects to run next. A debugger’s call stack combines return addresses with known module ranges and function information to show the nested route that reached the breakpoint.
 
 The call stack a debugger shows is a reconstruction, and it may be incomplete. Optimizations can inline functions, reuse stack space, or omit traditional frame pointers. Confirm an important caller by returning to it or placing a breakpoint at its call site and reproducing the action.
+
+## Establish context by following the observed call chain
+
+Here, **establishing context** means connecting a stored change to the
+specific player, requested action, operands, and checks that caused it.
+At the gold write, knowing “subtract 25” is incomplete: is that an item
+price, a fine, or a different player's payment?
+
+The original course called the move from a small helper toward its callers
+**bubbling**. Treat that name as a method, not a promise that every caller
+has a recoverable source name. Record each confirmed level:
+
+**Context cheatsheet:** keep these levels together when following a write toward its callers.
+
+| Level | Question it can answer | Evidence to keep |
+| --- | --- | --- |
+| Gold write | Which field changed, and by how much? | Receiver address, amount, before/after values |
+| Spending helper | Which check allowed the subtraction? | Taken comparison and its operands |
+| Purchase handler | What did the amount mean? | Item price passed to the helper |
+| Action dispatcher | What requested this handler? | Selected command and matching call site |
+
+Reproduce one action, confirm its write, inspect the caller, and repeat until
+you can explain that action. Compare a second action that shares the helper:
+it can reach the same write for a different reason. A breakpoint above the
+shared helper needs that caller context to distinguish them.
+
+<CodeTrace trace="original-bubbling" />
+
+The final steps inspect a recorded path; they do not rewind or repeat a
+purchase. In a live debugger, **Run until return** executes the rest of the
+current function. **Step over** executes a call and pauses after it returns;
+**Step into** follows its executed instructions. None undoes previous writes.
+Note the current values again after running, and distinguish an inferred call
+stack from a call site you reproduced. Inlining and tail calls can remove an
+ordinary call/return boundary.
+
+<MarginNote kind="brief">Bubbling follows confirmed callers toward the action. Keep the player, arguments, checks, and result together so one shared helper is not mistaken for one feature.</MarginNote>
 
 ## Recognize dispatcher code
 
@@ -5641,7 +5988,7 @@ The gold instruction tells you **where** a change happens. The menu dispatcher t
 
 That distinction matters:
 
-- patching the subtraction changes one cost rule;
+- patching the subtraction changes the stored cost result;
 - changing a branch may select a different feature;
 - hooking the dispatcher lets you observe every menu action.
 
@@ -5661,7 +6008,7 @@ This is also a lesson about **abstraction levels**. The subtraction is a low-lev
 
 Compilers can move calculations away from the source statement that inspired them. The instruction immediately above the anchor may be unrelated, while the important value was loaded twenty instructions earlier or passed by the caller. Track one value and one decision at a time.
 
-A practical stopping rule is: stop tracing callers when you can name the input, the decision, and the observable result in plain English. Going farther may reveal the whole menu framework, but it no longer answers the focused gold question.
+A practical stopping condition is: stop tracing callers when you can name the input, the decision, and the observable result in plain English. Going farther may reveal the whole menu framework, but it no longer answers the focused gold question.
 
 <MarginNote kind="alternative">Think of tracing a delivery: who ordered it is the caller, where the goods came from is data, and which check let it ship is the branch.</MarginNote>
 
@@ -5739,16 +6086,16 @@ if candidate_action == 3:       # Recruit in all three trials
     subtract gold
 ```
 
-## From a write to a menu rule
+## From a write to a menu action
 
 The gold write supplied a known starting instruction. Its return address and
 call stack led to the caller; recruiting and opening Terrain Description
 supplied contrasting cases for the menu branch. The small pseudocode model
 names only behavior those cases supported. That route from an observed write
-to a caller, branch, and named rule also works when the compiler has removed
+to a caller, branch, and named action also works when the compiler has removed
 the original source names.
 
-That explanation names a rule, but the address of its instruction still belongs
+That explanation identifies the action and its checks, but the address of its instruction still belongs
 to one run. The next question is how to find the same game state after a restart:
 why addresses move, and which relationships between objects can survive the
 move. Once those are clear, we can return to changing control flow itself.
@@ -8359,6 +8706,30 @@ One matching subtraction is a clue, not proof. Repeat it while turning, respawni
 ## The hidden `this` pointer
 
 A C++ call such as `player.update()` looks as if it passes no player argument. A non-static member function still needs to know **which** player it should update. The compiler supplies a hidden argument called `this`.
+
+### Shared method code still needs a particular receiver
+
+A field offset describes a position within one layout; it is not an
+absolute field address. In the invented layout below, both objects store
+health at `base + 8`. Ada's base is `0x1000`, so her health is at `0x1008`.
+Bo's base is `0x2000`, so his health is at `0x2008`.
+
+Choose the receiver and follow the same method body. The example uses the
+x86 Microsoft `__thiscall` convention's `ECX` receiver and limits damage so
+this small subtraction cannot make health negative. It illustrates address
+selection; it does not define a universal C++ layout or model the whole ABI.
+Microsoft documents this receiver convention in its
+[`__thiscall` reference](https://learn.microsoft.com/en-us/cpp/cpp/thiscall?view=msvc-170).
+
+<CodeTrace trace="original-object-method" />
+
+Identical code and identical field offsets can modify different objects.
+To explain one write, recover both the layout and the receiver used on that
+call. A pointer to the code is not a pointer to the instance's fields.
+
+<MarginNote kind="brief">Field address = receiver base + field offset. Shared method code does not imply shared instance storage.</MarginNote>
+
+**Receiver cheatsheet:** shared method code is not shared object storage; the receiver supplies the instance address; base plus field offset selects that instance's field.
 
 ### The call's frame and the object's lifetime
 
@@ -21622,7 +21993,7 @@ control-flow graph — it changes where a single instruction leads. Every
 difficulty in this lesson comes from doing that to a graph other threads are
 walking at the same time.
 
-So the rule to hold on to is:
+The installation invariant is:
 
 > The hook is either completely absent or completely working. There is never a
 > moment when a call can find half of it.
@@ -21662,6 +22033,38 @@ There should be no `HalfPatched` state visible to executing threads.
 | Lifetime | Callback state and trampoline outlive every user | Removal frees memory while a callback runs |
 
 A successful single-threaded test proves almost none of these under load.
+
+## Restoring state and replaying instructions are separate work
+
+A detour can replace the bytes of an operation that the original path still
+needs to perform. Its trampoline must execute the displaced work with its
+original meaning, then continue at the first whole instruction after the
+replaced span. Saving and restoring a register does not perform that work.
+
+Consider a toy path that loads gold, adds a bonus, and stores the result.
+The detour replaces the addition with a jump. Its observer temporarily uses
+`EAX`, so preserving the incoming value prevents that scratch calculation
+from changing the bonus's input. **Replay** means executing the displaced
+addition exactly once before continuation. Try the three deliberate mistakes:
+no replay, two replays, or leaving the temporary register change in place.
+
+<CodeTrace trace="original-displaced-replay" />
+
+The successful case preserves one register and replays one addition. It is
+only a computation model. A real trampoline also has to preserve live flags
+and required machine state, relocate address-dependent operands, satisfy the
+calling convention, and survive concurrent entry. The five contracts above
+remain necessary even if the toy's final number matches.
+
+There is a third operation at removal: **restore the original patch-site
+bytes** after callers can no longer enter or remain in the detour. That puts
+the original code path back. Replaying displaced work during a call,
+preserving machine state during observer work, and restoring bytes during
+removal happen at different times and solve different problems.
+
+<MarginNote kind="brief">Preserve the observer's live inputs, replay displaced work once per call, and restore original patch bytes during safe removal. None substitutes for the other two.</MarginNote>
+
+**Restoration cheatsheet:** preserve live register/flag inputs; replay displaced work exactly once; restore original patch bytes only during safe removal. These are three separate jobs.
 
 ## Decode before deciding patch length
 
@@ -27502,6 +27905,36 @@ sequenceDiagram
 The client's “move north” is an **intent**: a request for a change, not the final truth. The reply reports what the server actually accepted. If a wall blocked the move, the reply might still say `(10, 15)`, and the client would correct its display.
 
 These programs have separate memory. Changing a position in the client's memory does not directly change the server's stored position. They communicate by sending bytes. A client may display a predicted move while it waits, then correct that display when the server's reply arrives. The next question is how the reply's bytes become one complete message at the other end.
+
+## Peer-to-peer describes who communicates with whom
+
+In a **peer-to-peer** arrangement, players' programs can exchange messages
+directly. A lobby service may still introduce them, and a relay may carry bytes
+when a direct connection is unavailable. Neither service must calculate the match.
+
+A player who hosts a server on their own computer still runs a client/server
+arrangement if that server accepts movement and sends the final positions.
+The location of the program does not change its job.
+
+| Example arrangement | Message path | Who calculates the accepted position here? |
+| --- | --- | --- |
+| Dedicated game server | Each client talks to the server program. | The server program. |
+| Player hosts the game server | Clients talk to the server on a player's computer. | That server program. |
+| Peers exchange inputs | Players exchange the same ordered input history. | Each peer runs the agreed deterministic simulation. |
+
+The last row describes one particular design, often called **lockstep**.
+Peer-to-peer does not automatically mean lockstep: another design can give one
+peer responsibility for an object or use different ways to resolve conflicts.
+Always ask two separate questions: **where do messages go, and whose result is
+accepted?** Direct communication alone does not prove which copy owns a gold value.
+
+<CodeTrace trace="original-network-topology" />
+
+<MarginNote kind="clarify">A server is a program with a job. A peer is another participant. Hosting on a player's computer and exchanging directly between peers describe different choices.</MarginNote>
+
+**Topology cheatsheet:** client/server identifies service roles; peer-to-peer
+describes communication between participants; authority identifies the accepted
+result. A topology label alone cannot answer all three questions.
 
 ## TCP is a stream
 

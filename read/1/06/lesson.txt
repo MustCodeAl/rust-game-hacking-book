@@ -1,10 +1,10 @@
 Hacking Fundamentals
 
-Imagine an offline game whose display shows 100 gold. Buying an item for 25 changes the display to 75. The screen shows the result, but it does not identify the rule or the stored value that caused it. Game hacking in this book means investigating that behavior and making a deliberate, testable change to the game or its data.
+Imagine an offline game whose display shows 100 gold. Buying an item for 25 changes the display to 75. The screen shows the result, but it does not identify the affordability check, subtraction, or stored value that caused it. Game hacking in this book means investigating that behavior and making a deliberate, testable change to the game or its data.
 
 Section: Start with evidence, not a scan result.
 
-An observation is what you can actually see: after a 25-gold purchase, the display changes from 100 to 75. An explanation is a hypothesis: perhaps a four-byte value in the game’s memory stores the gold used by the purchase rule. Other explanations are possible. The game may keep a display copy, recalculate gold from other data, or let a server decide the result. A matching number is therefore a candidate, not a conclusion.
+An observation is what you can actually see: after a 25-gold purchase, the display changes from 100 to 75. An explanation is a hypothesis: perhaps a four-byte value in the game’s memory stores the gold used by the purchase handler. Other explanations are possible. The game may keep a display copy, recalculate gold from other data, or let a server decide the result. A matching number is therefore a candidate, not a conclusion.
 
 The fastest way to get completely lost is to open a memory scanner and start searching before deciding what you are asking. You can end up with hundreds of addresses—numbered locations in the game’s running memory—with no way to tell which matters and no record of which ones you have ruled out. A scanner finds values that match a question; a debugger can later show the instruction that reads or writes a candidate. Neither tool supplies the meaning by itself.
 
@@ -12,7 +12,7 @@ In brief: A match is only a candidate. Decide your question first, because scann
 
 Section: Four steps for a controlled experiment.
 
-One way to keep the work in order is to split it into four steps. Treat them as a suggestion to adapt, not a rule the rest of the book relies on:
+One way to keep the work in order is to split it into four steps. Treat them as a useful order to adapt when new evidence changes the question:
 
 Identify the exact behavior.
 
@@ -48,7 +48,7 @@ Good starting behaviors include spending gold, taking damage, moving along one a
 
 Section: 2. Understand how the behavior should work.
 
-Before searching memory, work out the rule the game appears to follow. For this lesson’s 25-gold purchase, our first guess is:
+Before searching memory, predict the checks and calculation the game appears to use. For this lesson’s 25-gold purchase, our first guess is:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -56,21 +56,21 @@ Try the same idea on another behavior. For health, a first guess might be:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The rule also implies conditions that should always hold:
+For this health model, record further predictions you can test:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 The health calculation, stored result, and visible bar are connected, but they need not be one stored value:
 
-These rules help distinguish a value used by the game’s rules from text, animation state, or a cached display value.
+These predictions help distinguish the health used for later damage and defeat decisions from text, animation state, or a cached display value.
 
 This self-contained Rust fragment makes the distinction visible:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Now displayed_gold is still 100, but gold is 75. Changing the copy would not make a later purchase use 100 gold; the rule reads gold. A real game may refresh its display differently, so the experiment must establish which value the rule actually reads.
+Now displayed_gold is still 100, but gold is 75. Changing the copy would not make a later purchase use 100 gold; the next affordability check reads gold. A real game may refresh its display differently, so the experiment must establish which value the purchase handler actually reads.
 
-At this stage the rules are guesses. The game may apply armor, difficulty scaling, or delayed damage, or a server may own the result, and any of these would break the simple formula.
+At this stage these checks and formulas are hypotheses. The game may apply armor, difficulty scaling, or delayed damage, or a server may own the result, and any of these would break the simple formula.
 
 Section: Define what your tool is allowed to do.
 
@@ -88,7 +88,7 @@ A later tool may replace the temporary address with a module-relative pointer pa
 
 Section: 3. Locate the data and code.
 
-Use the least complicated technique that can answer the question. A breakpoint is a debugger rule that pauses execution at a chosen instruction or memory access; we will use one only after learning the debugger.
+Use the least complicated technique that can answer the question. A breakpoint is a configured debugger stop that pauses execution at a chosen instruction or memory access; we will use one only after learning the debugger.
 
 scan for the visible value;
 
@@ -160,7 +160,7 @@ A debugger lets you pause at the suspicious step and inspect its values and inst
 
 Section: Use tests and types for quick feedback.
 
-Separate code that decides what should happen from code that performs a Windows A P I, application programming interface, call. In this toy rule, a write is allowed only when the current value still matches the value we expected and the replacement is at most 10,000. That limit is an example policy for this exercise, not a universal gold limit. Pure logic like this can be tested without launching the game:
+Separate code that decides what should happen from code that performs a Windows A P I, application programming interface, call. In this toy decision function, a write is allowed only when the current value still matches the value we expected and the replacement is at most 10,000. That limit is an example policy for this exercise, not a universal gold limit. Pure logic like this can be tested without launching the game:
 
 Code example. The code’s comments explain: Both the expected-value check and the replacement limit must pass. A changed field must not pass the expected-value check. The limit is allowed; the next value is not.
 
@@ -174,7 +174,7 @@ Review small changes as you work. A diff compares edited source with its previou
 
 Section: Leave a record another reader can repeat.
 
-Start documentation with the question, the tool’s purpose, and its limits. Then show the route through the experiment before detailing each step. A reader needs to know which file or command to begin with, what result to expect, and what a failure means. Define names consistently: if gold means the rule’s stored amount, call the screen copy displayed_gold throughout.
+Start documentation with the question, the tool’s purpose, and its limits. Then show the route through the experiment before detailing each step. A reader needs to know which file or command to begin with, what result to expect, and what a failure means. Define names consistently: if gold means the amount used by the purchase check, call the screen copy displayed_gold throughout.
 
 Keep a compact experiment record:
 
@@ -192,7 +192,7 @@ Read the record from a newcomer’s position. If an instruction says “use the 
 
 Section: What a candidate address tells you.
 
-A matching address is a lead. A repeatable behavior and an expected rule give it meaning; controlled changes and a breakpoint narrow the lead. A reversible edit tests whether that address affects the game rule or only a copy. The compiler and tests check the tool’s logic, while the debugger observes what the running game actually does.
+A matching address is a lead. A repeatable action and a predicted check or calculation give it meaning; controlled changes and a breakpoint narrow the lead. A reversible edit tests whether that address changes the amount a purchase reads or only a displayed copy. The compiler and tests check the tool’s logic, while the debugger observes what the running game actually does.
 
 Lesson 1.7 prepares a repeatable Windows lab. Lesson 1.8 shows what its scanner will read, and Lesson 1.9 walks through the first gold scan with screenshots. Its 15-gold recruit is a separate game action with its own starting value and observed result.
 

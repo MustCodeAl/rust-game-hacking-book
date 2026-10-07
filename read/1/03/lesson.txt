@@ -1,18 +1,18 @@
 Game Fundamentals
 
-Lesson 1.2 followed a game action through the C P U, central processing unit, and a simple loop. To understand why a displayed number changes, we need a model of the game around it: what the player does, which rule runs, what the game remembers, and what it shows. The byte-level memory model comes just before our first scan in Lesson 1.9.
+Lesson 1.2 followed a game action through the C P U, central processing unit, and a simple loop. To understand why a displayed number changes, we need a model of the game around it: what the player does, which check or calculation runs, what the game remembers, and what it shows. The byte-level memory model comes just before our first scan in Lesson 1.9.
 
-Our small game has players, coins, and a shop. Call one player Ada. We will follow her purchases and movement, then ask what the game must keep while she plays and what it must save when she leaves. The examples describe chosen rules for this game; another game can model the same activity differently.
+Our small game has players, coins, and a shop. Call one player Ada. We will follow her purchases and movement, then ask what the game must keep while she plays and what it must save when she leaves. The examples describe chosen checks and updates for this game; another game can model the same activity differently.
 
 Section: A game turns actions into a changing world.
 
-A player supplies input, such as buying an item or pressing a movement key. The game applies rules to its current state—the information it remembers about the world. It then draws or plays an output that the player can perceive. A common game loop repeats those steps as play continues:
+A player supplies input, such as clicking the Buy button or pressing a movement key. The game interprets that input as a requested action. It checks its current state—the information it remembers about the world—and calculates any accepted change. It then draws or plays an output that the player can perceive. A common game loop repeats those steps as play continues:
 
-The example takes the successful purchase path. If the player has only 10 gold and the item costs 25, the rule leaves gold unchanged. The screen reports what the game decided; it does not decide the purchase itself. Later in this lesson we will see why the screen may even hold a separate copy of that result.
+The example takes the successful purchase path. If the player has only 10 gold and the item costs 25, the affordability check fails and gold stays 10. The screen reports what the game decided; it does not decide the purchase itself. Later in this lesson we will see why the screen may even hold a separate copy of that result.
 
-Games can also update enemies, timers, motion, or music without a fresh button press. The important cycle is that rules read the current world, change it, and produce something the player can observe. An engine is reusable software for common game jobs. It commonly supplies the repeating loop, drawing, and loading resources such as images and sounds; the game supplies particular rules such as the price of an item. Finding the right place to change a game starts by asking which side owns the behavior. Lesson 4.1 develops that boundary.
+Games can also update enemies, timers, motion, or music without a fresh button press. On each update, the game can subtract time from a countdown, move a projectile by its speed and elapsed time, or choose an enemy action. It then draws the changed world or plays a sound. An engine is reusable software for common game jobs. It commonly supplies the repeating loop, drawing, and loading resources such as images and sounds; the game supplies particular behavior, such as looking up an item price and rejecting a purchase when gold is below that price. Finding the right place to change a game starts by asking which side owns the behavior. Lesson 4.1 develops that boundary.
 
-A game remembers more than one number. It might track one player’s gold, current health, and maximum health at the same time. How can it keep those values together and apply the same rule to many players?
+A game remembers more than one number. It might track one player’s gold, current health, and maximum health at the same time. How can it keep those values together and apply the same calculation to many players?
 
 Section: One player has related values.
 
@@ -20,7 +20,7 @@ Suppose Ada starts with 100 gold, 80 health, and a maximum of 100 health. These 
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The labels tell us what each value means. If the player buys an item for 25 gold, gold becomes 75, while health stays 80. If the player then takes 20 damage, health becomes 60, while gold stays 75. The changes belong to one player, but each rule uses a different part of that player’s state.
+The labels tell us what each value means. If the player buys an item for 25 gold, gold becomes 75, while health stays 80. If the player then takes 20 damage, health becomes 60, while gold stays 75. The changes belong to one player, but the purchase uses gold and the damage calculation uses health.
 
 A group of related named values is a record. Each value inside it is a field. The record lets the program talk about a player’s gold without confusing it with that player’s health. It also gives later memory work a question to ask: which nearby stored values belong to the same player?
 
@@ -34,7 +34,7 @@ An entity can also need several kinds of information. Ada has health, money, a p
 
 A component here means a part of the game’s model, not necessarily one particular programming technique. One game might put all these fields in a single player record; another might keep separate component records associated with player ID 17. Both can implement the same gameplay. We need this distinction because the information visible on one character need not occupy one uninterrupted block of memory.
 
-An entity also has a lifetime: the interval from its creation to its removal. A coin entity stops being available after Ada picks it up. A later coin can reuse its storage without being the same coin. Some games reuse IDs too, so an ID is meaningful only within the identity rules of that game. Later memory lessons develop how to recognize a currently valid entity; the first question is already useful: does this information still belong to the thing we intended to observe?
+An entity also has a lifetime: the interval from its creation to its removal. A coin entity stops being available after Ada picks it up. A later coin can reuse its storage without being the same coin. Some games reuse IDs too, so an ID is meaningful only within the identifier assignment and reuse policy of that game. Later memory lessons develop how to recognize a currently valid entity; the first question is already useful: does this information still belong to the thing we intended to observe?
 
 Section: Shared assets create separate instances.
 
@@ -44,19 +44,35 @@ Suppose two coins use the same image. One coin is beside Ada and one is near the
 
 The same distinction applies to player setup. A character definition might specify a starting maximum health of 100. Ada’s current health of 60 is state belonging to her running instance. A definition’s default and an instance’s current value can be equal when the instance starts, then diverge during play.
 
+Section: A class defines fields and methods; an instance holds values.
+
+In a language such as C++, a class describes a kind of object: which fields it has and which operations can use those fields. A function called through an object is a method. A player instance is one particular object created from that definition. Ada and Bo can use the same damage method while holding different health values.
+
+This explanatory pseudocode names the receiver self: the specific instance whose method was called. It is a sketch, not runnable Rust or C++:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+max(0, value) selects whichever is larger, so damage cannot make health negative in this model. Ada.damage(20) chooses Ada as self; it does not subtract 20 from every Player. A class definition does not mean that all instances share one set of field values. Games can also organize data using components rather than one class per entity, as we saw above.
+
+Choose a player or a damage amount below. Read the result first if useful, then step through how the receiver selects the changed field.
+
+In brief: A class defines fields and methods. Each instance holds its own field values; the receiver identifies which instance a method uses.
+
 Section: One record becomes several players.
 
 For the table below, add a second player called Bo. Bo has 40 gold and 50 health. Copying the first player’s field names into gold2, health2, and so on would work for two players, but every new player would demand more special-case code. Instead, the game can keep several player records in a collection:
 
 The table is a picture of two records, not a claim that R A M, random access memory, stores a table with headings. A compiled game stores values as bytes; the labels here tell us what each value means. Lesson 1.8 will show how a type tells code how to read those bytes.
 
-Suppose both players collect one coin. We could write “Ada’s gold becomes 76; Bo’s gold becomes 41.” For many players, repeating a single rule is simpler:
+Suppose both players collect one coin. We could write “Ada’s gold becomes 76; Bo’s gold becomes 41.” For many players, repeating one calculation is simpler:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-That repeated pass is a loop. One pass handles Ada (75 becomes 76); the next handles Bo (40 becomes 41). The rule stays the same when the collection grows. This is the reason to introduce a collection and a loop, rather than a list of data-structure names to memorize.
+That repeated pass is a loop. One pass handles Ada (75 becomes 76); the next handles Bo (40 becomes 41). The add-one calculation stays the same when the collection grows. This is the reason to introduce a collection and a loop, rather than a list of data-structure names to memorize.
 
-Alternative: Think of a spreadsheet: write one formula, copy it down every row, and the same rule covers two players or two hundred.
+Alternative: Think of a spreadsheet: write one formula, copy it down every row, and the same calculation covers two players or two hundred.
+
+Class cheatsheet: a class defines fields and operations; an instance holds one object’s current values; the receiver selects which instance a method changes.
 
 Section: The same idea in Rust.
 
@@ -68,29 +84,29 @@ Player is the record type. Each line inside the braces names a field, then gives
 
 A game’s actual layout may differ from this source-level sketch. A memory tool has to infer fields from the bytes and the instructions that use them. Lessons 3.4–3.6 develop that recovery in detail, including alternative layouts and objects that move or disappear.
 
-Section: Rules connect fields.
+Section: Checks keep health inside its permitted range.
 
-Having fields together also lets the game check relationships between them. Ada’s health of 60 fits her maximum of 100. A health value of 120 with a maximum of 100 would violate the simple rule
+Having fields together also lets the game check relationships between them. Ada’s health of 60 fits her maximum of 100. A health value of 120 with a maximum of 100 would exceed the permitted range
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Here, less than or equal to means “less than or equal to”: health must be at least zero and no greater than the maximum. Our damage and healing rules should keep it inside that range.
+Here, less than or equal to means “less than or equal to”: health must be at least zero and no greater than the maximum. Our damage and healing calculations should keep it inside that range.
 
-We do not need a new data structure to explain this rule. It is a relationship the game should preserve when it applies damage or healing. Lesson 1.4 keeps both fields in its working player record. Later chapters call a rule that must remain true an invariant and show how to test one when recovering a game’s data.
+We do not need a new data structure to express this condition. It is a relationship the game should preserve when it applies damage or healing. Lesson 1.4 keeps both fields in its working player record. Later chapters call a condition that must remain true an invariant and show how to test one when recovering a game’s data.
 
 An address alone does not prove that a player record is still the same player. The game can remove a player and use that memory for someone else. For this first pass, remember that an address tells you where to look now; it does not guarantee an object’s identity forever. Lesson 3.6 develops ways to recognize identity and lifetime.
 
 Section: Inputs request actions.
 
-We have said “Ada buys an item,” but a computer first receives something more mechanical: a mouse click, a key press, or a controller button. The game maps that input to an action, such as “buy this item” or “move right.” Keeping the action separate from its physical input allows the same rule to work with several devices and different key bindings.
+We have said “Ada buys an item,” but a computer first receives something more mechanical: a mouse click, a key press, or a controller button. The game maps that input to an action, such as “buy this item” or “move right.” Keeping the action separate from its physical input allows the same purchase handler to work with several devices and different key bindings.
 
-An action is a request. The purchase rule still checks the price and Ada’s gold before accepting it. Context matters too: pressing the right arrow might move Ada during play but select the next item while a shop menu is open. The same physical input can request different actions in different parts of the game.
+An action is a request. The purchase handler still compares the price with Ada’s gold before accepting it. Context matters too: pressing the right arrow might move Ada during play but select the next item while a shop menu is open. The same physical input can request different actions in different parts of the game.
 
-A game also distinguishes a button being pressed now from being held down. In our game, one press of the buy button requests one purchase. Holding the movement button requests continued movement. If the purchase rule ran on every update while the button was held, one press could accidentally buy many items. This makes the input’s timing part of the behavior we need to understand.
+A game also distinguishes a button being pressed now from being held down. In our game, one press of the buy button requests one purchase. Holding the movement button requests continued movement. If the purchase handler ran on every update while the button was held, one press could accidentally buy many items. This makes the input’s timing part of the behavior we need to understand.
 
 Section: Movement needs space and time.
 
-To move Ada, the game needs a way to describe where she is. In a small two-dimensional world, use two numbers: x for horizontal position and y for vertical position. Together, (x, y) are coordinates. Our example chooses positive x toward the right, positive y upward, and one unit as one tile’s width. These are conventions chosen for this world, not rules every engine shares.
+To move Ada, the game needs a way to describe where she is. In a small two-dimensional world, use two numbers: x for horizontal position and y for vertical position. Together, (x, y) are coordinates. Our example chooses positive x toward the right, positive y upward, and one unit as one tile’s width. These are conventions chosen for this world, not conventions every engine shares.
 
 Ada starts at (2, 3). Moving one unit right gives (3, 3): x changes from 2 to 3 and y stays 3. These are world coordinates, describing Ada’s location in the game. Her screen coordinates describe where her picture appears on the display. If the camera follows Ada, she can move through the world while staying near the middle of the screen. Moving the camera changes the view without moving Ada in the world. Chapter 7 develops these coordinate relationships for 3D games.
 
@@ -104,7 +120,7 @@ Alternative: Think of a road trip: distance is speed times time. Counting frames
 
 Section: The world updates between pictures.
 
-The work that advances movement, health, timers, and other rules is the simulation. The work that makes an image of the current world is rendering. One displayed picture is a frame. A simulation update is often called a tick. These names let us distinguish advancing the world from drawing it.
+The work that advances movement, health, timers, and other changing state is the simulation. The work that makes an image of the current world is rendering. One displayed picture is a frame. A simulation update is often called a tick. These names let us distinguish advancing the world from drawing it.
 
 Why does the distinction matter? Suppose a game moves Ada one unit each time it draws a frame. A computer drawing 120 frames in one second would move her twice as far as one drawing 60. Our speed calculation instead asks how much game time passed. Sixty updates of 1/60 second each produce the same four units of unobstructed movement as 120 updates of 1/120 second each: both add up to one second.
 
@@ -112,43 +128,43 @@ A game can use the measured time since the last update, or advance the simulatio
 
 This also explains change without input. Once a projectile has a speed, the simulation can move it on later ticks. A timer can count down, and an enemy can act. The player does not need to press a new button for each change. A pause menu might stop the simulation while still rendering the menu, so a visible animation is not proof that every game timer is running.
 
-Section: Collisions connect movement to rules.
+Section: Contact tests can block movement, award gold, or apply damage.
 
 Our movement calculation proposes a new position. It has not yet checked whether Ada would pass through a wall or touch a coin. The game gives objects simplified shapes for detecting contact. The test for whether these shapes meet or overlap is collision detection.
 
 For a simple worked example, treat Ada as a point starting at x equals 2 and place a wall at x equals 3. She requests movement to x equals 4, keeping the same y. Looking only at her destination could miss the wall: the point at 4 is past it. Testing the movement from 2 to 4 finds the crossing. Our game then stops Ada just before the wall. Actual characters have width, but the point example shows why a path and a final position answer different questions.
 
-Detecting contact and deciding its consequence are separate jobs. A wall blocks movement. A coin allows movement but awards gold and removes its own entity. A trap allows movement but applies damage. All three can begin with a contact test and then follow different game rules.
+Detecting contact and deciding its consequence are separate jobs. A wall blocks movement. A coin allows movement but awards gold and removes its own entity. A trap allows movement but applies damage. All three can begin with a contact test and then produce different changes to the world.
 
-A physics system can calculate motion using speed, forces, gravity, and contact responses. A game can also use simple movement rules without a general physics system. The drawn image and the collision shape may have different sizes or levels of detail, so touching an image is not always the same as touching the shape the rules test.
+A physics system can calculate motion using speed, forces, gravity, and contact responses. A game can also use simple movement calculations without a general physics system. The drawn image and the collision shape may have different sizes or levels of detail, so touching an image is not always the same as touching the shape the contact test uses.
 
 Section: Modes and events organize change.
 
 The same contact need not have the same outcome in every situation. Our game gives Ada three modes: alive, defeated, and respawning. At health zero, she changes from alive to defeated and movement requests are ignored. After a two-second wait, she enters respawning. Placing her at the spawn point and restoring her health makes her alive again.
 
-A change between modes is a transition. A set of allowed modes and rules for moving between them is a state machine. Here, “state” names one behavior mode. Earlier, “game state” meant all the information the game remembers, including gold, health, position, and this mode. The mode is one part of that larger state.
+A change between modes is a transition. A set of allowed modes and conditions and actions for moving between them is a state machine. Here, “state” names one behavior mode. Earlier, “game state” meant all the information the game remembers, including gold, health, position, and this mode. The mode is one part of that larger state.
 
-For this example, the game changes Ada’s mode while keeping her player identity. A different game could remove the old character entity and create another. The visible respawn alone does not tell us which lifetime rule it uses.
+For this example, the game changes Ada’s mode while keeping her player identity. A different game could remove the old character entity and create another. The visible respawn alone does not tell us whether it reused the player record or created another.
 
-The game can also announce a particular occurrence: “Ada collected coin 42.” Such an occurrence is an event. The coin rule can award one gold, then notify the sound system and the display so they can play a pickup sound and show the changed amount. Those systems can react to the same event without each deciding whether the coin was available.
+The game can also announce a particular occurrence: “Ada collected coin 42.” Such an occurrence is an event. The pickup handler can award one gold, then notify the sound system and the display so they can play a pickup sound and show the changed amount. Those systems can react to the same event without each deciding whether the coin was available.
 
 The distinctions are useful when following a change. An action requests something, current state describes what is true, and an event reports what happened. “Collect coin 42” is the request; “Ada has 76 gold” is the resulting state; “coin 42 was collected” is the event. If the coin was already removed, the game can reject a second request instead of awarding gold again. Chapter 4 develops decisions and events in more detail.
 
 Section: The display can hold a copy.
 
-After Ada collects a coin, the game may store 76 as her current gold and also prepare the text "Gold: 76" for the screen. The text is derived from the number, but it is not necessarily the number that the purchase rule reads.
+After Ada collects a coin, the game may store 76 as her current gold and also prepare the text "Gold: 76" for the screen. The text is derived from the number, but it is not necessarily the number that the purchase handler reads.
 
-If someone changes only the display text to "Gold: 999", the screen may show 999 while the purchase rule still sees 76. Changing a displayed copy can affect appearance without changing gameplay. This is why observing a matching number in memory is only the start of an investigation. Later lessons compare what changes after a purchase with what the game actually uses to decide whether the purchase is allowed.
+If someone changes only the display text to "Gold: 999", the screen may show 999 while the purchase check still sees 76. Changing a displayed copy can affect appearance without changing gameplay. This is why observing a matching number in memory is only the start of an investigation. Later lessons compare what changes after a purchase with what the game actually uses to decide whether the purchase is allowed.
 
 Section: Which copy decides the result?.
 
-In our local example, the purchase rule reads Ada’s gameplay gold. That value is authoritative for the purchase: the rule accepts it as the amount Ada actually has. The display copy reports the result but does not decide it. Authority describes this role, not a special numeric type.
+In our local example, the purchase check reads Ada’s gameplay gold. That value is authoritative for the purchase: the check uses it as the amount Ada actually has. The display copy reports the result but does not decide it. Authority describes this role, not a special numeric type.
 
-In a multiplayer game, a client is the program a player uses to take part. A server is a program that coordinates the shared game. A common design lets the client send “Ada requests this item” while the server looks up the item’s price and checks its own gold value before accepting or rejecting the request. Different games divide responsibility differently, so the important question is which side has authority over this particular decision.
+In a multiplayer game, a client is the program a player uses to take part. A server is a program that receives player requests over a connection, checks them against the shared game state it maintains, and sends accepted results to the participating clients. In a common shop design, the client sends the item ID Ada wants. The server looks up that item’s price, compares it with the gold it stores for Ada, and either rejects the request or subtracts the price and records the purchased item. Lesson 8.1 follows such requests and replies. Different games divide responsibility differently, so the important question is which side has authority over this particular decision.
 
 Suppose the server has 76 gold for Ada and the client’s display shows 999. The server accepts one 25-gold purchase and updates its value to 51. It sends the accepted result back to the client, which can then show 51. The display’s 999 did not give the server more gold. A network delay can also leave a client temporarily showing an older result, even when neither program has a bug.
 
-Narration: This is why servers do not trust a number a client shows: the client only sends a request, and the server checks it against its own copy.
+Narration: In this shop design, the server uses the item ID to find a price and checks its own stored gold. The client’s displayed amount does not pass or fail that check.
 
 Some clients show an expected result before the server replies so an action feels responsive. If the server rejects the action, the client must correct that expectation. For now, distinguish the player’s request, the local picture, and the accepted shared result. Chapter 8 follows the messages that connect them.
 
@@ -164,9 +180,9 @@ Loading also creates new running records. A saved player ID can help the game re
 
 Section: From a world idea to stored bytes.
 
-We can now connect the meanings we have used. First, a designer chooses an idea from a real or imagined world: a character owns coins and can spend them. The game represents the parts its rules need as entities and fields, such as player ID 17 with 76 gold. This chosen representation is a game-data model. Ada’s health number likewise models how the game’s damage rules work; it is not a complete description of a person’s body.
+We can now connect the meanings we have used. First, a designer chooses an idea from a real or imagined world: a character owns coins and can spend them. The game represents the information its calculations need as entities and fields, such as player ID 17 with 76 gold. This chosen representation is a game-data model. Ada’s health number likewise models how the game’s damage and healing calculations use; it is not a complete description of a person’s body.
 
-To save that information or send it to another program, the game chooses a format: rules specifying which fields are included and how to write and read them. A save might include gold and collected coins. A movement message might include only a player ID and the requested direction. They serve different purposes, so they need not contain the same information or resemble the live record’s layout.
+To save that information or send it to another program, the game chooses a format: a specification of which fields are included and how to write and read them. A save might include gold and collected coins. A movement message might include only a player ID and the requested direction. They serve different purposes, so they need not contain the same information or resemble the live record’s layout.
 
 An encoding assigns byte patterns to the chosen values. Here is a small invented format for a player gold record. It accepts IDs and gold amounts from 0 to 255, writes the ID first, and uses one byte for each field. Given player ID 17 and gold 76, it produces two bytes:
 
@@ -174,7 +190,7 @@ Code example. The code’s comments explain: Toy format: one byte of player ID, 
 
 Lesson 1.2 taught hexadecimal: hexadecimal 1 1 is 1 times 16 + 1 equals 17, and hexadecimal 4 C is 4 times 16 + 12 equals 76. The reader of this toy format knows the first byte means an ID and the second means gold because the format says so. The two bytes alone do not label their own meanings. Writing the text digits "76" or choosing a four-byte number would require a different encoding. Real formats can include additional fields, larger values, and checks; this example only shows how a declared format gives bytes meaning.
 
-The animation follows the meaning through those design choices. Live fields in R A M are already represented by bytes too; a game does not have to turn its whole world into a save file on every tick. In memory, code uses a known layout and types. In a save or message, code uses that format’s rules. Lesson 1.8 develops the memory representation in detail.
+The animation follows the meaning through those design choices. Live fields in R A M are already represented by bytes too; a game does not have to turn its whole world into a save file on every tick. In memory, code uses a known layout and types. In a save or message, code uses that format’s field order, widths, and encodings. Lesson 1.8 develops the memory representation in detail.
 
 Keep two questions separate when investigating a value: how is it represented? and what role does it have? A number stored as four bytes could be current gameplay gold, a display copy, a saved value, or a server result. Its byte representation alone does not establish its authority or tell us when it was last updated.
 
@@ -182,11 +198,11 @@ In brief: Bytes carry no label. The same four bytes could be live gold, a displa
 
 Section: How the game pieces fit.
 
-Ada’s input requests an action. Rules check her current state and update the relevant fields. Simulation advances that world through time; rendering shows a view of it. Identity tells the game which entity a value belongs to, components organize its responsibilities, and assets can be shared by many separate instances. A collection lets one loop visit several player records.
+Ada’s input requests an action. Purchase checks and damage calculations read her current state and update the relevant fields. Simulation advances that world through time; rendering shows a view of it. Identity tells the game which entity a value belongs to, components organize its responsibilities, and assets can be shared by many separate instances. A collection lets one loop visit several player records.
 
 The gameplay amount, displayed text, server’s gold value, and saved value can all describe Ada’s gold while serving different roles. Understanding those roles comes before deciding what a matching number in memory means. The game model explains the information; its memory layout or save/message format explains how code represents it as bytes.
 
-We have described the update in words. Lesson 1.4 turns the same player’s values and rules into a small Rust program.
+We have described the update in words. Lesson 1.4 turns the same player’s values and calculations into a small Rust program.
 
 Section: Where these ideas continue.
 
