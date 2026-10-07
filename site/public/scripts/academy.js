@@ -135,7 +135,7 @@
     syncNotesChoice();
     setPressed("data-theme-choice", theme.id);
     setPressed("data-mode-choice", mode);
-    setPressed("data-code-mode-choice", root.dataset.academyCodeChoice || "page");
+    setPressed("data-code-mode-choice", root.dataset.academyCodeChoice || "dark");
     setPressed("data-syntax-palette-choice", root.dataset.academySyntax || "academy");
     setPressed("data-background-choice", root.dataset.academyBackground || "theme");
     setPressed("data-semantic-choice", root.dataset.academySemantic === "off" ? "off" : "on");
@@ -251,13 +251,13 @@
   // "page" follows the page brightness; "dark" and "light" are explicit. The choice is academyCodeChoice and the
   // surface the stylesheets key on is academyCodeMode, which is recomputed whenever the page brightness changes.
   function resolveCodeMode() {
-    var choice = root.dataset.academyCodeChoice || "page";
+    var choice = root.dataset.academyCodeChoice || "dark";
     var mode = choice === "page" ? (root.dataset.theme === "dark" ? "dark" : "light") : choice;
     if (root.dataset.academyCodeMode !== mode) root.dataset.academyCodeMode = mode;
   }
 
   function applyCodeMode(id) {
-    var choice = CODE_MODES.indexOf(id) === -1 ? "page" : id;
+    var choice = CODE_MODES.indexOf(id) === -1 ? "dark" : id;
     root.dataset.academyCodeChoice = choice;
     resolveCodeMode();
     storageSet("gha-code-mode", choice);
@@ -367,7 +367,7 @@
       applyTheme("paper");
       applyMode("auto");
       applyBackground("theme");
-      applyCodeMode("page");
+      applyCodeMode("dark");
       applyNotesChoice("br");
       applySyntaxPalette("academy");
       applySemanticSetting("on");

@@ -37,6 +37,6 @@ export const readerSettingsScript = `(${function () {
     : root.dataset.academyMode;
   // Code brightness: "page" (the default) follows the page, so a light page gets a light code surface; "dark" and "light" are
   // explicit. academyCodeChoice is what the reader chose, academyCodeMode is what the stylesheets key on.
-  root.dataset.academyCodeChoice = choose(get('gha-code-mode'), ['page', 'dark', 'light'], 'page');
+  root.dataset.academyCodeChoice = choose(get('gha-code-mode'), ['page', 'dark', 'light'], 'dark');
   root.dataset.academyCodeMode = root.dataset.academyCodeChoice === 'page' ? root.dataset.theme : root.dataset.academyCodeChoice;
 }.toString()})();`;
