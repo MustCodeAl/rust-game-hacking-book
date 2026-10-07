@@ -1,0 +1,205 @@
+Instruction Reference: Decisions, Stack, and Bits
+
+A function does more than calculate values: it chooses a path, calls other functions, and returns to the right place. These worked examples use a fictional owned, resettable 32-bit x86 game, Intel syntax, and valid toy memory labels. The traces are small teaching models; they do not execute machine code or attach to a process.
+
+Start with values and arithmetic if registers, brackets, or ZF/SF/CF/OF are unfamiliar. Each example is already populated. Changing an input is optional exploration, not a test.
+
+Section: Find an operation.
+
+reg, imm, and r/m retain their meanings from the previous reference: register, encoded number, and register-or-memory. The forms below are common 32-bit forms, not the entire instruction set. Intel’s manuals give encoding, exception, mode, and special-form details.
+
+Section: Comparisons and paths.
+
+Section: cmp.
+
+Meaning: subtract for comparison, keep the flags, and discard the numeric result.
+
+Common forms: cmp reg, r/m/imm, cmp memory, reg/imm. Effects: read operands without writing either; set OF, SF, ZF, AF, CF, and PF as a subtraction would.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: the flags changed; the compared gold did not.
+
+Section: test.
+
+Meaning: compute a bitwise AND for comparison, then discard its numeric result.
+
+Common forms: test r/m, reg or test r/m, imm. Effects: leave operands unchanged; set ZF, SF, and PF from the temporary AND, clear CF/OF, and leave AF undefined. test e a x, e a x asks whether the complete value is zero; test e a x, 4 examines bit 2.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: a mask can inspect a field without deleting its other bits.
+
+Section: jmp.
+
+Meaning: continue at another instruction unconditionally.
+
+Common near forms: jmp label uses an encoded relative displacement; jmp reg32/memory32 reads an indirect destination. Effects: change the instruction pointer; do not create a return address or alter arithmetic flags. Memory-indirect forms read the pointer.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: a nearby instruction is not necessarily an executed instruction.
+
+Section: jcc.
+
+Meaning: jump only when the selected flag condition is true; otherwise continue with the next instruction.
+
+jcc is a name for the family, not a literal mnemonic to type. Common form: a specific conditional mnemonic such as jb label. Effects: read the specified flags and potentially change the instruction pointer; preserve registers, arithmetic flags, and game memory. Short and near relative forms have different reach and encoded lengths.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Here cannot_buy names an exit path outside the excerpt. The interactive shows both paths completely and lets you change the conditional mnemonic.
+
+jcxz/jecxz test a counter register rather than these flags. Do not apply this table blindly to them, or to flags produced by a floating-point comparison in the next reference.
+
+Clarification: A signed less-than test needs both SF and OF. SF by itself can mislead when subtraction overflowed. Unsigned ordering instead uses carry/borrow and zero.
+
+Takeaway: find the producer of the flags and the type intended by the branch before naming the condition.
+
+Section: Calls, returns, and saved values.
+
+The stack is a thread’s working storage for active calls and temporary data. In these ordinary 32-bit examples it grows toward lower addresses. Saving four bytes lowers e s p by four; removing them advances it by four. Real functions also follow a calling convention for arguments, saved registers, alignment, and cleanup.
+
+Section: call.
+
+Meaning: save where execution should resume, then enter another function.
+
+Common near forms: call label or call reg32/memory32. Effects: push the address immediately after the call onto the stack, update e s p, and change the instruction pointer. A near call does not itself change arithmetic flags. The callee’s instructions can change registers, flags, and memory afterward.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: a call saves a continuation; it does not guarantee what the helper will return or preserve.
+
+Section: ret.
+
+Meaning: read the saved return address from the stack and resume the caller there.
+
+Common near forms: ret; ret imm16 additionally removes a fixed argument-byte count after popping the return address. Effects: update the instruction pointer and e s p; leave arithmetic flags alone. Returning a value in e a x is a calling-convention choice, not work performed by ret itself.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: an unbalanced stack can make ret read data as an address; restoring one register is not enough.
+
+Section: push.
+
+Meaning: place a value on top of the stack.
+
+Common 32-bit forms: push reg32/memory32/imm. Effects: lower e s p by four and write the saved value there; preserve ordinary arithmetic flags. These widths are specific to this example: a normal 64-bit push usually uses an eight-byte slot.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: stack storage can preserve a value while its register is reused.
+
+Section: pop.
+
+Meaning: copy the top stack value to a destination and remove that slot from the active stack.
+
+Common forms: pop reg32/memory32. Effects: read stack memory, write the destination, and normally advance e s p by four. Arithmetic flags survive. Special destinations involving e s p need their exact manual rules; the example uses e b x. The old memory bytes are not erased.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+In brief: A stack is last-in, first-out. Keep the return address in the right place and reverse your temporary saves in the right order. Popped bytes may remain in memory without being live stack data.
+
+Takeaway: removing a slot changes which bytes are active, not whether those bytes still contain an old value.
+
+Section: Shifts and masks.
+
+Section: shl.
+
+Meaning: shift bits left, filling the newly opened low positions with zeros.
+
+Common forms: shl r/m32, imm8 or shl r/m32, c l; sal is an alias. Effects: write the operand; CF records the last bit shifted out, ZF/SF/PF describe the result, and AF is undefined for a nonzero effective count. OF has a defined shift result only for a count of one. An effective count of zero preserves value and flags. For a 32-bit operand, the count is masked to its low five bits.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: left shifting resembles multiplication by a power of two only while the needed bits are retained.
+
+Section: shr.
+
+Meaning: shift bits right, filling the newly opened high positions with zeros.
+
+Common forms: shr r/m32, imm8 or shr r/m32, c l. Effects: write the operand and use the shift flag/count rules above; for a one-bit shift, OF receives the old highest bit. An unsigned value is divided by a power of two with the discarded fractional part lost.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: zero-fill right shift does not preserve a negative signed value’s sign.
+
+Section: sar.
+
+Meaning: shift bits right while repeating the original sign bit in the new high positions.
+
+Common forms: sar r/m32, imm8 or sar r/m32, c l. Effects: write the operand and follow the shift flag/count rules; for a one-bit shift, OF is cleared. Signed negative values round toward minus infinity when low bits are discarded. That differs from idiv truncation toward zero: minus 3 shifted right once becomes minus 2, but minus 3 divided by 2 becomes minus 1.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: sign preservation and rounding are both part of a signed shift’s meaning.
+
+Section: and.
+
+Meaning: keep a one bit only where both input bits are one.
+
+Common forms: and reg, r/m/imm, and memory, reg/imm. Effects: write the destination; clear CF/OF, set ZF/SF/PF from the result, and leave AF undefined.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: and writes the masked word; test only inspects a temporary masked result.
+
+Section: or.
+
+Meaning: set a result bit when either input bit is one.
+
+Common forms: or reg, r/m/imm, or memory, reg/imm. Effects: write the destination; clear CF/OF, set ZF/SF/PF from the result, and leave AF undefined.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: setting a bit twice with or leaves it set both times.
+
+Section: xor.
+
+Meaning: set a result bit when its two input bits differ.
+
+Common forms: xor reg, r/m/imm, xor memory, reg/imm. Effects: write the destination; clear CF/OF, set ZF/SF/PF from the result, and leave AF undefined. xor e a x, e a x produces zero and changes flags; it is not interchangeable with every use of mov e a x, 0.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: toggling a bit twice returns it to its original state.
+
+Section: not.
+
+Meaning: invert every bit of the operand.
+
+Common form: not r/m. Effects: write the register or memory operand and preserve all arithmetic flags. This is bitwise complement, not a Boolean comparison.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: not flips the entire selected width, including bits a small diagram may not show.
+
+Section: Continuing and pausing.
+
+Section: nop.
+
+Meaning: advance to the next instruction without performing a game-data operation.
+
+Common form: nop; multi-byte no-op encodings also exist. Effects: leave general registers, arithmetic flags, and game memory unchanged; execution still advances and takes time. Replacing code with no-ops must preserve whole instruction boundaries and the surrounding program’s assumptions.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: doing nothing for one instruction does not stop the following instructions.
+
+Section: int3.
+
+Meaning: raise the breakpoint exception used by a debugger.
+
+Form here: int3, the one-byte CC instruction. Effects: transfer control through exception handling; the saved instruction pointer is after that byte. Hardware and the operating system manage exception-entry state, rather than producing an ordinary arithmetic comparison result. A debugger may pause and inspect the saved context; an unhandled exception can end the program.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Context: A debugger that temporarily replaces another instruction’s first byte has extra work: restore the byte, move execution back to the original instruction, step it, and re-arm safely. The deliberate int3 here is already part of our toy code.
+
+Takeaway: a breakpoint is an exception with a continuation decision, not an automatic no-op.
+
+Section: Cheatsheet.
+
+Next, read the scalar floating-point reference. For debugger handling rather than intentional breakpoint instructions, see Debug Events and Software Breakpoints.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/2/11/

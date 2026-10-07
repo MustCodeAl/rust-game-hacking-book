@@ -1,0 +1,99 @@
+Instruction Reference: Scalar Floating-Point Values
+
+Gold and ammo are often integers. Speed, position, and time are often floating-point numbers, which can represent fractions. This reference follows one float at a time in a fictional owned, resettable game. Every trace starts with a worked example; changing it is optional exploration.
+
+These examples use the legacy two-operand SSE instructions in 32-bit x86, with Intel syntax. Their v... AVX relatives have different operand and upper-register rules. A real instruction reference must match the encoding you are actually reading. The links below point to the corresponding entries in revision 093 of Intel’s official instruction manual.
+
+Section: Find an operation.
+
+Section: One float inside a wider register.
+
+An X M M register holds 128 bits. A binary32, or single-precision float, occupies 32 bits. Scalar means these instructions operate on one float in the low 32 bits, rather than calculating four floats together. The rest of the register still exists; do not assume every scalar instruction clears it.
+
+The suffix ss stands for scalar single precision. Memory labels such as [speed] denote valid four-byte fields in our toy game. xmm below means an X M M register, m32 a four-byte memory source, and r32 a general-purpose 32-bit register.
+
+Floating-point encoding differs from signed integer encoding. Copying the four bytes of an integer does not convert its numeric value into a float. A conversion calculates a new representation. Some values need rounding because a fixed-size format cannot represent every number exactly.
+
+m x c s r is a control/status register for SSE floating-point work. It records rounding direction, exception masks, and floating-point status. It is separate from integer ZF/SF/CF/OF. The arithmetic traces use round-to-nearest, ties-to-even, and ordinary finite binary32 inputs. They show selected effects, not a complete floating-point environment.
+
+In brief: Track the low float, the untouched upper bits, and the kind of flags involved. A 128-bit register does not mean that this instruction uses every bit as one large number.
+
+Section: Copies and arithmetic.
+
+Section: movss.
+
+Meaning: copy one binary32 value between a low X M M field and another register or memory.
+
+Legacy forms: movss xmm, xmm/m32, movss m32, xmm. Effects: register-to-register copies replace the low 32 bits and preserve the destination’s upper 96 bits. A memory load into X M M clears those upper 96 bits. A memory store writes only four bytes. Integer arithmetic flags are unchanged.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: distinguish a scalar load, register copy, and store before describing the rest of the register.
+
+Section: addss.
+
+Meaning: add the source’s low float to the destination’s low float.
+
+Legacy form: addss xmm, xmm/m32. Effects: write the low 32-bit floating result, rounded according to m x c s r; preserve the upper 96 X M M bits and integer arithmetic flags. It may record or raise floating-point exceptions. It does not write source memory.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: float addition does not produce an integer carry flag for a following jc.
+
+Section: mulss.
+
+Meaning: multiply the destination’s low float by the source’s low float.
+
+Legacy form: mulss xmm, xmm/m32. Effects: write the low binary32 result using m x c s r rounding; preserve the upper 96 bits and integer arithmetic flags. Floating-point status and possible exceptions belong to m x c s r.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: changing a multiplier changes the computed speed; it does not change the encoding into an integer operation.
+
+Section: Numeric conversion.
+
+Section: cvtsi2ss.
+
+Meaning: convert a signed integer into one single-precision floating-point value.
+
+Legacy 32-bit form: cvtsi2ss xmm, r32/m32. Effects: write the low binary32 value, preserve the upper 96 X M M bits and integer flags, and leave the integer source unchanged. m x c s r rounding applies when the integer cannot be represented exactly. For example, nearest, ties-to-even rounding converts the large number shown to the large number shown.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Code note: A four-byte copy preserves the original bit pattern. A numeric conversion aims to preserve its value in a different format, which can require different bits and rounding.
+
+Takeaway: an integer that fits 32 bits does not necessarily fit exactly into a binary32 float.
+
+Section: cvttss2si.
+
+Meaning: convert a binary32 value into a signed integer by truncating toward zero.
+
+Legacy 32-bit form: cvttss2si r32, xmm/m32. Effects: write the integer destination, preserve the float source and integer comparison flags. The tt form truncates regardless of m x c s r’s rounding direction. Thus 2.75 becomes 2, and minus 2.75 becomes minus 2.
+
+NaN or an out-of-range result causes an invalid-operation condition. If the m x c s r invalid exception is masked, this 32-bit form writes the indefinite integer this value; if unmasked, it raises an exception. That bit pattern also represents the valid signed minimum, so checking only the output bits is insufficient. The trace explicitly assumes the invalid exception is masked.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Takeaway: choose the conversion’s rounding behavior deliberately and validate the numeric range.
+
+Section: Comparison and unordered values.
+
+Section: comiss.
+
+Meaning: compare two low binary32 values and report their ordering in integer flags.
+
+Legacy form: comiss xmm, xmm/m32. Effects: preserve both float operands; set ZF/PF/CF as below and clear OF/SF/AF when the comparison completes. A NaN is unordered, not less, equal, or greater. comiss signals invalid operation for a NaN. With that exception masked, it produces unordered flags; with it unmasked, the exception prevents the flag update.
+
+Code example. The code’s comments explain: otherwise: ordered and at least the limit
+
+The two labels name exit paths outside this excerpt. Notice that jp reads PF, which marks unordered here. Once unordered is excluded, unsigned-style jb/ja conditions can describe float ordering; signed-integer jl/jg do not interpret these flags correctly.
+
+Clarification: ZF is one for both equality and unordered. A jump-if-equal used alone can mistake a NaN for an equal value. Check the comparison’s complete contract, including its exception state.
+
+Takeaway: a float comparison has four outcomes and its own flag rules.
+
+Section: Cheatsheet.
+
+Keep this reference beside Camera Frames and Projection and Coordinates, Vectors, and Directions. Their geometry depends on numeric values, not just the four bytes used to represent them.
+
+Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/2/12/
