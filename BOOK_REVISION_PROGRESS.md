@@ -1535,3 +1535,7 @@ Not verified: touch devices, Safari/Firefox, depth choice across every lab type.
 - Sidebar: keyboard focus on the active lesson no longer draws a box (tint plus underline instead).
 - Not done: the Byte Interpreter redesign in lesson 1.8 (byte boxes as inputs, preset chips, interpretation cards, takeaway callout) and the same for sibling labs; see the owner's brief in the chat history.
 No lab programs were run.
+
+### T28 addendum — Byte Interpreter redesigned (2026-10-07)
+
+Lesson 1.8's Byte Interpreter (`learning-widgets.js` `initializeByteLens`, last block of `design/labs.css`): the four byte boxes are now the input (two hex digits, auto-advance, Backspace and arrow keys move, pasting four bytes works); the raw text field is hidden state. Presets are pill chips that light up when the bytes match. Result cards carry type badges (INT, FLOAT, ENDIAN), tabular values, negatives in the danger colour and a "reads +3 +2 +1 +0" cue on the big-endian card. The takeaway is a labelled callout (`data-kind="insight"`). Every `.concept-lab` gets the rounded workbench shell, a non-clickable LIVE LAB status dot with a gentle green pulse, and pill-style example chips. Verified in Chrome: typing FFFFFFFF gives u32 4,294,967,295 and i32 -1, the preset chip highlights, no page errors. Not done: restructuring sibling labs (typed inputs in address-builder and packet-framer; give other static takeaways `data-kind="insight"`). The earlier "Not done" line in T28 above about the Byte Interpreter is now obsolete.
