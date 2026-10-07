@@ -893,8 +893,8 @@
     document.querySelectorAll('input[type="range"]').forEach(paintRange);
     document.querySelectorAll(LAB_SELECTOR.split(", ").map(function (selector) { return selector + " button"; }).join(", ")).forEach(function (button) {
       if (button.dataset.action || button.closest(".academy-quiz")) return;
-      var scene = button.dataset.sceneAction;
-      if (scene) { button.dataset.action = scene === "prev" ? "secondary" : (scene === "restart" ? "ghost" : "primary"); return; }
+      // Scene controls keep their own look (their icons and colours are set by the scene), so they get no role here.
+      if (button.dataset.sceneAction) return;
       if (button.matches('[role="tab"], [role="radio"], [aria-pressed], [draggable="true"], [class*="chip"], [class*="token"], [class*="tab"]')) return;
       var label = (button.textContent || "").trim();
       if (!label || label.length > 28) return;
