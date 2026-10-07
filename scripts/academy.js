@@ -31,6 +31,7 @@
     diagramSize: { attribute: "academyDiagramSize", key: "gha-diagram-size", values: ["fit", "actual"], fallback: "fit", control: "data-diagram-size-choice" },
     grid: { attribute: "academyGrid", key: "gha-grid", values: ["on", "off"], fallback: "on", control: "data-grid-choice" },
     cards: { attribute: "academyCards", key: "gha-cards", values: ["on", "off"], fallback: "on", control: "data-cards-choice" },
+    comments: { attribute: "academyComments", key: "gha-comments", values: ["show", "hide"], fallback: "show", control: "data-comments-choice" },
     chat: { attribute: "academyChat", key: "gha-chat", values: ["bottom-right", "bottom-left", "top-right", "top-left", "off"], fallback: "bottom-right", control: "data-chat-choice" },
     gradients: { attribute: "academyGradients", key: "gha-gradients", values: ["on", "off"], fallback: "on", control: "data-gradients-choice" },
     motion: { attribute: "academyMotion", key: "gha-motion", values: ["system", "onrequest", "off"], fallback: "system", control: "data-motion-choice" },
@@ -329,7 +330,7 @@
       "[data-background-choice], [data-semantic-choice], [data-ligature-choice], [data-theme-reset], " +
       "[data-diagram-background-choice], [data-diagram-fill-choice], [data-heading-style-choice], [data-text-size-choice], [data-spacing-choice], " +
       "[data-diagram-labels-choice], [data-diagram-borders-choice], [data-diagram-size-choice], [data-grid-choice], [data-cards-choice], [data-chat-choice], [data-gradients-choice], [data-motion-choice], [data-animation-speed-choice], " +
-      "[data-tier-choice], [data-drawer-choice], [data-depth-choice], [data-surface-choice], [data-inline-code-choice], [data-floating-choice], [data-notes-choice], [data-toc-tone-choice], [data-measure-choice], [data-print-book], [data-panel-hide], [data-panel-show], .theme-switcher__toggle"
+      "[data-tier-choice], [data-drawer-choice], [data-depth-choice], [data-surface-choice], [data-inline-code-choice], [data-floating-choice], [data-notes-choice], [data-comments-choice], [data-toc-tone-choice], [data-measure-choice], [data-print-book], [data-panel-hide], [data-panel-show], .theme-switcher__toggle"
     );
     if (!target) {
       closeThemeMenus(event.target.closest("[data-theme-switcher]"));
@@ -348,6 +349,7 @@
     if ("diagramSizeChoice" in data) return applyReaderChoice("diagramSize", data.diagramSizeChoice);
     if ("gridChoice" in data) return applyReaderChoice("grid", data.gridChoice);
     if ("cardsChoice" in data) return applyReaderChoice("cards", data.cardsChoice);
+    if ("commentsChoice" in data) return applyReaderChoice("comments", data.commentsChoice);
     if ("chatChoice" in data) return applyReaderChoice("chat", data.chatChoice);
     if ("gradientsChoice" in data) return applyReaderChoice("gradients", data.gradientsChoice);
     if ("motionChoice" in data) return applyReaderChoice("motion", data.motionChoice);

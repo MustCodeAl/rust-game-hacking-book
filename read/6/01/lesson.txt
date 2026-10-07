@@ -2,15 +2,21 @@ Messages, Streams, and Multiplayer
 
 Section: Client and server.
 
-Imagine two players looking at copies of the same game board. One presses north while their character is at (10, 15). Their computer can draw a possible new position immediately, but the other player cannot know about that move until information crosses the network. The server checks the move against the game’s rules and replies with the accepted position, (10, 14).
+A client is the game program running on a player’s device. It reads the player’s keyboard or controller, draws the world, and exchanges messages with another program over the network.
 
-A client collects your input, sends requests, receives state, and draws what you see. A server applies the shared rules. Both hold their own changing game state; a message carries information between the copies.
+A server is a program that receives requests from clients and provides a service to them. A game server might keep track of who has joined a match, calculate player movement and damage, and send the resulting positions and health to the connected players. The computer running that program is also often called “the server.” The program can run on a rented machine, on one player’s computer, or beside your client on the same computer during a local test.
+
+Imagine a match where the server calculates movement. It stores a player at (10, 15). The player’s client sends “move north.” The server checks whether the destination is inside the map and free of a wall. If the move is possible, it changes its stored position to (10, 14) and sends that position to the clients. Each client updates the character it draws. If a wall blocks the move, the server keeps (10, 15) and reports that position instead.
+
+Clarification: Client and server name the programs’ jobs. They do not require two computers: a local test can run both programs on one machine and connect them through loopback.
+
+This is one common arrangement, called a server-authoritative simulation: the server’s accepted position is the one the clients eventually use. Other games give the server a smaller job, such as hosting a lobby or forwarding players’ inputs. A server does not necessarily simulate every part of a game, and the clients do not necessarily hold identical or complete copies of its data.
 
 This chapter follows that message from intent to bytes, from captured bytes to a parsed event, and from one event to a legal session transition. A local chat client and proxy put the pieces together. The final lessons ask how two programs on one computer can exchange equally well-defined messages without using a network socket.
 
 The client’s “move north” is an intent: a request for a change, not the final truth. The reply reports what the server actually accepted. If a wall blocked the move, the reply might still say (10, 15), and the client would correct its display.
 
-The client and server are not one program with a slow shared variable. The server may accept, reject, reorder, or combine requests according to its rules, while the client may predict a result before confirmation arrives. The next question is how the reply’s bytes become one complete message at the other end.
+These programs have separate memory. Changing a position in the client’s memory does not directly change the server’s stored position. They communicate by sending bytes. A client may display a predicted move while it waits, then correct that display when the server’s reply arrives. The next question is how the reply’s bytes become one complete message at the other end.
 
 Section: T C P, transmission control protocol, is a stream.
 
@@ -38,7 +44,7 @@ Code example. The code’s comments explain: Wait for the whole header, even if 
 
 stream supplies incoming bytes and max_size is the caller’s permitted payload limit. A successful call returns one payload as a Vec<u8>; a truncated header or payload produces an I/O error through ?. For a header 00 00 00 02 followed by 41 42, the returned vector contains just 41 42. The maximum size prevents a bad length field from requesting absurd amounts of memory. This blocking helper also needs an appropriate timeout on a real socket so a peer cannot make it wait indefinitely.
 
-T C P reliability ends at delivering an ordered byte stream to the receiving socket. It does not prove the application parsed a complete message, accepted the request, saved the state, or sent a meaningful reply. Those guarantees belong to the application protocol. Define acknowledgments, request IDs, timeouts, and retry rules at that layer when the behavior needs them.
+T C P reliability ends at delivering an ordered byte stream to the receiving socket. It does not prove the application parsed a complete message, accepted the request, saved the state, or sent a meaningful reply. The application must provide those guarantees. An acknowledgment can report acceptance, a request ID can identify a repeated request, and a timeout can tell the client when to stop waiting. Decide whether a retry repeats the same request or starts a new one before implementing it.
 
 Section: Byte order is part of the protocol.
 
@@ -52,7 +58,7 @@ Section: Packets and protocols.
 
 A packet is a chunk of bytes sent across a network. That part is straightforward.
 
-“Protocol” is usually defined with words like rules or agreement, which sound reasonable and tell you nothing. Be concrete instead. A protocol is the set of specific questions both programs must already know the answers to before a single byte means anything. There are four:
+A protocol specifies how programs communicate: how to separate messages, decode their fields, order the conversation, and respond to invalid input. Both programs need matching answers to these four questions:
 
 Where does one message end and the next begin? A T C P connection is one long stream of bytes with no natural gaps, so something has to mark the boundaries.
 
@@ -98,17 +104,17 @@ Processing is asynchronous when the sender can continue before the work finishes
 
 There are also two common ways to process a sequence of events:
 
-“Stream processing” here means processing ongoing events; it does not mean the T C P byte stream discussed earlier. A service can obtain events from many connections, files, or queues. A batch deliberately waits for a group of data and processes that group together. Neither approach implies that a game can delay its immediate rules until a leaderboard job finishes.
+“Stream processing” here means processing ongoing events; it does not mean the T C P byte stream discussed earlier. A service can obtain events from many connections, files, or queues. A batch deliberately waits for a group of data and processes that group together. Neither approach implies that a game can wait for a leaderboard job before processing a player’s movement or damage.
 
 For example, a match event might carry match_id, event_id, and a score change. If a sender retries it after a lost acknowledgment, the receiver must recognise the same event rather than add the score twice. Event identity and retry behaviour belong to the model and protocol, not to whether T C P delivered the underlying bytes correctly.
 
 Section: Modularity and scaling follow the dependencies.
 
-Keep receiving, parsing, rule validation, and persistence as identifiable jobs. Then measure where time is spent. A slow disk write, repeated full-player search, and long logging operation need different remedies; adding workers does not remove a shared bottleneck automatically.
+Keep receiving bytes, parsing messages, checking requested actions, and saving results as identifiable jobs. Then measure where time is spent. A slow disk write, repeated full-player search, and long logging operation need different remedies; adding workers does not remove a shared bottleneck automatically.
 
 Several independent matches can often run on separate workers. Within one match, operations on shared state still need a defined order. Moving one job to another process also adds a message boundary, possible failures, and delay. Start with a small correct local service, preserve these contracts, and distribute work when measurements and the use case justify it.
 
-Bound queues as well as messages. If input arrives faster than it can be processed, an unbounded queue consumes memory and makes results increasingly stale. A newer position snapshot may replace an older one under a documented policy; a one-time item grant needs different handling. That is a decision about message meaning, not a universal “drop old data” rule.
+Bound queues as well as messages. If input arrives faster than it can be processed, an unbounded queue consumes memory and makes results increasingly stale. A newer position snapshot may replace an older one under a documented policy; a one-time item grant needs different handling. That is a decision about message meaning: discarding an old position can be useful, but discarding an unprocessed item grant loses the item.
 
 Section: U D P, user datagram protocol, is made of datagrams.
 

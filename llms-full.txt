@@ -27461,9 +27461,21 @@ Summary: See how a client and server turn a move into framed bytes, and why TCP 
 
 ## Client and server
 
-Imagine two players looking at copies of the same game board. One presses north while their character is at `(10, 15)`. Their computer can draw a possible new position immediately, but the other player cannot know about that move until information crosses the network. The server checks the move against the game's rules and replies with the accepted position, `(10, 14)`.
+A **client** is the game program running on a player's device. It reads the player's keyboard or controller, draws the world, and exchanges messages with another program over the network.
 
-A **client** collects your input, sends requests, receives state, and draws what you see. A **server** applies the shared rules. Both hold their own changing game state; a message carries information between the copies.
+A **server** is a program that receives requests from clients and provides a service to them. A game server might keep track of who has joined a match, calculate player movement and damage, and send the resulting positions and health to the connected players. The computer running that program is also often called “the server.” The program can run on a rented machine, on one player's computer, or beside your client on the same computer during a local test.
+
+Imagine a match where the server calculates movement. It stores a player at `(10, 15)`. The player's client sends “move north.” The server checks whether the destination is inside the map and free of a wall. If the move is possible, it changes its stored position to `(10, 14)` and sends that position to the clients. Each client updates the character it draws. If a wall blocks the move, the server keeps `(10, 15)` and reports that position instead.
+
+| In this example | Client program | Server program |
+| --- | --- | --- |
+| Input | Notices the north key press and sends a move request. | Receives the request and identifies the player who sent it. |
+| Simulation | May predict movement to make the controls feel responsive. | Checks the destination and updates the match's stored position. |
+| Display | Draws the player at the latest known or predicted position. | Sends position updates; a dedicated server usually draws no game window. |
+
+<MarginNote kind="clarify">Client and server name the programs' jobs. They do not require two computers: a local test can run both programs on one machine and connect them through loopback.</MarginNote>
+
+This is one common arrangement, called a **server-authoritative simulation**: the server's accepted position is the one the clients eventually use. Other games give the server a smaller job, such as hosting a lobby or forwarding players' inputs. A server does not necessarily simulate every part of a game, and the clients do not necessarily hold identical or complete copies of its data.
 
 This chapter follows that message from intent to bytes, from captured bytes
 to a parsed event, and from one event to a legal session transition. A local
@@ -27489,7 +27501,7 @@ sequenceDiagram
 
 The client's “move north” is an **intent**: a request for a change, not the final truth. The reply reports what the server actually accepted. If a wall blocked the move, the reply might still say `(10, 15)`, and the client would correct its display.
 
-The client and server are not one program with a slow shared variable. The server may accept, reject, reorder, or combine requests according to its rules, while the client may predict a result before confirmation arrives. The next question is how the reply's bytes become one complete message at the other end.
+These programs have separate memory. Changing a position in the client's memory does not directly change the server's stored position. They communicate by sending bytes. A client may display a predicted move while it waits, then correct that display when the server's reply arrives. The next question is how the reply's bytes become one complete message at the other end.
 
 ## TCP is a stream
 
@@ -27559,7 +27571,7 @@ a bad length field from requesting absurd amounts of memory. This blocking
 helper also needs an appropriate timeout on a real socket so a peer cannot
 make it wait indefinitely.
 
-TCP reliability ends at delivering an ordered byte stream to the receiving socket. It does not prove the application parsed a complete message, accepted the request, saved the state, or sent a meaningful reply. Those guarantees belong to the application protocol. Define acknowledgments, request IDs, timeouts, and retry rules at that layer when the behavior needs them.
+TCP reliability ends at delivering an ordered byte stream to the receiving socket. It does not prove the application parsed a complete message, accepted the request, saved the state, or sent a meaningful reply. The application must provide those guarantees. An acknowledgment can report acceptance, a request ID can identify a repeated request, and a timeout can tell the client when to stop waiting. Decide whether a retry repeats the same request or starts a new one before implementing it.
 
 ## Byte order is part of the protocol
 
@@ -27594,10 +27606,9 @@ which is 2 × 16,777,216 + 1 × 65,536 = 33,619,968: a frame length of more than
 A **packet** is a chunk of bytes sent across a network. That part is
 straightforward.
 
-“Protocol” is usually defined with words like *rules* or *agreement*, which
-sound reasonable and tell you nothing. Be concrete instead. A **protocol** is
-the set of specific questions both programs must already know the answers to
-before a single byte means anything. There are four:
+A **protocol** specifies how programs communicate: how to separate messages,
+decode their fields, order the conversation, and respond to invalid input.
+Both programs need matching answers to these four questions:
 
 1. **Where does one message end and the next begin?** A TCP connection is one
    long stream of bytes with no natural gaps, so something has to mark the
@@ -27701,7 +27712,7 @@ There are also two common ways to process a sequence of events:
 TCP byte stream discussed earlier. A service can obtain events from many
 connections, files, or queues. A batch deliberately waits for a group of data
 and processes that group together. Neither approach implies that a game can
-delay its immediate rules until a leaderboard job finishes.
+wait for a leaderboard job before processing a player's movement or damage.
 
 For example, a match event might carry `match_id`, `event_id`, and a score
 change. If a sender retries it after a lost acknowledgment, the receiver must
@@ -27711,7 +27722,7 @@ the underlying bytes correctly.
 
 ### Modularity and scaling follow the dependencies
 
-Keep receiving, parsing, rule validation, and persistence as identifiable jobs.
+Keep receiving bytes, parsing messages, checking requested actions, and saving results as identifiable jobs.
 Then measure where time is spent. A slow disk write, repeated full-player
 search, and long logging operation need different remedies; adding workers
 does not remove a shared bottleneck automatically.
@@ -27726,7 +27737,7 @@ Bound queues as well as messages. If input arrives faster than it can be
 processed, an unbounded queue consumes memory and makes results increasingly
 stale. A newer position snapshot may replace an older one under a documented
 policy; a one-time item grant needs different handling. That is a decision
-about message meaning, not a universal “drop old data” rule.
+about message meaning: discarding an old position can be useful, but discarding an unprocessed item grant loses the item.
 
 ## UDP is made of datagrams
 
@@ -28058,7 +28069,7 @@ later question of whether the decoded chat message makes sense.
 
 ## Keep five layers separate
 
-A protocol message has several nested layers, and each layer has its own rule:
+A protocol message has several nested layers. Each layer decodes the representation produced by the one outside it:
 
 ```text
 TCP byte stream
@@ -28567,7 +28578,7 @@ returns `IllegalTransition`. A `Greeting` with any version other than 1 is
 refused by its own arm with `UnsupportedVersion`, and `Goodbye` is accepted in
 every state, including `Closed` itself.
 
-This looks more verbose than a chain of `if` statements. The benefit is coverage: the compiler helps you notice new states and message variants that need rules.
+This is longer than a chain of `if` statements, but every state and message variant has an explicit case. Adding a variant makes an exhaustive `match` stop compiling until you decide how to handle it.
 
 <Scene name="session-replay" />
 
@@ -28597,7 +28608,7 @@ Redact account names or chat content before committing fixtures. A local test ca
 Replay takes recorded frames and the parser used for this protocol version.
 It starts from `Connected`, validates each frame's size and delay, parses its
 bytes, and applies the resulting message to the session state. The returned
-state is what that exact log means under the current rules; the error names
+state is the result of those messages under the current transition function; the error names
 the frame where interpretation stopped:
 
 ```rust
@@ -29864,8 +29875,8 @@ flowchart TD
     F --> G["Both sides close handles"]
 ```
 
-The pipe transports bytes; the frame format supplies the length and validation
-rules that make those bytes meaningful to both programs.
+The pipe transports bytes. Both programs still need to agree on the length field,
+message kinds, payload encoding, and which requests to reject.
 
 :::note
 🔌 **IPC idea:** define a small message format instead of sharing addresses. Each process keeps ownership of its own memory and exchanges bounded copies.
@@ -30256,15 +30267,15 @@ does not supply every implementation inside a shipping engine.
 
 This lesson follows the SDK revision beginning `b8cfb12`. Treat its named
 interfaces and defaults as facts about that revision. Keep experiments in
-your own offline SDK mod. A **mod** supplies changed game content or rules
+your own offline SDK mod. A **mod** supplies changed game content or behavior
 while using the engine's supported loading contracts.
 
 ## The engine connects client and server game code
 
 A launcher starts the engine and selects the game to load. The engine
 provides common services such as files, rendering, sound, and networking.
-Game-specific code supplies weapons, entities, movement rules, and decisions
-about what happens next.
+Game-specific code defines weapons and entities, calculates movement and damage,
+and decides how those objects respond to input and contact.
 
 On Windows, this game code commonly comes in `client.dll` and `server.dll`.
 A **DLL** is a library loaded into a process while it runs, as introduced in
@@ -30272,8 +30283,9 @@ A **DLL** is a library loaded into a process while it runs, as introduced in
 formats for the same architectural division.
 
 The client library handles the player's input, local presentation, and
-prediction. The server library owns the simulated game rules and the state
-that clients must follow. Some movement code is shared so both sides can
+prediction. The server library calculates movement, collisions, damage, and
+other changes to the match state; it sends the accepted results to clients.
+Some movement code is shared so both sides can
 compute comparable results. Rendering a player and deciding whether that
 player can pass a wall are separate responsibilities.
 
@@ -30454,7 +30466,9 @@ The important ownership stays intact: the server performs the hit check.
 It temporarily adjusts eligible recorded player state and then restores
 it. The world does not permanently travel backward because a packet arrived.
 
-## Console variables carry rules as well as values
+<span id="console-variables-carry-rules-as-well-as-values"></span>
+
+## Console variables have permissions as well as values
 
 Games need settings without recompiling each change. A **console variable**,
 or **ConVar**, is a named setting with a value and flags describing how it may
@@ -30506,7 +30520,8 @@ view; a server result describes an accepted simulation step; a package
 entry locates stored content.
 
 For your own mod, keep module versions explicit and record which side owns
-each value. Follow the DLL lifetime rules when starting and stopping tools.
+each value. Start work after DLL loading has finished, stop workers before
+unloading, and release their handles when stopping tools.
 For defenders, validate player requests against server-owned state and keep
 work per client bounded. Interpolation, quantization, and correction explain
 some ordinary discrepancies, so one mismatch needs context. [Chapter 15](/pages/15/01/) builds on this separation between requests,
