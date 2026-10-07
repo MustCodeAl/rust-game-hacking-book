@@ -37,8 +37,11 @@
     animationSpeed: { attribute: "academyAnimationSpeed", key: "gha-animation-speed", values: ["slow", "normal", "fast"], fallback: "normal", control: "data-animation-speed-choice" },
     headingStyle: { attribute: "academyHeadingStyle", key: "gha-heading-style", values: ["boxed", "plain"], fallback: "boxed", control: "data-heading-style-choice" },
     textSize: { attribute: "academyTextSize", key: "gha-text-size", values: ["small", "standard", "large"], fallback: "standard", control: "data-text-size-choice" },
+    ui: { attribute: "academyUi", key: "gha-ui", values: ["classic", "refined"], fallback: "classic", control: "data-ui-choice" },
+    surface: { attribute: "academySurface", key: "gha-surface", values: ["default", "unified"], fallback: "default", control: "data-surface-choice" },
+    inlineCode: { attribute: "academyInlineCode", key: "gha-inline-code", values: ["classic", "soft"], fallback: "classic", control: "data-inline-code-choice" },
+    floating: { attribute: "academyFloating", key: "gha-floating", values: ["docked", "minimal"], fallback: "docked", control: "data-floating-choice" },
     tocTone: { attribute: "academyTocTone", key: "gha-toc-tone", values: ["page", "light", "dark"], fallback: "page", control: "data-toc-tone-choice" },
-    sidebarTone: { attribute: "academySidebarTone", key: "gha-sidebar-tone", values: ["page", "light", "dark"], fallback: "page", control: "data-sidebar-tone-choice" },
     measure: { attribute: "academyMeasure", key: "gha-measure", values: ["narrow", "standard", "wide"], fallback: "standard", control: "data-measure-choice" },
     spacing: { attribute: "academySpacing", key: "gha-spacing", values: ["compact", "comfortable", "spacious"], fallback: "comfortable", control: "data-spacing-choice" }
   };
@@ -324,7 +327,7 @@
       "[data-background-choice], [data-semantic-choice], [data-ligature-choice], [data-theme-reset], " +
       "[data-diagram-background-choice], [data-diagram-fill-choice], [data-heading-style-choice], [data-text-size-choice], [data-spacing-choice], " +
       "[data-diagram-labels-choice], [data-diagram-borders-choice], [data-diagram-size-choice], [data-grid-choice], [data-cards-choice], [data-chat-choice], [data-gradients-choice], [data-motion-choice], [data-animation-speed-choice], " +
-      "[data-notes-choice], [data-toc-tone-choice], [data-sidebar-tone-choice], [data-measure-choice], [data-print-book], [data-panel-hide], [data-panel-show], .theme-switcher__toggle"
+      "[data-ui-choice], [data-surface-choice], [data-inline-code-choice], [data-floating-choice], [data-notes-choice], [data-toc-tone-choice], [data-measure-choice], [data-print-book], [data-panel-hide], [data-panel-show], .theme-switcher__toggle"
     );
     if (!target) {
       closeThemeMenus(event.target.closest("[data-theme-switcher]"));
@@ -346,9 +349,12 @@
     if ("chatChoice" in data) return applyReaderChoice("chat", data.chatChoice);
     if ("gradientsChoice" in data) return applyReaderChoice("gradients", data.gradientsChoice);
     if ("motionChoice" in data) return applyReaderChoice("motion", data.motionChoice);
+    if ("uiChoice" in data) return applyReaderChoice("ui", data.uiChoice);
+    if ("surfaceChoice" in data) return applyReaderChoice("surface", data.surfaceChoice);
+    if ("inlineCodeChoice" in data) return applyReaderChoice("inlineCode", data.inlineCodeChoice);
+    if ("floatingChoice" in data) return applyReaderChoice("floating", data.floatingChoice);
     if ("notesChoice" in data) return applyNotesChoice(data.notesChoice);
     if ("tocToneChoice" in data) return applyReaderChoice("tocTone", data.tocToneChoice);
-    if ("sidebarToneChoice" in data) return applyReaderChoice("sidebarTone", data.sidebarToneChoice);
     if ("measureChoice" in data) return applyReaderChoice("measure", data.measureChoice);
     if ("animationSpeedChoice" in data) return applyReaderChoice("animationSpeed", data.animationSpeedChoice);
     if ("headingStyleChoice" in data) return applyReaderChoice("headingStyle", data.headingStyleChoice);

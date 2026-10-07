@@ -25,8 +25,11 @@ export const readerSettingsScript = `(${function () {
     ['academyLigatures', 'gha-code-ligatures', ['on', 'off'], 'off'],
     ['academySidebar', 'gha-sidebar', ['shown', 'hidden'], 'shown'],
     ['academyToc', 'gha-toc', ['shown', 'hidden'], 'shown'],
+    ['academyUi', 'gha-ui', ['classic', 'refined'], 'classic'],
+    ['academySurface', 'gha-surface', ['default', 'unified'], 'default'],
+    ['academyInlineCode', 'gha-inline-code', ['classic', 'soft'], 'classic'],
+    ['academyFloating', 'gha-floating', ['docked', 'minimal'], 'docked'],
     ['academyTocTone', 'gha-toc-tone', ['page', 'light', 'dark'], 'page'],
-    ['academySidebarTone', 'gha-sidebar-tone', ['page', 'light', 'dark'], 'page'],
     ['academyMeasure', 'gha-measure', ['narrow', 'standard', 'wide'], 'standard']
   ];
   settings.forEach(function (setting) { root.dataset[setting[0]] = choose(get(setting[1]), setting[2], setting[3]); });

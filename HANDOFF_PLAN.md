@@ -83,12 +83,13 @@ detailed notes so any AI can continue. Keep agents to one or two at a time; veri
   none) and making them more visible is a real request. The last five were placed automatically after the first body paragraph
   below the first heading of each lesson; check that placement reads well and move any that interrupt a thought.
 
-### The design layer is the site theme (2026-10-06; BOOK_REVISION_PROGRESS.md T21-T23)
+### Design layers (BOOK_REVISION_PROGRESS.md T26 is current; T21-T25 describe the "refined" overhaul)
 
-`site/src/styles/design/*.css` replaced the old look; it always applies (no beta, no switch). Edit tokens in `tokens.css` (palettes, brightness, bg tints,
-legacy-token bridge at the end), chrome in `chrome.css`, components in `components.css`/`labs.css`/`subsystems.css`, phones in `responsive.css`.
-Margin comment kinds are shown by colour (`--note-hue` in `margin-notes.css`), not titles. Open work: measure contrast (a script over all palettes),
-check remaining kit components in every palette, hovercard bottom sheet on touch (JS), more modernising polish (spacing rhythm, motion).
+The ORIGINAL look is the default (owner rule). `site/src/styles/design/`: base files (`base-tokens`, `layout`, `chrome`, `variants`, `responsive`, `a11y-print`) are anchored on
+`:root[data-design="v2"]` and only fix collisions or add opt-in variants; the refined overhaul (`tokens`, `components`, `labs`, `buttons`, `subsystems`, `refined-chrome`) is anchored
+on `:root[data-ui="refined"]` and only applies when the reader picks Interface style: Refined. Any new visual alternative must be a drawer choice whose default is the original
+(see how `inlineCode`/`surface`/`floating` are wired in `academy.js`, `reader-settings.mjs`, `ThemeSelect.astro`, and the head-script bridge in `astro.config.mjs`). No arbitrary hex
+codes or px in new rules; use the legacy tokens (`--ink`, `--paper`, `--line`, `--rust`, ...) and rem/em.
 
 ### Prioritized plan
 1. **Images and GIFs everywhere** (owner request, unmet): add 2 or 3 original CC0 SVG figures per chapter (about 40 more), each placed

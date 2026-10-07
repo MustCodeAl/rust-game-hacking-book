@@ -1482,3 +1482,23 @@ head script in `astro.config.mjs`):
   and `data-semantic` mirrors the semantic-highlighting setting.
 Verified: contrast audit passes (all palettes, lessons 1.5 and 3.2), links 0 broken, panel tones change the TOC/sidebar colours. Not verified by eye: dark panel on a
 light page and the reverse (computed colours only), top-right chat on a real phone, Notes tl/tr visual overlap with the header. No lab programs were run.
+
+## T26 — Back to the original look; every variation is a drawer choice (2026-10-07)
+
+Owner decision: the original look is the 100% default. The "refined" overhaul (T21 to T25) no longer applies unless chosen; layout and collision fixes stay on for everyone.
+- **Default = original** (verified computed: canvas `#f7f9fc`, Lexend, dark `#151b23` header and sidebar, dark code `#080a0d`, classic inline-code badge).
+- **Always on (collision / accessibility)**: no floating pager or edge chevrons (`pager.js` keeps only the arrow-key shortcut; pagination is the static cards after "Finished
+  this lesson"), dock z-index and offsets for Notes/chat, sidebar collapse transition, 6.5rem of room at the end of scrolling columns, muted completed-lesson checks, slim
+  scrollbars, `kbd` bevel, themed range/checkbox accent (original rust), focus ring, mobile touch targets/overflow/bottom-sheet hover cards, print rules, glossary and
+  hover-card triggers use a subtle dashed underline with `cursor: help`, active lesson = accent strip with soft tint (original colours).
+- **Drawer choices (HTML data attributes, default first)**: Interface style `data-ui` classic|refined (refined = the old overhaul: palette tokens, light chrome, off-canvas
+  sheet, button system, component and diagram cards; files `tokens.css`, `components.css`, `labs.css`, `buttons.css`, `subsystems.css`, `refined-chrome.css`);
+  Sidebar and header contrast `data-surface-contrast` default|unified (unified tints chrome from the page's own `--ink`/`--paper`, `variants.css`);
+  Inline code `data-inline-code` classic|soft; Floating buttons `data-floating-ui` docked|minimal (icon Notes, faded smaller chat); Code brightness
+  `data-code-brightness` match|dark|light (default dark = original); chat and Notes in all four corners; Table of contents light/dark (`data-toc-tone`); Reading width
+  narrow|standard|wide. The head script in `astro.config.mjs` mirrors every reader choice into the spec's attributes (palette, brightness auto|light|dark, bg, hovercards,
+  chat-position, gradients, page-grid, heading-boxes, diagram-bg|boxes|labels|frames|size, font-size small|default|large, spacing compact|default|spacious, motion
+  system|on-play|off, semantic, ligatures) with explicit values.
+- Removed: the lesson-list light/dark control (replaced by surface contrast).
+Verified in Chrome: default identical to the original on key computed values; each toggle changes only what it should; no horizontal overflow on ten pages at 420/1280.
+Not verified: refined style after this re-anchoring (spot-checked computed only), every component in refined style, touch devices, Safari/Firefox. No lab programs were run.
