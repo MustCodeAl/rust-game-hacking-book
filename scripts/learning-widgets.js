@@ -360,41 +360,62 @@
     );
 
     const body = element("div", "concept-lab__body");
-    const controls = element("div", "concept-lab__control-row");
+    // The four byte boxes ARE the input: type two hex digits in each and focus jumps to the next. The old raw text field is kept only as
+    // hidden state so the rest of the lab (and any saved value) still reads one string.
     const byteControl = makeTextControl(`${labId}-bytes`, "Four hexadecimal bytes", "64 00 00 00");
-    byteControl.input.setAttribute("aria-describedby", `${labId}-byte-help ${labId}-byte-error`);
+    byteControl.label.hidden = true;
+    const controls = element("div", "concept-lab__control-row");
+    const byteStrip = element("div", "concept-lab__byte-strip");
+    byteStrip.setAttribute("role", "group");
+    byteStrip.setAttribute("aria-label", "Four bytes, lowest address first. Type two hex digits in each box.");
+    const cells = [0, 1, 2, 3].map((index) => {
+      const cell = element("label", "concept-lab__byte");
+      const input = element("input", "concept-lab__byte-input");
+      input.type = "text";
+      input.maxLength = 2;
+      input.autocomplete = "off";
+      input.spellcheck = false;
+      input.setAttribute("aria-label", `Byte +${index}, two hex digits`);
+      cell.append(element("small", "", `+${index}`), input);
+      return { cell, input };
+    });
+    byteStrip.append(...cells.map((entry) => entry.cell));
+
     const examples = element("div", "concept-lab__examples");
-    examples.append(element("span", "concept-lab__example-label", "Try a known value:"));
-    [
+    examples.append(element("span", "concept-lab__example-label", "Presets:"));
+    const chips = [
       ["100", "64 00 00 00"],
       ["−1", "FF FF FF FF"],
       ["1.0", "00 00 80 3F"],
-    ].forEach(([label, bytes]) => {
+    ].map(([label, bytes]) => {
       const button = element("button", "concept-lab__example", label);
       button.type = "button";
       button.dataset.bytes = bytes;
+      button.setAttribute("aria-pressed", "false");
       examples.append(button);
+      return button;
     });
-    controls.append(byteControl.label, examples);
+    controls.append(byteStrip, examples);
 
-    const help = element(
-      "p",
-      "concept-lab__help",
-      "Write each byte with two hex digits. The first byte is stored at the lowest address."
-    );
+    const help = element("p", "concept-lab__help", "Two hex digits per byte. The first byte (+0) is stored at the lowest address.");
     help.id = `${labId}-byte-help`;
     const error = element("p", "concept-lab__error");
     error.id = `${labId}-byte-error`;
     error.setAttribute("role", "alert");
     error.hidden = true;
 
-    const byteStrip = element("div", "concept-lab__byte-strip");
-    byteStrip.setAttribute("aria-label", "Bytes in increasing address order");
     const results = element("div", "concept-lab__results concept-lab__results--four");
     const unsigned = makeResult("Unsigned 32-bit", "", "Little-endian u32");
     const signed = makeResult("Signed 32-bit", "", "Little-endian i32");
     const floating = makeResult("32-bit decimal", "", "IEEE-754 f32");
     const bigEndian = makeResult("Unsigned, reversed order", "", "Big-endian u32");
+    // A small type badge on each card tells the families apart; the big-endian card also shows the byte order it reads.
+    [[unsigned, "INT", "int"], [signed, "INT", "int"], [floating, "FLOAT", "float"], [bigEndian, "ENDIAN", "endian"]].forEach(([result, text, kind]) => {
+      const badge = element("span", "concept-lab__type-badge", text);
+      badge.dataset.kind = kind;
+      result.card.prepend(badge);
+    });
+    bigEndian.card.append(element("span", "concept-lab__order", "⇄ reads +3 +2 +1 +0"));
     results.append(unsigned.card, signed.card, floating.card, bigEndian.card);
 
     const takeaway = element(
@@ -402,44 +423,70 @@
       "concept-lab__takeaway",
       "Memory stores bytes, not labels. A type tells the program how to interpret those bytes."
     );
-    body.append(controls, help, error, byteStrip, results, takeaway);
+    takeaway.dataset.kind = "insight";
+    body.append(controls, help, error, results, takeaway);
     root.append(body);
+
+    const readCells = () => cells.map((entry) => entry.input.value.padStart(2, "0").toUpperCase());
+    const setCells = (parts) => parts.forEach((part, index) => { cells[index].input.value = part; });
+    function sync() {
+      byteControl.input.value = readCells().join(" ");
+      render();
+    }
+    setCells(byteControl.input.value.split(" "));
+    cells.forEach(({ input }, index) => {
+      input.addEventListener("focus", () => input.select());
+      input.addEventListener("click", () => input.select());
+      input.addEventListener("input", () => {
+        input.value = input.value.replace(/[^0-9a-f]/gi, "").toUpperCase().slice(0, 2);
+        if (input.value.length === 2 && index < 3) { cells[index + 1].input.focus(); }
+        sync();
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Backspace" && !input.value && index > 0) { event.preventDefault(); cells[index - 1].input.focus(); }
+        if (event.key === "ArrowLeft" && input.selectionStart === 0 && index > 0) { event.preventDefault(); cells[index - 1].input.focus(); }
+        if (event.key === "ArrowRight" && input.selectionStart === input.value.length && index < 3) { event.preventDefault(); cells[index + 1].input.focus(); }
+      });
+      input.addEventListener("paste", (event) => {
+        const parsed = parseFourBytes(event.clipboardData ? event.clipboardData.getData("text") : "");
+        if (!parsed) return;
+        event.preventDefault();
+        setCells(parsed.map((byte) => byte.toString(16).toUpperCase().padStart(2, "0")));
+        sync();
+      });
+    });
 
     function render() {
       const bytes = parseFourBytes(byteControl.input.value);
       if (!bytes) {
-        error.textContent = "Enter exactly four bytes, such as 64 00 00 00.";
+        error.textContent = "Each box needs two hex digits, such as 64.";
         error.hidden = false;
         results.hidden = true;
-        byteStrip.replaceChildren();
         return;
       }
       error.hidden = true;
       results.hidden = false;
-      byteStrip.replaceChildren(
-        ...bytes.map((byte, index) => {
-          const cell = element("span", "concept-lab__byte");
-          cell.append(
-            element("small", "", `+${index}`),
-            element("strong", "", byte.toString(16).toUpperCase().padStart(2, "0"))
-          );
-          return cell;
-        })
-      );
       const array = Uint8Array.from(bytes);
       const view = new DataView(array.buffer);
       unsigned.value.textContent = view.getUint32(0, true).toLocaleString("en-US");
-      signed.value.textContent = view.getInt32(0, true).toLocaleString("en-US");
+      const signedValue = view.getInt32(0, true);
+      signed.value.textContent = signedValue.toLocaleString("en-US");
+      signed.value.dataset.negative = String(signedValue < 0);
       floating.value.textContent = readableFloat32(view.getFloat32(0, true));
       bigEndian.value.textContent = view.getUint32(0, false).toLocaleString("en-US");
+      const joined = readCells().join(" ");
+      chips.forEach((chip) => {
+        const active = chip.dataset.bytes === joined;
+        chip.classList.toggle("is-active", active);
+        chip.setAttribute("aria-pressed", String(active));
+      });
     }
 
-    byteControl.input.addEventListener("input", render);
-    examples.querySelectorAll("[data-bytes]").forEach((button) => {
+    chips.forEach((button) => {
       button.addEventListener("click", () => {
-        byteControl.input.value = button.dataset.bytes;
-        render();
-        byteControl.input.focus();
+        setCells(button.dataset.bytes.split(" "));
+        sync();
+        cells[0].input.focus();
       });
     });
     render();
