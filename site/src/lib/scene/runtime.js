@@ -8,11 +8,15 @@ import { renderScene } from './markup.mjs';
 const mounted = new WeakSet();
 const SPEEDS = [0.5, 1, 2];
 const round = (n) => Math.round(n * 100) / 100;
-// Only the two selected simulations load their model code. Other scenes retain
+// Only selected simulations load their model code. Other scenes retain
 // their existing playback and static picture without loading the explorers.
 const explorers = {
 	'bfs-around-wall': () => import('../../scenes/bfs-around-wall.mjs'),
 	'world-to-screen': () => import('../../scenes/world-to-screen.mjs'),
+	'server-authority': () => import('../../scenes/server-authority.mjs'),
+	'detector-input-window': () => import('../../scenes/detector-input-window.mjs'),
+	'evidence-correlation': () => import('../../scenes/evidence-correlation.mjs'),
+	'edge-events': () => import('../../scenes/edge-events.mjs'),
 };
 
 export function mountScenes(scope = document) {

@@ -330,6 +330,7 @@
     const badge = element("span", "concept-lab__type-badge", text);
     badge.dataset.kind = kind;
     card.prepend(badge);
+    return badge;
   }
 
   function parseFourBytes(raw) {
@@ -652,6 +653,8 @@
     const results = element("div", "concept-lab__angle-results");
     const direct = makeResult("Direct subtraction", "", "desired − current");
     const shortest = makeResult("Shortest turn", "", "normalized to −180°…180°");
+    addTypeBadge(direct.card, "DEGREES", "float");
+    addTypeBadge(shortest.card, "DEGREES", "float");
     shortest.card.classList.add("concept-lab__result-card--accent");
     results.append(direct.card, shortest.card);
     visual.append(dial, results);
@@ -750,6 +753,8 @@
     const goldValue = svgNode("text", { x: 343, y: 107, class: "pointer-tracer__mono" }, "gold: not read");
     picture.append(addressValue, goldValue);
     const explanationText = element("p", "pointer-tracer__explanation");
+    explanationText.classList.add("concept-lab__takeaway");
+    explanationText.dataset.kind = "insight";
     explanationText.setAttribute("role", "status");
     const controls = element("div", "concept-lab__step-controls");
     const previous = element("button", "concept-lab__example", "Previous");
@@ -764,6 +769,13 @@
     root.append(body);
     let activeStep = 0;
     let animationTimer;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const motionAllowed = () => document.documentElement.dataset.academyMotion !== "off" && !reduced.matches;
+    const stopCopyMotion = () => {
+      if (!motionAllowed()) { clearTimeout(animationTimer); chip.style.transition = "none"; }
+    };
+    document.addEventListener("academy:reader-preference", stopCopyMotion);
+    reduced.addEventListener("change", stopCopyMotion);
     function render(step) {
       clearTimeout(animationTimer);
       activeStep = Math.max(0, Math.min(steps.length - 1, step));
@@ -788,7 +800,7 @@
         chip.style.transition = "none";
         chip.style.transform = `translate(191px, ${sourceY + 6}px)`;
         chip.setAttribute("opacity", "1");
-        if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        if (motionAllowed()) {
           animationTimer = setTimeout(() => {
             chip.style.transition = "transform 550ms ease";
             chip.style.transform = `translate(223px, ${targetY - 14}px)`;
@@ -1017,6 +1029,7 @@
   };
   const PREDICT_LABS = {
     "stride-lab": {
+      resultType: "BYTE OFFSET",
       eyebrow: "Explore it",
       title: "Find a field inside a table of records",
       description: "Records sit one fixed stride apart. Change the player and the field and watch the offset from the table's start get built, one step at a time.",
@@ -1033,6 +1046,7 @@
       show: (right) => hex(right),
     },
     "grid-lab": {
+      resultType: "ZERO-BASED INDEX",
       eyebrow: "Explore it",
       title: "Turn a tile's (x, y) into a position in a flat list",
       description: "A map is stored as one long row-major list. Move the tile and the width and see which index it lands on, and why.",
@@ -1050,6 +1064,7 @@
       show: (right) => String(right),
     },
     "vector-lab": {
+      resultType: "WORLD-UNIT DISTANCE",
       eyebrow: "Explore it",
       title: "How far apart are two points?",
       description: "Subtract to get the direction, then measure its length. Move the points and watch the numbers change.",
@@ -1070,6 +1085,7 @@
       show: (right) => right.toFixed(1),
     },
     "utf8-lab": {
+      resultType: "UTF-8 BYTE COUNT",
       eyebrow: "Explore it",
       title: "How many bytes does this text take?",
       description: "One visible character is not always one byte. Type a word and see each character's UTF-8 bytes and the total.",
@@ -1223,7 +1239,8 @@
     function redraw() {
       question.textContent = cfg.ask(values);
       steps.replaceChildren(...cfg.steps(values).map((line) => element("li", "", line)));
-      result.textContent = "Result: " + cfg.show(cfg.answer(values));
+      result.textContent = " Result: " + cfg.show(cfg.answer(values));
+      addTypeBadge(result, cfg.resultType, lab === "vector-lab" ? "float" : "int");
       const drawing = predictDiagram(lab, values);
       if (drawing) figure.replaceChildren(drawing);
     }
