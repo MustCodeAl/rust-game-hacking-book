@@ -1,6 +1,7 @@
 // The declared example in Lesson 7.9: OpenGL depth, column vectors, -Z forward.
 // Drawing scales are only SVG layout units; all displayed coordinates are derived below.
 import { scene, rect, cell, text, note, line, dot, group, timeline } from '../lib/scene/kit.mjs';
+import { createProjectionExplorer } from '../lib/scene/explorers.mjs';
 
 const near = 1, far = 9, depth = 4, viewport = 800;
 const clipZ = (z) => ((far + near) / (near - far)) * z + (2 * far * near) / (near - far);
@@ -52,7 +53,10 @@ tl.cue(19, 'Map normalized coordinates into pixels. X=(0.25+1)×800/2=500. Scree
 tl.at(19).text('topLeft', 'pixels (0,0)').text('bottomRight', '(800,800)').text('result', `pixel (${pixel(1, depth)},${pixel(1, depth, true)})`).text('clip', 'centre: (400,400)').text('viewCoords', 'Only the viewport result is a screen position.');
 tl.cue(23, 'Double the depth from 4 to 8 without changing relative X or Y. W becomes 8, so both normalized offsets halve to 1/8=0.125. The pixel moves to (450,350), closer to the centre.');
 tl.at(23).move('point', 158, 62, 1.2).move('pointLabel', 170, 88, 1.2).text('pointLabel', 'view (1,1,−8)').scale('ray', fartherLength / normalLength, 1.2).rotate('ray', angle(-192), 1.2).move('planePoint', 116, 230, 1.2).show('oldMarker').move('marker', 383.25, 148.75, 1.2).text('result', `pixel (${pixel(1, 8)},${pixel(1, 8, true)})`).text('clip', `clip Z=${clipZ(-8)}, W=8`).text('viewCoords', 'Double depth halves the offset.');
-export default scene({ id: 'world-to-screen', title: 'A camera ray places a marker on the viewport',
+const worked = scene({ id: 'world-to-screen', title: 'A camera ray places a marker on the viewport',
 	alt: 'The inverse camera pose makes the point camera-relative. Its ray crosses a projection plane; dividing by depth gives normalized coordinates. The viewport maps those coordinates to pixels. Doubling depth moves the marker halfway toward the centre, with the first marker retained as a small grey reference.',
 	caption: 'Declared convention: column vectors, negative Z forward, OpenGL depth. The muted dot is the first valid marker; the coloured dot is the farther point.',
 	w: 480, h: 330, end: 26, actors, cues: tl.cues, tracks: tl.tracks });
+
+export const exploration = createProjectionExplorer(worked);
+export default worked;

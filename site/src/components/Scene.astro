@@ -5,7 +5,7 @@
 //
 // The page holds the finished picture and the written steps, so printing, search,
 // the listening edition, and a browser without scripts all work. The script only
-// adds playback: play, pause, step, and scrub.
+// adds playback and, for selected scenes, bounded inputs that recompute the model.
 import { renderScene } from '../lib/scene/markup.mjs';
 import { playerSpec } from '../lib/scene/engine.mjs';
 import { inlineMarkdown } from '../lib/inline-md';
@@ -16,23 +16,38 @@ interface Props {
 }
 
 const { name } = Astro.props;
-const scenes = import.meta.glob('../scenes/*.mjs', { eager: true }) as Record<string, { default: any }>;
-const sc = scenes[`../scenes/${name}.mjs`]?.default;
+const scenes = import.meta.glob('../scenes/*.mjs', { eager: true }) as Record<string, { default: any; exploration?: any }>;
+const module = scenes[`../scenes/${name}.mjs`];
+const sc = module?.default;
 if (!sc) throw new Error(`There is no scene called "${name}". Add src/scenes/${name}.mjs.`);
+const exploration = module.exploration;
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 // One scene may appear once on a page, so its name is a stable id (a counter would change between builds).
 const uid = `scene-${name}`;
 const picture = renderScene(sc, sc.duration, { id: uid, base });
 // "<" never appears raw inside the embedded data, so it cannot close the script early.
-const spec = JSON.stringify(playerSpec(sc)).replace(/</g, '\\u003c');
+const spec = JSON.stringify({ ...playerSpec(sc), explore: exploration ? name : undefined }).replace(/</g, '\\u003c');
 ---
 
-<figure class="scene not-content" data-scene data-scene-id={uid} style={`--scene-w:${sc.w}`} aria-labelledby={`${uid}-title`}>
+<figure class="scene not-content" data-scene data-scene-id={uid} data-scene-base={base} style={`--scene-w:${sc.w}`} aria-labelledby={`${uid}-title`}>
 	<figcaption class="scene__top">
 		<span class="scene__eyebrow">Watch it happen</span>
 		<strong id={`${uid}-title`} class="scene__title">{sc.title}</strong>
 	</figcaption>
+	{exploration && <div class="scene__explore" data-scene-explore data-reader-skip role="group" aria-labelledby={`${uid}-explore-title`} hidden>
+		<strong id={`${uid}-explore-title`}>Change the simulation</strong>
+		<p class="scene__invite">{exploration.invite}</p>
+		<div class="scene__fields">
+			{exploration.fields.map((field: any) => <label class:list={['scene__field', { 'scene__field--check': field.type === 'checkbox' }]} for={`${uid}-${field.key}`}>
+				{field.type === 'checkbox'
+					? <><input id={`${uid}-${field.key}`} data-scene-input={field.key} type="checkbox" checked={field.start} /><span>{field.label}</span></>
+					: <><span>{field.label} <output for={`${uid}-${field.key}`} data-scene-output={field.key}>{field.start}{field.unit || ''}</output></span><input id={`${uid}-${field.key}`} data-scene-input={field.key} type="range" min={field.min} max={field.max} step={field.step} value={field.start} /></>}
+			</label>)}
+		</div>
+		<div class="scene__controls"><button type="button" data-scene-reset>Reset</button></div>
+		<p class="scene__result" data-scene-result role="status"></p>
+	</div>}
 	<div class="scene__stage">
 		<svg class="scene__svg" viewBox={`0 0 ${sc.w} ${sc.h}`} aria-hidden="true" focusable="false" set:html={picture} />
 	</div>
@@ -62,3 +77,16 @@ const spec = JSON.stringify(playerSpec(sc)).replace(/</g, '\\u003c');
 	mountScenes(document);
 	document.addEventListener('astro:page-load', () => mountScenes(document));
 </script>
+
+<style>
+	.scene__explore { margin-block: .6rem; font-size: .85rem; }
+	.scene__invite { margin: .35rem 0 .6rem; line-height: 1.5; }
+	.scene__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: .6rem .8rem; }
+	.scene__field { display: grid; min-width: 0; gap: .3rem; }
+	.scene__field--check { display: flex; align-items: center; gap: .4em; }
+	.scene__field input[type='range'] { width: 100%; margin: 0; accent-color: var(--reading-process); }
+	.scene__field input[type='checkbox'] { margin: 0; accent-color: var(--reading-process); }
+	.scene__field output { margin-inline-start: .35em; font-family: var(--mono); color: var(--diagram-ink-strong); }
+	.scene__result { margin: .35rem 0 0; padding-inline-start: .6em; border-inline-start: .15em solid var(--reading-result); line-height: 1.5; }
+	@media print { .scene__explore { display: none !important; } }
+</style>

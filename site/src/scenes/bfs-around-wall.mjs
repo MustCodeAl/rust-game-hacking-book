@@ -1,6 +1,7 @@
 // Lesson 4.9: a breadth-first search finds the route around a wall. The 3-by-2 grid,
 // the wall at (1,0), and the five tiles of the route are the ones the lesson's test uses.
 import { scene, cell, text, note, rect, line, image } from '../lib/scene/kit.mjs';
+import { createBfsExplorer } from '../lib/scene/explorers.mjs';
 
 const S = 84;
 const GAP = 3;
@@ -175,7 +176,7 @@ add('route', 'o', [0, 0], [t6 + 1.3 + 4 * 0.7, 0], [t6 + 1.3 + 4 * 0.7 + 0.4, 1]
 // The last parent edge finishes at t6 + 3.95. Walking begins after it settles.
 add('hero', 'u', [0, 0], [t6 + 4.05, 0], [t6 + 6.25, 1, 'linear']);
 
-export default scene({
+const worked = scene({
 	id: 'bfs-around-wall',
 	title: 'A first-in, first-out queue finds the route around the wall',
 	alt: 'A grid three tiles wide and two tall with a wall at the top middle. The search takes one tile at a time from the front of a queue, tests its neighbours, queues the new ones, and records each new tile’s parent in a came_from list. When the goal is taken from the queue, the parent links are followed backward to draw the four-move route through the bottom row. A small hero then walks that route to the chest without crossing the wall.',
@@ -187,3 +188,6 @@ export default scene({
 	actors: [...grid, ...sprites, ...route, ...labels, ...overlay],
 	tracks: done(),
 });
+
+export const exploration = createBfsExplorer(worked);
+export default worked;

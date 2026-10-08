@@ -2,11 +2,18 @@
 // moves the same elements through the scene's tracks so a reader can play,
 // pause, step, and scrub it. Nothing runs until a scene is near the screen, and
 // nothing moves unless the reader's motion settings allow it.
-import { format, transformOf, valuesAt } from './engine.mjs';
+import { format, transformOf, valuesAt, playerSpec } from './engine.mjs';
+import { renderScene } from './markup.mjs';
 
 const mounted = new WeakSet();
 const SPEEDS = [0.5, 1, 2];
 const round = (n) => Math.round(n * 100) / 100;
+// Only the two selected simulations load their model code. Other scenes retain
+// their existing playback and static picture without loading the explorers.
+const explorers = {
+	'bfs-around-wall': () => import('../../scenes/bfs-around-wall.mjs'),
+	'world-to-screen': () => import('../../scenes/world-to-screen.mjs'),
+};
 
 export function mountScenes(scope = document) {
 	scope.querySelectorAll('[data-scene]').forEach(mount);
@@ -24,14 +31,14 @@ function mount(root) {
 	if (!specNode || !svg || !controls || !cueNode || !scrub || !playButton) return;
 	mounted.add(root);
 
-	const spec = JSON.parse(specNode.textContent);
+	let spec = JSON.parse(specNode.textContent);
 	const id = root.dataset.sceneId;
 	const doc = root.ownerDocument;
 	const view = doc.defaultView;
 	const reduced = view.matchMedia('(prefers-reduced-motion: reduce)');
-	const duration = spec.d;
+	let duration = spec.d;
 
-	const actors = spec.a.map((actor) => {
+	const makeActors = data => data.a.map((actor) => {
 		const node = svg.querySelector(`[data-a="${CSS.escape(actor.id)}"]`);
 		return {
 			...actor,
@@ -43,6 +50,7 @@ function mount(root) {
 			written: {},
 		};
 	}).filter((actor) => actor.node);
+	let actors = makeActors(spec);
 
 	let time = duration;
 	let playing = false;
@@ -115,7 +123,8 @@ function mount(root) {
 
 	// The words for each step are already in the page, in the list under the picture;
 	// the line shown beside the picture is a copy of the current one.
-	const stepItems = Array.from(root.querySelectorAll('.scene__steps li'));
+	let stepItems = Array.from(root.querySelectorAll('.scene__steps li'));
+	const originalSteps = stepItems.map(item => item.cloneNode(true));
 
 	function showCue(index) {
 		if (index === cueIndex) return;
@@ -243,7 +252,64 @@ function mount(root) {
 			}
 		}
 	}, { threshold: 0.35 });
-	let autoStarted = false;
+	let autoStarted = Boolean(spec.explore);
+
+	const explorePanel = root.querySelector('[data-scene-explore]');
+	const loadExplorer = explorers[spec.explore];
+	if (explorePanel && loadExplorer) loadExplorer().then(({ exploration }) => {
+		if (!exploration || typeof exploration.build !== 'function') return;
+		const fields = exploration.fields.map(field => ({
+			...field,
+			input: explorePanel.querySelector(`[data-scene-input="${CSS.escape(field.key)}"]`),
+			output: explorePanel.querySelector(`[data-scene-output="${CSS.escape(field.key)}"]`),
+		}));
+		if (fields.some(field => !field.input)) return;
+		const result = explorePanel.querySelector('[data-scene-result]');
+		const steps = root.querySelector('.scene__steps ol');
+		const alt = root.querySelector('.scene__alt');
+		const defaults = exploration.build(exploration.defaults);
+		if (result) result.textContent = defaults.summary;
+
+		function recompute(reset = false) {
+			if (reset) for (const field of fields) {
+				if (field.type === 'checkbox') field.input.checked = exploration.defaults[field.key];
+				else field.input.value = String(exploration.defaults[field.key]);
+			}
+			const values = Object.fromEntries(fields.map(field => [field.key, field.type === 'checkbox' ? field.input.checked : Number(field.input.value)]));
+			const next = exploration.build(values), sc = next.scene;
+			pause();
+			wantsPlay = false;
+			autoStarted = true;
+			svg.innerHTML = renderScene(sc, sc.duration, { id, base: root.dataset.sceneBase || '' });
+			spec = { ...playerSpec(sc), explore: spec.explore };
+			duration = spec.d;
+			actors = makeActors(spec);
+			cueIndex = -2;
+			const isDefault = fields.every(field => values[field.key] === exploration.defaults[field.key]);
+			if (steps) {
+				steps.replaceChildren(...(isDefault ? originalSteps.map(item => item.cloneNode(true)) : sc.cues.map(([, words]) => {
+					const item = doc.createElement('li');
+					item.textContent = words;
+					return item;
+				})));
+				stepItems = Array.from(steps.children);
+			}
+			if (alt) alt.textContent = sc.alt;
+			if (result) result.textContent = next.summary;
+			for (const field of fields) if (field.output) field.output.value = `${values[field.key]}${field.unit || ''}`;
+			// Explore first: immediately show the computed result. Replay and manual
+			// steps can then explain how this version reached it.
+			seek(duration);
+			announce();
+		}
+		for (const field of fields) field.input.addEventListener(field.type === 'checkbox' ? 'change' : 'input', () => recompute());
+		explorePanel.querySelector('[data-scene-reset]')?.addEventListener('click', () => recompute(true));
+		explorePanel.hidden = false;
+		root.dataset.simulationReady = 'true';
+	}).catch(() => {
+		// A missing optional model leaves the original picture/playback usable.
+		// Hidden controls must never advertise a simulation that did not load.
+	});
 
 	function applyPreferences() {
 		speed = preferredSpeed();
@@ -267,7 +333,7 @@ function mount(root) {
 	speed = preferredSpeed();
 	// A scene that may play starts at its first picture and waits to be seen; one
 	// that may not shows its finished picture, which the page already holds.
-	if (autoplayAllowed() && observer) {
+	if (!spec.explore && autoplayAllowed() && observer) {
 		seek(0);
 		observer.observe(root);
 	} else {
