@@ -157,7 +157,7 @@
   // PageSidebar.astro). While a panel is hidden, a tab at that edge of the
   // screen brings it back, so the control is always where the panel was.
   var PANELS = {
-    sidebar: { key: "gha-sidebar", attribute: "academySidebar", label: "Lessons", tip: "Show the lesson list · Alt+N", side: "left" },
+    sidebar: { key: "gha-sidebar", attribute: "academySidebar", label: "Lessons", tip: "Show the lesson list · Alt+B", side: "left" },
     toc: { key: "gha-toc", attribute: "academyToc", label: "On this page", tip: "Show “On this page” · Alt+O", side: "right" }
   };
 
@@ -425,7 +425,7 @@
       KeyS: function () { applySyntaxPalette(cycle(SYNTAX_PALETTES, root.dataset.academySyntax || "academy")); },
       KeyH: function () { applySemanticSetting(root.dataset.academySemantic === "off" ? "on" : "off"); },
       KeyL: function () { applyLigatureSetting(root.dataset.academyLigatures === "on" ? "off" : "on"); },
-      KeyN: function () { togglePanel("sidebar"); },
+      KeyB: function () { togglePanel("sidebar"); },
       KeyO: function () { togglePanel("toc"); }
     };
     if (!actions[event.code]) return;
@@ -890,6 +890,40 @@
   ];
 
   var labPolishQueued = false;
+  var readingResizeObserver;
+  var readingObserved = new WeakSet();
+  // Wide code and diagrams need their own keyboard scroll target. Only add a
+  // stop when a region overflows, and preserve any authored keyboard behavior.
+  function polishReadingAccess() {
+    document.querySelectorAll('button[data-open-modal]').forEach(function (button) {
+      var hint = button.querySelector("kbd");
+      var label = button.querySelector("span");
+      if (!hint || !label) return;
+      hint.setAttribute("aria-hidden", "true");
+      button.setAttribute("aria-label", (label.textContent + " " + hint.textContent).trim());
+    });
+    document.querySelectorAll('.sl-markdown-content pre, .sl-markdown-content .mem-figure, .sl-markdown-content .table-scroll').forEach(function (region) {
+      if (readingResizeObserver && !readingObserved.has(region)) {
+        readingObserved.add(region);
+        readingResizeObserver.observe(region);
+      }
+      var managed = region.dataset.keyboardScroll === "true";
+      if (!managed && region.hasAttribute("tabindex")) return;
+      var style = window.getComputedStyle(region);
+      var visible = region.clientWidth > 0 && !region.closest('[hidden], [aria-hidden="true"], .sr-only');
+      var overflow = visible && (
+        (/auto|scroll/.test(style.overflowX) && region.scrollWidth > region.clientWidth + 1) ||
+        (/auto|scroll/.test(style.overflowY) && region.scrollHeight > region.clientHeight + 1)
+      );
+      if (overflow) {
+        region.tabIndex = 0;
+        region.dataset.keyboardScroll = "true";
+      } else if (managed) {
+        region.removeAttribute("tabindex");
+        delete region.dataset.keyboardScroll;
+      }
+    });
+  }
   function polishLabs() {
     labPolishQueued = false;
     document.querySelectorAll('input[type="range"]').forEach(paintRange);
@@ -904,6 +938,7 @@
         if (ACTION_RULES[i][1].test(label)) { button.dataset.action = ACTION_RULES[i][0]; return; }
       }
     });
+    polishReadingAccess();
   }
   function queueLabPolish() {
     if (labPolishQueued) return;
@@ -913,6 +948,9 @@
   function initLabPolish() {
     if (window.__academyLabPolish) return;
     window.__academyLabPolish = true;
+    if (window.ResizeObserver) readingResizeObserver = new ResizeObserver(queueLabPolish);
+    window.addEventListener("resize", queueLabPolish);
+    if (document.fonts) document.fonts.ready.then(queueLabPolish);
     ["input", "change", "click", "keyup", "pointerup"].forEach(function (name) {
       document.addEventListener(name, function (event) {
         if (event.target && event.target.type === "range") paintRange(event.target);
