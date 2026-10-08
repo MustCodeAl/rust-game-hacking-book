@@ -1,6 +1,6 @@
 # Reader overhaul — owner specification, 8 October 2026
 
-New authorized work, separate from the finished T52–T54 publication. All items below remain pending implementation/verification. Preserve the original design as default and place taste variants in the existing Appearance tiers unless the owner explicitly changes that default. New CSS uses existing semantic tokens and relative units. The requested modern frost/shadow style supersedes the older blanket no-blur advice when that style is chosen; measure scrolling and retain motion/depth preferences.
+New authorized work, separate from the finished T52–T54 publication. All implementation items below remain pending. The owner approved the exact balanced map on2026-10-08; its implementation is now authorized. Preserve the original design as default and place taste variants in the existing Appearance tiers unless the owner explicitly changes that default. New CSS uses existing semantic tokens and relative units. The requested modern frost/shadow style supersedes the older blanket no-blur advice when that style is chosen; measure scrolling and retain motion/depth preferences.
 
 ## Strict TypeScript and static architecture
 

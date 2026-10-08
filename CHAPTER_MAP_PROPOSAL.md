@@ -1,6 +1,6 @@
 # Balanced chapter map for owner review
 
-Prepared 2026-10-08 from source `8ef38fa1` plus current reader repairs. **Proposal only. No moves or renumbering approved or applied.** This replaces the rejected grouping-only proposal. It assigns all **155 existing lessons** to **15 coherent chapters: ten chapters of 10 lessons and five of 11**. Every existing source path, content ID and public URL stays fixed.
+Prepared 2026-10-08 from source `8ef38fa1` plus current reader repairs. **Exact map approved by the owner on2026-10-08. Implementation not yet applied.** This replaces the rejected grouping-only proposal. It assigns all **155 existing lessons** to **15 coherent chapters: ten chapters of 10 lessons and five of 11**. Every existing source path, content ID and public URL stays fixed.
 
 ## What changes in the proposed reading path
 
