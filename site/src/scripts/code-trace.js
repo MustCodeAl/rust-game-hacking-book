@@ -709,7 +709,6 @@ function build(root, id) {
 	codePanel.append(el('h4', 'code-trace__label', 'Code'));
 	const codeList = el('ol', 'code-trace__code');
 	codeList.tabIndex = 0;
-	codeList.setAttribute('role', 'group');
 	codeList.setAttribute('aria-label', 'Code listing. The highlighted line is the current step. Left and right arrow keys move between steps.');
 	codePanel.append(codeList);
 

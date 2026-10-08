@@ -170,7 +170,7 @@
 
     // Keep a plain reading copy available to assistive readers while the
     // animated characters stay quiet. Recall uses the same masks as the screen.
-    var readable = el("pre", "sr-only");
+    var readable = el("div", "sr-only");
     readable.id = id + "-practice-code";
     readable.setAttribute("data-speedtype-readable", "");
     function syncReadable() {

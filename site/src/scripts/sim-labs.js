@@ -545,6 +545,7 @@ function evidenceCorrelation(root) {
 	});
 	const cards = el('div', 'sim-lab__cards');
 	const ledger = el('div', 'sim-lab__fields');
+	ledger.setAttribute('role', 'group');
 	ledger.setAttribute('aria-label', 'Event ledger with report sources');
 	const explain = el('p', 'sim-lab__explain');
 	explain.setAttribute('aria-live', 'polite');

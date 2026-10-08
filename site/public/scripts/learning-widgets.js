@@ -205,9 +205,10 @@
       const button = element("button", "ownership-scope__code-line");
       button.type = "button";
       button.dataset.ownershipStep = String(index);
-      button.setAttribute("aria-label", `Show step ${index + 1}: ${line}`);
+      // The native name includes the exact visible line number and code.
+      const number = element("span", "ownership-scope__line-number", String(index + 1).padStart(2, "0"));
       button.append(
-        element("span", "ownership-scope__line-number", String(index + 1).padStart(2, "0")),
+        number,
         element("code", "", line)
       );
       codeLines.append(button);

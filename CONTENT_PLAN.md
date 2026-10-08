@@ -1,6 +1,9 @@
 # CONTENT_PLAN.md — plans for the next AI (written 2026-10-07)
 
-The owner asked for **plans only** for the items below; do them in a later session. Read `HANDOFF_PLAN.md` first (rules, publishing, checks), then this file.
+This is the historical implementation plan. Read `HANDOFF_PLAN.md` first for current completion, publishing and verification status.
+
+**Current implementation state — 2026-10-08:** A's 25 contextual comparisons are complete, with full Improved code shown first and a Show the diff control. B's named missing foundations are integrated; D's three instruction-reference lessons and E's four Rust companions are integrated and verified (T37, T43–T44). T45 completes the preserved clarity drafts and broader wording audit; T46 completes compact cheatsheets. G's teaching and theme implementation is integrated, with concrete accessibility repairs and additional browser/emulated-touch checks in T47–T48. Do not reapply preserved drafts. C has a concrete proposal/inventory, but the owner requested adjustments rather than approving moves; no restructuring or saved-key migration is authorized. Native-device/speech and real-provider verification limits are recorded in the progress ledger.
+
 Owner rules that apply to all of it: beginner-first writing; teaching-first interactives (never forced exercises); quizzes test the concept, with pools 3x the batch and answers
 not predictably the longest; never run lab binaries; original look is the default design (new visual variants are drawer choices); document everything in
 `BOOK_REVISION_PROGRESS.md`; publish only with `cd site && node scripts/publish-pages.mjs`.

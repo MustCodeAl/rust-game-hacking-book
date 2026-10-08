@@ -141,7 +141,10 @@ function mount(root) {
 	function refreshButtons() {
 		playButton.textContent = playing ? 'Pause' : time >= duration ? 'Replay' : time > 0 ? 'Resume' : 'Play';
 		playButton.disabled = !playAllowed();
-		if (speedButton) speedButton.textContent = `${speed}×`;
+		if (speedButton) {
+			speedButton.textContent = `${speed}×`;
+			speedButton.setAttribute('aria-label', `Playback speed: ${speed}×`);
+		}
 		root.dataset.playing = String(playing);
 	}
 
