@@ -5,7 +5,7 @@ The owner requested finish after the urgent repair; both agents then hit the
 account usage limit. Preserve the drafts rather than reporting unverified
 features as completed.
 
-Read HANDOFF_PLAN.md and T39–T45 in BOOK_REVISION_PROGRESS.md first. Source is
+Read HANDOFF_PLAN.md and T39–T46 in BOOK_REVISION_PROGRESS.md first. Source is
 `codex/book-revision`; publish only through the repository script. No existing
 lesson ID has been moved, and restructuring still needs the owner's approval.
 
@@ -27,6 +27,6 @@ lesson ID has been moved, and restructuring still needs the owner's approval.
 - `rust-idioms/site/`: **integrated and verified in T44; do not copy this historical draft over active content.** Four lessons at `pages/1/13–16`, reader 1.11–1.14, now have 17 traces, six recall snippets, first-use links and 60 balanced concept questions. All 22 Rust listings compile in an isolated check library without execution. See T44 for model, browser and final integration receipts.
 - `reader-sync/site/`: historical draft, superseded by active T39. Shared author/reader layout, global styling, DOM-ready comments, stable IDs, deletion tombstones and client account merge are integrated and checked. Preserve the active T36–T39 pointer/restore repairs; **do not copy this old draft over them**. T39 records the mock transport and actual browser checks. A real external provider is still unconfigured, and client merging is not server-atomic.
 
-Still open: compact download cheatsheets,
-cross-browser/accessibility checks, and chapter map adjustments requested by the owner, followed by explicit approval before any
+Compact downloaded cheatsheets are completed and checked in T46. Still open:
+cross-browser/accessibility checks (limited phone WebKit evidence only; Firefox launch failed), and chapter map adjustments requested by the owner, followed by explicit approval before any
 redirect/key migration. No lab programs should be run during verification.
