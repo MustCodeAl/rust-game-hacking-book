@@ -15,11 +15,30 @@ export function mountMarginNotes() {
 	const neededSpace = () => 16.5 * parseFloat(getComputedStyle(root).fontSize);
 	const isCode = node => !!node && (node.matches('pre, .expressive-code, .kit-speedtype, .kit-github, .code-trace, .code-blanks, [data-code-trace]') || !!node.querySelector('pre, .expressive-code'));
 	let notes = [];
+	const expanded = note => note.dataset.collapsed !== 'true' && (root.dataset.noteMode !== 'pin' || note.dataset.open === 'true');
+	const reflect = note => {
+		const button = note.querySelector('.margin-note__toggle');
+		if (!button) return;
+		const open = expanded(note);
+		button.textContent = open ? 'Hide' : '💬';
+		button.setAttribute('aria-expanded', String(open));
+		button.setAttribute('aria-label', (open ? 'Hide ' : 'Show ') + (note.getAttribute('aria-label') || '') + ' comment');
+	};
+	const collapse = note => {
+		note.dataset.collapsed = 'true';
+		note.removeAttribute('data-open');
+		reflect(note);
+		if (root.dataset.noteMode) settle();
+	};
 	const toggle = note => {
-		if (root.dataset.noteMode !== 'pin') return;
-		const open = note.dataset.open !== 'true';
-		notes.forEach(n => n.removeAttribute('data-open'));
-		if (open) note.dataset.open = 'true';
+		if (expanded(note)) { collapse(note); return; }
+		note.removeAttribute('data-collapsed');
+		if (root.dataset.noteMode === 'pin') {
+			notes.forEach(n => { n.removeAttribute('data-open'); reflect(n); });
+			note.dataset.open = 'true';
+		}
+		reflect(note);
+		if (root.dataset.noteMode) settle();
 	};
 	const adopt = note => {
 		if (note.dataset.adopted) return;
@@ -31,12 +50,20 @@ export function mountMarginNotes() {
 		note.tabIndex = 0;
 		const before = note.previousElementSibling;
 		if (!note.classList.contains('margin-note--mine') && before && /^(P|UL|OL|BLOCKQUOTE)$/.test(before.tagName)) before.before(note);
-		note.addEventListener('click', () => toggle(note));
+		const button = document.createElement('button');
+		button.type = 'button'; button.className = 'margin-note__toggle';
+		button.addEventListener('click', event => { event.stopPropagation(); toggle(note); });
+		note.append(button);
+		note.addEventListener('click', event => {
+			if (event.target instanceof Element && event.target.closest('a, button, input, textarea, select, summary, [contenteditable]')) return;
+			if (window.getSelection()?.toString()) return;
+			toggle(note);
+		});
 		note.addEventListener('keydown', event => {
+			if (event.key === 'Escape') { event.preventDefault(); collapse(note); return; }
 			// Buttons and links keep their own keyboard behavior.
 			if (event.target !== note) return;
 			if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(note); }
-			if (event.key === 'Escape') note.removeAttribute('data-open');
 		});
 	};
 	const settle = () => {
@@ -55,12 +82,14 @@ export function mountMarginNotes() {
 		const right = window.innerWidth - content.getBoundingClientRect().right >= neededSpace();
 		const left = content.getBoundingClientRect().left >= neededSpace();
 		notes.forEach(n => (n.dataset.side = n.dataset.preferredSide || 'right'));
-		notes.forEach(n => n.removeAttribute('data-open'));
+		const previousMode = root.dataset.noteMode;
 		if (window.innerWidth < 640) root.removeAttribute('data-note-mode');
 		else if (right && left) root.dataset.noteMode = 'margin';
 		else if (right) { notes.forEach(n => (n.dataset.side = 'right')); root.dataset.noteMode = 'margin'; }
 		else if (left) { notes.forEach(n => (n.dataset.side = 'left')); root.dataset.noteMode = 'margin'; }
 		else root.dataset.noteMode = 'pin';
+		if (previousMode !== root.dataset.noteMode) notes.forEach(n => n.removeAttribute('data-open'));
+		notes.forEach(reflect);
 		if (root.dataset.noteMode) settle();
 	};
 	layout();
@@ -74,6 +103,6 @@ export function mountMarginNotes() {
 	window.addEventListener('gha:bubbles', layout);
 	window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(layout, 150); });
 	document.addEventListener('click', event => {
-		if (!(event.target instanceof Element) || !event.target.closest('[data-margin-note]')) notes.forEach(n => n.removeAttribute('data-open'));
+		if (!(event.target instanceof Element) || !event.target.closest('[data-margin-note]')) notes.forEach(n => { n.removeAttribute('data-open'); reflect(n); });
 	});
 }

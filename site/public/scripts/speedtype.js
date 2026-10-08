@@ -7,8 +7,9 @@
 // and shows words per minute (five characters count as a word), accuracy, time,
 // and the reader's best for that snippet. Nothing is sent anywhere; the best is
 // kept in this browser. The code block itself is copied, not changed, so the page
-// reads, prints, and searches as before. Authored recall fragments add a second
-// optional mode: blanks replace those fragments in the copy until they are typed.
+// reads, prints, and searches as before. When recall fragments are authored,
+// the main practice button hides those fragments until they are typed. Copying
+// visible code remains a separate optional practice button.
 (function () {
   "use strict";
 
@@ -514,31 +515,34 @@
     var wrap = el("div", "kit-speedtype__bar");
     var start = button("⌨ Practise typing this", "kit-speedtype__start");
     var best = el("span", "kit-speedtype__best");
-    var recallStart = fragments.length ? button("Recall practice", "kit-speedtype__start") : null;
-    var recallBest = fragments.length ? el("span", "kit-speedtype__best") : null;
+    var copyStart = fragments.length ? button("Copy visible code", "kit-speedtype__start") : null;
+    var copyBest = fragments.length ? el("span", "kit-speedtype__best") : null;
+    start.dataset.speedtypeStart = fragments.length ? "recall" : "copy";
     wrap.appendChild(start);
     wrap.appendChild(best);
-    if (recallStart) {
-      wrap.appendChild(recallStart);
-      wrap.appendChild(recallBest);
+    if (copyStart) {
+      copyStart.dataset.speedtypeStart = "copy";
+      wrap.appendChild(copyStart);
+      wrap.appendChild(copyBest);
+      wrap.appendChild(el("span", "kit-speedtype__best", "Practice hides names and logic; hints and answers are available."));
     }
     root.appendChild(wrap);
     var starter = {
       node: wrap,
       button: start,
       updateBest: function () {
-        var saved = readBest(id);
-        best.textContent = saved ? "Your best: " + saved.wpm + " wpm, " + saved.acc + "% accuracy" : "";
-        if (recallBest) {
-          var recalled = readBest(id + ":recall");
-          recallBest.textContent = recalled ? "Recall best (unaided): " + recalled.wpm + " wpm, " + recalled.acc + "% accuracy" : "";
+        var saved = readBest(id + (fragments.length ? ":recall" : ""));
+        best.textContent = saved ? (fragments.length ? "Recall best (unaided): " : "Your best: ") + saved.wpm + " wpm, " + saved.acc + "% accuracy" : "";
+        if (copyBest) {
+          var copied = readBest(id);
+          copyBest.textContent = copied ? "Copy best: " + copied.wpm + " wpm, " + copied.acc + "% accuracy" : "";
         }
       },
     };
     starter.updateBest();
-    start.addEventListener("click", function () { open(root, block, starter); });
-    if (recallStart) recallStart.addEventListener("click", function () {
-      open(root, block, { node: wrap, button: recallStart, updateBest: starter.updateBest }, fragments);
+    start.addEventListener("click", function () { open(root, block, starter, fragments.length ? fragments : undefined); });
+    if (copyStart) copyStart.addEventListener("click", function () {
+      open(root, block, { node: wrap, button: copyStart, updateBest: starter.updateBest });
     });
   }
 

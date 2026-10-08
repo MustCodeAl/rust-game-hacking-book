@@ -68,7 +68,7 @@ try {
       if (lesson === '1/05') {
         const root = page.locator('[data-speedtype][data-speedtype-recall]').first();
         const recall = JSON.parse(await root.getAttribute('data-speedtype-recall'));
-        const start = root.locator('.kit-speedtype__start').first();
+        const start = root.getByRole('button', { name: 'Copy visible code', exact: true });
         await start.focus(); await press('Enter');
         const readable = root.locator('[data-speedtype-readable]');
         const input = root.locator('.kit-speedtype__input');
@@ -78,7 +78,7 @@ try {
         if (output) await page.screenshot({ path: `${output}/copy-${width}.png` });
         await press('Escape');
         assert.equal(await start.evaluate(node => node === document.activeElement), true);
-        const recallStart = root.getByRole('button', { name: 'Recall practice', exact: true });
+        const recallStart = root.locator('[data-speedtype-start="recall"]');
         await recallStart.focus(); await press('Enter');
         const masked = await readable.textContent();
         assert.match(masked, /_/);

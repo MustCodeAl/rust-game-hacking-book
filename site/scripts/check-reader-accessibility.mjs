@@ -94,7 +94,7 @@ try {
         await page.locator('[data-note-tab="preview"]').click();
         await scan('notes-preview');
         await page.locator('[data-note-close]').click();
-        await page.locator('[data-speedtype]').filter({ has: page.getByRole('button', { name: 'Recall practice', exact: true }) }).first().getByRole('button', { name: 'Recall practice', exact: true }).click();
+        await page.locator('[data-speedtype][data-speedtype-recall]').first().locator('[data-speedtype-start="recall"]').click();
         await scan('recall');
         await page.keyboard.press('Escape'); keys++;
       }
