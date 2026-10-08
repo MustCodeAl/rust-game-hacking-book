@@ -130,7 +130,7 @@ Never add values from different spaces. world_position + model_offset is valid o
 
 Section: What a matrix actually does.
 
-A matrix is a rectangular table of numbers. By itself that is just storage. What makes it useful is one fixed rule for combining it with a point, and the rule is smaller than it looks.
+A matrix is a rectangular table of numbers. By itself that is just storage. Matrix-vector multiplication turns it into a transform: multiply each row by the point components and add the products to make one output component.
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -198,7 +198,7 @@ Take the turret of the tank above, at (10, 7, 1) in the world while the tank sit
 
 Narration: Reading a child’s cached world transform before the parent update propagates can place a marker one update behind the moving object.
 
-A system that reads the turret’s world position between the second and third rows gets the previous frame’s answer. A tank that moves 60 units a second advances 60 times (1 divided by 60) equals 1 unit in a frame, so a marker drawn from the stale copy trails the turret by exactly 1 unit. A rule that must see the new value in the same frame has to run after the rebuild, or work out the world position itself from the local numbers, as above.
+A system that reads the turret’s world position between the second and third rows gets the previous frame’s answer. A tank that moves 60 units a second advances 60 times (1 divided by 60) equals 1 unit in a frame, so a marker drawn from the stale copy trails the turret by exactly 1 unit. A system that needs the new value in the same frame has to run after the rebuild, or work out the world position itself from the local numbers, as above.
 
 Two facts follow for memory work. While the tank drives, the turret’s local numbers stay the same and its world numbers change, so a scan for “the turret’s position” whose value changes with every move has found the world copy. And writing to the world copy changes nothing that lasts, because the next rebuild overwrites it from the local transforms. To move the object, write the source.
 
@@ -264,13 +264,13 @@ The reverse also works, because nothing was divided. A click at pixel (600, 180)
 
 Section: Several cameras, one world.
 
-A camera is an object with a position and a turn like any other, plus a projection and a few settings: which surface it draws into (the window, or an off-screen image), which rectangle of that surface (its viewport), and when it draws compared with the other cameras (its order). A split screen, a minimap, a rear-view mirror, and a security monitor inside the game each use another camera. A camera that draws into an off-screen image makes a texture that a material can then show on a mirror or a monitor. Every formula in this lesson works for each camera separately, with one rule: use that camera’s viewport, not the window’s.
+A camera is an object with a position and a turn like any other, plus a projection and a few settings: which surface it draws into (the window, or an off-screen image), which rectangle of that surface (its viewport), and when it draws compared with the other cameras (its order). A split screen, a minimap, a rear-view mirror, and a security monitor inside the game each use another camera. A camera that draws into an off-screen image makes a texture that a material can then show on a mirror or a monitor. Every formula in this lesson works for each camera separately, using that camera’s viewport rather than the whole window.
 
 ExampleA 1920 times 1080 window with two players and a minimap
 
 The window’s own aspect is 1920 divided by 1080 equals 1.778. Give player 1’s camera that value instead of 0.889, and its horizontal scale, y_scale divided by aspect, comes out 0.889 divided by 1.778 equals 0.5 times what it should be, so the picture is squeezed to half its width. And a world point that projects to the middle of player 2’s picture belongs at pixel x equals 1440, not at 480.
 
-The minimap’s viewport lies inside player 2’s, so the minimap must draw later. The camera with the lower order draws first, and a later camera can paint over what is already there instead of clearing it, which is how a minimap sits on top of the main picture. Which objects each camera draws is decided by the visibility rules in Lesson 7.2.
+The minimap’s viewport lies inside player 2’s, so the minimap must draw later. The camera with the lower order draws first, and a later camera can paint over what is already there instead of clearing it, which is how a minimap sits on top of the main picture. Which objects each camera draws is decided by the layer filters, culling, and visibility tests in Lesson 7.2.
 
 In memory, a game with several cameras can hold several view-projection matrices. The one that belongs to the picture you draw over is the one that changes when you turn that player’s view, and its viewport is the rectangle to use in the pixel conversion that follows.
 

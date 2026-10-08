@@ -1,6 +1,6 @@
 What Any Computer Can Compute
 
-Your computer can run a game, a web browser, and a program that pretends to be a console from 1985. Nobody built it separately for each job. Why can one machine run all of them? And why can no tool ever tell you, for certain, what an arbitrary program will do?
+Your computer can run a game, a web browser, and a program that pretends to be a console from 1985. Nobody built it separately for each job. Why can one machine run all of them? And why can no checker always decide whether an arbitrary program will eventually stop on a given input?
 
 We have seen a host run scripts and limit the work they can do. Before opening the virtual machine that executes them, consider why one program can run another at all—and why a host needs a step budget instead of a perfect test for whether a script will finish.
 
@@ -16,15 +16,15 @@ a head that sits over one cell at a time and can read or overwrite it;
 
 a state, which is a single named setting the machine is in, such as carry or done;
 
-a rule table that says, for every combination of current state and symbol under the head, what to write, which way to move, and which state comes next.
+a transition table, often called a rule table, that says, for every combination of current state and symbol under the head, what to write, which way to move, and which state comes next.
 
-That mechanism is a Turing machine. It runs by repeating one step: look up the rule for the current state and the symbol under the head, write, move one cell left or right or stay put, and switch state. When no rule matches, the machine stops. The usual word for stopping is halting.
+That mechanism is a Turing machine. It runs by repeating one step: look up the table row for the current state and the symbol under the head, write, move one cell left or right or stay put, and switch state. When no row matches, the machine stops. The usual word for stopping is halting.
 
 Here is a complete machine that adds one to a binary number. It starts in state carry with the head on the rightmost digit:
 
-The state done has no rules, so reaching it halts the machine. Put 1011 (eleven) on the tape, with blank cells, drawn _, on either side. The highlighted cell is the one under the head:
+The state done has no matching table rows, so reaching it halts the machine. Put 1011 (eleven) on the tape, with blank cells, drawn _, on either side. The highlighted cell is the one under the head:
 
-This is ordinary school addition. Adding one to a 1 gives 0 and carries one to the left; adding the carry to a 0 gives 1 and the carry is used up. The third rule handles 111: the carry runs past the leftmost digit into a blank cell, and the machine writes a new leading 1, giving 1000.
+This is ordinary school addition. Adding one to a 1 gives 0 and carries one to the left; adding the carry to a 0 gives 1 and the carry is used up. The third row handles 111: the carry runs past the leftmost digit into a blank cell, and the machine writes a new leading 1, giving 1000.
 
 Three rows are the whole program, yet they handle a number of any length. Notice also what the machine does not know. Nothing in the table mentions “eleven” or “twelve”. The machine moves symbols around, and the meaning — binary numbers — comes from us. Lesson 1.2 said the same thing about bytes in memory: meaning comes from the code that reads them, not from the bytes.
 
@@ -42,7 +42,7 @@ A real computer also has a fixed amount of memory, while the tape never runs out
 
 Section: The universal machine: programs are data.
 
-Turing’s most important idea came next. A rule table is itself only a list of symbols, so it can be written onto a tape like anything else. He then described a single machine, the universal Turing machine, that reads another machine’s rule table from its tape and carries out that machine’s steps one by one. One fixed machine can therefore imitate every other machine. To change what it does, you change what is on the tape, not the machine.
+Turing’s most important idea came next. A transition table is itself only a list of symbols, so it can be written onto a tape like anything else. He then described a single machine, the universal Turing machine, that reads another machine’s transition table from its tape and carries out that machine’s steps one by one. One fixed machine can therefore imitate every other machine. To change what it does, you change what is on the tape, not the machine.
 
 Alternative: A program can be input to another program. An interpreter reads that input and performs the operations it describes.
 
@@ -62,7 +62,7 @@ If code is just bytes, what stops a program from overwriting its own instruction
 
 Section: Turing complete: when a system can compute anything.
 
-A system is Turing complete when it can carry out anything a Turing machine can, given enough time and memory. In their idealized forms, general-purpose languages such as Rust, C++, Lua, and assembly qualify. So do some systems nobody designed as computers. Conway’s Game of Life, a grid of cells that live or die by four simple rules, can be arranged to compute anything in this sense. Players have also built working processors inside Minecraft out of redstone circuits; any one build is still limited by the game’s actual resources.
+A system is Turing complete when it can carry out anything a Turing machine can, given enough time and memory. In their idealized forms, general-purpose languages such as Rust, C++, Lua, and assembly qualify. So do some systems nobody designed as computers. Conway’s Game of Life, a grid of cells that live or die according to neighboring live-cell counts, can be arranged to compute anything in this sense. Players have also built working processors inside Minecraft out of redstone circuits; any one build is still limited by the game’s actual resources.
 
 The useful consequence for you concerns what a game loads. A texture or a sound file is data: the game reads it in one fixed way, so the most a strange one can usually do is trip over a bug in the code that reads it. A script is different. A Wesnoth add-on can contain Lua, and a mod that ships a script is shipping a program. A Turing-complete script can compute anything within the resources available to it, and what it is allowed to touch is limited by what its host exposes. That is why the Lua lessons separate the script’s behavior from the game objects and operations its host permits.
 
@@ -94,15 +94,15 @@ A signature scanner, whether antivirus or anti-cheat, cannot decide what arbitra
 
 A step budget, the limit Lesson 10.8 builds into its virtual machine’s loop, exists because a host cannot know in advance whether a script will ever finish. All it can decide is how long it is willing to wait.
 
-The practical rule follows directly. Reading code tells you what might happen. Running it under control, on a specific input, tells you what did happen on that input. That is why the lessons pair reading code with running it.
+The practical distinction follows directly. Reading code tells you what might happen. Running it under control, on a specific input, tells you what did happen on that input. That is why the lessons pair reading code with running it.
 
 Section: Run the machine yourself.
 
-The portable lab turing_machine_lab.rs is a short Turing machine simulator. Its rule tables are plain text that the simulator reads when it starts. One fixed program can therefore run different machines described by its input, within the lab’s finite memory and step budget. That demonstrates the universal-machine idea without claiming that the lab itself has an unbounded tape.
+The portable lab turing_machine_lab.rs is a short Turing machine simulator. Its transition tables are plain text that the simulator reads when it starts. One fixed program can therefore run different machines described by its input, within the lab’s finite memory and step budget. In the Rust source, machine.rules names the map of transition-table rows. That demonstrates the universal-machine idea without claiming that the lab itself has an unbounded tape.
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The heart of the simulator is the step loop. It looks up a rule, gives up if the budget is spent, and otherwise writes, moves, and switches state:
+The heart of the simulator is the step loop. It looks up a matching transition row, gives up if the budget is spent, and otherwise writes, moves, and switches state:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -114,13 +114,13 @@ Terminal window
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The lab adds one to three numbers, including 111 so you can watch the carry run off the end. Then it runs a one-rule machine that writes 1s forever and stops it with a budget. Finally, it feeds the simulator a malformed rule table to show that a program which is only data still has to be validated before it runs. The tests beside it check every number from 0 to 64 and the budget edge case.
+The lab adds one to three numbers, including 111 so you can watch the carry run off the end. Then it runs a machine with one repeating transition that writes 1s forever and stops it with a budget. Finally, it feeds the simulator a malformed transition table to show that a program which is only data still has to be validated before it runs. The tests beside it check every number from 0 to 64 and the budget edge case.
 
-Another small machine could flip every digit of a binary number, turning 1011 into 0100. It needs only two rules, because the machine halts when it reaches a blank that no rule mentions. Starting at the leftmost digit, it takes four rule steps to flip four digits and then stops when the head reaches the blank.
+Another small machine could flip every digit of a binary number, turning 1011 into 0100. It needs only two transition rows, because the machine halts when it reaches a blank with no matching table row. Starting at the leftmost digit, it applies four transitions to flip four digits and then stops when the head reaches the blank.
 
 Section: What the model explains.
 
-A Turing machine has a tape, a head, a state, and a rule table. Its three-rule incrementer carries left until it can turn a 0 into a 1; if the carry runs off the left end, a new 1 is needed. Computer memory, addresses, registers, and instructions play roles analogous to tape, head position, state, and rules. Stored programs let a debugger place a breakpoint by replacing an instruction byte. A mod with a script is executable behavior, and no general tool can decide whether every possible program halts. Disassemblers, decompilers, scanners, and step budgets therefore provide bounded observations rather than universal answers.
+A Turing machine has a tape, a head, a state, and a transition table. Its three-row incrementer carries left until it can turn a 0 into a 1; if the carry runs off the left end, a new 1 is needed. Computer memory, addresses, registers, and instructions play roles analogous to tape, head position, state, and transitions. Stored programs let a debugger place a breakpoint by replacing an instruction byte. A mod with a script is executable behavior, and no general tool can decide whether every possible program halts. Disassemblers, decompilers, scanners, and step budgets therefore provide bounded observations rather than universal answers.
 
 From Lua Source to a Tiny Virtual Machine now follows a short expression from text into executable operations. Its interpreter uses the same practical limit as the simulator here: execute a bounded number of steps and report what happened, without claiming to decide the behavior of every possible program.
 

@@ -64,15 +64,15 @@ Section: A value can have more than one role.
 
 Gold and cost are inputs to spend_if_possible; its returned amount is an output. The caller can store that output in its mutable gold variable. cost stays fixed during the calculation. Input, output, and mutable are therefore overlapping descriptions, not three separate kinds of variable. They answer “where does the value flow?” and “may it change?”
 
-Two other descriptions concern where a name is usable and how long its storage exists. A local name belongs to a scope such as one function. People often use global for a name available outside a single function, although the language’s visibility rules still control which code can use it. A Rust static item has storage for the entire program run. That storage duration does not by itself mean its contents can never change; Rust has separate rules for access and mutation. See the Rust Reference’s static-item explanation when you need those rules. Our purchase calculation needs only its supplied inputs, so it does not need a shared global gold value.
+Two other descriptions concern where a name is usable and how long its storage exists. A local name belongs to a scope such as one function. People often use global for a name available outside a single function, although the language’s visibility controls which code can use it. A Rust static item has storage for the entire program run. That storage duration does not by itself mean its contents can never change; Rust separately checks how code obtains shared or editable access; a long lifetime does not grant permission to mutate. See the Rust Reference’s static-item explanation for the complete access requirements. Our purchase calculation needs only its supplied inputs, so it does not need a shared global gold value.
 
-Section: Check the rule at its boundaries.
+Section: Check affordability at the price boundary.
 
-The ordinary 100-gold purchase is a useful baseline case, sometimes informally called a base case. In recursive algorithms, “base case” has a more specific meaning: a case solved directly without another recursive call. For this purchase rule, we are checking ordinary and unusual inputs. It is not enough to check only that example. An edge case exercises an unusual end of the allowed range, such as having zero gold. A boundary case checks where a decision changes: just below, exactly at, and just above the price. A corner case combines unusual conditions, such as zero gold and a zero price. These labels can overlap; the important part is writing down the inputs and expected result:
+The ordinary 100-gold purchase is a useful baseline case, sometimes informally called a base case. In recursive algorithms, “base case” has a more specific meaning: a case solved directly without another recursive call. For this affordability check, we are checking ordinary and unusual inputs. It is not enough to check only that example. An edge case exercises an unusual end of the allowed range, such as having zero gold. A boundary case checks where a decision changes: just below, exactly at, and just above the price. A corner case combines unusual conditions, such as zero gold and a zero price. These labels can overlap; the important part is writing down the inputs and expected result:
 
-The exact-price case checks that greater than or equal to allows payment when gold equals cost. Changing it to greater than would reject that purchase. The free-item case also shows the limitation already mentioned: unchanged gold alone cannot tell us whether a purchase happened. The Rust Primer demonstrates an automated test for its own game rule; Hacking Fundamentals will test a small rule for permitting a memory write.
+The exact-price case checks that greater than or equal to allows payment when gold equals cost. Changing it to greater than would reject that purchase. The free-item case also shows the limitation already mentioned: unchanged gold alone cannot tell us whether a purchase happened. The Rust Primer demonstrates an automated test for its stamina check; Hacking Fundamentals will check the conditions that permit a memory write.
 
-Alternative: Test a rule like checking a ruler mark: look just before, exactly at, and just after the line. Mistakes such as using greater than instead of at least hide there.
+Alternative: Amounts just below, equal to, and above the price reveal where affordability changes. They catch a mistaken greater-than check where at-least was intended.
 
 Section: A data structure organizes values.
 
@@ -86,7 +86,7 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 The braces supply the three field values. A comma separates fields; the semicolon ends the let statement. ada.gold reads Ada’s gold field. ada.health reads her health. The dot selects a field from this particular record.
 
-The pair health and max_health has a rule: a valid player’s health should be between zero and the maximum. For Ada, 80 is within 0 to 100. If a mistaken update made health 120 while the maximum stayed 100, the record would violate that rule. We will name this kind of rule an invariant below. For now, check the relationship instead of trusting either field alone.
+The pair health and max_health has a required relationship: a valid player’s health must be between zero and the maximum. For Ada, 80 is within 0 to 100. If a mistaken update made health 120 while the maximum stayed 100, the record would violate that relationship. We will call such a condition an invariant below. For now, check the relationship instead of trusting either field alone.
 
 Section: Apply one operation to several players.
 
@@ -100,7 +100,7 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Read for player in ... as “take each player in turn.” The &mut players part lets the loop access the existing records so it can change them; Rust calls this a mutable borrow. We will study borrowing more fully when a tool begins reading another process in Chapter 3. Here, the important effect is that the loop changes the records in the collection, rather than temporary copies.
 
-On the first pass, Ada’s 100 becomes 75. On the second, Bo’s 40 becomes 15. If Bo had only 10, his gold would stay 10 because the function’s comparison would reject that purchase. The same named operation works for both players; adding a third record would not require writing a third purchase rule.
+On the first pass, Ada’s 100 becomes 75. On the second, Bo’s 40 becomes 15. If Bo had only 10, his gold would stay 10 because the function’s comparison would reject that purchase. The same named operation works for both players; adding a third record would not require writing another affordability check and subtraction.
 
 The Player record groups fields belonging to one player; the array groups several players. Both are data structures, chosen for different questions. We will compare other useful collections after tracing this array.
 
@@ -108,7 +108,7 @@ Section: Trace the two-player result.
 
 The function, record, and loop fragments above show both outcomes without seeing a longer program yet:
 
-The same purchase rule visits each record. It changes gold, not health. The Rust Primer runs a separate stamina-based program with two runners and shows how Rust lends each record to a function in turn.
+The same purchase function visits each record. It changes gold, not health. The Rust Primer runs a separate stamina-based program with two runners and shows how Rust lends each record to a function in turn.
 
 Section: Programming logic: sequence, selection, and repetition.
 
@@ -146,9 +146,9 @@ A grid can be a vector of rows, so tiles[row][column] reaches a tile. A graph st
 
 Alternative: Picture a vector as numbered lockers, a hash map as a coat check where a ticket finds your coat, and a queue as a line at a shop.
 
-Section: Programming paradigms: ways to organize the same rule.
+Section: Programming paradigms: ways to organize a purchase.
 
-A programming paradigm is a style for organizing instructions and responsibilities. It does not change what a purchase means. Ada still starts with 100 gold, pays 25 if she can, and ends with 75. The styles answer a different question: where should that rule live, and how should other code use it?
+A programming paradigm is a style for organizing instructions and responsibilities. It does not change what a purchase means. Ada still starts with 100 gold, pays 25 if she can, and ends with 75. The styles answer a different question: where should the affordability check and subtraction live, and how should other code use it?
 
 Section: Procedural: follow the steps.
 
@@ -156,7 +156,7 @@ The first version we wrote is procedural. It says how to update the variable, in
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-That is often the clearest way to begin. It becomes awkward only if every screen and bot copies the same purchase steps, because one later rule change would have to be repeated everywhere. Our named function solves that duplication.
+That is often the clearest way to begin. It becomes awkward only if every screen and bot copies the same purchase steps, because a later change to the affordability check would have to be repeated everywhere. Our named function solves that duplication.
 
 Narration: If ten screens each copy the purchase steps, one price change means ten edits, and missing one leaves the screens disagreeing. A named function keeps a single copy.
 
@@ -178,21 +178,21 @@ A real game stays open instead of running main once and closing. A Buy click can
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-This shows the handler’s job, not a complete window setup. A game also updates and draws while no one clicks. Lesson 6.7 explains Windows messages and game loops; Lesson 4.10 compares events with checking for changes on a schedule. For now, notice that the event-driven style decides when the familiar purchase rule runs.
+This shows the handler’s job, not a complete window setup. A game also updates and draws while no one clicks. Lesson 6.7 explains Windows messages and game loops; Lesson 4.10 compares events with checking for changes on a schedule. For now, notice that the event-driven style decides when the purchase calculation runs.
 
 One game can use all four styles: an event calls a handler, which asks a player method to update state using a small calculation. A paradigm is a way to organize work, not a team you must join forever.
 
 Section: An abstraction hides details behind a smaller interface.
 
-Calling spend_if_possible(100, 25) lets another part of the program use the purchase rule without repeating its branch and subtraction. That is an abstraction: a smaller interface hides useful steps. It still has to keep its promise. If the caller and function disagree about the inputs, the friendly name does not repair the mistake. Lesson 6.1 later explains source-level APIs and machine-level ABIs when we begin calling compiled game functions.
+Calling spend_if_possible(100, 25) lets another part of the program use the purchase calculation without repeating its branch and subtraction. That is an abstraction: a smaller interface hides useful steps. It still has to keep its promise. If the caller and function disagree about the inputs, the friendly name does not repair the mistake. Lesson 6.1 later explains source-level APIs and machine-level ABIs when we begin calling compiled game functions.
 
-Section: An invariant is a rule valid state must keep true.
+Section: An invariant is a condition valid state keeps true.
 
-The earlier health rule is an invariant: when player state is valid, health less than or equal to max_health must hold. A small function can check it:
+The earlier health-range requirement is an invariant: when player state is valid, health less than or equal to max_health must hold. A small function can check it:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-For our u32 values, zero is already the smallest possible number. If Ada has 80 health and a maximum of 100, the function returns true; for 120 and 100 it returns false. The purchase rule has its own condition: only subtract a cost when the player can pay. An invariant gives you a concrete check when unfamiliar state or a recovered field might be wrong. Lesson 13.1 uses such rules in deeper game-state investigations.
+For our u32 values, zero is already the smallest possible number. If Ada has 80 health and a maximum of 100, the function returns true; for 120 and 100 it returns false. The purchase function has its own condition: only subtract a cost when the player can pay. An invariant gives you a concrete check when unfamiliar state or a recovered field might be wrong. Lesson 13.1 uses such conditions to distinguish valid and invalid game state.
 
 Section: Follow the data through unfamiliar code.
 
@@ -214,7 +214,7 @@ Section: What the gold program shows.
 
 mut permits gold to change while cost stays fixed. The 10-gold case takes the failed branch of gold greater than or equal to cost, so spend_if_possible returns unchanged gold. One loop applies that same function to Ada and Bo. The three-price trace combines ordered steps, a branch, and repetition.
 
-A vector keeps a growing history; a hash map answers a lookup by key; a queue keeps pending actions in arrival order. A visible “Gold: 75” label can be separate from the gold field the rule reads. Procedural, object-oriented, functional, and event-driven styles can organize the same rule in different places, while valid_health checks that player health stays within its allowed range.
+A vector keeps a growing history; a hash map answers a lookup by key; a queue keeps pending actions in arrival order. A visible “Gold: 75” label can be separate from the gold field the calculation reads. Procedural, object-oriented, functional, and event-driven styles can organize the same check and subtraction in different places, while valid_health checks that player health stays within its allowed range.
 
 The Rust Primer uses a different game action to make the Rust syntax executable. Hacking Fundamentals then turns an observed purchase into a question about a running game: which value actually controls it?
 

@@ -2,7 +2,7 @@ Tool Architecture, Commands, and Cleanup
 
 Several small labs can work on their own and still fail when combined. The input thread changes settings while a worker is reading them. Two features install a patch at the same address. Closing a menu leaves a worker running inside a D L L, dynamic link library, that is about to unload. These failures come from the connections between components, even when each component’s main calculation is correct.
 
-The D L L, hook, input, and menu lessons have supplied the pieces. This lesson gives each piece an owner and a place in the tool’s control flow. We will use a small monitor of a local player’s health and gold to express the design; the same rules later support camera snapshots and rendering features.
+The D L L, hook, input, and menu lessons have supplied the pieces. This lesson gives each piece an owner and a place in the tool’s control flow. We will use a small monitor of a local player’s health and gold to express the design; the same separation of ownership, observations, and commands later supports camera snapshots and rendering features.
 
 Section: Combining code exposes hidden problems.
 
@@ -28,7 +28,7 @@ One useful project split is:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Each file has one main reason to change. A new game build mostly changes target.rs. A redesigned menu mostly changes ui.rs. A safer restoration rule belongs in apply.rs, not in every checkbox handler.
+Each file has one main reason to change. A new game build mostly changes target.rs. A redesigned menu mostly changes ui.rs. An additional check before restoring changed bytes belongs in apply.rs, not in every checkbox handler.
 
 The main path should show the tool’s control flow clearly:
 
@@ -60,7 +60,7 @@ Alternative: A display enum is like a radio-button group: exactly one mode is se
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-One DisplayMode value cannot hold two variants at once. The independent watch_health and log_changes switches may both be enabled because those activities can run together. The type follows the actual rule rather than asking every handler to repair impossible combinations.
+One DisplayMode value cannot hold two variants at once. The independent watch_health and log_changes switches may both be enabled because those activities can run together. The enum permits only one display mode at a time, while separate switches permit both activities. Each handler receives a state the types can represent without contradictory display modes.
 
 Section: Route input as commands.
 
@@ -120,17 +120,17 @@ Porting a small licensed tool can be good practice. Begin with its tests or obse
 
 Section: Test patch decisions without launching the game.
 
-Do not make every test launch AssaultCube and call ReadProcessMemory. Put a small trait between the patch-verification rule and Windows. The real tool uses a Process-backed reader; a fast test uses bytes stored inside the test:
+Do not make every test launch AssaultCube and call ReadProcessMemory. Put a small trait between the instruction-byte comparison and the Windows memory-read A P I. The real tool uses a Process-backed reader; a fast test uses bytes stored inside the test:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-This test answers a game-hacking question: “Does the tool refuse to patch when the live instruction bytes do not match the supported build?” It does not need a running match to answer that. Separate Windows-only checks can verify handle ownership and byte copying. When one fails, you know whether the problem is the build-verification rule or the ReadProcessMemory boundary. 🧪
+This test answers a game-hacking question: “Does the tool refuse to patch when the live instruction bytes do not match the supported build?” It does not need a running match to answer that. Separate Windows-only checks can verify handle ownership and byte copying. When one fails, you know whether the problem is the comparison with the supported build or the ReadProcessMemory call. 🧪
 
 A one-shot memory scanner can print its matches directly. A long-running in-process menu should log the same fields for every state change: target_game, target_build, feature, address, expected_bytes, found_bytes, action, and restored. Those log entries show which patch was enabled and whether its original bytes were restored. Keep them separate from the visible menu so closing or redesigning the UI does not erase the log needed to debug a failed cleanup.
 
 Section: Know when the combined tool is ready.
 
-Combining separate features into one D L L is what the original course called the multihack. The useful engineering question is whether the combination preserves every feature’s ownership and cleanup rules.
+Combining separate features into one D L L is what the original course called the multihack. The useful engineering question is whether the combination preserves each feature’s resource owner and completes its shutdown and restoration.
 
 A multifeature tool is ready when:
 

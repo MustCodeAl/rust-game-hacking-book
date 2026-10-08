@@ -1,10 +1,10 @@
 How NPCs Sense and Decide
 
-Recording a guard’s movement tells us when it turned, chased, or stopped. It does not explain why. To recover that rule, follow the information the game gave the guard, the decision it made from that information, and the action that followed.
+Recording a guard’s movement tells us when it turned, chased, or stopped. It does not explain why. To reconstruct how the guard chooses its action, follow the information the game gave the guard, the decision it made from that information, and the action that followed.
 
 Section: An N P C, non player character, is a small program that runs every tick.
 
-A non-player character (N P C) is any character the game controls rather than a person: a guard, a shopkeeper, an enemy soldier. In games, “A I, artificial intelligence,” means the code that picks what an N P C does next. It is usually far simpler than the A I in the news: a handful of rules, checked quickly, many times per second.
+A non-player character (N P C) is any character the game controls rather than a person: a guard, a shopkeeper, an enemy soldier. In games, “A I, artificial intelligence,” means the code that picks what an N P C does next. It is usually far simpler than the A I in the news: a small set of distance, visibility, health, and timing checks, evaluated many times per second.
 
 The portable lab npc_brain_lab.rs builds one such character, a guard, and this lesson follows it piece by piece. Nothing in it touches a real game.
 
@@ -38,7 +38,7 @@ The cone check never measures an angle. It uses a quick calculation called a dot
 
 Section: Decide: a finite-state machine.
 
-The guard’s behavior is a finite-state machine, the same structure Lesson 4.6 uses for a macro: a fixed set of named states and a rule for each move between them. The guard has five states:
+The guard’s behavior is a finite-state machine, the same structure Lesson 4.6 uses for a macro: a fixed set of named states and a condition for each transition between them. The guard has five states:
 
 Patrol: walk the route. The lab’s route is a single point, the guard’s post at (0, 0), so patrolling means standing there.
 
@@ -78,7 +78,7 @@ Section: One run, tick by tick.
 
 The lab’s first demo puts the guard at its post, (0, 0), facing east, (1, 0). A wall fills the box from (5.5, minus 1) to (6.5, 1): every point with x from 5.5 to 6.5 and y from minus 1 to 1. The player stands in the open at (5, 0) for ticks 1 to 7, then slips behind the wall to (8, 0) for ticks 8 to 16. “Distance” is measured before the guard moves:
 
-Every row follows from the rules above:
+Every row follows from the perception checks and state transitions above:
 
 Ticks 1 and 2: the player is 5 away, straight ahead, and in the open, so all three checks pass, but seen_for is only 1, then 2.
 
@@ -110,7 +110,7 @@ Lesson 4.13 lays out the whole structure field by field.
 
 Section: What editing the state byte would do.
 
-Take a toy program you wrote yourself, or an offline single-player game running in your lab V M, virtual machine,, whose guard follows the lab’s rules. Changing the state byte between two ticks has very different effects depending on the value:
+Take a toy program you wrote yourself, or an offline single-player game running in your lab V M, virtual machine,, whose guard uses the five-state implementation above. Changing the state byte between two ticks has very different effects depending on the value:
 
 Write 4 (Flee) mid-chase: on the next tick decide sees Flee, and nothing leads out of Flee, so the guard turns and runs from the last place it saw the player until the program restarts. The edit lasts.
 
@@ -118,9 +118,9 @@ Write 0 (Patrol) mid-chase, with the player in view: a chase only starts after 3
 
 Write 0 (Patrol) while the guard is searching: now the senses agree with Patrol, because the player is not in view, so the guard gives up the search early and walks home. The edit lasts.
 
-The pattern behind those results: the state is an output the game recomputes from its inputs every tick. An edit to the output survives only when the inputs agree with it, as seen_for did not in the second case. An edit to an input that the rules read, such as writing 20 into health, changes behavior for as long as the input holds, here by sending the guard into Flee on the next tick.
+The pattern behind those results: the state is an output the game recomputes from its inputs every tick. An edit to the output survives only when the inputs agree with it, as seen_for did not in the second case. An edit to an input that the decision code reads, such as writing 20 into health, changes behavior for as long as the input holds, here by sending the guard into Flee on the next tick.
 
-Narration: A value that snaps back after you change it is usually an output. The real control is an input the rules read, so look one step earlier.
+Narration: A value that snaps back after you change it is usually an output. The real control is an input the decision code reads, so look one step earlier.
 
 Section: Why online NPCs are out of reach.
 
@@ -134,8 +134,8 @@ Terminal window
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The first command prints the sixteen-tick run from the table above, then five situations scored by the utility system from Lesson 4.13. The tests pin down each rule on its own, from the reaction delay and the search timeout to low health overriding every state, the three perception checks, and the utility choices.
+The first command prints the sixteen-tick run from the table above, then five situations scored by the utility system from Lesson 4.13. The tests check each decision case separately, from the reaction delay and the search timeout to low health overriding every state, the three perception checks, and the utility choices.
 
-Then change REACTION_TICKS to 1 and predict, before running the demo, which tick the chase starts on and where the guard stands when it attacks. Two of the tests will fail after that change, because they pin the delay at 3 ticks. Compare the new trace with the old one, then restore the constant to 3 so the tests describe the program again. Lesson 4.13 explains the sensing calculations and alternate decision rules that this trace treats as black boxes.
+Then change REACTION_TICKS to 1 and predict, before running the demo, which tick the chase starts on and where the guard stands when it attacks. Two of the tests will fail after that change, because they pin the delay at 3 ticks. Compare the new trace with the old one, then restore the constant to 3 so the tests describe the program again. Lesson 4.13 explains the sensing calculations and behavior-tree and utility-selection algorithms that this trace treats as black boxes.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/4/09/

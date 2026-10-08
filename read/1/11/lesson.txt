@@ -1,12 +1,12 @@
-Game Engines: Where the Rules Live
+Game Engines: Input, Simulation, and Rendering
 
-The previous chapters followed values into instructions and turned remote bytes into typed objects and collections. The next question is larger: which system owns those objects, applies the rules, and updates the world? A rule could come from native code, a script, or loaded game data. To choose where to observe or change it, first separate the game’s particular rules from the machinery that runs them.
+The previous chapters followed values into instructions and turned remote bytes into typed objects and collections. The next question is larger: which system moves them, resolves collisions, applies damage, and advances timers? A health update might be native code, a cooldown calculation a script, and a unit’s starting health loaded from a data file. Finding the relevant function or definition starts with separating game-specific behavior from the engine services that execute it.
 
-The game loop reads input, applies rules, changes state, and draws the result. Games need other machinery too: something loads the level, stores objects, and calls the renderer. A game engine supplies much of this reusable machinery. Knowing where it stops and the game begins tells you which technique in this book will work on a given problem.
+The game loop reads input, checks whether actions are allowed, updates positions and health, and draws the result. Games need other machinery too: something loads the level, stores objects, and calls the renderer. A game engine supplies much of this reusable machinery. Knowing where it stops and the game begins tells you which technique in this book will work on a given problem.
 
 Section: An engine is reusable game machinery.
 
-Many games need the same kinds of machinery, even when their rules and art are different:
+Many games need the same kinds of machinery, even when their weapons, maps, and art are different:
 
 a game loop that reads input, updates the world, and draws a frame, over and over ( Lesson 1.3 );
 
@@ -20,9 +20,9 @@ collision, when objects can meet walls or one another;
 
 sound, input, menus, and sometimes networking and scripting.
 
-Not every game needs every item: a text adventure may have no renderer or collision system. For games that do need these pieces, reusing them can save substantial work. A game about tanks and a game about farming can share the machinery while supplying different rules and content.
+Not every game needs every item: a text adventure may have no renderer or collision system. For games that do need these pieces, reusing them can save substantial work. A game about tanks and a game about farming can share the window, input, loading, and rendering machinery while supplying different behavior: armor damage for tanks, crop growth for farming.
 
-A game engine is that reusable machinery: the software that runs the loop, draws the frames, loads the files, and manages the objects, on which a particular game’s content and rules are built.
+A game engine is that reusable machinery: the software that runs the loop, draws the frames, loads the files, and manages the objects, on which a particular game’s content and behavior—such as what a hit does or what a unit costs—are built.
 
 A spreadsheet program is a useful comparison, because it holds up when you push on it. The program supplies the grid, the formulas, and the recalculation; each spreadsheet file supplies its own numbers and formulas. A bug in how the program recalculates breaks every spreadsheet you open. A wrong formula in one file breaks only that file. And two files made in the same program share the same structure, so once you understand one, the next is easier to read. All three statements hold for engines and games too, which is exactly what makes the split worth learning.
 
@@ -52,7 +52,7 @@ An engine that owns the loop does the same few jobs on every pass through it, in
 
 Gather input. Ask the operating system which keys, buttons, and mouse movements happened since the last pass, and turn them into actions (Lesson 1.3).
 
-Update the world. Run the game’s rules: move things, check contacts, count timers down, let characters decide.
+Update the world. Move objects, resolve contacts, apply damage, count timers down, and choose character actions.
 
 Draw. Build the picture of the world as it is now.
 
@@ -70,21 +70,21 @@ ExampleThree frames of fixed steps
 
 After 70 milliseconds of real time the game has run 4 steps, which is 4 times 16.67 equals 66.67 milliseconds of game time, and 3.33 milliseconds is waiting. The two add back to 70 milliseconds, so no time was lost. A slow frame runs several steps to catch up, and a quick one runs none.
 
-What is drawn after a frame is usually partway between two steps. The 3.33 milliseconds left over is 3.33 divided by 16.67 equals 20 percent of the way to the next step, and many engines blend the last two steps by that fraction, so motion looks smooth even though the rules advance in coarse steps (Lesson 4.7 shows how that blend is computed).
+What is drawn after a frame is usually partway between two steps. The 3.33 milliseconds left over is 3.33 divided by 16.67 equals 20 percent of the way to the next step, and many engines blend the last two steps by that fraction, so motion looks smooth even though the simulation advances in fixed steps (Lesson 4.7 shows how that blend is computed).
 
-This tells you something when you scan memory. A value the rules change moves once per step, and a value the drawing code keeps (an on-screen animation timer, an interpolated position) can change once per frame. Counting how often a value changes tells you which loop owns it.
+This tells you something when you scan memory. A value the simulation changes moves once per step, and a value the drawing code keeps (an on-screen animation timer, an interpolated position) can change once per frame. Counting how often a value changes tells you which loop owns it.
 
 A cooldown is a timer built the same way. When an ability is used, the game stores how long remains, say 5.0 seconds, and subtracts the delta time on every step: after 60 steps of 1/60 second the value has fallen by 1.0 to 4.0, and after 300 steps it reaches 0 and the ability is ready. Some games instead store the moment it becomes ready (now + 5.0) and compare it with the clock. Either way the cooldown is a number in memory that you can scan for.
 
 Section: Real time, game time, and the clamp.
 
-The delta time an update receives is not always the time that really passed. Engines keep two clocks. Real time is the wall clock: it never stops, and a loading spinner or a menu animation uses it. Game time is what the rules use. Each frame the engine takes the real time since the last frame, limits it to a maximum, and multiplies it by a time scale:
+The delta time an update receives is not always the time that really passed. Engines keep two clocks. Real time is the wall clock: it never stops, and a loading spinner or a menu animation uses it. Game time is the clock used for simulated movement and cooldowns. Each frame the engine takes the real time since the last frame, limits it to a maximum, and multiplies it by a time scale:
 
 A scale of 1 is normal speed, 0.5 is slow motion, 2 is fast forward, and 0 is a pause. A pause stops game time but not real time, which is why a paused game still draws its menu and answers the mouse. The scale also stretches every timer that counts game time:
 
 ExampleOne 16.67 milliseconds frame at four time scales
 
-The limit protects the rules from a frame that stalled. A laptop that sleeps, or a window held still by the mouse for 3 seconds, would otherwise hand the next update a delta of 3.0 s. A ball moving 150 pixels a second would jump 150 times 3.0 equals 450 pixels at once, straight through any wall, and a fixed-step loop would owe 3.0 divided by (1/60) equals 180 steps. Bevy’s default limit is 250 milliseconds, so the longest delta any frame can add is 0.25 s, and at 60 steps a second the loop owes at most 0.25 divided by (1/60) equals 15 steps.
+The limit bounds the simulation time added after a stalled frame. A laptop that sleeps, or a window held still by the mouse for 3 seconds, would otherwise hand the next update a delta of 3.0 s. A ball moving 150 pixels a second would jump 150 times 3.0 equals 450 pixels at once, straight through any wall, and a fixed-step loop would owe 3.0 divided by (1/60) equals 180 steps. Bevy’s default limit is 250 milliseconds, so the longest delta any frame can add is 0.25 s, and at 60 steps a second the loop owes at most 0.25 divided by (1/60) equals 15 steps.
 
 The limit also ends a failure called the spiral of death. Suppose each fixed step takes 20 milliseconds of real time to compute but advances game time by only 16.67 milliseconds. While the engine computes one step, the real clock moves 20 milliseconds, so the next frame owes 20 milliseconds of game time, which is 20 divided by 16.67 equals 1.2 times as much as the step paid off. The frame after that owes 1.2 times as much again. Each step leaves the game 20 minus 16.67 equals 3.33 milliseconds further behind real time, so after 60 steps it is 60 times 3.33 equals 200 milliseconds behind, and running more steps to catch up only adds more debt. The clamp throws the excess away, so the game falls behind real time and runs in slow motion instead of freezing.
 
@@ -122,7 +122,7 @@ Alternative: Think of a school: students are just ID numbers, clubs say what eac
 
 In memory, each kind of component sits in its own run. Ten thousand Position components of two 4-byte floats each take 10,000 times 8 equals 80,000 bytes in one stretch, which is what Lesson 3.6 called a component pool. A system walks that stretch from start to end, and a scan finds the whole run at once.
 
-Engines add a few rules around this:
+Entity updates also need coordination:
 
 A system should not add or remove entities while it is looping over them, or the loop could skip some and visit others twice. Instead it queues commands (spawn this, despawn that, add this component), and the engine applies them together at a safe moment between systems. A delayed command is one the engine holds back until a timer ends, such as removing an effect after 2 seconds.
 
@@ -146,9 +146,9 @@ The games in this book cover most of the ways a game can relate to its engine:
 
 Flare shows the split most clearly. Flare is the engine; a campaign such as the Empyrean Campaign from Lesson 9.2 is a content package the engine loads. Swap the content package and the same executable runs a different game.
 
-Section: Where a rule lives decides how you change it.
+Section: Find the source of a behavior or value.
 
-Here is the most useful thing to take from this lesson. Every rule in a game lives in one of a few places, and the place decides which part of this book applies — and how long your change lasts.
+A spending calculation is implemented in code; a price or starting health value may come from a data file or script. Identify that source before changing a live value. It tells you which technique applies and when the game might replace your edit with a newly calculated or loaded value.
 
 Wesnoth shows two of them side by side:
 
@@ -158,11 +158,11 @@ A number in memory, updated by native engine code. Change it with the scan from 
 
 A unit's hit points
 
-They come from a unit definition in a W M L data file. Change one unit’s hit points in memory and that single unit changes. Recruit another of the same type and it arrives with the file’s value, because every new unit is built from the definition on disk. Change the file instead, and every unit of that type created afterwards has the new value.
+They come from a unit definition in a W M L data file. Change one unit’s hit points in memory and that single unit changes. Recruit another of the same type and it arrives with the file’s value, because every new unit is built from the definition on disk. Change the definition file instead, and units created after the game reloads that edited definition use the new value.
 
-Neither change is wrong. They answer different questions, and knowing which one you are making saves an afternoon of wondering why a change “didn’t stick.”
+Choose according to whether you want to change one live unit or the definition that future units will load. That distinction explains why a memory edit can be overwritten while a reloaded definition produces the change again.
 
-In brief: A rule’s home decides how you change it. A memory edit lasts for one run, while a data-file edit applies each time the file loads.
+In brief: Changing one live unit affects that instance. Changing its type definition affects units created from it after the edited definition is loaded.
 
 The data-file row deserves special attention. When a game exposes a file for customization, editing it may be the simplest route. Keep a copy of the original: a game update can still replace a file or change its format. Chapter 9 opens with this decision.
 
@@ -202,7 +202,7 @@ One step, with real numbers. The ball is at x equals 794 with a velocity of 150 
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Nothing in that step names Breakout. It is the movement and contact rules of Lesson 1.3 run by systems over entities, in the order the engine’s loop calls them.
+Nothing in that step names Breakout. It is the position update and wall-collision response from Lesson 1.3 run by systems over entities, in the order the engine’s loop calls them.
 
 Section: Where each engine part is explained.
 
@@ -224,7 +224,7 @@ Lesson 11.2 shows how to tell which engine a game uses from the files beside its
 
 Section: Where the change belongs.
 
-An engine supplies reusable machinery; the game adds its particular rules and content. A library responds when your code calls it, while an engine also calls game code at the points it controls. The course games use different engines, so a rule may live in data, a script, native code, or managed code. A memory edit lasts for a running process; a data-file edit can persist when the file is loaded again. Engine consoles and debug commands expose named state that can help identify the right layer before changing it.
+An engine supplies reusable machinery; the game adds its particular weapon values, damage routines, missions, and content. A library responds when your code calls it, while an engine also calls game code at the points it controls. The course games use different engines, so a health update or unit definition may live in data, a script, native code, or managed code. A memory edit lasts for a running process; a data-file edit can persist when the file is loaded again. Engine consoles and debug commands expose named state that can help identify the right layer before changing it.
 
 To describe a match, a tool needs more than one verified field: it needs the players and values that belong together at one moment. From One Player to a Game-State Snapshot builds that view while keeping the engine’s changing state separate from the tool’s local copy.
 

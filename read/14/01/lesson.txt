@@ -10,7 +10,7 @@ Section: Two modes, enforced by the processor.
 
 The kernel and a game run on the same processor, often on the same core, taking turns many times a second. What stops the game from doing what the kernel does: rewriting another process’s memory, reprogramming the disk controller, or simply never giving the processor back?
 
-A rule written only in software could not stop it. If the kernel’s protections were ordinary code and data, the program being restricted could overwrite them, the same way a debugger overwrites an instruction with a breakpoint. The rule has to live somewhere the restricted program cannot reach, and the only such place is the processor itself.
+A protection check in memory the restricted program can overwrite would not stop it. The restriction has to be enforced beyond that writable memory. The processor checks privilege and memory permissions before carrying out an access.
 
 So the processor tracks a privilege level for the code it is running. It checks privileged instructions and page translations against that level. x86 processors define four levels, numbered 0 to 3 and usually drawn as nested rings, with ring 0 the most privileged. Windows uses two of them:
 
@@ -28,7 +28,7 @@ Privileged instructions. Some instructions only make sense for whoever runs the 
 
 Memory marked for the kernel. Page-table entries carry a user/supervisor bit, bit 2. When it is 0 on a present mapping, a ring-3 access causes a page fault. Windows reserves a system range of virtual addresses for the kernel. In a traditional shared page table, kernel pages can be mapped there alongside a game’s pages, but their supervisor bit still blocks the game. With KVA shadow, the user-mode page table omits most kernel mappings and keeps only the pages needed to enter the kernel; entry code switches to the fuller kernel page table. In either arrangement, a game cannot read or write the kernel’s privileged pages. Lesson 11.11 compares the flag bits of a user page and a kernel page.
 
-Put the two checks together and user-mode code is boxed in. It cannot run the instructions that change the rules, and it cannot touch the memory where the rules are kept, including the page tables themselves.
+Put the two checks together and user-mode code is boxed in. It cannot run the instructions that change privilege or page mappings, and it cannot alter the kernel’s page tables.
 
 Section: A system call is how a program asks.
 
@@ -84,7 +84,7 @@ When a device needs attention, because a key was pressed, a disk transfer finish
 
 Section: It owns devices through drivers.
 
-Ordinary user programs reach devices through operating-system interfaces rather than writing device registers directly. A driver knows a device’s registers and rules, and Windows routes requests through the relevant driver stack. Lesson 12.4 follows one request down to the hardware.
+Ordinary user programs reach devices through operating-system interfaces rather than writing device registers directly. A driver knows a device’s register layout and command protocol, and Windows routes requests through the relevant driver stack. Lesson 12.4 follows one request down to the hardware.
 
 Section: It enforces security checks.
 
@@ -102,7 +102,7 @@ This is why the book keeps its labs in user mode and inside a virtual machine. T
 
 Section: Why some anti-cheat runs a kernel component.
 
-Anti-cheat software exists to notice when another program interferes with a game. If an anti-cheat and an interfering tool both run in user mode, both are subject to process handles, access rights, and other Windows rules from Chapter 11. Running at the same processor privilege does not itself grant either process access to the other. It does limit what either can establish about system-wide events and privileged components from inside its own process.
+Anti-cheat software exists to notice when another program interferes with a game. If an anti-cheat and an interfering tool both run in user mode, both are subject to process handles, access rights, and other Windows permission checks from Chapter 11. Running at the same processor privilege does not itself grant either process access to the other. It does limit what either can establish about system-wide events and privileged components from inside its own process.
 
 A kernel component changes that balance. Running in ring 0 lets it use documented Windows facilities that user-mode code cannot reach:
 
