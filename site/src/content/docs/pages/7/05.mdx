@@ -34,7 +34,7 @@ flowchart TD
 The Windows calls are only the outer shell. Candidate filtering uses checked local slices.
 
 :::note
-🔎 A filter pass re-reads only the addresses already on the candidate list, so it can remove candidates but never add them. If the list grows, the program rescanned memory instead of filtering; if it stops shrinking, check the value type, the range, and the filtering rule.
+🔎 A filter pass re-reads only the addresses already on the candidate list, so it can remove candidates but never add them. If the list grows, the program rescanned memory instead of filtering; if it stops shrinking, check the value type, the range, and the selected equal, changed, increased, or decreased comparison.
 :::
 
 <SimLab sim="scan-cost" label="Explore scan cost" />
@@ -220,7 +220,7 @@ fn keep(filter: &Filter, previous: u32, current: u32) -> bool {
 
 The enum replaces a stringly typed filter:
 
-The original helper recognizes two strings and returns `false` for every other spelling. A typo silently removes candidates instead of identifying an unsupported rule.
+The original helper recognizes two strings and returns `false` for every other spelling. A typo silently removes candidates instead of identifying an unsupported scan comparison.
 
 ```rust title="Before: choose a scan filter with text"
 fn keep(kind: &str, previous: u32, current: u32) -> bool {
@@ -286,13 +286,13 @@ fn keep(filter: &Filter, previous: u32, current: u32) -> bool {
 </Tab>
 </CodeGroup>
 
-**Takeaway:** use a finite type for a finite set of rules, and let the compiler check every case.
+**Takeaway:** use a finite type for a finite set of scan comparisons, and let the compiler check every case.
 
 :::note[Why this version?]
 A misspelled string silently behaves like an unknown
 filter. An enum can contain only supported states, and an exhaustive `match`
 makes the compiler point out every place that needs updating when a new filter
-is added. Passing `&Filter` borrows the rule because the comparison does not
+is added. Passing `&Filter` borrows the comparison choice because the comparison does not
 need to consume or copy it.
 :::
 
@@ -330,7 +330,7 @@ Set limits for:
 
 A scan for a common value such as zero can produce millions of matches. Refuse or require a narrower range rather than exhausting memory.
 
-Limits are correctness rules:
+Each limit prevents a specific failure:
 
 - a chunk limit bounds each allocation and Windows copy;
 - a region limit avoids one suspicious mapping monopolizing the scan;
@@ -376,7 +376,7 @@ flowchart LR
 
 The UI should show the old and new value and require an explicit action.
 
-The second read closes a **time-of-check/time-of-use** gap. The candidate matched during the last filter, but the game kept running afterward. If the current value no longer equals `candidate.previous`, the address may be stale or the rule may have changed; the write must stop rather than overwrite newer state.
+The second read closes a **time-of-check/time-of-use** gap. The candidate matched during the last filter, but the game kept running afterward. If the current value no longer equals `candidate.previous`, the address may be stale or the game may have updated that field; the write must stop rather than overwrite newer state.
 
 <MarginNote kind="alternative">Like glancing at a traffic light and then closing your eyes: the colour may change before you move. Re-check at the moment you act.</MarginNote>
 

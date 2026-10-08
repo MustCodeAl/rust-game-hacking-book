@@ -20,7 +20,7 @@ chooses between possible steps, repeats a step, and keeps related state
 together. Rust has familiar ways to express each of those ideas. We will
 build one small program around a fictional runner named Mira, who has 12
 stamina. A dash uses 4 stamina. A second runner named Sol will let us see
-why the same rule can serve several records.
+why the same dash function can update several records.
 
 | Programming question | Rust expression in this lesson |
 | --- | --- |
@@ -101,8 +101,8 @@ stamina = stamina - cost; // first calculate 12 - 4, then store 8
 
 ## Selection: run only the path that fits
 
-The assignment above <HoverCard kind="caution" body="Without a check, a `u32` that would go below zero does not become negative. A debug build stops with a subtract-with-overflow panic; a release build wraps around, so 2 − 4 gives 4,294,967,294.">assumes the runner has enough stamina</HoverCard>. To express a rule with
-two possible paths, use `if` and `else`:
+The assignment above <HoverCard kind="caution" body="Without a check, a `u32` that would go below zero does not become negative. A debug build stops with a subtract-with-overflow panic; a release build wraps around, so 2 − 4 gives 4,294,967,294.">assumes the runner has enough stamina</HoverCard>. To choose whether the dash runs or reports insufficient stamina, use `if`
+and `else`:
 
 <SpeedType id="rust-select-dash" title="Choose the dash branch" recall={[{"text": "can_dash", "hint": "Use the boolean computed from the stamina and cost."}, {"text": "stamina - cost", "hint": "Subtract the requested amount from the available amount."}]}>
 
@@ -126,7 +126,9 @@ of a result instead of a true/false condition.
 
 Move the stamina below the cost, then step forward. The failed branch keeps the original amount; a comparison chooses the path before any subtraction.
 
-## Repetition: apply the same rule to several inputs
+<span id="repetition-apply-the-same-rule-to-several-inputs" aria-hidden="true" />
+
+## Repetition: call the dash function for several inputs
 
 A `for` loop repeats a body for each item in a collection. Here the loop
 tries three dash costs in order, carrying the current stamina into the next
@@ -198,7 +200,7 @@ when `remaining` reaches zero.
 So far `stamina` is a standalone number. A game also needs to know whose
 stamina it is. A `struct` names a shape of related fields; `Runner` groups a
 name with a stamina amount. A function names a repeatable behavior. Here
-`dash` is the guarded dash rule and `show_stamina` displays the state:
+`dash` checks stamina before subtracting the cost; `show_stamina` displays the state:
 
 ```rust
 struct Runner {
@@ -240,7 +242,7 @@ Mira has 8 stamina
 ```
 
 The order of those lines matters. `main` starts, creates this sample
-runner, prints the starting value, asks `dash` to apply the rule, and
+runner, prints the starting value, asks `dash` to check and spend stamina, and
 prints the new value.
 The first and last print calls read the **same** runner record, before
 and after one controlled change.
@@ -266,7 +268,7 @@ returns, `main` can use Mira again. Neither function needs to copy the
 whole record just to read or update its fields.
 
 Think of Mira's record as one notebook. `show_stamina` may read it; `dash`
-needs permission to write in it. The analogy stops at the Rust rule:
+needs permission to write in it. The analogy stops at Rust's borrowing checks:
 references are checked by the compiler, and Rust will reject conflicting
 access to the same value during an editable borrow. [Lesson 3.1](/pages/3/01/) develops ownership, borrowing, and error handling
 when we build an external memory tool.
@@ -313,7 +315,7 @@ temporarily while Mira remains owned by `main`.
 
 The interactive view separates the `String` value's small bookkeeping
 from the text it owns. It previews the stack and heap vocabulary that
-Lesson 1.8 will explain. The important source-level rule here is that
+Lesson 1.8 will explain. The important ownership consequence here is that
 the old name cannot be used after its owned `String` moves; the new
 owner can use it. A copyable `u32` behaves differently.
 
@@ -338,7 +340,7 @@ names into scope; `::` walks through their module path.
 
 ## Grow one runner into the full two-runner program
 
-To see how one rule serves several records, add Sol to the program. Mira
+To see how one function updates several records, add Sol to the program. Mira
 starts with 12 stamina and Sol with 7; each has a separate health amount.
 Replace `src/main.rs` with this complete version;
 do not paste a second `main` underneath the first one:
@@ -401,7 +403,7 @@ Mira has 8 stamina and 70/100 health
 Sol has 3 stamina and 45/60 health
 ```
 
-The shape of each runner became larger, but the rule did not need a
+The shape of each runner became larger, but the stamina check did not need a
 special Mira version and a special Sol version. Add a third record with
 2 stamina: the dash fails and that record keeps 2. The function's
 `bool` result could also be used to
@@ -434,8 +436,7 @@ the method temporary editable access to that runner, like the earlier
 `&mut Runner` parameter. You can add this `impl` block below the
 two-runner program and replace `dash(runner, 4)` in the first loop with
 `runner.try_dash(4)`. The result stays Mira 8 and Sol 3. The method
-organizes the code differently; it does not invent a different dash
-rule. In Rust, a `struct` holds fields and an `impl` gives it methods;
+organizes the code differently; it keeps the same stamina check and subtraction. In Rust, a `struct` holds fields and an `impl` gives it methods;
 class inheritance is not required.
 
 ## Model two possible outcomes with `enum` and `match`
@@ -551,14 +552,14 @@ for stamina in stamina_samples {
 // ready is 2
 ```
 
-Use the form that makes the rule clearest. Later labs also use `.map(...)`
+Use the form that makes the value transformation easiest to read. Later labs also use `.map(...)`
 to transform each item and `.collect()` to gather results; the logic is
 still “visit each item, do something, then produce an answer.”
 
 Both the map lookup and the queue removal may fail to produce an item:
 the name might be absent or the queue empty. Their results therefore
 use `Some(value)` or `None`. The next section shows the same shape with
-the dash rule. A grid and graph need their own operations; [Lesson 4.9](/pages/4/06/) uses them for map tiles and paths.
+the stamina check and subtraction. A grid and graph need their own operations; [Lesson 4.9](/pages/4/06/) uses them for map tiles and paths.
 
 ## When a result might be missing
 
@@ -683,20 +684,22 @@ to a reusable type: success holds a `u32`, error holds a parse error.
 
 ## Recognize a few later Rust boundaries
 
-The book's memory tools also introduce syntax whose full rules belong
+The book's memory tools also introduce syntax whose detailed requirements belong
 beside the tool that needs them. You can still tell what role each plays:
 
 | Later syntax | Programming idea it expresses | Where it becomes concrete |
 | --- | --- | --- |
 | `trait MemoryReader { ... }` | A promise that different readers provide the same behavior. | [Lesson 3.1](/pages/3/01/) |
-| `unsafe { ... }` | A small region where the programmer must uphold rules the compiler cannot verify. | [Lesson 3.1](/pages/3/01/#raw-pointers-and-unsafe) |
+| `unsafe { ... }` | Allows operations such as raw-pointer dereferencing; the programmer must ensure the data is valid, aligned and accessible for that operation. | [Lesson 3.1](/pages/3/01/#raw-pointers-and-unsafe) |
 | `extern "system" { ... }` | A call across the Rust–Windows boundary. | [Lesson 5.7](/pages/7/07/) |
 
 You can read a lab function as *inputs → operation → `Result` → caller's
 decision* even before knowing every Windows API name. The later lesson
 defines the new boundary when you reach it.
 
-## Check the rule with a small test
+<span id="check-the-rule-with-a-small-test" aria-hidden="true" />
+
+## Check insufficient stamina with a small test
 
 Below the complete two-runner program, add this test. It creates a runner
 with only 2 stamina, requests a 4-point dash, and checks both the answer and the
@@ -720,7 +723,7 @@ fn insufficient_stamina_keeps_state() {
 
 `#[test]` marks a function for Cargo's test runner. `assert!` requires
 the answer to be false here; `assert_eq!` requires the stamina to remain 2.
-Run `cargo test`. If you change the `dash` rule so it subtracts without
+Run `cargo test`. If you change `dash` so it subtracts without
 checking, this test catches the mistake. The test does not prove every
 possible dash is correct, but it protects one important boundary.
 The successful path can be checked with 12 stamina and cost 4. The [Cargo Book's testing

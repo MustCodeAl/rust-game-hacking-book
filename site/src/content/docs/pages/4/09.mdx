@@ -16,7 +16,7 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 Recording a guard's movement tells us when it turned, chased, or stopped. It
-does not explain why. To recover that rule, follow the information the game
+does not explain why. To reconstruct how the guard chooses its action, follow the information the game
 gave the guard, the decision it made from that information, and the action
 that followed.
 
@@ -25,7 +25,7 @@ that followed.
 A **non-player character** (NPC) is any character the game controls rather than
 a person: a guard, a shopkeeper, an enemy soldier. In games, “AI” means the code
 that picks what an NPC does next. It is usually far simpler than the AI in the
-news: a handful of rules, checked quickly, many times per second.
+news: a small set of distance, visibility, health, and timing checks, evaluated many times per second.
 
 The portable lab [`npc_brain_lab.rs`](/rust-labs/src/bin/npc_brain_lab.rs)
 builds one such character, a guard, and this lesson follows it piece by piece.
@@ -108,8 +108,7 @@ through all three checks in the lab's code and shows why.
 ## Decide: a finite-state machine
 
 The guard's behavior is a finite-state machine, the same structure
-[Lesson 4.6](/pages/4/04/) uses for a macro: a fixed set of named states and a
-rule for each move between them. The guard has five states:
+[Lesson 4.6](/pages/4/04/) uses for a macro: a fixed set of named states and a condition for each transition between them. The guard has five states:
 
 - **Patrol:** walk the route. The lab's route is a single point, the guard's
   post at (0, 0), so patrolling means standing there.
@@ -223,7 +222,7 @@ measured before the guard moves:
 | 15 | no | 0 | 5 | `Patrol` | (2, 0) |
 | 16 | no | 0 | 6 | `Patrol` | (1, 0) |
 
-Every row follows from the rules above:
+Every row follows from the perception checks and state transitions above:
 
 - **Ticks 1 and 2:** the player is 5 away, straight ahead, and in the open, so
   all three checks pass, but `seen_for` is only 1, then 2.
@@ -279,7 +278,7 @@ structure field by field.
 ### What editing the state byte would do
 
 Take a toy program you wrote yourself, or an offline single-player game running
-in your lab VM, whose guard follows the lab's rules. Changing the state byte
+in your lab VM, whose guard uses the five-state implementation above. Changing the state byte
 between two ticks has very different effects depending on the value:
 
 - **Write 4 (Flee) mid-chase:** on the next tick `decide` sees Flee, and nothing
@@ -296,11 +295,10 @@ between two ticks has very different effects depending on the value:
 
 The pattern behind those results: the state is an output the game recomputes
 from its inputs every tick. An edit to the output survives only when the inputs
-agree with it, as `seen_for` did not in the second case. An edit to an input
-that the rules read, such as writing 20 into `health`, changes behavior for as
+agree with it, as `seen_for` did not in the second case. An edit to an input that the decision code reads, such as writing 20 into `health`, changes behavior for as
 long as the input holds, here by sending the guard into Flee on the next tick.
 
-<MarginNote kind="narration">A value that snaps back after you change it is usually an output. The real control is an input the rules read, so look one step earlier.</MarginNote>
+<MarginNote kind="narration">A value that snaps back after you change it is usually an output. The real control is an input the decision code reads, so look one step earlier.</MarginNote>
 
 ## Why online NPCs are out of reach
 
@@ -328,8 +326,7 @@ cargo test --bin npc_brain_lab
 
 The first command prints the sixteen-tick run from the table above, then five
 situations scored by the utility system from
-[Lesson 4.13](/pages/4/10/#choose-among-actions-utility-scoring). The tests pin
-down each rule on its own, from the reaction delay and the search timeout to
+[Lesson 4.13](/pages/4/10/#choose-among-actions-utility-scoring). The tests check each decision case separately, from the reaction delay and the search timeout to
 low health overriding every state, the three perception checks, and the utility
 choices.
 
@@ -338,5 +335,5 @@ tick the chase starts on and where the guard stands when it attacks. Two of the
 tests will fail after that change, because they pin the delay at 3 ticks.
 Compare the new trace with the old one, then restore the constant to 3
 so the tests describe the program again. [Lesson 4.13](/pages/4/10/)
-explains the sensing calculations and alternate decision rules that
+explains the sensing calculations and behavior-tree and utility-selection algorithms that
 this trace treats as black boxes.

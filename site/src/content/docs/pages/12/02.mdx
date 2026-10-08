@@ -41,7 +41,7 @@ entity record: named keys id, alive, and position
 lookup map: arbitrary entity IDs mapped to records; order is not promised
 ```
 
-The same Lua table implementation can represent all three, but host validation and iteration rules differ.
+The same Lua table implementation can represent all three, but host validation and the choice of iteration method differ.
 
 ```lua
 print(list[1]) -- sword ✅
@@ -126,7 +126,7 @@ Suppose a script must rank targets without choosing one yet. The two input
 tables below are positions. The function subtracts their coordinates and
 returns squared distance, which preserves the nearest-to-farthest order without
 calculating a square root. Assigning the function to `scoring_rule` copies a
-callable value, so the rule can later be passed to other code.
+callable value, so the function can later be passed to other code.
 
 <SpeedType id="lua-squared-distance" title="Type the distance function">
 
@@ -231,7 +231,7 @@ Colon syntax is convenient, but the last line above changes the `Bot` table itse
 
 The previous `Bot` table had a method, but a separate `bot` record did not
 inherit it. Here `Bot:new` attaches `Bot` as the new record's metatable. The
-`__index` rule then lets `scout:set_state` find the method on `Bot`, leaving
+`__index` fallback then lets `scout:set_state` find the method on `Bot`, leaving
 `scout.state` as `"plan"`.
 
 ```lua
@@ -284,9 +284,9 @@ flowchart LR
 follows the metatable arrow, finds `__index`, and follows the loop to search
 `Bot`, where the key exists.
 
-When `scout` has no `set_state` key, its metatable's `__index` points to `Bot`, so Lua looks there. This resembles method lookup, but it is not a compiled C++ vtable. It is a runtime table rule that scripts can inspect and change.
+When `scout` has no `set_state` key, its metatable's `__index` points to `Bot`, so Lua looks there. This resembles method lookup, but it is not a compiled C++ vtable. It is lookup behavior that scripts can inspect and change.
 
-Read the expression `scout:set_state("plan")` in two stages. Colon syntax first supplies `scout` as the hidden first argument. Normal table lookup then searches `scout` for `set_state` and follows the `__index` rule to `Bot` when the key is absent. Keeping argument passing separate from lookup makes metatable behavior much less mysterious.
+Read the expression `scout:set_state("plan")` in two stages. Colon syntax first supplies `scout` as the hidden first argument. Normal table lookup then searches `scout` for `set_state` and follows the `__index` reference to `Bot` when the key is absent. Keeping argument passing separate from lookup makes metatable behavior much less mysterious.
 
 ```mermaid
 flowchart TD
@@ -303,7 +303,7 @@ flowchart TD
 ```
 
 The left side of the process chooses the first argument. The right side finds
-the function value. They cooperate, but they are separate rules.
+the function value. They cooperate, but they are separate steps.
 
 ## Validate host-shaped tables
 
@@ -335,4 +335,4 @@ For beginner-friendly game scripts:
 - do not run arbitrary behavior during simple field reads;
 - validate tables received from scripts at the host boundary.
 
-Plain tables and plain functions are enough for most observers, mod rules, and state machines. Learn the mechanism, then use only as much magic as the reader can still explain.
+Plain tables and plain functions are enough for most observers, mod logic, and state machines. Learn the mechanism, then use only as much magic as the reader can still explain.

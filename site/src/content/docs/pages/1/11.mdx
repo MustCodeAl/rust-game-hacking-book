@@ -1,13 +1,13 @@
 ---
-title: "Game Engines: Where the Rules Live"
-description: "Separate the reusable engine from the game built on it, follow one frame and the clocks that drive it, the entities and the scenes inside it, see which engine each course game uses, and learn why where a rule lives decides how you change it."
+title: "Game Engines: Input, Simulation, and Rendering"
+description: "Follow input, movement, collisions, timers, and drawing through an engine; distinguish live state from the code and files that produce it."
 chapter: "4.1"
 minutes: 35
 author: "attilathedud"
 date: "2026-09-24"
 sidebar:
   order: 1
-  label: "4.1 Game Engines: Where the Rules Live"
+  label: "4.1 Game Engines: Input, Simulation, and Rendering"
 ---
 import { CardGrid, Column, Columns, Example, HoverCard, LinkCard, Math, Tooltip } from '../../../../components/kit';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
@@ -15,20 +15,21 @@ import CodeTrace from '../../../../components/CodeTrace.astro';
 
 The previous chapters followed values into instructions and turned remote
 bytes into typed objects and collections. The next question is larger:
-which system owns those objects, applies the rules, and updates the world?
-A rule could come from native code, a script, or loaded game data. To choose
-where to observe or change it, first separate the game's particular rules
-from the machinery that runs them.
+which system moves them, resolves collisions, applies damage, and advances timers?
+A health update might be native code, a cooldown calculation a script, and a
+unit's starting health loaded from a data file. Finding the relevant function
+or definition starts with separating game-specific behavior from the engine
+services that execute it.
 
-The game loop reads input, applies rules, changes state, and draws the
-result. Games need other machinery too: something loads the level, stores
+The game loop reads input, checks whether actions are allowed, updates
+positions and health, and draws the result. Games need other machinery too: something loads the level, stores
 objects, and calls the renderer. A **game engine** supplies much of this
 reusable machinery. Knowing where it stops and the game begins tells you
 which technique in this book will work on a given problem.
 
 ## An engine is reusable game machinery
 
-Many games need the same kinds of machinery, even when their rules and art are
+Many games need the same kinds of machinery, even when their weapons, maps, and art are
 different:
 
 - a **game loop** that reads input, updates the world, and draws a frame, over
@@ -42,11 +43,13 @@ different:
 Not every game needs every item: a text adventure may have no renderer or
 collision system. For games that do need these pieces, reusing them can save
 substantial work. A game about tanks and a game about farming can share the
-machinery while supplying different rules and content.
+window, input, loading, and rendering machinery while supplying different
+behavior: armor damage for tanks, crop growth for farming.
 
 A **game engine** is that reusable machinery: the software that runs the loop,
 draws the frames, loads the files, and manages the objects, on which a
-particular game's content and rules are built.
+particular game's content and behavior—such as what a hit does or what a unit
+costs—are built.
 
 A spreadsheet program is a useful comparison, because it holds up when you push
 on it. The program supplies the grid, the formulas, and the recalculation; each
@@ -116,15 +119,15 @@ the same order:
 1. **Gather input.** Ask the operating system which keys, buttons, and mouse
    movements happened since the last pass, and turn them into actions
    (Lesson 1.3).
-2. **Update the world.** Run the game's rules: move things, check contacts, count
-   timers down, let characters decide.
+2. **Update the world.** Move objects, resolve contacts, apply damage, count
+   timers down, and choose character actions.
 3. **Draw.** Build the picture of the world as it is now.
 4. **Present.** Hand the finished picture to the display, and, with vertical
    sync on, wait for the display's next refresh.
 
 ```mermaid
 flowchart LR
-    I["input<br/>keys, mouse, pad"] --> U["update<br/>rules, physics, timers"]
+    I["input<br/>keys, mouse, pad"] --> U["update<br/>movement, damage, timers"]
     U --> R["render<br/>draw the world"]
     R --> P["present<br/>show the frame"]
     P --> I
@@ -171,9 +174,9 @@ lost. A slow frame runs several steps to catch up, and a quick one runs none.
 What is drawn after a frame is usually partway between two steps. The 3.33 ms
 left over is 3.33 ÷ 16.67 = 20% of the way to the next step, and many engines
 blend the last two steps by that fraction, so motion looks smooth even though
-the rules advance in coarse steps (Lesson 4.7 shows how that blend is computed).
+the simulation advances in fixed steps (Lesson 4.7 shows how that blend is computed).
 
-This tells you something when you scan memory. A value the rules change moves
+This tells you something when you scan memory. A value the simulation changes moves
 once per step, and a value the drawing code keeps (an on-screen animation timer,
 an interpolated position) can change once per frame. Counting how often a value
 changes tells you which loop owns it.
@@ -189,7 +192,7 @@ cooldown is a number in memory that you can scan for.
 
 The delta time an update receives is not always the time that really passed. Engines
 keep two clocks. **Real time** is the <Tooltip tip="The time a clock on a wall shows. It keeps running whatever the game does, so pausing the game cannot stop it.">wall clock</Tooltip>: it never stops, and a loading
-spinner or a menu animation uses it. **Game time** is what the rules use. Each frame
+spinner or a menu animation uses it. **Game time** is the clock used for simulated movement and cooldowns. Each frame
 the engine takes the real time since the last frame, limits it to a maximum, and
 multiplies it by a **time scale**:
 
@@ -211,7 +214,7 @@ counts game time:
 
 </Example>
 
-The limit protects the rules from a frame that stalled. A laptop that sleeps, or a
+The limit bounds the simulation time added after a stalled frame. A laptop that sleeps, or a
 window held still by the mouse for 3 seconds, would otherwise hand the next update a
 delta of 3.0 s. A ball moving 150 pixels a second would jump 150 × 3.0 = 450 pixels
 at once, straight through any wall, and a fixed-step loop would owe 3.0 ÷ (1/60) =
@@ -320,7 +323,7 @@ components of two 4-byte floats each take 10,000 × 8 = 80,000 bytes in one
 stretch, which is what Lesson 3.6 called a component pool. A system walks that
 stretch from start to end, and a scan finds the whole run at once.
 
-Engines add a few rules around this:
+Entity updates also need coordination:
 
 - A system should not add or remove entities while it is looping over them, or the
   loop could skip some and visit others twice. Instead it queues **commands**
@@ -366,7 +369,7 @@ scene is left, so an address found in one level can mean nothing in the next.
 
 The games in this book cover most of the ways a game can relate to its engine:
 
-| Game | Engine | Where most of its rules live |
+| Game | Engine | Typical places to inspect behavior and configuration |
 |---|---|---|
 | Wesnoth 1.14.9 | its own engine, written for this game | C++ engine code, WML data files, Lua scripts |
 | AssaultCube 1.2.0.2 | Cube, an open-source engine | C++ engine code |
@@ -378,11 +381,14 @@ Flare shows the split most clearly. Flare is the engine; a campaign such as the
 Empyrean Campaign from Lesson 9.2 is a content package the engine loads. Swap the
 content package and the same executable runs a different game.
 
-## Where a rule lives decides how you change it
+<span id="where-a-rule-lives-decides-how-you-change-it" aria-hidden="true" />
 
-Here is the most useful thing to take from this lesson. Every rule in a game
-lives in one of a few places, and the place decides which part of this book
-applies — and how long your change lasts.
+## Find the source of a behavior or value
+
+A spending calculation is implemented in code; a price or starting health
+value may come from a data file or script. Identify that source before changing
+a live value. It tells you which technique applies and when the game might
+replace your edit with a newly calculated or loaded value.
 
 Wesnoth shows two of them side by side:
 
@@ -399,27 +405,28 @@ Wesnoth shows two of them side by side:
   They come from a unit definition in a WML data file. Change one unit's hit points
   in memory and that single unit changes. Recruit another of the same type and it
   arrives with the file's value, because every new unit is built from the definition
-  on disk. Change the file instead, and every unit of that type created afterwards
-  has the new value.
+  on disk. Change the definition file instead, and units created after the game reloads
+  that edited definition use the new value.
 
   </Column>
 </Columns>
 
 ```mermaid
 flowchart LR
-    W["your file edit"] -.->|"changes every unit<br/>created afterwards"| D
+    W["your file edit"] -.->|"affects units created<br/>after definition reload"| D
     D["unit type in a WML file:<br/>defines its hit points"] -->|"each recruit is<br/>built from it"| U1["unit in memory"]
     D --> U2["unit in memory"]
     D --> U3["the next recruit"]
     M["your memory edit"] -.->|"changes only this unit"| U1
 ```
 
-Neither change is wrong. They answer different questions, and knowing which one
-you are making saves an afternoon of wondering why a change "didn't stick."
+Choose according to whether you want to change one live unit or the definition
+that future units will load. That distinction explains why a memory edit can be
+overwritten while a reloaded definition produces the change again.
 
-<MarginNote kind="brief">A rule's home decides how you change it. A memory edit lasts for one run, while a data-file edit applies each time the file loads.</MarginNote>
+<MarginNote kind="brief">Changing one live unit affects that instance. Changing its type definition affects units created from it after the edited definition is loaded.</MarginNote>
 
-| Where the rule lives | What you change | Where this book covers it |
+| Source layer | What you change | Where this book covers it |
 |---|---|---|
 | a data file | the file, before the game loads it | Chapter 9 |
 | a script | the script, or what the host lets it do | Chapter 10 |
@@ -497,7 +504,7 @@ the wall is at x = 800, and 804.5 is past it, so the ball hits the wall
 reply     = velocity x becomes −150, and x is moved back to 800 − 8 = 792
 ```
 
-Nothing in that step names Breakout. It is the movement and contact rules of
+Nothing in that step names Breakout. It is the position update and wall-collision response from
 Lesson 1.3 run by systems over entities, in the order the engine's loop calls
 them.
 
@@ -547,10 +554,10 @@ in the table above you are dealing with.
 ## Where the change belongs
 
 An engine supplies reusable machinery; the game adds its particular
-rules and content. A library responds when your code calls it, while an
+weapon values, damage routines, missions, and content. A library responds when your code calls it, while an
 engine also calls game code at the points it controls. The course games
-use different engines, so a rule may live in data, a script, native
-code, or managed code. A memory edit lasts for a running process; a
+use different engines, so a health update or unit definition may live in data,
+a script, native code, or managed code. A memory edit lasts for a running process; a
 data-file edit can persist when the file is loaded again. Engine
 consoles and debug commands expose named state that can help identify
 the right layer before changing it.

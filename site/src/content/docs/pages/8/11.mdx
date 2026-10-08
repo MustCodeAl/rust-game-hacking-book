@@ -28,15 +28,12 @@ flowchart LR
     D["device events<br/>key W goes down;<br/>left stick reads 0.8 up"] --> S["input state<br/>W is down;<br/>stick axis is 0.8"]
     S --> B["bindings<br/>W or stick up<br/>means MoveForward"]
     B --> A["actions<br/>MoveForward = 1.0<br/>or 0.8"]
-    A --> R["game rules<br/>move the player"]
+    A --> R["movement simulation<br/>move the player"]
 ```
 
 The device layer is what the operating system reports: a key went down, the mouse
 moved 12 <Tooltip tip="A count is the smallest step a mouse can report. A mouse set to 800 counts per inch reports 800 counts when it moves one inch, so 12 counts is 12 ÷ 800 = 0.015 inch.">counts</Tooltip>, a stick reads 0.8. The state layer is the engine's own copy of
-those facts, refreshed once per frame. The action layer is what the game's rules
-use, and it is the only layer that knows the player's settings. That is why one
-game accepts a keyboard, a controller, and a remapped key for the same jump, and
-why the rules never mention a key.
+those facts, refreshed once per frame. The action layer converts them using the player's bindings and settings. Movement and jump code then consume named actions rather than physical keys. The same jump can therefore come from a keyboard, a controller, or a remapped key without changing the jump calculation.
 
 ## Buttons: down, just pressed, and just released
 
@@ -102,7 +99,7 @@ different frame never sees it:
 <Example title="A press that no step sees">
 
 The game draws at 144 frames a second, so a frame is 1000 ÷ 144 = 6.94 ms, and runs
-its rules in 60 Hz steps, which are due every 16.67 ms. The engine runs the steps
+movement and collision updates in 60 Hz steps, which are due every 16.67 ms. The engine runs the steps
 that are owed at the start of each frame:
 
 | Frame | Starts at | Steps run | Just pressed in this frame |
@@ -118,10 +115,10 @@ twice.
 
 </Example>
 
-The repair is to stop treating the edge as the thing the rules read. The input
+The repair is to keep a press available until a simulation step can consume it. The input
 system turns a press into an event or an **intent**, such as "jump requested", that
 stays in the queue until a step consumes it, exactly once. Many engines suggest
-doing this for any rule that runs in fixed steps.
+doing this for input-sensitive updates that run in fixed steps.
 
 <MarginNote kind="brief">A queued intent survives between render frames and simulation steps, then disappears when one step consumes it.</MarginNote>
 

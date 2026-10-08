@@ -22,7 +22,7 @@ between components, even when each component's main calculation is correct.
 The DLL, hook, input, and menu lessons have supplied the pieces. This lesson
 gives each piece an owner and a place in the tool's control flow. We will use
 a small monitor of a local player's health and gold to express the design;
-the same rules later support camera snapshots and rendering features.
+the same separation of ownership, observations, and commands later supports camera snapshots and rendering features.
 
 ## Combining code exposes hidden problems
 
@@ -54,15 +54,14 @@ One useful project split is:
 ```text
 target.rs   identify the executable, build, modules, and supported addresses
 observe.rs  turn verified Win32 reads into local snapshots
-decide.rs   apply pure feature rules to a snapshot
+decide.rs   compute alarms and feature decisions from a snapshot
 apply.rs    own guarded writes, patches, hooks, and restoration
 ui.rs       turn user events into commands and display acknowledgements
 main.rs     connect those pieces and control their lifetime
 ```
 
 Each file has one main reason to change. A new game build mostly changes
-`target.rs`. A redesigned menu mostly changes `ui.rs`. A safer restoration rule
-belongs in `apply.rs`, not in every checkbox handler.
+`target.rs`. A redesigned menu mostly changes `ui.rs`. An additional check before restoring changed bytes belongs in `apply.rs`, not in every checkbox handler.
 
 <SortBoard board="module-jobs" label="Explore which stage owns each job" />
 
@@ -158,8 +157,7 @@ struct Settings {
 
 One `DisplayMode` value cannot hold two variants at once. The independent
 `watch_health` and `log_changes` switches may both be enabled because those
-activities can run together. The type follows the actual rule rather than
-asking every handler to repair impossible combinations.
+activities can run together. The enum permits only one display mode at a time, while separate switches permit both activities. Each handler receives a state the types can represent without contradictory display modes.
 
 ## Route input as commands
 
@@ -332,7 +330,7 @@ instead of rewarding blind copy-and-paste.
 ## Test patch decisions without launching the game
 
 Do not make every test launch AssaultCube and call `ReadProcessMemory`. Put a
-small trait between the patch-verification rule and Windows. The real tool uses
+small trait between the instruction-byte comparison and the Windows memory-read API. The real tool uses
 a `Process`-backed reader; a fast test uses bytes stored inside the test:
 
 ```rust
@@ -369,7 +367,7 @@ This test answers a game-hacking question: “Does the tool refuse to patch when
 the live instruction bytes do not match the supported build?” It does not need
 a running match to answer that. Separate Windows-only checks can verify handle
 ownership and byte copying. When one fails, you know whether the problem is the
-build-verification rule or the `ReadProcessMemory` boundary. 🧪
+comparison with the supported build or the `ReadProcessMemory` call. 🧪
 
 A one-shot memory scanner can print its matches directly. A long-running
 in-process menu should log the same fields for every state change:
@@ -383,7 +381,7 @@ to debug a failed cleanup.
 
 Combining separate features into one DLL is what the original course called
 the **multihack**. The useful engineering question is whether the combination
-preserves every feature's ownership and cleanup rules.
+preserves each feature's resource owner and completes its shutdown and restoration.
 
 A multifeature tool is ready when:
 
@@ -399,4 +397,3 @@ The next hook lesson examines the live control-flow changes that this owner
 must verify and restore. Chapter 7 then applies the same architecture to
 rendering: the camera, player positions, and viewport must belong to the same
 captured update, and every draw must leave the game's graphics state intact.
-

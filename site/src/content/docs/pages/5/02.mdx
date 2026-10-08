@@ -64,7 +64,7 @@ The names differ between graphics APIs, but the responsibilities remain useful:
 - clipping trims or rejects primitives outside the camera's clip volume;
 - rasterization finds the pixel-sized **fragments** covered by each primitive;
 - a fragment shader computes candidate colors and other outputs;
-- depth, stencil, and blending rules decide how candidates affect stored pixels.
+- depth/stencil tests and blending decide how candidates affect stored pixels.
 
 A fragment is not yet a final pixel. Several triangles may produce fragments for
 the same pixel, and tests may reject most of them.
@@ -244,7 +244,7 @@ portals, fog-of-war systems, and server state may use entirely different data.
 
 </Frame>
 
-That visual result proves a rendering rule changed; it does **not** prove which objects a call represents. You still need classification tests.
+That visual result shows the depth-test behavior changed; it does **not** prove which objects a call represents. You still need classification tests.
 
 ## Transparency and draw order
 
@@ -264,7 +264,7 @@ background shows through, tinted.
 Because the mix uses what is already there, order matters. Swap two see-through
 layers and the result changes. So engines draw all the solid objects first, with depth
 writes on, and then the see-through ones from the farthest to the nearest, with depth
-writes off, as described above. Other blend modes use a different rule: **additive**
+writes off, as described above. Other blend modes combine colors differently: **additive**
 blending simply adds the colours, which suits glows and sparks.
 
 Two-dimensional games rely on exactly this. A sprite is a picture with transparent
@@ -387,7 +387,7 @@ flowchart LR
   rectangle is drawn with a shader that reads it. **Bloom** blurs the brightest parts and
   adds them back, and **colour grading** remaps colours. **Tone mapping** compresses
   **HDR** (high dynamic range) values, where lighting can produce colours above 1.0, into
-  the 0 to 1 range a display can show. A simple rule, `c ÷ (1 + c)`, turns a value of
+  the 0 to 1 range a display can show. A simple tone-mapping formula, `c ÷ (1 + c)`, turns a value of
   4.0 into 0.8, a value of 1.0 into 0.5, and a value of 0.5 into 0.33, so bright values
   are squeezed more than dim ones.
 - **Render to texture.** A pass can draw into an off-screen texture, not the screen.
@@ -411,7 +411,7 @@ comes out at 1.4 and a lamp at 12.0. In an 8-bit picture both are cut off at 1.0
 look equally bright. **HDR** rendering draws into a texture whose channels are wider
 and floating-point, commonly 16 bits each, so the difference survives until the
 tone-mapping step at the end compresses the result into the 0 to 1 range of the
-display. With the `c ÷ (1 + c)` rule from above, the wall becomes 1.4 ÷ 2.4 = 0.58 and
+display. With the `c ÷ (1 + c)` tone-mapping formula above, the wall becomes 1.4 ÷ 2.4 = 0.58 and
 the lamp 12 ÷ 13 = 0.92: still different, and both displayable.
 
 The wider pixels cost memory. A 1920 × 1080 picture has 1920 × 1080 = 2,073,600 pixels.
@@ -503,9 +503,8 @@ one frame behind the simulation that is already working on the next one.
 
 For memory work this means a game's positions can exist twice, once in each world. The
 render copy is overwritten from the main copy at every extract, so editing it changes
-the picture only until the next extract, while editing the main copy changes the rules
-and the picture together. A hook on a draw call (Lesson 7.10) sees the render copy, and
-the game's rules see the main one. Lesson 7.12 shows how to avoid mixing values from
+the picture only until the next extract, while editing the main copy changes state used by the simulation and future drawing. A hook on a draw call (Lesson 7.10) sees the render copy, and
+the movement and damage calculations read the main one. Lesson 7.12 shows how to avoid mixing values from
 different frames.
 
 ## Two-dimensional rendering uses the same pipeline
@@ -551,7 +550,7 @@ Forgetting restoration can break the entire frame, menus, or later effects.
 
 <MarginNote kind="narration">A forgotten debug setting can affect the next draw, so a broken menu may reveal a state leak from an earlier world-object experiment.</MarginNote>
 
-A restore guard makes the cleanup rule explicit:
+A restore guard returns the previous graphics state when its owner leaves scope:
 
 ```rust
 struct RestoreOnDrop<F: FnOnce()>(Option<F>);
