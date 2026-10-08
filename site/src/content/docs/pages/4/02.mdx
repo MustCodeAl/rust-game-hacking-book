@@ -9,6 +9,7 @@ sidebar:
   order: 4
   label: "4.4 Why Snapshots Need Guarded Actions"
 ---
+import Frame from '../../../../components/kit/Frame.astro';
 import { Accordion, Badge, GitHub, SpeedType, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -39,6 +40,10 @@ A more reliable tool separates six phases:
 
 The important idea is not extra code. It is that **data crosses a gate before the tool acts on it**. A raw address read once may already be out of date. A `Snapshot` captured twice with equal results was consistent at that moment. A write happens only if a fresh capture, taken immediately before it, still equals the snapshot.
 
+<Frame caption="A separate gold example: observe 100, then income adds 10 before the fresh capture. That snapshot now contains 110, so it differs and the requested 888 is not written. Gold is only one field in the whole-snapshot comparison; this check still cannot make the game’s later changes atomic.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/finish-early-stale-snapshot-gate.svg`} width="480" height="310" alt="A tool observes gold 100, then income adds ten and a fresh capture sees 110. The whole-snapshot equality gate fails because that field changed, so the requested replacement 888 is stopped before writing." loading="lazy" decoding="async" />
+</Frame>
+
 <MarginNote kind="brief">Treat every read as temporary evidence. Re-check it right before acting, and write only if nothing has changed.</MarginNote>
 
 ## Store one snapshot in one typed value
@@ -50,7 +55,7 @@ This lesson records the entire Wesnoth pointer path, not only the final gold num
   caption="The whole `Snapshot`. Comparing all four fields catches a changed pointer link, not only a changed gold number."
 />
 
-<SpeedType id="snapshot-struct" title="Type the Snapshot struct">
+<SpeedType id="snapshot-struct" title="Type the Snapshot struct" recall={[{"text": "player: usize", "hint": "Keep the player object reached by the root pointer."}, {"text": "side: usize", "hint": "Keep the side pointer so a changed faction or match link is detected."}, {"text": "gold_address: usize", "hint": "Keep the precise address a later gold action would touch."}, {"text": "gold: u32", "hint": "Keep the observed unsigned 32-bit gold amount as well as its pointer path."}]}>
 
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -77,7 +82,7 @@ Equality now asks a useful question: “Did the whole chain and its value remain
 
 The tool captures twice and accepts the result only when both snapshots agree:
 
-<SpeedType id="stable-snapshot" title="Type the stable snapshot check">
+<SpeedType id="stable-snapshot" title="Type the stable snapshot check" recall={[{"text": "process: &Process", "hint": "Borrow the process owner to capture its current state."}, {"text": "1..=5", "hint": "Use five attempts, from one through an inclusive upper limit."}, {"text": "first == second", "hint": "Accept only when the two entire snapshots agree."}, {"text": "Ok(first)", "hint": "Return the agreed capture in the success result."}]}>
 
 ```rust
 fn stable_snapshot(process: &Process) -> anyhow::Result<Snapshot> {

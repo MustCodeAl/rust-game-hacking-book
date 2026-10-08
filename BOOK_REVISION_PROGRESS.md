@@ -1,11 +1,11 @@
 # Book revision progress
 
-Updated 2026-10-07. The current book has **148 lessons in 15 chapters**.
+Updated 2026-10-08. The current book has **155 lessons in 15 chapters**.
 The full-book teaching pass is implemented on
 `codex/book-revision`. [BOOK_REVISION_AUDIT.md](BOOK_REVISION_AUDIT.md)
 records a prerequisite, teaching thread, and disposition for **each of the
 132 lessons before the latest redistribution**. Two topic splits made
-**134 lessons** in that earlier pass. Later additions now make 147, with
+**134 lessons** in that earlier pass. Later additions now make 155, with
 every original lesson and URL retained.
 [BOOK_REVISION_PLAN.md](BOOK_REVISION_PLAN.md) records
 the original editorial contract and source investigation.
@@ -1818,3 +1818,14 @@ Source commits **15087858** (14 illustrated lessons and corrected backlog), **9c
 Final **live Chromium** at 420/1280 passes **204 concept result/geometry cases / 94 actual clicks**, **40 scene/tree/formula result cases / 74 actual clicks**, and **35 actual reader-control clicks**. Changed vectors/stride/dead-zone results, BFS/no-route states, camera clipping, tree conditions/arrows/tick/reset, finished shake, TOC/Hide/Restore and comments with reload persistence all pass. No page errors or horizontal overflow; stalled external requests do not block reader controls. Inspected six representative live vector/camera/tree screenshots at both widths. Complete local artwork and component visual review is recorded in T49–T51; no claim that every live capture or prior keyboard/accessibility/platform check was newly reviewed or rerun.
 
 Updated the handoff checkpoint to this publication. The later root-document receipt commit does not change the generated book. Further purposeful artwork remains open (**98/155 lessons have authored image references; 57 do not**); chapter-map adjustments/approval and owner account configuration remain required. Recorded native-device/speech, Firefox-launch, provider and Windows verification limits remain. No lessons or saved keys moved and no lab programs ran.
+
+
+## T52 — Finish the actual illustration gaps and typing content (2026-10-08)
+
+Added the remaining 57 purposefully anchored original CC0 SVGs (16 early / 41 later) and one optional 50,192-byte ETW buffer GIF. Every one of the 155 lessons now has genuine authored image markup. The audit excludes Rust `vec![...]` and `#![...]`, which previously caused four false positives. All new figures have explanations, alt text, dimensions, credits and reproducible generators; the committed placement inventory is `site/src/data/finish-handoff-figures.json`. Independent reviews corrected a pointer-guide label crossing, a callback-drain claim that overstated safe removal, and a boot-managed protection bar that wrongly ended with the game. The ETW picture stays still until Play.
+
+Added authored recall to the remaining 29 SpeedType snippets: 16 early snippets / 54 fragments and 13 later snippets / 42 fragments. All 44 snippets now have hidden names, parameters, conditions or computations with semantic hints. The code, prose and saved snippet IDs were preserved. T54 supplies the default practice-button behavior.
+
+Verification on the assembled source: build exits 0 (334 pages, 155 listening articles, 966 silent preserved visuals; 270 diagrams reused). Links: 334 pages, 0 broken. Quizzes: 155 full pools / 3,226 questions. Account merge, reading audio, chat suggestions, all 52 reader-scene copies and all 155 compact cheatsheets pass. The new artwork browser check passes 114 page/width groups at 420/1280 with exact captions/alt, decoded assets, no page errors or horizontal overflow. Early regenerated art passes 63 independent assertions and 216 rendered label bounds; the later generator passes XML and its exact arithmetic assertions. Cross-review checked the mechanisms and placement paragraphs; recovered later artwork receives fresh full-site verification. New typing behavior passes the 88-group browser receipt recorded in T54. All ten palette/brightness combinations pass on nine changed interactive/comment pages. No lab programs or lab tests ran.
+
+The temporary source and QA folder disappeared during this session. Source edits were recovered from this task's exact tool history into a registered persistent worktree at `/Users/notlaggy/.codex/worktrees/book-finish/gamehackingacademy.github.io`, on `codex/book-revision`. Rejected historical patch attempts were excluded. The verified published branch supplied all 270 cached diagrams, with byte-identical loader version. The primary generated checkout and its unrelated files were preserved. Browser/source checks were rerun after recovery; lost screenshots are not offered as current evidence.
