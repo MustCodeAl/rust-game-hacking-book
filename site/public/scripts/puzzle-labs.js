@@ -45,7 +45,8 @@
   // ---------------------------------------------------------------------------
   // Data: code blanks. `code` lines hold {1}, {2}... markers, one per blank.
   // Every blank has the answer from the lesson and `effects`: a plain-English
-  // line for each piece that is worth trying there. Other pieces get a generic line.
+  // line for each piece that is worth trying there. Unmodelled combinations are
+  // described as such rather than being guessed to be compilation failures.
   // ---------------------------------------------------------------------------
   const CODE_BLANKS = {
     "blanks-dead-zone": {
@@ -65,15 +66,23 @@
         { answer: "v.abs()", effects: {
           "v.abs()": "the size of the push is compared with d, so a small push left (-0.1) is ignored just like a small push right (0.1).",
           "v": "a push left such as -0.5 is always smaller than d, so every left push would be thrown away as 'inside the dead zone' while right pushes still work. The stick would feel dead on one side.",
+          "v.signum()": "the test sees only -1 or +1. Every negative push returns zero; positive pushes, however tiny, reach the rescaling branch.",
+          "(1.0 - d)": "the test compares the constant 0.85 with 0.15. It never suppresses the centre, so even a centred stick reaches the rescaling branch.",
+          "1.0": "1.0 is always greater than the dead zone, so no input is discarded. Near the centre the subtraction can even reverse the output.",
         } },
         { answer: "v.signum()", effects: {
           "v.signum()": "the sign (+1 or -1) is put back after the size was reduced, so a push left stays a push left.",
           "v.abs()": "the result would always be positive, so pushing the stick left would move the character right.",
           "v": "multiplying by v shrinks the output a second time instead of only restoring the sign: 0.5 would come out near 0.21 instead of 0.41.",
+          "(1.0 - d)": "this cancels the denominator instead of restoring the sign. Both left and right pushes become positive, and a full push reaches only 0.85.",
+          "1.0": "no sign is restored: a left push and a right push of the same size both produce a positive output.",
         } },
         { answer: "(1.0 - d)", effects: {
           "(1.0 - d)": "dividing by the width of the live range stretches it back to a full 0 to 1, so a full push of 1.0 comes out as exactly 1.0.",
           "1.0": "without dividing by (1 - d) the top of the range is lost: a full push would only come out as 0.85.",
+          "v.abs()": "the divisor changes with the push. A push of either sign with size 0.5 produces size 0.7; a full push reaches only 0.85.",
+          "v": "a negative divisor cancels the restored negative sign. Pushing left produces a positive output, and a full push reaches only 0.85.",
+          "v.signum()": "dividing by the sign cancels the restored sign. Left and right pushes become positive, and their size is not stretched back to the full range.",
         } },
       ],
       why: "Compare the size of the push, subtract the dead zone, divide by what is left of the range, then put the sign back: the output is 0 inside the dead zone and still reaches exactly 1.0 at a full push.",
@@ -123,7 +132,7 @@
       blanks: [
         { answer: "fetch_add", effects: {
           "fetch_add": "one atomic step adds 1 and hands back the old number, so no two workers can ever receive the same region number.",
-          "load": "load only reads the counter and never moves it forward, so workers would keep getting the same region number and rescan it.",
+          "load": "this call would not compile: load takes only an Ordering, whereas fetch_add takes an increment and an Ordering. Even a corrected load call would keep handing out the unchanged region number.",
         } },
         { answer: "break", effects: {
           "break": "once get answers None the list has run out, so the worker leaves its loop and finishes.",
@@ -270,8 +279,11 @@
   const reducedMotion = () => !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const cleanId = (root, fallback) => String(root.dataset.conceptId || fallback).replace(/[^a-z0-9_-]/gi, "-");
   function actionButton(text) {
-    const b = element("button", "concept-lab__example", text);
+    const b = element("button", "concept-lab__example");
     b.type = "button";
+    const icons = { "Show the answer": "↻", "Check my pieces": "✓", "Give me a hint": "?", "Empty the blanks": "×", "Add the arrow": "+", "Cancel": "×", "Remove this arrow": "−", "Replay the inputs": "▶", "Hint: put one arrow back": "?", "Start from empty": "×", "Reset": "↻" };
+    if (icons[text]) { const icon = element("span", "", icons[text]); icon.setAttribute("aria-hidden", "true"); b.append(icon); }
+    b.append(document.createTextNode(text));
     return b;
   }
   function svgEl(tag, attrs, text) {
@@ -281,6 +293,48 @@
     return node;
   }
   const listWords = (items) => items.length < 3 ? items.join(" and ") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+
+  // Only the five displayed numeric expressions are interpreted. This is a
+  // bounded arithmetic model; it never evaluates or executes reader code.
+  function deadZoneOutput(pieces, value) {
+    const d = 0.15;
+    const terms = { "v.abs()": Math.abs(value), "v": value, "v.signum()": value < 0 ? -1 : 1, "(1.0 - d)": 1 - d, "1.0": 1 };
+    if (!pieces.every(piece => Object.hasOwn(terms, piece))) return null;
+    return terms[pieces[0]] < d ? 0 : terms[pieces[1]] * (Math.abs(value) - d) / terms[pieces[2]];
+  }
+
+  function deadZonePreview(id, current, answers) {
+    const box = element("div", "code-blanks__preview");
+    const label = element("label", "concept-lab__field");
+    const input = element("input", "concept-lab__text-input");
+    input.type = "range"; input.min = -1; input.max = 1; input.step = 0.05; input.value = 0.5;
+    input.id = `${id}-stick`; label.htmlFor = input.id;
+    label.append(element("span", "concept-lab__field-label", "Try a stick position (dead zone 0.15)"), input);
+    const figure = element("figure", "predict-figure");
+    const result = element("p", "concept-lab__takeaway");
+    result.setAttribute("role", "status"); result.dataset.deadzoneOutput = "";
+    box.append(label, figure, result);
+    const format = value => Number.isFinite(value) ? (Object.is(value, -0) ? 0 : value).toFixed(4) : Number.isNaN(value) ? "undefined (0 ÷ 0)" : value > 0 ? "+∞" : "−∞";
+    function update() {
+      const value = Number(input.value), output = deadZoneOutput(current, value), worked = deadZoneOutput(answers, value);
+      if (output === null) { figure.replaceChildren(); result.textContent = "Fill every blank to see this version's stick output."; return; }
+      const svg = svgEl("svg", { viewBox: "0 0 480 150", role: "img", class: "predict-figure__drawing" });
+      svg.append(svgEl("title", {}, `Stick ${value} gives ${format(output)}; the lesson version gives ${format(worked)}`));
+      svg.append(svgEl("desc", {}, "The top marker is the input. The lower markers compare the current output with the lesson output. Both rails use the same −1 to +1 scale. An out-of-range output is labelled and drawn at the rail's edge."));
+      const x = v => 240 + Math.max(-1, Math.min(1, v)) * 170;
+      for (const [y, word] of [[40, "Input"], [98, "Output"]]) {
+        svg.append(svgEl("text", { x: 18, y: y - 16 }, word), svgEl("line", { x1: 70, x2: 410, y1: y, y2: y, class: "predict-figure__guide" }), svgEl("line", { x1: 240, x2: 240, y1: y - 5, y2: y + 5, class: "predict-figure__guide" }));
+      }
+      svg.append(svgEl("circle", { cx: x(value), cy: 40, r: 5, class: "predict-figure__point is-selected" }));
+      svg.append(svgEl("circle", { cx: x(worked), cy: 98, r: 8, class: "predict-figure__point" }));
+      if (!Number.isNaN(output)) svg.append(svgEl("circle", { cx: x(output), cy: 98, r: 4, class: "predict-figure__point is-selected" }));
+      svg.append(svgEl("text", { x: 70, y: 137 }, "−1"), svgEl("text", { x: 240, y: 137, "text-anchor": "middle" }, "0"), svgEl("text", { x: 410, y: 137, "text-anchor": "end" }, "+1"));
+      figure.replaceChildren(svg);
+      result.textContent = `Stick ${value.toFixed(2)} → this version ${format(output)}; lesson version ${format(worked)}. Solid dot = this version; ring = lesson version.${!Number.isFinite(output) ? " Division by zero gives no finite movement value." : Math.abs(output) > 1 ? " This output is outside the normal stick range; the marker stops at the edge." : ""}`;
+    }
+    input.addEventListener("input", update);
+    return { box, update, reset: () => { input.value = 0.5; } };
+  }
 
   // ---------------------------------------------------------------------------
   // Code blanks
@@ -388,7 +442,11 @@
     why.dataset.kind = "insight";
     why.append(element("strong", "", "Why the lesson's version works. "), document.createTextNode(cfg.why));
 
-    body.append(codeWrap, effect, bank, summary, actions, why);
+    const preview = cfg === CODE_BLANKS["blanks-dead-zone"] ? deadZonePreview(id, current, answers) : null;
+    body.append(codeWrap, effect);
+    if (preview) body.append(preview.box);
+    body.append(bank, summary, actions, why);
+    if (preview) { const reset = actionButton("Reset"); reset.addEventListener("click", () => { preview.reset(); showAnswer.click(); }); actions.append(reset); }
     root.append(body);
 
     // One message box, three looks: info (a selection prompt), good (the lesson's
@@ -406,7 +464,7 @@
       if (!token) return `Blank ${index + 1} is empty, so this line is unfinished. Pick a piece to see what it would do.`;
       const note = (cfg.blanks[index].effects || {})[token];
       const lead = `With ${token} in blank ${index + 1}${token === answers[index] ? " (the lesson's choice)" : ""}: `;
-      return lead + (note || "that piece does not belong in this spot, so the code would not compile or would not do its job.");
+      return lead + (note || "this combination is outside this lab's worked examples. Show the answer restores the explained version; the lab does not run or compile these pieces.");
     }
 
     function render() {
@@ -428,6 +486,7 @@
         ? "This is the lesson's working version."
         : `This version differs from the lesson's in blank ${listWords(differs.map(String))}. Show the answer puts the lesson's version back.`;
       summary.classList.toggle("is-working", differs.length === 0);
+      preview?.update();
       updateOverflow();
     }
 

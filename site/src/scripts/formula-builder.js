@@ -127,6 +127,10 @@ export const FORMULAS = {
 			{ label: 'at 0.5 s (finished)', values: { time: 0.5 } },
 		],
 		result: { label: 'offset', fmt: 'dec', unit: ' px' },
+		finish: ({ v, value }) => ({
+			value: Math.max(0, value),
+			step: v.e >= v.f ? `The fade is finished: the largest shake offset stops at 0 px, rather than continuing below zero (${fmtNum(value)} px).` : null,
+		}),
 		explain: ({ v, result, fmt }) => {
 			if (v.e >= v.f) return `The time (${fmt(v.e)} s) has reached the fade time (${fmt(v.f)} s), so the shake is over and the offset is 0. A real game stops the shake here rather than letting the formula go negative.`;
 			return `${fmt(v.a)} px × (1 − ${fmt(v.e)} ÷ ${fmt(v.f)}) = ${fmt(result)} px. The largest offset at ${fmt(v.e)} s is ${fmt(result)} px, and it shrinks in a straight line to 0 at ${fmt(v.f)} s. Shake is presentation: it moves the picture, not the aim.`;
@@ -250,6 +254,12 @@ export function reduceSteps(input, resultFmt) {
 const isLiteral = text => /^[0-9.]+$/.test(text);
 const slotOf = text => (/^\{(.+)\}$/.exec(text) || [])[1];
 
+// Keep the expression's arithmetic visible, then apply any physical boundary.
+// Both the live builder and its static worked example use this same final result.
+export function finishFormulaResult(board, v, value) {
+	return Number.isFinite(value) && board.finish ? board.finish({ v, value }) : { value, step: null };
+}
+
 // The lesson's worked example, computed without the browser (used for the no-JS caption).
 export function workedExample(id) {
 	const board = FORMULAS[id];
@@ -266,9 +276,10 @@ export function workedExample(id) {
 		if (isLiteral(text)) return { k: 'n', v: Number(text), fmt: 'dec' };
 		return OPS.has(text) ? { k: 'o', v: text } : { k: text, v: text };
 	});
-	const { steps, value } = reduceSteps(tokens, board.result.fmt);
+	const { steps, value: rawValue } = reduceSteps(tokens, board.result.fmt);
+	const { value, step } = finishFormulaResult(board, v, rawValue);
 	const symbolic = board.expr.map(text => (slotOf(text) ? board.slots[slotOf(text)].label : OPSHOW[text] ?? text)).join(' ').replace(/\( /g, '(').replace(/ \)/g, ')');
-	return { symbolic, steps: steps.map(s => s.text), value, text: board.explain({ v, names, result: value, fmt: n => fmtNum(n, board.result.fmt) }) };
+	return { symbolic, steps: [...steps.map(s => s.text), ...(step ? [step] : [])], value, text: board.explain({ v, names, result: value, fmt: n => fmtNum(n, board.result.fmt) }) };
 }
 
 // ------------------------------------------------------------------ DOM
@@ -555,7 +566,8 @@ function mountFormula(root, board) {
 				if (isLiteral(text)) return { k: 'n', v: Number(text), fmt: 'dec' };
 				return OPS.has(text) ? { k: 'o', v: text } : { k: text, v: text };
 			});
-			const { steps, value } = reduceSteps(tokens, resultFmt);
+			const { steps, value: rawValue } = reduceSteps(tokens, resultFmt);
+			const { value, step: finalStep } = finishFormulaResult(board, v, rawValue);
 			const symbolic = board.expr.map(text => (slotOf(text) ? board.slots[slotOf(text)].label : OPSHOW[text] ?? text)).join(' ').replace(/\( /g, '(').replace(/ \)/g, ')');
 			const ol = el('ol', 'formula-builder__stepper');
 			const first = el('li');
@@ -566,6 +578,11 @@ function mountFormula(root, board) {
 				li.append(el('span', 'formula-builder__step-label', i === 0 ? 'With your numbers' : `Work out ${step.did.split(' = ')[0]}`), el('code', '', step.text));
 				ol.append(li);
 			});
+			if (finalStep) {
+				const li = el('li');
+				li.append(el('span', 'formula-builder__step-label', 'Stop at the finished shake'), el('span', '', finalStep));
+				ol.append(li);
+			}
 			stepsBox.append(ol);
 			const result = el('p', 'formula-builder__result');
 			result.append(el('span', 'concept-lab__result-label', board.result.label), el('strong', '', ` = ${fmtNum(value, resultFmt)}${board.result.unit || ''}`));

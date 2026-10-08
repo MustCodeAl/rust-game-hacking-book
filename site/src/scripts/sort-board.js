@@ -84,7 +84,7 @@ export const BOARDS = {
 				why: { apply: 'Whoever makes a change must be able to undo it. Restoration lives with the code that wrote the patch, not in every checkbox handler.' } },
 		],
 		spotlight: 'rule',
-		summary: c => `observe.rs: ${c.observe}. decide.rs: ${c.decide}. apply.rs: ${c.apply}. In the lesson\u2019s split only apply.rs touches the game, so a write can only come from one place, and each file has one main reason to change.`,
+		summary: c => `observe.rs: ${c.observe}. decide.rs: ${c.decide}. apply.rs: ${c.apply}. In the lesson\u2019s split observe.rs reads the game, decide.rs works on its local copy, and only apply.rs changes game state. A write can only come from one place, and each file has one main reason to change.`,
 	},
 
 	'colored-vs-player': {

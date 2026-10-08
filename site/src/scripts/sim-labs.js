@@ -1,4 +1,5 @@
 import { probabilityBoard } from './probability-board.js';
+import { createBehaviorTree, editBehaviorTree, tickBehaviorTree, treeNodeLabel, TREE_ACTIONS, TREE_TESTS } from './behavior-tree-model.js';
 
 // Explorable simulations (see components/SimLab.astro). Each one opens with a
 // worked example and its explanation already showing; the reader changes the
@@ -641,45 +642,15 @@ function detectorInputWindow(root) {
 	start.addEventListener('change', render); render();
 }
 
-export function behaviorTreeModel({ health, seen, distance, memory, combatFirst = false, running = true }) {
-	const trace = [];
-	const actionState = running ? 'running' : 'success';
-	const branches = combatFirst ? ['combat', 'flee', 'search', 'patrol'] : ['flee', 'combat', 'search', 'patrol'];
-	let action = 'patrol';
-	for (const branch of branches) {
-		if (branch === 'flee') {
-			const passes = health <= 25;
-			trace.push({ id: 'health', status: passes ? 'success' : 'failure', text: `Health ${health} ≤ 25: ${passes ? 'yes' : 'no'}.` });
-			if (!passes) { trace.push({ id: 'flee', status: 'failure', text: 'Flee sequence stops at its failed condition.' }); continue; }
-			action = 'flee';
-		} else if (branch === 'combat') {
-			const passes = seen >= 3;
-			trace.push({ id: 'seen', status: passes ? 'success' : 'failure', text: `Seen for ${seen} ticks ≥ 3: ${passes ? 'yes' : 'no'}.` });
-			if (!passes) { trace.push({ id: 'combat', status: 'failure', text: 'Combat sequence stops before inspecting the distance.' }); continue; }
-			const inRange = distance <= 1.5;
-			trace.push({ id: 'range', status: inRange ? 'success' : 'failure', text: `Distance ${distance.toFixed(1)} ≤ 1.5: ${inRange ? 'yes' : 'no'}.` });
-			if (!inRange) trace.push({ id: 'attack-path', status: 'failure', text: 'The attack sequence fails, so the inner selector tries chase.' });
-			action = inRange ? 'attack' : 'chase';
-		} else if (branch === 'search') {
-			trace.push({ id: 'memory', status: memory ? 'success' : 'failure', text: `A last known spot exists: ${memory ? 'yes' : 'no'}.` });
-			if (!memory) { trace.push({ id: 'search', status: 'failure', text: 'Search sequence stops without a remembered spot.' }); continue; }
-			action = 'search';
-		}
-		trace.push({ id: action === 'search' || action === 'flee' ? `${action}-action` : action, status: actionState, text: `${action[0].toUpperCase() + action.slice(1)} returns ${actionState}.` });
-		if (branch === 'combat') {
-			if (action === 'attack') trace.push({ id: 'attack-path', status: actionState, text: `The attack sequence returns ${actionState}.` });
-			trace.push({ id: 'choice', status: actionState, text: `The inner selector returns ${actionState} from ${action}.` });
-		}
-		trace.push({ id: branch, status: actionState, text: `${branch[0].toUpperCase() + branch.slice(1)} branch returns ${actionState}; the root selector stops here.` });
-		break;
-	}
-	return { action, status: actionState, branches, trace };
+export function behaviorTreeModel({ health, seen, distance, memory, combatFirst = false, running = true, tree }) {
+	return tickBehaviorTree(tree || createBehaviorTree({ combatFirst }), { health, seen, distance, memory, running });
 }
 
 function behaviorTree(root) {
 	header(root, 'Explore it', 'Watch a priority tree choose one action',
-		'Try changing the guard’s health, sight history, or distance. This tree checks priorities from the top on every tick.');
+		'Try changing the guard’s health, sight history, or distance. Each change shows a fresh tick through the tree. Optional editing lets you change its checks and arrows.');
 	const id = root.id || 'sim-behavior-tree';
+	let model = createBehaviorTree(), selected = model.root, traceVisible = true;
 	const health = slider(`${id}-health`, 'Health remaining', 0, 100, 1, 30, value => `${value} health`);
 	const seen = slider(`${id}-seen`, 'Consecutive ticks seeing the player', 0, 5, 1, 3, value => `${value} ticks`);
 	const distance = slider(`${id}-distance`, 'Distance to the player', 0, 5, 0.1, 1, value => `${value.toFixed(1)} units`);
@@ -691,41 +662,162 @@ function behaviorTree(root) {
 	for (const [value, text] of [['health', 'Flee first'], ['combat', 'Combat first']]) { const option = el('option', '', text); option.value = value; priority.append(option); }
 	priorityLabel.append(el('span', '', 'Root priority order'), priority);
 	const controls = el('div', 'sim-lab__controls'); controls.append(health.wrap, seen.wrap, distance.wrap, memoryLabel, runningLabel, priorityLabel);
-	const tree = el('ol', 'sim-lab__tree'); tree.setAttribute('aria-label', 'Selector branches in the order checked');
+	const tree = el('ol', 'sim-lab__tree'); tree.setAttribute('aria-label', 'Connected tree: parents above their indented children, in tick order');
 	const trace = el('ol', 'sim-lab__execution');
+	trace.setAttribute('aria-label', 'One tick in execution order');
+	const traceEmpty = el('p', 'concept-lab__example-label', 'Trace cleared. Run one tick or change an input to show a fresh trace.'); traceEmpty.hidden = true;
 	const explain = el('p', 'sim-lab__explain concept-lab__takeaway'); explain.dataset.kind = 'insight'; explain.setAttribute('aria-live', 'polite');
+	const actions = el('div', 'sim-lab__presets');
+	const button = (text, action, parent = actions) => { const node = el('button', 'concept-lab__example', text); node.type = 'button'; node.addEventListener('click', action); parent.append(node); return node; };
+	button('Run one tick', () => render());
+	button('Reset', () => restore());
+	button('Clear trace', () => { traceVisible = false; render(false); });
+
+	const editor = el('details', 'sim-lab__tree-editor'); editor.dataset.treeEditor = '';
+	editor.append(el('summary', '', 'Edit the tree (optional)'), el('p', '', 'Try disconnecting the flee branch, moving patrol earlier, or changing a condition. The connected tree runs after each accepted edit. Detached branches stay on the workbench. Reset restores the lesson’s tree and inputs.'));
+	const fields = el('div', 'sim-lab__tree-fields');
+	const select = (key, label, items, parent = fields) => {
+		const wrap = el('label'), input = el('select', 'concept-lab__text-input'); input.id = `${id}-${key}`; wrap.htmlFor = input.id;
+		wrap.append(el('span', '', label), input); parent.append(wrap);
+		for (const [value, text] of items) { const option = el('option', '', text); option.value = value; input.append(option); }
+		return { wrap, input };
+	};
+	const definitions = [
+		['selector', 'Selector: first success or running'], ['sequence', 'Sequence: all children must succeed'],
+		...Object.entries(TREE_TESTS).map(([test, specification]) => [`condition:${test}`, `Condition: ${specification.label.toLowerCase()}`]),
+		...TREE_ACTIONS.map(action => [`action:${action}`, `Action: ${action}`]),
+	];
+	const nodePicker = select('tree-node', 'Node to change', []); nodePicker.input.dataset.treeNode = '';
+	const kind = select('tree-kind', 'Node behaviour', definitions);
+	const limitWrap = el('label'), limit = el('input', 'concept-lab__text-input'); limit.type = 'number'; limit.id = `${id}-tree-limit`; limitWrap.htmlFor = limit.id;
+	const limitLabel = el('span'); limitWrap.append(limitLabel, limit); fields.append(limitWrap);
+	const expectedWrap = el('label'), expected = el('input'); expected.type = 'checkbox'; expected.id = `${id}-tree-expected`; expectedWrap.htmlFor = expected.id;
+	expectedWrap.append(expected, document.createTextNode(' Require a last known spot')); fields.append(expectedWrap);
+	const outcome = select('tree-outcome', 'Action returns', [['blackboard', 'Follow the running checkbox'], ['success', 'Success'], ['running', 'Running'], ['failure', 'Failure']]);
+	const nodeActions = el('div', 'sim-lab__presets');
+	button('Apply node change', () => {
+		const current = model.nodes.find(node => node.id === selected);
+		const changes = definition(kind.input.value, current);
+		if (changes.type === 'condition') {
+			if (changes.test === 'memory') changes.expected = expected.checked;
+			else changes.limit = limit.value.trim() ? Number(limit.value) : NaN;
+		}
+		if (changes.type === 'action') changes.outcome = outcome.input.value;
+		applyEdit({ type: 'update', id: selected, changes }, 'Node changed. The trace follows the new behaviour.');
+	}, nodeActions).dataset.treeEdit = 'update';
+	const remove = button('Delete detached branch', () => applyEdit({ type: 'remove', id: selected }, 'Detached branch deleted.'), nodeActions); remove.dataset.treeEdit = 'remove';
+	const detached = el('p', 'concept-lab__example-label');
+	const edgeFields = el('div', 'sim-lab__tree-fields');
+	const parentPicker = select('tree-parent', 'Parent of the arrow', [], edgeFields);
+	const childPicker = select('tree-child', 'Child of the arrow', [], edgeFields);
+	const edgeActions = el('div', 'sim-lab__presets');
+	for (const [label, type, direction] of [['Connect arrow', 'connect'], ['Disconnect arrow', 'disconnect'], ['Earlier', 'move', -1], ['Later', 'move', 1]]) {
+		button(label, () => applyEdit({ type, parent: parentPicker.input.value, child: childPicker.input.value, direction }, `${label}: the connected tree has been evaluated again.`), edgeActions).dataset.treeEdit = direction === -1 ? 'earlier' : direction === 1 ? 'later' : type;
+	}
+	const newFields = el('div', 'sim-lab__tree-fields');
+	const newKind = select('tree-new-kind', 'New detached node', definitions, newFields);
+	newKind.input.value = 'condition:health';
+	button('Add node', () => applyEdit({ type: 'add', node: definition(newKind.input.value) }, 'Node added to the workbench. Connect an arrow to include it in the tick.'), newFields).dataset.treeEdit = 'add';
+	const editStatus = el('p', 'sim-lab__tree-status'); editStatus.setAttribute('role', 'status');
+	editor.append(fields, nodeActions, el('p', 'concept-lab__example-label', 'Arrows run from parent to child. Earlier and Later change the order in which siblings are checked.'), edgeFields, edgeActions, newFields, detached, editStatus);
 	root.append(controls, presets([
 		{ label: 'Reset: attack nearby', health: 30, seen: 3, distance: 1, memory: true },
 		{ label: 'Low health', health: 20, seen: 3, distance: 1, memory: true },
 		{ label: 'Search the last spot', health: 30, seen: 0, distance: 3, memory: true },
 		{ label: 'No sight or memory', health: 30, seen: 0, distance: 3, memory: false },
-	], values => { health.input.value = values.health; seen.input.value = values.seen; distance.input.value = values.distance; memory.checked = values.memory; priority.value = 'health'; running.checked = true; [health, seen, distance].forEach(item => item.update()); render(); }), el('p', 'concept-lab__example-label', 'Root: selector — stop at the first child returning success or running'), tree, el('p', 'concept-lab__example-label', 'One tick through the tree'), trace, explain);
-	const descriptions = {
-		flee: { id: 'flee', title: 'Sequence: flee', children: [{ id: 'health', title: 'Condition: health ≤ 25' }, { id: 'flee-action', title: 'Action: flee' }] },
-		combat: { id: 'combat', title: 'Sequence: combat', children: [{ id: 'seen', title: 'Condition: seen for at least 3 ticks' }, {
-			id: 'choice', title: 'Selector: attack or chase', children: [
-				{ id: 'attack-path', title: 'Sequence: attack', children: [{ id: 'range', title: 'Condition: distance ≤ 1.5' }, { id: 'attack', title: 'Action: attack' }] },
-				{ id: 'chase', title: 'Action: chase' },
-			],
-		}] },
-		search: { id: 'search', title: 'Sequence: search', children: [{ id: 'memory', title: 'Condition: a last known spot exists' }, { id: 'search-action', title: 'Action: search there' }] },
-		patrol: { id: 'patrol', title: 'Action: patrol the route' },
-	};
-	function render() {
-		const result = behaviorTreeModel({ health: Number(health.input.value), seen: Number(seen.input.value), distance: Number(distance.input.value), memory: memory.checked, running: running.checked, combatFirst: priority.value === 'combat' });
-		const statuses = new Map(result.trace.map(item => [item.id, item.status]));
-		const drawNode = specification => {
-			const node = el('li'); node.dataset.status = statuses.get(specification.id) || 'not-visited';
-			node.append(el('span', '', `${specification.title} · ${statuses.get(specification.id) || 'not visited'}`));
-			if (specification.children) { const children = el('ul'); children.append(...specification.children.map(drawNode)); node.append(children); }
+	], values => { if (values.label.startsWith('Reset')) { restore(); return; } health.input.value = values.health; seen.input.value = values.seen; distance.input.value = values.distance; memory.checked = values.memory; running.checked = true; [health, seen, distance].forEach(item => item.update()); render(); }), el('p', 'concept-lab__example-label', 'Connected tree: children are checked from top to bottom'), tree, editor, el('p', 'concept-lab__example-label', 'One tick through the tree'), actions, trace, traceEmpty, explain);
+
+	function definition(value, current) {
+		const [type, detail] = value.split(':');
+		if (type === 'selector' || type === 'sequence') return { type, label: current?.label || `new ${type}` };
+		if (type === 'action') return { type, action: detail, outcome: current?.outcome || 'blackboard' };
+		return { type: 'condition', test: detail, ...(detail === 'memory' ? { expected: current?.expected ?? true } : { limit: current?.test === detail ? current.limit : TREE_TESTS[detail].limit }) };
+	}
+	function configureInspector() {
+		const [type, test] = kind.input.value.split(':');
+		limitWrap.hidden = type !== 'condition' || test === 'memory';
+		expectedWrap.hidden = type !== 'condition' || test !== 'memory';
+		outcome.wrap.hidden = type !== 'action';
+		if (!limitWrap.hidden) {
+			const specification = TREE_TESTS[test], current = model.nodes.find(node => node.id === selected);
+			Object.assign(limit, { min: specification.min, max: specification.max, step: specification.step, value: current?.test === test ? current.limit : specification.limit });
+			limitLabel.textContent = specification.label;
+		}
+	}
+	function fillOptions(input, nodes, value) {
+		input.replaceChildren(...nodes.map(node => { const option = el('option', '', `${node.id}: ${treeNodeLabel(node)}`); option.value = node.id; return option; }));
+		input.value = nodes.some(node => node.id === value) ? value : nodes[0]?.id || '';
+	}
+	function refreshEditor() {
+		if (!model.nodes.some(node => node.id === selected)) selected = model.root;
+		const current = model.nodes.find(node => node.id === selected), parent = model.nodes.find(node => node.children.includes(selected));
+		fillOptions(nodePicker.input, model.nodes, selected);
+		const isComposite = current.type === 'selector' || current.type === 'sequence';
+		kind.input.replaceChildren(...definitions.filter(([value]) => isComposite === ['selector', 'sequence'].includes(value)).map(([value, text]) => { const option = el('option', '', text); option.value = value; return option; }));
+		kind.input.value = isComposite ? current.type : `${current.type}:${current.type === 'condition' ? current.test : current.action}`;
+		expected.checked = current.expected ?? true; outcome.input.value = current.outcome || 'blackboard';
+		configureInspector(); remove.disabled = selected === model.root || !!parent;
+		fillOptions(parentPicker.input, model.nodes.filter(node => node.type === 'selector' || node.type === 'sequence'), parentPicker.input.value || parent?.id || model.root);
+		fillOptions(childPicker.input, model.nodes.filter(node => node.id !== model.root), childPicker.input.value || (selected !== model.root ? selected : model.nodes[0].children[0]));
+		const roots = model.nodes.filter(node => node.id !== model.root && !model.nodes.some(candidate => candidate.children.includes(node.id)));
+		detached.textContent = `Workbench: ${roots.length ? roots.map(treeNodeLabel).join('; ') : 'no detached branches'}. ${model.nodes.length}/24 nodes; branches can be at most 8 nodes deep.`;
+	}
+	function applyEdit(edit, message) {
+		const result = editBehaviorTree(model, edit);
+		editStatus.dataset.tone = result.ok ? 'info' : 'warn'; editStatus.dataset.toneExplicit = '1';
+		editStatus.textContent = result.ok ? message : result.error;
+		if (!result.ok) return;
+		model = result.tree; selected = result.selected; refreshEditor(); render();
+	}
+	function restore() {
+		model = createBehaviorTree(); selected = model.root;
+		health.input.value = 30; seen.input.value = 3; distance.input.value = 1; memory.checked = true; running.checked = true;
+		[health, seen, distance].forEach(item => item.update());
+		editStatus.textContent = 'The lesson’s tree and inputs are restored.'; editStatus.dataset.tone = 'info';
+		parentPicker.input.value = model.root; childPicker.input.value = 'flee'; refreshEditor(); render();
+	}
+	function render(showTrace = true) {
+		if (showTrace) traceVisible = true;
+		const result = behaviorTreeModel({ tree: model, health: Number(health.input.value), seen: Number(seen.input.value), distance: Number(distance.input.value), memory: memory.checked, running: running.checked });
+		const nodes = new Map(model.nodes.map(node => [node.id, node]));
+		const drawNode = (nodeId, index) => {
+			const specification = nodes.get(nodeId), node = el('li'); node.dataset.status = result.statuses[nodeId] || 'not-visited'; node.dataset.treeNodeId = nodeId;
+			const pick = el('button', 'sim-lab__tree-node'); pick.type = 'button'; pick.dataset.status = node.dataset.status;
+			pick.classList.toggle('is-selected', selected === nodeId);
+			pick.setAttribute('aria-label', `${treeNodeLabel(specification)}; ${result.statuses[nodeId] || 'not visited'}. Edit this node.`);
+			pick.append(el('span', '', `${index === undefined ? '' : `${index + 1}. `}${treeNodeLabel(specification)}`), el('span', 'sim-lab__tree-node-status', result.statuses[nodeId] || 'not visited'));
+			pick.addEventListener('click', () => {
+				selected = nodeId; editor.open = true;
+				parentPicker.input.value = model.nodes.find(candidate => candidate.children.includes(selected))?.id || model.root;
+				childPicker.input.value = selected; refreshEditor(); render();
+				tree.querySelector(`[data-tree-node-id="${nodeId}"] > button`)?.focus();
+			});
+			node.append(pick);
+			if (specification.children.length) { const children = el('ul'); children.append(...specification.children.map(drawNode)); node.append(children); }
 			return node;
 		};
-		tree.replaceChildren(...result.branches.map(branch => drawNode(descriptions[branch])));
-		trace.replaceChildren(...result.trace.map(step => el('li', '', step.text)));
-		explain.textContent = `Chosen action: ${result.action}; result: ${result.status}. A sequence stops when a condition fails. A selector moves past failure, but stops at success or running. ${priority.value === 'combat' ? 'Putting combat first can make the guard fight even at low health. ' : ''}Sight history and the remembered spot belong to the blackboard; this one-tick tree does not invent or update them.`;
+		tree.replaceChildren(drawNode(model.root));
+		trace.hidden = !traceVisible; traceEmpty.hidden = traceVisible;
+		trace.replaceChildren(...(traceVisible ? result.trace.map(step => el('li', '', step.text)) : []));
+		const first = nodes.get(model.root).children;
+		priority.disabled = nodes.get(model.root).type !== 'selector' || !first.includes('flee') || !first.includes('combat');
+		priority.value = first.indexOf('combat') >= 0 && first.indexOf('combat') < first.indexOf('flee') ? 'combat' : 'health';
+		explain.textContent = `${result.action ? `Chosen action: ${result.action}` : 'No action selected'}; root result: ${result.status}. A sequence continues after success; a selector continues after failure. Both stop at running. Nodes marked “not visited” were never read this tick. Sight history and the remembered spot come from the blackboard; this tree does not move the guard or update those inputs.`;
 	}
+	nodePicker.input.addEventListener('change', () => { selected = nodePicker.input.value; parentPicker.input.value = model.nodes.find(node => node.children.includes(selected))?.id || model.root; childPicker.input.value = selected; refreshEditor(); render(); });
+	kind.input.addEventListener('change', configureInspector);
+	priority.addEventListener('change', () => {
+		const child = priority.value === 'combat' ? 'combat' : 'flee', other = child === 'combat' ? 'flee' : 'combat';
+		let children = model.nodes.find(node => node.id === model.root).children;
+		while (children.indexOf(child) > children.indexOf(other)) {
+			const edit = editBehaviorTree(model, { type: 'move', parent: model.root, child, direction: -1 });
+			if (!edit.ok) break;
+			model = edit.tree; children = model.nodes.find(node => node.id === model.root).children;
+		}
+		refreshEditor(); render();
+	});
 	[health, seen, distance].forEach(item => item.input.addEventListener('input', render));
-	[memory, running, priority].forEach(input => input.addEventListener('change', render)); render();
+	[memory, running].forEach(input => input.addEventListener('change', render)); refreshEditor(); render();
 }
 
 export function scanCostModel({ mib, chunkKib, candidates, throughputMib, overheadUs }) {
