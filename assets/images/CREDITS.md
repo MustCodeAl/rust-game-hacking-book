@@ -87,3 +87,19 @@ These 45 original geometric figures are dedicated to CC0 1.0. Regenerate with `s
 | `detector-observation.svg` | Repeated input is an observation to explain |
 | `client-check-view.svg` | Each observer sees a limited part of a machine |
 | `process-location.svg` | Tool location changes the available observations |
+
+
+## Foundation mechanism drawings — 8 October 2026
+
+The following original geometric drawings and byte animation are dedicated to CC0 1.0. They illustrate the exact worked values in their lessons. Regenerate with `site/scripts/make-foundation-art.py` (Python with Pillow); no outside images or sprites are used.
+
+| File in `original/` | Teaching purpose |
+|---|---|
+| `module-offset-two-runs.svg` | The same instruction offset across two loaded module bases |
+| `option-chain-values.svg` | Present and missing items through map, and_then, and ok_or |
+| `borrowed-prefix-view.svg` | A returned view selects existing bytes inside its caller’s buffer |
+| `byte-guard-return-paths.svg` | Both ordinary return paths restore the saved local byte |
+| `breakpoint-byte-cycle.svg`, `breakpoint-byte-cycle-still.png`, `breakpoint-byte-cycle.gif` | Saved 29, installed CC, and restored 29 for one subtraction instruction |
+| `float-ten-bit-fields.svg` | 10.0 as four bytes and sign/exponent/fraction fields |
+
+The page begins with a three-phase still overview. Readers choose Play to replay the byte changes and can pause back to the still. Playback is slowed for explanation; it does not connect to a running program.

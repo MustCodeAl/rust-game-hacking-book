@@ -1006,8 +1006,8 @@
   }
 
 
-  // Predict-then-check labs: the reader changes the numbers, commits to an
-  // answer, and only then sees the worked steps. Each lab is plain data.
+  // Worked examples stay visible. Changing an input updates the result and
+  // diagram immediately; guessing is an optional extra.
   const hex = (n) => "0x" + n.toString(16).toUpperCase();
   const parseNumber = (raw) => {
     const text = String(raw || "").trim().toLowerCase().replace(/_/g, "");
@@ -1054,10 +1054,10 @@
       title: "How far apart are two points?",
       description: "Subtract to get the direction, then measure its length. Move the points and watch the numbers change.",
       inputs: [
-        { key: "ax", label: "Point A x", min: -6, max: 6, value: 0 },
-        { key: "ay", label: "Point A y", min: -6, max: 6, value: 0 },
-        { key: "bx", label: "Point B x", min: -6, max: 6, value: 3 },
-        { key: "by", label: "Point B y", min: -6, max: 6, value: 4 },
+        { key: "ax", label: "Point A x", min: -8, max: 8, value: 2 },
+        { key: "ay", label: "Point A y", min: -8, max: 8, value: 3 },
+        { key: "bx", label: "Point B x", min: -8, max: 8, value: 5 },
+        { key: "by", label: "Point B y", min: -8, max: 8, value: 7 },
       ],
       ask: (v) => `A is at (${v.ax}, ${v.ay}) and B is at (${v.bx}, ${v.by}). What is the distance from A to B, rounded to one decimal place?`,
       answer: (v) => Math.hypot(v.bx - v.ax, v.by - v.ay),
@@ -1086,6 +1086,62 @@
     },
   };
 
+  function predictDiagram(lab, values) {
+    if (!["stride-lab", "vector-lab"].includes(lab)) return null;
+    const svgNode = (tag, attrs, text) => {
+      const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+      Object.entries(attrs || {}).forEach(([key, value]) => node.setAttribute(key, String(value)));
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    const svg = svgNode("svg", { viewBox: lab === "stride-lab" ? "0 0 480 220" : "0 0 480 270", role: "img", class: "predict-figure__drawing" });
+    const add = (tag, attrs, text) => { const node = svgNode(tag, attrs, text); svg.append(node); return node; };
+    if (lab === "stride-lab") {
+      const { index, stride, field } = values;
+      const start = index * stride, address = start + field;
+      add("title", {}, `Player ${index}: record ${hex(start)}, field ${hex(address)}`);
+      add("desc", {}, `Ten equal-sized records. Record ${index} is selected. The enlarged record shows the field ${hex(field)} bytes from its start, reaching offset ${hex(address)} from the table start. Record widths are schematic; the enlarged field marker uses the actual field-to-stride ratio.`);
+      add("text", { x: 20, y: 22 }, `Each record spans ${hex(stride)} bytes`);
+      for (let i = 0; i < 10; i++) {
+        add("rect", { x: 20 + i * 44, y: 36, width: 40, height: 34, class: `predict-figure__record${i === index ? " is-selected" : ""}` });
+        add("text", { x: 40 + i * 44, y: 59, "text-anchor": "middle" }, String(i));
+      }
+      add("path", { d: `M${40 + index * 44} 72 L240 100`, class: "predict-figure__guide" });
+      add("rect", { x: 30, y: 108, width: 420, height: 40, class: "predict-figure__record is-selected" });
+      const marker = 30 + 420 * field / stride;
+      add("line", { x1: marker, x2: marker, y1: 102, y2: 154, class: "predict-figure__arrow" });
+      add("text", { x: 30, y: 174 }, `start ${hex(start)}`);
+      add("text", { x: 450, y: 174, "text-anchor": "end" }, `next ${hex(start + stride)}`);
+      add("text", { x: 240, y: 202, "text-anchor": "middle" }, `Field: ${hex(start)} + ${hex(field)} = ${hex(address)}`);
+    } else {
+      const { ax, ay, bx, by } = values;
+      const dx = bx - ax, dy = by - ay, length = Math.hypot(dx, dy);
+      const x = n => 240 + n * 13, y = n => 125 - n * 13;
+      add("title", {}, `A (${ax}, ${ay}) to B (${bx}, ${by}): length ${length.toFixed(1)}`);
+      add("desc", {}, `The arrow runs from A to B. The right triangle has horizontal difference ${dx} and vertical difference ${dy}. Both axes use the same scale. ${length === 0 ? "The points coincide, so the arrow has zero length." : `Its length is the square root of ${dx * dx + dy * dy}.`}`);
+      add("line", { x1: x(-8), y1: y(0), x2: x(8), y2: y(0), class: "predict-figure__guide" });
+      add("line", { x1: x(0), y1: y(-8), x2: x(0), y2: y(8), class: "predict-figure__guide" });
+      add("text", { x: x(8) + 12, y: y(0) + 5 }, "x");
+      add("text", { x: x(0) + 8, y: y(8) }, "y");
+      add("text", { x: x(-8), y: y(0) + 18 }, "−8");
+      add("text", { x: x(8), y: y(0) + 18, "text-anchor": "end" }, "8");
+      add("path", { d: `M${x(ax)} ${y(ay)} H${x(bx)} V${y(by)}`, class: "predict-figure__triangle" });
+      add("line", { x1: x(ax), y1: y(ay), x2: x(bx), y2: y(by), class: "predict-figure__arrow" });
+      if (length > 0) {
+        const ux = dx / length, uy = -dy / length, tipX = x(bx), tipY = y(by);
+        add("path", { d: `M${tipX - 9 * ux - 4 * uy} ${tipY - 9 * uy + 4 * ux} L${tipX} ${tipY} L${tipX - 9 * ux + 4 * uy} ${tipY - 9 * uy - 4 * ux}`, class: "predict-figure__arrow" });
+      }
+      add("circle", { cx: x(ax), cy: y(ay), r: length === 0 ? 7 : 5, class: "predict-figure__point" });
+      add("circle", { cx: x(bx), cy: y(by), r: 4, class: "predict-figure__point is-selected" });
+      add("text", { x: x(ax) - 10, y: y(ay) + 18, "text-anchor": "end" }, "A");
+      add("text", { x: x(bx) + 10, y: y(by) - 8 }, "B");
+      add("text", { x: 20, y: 250 }, `A (${ax}, ${ay})`);
+      add("text", { x: 460, y: 250, "text-anchor": "end" }, `B (${bx}, ${by})`);
+      add("text", { x: 240, y: 266, "text-anchor": "middle" }, length === 0 ? "Same position · distance 0" : `Δx ${dx} · Δy ${dy} · length ${length.toFixed(1)}`);
+    }
+    return svg;
+  }
+
   function initializePredictLab(root, lab) {
     const cfg = PREDICT_LABS[lab];
     const id = String(root.dataset.conceptId || lab).replace(/[^a-z0-9_-]/gi, "-");
@@ -1094,6 +1150,7 @@
     const controls = element("div", "concept-lab__control-row");
     const values = {};
     const readers = [];
+    let textInput = null;
     const sync = () => {
       Object.assign(values, cfg.normalize ? cfg.normalize({ ...values }) : values);
       readers.forEach(({ spec, input }) => { if (!spec.options && values[spec.key] !== undefined) { input.value = String(values[spec.key]); if (input.nextSibling) input.nextSibling.textContent = String(values[spec.key]); } });
@@ -1122,9 +1179,10 @@
     });
     if (cfg.text) {
       const control = makeTextControl(`${id}-text`, cfg.text.label, cfg.text.value);
+      textInput = control.input;
       control.input.maxLength = 16;
       values.text = cfg.text.value;
-      control.input.addEventListener("input", () => { values.text = control.input.value.slice(0, 8) || " "; resetAnswer(); redraw(); });
+      control.input.addEventListener("input", () => { values.text = Array.from(control.input.value).slice(0, 8).join("") || " "; resetAnswer(); redraw(); });
       const samples = element("div", "concept-lab__examples");
       samples.append(element("span", "concept-lab__example-label", "Try:"));
       cfg.text.samples.forEach((sample) => {
@@ -1138,6 +1196,8 @@
     sync();
 
     const steps = element("ol", "concept-lab__steps");
+    const figure = element("figure", "predict-figure");
+    figure.hidden = !["stride-lab", "vector-lab"].includes(lab);
     const result = element("p", "concept-lab__takeaway");
     result.dataset.kind = "insight";
     result.setAttribute("aria-live", "polite");
@@ -1151,12 +1211,12 @@
     guess.id = `${id}-guess`; guess.type = "text"; guess.autocomplete = "off"; guess.spellcheck = false; guess.placeholder = "Your guess";
     guessLabel.append(element("span", "concept-lab__field-label", "Your guess"), guess);
     const actions = element("div", "concept-lab__examples");
-    const mk = (text) => { const b = element("button", "concept-lab__example", text); b.type = "button"; actions.append(b); return b; };
-    const check = mk("Compare"), shuffle = mk("New numbers");
+    const mk = (text, icon) => { const b = element("button", "concept-lab__example"); b.type = "button"; const mark = element("span", "", icon); mark.setAttribute("aria-hidden", "true"); b.append(mark, document.createTextNode(text)); actions.append(b); return b; };
+    const check = mk("Compare", "✓"), shuffle = mk("New numbers", "⤨"), reset = mk("Reset", "↻");
     const status = element("p", "concept-lab__takeaway");
     status.setAttribute("aria-live", "polite");
     guessBox.append(question, guessLabel, status);
-    body.append(controls, result, steps, guessBox, actions);
+    body.append(controls, figure, result, steps, guessBox, actions);
     root.append(body);
 
     function resetAnswer() { guess.value = ""; status.textContent = ""; }
@@ -1164,6 +1224,8 @@
       question.textContent = cfg.ask(values);
       steps.replaceChildren(...cfg.steps(values).map((line) => element("li", "", line)));
       result.textContent = "Result: " + cfg.show(cfg.answer(values));
+      const drawing = predictDiagram(lab, values);
+      if (drawing) figure.replaceChildren(drawing);
     }
     check.addEventListener("click", () => {
       guessBox.open = true;
@@ -1182,9 +1244,14 @@
       if (cfg.text) {
         const pick = cfg.text.samples[Math.floor(Math.random() * cfg.text.samples.length)];
         values.text = pick;
-        root.querySelector(".concept-lab__field input[type=text]").value = pick;
+        textInput.value = pick;
       }
       sync(); resetAnswer(); redraw();
+    });
+    reset.addEventListener("click", () => {
+      readers.forEach(({ spec, input, read }) => { input.value = String(spec.value); read(); });
+      if (cfg.text) { values.text = cfg.text.value; textInput.value = cfg.text.value; }
+      sync(); resetAnswer(); guessBox.open = false; redraw();
     });
     guess.addEventListener("keydown", (event) => { if (event.key === "Enter") check.click(); });
     redraw();
