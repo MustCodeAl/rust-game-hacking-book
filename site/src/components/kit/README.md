@@ -53,10 +53,10 @@ decoration; if the page reads as well without it, leave it out.
 
 ## Optional recall practice
 
-`SpeedType` keeps the complete code visible for reading and offers copy typing.
-Add `recall` only to a short snippet the lesson has already explained. It adds a
-separate **Recall practice** button, which blanks every exact occurrence of the
-authored fragments in the practice copy. Names, parameter lists, conditions and
+`SpeedType` keeps the complete code visible for reading. Add `recall` only to a
+short snippet the lesson has already explained. **Practise typing this** blanks
+every exact occurrence of the authored fragments in the practice copy;
+**Copy visible code** remains a separate option. Names, parameter lists, conditions and
 calculations can all be fragments; spaces, line breaks and automatic indentation
 remain visible. Give each fragment a semantic clue rather than its answer.
 
@@ -128,6 +128,22 @@ shared builder is `src/lib/scene/defence.mjs`. No scene is a production detector
 The MarkdownContent override appends the page's Quiz. Keep additional
 authored questions in src/data/lesson-quiz-banks.json rather than inserting
 another Quiz in MDX. Use five to ten questions per batch and at least three
-times that many distinct page-specific questions. Balance options and derive
+times that many distinct concept questions in new scenarios. Balance options and derive
 any arithmetic from the lesson. New quiz samples a changed batch; Retake
-reuses its IDs in a new order. The 137 older pools still require expansion.
+reuses its IDs in a new order. All 155 current pools meet that requirement;
+`scripts/check-lesson-quizzes.mjs` checks coverage and answer lengths.
+
+### Parameter-driven scenes
+
+Six existing pictures now rebuild from their own optional controls: BFS,
+world-to-screen projection, server authority, detector input windows, event
+identity merging, and snapshot edges. Each scene module exports `exploration`
+with fields, authored defaults, an invitation, and `build(values)`. Register its
+lazy import in `src/lib/scene/runtime.js`. Reset restores the exact authored
+scene. The same controls support checkbox and bounded numeric inputs. Keep a
+useful final still and a complete explanation for readers who never interact.
+
+The four defensive/event models are in
+`src/lib/scene/defence-explorers.mjs`; their independent cases run through
+`scripts/check-handoff-scene-models.mjs`. These are synthetic teaching models,
+never detectors or connections to a real game.

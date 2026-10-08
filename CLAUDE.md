@@ -620,11 +620,12 @@ shuffling. New quiz changes membership; Retake keeps the last membership
 and shuffles question and choice order. Attempt recovery checks the content
 fingerprint and rejects unknown/duplicate IDs.
 
-Source 8.9 has 30 distinct questions with ten per batch. The nine Chapter 15
-pages have fifteen with five per batch. The 137 older pools remain below
-the user's requested coverage; they need original page-specific expansion.
-Run `node scripts/check-lesson-quizzes.mjs` after building. The checker reports
-that gap rather than counting reworded duplicates or unrelated questions.
+Current checkpoint (8 October 2026): all 155 lessons have concept-focused pools
+of at least three times their batch size, with 3,226 questions in total. Questions
+test the taught idea in new situations, rather than recall of page-specific
+code or names. Run `node scripts/check-lesson-quizzes.mjs` after building; it
+checks coverage, distinct questions and balanced answer lengths. Historical
+137/147-lesson counts elsewhere in this file describe earlier editions.
 
 Mark chapter done belongs on Contents. All lessons done automatically
 completes their chapter; complete-chapter checks are deeper green. Completion
