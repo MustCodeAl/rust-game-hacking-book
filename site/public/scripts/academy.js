@@ -157,7 +157,7 @@
   // PageSidebar.astro). While a panel is hidden, a tab at that edge of the
   // screen brings it back, so the control is always where the panel was.
   var PANELS = {
-    sidebar: { key: "gha-sidebar", attribute: "academySidebar", label: "Lessons", tip: "Show the lesson list · Alt+N", side: "left" },
+    sidebar: { key: "gha-sidebar", attribute: "academySidebar", label: "Lessons", tip: "Show the lesson list · Alt+B", side: "left" },
     toc: { key: "gha-toc", attribute: "academyToc", label: "On this page", tip: "Show “On this page” · Alt+O", side: "right" }
   };
 
@@ -425,7 +425,7 @@
       KeyS: function () { applySyntaxPalette(cycle(SYNTAX_PALETTES, root.dataset.academySyntax || "academy")); },
       KeyH: function () { applySemanticSetting(root.dataset.academySemantic === "off" ? "on" : "off"); },
       KeyL: function () { applyLigatureSetting(root.dataset.academyLigatures === "on" ? "off" : "on"); },
-      KeyN: function () { togglePanel("sidebar"); },
+      KeyB: function () { togglePanel("sidebar"); },
       KeyO: function () { togglePanel("toc"); }
     };
     if (!actions[event.code]) return;

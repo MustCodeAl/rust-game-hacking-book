@@ -122,6 +122,7 @@ export function mountNotes() {
 		const key = PREFIX + id;
 		const area = root.querySelector('[data-note-text]');
 		const preview = root.querySelector('[data-note-preview]');
+		const writePanel = root.querySelector('[data-note-write]');
 		const status = root.querySelector('[data-note-status]');
 		const summary = root.querySelector('[data-note-summary]');
 		const panel = root.querySelector('.lesson-notes__panel');
@@ -147,12 +148,28 @@ export function mountNotes() {
 		window.addEventListener('pagehide', () => { if (timer) { clearTimeout(timer); save(); } });
 
 		const show = which => {
-			tabs.forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.noteTab === which)));
+			tabs.forEach(tab => {
+				const selected = tab.dataset.noteTab === which;
+				tab.setAttribute('aria-selected', String(selected));
+				tab.tabIndex = selected ? 0 : -1;
+			});
+			writePanel.hidden = which === 'preview';
 			area.hidden = which === 'preview';
 			preview.hidden = which !== 'preview';
 			if (which === 'preview') preview.innerHTML = area.value.trim() ? renderMarkdown(area.value) : '<p><em>Nothing written yet.</em></p>';
 		};
 		tabs.forEach(tab => tab.addEventListener('click', () => show(tab.dataset.noteTab)));
+		tabs.forEach((tab, index) => tab.addEventListener('keydown', event => {
+			let next;
+			if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+			else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+			else if (event.key === 'Home') next = 0;
+			else if (event.key === 'End') next = tabs.length - 1;
+			else return;
+			event.preventDefault();
+			show(tabs[next].dataset.noteTab);
+			tabs[next].focus();
+		}));
 
 		root.querySelector('[data-note-export]').addEventListener('click', () => {
 			if (!area.value.trim()) { status.textContent = 'Write something first, then export it.'; return; }
@@ -178,7 +195,11 @@ export function mountNotes() {
 			status.textContent = 'Note cleared.';
 		});
 		refresh();
-		const setOpen = open => { panel.hidden = !open; fab.setAttribute('aria-expanded', String(open)); if (open) area.focus(); };
+		const setOpen = open => {
+			panel.hidden = !open;
+			fab.setAttribute('aria-expanded', String(open));
+			if (open) (preview.hidden ? area : preview).focus();
+		};
 
 		// Where the button sits, and whether it is hidden, are the reader's choice (kept in this browser).
 		const UI = 'gha-notes-ui';
@@ -195,7 +216,15 @@ export function mountNotes() {
 		window.addEventListener('gha:notes-ui-set', event => { Object.assign(ui, event.detail || {}); applyUi(); if (ui.hidden) setOpen(false); });
 		root.querySelector('[data-note-move]').addEventListener('click', () => { ui.corner = corners[(corners.indexOf(ui.corner) + 1) % corners.length]; applyUi(); status.textContent = 'Moved. Press Move again for the next corner.'; });
 		root.querySelector('[data-note-hide]').addEventListener('click', () => { ui.hidden = true; applyUi(); setOpen(false); });
-		window.addEventListener('keydown', event => { if (event.altKey && event.key.toLowerCase() === 'n') { ui.hidden = false; applyUi(); setOpen(panel.hidden); } });
+		window.addEventListener('keydown', event => {
+			if (event.defaultPrevented || !event.altKey || event.ctrlKey || event.metaKey || event.code !== 'KeyN') return;
+			event.preventDefault();
+			ui.hidden = false;
+			applyUi();
+			const open = panel.hidden;
+			setOpen(open);
+			if (!open) fab.focus();
+		});
 
 		// Reader-made margin comments: pinned to the section being read, shown beside the text like the authors' notes.
 		const BKEY = 'gha-bubbles:' + id;

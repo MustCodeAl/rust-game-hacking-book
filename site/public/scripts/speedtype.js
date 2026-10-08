@@ -168,10 +168,20 @@
     var seq = buildSequence(copy);
     if (recallMode) addRecall(seq, fragments);
 
+    // Keep a plain reading copy available to assistive readers while the
+    // animated characters stay quiet. Recall uses the same masks as the screen.
+    var readable = el("pre", "sr-only");
+    readable.id = id + "-practice-code";
+    readable.setAttribute("data-speedtype-readable", "");
+    function syncReadable() {
+      readable.textContent = seq.map(function (item) { return item.el.textContent; }).join("");
+    }
+
     var input = el("textarea", "kit-speedtype__input");
     input.value = SENTINEL;
     input.rows = 1;
     input.setAttribute("aria-label", "Typing field for " + title + (recallMode ? ". Type the whole snippet, filling the underscores from memory. Hint gives a clue for the current or next blank; Show hidden code reveals the answers. Both mark this run as assisted." : ". Type the code that is shown.") + " Enter starts a new line and the indentation is filled in. Backspace corrects. Escape closes.");
+    input.setAttribute("aria-describedby", readable.id);
     ["autocomplete", "autocorrect", "autocapitalize", "spellcheck"].forEach(function (name) {
       input.setAttribute(name, name === "autocapitalize" ? "none" : "off");
     });
@@ -208,6 +218,7 @@
 
     panel.appendChild(stats);
     panel.appendChild(track);
+    panel.appendChild(readable);
     panel.appendChild(shell);
     panel.appendChild(hint);
     if (clue) panel.appendChild(clue);
@@ -257,6 +268,7 @@
       reveal.textContent = answersVisible ? "Hide answers" : "Show hidden code";
       reveal.setAttribute("aria-pressed", String(answersVisible));
       seq.forEach(function (item, index) { setState(index, item.el.dataset.s); });
+      syncReadable();
       input.focus({ preventScroll: true });
     }
 
@@ -265,6 +277,7 @@
       var item = seq[pos];
       current = item ? item.el : null;
       if (current) current.dataset.cur = "true";
+      syncReadable();
     }
 
     function skipAuto() {
