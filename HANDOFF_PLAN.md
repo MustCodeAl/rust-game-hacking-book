@@ -5,7 +5,9 @@ read `CLAUDE.md`, `BOOK_REVISION_PLAN.md`, and `BOOK_REVISION_PROGRESS.md`.** Th
 Academy": a beginner (about 15 years old) book, Astro 7 + Starlight in `site/`, live at
 https://mustcodeal.github.io/rust-game-hacking-book/ (served from branch `gh-pages`).
 
-## Current checkpoint — 2026-10-08 (T52–T54; read before historical backlogs)
+## Current checkpoint — 2026-10-08 (T52–T58; read before historical backlogs)
+
+T57/T58 finish the low-cost source-preview/read-here requests: server-highlighted, native no-script disclosures; five redundant controls suppressed; strictly typed explicit on-page playback using the existing static transcript, voice/rate keys and full lesson URL. Verification and publication receipt are in the newest ledger entries. The rest of the migration, approved map and modern/content overhaul remains unfinished.
 
 Completed source steps: `4533e21` (remaining artwork/recall content), `66fb233` (four priority picture simulations and lab cues), `8ef38fa` (primary masked typing and individual comment toggles). Published source `ec06c403` to Pages `d6d8188b`; exact deployment `37843799108` succeeded. Fresh public Primer checks confirm masked typing and comment toggles at420/1280; receipt is in the progress ledger. Do not call the older 57-image backlog open: all 155 lessons now contain genuine authored picture markup, including 57 new original CC0 SVGs and one optional ETW GIF. All 44 SpeedType snippets now have authored hidden fragments; the primary practice button opens recall and Copy visible code is explicit secondary. Clicking any authored or reader comment collapses its body, with a pin to reopen it; links, selection and saved text remain. Six pictures are directly parameterized (BFS/projection plus server authority/input window/event identity/snapshot edges); all 52 causal scene recordings and their companions remain. This does not claim every original picture is directly parameterized.
 
