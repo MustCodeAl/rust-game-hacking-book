@@ -19,6 +19,7 @@ for (const pal of ['paper','purple','midnight','forest','contrast']) for (const 
     const response=await p.goto(base+u,{waitUntil:'domcontentloaded'});
     if(response?.status()!==200) throw new Error(`Contrast audit did not reach a lesson: ${base+u} (${response?.status()})`);
     await p.waitForSelector('.sl-markdown-content');await p.waitForTimeout(600);
+    if(process.env.CONTRAST_OPEN_SOURCES==='1') await p.locator('.kit-github__source').evaluateAll(nodes=>nodes.forEach(node=>node.open=true));
     // Sample the settled palette, rather than an interpolated transition colour.
     await p.addStyleTag({content:'*, *::before, *::after { transition: none !important; animation: none !important; }'});
     await p.waitForTimeout(150);

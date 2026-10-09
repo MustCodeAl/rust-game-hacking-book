@@ -44,5 +44,6 @@ export function sourceInfo(path) {
 		language: LANGUAGES[extension] ?? extension.toUpperCase(),
 		githubUrl: `https://github.com/${REPO}/blob/${sourceRef()}/${path}`,
 		served: SERVED.includes(path.split('/')[0]),
+		text,
 	};
 }

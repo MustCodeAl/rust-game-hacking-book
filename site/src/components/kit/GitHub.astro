@@ -1,65 +1,41 @@
 ---
-// A card for a file in this book's repository, usually a lab: its name, how
-// long it is, and links to the exact version on GitHub and, for the lab
-// folders, to the copy the book serves. The line count and the link are made
-// while building, so they always match the file the lesson describes.
 import { Icon } from '@astrojs/starlight/components';
+import { Code } from 'astro:components';
 import { sourceInfo } from '../../lib/github.mjs';
-
-interface Props {
-	/** A path from the repository root, such as windows-labs/src/bin/access_probe.rs. */
-	path: string;
-	title?: string;
-}
-
-const { path, title } = Astro.props;
-const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-const { lines, language, githubUrl, served } = sourceInfo(path);
+import { academyCodeTheme, ROLE_COLORS } from '../../data/code-theme.mjs';
+interface Props { path: string; title?: string; codeShown?: boolean }
+const { path, title, codeShown = false } = Astro.props;
+const { lines, language, githubUrl, served, text } = sourceInfo(path);
 const name = path.split('/').at(-1);
 const folder = path.split('/').slice(0, -1).join('/');
+const languages: Record<string, string> = { rs: 'rust', lua: 'lua', toml: 'toml', c: 'c', cpp: 'cpp', h: 'c', ps1: 'powershell', sh: 'bash', md: 'markdown', json: 'json', mjs: 'javascript', js: 'javascript', ts: 'typescript' };
+const lang = languages[path.split('.').at(-1)!] ?? 'text';
+let body = '';
+try { body = Astro.locals.starlightRoute.entry.body ?? ''; } catch { /* print outside a Starlight route */ }
+const normalized = (value: string) => value.replace(/\r\n?/g, '\n').trim();
+const alreadyShown = codeShown || [...body.matchAll(/```[^\n]*\n([\s\S]*?)\n```/g)].some(match => normalized(match[1]) === normalized(text));
+const roles: Record<string, string> = { text: 'identifier', enumVariant: 'enum-variant' };
+const colours = Object.entries(ROLE_COLORS).map(([role, colour]) => `.kit-github__code span[style*="color:${colour}" i]{color:var(--syntax-${roles[role] ?? role})!important}`).join('');
 ---
-
 <div class="kit-github" data-reader-skip>
-	<span class="kit-github__icon" aria-hidden="true"><Icon name="github" size="1.5rem" /></span>
-	<div class="kit-github__info">
-		<p class="kit-github__title"><strong>{title ?? name}</strong></p>
-		<p class="kit-github__meta"><code>{folder}/</code> · {language}, {lines} lines</p>
-	</div>
-	<p class="kit-github__links">
-		<a href={githubUrl} rel="noopener">View on GitHub<span aria-hidden="true"> ↗</span></a>
-		{served && <button type="button" class="kit-github__toggle" aria-expanded="false" data-github-src={`${base}/${path}`}>Show the code</button>}
-	</p>
-	{served && (
-		<div class="kit-github__code" hidden>
-			<pre tabindex="0"><code></code></pre>
-		</div>
-	)}
+  <span class="kit-github__icon" aria-hidden="true"><Icon name="github" size="1.5rem" /></span>
+  <div class="kit-github__info">
+    <p class="kit-github__title"><strong>{title ?? name}</strong></p>
+    <p class="kit-github__meta"><code>{folder}/</code> · {language}, {lines} lines</p>
+  </div>
+  <p class="kit-github__links"><a href={githubUrl} rel="noopener">View on GitHub<span aria-hidden="true"> ↗</span></a></p>
+  {served && !alreadyShown && <details class="kit-github__source">
+    <summary><span class="kit-github__show">Show the code</span><span class="kit-github__hide">Hide the code</span></summary>
+    <div class="kit-github__code"><Code code={text} lang={lang} theme={academyCodeTheme} /></div>
+  </details>}
 </div>
-
-<script>
-	// Shows a lab's source in place. The file is fetched the first time it is
-	// asked for, so a page with many cards stays light, and nothing is saved to
-	// the reader's computer.
-	document.addEventListener('click', async event => {
-		const button = event.target instanceof Element ? event.target.closest('[data-github-src]') : null;
-		if (!button) return;
-		const card = button.closest('.kit-github');
-		const panel = card?.querySelector('.kit-github__code');
-		const code = panel?.querySelector('code');
-		if (!panel || !code) return;
-		const open = panel.hidden;
-		panel.hidden = !open;
-		button.setAttribute('aria-expanded', String(open));
-		button.textContent = open ? 'Hide the code' : 'Show the code';
-		if (open && !code.textContent) {
-			code.textContent = 'Loading…';
-			try {
-				const response = await fetch(button.getAttribute('data-github-src'));
-				if (!response.ok) throw new Error(String(response.status));
-				code.textContent = await response.text();
-			} catch {
-				code.textContent = 'The file could not be loaded here. Use “View on GitHub” instead.';
-			}
-		}
-	});
-</script>
+<style is:inline set:html={colours} />
+<style is:global>
+  .kit-github__source { flex-basis: 100%; grid-column: 1 / -1; min-width: 0; }
+  .kit-github__source summary { cursor: pointer; color: var(--chapter-ink); }
+  .kit-github__hide { display: none; }
+  .kit-github__source[open] .kit-github__show { display: none; }
+  .kit-github__source[open] .kit-github__hide { display: inline; }
+  .kit-github__code pre { overflow: auto; max-width: 100%; padding: .8rem; background: var(--code-bg) !important; color: var(--syntax-identifier) !important; border: .0625rem solid var(--line); font-family: var(--mono); font-size: .85rem; line-height: 1.6; }
+  .kit-github__code pre:focus-visible { outline: .125rem solid var(--chapter-accent); outline-offset: .125rem; }
+</style>

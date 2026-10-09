@@ -1873,3 +1873,10 @@ The urgent fix uses the separate persistent typing-hotfix checkout based on5a15d
 
 
 T56publicationreceipt — 2026-10-08: hotfix source000db6b0normallyfast-forwarded origin/codex/book-revision. Official publisher exited0and normallypushed Pages76b4a091e3ff57dccafeed0930b0e520fa9b23fc. Exactdeployment37871094423completed successfully. Finalpublisherbuild reused270diagrams; postpublishlinks334/0broken; processeddiagramlessonpagecount114. Source-only receipt changes do not alter the deployed site. Unfinished TypeScript/client/approvedmap/modernreader/newcontent work remains preserved in the separate book-finish worktree and MIGRATION_HANDOFF.md; none of that unverified draft was published.
+
+
+## T57 — Small completed fixes: source previews (2026-10-08)
+
+The owner prioritized the cheapest completed work. Lab source previews now use server-rendered syntax highlighting with the existing Academy code-role palette and native details/summary disclosure, so expansion works without JavaScript or a fetch. Five exact complete listings already printed in their lessons are explicitly marked codeShown; their redundant control is suppressed in lesson, print and no-script contexts, including reported pages/10/07. Source links still reference the build commit. New CSS uses existing tokens and relative units. No lab code was altered or executed.
+
+Verification on the assembled T57/T58 source: build0/334pages/155listening articles/270reuseddiagrams; links334/0broken; quizzes155fullpools/3,226questions; account/audio/chat checks,52reader-scenes and155compactcheatsheets pass. All10palettes/brightness combinations pass with the source previews closed; expanded-preview palette audit also ran (receipt appended when complete). Chromium420/1280 verifies no duplicate on10/07, server-highlighted source and native no-script disclosure. Screenshots of opened previews and lesson headers inspected. First browser fixture chose1/07, which has no such preview; corrected fixture to7/01 and passed. No claim of an actual screen-reader speech check.
