@@ -111,21 +111,29 @@
   // sequence uses code points, so counting sequence items would skew a match
   // after an emoji. Keep whitespace and automatically filled characters visible.
   function addRecall(seq, fragments) {
-    var source = "";
-    var offsets = seq.map(function (item) {
-      var offset = source.length;
-      source += item.ch;
-      return offset;
-    });
+    var source = "", offsets = seq.map(function (item) { var n = source.length; source += item.ch; return n; });
+    var eligible = seq.filter(function (item) { return !item.auto && !/\s/.test(item.ch); }).length;
+    var budget = Math.max(1, Math.floor(eligible * 0.15)), used = 0, gaps = [];
     fragments.forEach(function (fragment) {
-      var start = source.indexOf(fragment.text);
-      while (start !== -1) {
-        var end = start + fragment.text.length;
-        seq.forEach(function (item, index) {
-          if (offsets[index] >= start && offsets[index] < end && !item.auto &&
-            !/\s/.test(item.ch) && !item.recallHint) item.recallHint = fragment.hint;
-        });
-        start = source.indexOf(fragment.text, start + 1);
+      if (used >= budget || gaps.length >= 3) return;
+      // One short operator or identifier, never a whole parameter list or expression.
+      var token = /(?:>=|<=|===|!==|==|!=|\+=|-=|>>|<<|[+*\/%<>])/.exec(fragment.text);
+      if (!token) token = /\b(?:Drop|Option|Result|Ok|Err)\b/.exec(fragment.text);
+      if (!token) token = /\b[A-Za-z_][A-Za-z0-9_]*/.exec(fragment.text);
+      if (!token) return;
+      var found = source.indexOf(fragment.text);
+      while (found !== -1) {
+        var length = Math.min(8, token[0].length, budget - used);
+        var start = found + token.index + Math.floor((token[0].length - length) / 2), end = start + length;
+        if (gaps.every(function (gap) { return end + 8 <= gap.start || start >= gap.end + 8; })) {
+          var count = 0;
+          seq.forEach(function (item, index) {
+            if (offsets[index] >= start && offsets[index] < end && !item.auto && !/\s/.test(item.ch)) { item.recallHint = fragment.hint; count++; }
+          });
+          if (count) { used += count; gaps.push({ start: start, end: end }); }
+          break;
+        }
+        found = source.indexOf(fragment.text, found + fragment.text.length);
       }
     });
   }
@@ -174,21 +182,28 @@
     var readable = el("div", "sr-only");
     readable.id = id + "-practice-code";
     readable.setAttribute("data-speedtype-readable", "");
-    function syncReadable() {
-      readable.textContent = seq.map(function (item) { return item.el.textContent; }).join("");
+    var readableChars = seq.map(function (item) { return item.el.textContent; });
+    var readableFrame = 0;
+    function syncReadable(immediate) {
+      if (immediate) {
+        if (readableFrame) window.cancelAnimationFrame(readableFrame);
+        readableFrame = 0; readable.textContent = readableChars.join("");
+      } else if (!readableFrame) {
+        readableFrame = window.requestAnimationFrame(function () { readableFrame = 0; readable.textContent = readableChars.join(""); });
+      }
     }
 
     var input = el("textarea", "kit-speedtype__input");
     input.value = SENTINEL;
     input.rows = 1;
-    input.setAttribute("aria-label", "Typing field for " + title + (recallMode ? ". Type the whole snippet, filling the underscores from memory. Hint gives a clue for the current or next blank; Show hidden code reveals the answers. Both mark this run as assisted." : ". Type the code that is shown.") + " Enter starts a new line and the indentation is filled in. Backspace corrects. Escape closes.");
+    input.setAttribute("aria-label", "Typing field for " + title + (recallMode ? ". Type the snippet with a few short blanks. Most code stays visible. Hint gives a clue for the current or next blank; Show hidden code reveals the answers. Both mark this run as assisted." : ". Type the code that is shown.") + " Enter starts a new line and the indentation is filled in. Backspace corrects. Escape closes.");
     input.setAttribute("aria-describedby", readable.id);
     ["autocomplete", "autocorrect", "autocapitalize", "spellcheck"].forEach(function (name) {
       input.setAttribute(name, name === "autocapitalize" ? "none" : "off");
     });
     input.setAttribute("data-gramm", "false");
 
-    var hint = el("p", "kit-speedtype__hint", recallMode ? "Type the whole snippet, filling the underscores from memory. Correct characters appear; spaces and indentation stay in place. Hint or Show hidden code marks this run as assisted. Enter starts a new line, Backspace corrects, Esc closes." : "Click here and type the code. A wrong key flashes and waits. Enter starts a new line and fills in the indentation. Backspace corrects, Esc closes.");
+    var hint = el("p", "kit-speedtype__hint", recallMode ? "Type the snippet with a few short blanks. Most code stays visible. Correct characters appear; spaces and indentation stay in place. Hint or Show hidden code marks this run as assisted. Enter starts a new line, Backspace corrects, Esc closes." : "Click here and type the code. A wrong key flashes and waits. Enter starts a new line and fills in the indentation. Backspace corrects, Esc closes.");
     var clue = recallMode ? el("p", "kit-speedtype__clue") : null;
     if (clue) {
       clue.setAttribute("role", "status");
@@ -244,7 +259,9 @@
       item.el.dataset.s = state;
       if (item.recallHint) {
         var masked = state === "todo" && !answersVisible;
-        item.el.textContent = masked ? "_" : item.ch;
+        var display = masked ? "_" : item.ch;
+        if (item.el.textContent !== display) item.el.textContent = display;
+        readableChars[index] = display;
         item.el.toggleAttribute("data-recall-hidden", masked);
       }
     }
@@ -269,7 +286,7 @@
       reveal.textContent = answersVisible ? "Hide answers" : "Show hidden code";
       reveal.setAttribute("aria-pressed", String(answersVisible));
       seq.forEach(function (item, index) { setState(index, item.el.dataset.s); });
-      syncReadable();
+      syncReadable(true);
       input.focus({ preventScroll: true });
     }
 
@@ -467,10 +484,12 @@
     function close() {
       window.clearInterval(ticker);
       document.removeEventListener("visibilitychange", onHide);
+      if (readableFrame) window.cancelAnimationFrame(readableFrame);
       panel.remove();
       block.hidden = false;
       starter.node.hidden = false;
       delete document.documentElement.dataset.typing;
+      document.dispatchEvent(new Event("academy:typing-state"));
       active = null;
       starter.button.focus();
     }
@@ -492,6 +511,7 @@
     function onHide() { if (document.hidden && !finished && begun) input.blur(); }
     document.addEventListener("visibilitychange", onHide);
 
+    document.documentElement.dataset.typing = "true";
     block.hidden = true;
     starter.node.hidden = true;
     block.parentNode.insertBefore(panel, block.nextSibling);
@@ -500,6 +520,7 @@
     seq.forEach(function (item, index) { setState(index, "todo"); });
     skipAuto();
     mark();
+    syncReadable(true);
     paint();
     input.focus({ preventScroll: true });
     panel.scrollIntoView({ block: "nearest" });
@@ -524,7 +545,7 @@
       copyStart.dataset.speedtypeStart = "copy";
       wrap.appendChild(copyStart);
       wrap.appendChild(copyBest);
-      wrap.appendChild(el("span", "kit-speedtype__best", "Practice hides names and logic; hints and answers are available."));
+      wrap.appendChild(el("span", "kit-speedtype__best", "Practice leaves most code visible with a few short blanks; hints are available."));
     }
     root.appendChild(wrap);
     var starter = {

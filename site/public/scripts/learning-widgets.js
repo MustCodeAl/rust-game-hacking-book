@@ -1360,9 +1360,9 @@
     if (!window.MutationObserver) return;
     var queued = false;
     new MutationObserver(function () {
-      if (queued) return;
+      if (document.documentElement.dataset.typing === "true" || queued) return;
       queued = true;
-      window.requestAnimationFrame(function () { queued = false; scanTones(); });
+      window.requestAnimationFrame(function () { queued = false; if (document.documentElement.dataset.typing !== "true") scanTones(); });
     }).observe(document.body, { subtree: true, childList: true, characterData: true });
     scanTones();
   }
@@ -1372,9 +1372,10 @@
     watchTones();
 
     const bookBody = document.querySelector("main") || document.body;
+    document.addEventListener("academy:typing-state", function () { if (document.documentElement.dataset.typing !== "true") { initializeLearningWidgets(bookBody); scanTones(); } });
     if (window.MutationObserver && bookBody) {
       new MutationObserver((mutations) => {
-        if (mutations.some((mutation) => mutation.addedNodes.length > 0)) {
+        if (document.documentElement.dataset.typing !== "true" && mutations.some((mutation) => mutation.addedNodes.length > 0)) {
           initializeLearningWidgets(bookBody);
         }
       }).observe(bookBody, { childList: true, subtree: true });

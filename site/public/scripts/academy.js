@@ -926,6 +926,7 @@
   }
   function polishLabs() {
     labPolishQueued = false;
+    if (document.documentElement.dataset.typing === "true") return;
     document.querySelectorAll('input[type="range"]').forEach(paintRange);
     document.querySelectorAll(LAB_SELECTOR.split(", ").map(function (selector) { return selector + " button"; }).join(", ")).forEach(function (button) {
       if (button.dataset.action || button.closest(".academy-quiz")) return;
@@ -941,7 +942,7 @@
     polishReadingAccess();
   }
   function queueLabPolish() {
-    if (labPolishQueued) return;
+    if (document.documentElement.dataset.typing === "true" || labPolishQueued) return;
     labPolishQueued = true;
     window.requestAnimationFrame(polishLabs);
   }
@@ -958,6 +959,7 @@
       }, true);
     });
     new MutationObserver(queueLabPolish).observe(document.body, { childList: true, subtree: true });
+    document.addEventListener("academy:typing-state", queueLabPolish);
     polishLabs();
   }
 

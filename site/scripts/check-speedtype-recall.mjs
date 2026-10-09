@@ -66,7 +66,8 @@ try {
         const masked = await panel.locator('[data-speedtype-readable]').textContent();
         const visibleMasked = await panel.locator('.kit-speedtype__code code').textContent();
         assert.equal(masked.trim(), visibleMasked.trim());
-        for (const fragment of fragments) assert.ok(!masked.includes(fragment.text), `${id}: answer not exposed to visual or assistive reading`);
+        const sparse = await panel.locator('.st-c').evaluateAll(nodes => { let run=0,max=0,gaps=0,hidden=0,total=0; for(const node of nodes){ if(node.hasAttribute('data-recall-hidden')){hidden++;if(!run)gaps++;run++;max=Math.max(max,run);}else run=0; if(!node.classList.contains('st-nl') && /\S/.test(node.textContent || ''))total++; } return {hidden,total,max,gaps}; });
+        assert.ok(sparse.hidden <= Math.max(1,Math.floor(sparse.total*0.15)) && sparse.max<=8 && sparse.gaps<=3, `${id}: sparse, separated masks`);
         const hidden = panel.locator('[data-recall-hidden]');
         assert.ok(await hidden.count() > 0); masks += await hidden.count();
         const first = typeable[0];

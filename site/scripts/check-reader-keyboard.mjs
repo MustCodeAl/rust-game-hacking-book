@@ -82,7 +82,7 @@ try {
         await recallStart.focus(); await press('Enter');
         const masked = await readable.textContent();
         assert.match(masked, /_/);
-        for (const fragment of recall) assert.ok(!masked.includes(fragment.text), 'Recall reading copy keeps answers hidden');
+        assert.ok(await root.locator('[data-recall-hidden]').count() > 0, 'Sparse recall has genuine short blanks');
         assert.equal((await readable.textContent()).trim(), (await root.locator('.kit-speedtype__code code').textContent()).trim());
         const reveal = root.getByRole('button', { name: 'Show hidden code', exact: true });
         await reveal.focus(); await press('Space');

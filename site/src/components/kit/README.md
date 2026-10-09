@@ -55,9 +55,9 @@ decoration; if the page reads as well without it, leave it out.
 
 `SpeedType` keeps the complete code visible for reading. Add `recall` only to a
 short snippet the lesson has already explained. **Practise typing this** blanks
-every exact occurrence of the authored fragments in the practice copy;
+a few short tokens selected from the authored fragments in the practice copy;
 **Copy visible code** remains a separate option. Names, parameter lists, conditions and
-calculations can all be fragments; spaces, line breaks and automatic indentation
+calculations can all be fragments. Practice hides at most 15% of non-space characters, in up to three separated gaps of at most eight characters; spaces, line breaks and automatic indentation
 remain visible. Give each fragment a semantic clue rather than its answer.
 
 ````mdx
