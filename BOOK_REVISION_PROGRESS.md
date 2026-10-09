@@ -1905,3 +1905,10 @@ Verification on the assembled T59–T62 tree: build exits0,334pages,155listening
 Added the requested encoding notes to existing lesson3.8 without adding a lesson or moving IDs. ASCII's7-bit range, Unicode/code-unit/grapheme distinctions and UTF-8/UTF-16LE representations lead into HI →48 49→SEk=. Base64 alphabet, zero pad bits, trailing padding and base64url are explained; encoding is distinct from encryption. An original CC0 SVG shows both bit rows and the three6-bit groups, with alt/caption/license/credits and base-aware asset URL.
 
 Agent verification independently checked standard encoders, both bit rows/XML, original fences/frontmatter/IDs and unchanged Windows files. Root inspected the rendered illustration at420/1280; integration browser/build/link/contrast receipts are recorded inT59. This is an addition to an existing section; existing quiz pools remain unchanged. No lab code ran.
+
+
+## T61 — Concrete x86 opcode lookup table (2026-10-08)
+
+Added nine complete32-bit instruction encodings to lesson5.6, including immediate little-endian order, the shared83opcode's add/sub ModR/M distinction, relative JE and stack operations. The worked ModR/M fields explain why one opcode is insufficient. Linked Intel's manuals and the existing toy CPU encoding table instead of conflating software bytecode with x86 machine code.
+
+Before the owner's latest request to avoid repeated example-code checks, an independent assembler produced the expected21object bytes for allnineforms; the object was never executed. Primary Intel encoding references were checked. Existing source code stays unchanged; actual site/browser/link/contrast checks are inT59. No lab programs/tests ran.

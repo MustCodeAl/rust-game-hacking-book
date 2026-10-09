@@ -90,6 +90,39 @@ detour must decode whole instructions before deciding how many bytes to replace.
   caption="The test bytes from `decodes_simple_64_bit_function` later in this lesson. Here `48 89 D8` encodes `mov rax, rbx` in 64-bit mode, followed by `C3` for `ret`. For comparison, Lesson 2.3's `B8 19 00 00 00` encoded `mov eax, 25` in 32-bit mode. An opcode selects an operation; a prefix or ModR/M byte appears only when that instruction needs it."
 />
 
+### A small opcode lookup table
+
+These are **complete encodings in 32-bit mode**, with hexadecimal bytes and
+decimal assembly operands. They are examples, not every form of each instruction:
+
+| Machine-code bytes | Assembly | How to read the bytes |
+|---|---|---|
+| `B8 19 00 00 00` | `mov eax, 25` | `B8` selects EAX; the next four bytes hold 25, little-endian |
+| `83 C0 01` | `add eax, 1` | `83` plus ModR/M `C0` selects addition to EAX; `01` is the immediate |
+| `83 E8 01` | `sub eax, 1` | The same `83`, with ModR/M `E8`, selects subtraction |
+| `31 C0` | `xor eax, eax` | `31` selects XOR; ModR/M names EAX as both operands, clearing it |
+| `39 D8` | `cmp eax, ebx` | Compare EAX with EBX by setting flags; neither register is changed |
+| `74 02` | `je next_ip + 2` | Jump two bytes past the next instruction address when ZF is 1 |
+| `50` | `push eax` | In this mode, decrease ESP by four and store EAX on the stack |
+| `58` | `pop eax` | Read four stack bytes into EAX and increase ESP by four |
+| `C3` | `ret` | Pop a return address into EIP and resume there |
+
+Notice that `83` alone does not distinguish `add` from `sub`. A ModR/M byte
+has three fields: **mod**, **reg**, and **r/m**, containing 2, 3, and 3 bits.
+Here `C0` is `11 000 000`, while `E8` is `11 101 000`. For this opcode,
+`11` chooses a register operand, the middle field selects addition (`000`)
+or subtraction (`101`), and the final `000` names EAX. In other instructions,
+the middle field can name a second register instead.
+
+<MarginNote kind="brief">The opcode is only part of an instruction. Read its operand form and CPU mode before interpreting the following bytes.</MarginNote>
+
+For complete forms and flag effects, consult
+[Intel's instruction manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html).
+**Bytecode** is a separate instruction format designed for a software interpreter;
+its numeric opcodes need not match x86. The
+[toy CPU's encoding table](/pages/14/11/#a-toy-8-bit-cpu) shows that distinction with
+seven deliberately simple operations.
+
 For our tool, use `iced-x86`.
 
 ```toml
