@@ -5,7 +5,11 @@ read `CLAUDE.md`, `BOOK_REVISION_PLAN.md`, and `BOOK_REVISION_PROGRESS.md`.** Th
 Academy": a beginner (about 15 years old) book, Astro 7 + Starlight in `site/`, live at
 https://mustcodeal.github.io/rust-game-hacking-book/ (served from branch `gh-pages`).
 
-## Current checkpoint — 2026-10-08 (T52–T63; read before historical backlogs)
+## Current checkpoint — 2026-10-09 (T52–T67; read before historical backlogs)
+
+T67 is published: source98a6cc53→Pages3c7d59dd, exactdeployment37993321499success. Completeword/API/argument/import/type recall nowusesnativeAstroTypeScript,52snippets, explicitfocus/rotationandseparatesavedrecords. Newmemorywidgetsactuallyrecomputecdeclstack/returnandsegment/page paths, withchosenPlayandmotionoff. All13newmemory/backend/networkdiagramsandnetwork/backendexplainersarelive. ModernfinishisoptionalunderAdvanced;Originalstaysdefault. Rootfixedactualreset/revealandvisiblePlayracesandwiredModernbuttonswithnativeTS. SourceTokenSaveworksusinggraph_rootbook-finishandgraph_branchcodex/book-revision,includingMDX/SVGindexing. SeeT64–T67foractualchecksandlimits.
+
+Pendingreadydrafts: /private/tmp/gha-reader-upgrade-draft phases2/3A/3B (navigation/geometry/hex); /private/tmp/gha-balanced-map-draft (approvedmap+legacykey/referenceadapter); /private/tmp/gha-typescript-node-draft scene62subset plus savedoriginal116-modulearchive. ThesehaveNOTbeenpublished. Page-lengthconsolidations, newtopicquizcompanions, remainingreaderfeaturesandfullTSmigrationarestillunfinished. Preserveallcurrentadditionswhileintegrating; donotrepeatcompletedT59–T67work.
 
 T59–T62 add Windows API conventions/prefixes, ASCII/Unicode/Base64 notes with original art, a concrete x86 opcode table and six later-chapter typing drills. All15readerchapters now have practice,50snippets total. Shared build/link/quiz/account/audio/chat/contrast and100typing-browser groups pass; Published source beb44a9e to Pages b192236d; exactdeployment37878849262succeeds. Public content/typing checks and12finished-origin-branch deletions are recorded in the newest ledger. Larger migration/map/modern-reader/network/backend work remains unfinished.
 
