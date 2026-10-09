@@ -366,6 +366,26 @@ now, follow the value: 100 went in, one was added, and 101 came out.
 
 <CodeTrace trace="handoff-cpu-store" />
 
+## Working values live at different distances from the CPU
+
+A **register** holds a value named by an instruction. A **cache** holds memory
+lines the processor may reuse; it is not another set of variables the game
+names. Common CPUs have L1, L2, and L3 cache levels. A cache hit can serve a
+memory request nearby; a miss may require a farther cache level or RAM.
+Intel's [cache explanation](https://www.intel.com/content/www/us/en/docs/vtune-profiler/user-guide/2024-2/cpu-metrics-reference.html)
+describes why those extra fetches can make the CPU wait.
+
+RAM holds the running program's resident code and data. An **SSD** or **HDD**
+keeps persistent files; the operating system performs file I/O to bring their
+contents into working memory. Their capacities and access times depend on the
+machine, so this hierarchy gives roles rather than fixed speed numbers.
+
+<Frame caption="Registers, caches, RAM, and drives have different roles. The arrows summarize data movement, not a mandatory route for every access.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/memory-working-hierarchy.svg`} width="480" height="416" style="width:30rem;max-width:100%;height:auto;" alt="Registers hold instruction operands; L1, L2, and L3 cache memory lines; RAM holds resident code and data; file I/O connects RAM to persistent SSD or HDD files." loading="lazy" decoding="async" />
+</Frame>
+
+<MarginNote kind="brief">Changing gold in a working register or memory does not save the game. Persistent output needs a separate save operation.</MarginNote>
+
 ## A program combines instructions
 
 A **program** is a collection of instructions arranged to do a larger job.
@@ -6719,6 +6739,25 @@ That last line matters. Later branches may inspect zero, sign, carry, or overflo
 
 The effective address calculation does not dereference `reg` and then add an offset to the loaded value. It adds the offset to the register first, then reads memory at the resulting address. Keep “calculate an address” separate from “read the value at that address.”
 
+### Register names can select overlapping bits
+
+`eax`, `ax`, `ah`, and `al` are views of the same register family, not four
+independent containers. `eax` selects 32 bits, `ax` its low 16, `ah` bits 15–8,
+and `al` bits 7–0. In the course's 32-bit target, `eax` is the full-width view.
+The diagram also shows the wider `rax` available in 64-bit mode.
+
+<Frame caption="RAX, EAX, AX, AH, and AL overlap. Their names select widths within one register family.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/register-a-family.svg`} width="480" height="326" style="width:30rem;max-width:100%;height:auto;" alt="RAX spans bits 63 through 0, EAX the low 32 bits, AX the low 16, AH bits 15 through 8, and AL bits 7 through 0." loading="lazy" decoding="async" />
+</Frame>
+
+In **64-bit mode**, a write to `eax` also clears `rax` bits 63–32. Writes to
+`ax`, `ah`, or `al` preserve bits outside the selected part. Microsoft's
+[x64 register reference](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/x64-architecture)
+documents this distinction. For the gold instruction, the operand width
+still tells us that exactly four memory bytes are changed.
+
+<MarginNote kind="brief">A register name is a width clue. Treat an 8-bit, 16-bit, and 32-bit write as different state changes even when they belong to one register family.</MarginNote>
+
 ## Read the brackets as an address calculation
 
 For an instruction such as:
@@ -6834,6 +6873,55 @@ Now you are back in the caller. Repeat this carefully to move from the low-level
 When x86 executes `call`, it places a return address on the stack before jumping to the callee. That address points to the instruction the caller expects to run next. A debugger’s call stack combines return addresses with known module ranges and function information to show the nested route that reached the breakpoint.
 
 The call stack a debugger shows is a reconstruction, and it may be incomplete. Optimizations can inline functions, reuse stack space, or omit traditional frame pointers. Confirm an important caller by returning to it or placing a breakpoint at its call site and reproducing the action.
+
+### Distinguish the frame from the object it points to
+
+The stack is one place a running function keeps its bookkeeping and temporary
+values. It is not the home of every object the function uses:
+
+| Storage role | Typical contents | Lifetime to check |
+| --- | --- | --- |
+| Thread stack | Active call frames, saved return addresses, some local values | The current frame ends when the function returns; the thread has its own stack. |
+| Heap allocation | Dynamically allocated objects or buffers | The allocation lasts until its owner releases it, which may be later than this call. |
+| Static or module data | Globals, constants, and other long-lived data | Data remains for the program or module lifetime. |
+
+These are roles in virtual memory, not three physical kinds of RAM. Windows
+describes [thread stacks](https://learn.microsoft.com/en-us/windows/win32/procthread/thread-stack-size)
+and [heaps](https://learn.microsoft.com/en-us/windows/win32/memory/heap-functions);
+Microsoft's [C++ storage-duration guide](https://learn.microsoft.com/en-us/cpp/cpp/storage-classes-cpp)
+explains why a local static value can survive repeated calls. A compiler can
+also keep a local in a register or eliminate it entirely.
+
+<Frame caption="A pointer inside a stack frame can refer to a heap object with a different lifetime. Region positions are schematic.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/stack-heap-static-lifetimes.svg`} width="480" height="340" style="width:30rem;max-width:100%;height:auto;" alt="A callee stack frame contains a pointer that leads to an object in a heap allocation. Separately, module data holds globals and constants. Returning ends the frame, while the heap owner releases its object independently." loading="lazy" decoding="async" />
+</Frame>
+
+<MarginNote kind="brief">The location of a pointer is not the location of its object. Ending a raw-pointer stack slot does not release its heap allocation. An owning local can release that allocation when it is dropped during return.</MarginNote>
+
+### Read one concrete 32-bit call frame
+
+Here is an illustrative **near call with no arguments**, not an address from
+Wesnoth. A five-byte `call` at `0x00401020` must resume at `0x00401025`.
+Start with `esp = 0x0012FF90` and caller `ebp = 0x0012FFC0`:
+
+| Step | Stack pointer | What is saved or restored |
+| --- | --- | --- |
+| `call` | `0x0012FF8C` | Four-byte return address `0x00401025`. |
+| `push ebp`; `mov ebp, esp` | `0x0012FF88` | Old EBP is saved; new EBP marks this frame. |
+| `sub esp, 0x10` | `0x0012FF78` | Sixteen bytes are available for locals below EBP. |
+| `mov esp, ebp`; `pop ebp` | `0x0012FF8C` | Local space is released and caller EBP is restored. |
+| Plain `ret` | `0x0012FF90` | Saved address becomes EIP, so execution resumes after the call. |
+
+<Frame caption="A conventional EBP frame makes the saved return address visible at EBP + 4. The values are illustrative and the call has no arguments.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/x86-stack-frame-return.svg`} width="480" height="390" style="width:30rem;max-width:100%;height:auto;" alt="The return slot is at 0012FF8C, old EBP at 0012FF88, and sixteen local bytes extend down to 0012FF78. After the epilogue and plain RET, EIP is 00401025 and ESP is restored to 0012FF90." loading="lazy" decoding="async" />
+</Frame>
+
+Intel's [`CALL` and `RET` descriptions](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html)
+define the instruction behavior. The EBP prologue is a conventional frame
+layout, not something `call` creates by itself. Releasing or popping stack
+space need not erase its old bytes, so readable leftovers do not prove a
+local object is still alive. The compiler caveats above explain why a real
+optimized call may have a different layout.
 
 ## Establish context by following the observed call chain
 
@@ -17046,6 +17134,19 @@ let image_base = match magic {
 };
 ```
 
+PE32+ also **omits `BaseOfData`**; its eight-byte `ImageBase` starts in the
+space where PE32 has that four-byte data landmark. Offsets here are relative
+to the optional header, as specified by [Microsoft's PE format](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format):
+
+| Field | PE32 | PE32+ |
+| --- | --- | --- |
+| `BaseOfCode` | Four bytes at +20 | Four bytes at +20 |
+| `BaseOfData` | Four bytes at +24 | Absent |
+| `ImageBase` | Four bytes at +28 | Eight bytes at +24 |
+
+`BaseOfData` being absent does not mean the image has no data sections.
+The section rows still describe their RVAs and sizes.
+
 The games used by the memory-patching chapters are the specified 32-bit course builds, so their magic should be `0x10B`. The parser supports both formats because a tool should explain what it found instead of guessing.
 
 <ConceptLab
@@ -17087,6 +17188,28 @@ for index in 0..section_count {
 ```
 
 `.text` is normally readable and executable. `.rdata` is normally readable. `.data` is normally readable and writable. Names are only conventions; the characteristic flags are what the loader actually uses to set each section's page protection.
+
+## Linked code still needs a file-to-image map
+
+**Static linking** copies the needed library implementation into the output
+module. **DLL linking** keeps that implementation in another module and
+records how to find its exported functions. An import library can help link
+an EXE to a DLL without copying the DLL's implementation into the EXE.
+Microsoft's [DLL overview](https://learn.microsoft.com/en-us/windows/win32/dlls/about-dynamic-link-libraries)
+describes load-time and run-time linking. Once loaded, the DLL uses the
+calling process's virtual address space and the calling thread's stack.
+
+Whichever linking choice produced the module, its file bytes still need the
+section map. For an illustrative `.text` row with raw start `0x400` and RVA
+start `0x1000`, file byte `0x520` is `0x120` bytes into the section. Its RVA
+is `0x1120`; at live base `0x00400000`, its virtual address is `0x00401120`.
+This example assumes the byte lies inside that section's file-backed data.
+
+<Frame caption="Static and DLL linking package implementations differently. A separate worked section still maps file offset 0x520 to RVA 0x1120 and live VA 0x00401120.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/linking-file-to-image.svg`} width="480" height="466" style="width:30rem;max-width:100%;height:auto;" alt="Static linking puts library implementation into an output module; DLL linking connects to a separate image in the same process. In the independent section example, raw start 0400 maps to RVA start 1000, so file 0520 becomes RVA 1120 and VA 00401120 at base 00400000." loading="lazy" decoding="async" />
+</Frame>
+
+<MarginNote kind="brief">Static storage is a lifetime term; static linking is a packaging choice. Neither makes a file offset equal to a live virtual address.</MarginNote>
 
 ## Run the real lab
 
@@ -30373,6 +30496,101 @@ processed, an unbounded queue consumes memory and makes results increasingly
 stale. A newer position snapshot may replace an older one under a documented
 policy; a one-time item grant needs different handling. That is a decision
 about message meaning: discarding an old position can be useful, but discarding an unprocessed item grant loses the item.
+
+## Design the backend for one match
+
+A player logs in, joins match 42, and buys an item for 300 coins. The **game
+backend** is the set of services behind those actions. Separating their jobs
+explains why a working socket alone cannot prove a successful purchase.
+
+### From login to the live world
+
+**Authentication** establishes the player's identity. A **session** lets later
+requests refer to that authenticated login; it can outlive one TCP connection.
+A **matchmaker** groups compatible players and arranges a match location. It
+does not calculate their movement. Microsoft's [PlayFab matchmaking overview](https://learn.microsoft.com/en-us/xbox/playfab/multiplayer/matchmaking/)
+illustrates that service role.
+
+An **API gateway** routes requests to the appropriate service. **Middleware**
+performs shared checks along that route: validate the session, bound the
+request, enforce its permissions, and record its outcome. A load balancer can
+spread these entry requests across equivalent gateway instances. The
+**authoritative match server** owns match 42's accepted positions and damage;
+route its commands to that owner instead of a randomly chosen empty worker.
+These are logical jobs, which a small project can combine in one program.
+
+<Frame caption="Login, match allocation and asset delivery have different owners. These are logical service roles, not a requirement to deploy every box separately. Original CC0 artwork.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/backend-service-ownership.svg`} width="480" height="576" alt="A client sends account and matchmaking requests through a gateway with middleware checks, while assets come from a CDN. Account sessions lead to a durable database; matchmaking selects an authoritative match worker and a coordination record. Object storage supplies the CDN. A cache holds reusable derived views." loading="lazy" decoding="async" />
+</Frame>
+
+### Put each value in the right store
+
+A **database** keeps structured, durable account balances and inventory.
+**Object storage** keeps larger files addressed by keys, such as versioned
+patches and replay recordings. A **cache** reuses a result that can be rebuilt;
+a **CDN**, or content delivery network, brings eligible asset copies closer to
+players. An asset cache hit can avoid an origin fetch, as [Cloudflare's request lifecycle](https://developers.cloudflare.com/billing/understand/how-charges-accrue/)
+explains. Personal account responses need separate authorization and cache
+rules. A cached lobby count is useful; its old balance must not authorize a
+new purchase.
+
+### One purchase, one effect
+
+The player has 1,000 coins. Request `P7` asks for the 300-coin item. Validate the
+server's price and current balance, debit to 700, grant the item, and record
+`P7`'s result inside one **transaction**: either that whole change commits or
+none does. Concurrent requests also need appropriate isolation or locking;
+merely surrounding unsafe read-then-write logic with a transaction is
+insufficient. [PostgreSQL's isolation guide](https://www.postgresql.org/docs/18/transaction-iso.html)
+explains these concurrency guarantees and possible transaction retries.
+
+If the reply is lost, retry the same request ID. **Idempotency** means that
+repeat has the same effect: return the recorded result, without another debit
+or item. Scope the ID to its account, reject a changed payload under the same
+ID, and save the receipt atomically with the effect.
+
+<Frame caption="Purchase P7 commits its debit, item and receipt together; retrying P7 returns that receipt. The separate leaderboard example may display an older score until its derived view catches up. Original CC0 artwork.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/backend-transaction-consistency.svg`} width="480" height="522" alt="A protected transaction changes 1,000 coins to 700, grants one item and records purchase P7, then commits. A retry returns P7's recorded result. In a separate leaderboard flow, an accepted score changes from 10 to 12 while a delayed display still shows 10 before updating to 12." loading="lazy" decoding="async" />
+</Frame>
+
+**Consistency** describes which writes a read can observe. A strongly
+consistent read respects completed writes within its promised scope. A weaker
+read can return an older replica or cache value. **Eventual consistency**
+promises convergence when updates stop and propagation succeeds, not a fixed
+maximum delay. Currency authorization needs a current protected decision;
+a leaderboard can tolerate a clearly dated older view. [Cosmos DB's consistency definitions](https://learn.microsoft.com/en-us/azure/cosmos-db/consistency-levels)
+show why these guarantees must be stated explicitly.
+
+Optional: explore the smaller concurrency problem below. Starting at 1,000,
+a reward of 500 and purchase of 300 should leave 1,200. Overlapping reads and
+writes can lose one change. Its local lock illustrates ordering; a backend
+must enforce its database transaction rules across all participating processes.
+
+<SimLab sim="lost-update" id="backend-concurrent-coins" label="Explore overlapping reward and purchase updates" />
+
+### More matches, with explicit ownership
+
+**Sharding** partitions work or records by a key: independent matches can run
+on different workers. A shared world crossing shard boundaries additionally
+needs ownership handoffs and ordered cross-boundary actions. [Azure's sharding pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/sharding)
+describes the partitioning tradeoff.
+
+**Coordination** records which worker owns match 42. On failure, a replacement
+needs recoverable state and a new ownership generation; an expired worker
+must be prevented from committing late writes. Electing a replacement alone
+cannot reconstruct lost match state. [Leader-election guidance](https://learn.microsoft.com/en-us/azure/architecture/patterns/leader-election)
+explains leases and their failure limits. Retried result events also need
+persistent event IDs to avoid awarding the same win twice.
+
+### Spend the latency budget where it matters
+
+A toy 60-tick-per-second server has about 16.7 milliseconds per simulation
+step. That budget is distinct from network round-trip delay. Keep slow replay
+uploads and leaderboard work outside the movement path. Measure queue depth,
+bytes per player, and slow-tail latency before optimizing. Spatial indexes can
+reduce repeated full-world searches; smaller state deltas reduce bandwidth,
+while compression spends CPU time. Extra workers cannot repair an undefined
+ownership rule or an overloaded shared database.
 
 ## UDP is made of datagrams
 
@@ -44124,6 +44342,52 @@ numbers.
 
 
 <CodeTrace trace="handoff-address-translation" />
+
+## Place the virtual address inside a process map
+
+Before translating one page, identify the architecture and address-space
+configuration. Microsoft's [default 32-bit Windows map](https://learn.microsoft.com/en-us/windows/win32/memory/virtual-address-space)
+gives a **32-bit process on 32-bit Windows** a lower 2 GiB user range
+(`0x00000000`–`0x7FFFFFFF`) and an upper 2 GiB system range
+(`0x80000000`–`0xFFFFFFFF`). Those are address ranges, not amounts of installed
+or resident RAM. Modules, heaps, stacks, mapped files, and free holes occupy
+parts of the user range rather than filling it uniformly.
+
+<Frame caption="The default 32-bit Windows split gives equal 2 GiB virtual ranges to user and system space. User-region locations are schematic, not fixed addresses or physical RAM.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/windows-32bit-address-map.svg`} width="480" height="410" style="width:30rem;max-width:100%;height:auto;" alt="The lower range 00000000 through 7FFFFFFF contains user mappings and holes; the upper range 80000000 through FFFFFFFF belongs to the system. Modules, heaps, and stacks are illustrative scattered regions inside the user half." loading="lazy" decoding="async" />
+</Frame>
+
+ASLR and allocation history can move those user regions; Microsoft describes
+the image-randomization behavior under [`DYNAMICBASE`](https://learn.microsoft.com/en-us/cpp/build/reference/dynamicbase-use-address-space-layout-randomization).
+The [limits table](https://learn.microsoft.com/en-us/windows/win32/memory/memory-limits-for-windows-releases)
+also gives the exceptions: 4GT plus a large-address-aware image can extend a
+32-bit process to 3 GiB on 32-bit Windows; on 64-bit Windows, a large-address-aware
+32-bit process can have 4 GiB. A native 64-bit process has a different map.
+Do not apply the diagram's split to this lesson's x86-64 capture merely because
+both use Windows.
+
+<MarginNote kind="brief">A legal address range can contain unmapped holes. The range tells you where an address could fit; the current page tables tell you whether an access can work.</MarginNote>
+
+### Segmentation and paging are different stages
+
+A simplified upward-growing **segment** has a base and an inclusive limit.
+For a one-byte access, check the offset against the limit, then add it to the
+base to form a linear address. **Paging** divides that linear address space
+into fixed-size pages and maps each page to a physical frame, with access
+permissions. Adjacent virtual pages need not reach adjacent physical frames.
+
+<Frame caption="Two independent examples compare a base-and-limit segment with a 4 KiB page mapping. They are not consecutive steps in one worked address.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/segments-and-pages.svg`} width="480" height="386" style="width:30rem;max-width:100%;height:auto;" alt="An offset 0234 within segment limit 1FFF combines with base 00400000 to form linear 00400234; offset 2000 is rejected. Separately, virtual 4234 uses page 4 and offset 234. Mapping page 4 to frame base 001A0000 gives physical 001A0234." loading="lazy" decoding="async" />
+</Frame>
+
+Intel's [memory-management guide](https://cdrdv2-public.intel.com/874249/253668-090-sdm-vol-3a.pdf)
+describes how the mechanisms combine. Windows normally uses a **flat**
+application address model rather than separate variable-size application
+segments; [Microsoft's x86 overview](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/x86-architecture)
+states that model. Page tables supply the process mappings and page permissions.
+In 64-bit mode, most traditional segment bases are ignored, while FS/GS still
+have special uses. A segment register is therefore not an alternative process
+page table. The next section follows the paging structures used by the capture.
 
 ## CR3 points to the first translation table
 

@@ -60,6 +60,10 @@ The optional-header magic is hexadecimal 1 0 B for PE32 and hexadecimal 2 0 B fo
 
 Code example. The code’s comments explain: 📦 PE32 stores a four-byte image base at +28. 📦 PE32+ stores an eight-byte image base at +24.
 
+PE32+ also omits BaseOfData; its eight-byte ImageBase starts in the space where PE32 has that four-byte data landmark. Offsets here are relative to the optional header, as specified by Microsoft’s P E format:
+
+BaseOfData being absent does not mean the image has no data sections. The section rows still describe their RVAs and sizes.
+
 The games used by the memory-patching chapters are the specified 32-bit course builds, so their magic should be hexadecimal 1 0 B. The parser supports both formats because a tool should explain what it found instead of guessing.
 
 Section: Walk the 40-byte section rows.
@@ -69,6 +73,14 @@ The section table begins immediately after the optional header. Each row is 40 b
 Code example. The code’s comments explain: 📏 Multiply and add separately with checks so a hostile count cannot wrap around and point an apparently valid row back into an earlier header. 🔍 P E names are fixed eight-byte fields and are not required to end in NUL.
 
 .text is normally readable and executable. .rdata is normally readable. .data is normally readable and writable. Names are only conventions; the characteristic flags are what the loader actually uses to set each section’s page protection.
+
+Section: Linked code still needs a file-to-image map.
+
+Static linking copies the needed library implementation into the output module. D L L, dynamic link library, linking keeps that implementation in another module and records how to find its exported functions. An import library can help link an EXE to a D L L without copying the D L L’s implementation into the EXE. Microsoft’s D L L overview describes load-time and run-time linking. Once loaded, the D L L uses the calling process’s virtual address space and the calling thread’s stack.
+
+Whichever linking choice produced the module, its file bytes still need the section map. For an illustrative .text row with raw start hexadecimal 4 0 0 and R V A start hexadecimal 1 0 0 0, file byte hexadecimal 5 2 0 is hexadecimal 1 2 0 bytes into the section. Its R V A is hexadecimal 1 1 2 0; at live base this value, its virtual address is this value. This example assumes the byte lies inside that section’s file-backed data.
+
+In brief: Static storage is a lifetime term; static linking is a packaging choice. Neither makes a file offset equal to a live virtual address.
 
 Section: Run the real lab.
 

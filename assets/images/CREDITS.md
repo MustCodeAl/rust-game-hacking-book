@@ -172,3 +172,17 @@ These 57 distinct original geometric drawings are dedicated to CC0 1.0. Each is 
 ## Encoding illustration — 2026-10-08
 
 `original/hi-base64-groups.svg` is original Game Hacking Academy geometric artwork, dedicated to the public domain under CC0 1.0 Universal. It illustrates the independently checked RFC 4648 grouping of the UTF-8 bytes for `HI` into `SEk=`; no third-party image assets. Its hand-authored SVG source includes the license, title and description.
+
+## Memory and backend foundations — 2026-10-09
+
+Original Game Hacking Academy geometric diagrams, dedicated to CC0 1.0 Universal; no third-party image assets. Each SVG embeds its title, description and license.
+
+- `original/memory-working-hierarchy.svg`
+- `original/register-a-family.svg`
+- `original/stack-heap-static-lifetimes.svg`
+- `original/x86-stack-frame-return.svg`
+- `original/linking-file-to-image.svg`
+- `original/windows-32bit-address-map.svg`
+- `original/segments-and-pages.svg`
+- `original/backend-service-ownership.svg`
+- `original/backend-transaction-consistency.svg`
