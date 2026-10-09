@@ -13,6 +13,8 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Scene from '../../../../components/Scene.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 import CodeTrace from '../../../../components/CodeTrace.astro';
+import Frame from '../../../../components/kit/Frame.astro';
+import SimLab from '../../../../components/SimLab.astro';
 
 ## Client and server
 
@@ -323,6 +325,101 @@ processed, an unbounded queue consumes memory and makes results increasingly
 stale. A newer position snapshot may replace an older one under a documented
 policy; a one-time item grant needs different handling. That is a decision
 about message meaning: discarding an old position can be useful, but discarding an unprocessed item grant loses the item.
+
+## Design the backend for one match
+
+A player logs in, joins match 42, and buys an item for 300 coins. The **game
+backend** is the set of services behind those actions. Separating their jobs
+explains why a working socket alone cannot prove a successful purchase.
+
+### From login to the live world
+
+**Authentication** establishes the player's identity. A **session** lets later
+requests refer to that authenticated login; it can outlive one TCP connection.
+A **matchmaker** groups compatible players and arranges a match location. It
+does not calculate their movement. Microsoft's [PlayFab matchmaking overview](https://learn.microsoft.com/en-us/xbox/playfab/multiplayer/matchmaking/)
+illustrates that service role.
+
+An **API gateway** routes requests to the appropriate service. **Middleware**
+performs shared checks along that route: validate the session, bound the
+request, enforce its permissions, and record its outcome. A load balancer can
+spread these entry requests across equivalent gateway instances. The
+**authoritative match server** owns match 42's accepted positions and damage;
+route its commands to that owner instead of a randomly chosen empty worker.
+These are logical jobs, which a small project can combine in one program.
+
+<Frame caption="Login, match allocation and asset delivery have different owners. These are logical service roles, not a requirement to deploy every box separately. Original CC0 artwork.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/backend-service-ownership.svg`} width="480" height="576" alt="A client sends account and matchmaking requests through a gateway with middleware checks, while assets come from a CDN. Account sessions lead to a durable database; matchmaking selects an authoritative match worker and a coordination record. Object storage supplies the CDN. A cache holds reusable derived views." loading="lazy" decoding="async" />
+</Frame>
+
+### Put each value in the right store
+
+A **database** keeps structured, durable account balances and inventory.
+**Object storage** keeps larger files addressed by keys, such as versioned
+patches and replay recordings. A **cache** reuses a result that can be rebuilt;
+a **CDN**, or content delivery network, brings eligible asset copies closer to
+players. An asset cache hit can avoid an origin fetch, as [Cloudflare's request lifecycle](https://developers.cloudflare.com/billing/understand/how-charges-accrue/)
+explains. Personal account responses need separate authorization and cache
+rules. A cached lobby count is useful; its old balance must not authorize a
+new purchase.
+
+### One purchase, one effect
+
+The player has 1,000 coins. Request `P7` asks for the 300-coin item. Validate the
+server's price and current balance, debit to 700, grant the item, and record
+`P7`'s result inside one **transaction**: either that whole change commits or
+none does. Concurrent requests also need appropriate isolation or locking;
+merely surrounding unsafe read-then-write logic with a transaction is
+insufficient. [PostgreSQL's isolation guide](https://www.postgresql.org/docs/18/transaction-iso.html)
+explains these concurrency guarantees and possible transaction retries.
+
+If the reply is lost, retry the same request ID. **Idempotency** means that
+repeat has the same effect: return the recorded result, without another debit
+or item. Scope the ID to its account, reject a changed payload under the same
+ID, and save the receipt atomically with the effect.
+
+<Frame caption="Purchase P7 commits its debit, item and receipt together; retrying P7 returns that receipt. The separate leaderboard example may display an older score until its derived view catches up. Original CC0 artwork.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/backend-transaction-consistency.svg`} width="480" height="522" alt="A protected transaction changes 1,000 coins to 700, grants one item and records purchase P7, then commits. A retry returns P7's recorded result. In a separate leaderboard flow, an accepted score changes from 10 to 12 while a delayed display still shows 10 before updating to 12." loading="lazy" decoding="async" />
+</Frame>
+
+**Consistency** describes which writes a read can observe. A strongly
+consistent read respects completed writes within its promised scope. A weaker
+read can return an older replica or cache value. **Eventual consistency**
+promises convergence when updates stop and propagation succeeds, not a fixed
+maximum delay. Currency authorization needs a current protected decision;
+a leaderboard can tolerate a clearly dated older view. [Cosmos DB's consistency definitions](https://learn.microsoft.com/en-us/azure/cosmos-db/consistency-levels)
+show why these guarantees must be stated explicitly.
+
+Optional: explore the smaller concurrency problem below. Starting at 1,000,
+a reward of 500 and purchase of 300 should leave 1,200. Overlapping reads and
+writes can lose one change. Its local lock illustrates ordering; a backend
+must enforce its database transaction rules across all participating processes.
+
+<SimLab sim="lost-update" id="backend-concurrent-coins" label="Explore overlapping reward and purchase updates" />
+
+### More matches, with explicit ownership
+
+**Sharding** partitions work or records by a key: independent matches can run
+on different workers. A shared world crossing shard boundaries additionally
+needs ownership handoffs and ordered cross-boundary actions. [Azure's sharding pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/sharding)
+describes the partitioning tradeoff.
+
+**Coordination** records which worker owns match 42. On failure, a replacement
+needs recoverable state and a new ownership generation; an expired worker
+must be prevented from committing late writes. Electing a replacement alone
+cannot reconstruct lost match state. [Leader-election guidance](https://learn.microsoft.com/en-us/azure/architecture/patterns/leader-election)
+explains leases and their failure limits. Retried result events also need
+persistent event IDs to avoid awarding the same win twice.
+
+### Spend the latency budget where it matters
+
+A toy 60-tick-per-second server has about 16.7 milliseconds per simulation
+step. That budget is distinct from network round-trip delay. Keep slow replay
+uploads and leaderboard work outside the movement path. Measure queue depth,
+bytes per player, and slow-tail latency before optimizing. Spatial indexes can
+reduce repeated full-world searches; smaller state deltas reduce bandwidth,
+while compression spends CPU time. Extra workers cannot repair an undefined
+ownership rule or an overloaded shared database.
 
 ## UDP is made of datagrams
 
