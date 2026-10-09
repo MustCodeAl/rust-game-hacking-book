@@ -11719,6 +11719,9 @@ that truncates a string at a fixed byte count can cut a character in half and
 produce bytes that no longer decode. Always say which of these four lengths a
 number refers to.
 
+That final row is one [grapheme cluster](https://www.unicode.org/glossary/),
+the unit approximating a character a reader perceives.
+
 <MarginNote kind="brief">Text length is ambiguous: bytes, code units, characters and what you see on screen can all differ, so say which one you mean.</MarginNote>
 
 <Frame caption="Four characters, five bytes: é needs two.">
@@ -11730,6 +11733,48 @@ number refers to.
   lab="utf8-lab"
   label="Predict how many bytes a piece of text takes"
 />
+
+## Compare ASCII, Unicode, and Base64 with the same text
+
+**ASCII** defines a 7-bit repertoire: 128 values, numbered 0 through 127,
+covering basic Latin letters, digits, punctuation, and control codes. An ASCII value
+fits in an 8-bit byte with its top bit zero, as [RFC 20](https://www.rfc-editor.org/rfc/rfc20.html)
+describes. Values above 127 belong to some other encoding, not standard ASCII.
+
+**Unicode** preserves those ASCII assignments within a much larger repertoire.
+Its code points identify characters; UTF-8 and UTF-16 choose their stored code
+units and bytes. The [Unicode UTF FAQ](https://www.unicode.org/faq/utf_bom.html)
+explains that relationship. Compare the same two-letter text, `HI`, in each
+representation. No terminator or byte-order mark is included:
+
+| View of `HI` | Representation | What to count |
+| --- | --- | --- |
+| Unicode code points | `U+0048 U+0049` | Two code points: H and I. |
+| ASCII / UTF-8 bytes, in hex | `48 49` | Two bytes, with decimal values 72 and 73. |
+| Those bytes, in binary | `01001000 01001001` | Sixteen bits, displayed as two 8-bit bytes. |
+| UTF-16LE bytes, in hex | `48 00 49 00` | Four bytes for two 16-bit code units. |
+| Base64 of the ASCII / UTF-8 bytes | `SEk=` | Four output symbols representing the original two bytes. |
+
+**Base64** encodes bytes as ASCII text. It is reversible without a secret key,
+so encoding is not encryption. Standard Base64 uses the 64-symbol alphabet
+`A–Z`, `a–z`, `0–9`, `+`, `/`; `=` is padding. [RFC 4648](https://www.rfc-editor.org/rfc/rfc4648.html)
+defines these rules.
+
+For `48 49`, join the 16 bits and append two zero pad bits to complete a
+six-bit group: `010010 000100 100100`. The group values are 18, 4, and 36,
+which select `S`, `E`, and `k`. Two input bytes leave one `=` padding symbol,
+so the result is `SEk=`.
+
+<Frame caption="HI's sixteen data bits become three six-bit groups; two added zero bits complete the last group.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/hi-base64-groups.svg`} width="480" height="330" style="width:30rem;max-width:100%;height:auto;" alt="H and I are bytes 48 and 49 hex. Their bits 01001000 and 01001001 are regrouped, with two zero pad bits, as 010010, 000100, and 100100. Values 18, 4, and 36 select S, E, and k; one equals sign pads the output SEk=." loading="lazy" decoding="async" />
+</Frame>
+
+<MarginNote kind="brief">Choose the bytes before applying Base64. UTF-8 `HI` gives `SEk=`, while the UTF-16LE bytes `48 00 49 00` give `SABJAA==`. The visible text alone does not determine a Base64 result.</MarginNote>
+
+The [base64url variant in RFC 4648](https://www.rfc-editor.org/rfc/rfc4648.html)
+replaces `+` with `-` and `/` with `_`. Some protocols allow omitted `=`
+padding; follow the receiving protocol's rule. The example needs neither
+replacement character, so its padded base64url form is also `SEk=`.
 
 <Frame caption="A terrain description: the text this lesson searches for in memory.">
 
@@ -17229,6 +17274,10 @@ with the RVA.
 
 Small wrapper types can stop coordinate-space mistakes before runtime:
 
+Optional: practise keeping the RVA inside its image before forming a live address.
+
+<SpeedType id="bounded-rva-address" title="Resolve a bounded RVA" recall={[{"text": "offset >= image_size", "hint": "Reject a displacement at or beyond the image end."}, {"text": "checked_add(offset)", "hint": "Add the displacement only if the address type can hold the result."}, {"text": "map(LiveAddress)", "hint": "Wrap a successful sum in the live-address type."}]}>
+
 ```rust
 #[derive(Clone, Copy, Debug)]
 struct Rva(u32);
@@ -17244,6 +17293,8 @@ fn resolve_rva(base: LiveAddress, image_size: usize, rva: Rva) -> Option<LiveAdd
     base.0.checked_add(offset).map(LiveAddress)
 }
 ```
+
+</SpeedType>
 
 Both values are integers internally, but the type names preserve their units.
 The function also states two proof obligations: the RVA belongs to this image,
@@ -18928,6 +18979,39 @@ detour must decode whole instructions before deciding how many bytes to replace.
   groups="0-2:`mov rax, rbx` — REX prefix + opcode + ModR/M|3-3:`ret` — opcode only"
   caption="The test bytes from `decodes_simple_64_bit_function` later in this lesson. Here `48 89 D8` encodes `mov rax, rbx` in 64-bit mode, followed by `C3` for `ret`. For comparison, Lesson 2.3's `B8 19 00 00 00` encoded `mov eax, 25` in 32-bit mode. An opcode selects an operation; a prefix or ModR/M byte appears only when that instruction needs it."
 />
+
+### A small opcode lookup table
+
+These are **complete encodings in 32-bit mode**, with hexadecimal bytes and
+decimal assembly operands. They are examples, not every form of each instruction:
+
+| Machine-code bytes | Assembly | How to read the bytes |
+|---|---|---|
+| `B8 19 00 00 00` | `mov eax, 25` | `B8` selects EAX; the next four bytes hold 25, little-endian |
+| `83 C0 01` | `add eax, 1` | `83` plus ModR/M `C0` selects addition to EAX; `01` is the immediate |
+| `83 E8 01` | `sub eax, 1` | The same `83`, with ModR/M `E8`, selects subtraction |
+| `31 C0` | `xor eax, eax` | `31` selects XOR; ModR/M names EAX as both operands, clearing it |
+| `39 D8` | `cmp eax, ebx` | Compare EAX with EBX by setting flags; neither register is changed |
+| `74 02` | `je next_ip + 2` | Jump two bytes past the next instruction address when ZF is 1 |
+| `50` | `push eax` | In this mode, decrease ESP by four and store EAX on the stack |
+| `58` | `pop eax` | Read four stack bytes into EAX and increase ESP by four |
+| `C3` | `ret` | Pop a return address into EIP and resume there |
+
+Notice that `83` alone does not distinguish `add` from `sub`. A ModR/M byte
+has three fields: **mod**, **reg**, and **r/m**, containing 2, 3, and 3 bits.
+Here `C0` is `11 000 000`, while `E8` is `11 101 000`. For this opcode,
+`11` chooses a register operand, the middle field selects addition (`000`)
+or subtraction (`101`), and the final `000` names EAX. In other instructions,
+the middle field can name a second register instead.
+
+<MarginNote kind="brief">The opcode is only part of an instruction. Read its operand form and CPU mode before interpreting the following bytes.</MarginNote>
+
+For complete forms and flag effects, consult
+[Intel's instruction manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html).
+**Bytecode** is a separate instruction format designed for a software interpreter;
+its numeric opcodes need not match x86. The
+[toy CPU's encoding table](/pages/14/11/#a-toy-8-bit-cpu) shows that distinction with
+seven deliberately simple operations.
 
 For our tool, use `iced-x86`.
 
@@ -39968,12 +40052,18 @@ The first troubleshooting step is to print the exact error and requested mask. D
 
 The shared `Process` wrapper starts with query and read rights. It adds operation and write rights only when the caller passes `allow_write: true`:
 
+Optional: practise the access-mask decision that adds write rights only when requested.
+
+<SpeedType id="explicit-process-write-rights" title="Choose process access rights" recall={[{"text": "PROCESS_VM_READ", "hint": "Include the right that permits reading the target process memory."}, {"text": "allow_write", "hint": "Use the caller’s explicit choice before adding operation and write rights."}]}>
+
 ```rust
 let mut access = PROCESS_QUERY_INFORMATION | PROCESS_VM_READ;
 if allow_write {
     access |= PROCESS_VM_OPERATION | PROCESS_VM_WRITE;
 }
 ```
+
+</SpeedType>
 
 That boolean is a visible decision at the call site. A scanner can open read-only; a verified patcher must deliberately opt into writing.
 
@@ -40364,6 +40454,10 @@ For any page size, an address can be split into two pieces:
 
 <MarginNote kind="alternative">Split an address like a book reference: the virtual page selects the mapped page, and the offset picks a byte within it.</MarginNote>
 
+Optional: practise separating the page number from the byte offset without dividing by zero.
+
+<SpeedType id="virtual-page-offset" title="Split a virtual page and offset" recall={[{"text": "page_size == 0", "hint": "Refuse an invalid page size before division or remainder."}, {"text": "address / page_size", "hint": "Use whole-number division to find which virtual page contains the address."}, {"text": "address % page_size", "hint": "Use the remainder to locate the byte inside that page."}]}>
+
 ```rust
 fn split_address(address: usize, page_size: usize) -> Option<(usize, usize)> {
     if page_size == 0 {
@@ -40375,6 +40469,8 @@ fn split_address(address: usize, page_size: usize) -> Option<(usize, usize)> {
     Some((virtual_page, offset_inside_page))
 }
 ```
+
+</SpeedType>
 
 With a 4 KiB page, address `0x1234_5ABC` has offset `0xABC` inside its page.
 The remaining upper part identifies the virtual page. The translation changes
@@ -41353,6 +41449,69 @@ fn resolve_virtual_query() -> windows::core::Result<FARPROC> {
 
 The types make the two encodings visible instead of silently mixing them.
 
+## Read the Windows signature before translating it
+
+Microsoft's C documentation uses names such as `DWORD`, `BOOL`, and `HANDLE`
+to describe the API's binary contract. Match that contract rather than choosing
+a Rust type just because its name sounds similar:
+
+| Windows spelling | What it means at the boundary | Rust reading rule |
+| --- | --- | --- |
+| `DWORD` | Unsigned 32-bit integer, even in a 64-bit process | Usually `u32`; it does not grow into `usize`. |
+| `BOOL` | Signed 32-bit integer Boolean value | Raw `i32`, or the binding's projected type or result; Rust `bool` has a different representation. For Boolean truth, test nonzero rather than equality to 1. |
+| `HANDLE` | Opaque, pointer-sized object handle | Use the binding's handle type; it is not a Rust reference that you may dereference. |
+
+These distinctions come from [Windows coding conventions](https://learn.microsoft.com/en-us/windows/win32/learnwin32/windows-coding-conventions)
+and [Windows data types](https://learn.microsoft.com/en-us/windows/win32/winprog/windows-data-types).
+Read each function's return-value section too: its success and failure rules
+can be more specific than its return type.
+
+The lab's string-width mistake is one instance of a broader convention.
+In paired string APIs, `W` accepts UTF-16 code units and `A` accepts 8-bit text
+in the API's ANSI encoding; `A` is not a promise of ASCII or UTF-8. C headers
+may select an unsuffixed name using the `UNICODE` macro. Calling the explicit
+`W` function keeps the choice visible in Rust. See [Working with Strings](https://learn.microsoft.com/en-us/windows/win32/learnwin32/working-with-strings).
+
+The **ABI**, or application binary interface, also specifies how arguments and
+results pass between caller and callee. `WINAPI` and `CALLBACK` in C signatures
+mark a calling convention, not an access right. Generated bindings supply the
+matching declarations. For a callback declared with that convention, match its
+exact signature and [Rust's `extern "system"` ABI](https://doc.rust-lang.org/reference/items/external-blocks.html#abi):
+its underlying convention depends on the target, including `stdcall` on 32-bit
+Windows for non-variadic functions.
+
+<MarginNote kind="brief">A handle's size does not tell you who owns it. Check the API that produced it and its documented release rule; this lab's borrowed module handle must not be released with `FreeLibrary`.</MarginNote>
+
+The [`GetModuleHandleW` contract](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandlew)
+is the ownership rule behind that note. Likewise, a string pointer must stay
+valid for as long as the receiving API uses it; a pointer wrapper alone does
+not own its storage.
+
+### Which windows-rs crate does what?
+
+The crate names describe different jobs in the Rust bindings. They do not
+change which Windows layer runs a call or what the caller may access.
+
+| Crate | Role |
+| --- | --- |
+| [`windows`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows.md) | Generated projected APIs for Win32, COM, and WinRT, with typed values and conversions. This is the lab's API crate. |
+| [`windows-sys`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-sys.md) | Raw Windows ABI declarations; the caller manages pointer contracts, ownership, and error translation. |
+| [`windows-core`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-core.md) | Shared COM and WinRT interface types, traits, and projection support. |
+| [`windows-strings`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-strings.md) | Windows string representations, including owning strings and borrowed pointer wrappers. |
+| [`windows-result`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-result.md) | Windows status and error types, including `HRESULT` and `Result`. |
+
+The generation tools have separate jobs: [`windows-bindgen`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-bindgen.md)
+turns Windows metadata into Rust bindings; [`windows-metadata`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-metadata.md)
+reads and writes that metadata; [`windows-clang`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-clang.md)
+extracts C/C++ header declarations using libclang. The lab consumes pre-generated
+bindings. Add support or generation crates only when your own task needs them;
+many support types are already re-exported by the API crate.
+
+One similarly named crate, [`windows-reference`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-reference.md),
+boxes a value for a WinRT signature that requires `IReference<T>`. That is a
+Windows interface object, distinct from ordinary Rust borrowing with `&T`.
+The address inspector needs no such boxed value.
+
 ## Run it and compare two launches
 
 <Badge text="Windows VM" variant="note" />
@@ -41634,6 +41793,44 @@ kernel, where the caller cannot simply skip the decision. The kernel also
 enforces the access tokens and integrity levels from Lesson 11.5, the page
 protections from Lesson 11.7, and the signing rules that decide which drivers
 may load at all (Lesson 12.4).
+
+## Recognize the subsystem in a kernel routine's name
+
+Driver documentation and debugger stacks often use short prefixes as clues
+to a routine's subsystem. The table connects those names to the responsibilities
+above; the linked routines are reading examples, not extra lab steps.
+
+| Prefix | Conceptual meaning | Representative documented routine |
+| --- | --- | --- |
+| `Cm` | Configuration manager: registry operations | [`CmRegisterCallbackEx`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-cmregistercallbackex) registers a registry callback. |
+| `Ex` | Executive support: shared kernel helpers | [`ExAllocatePool2`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-exallocatepool2) allocates kernel pool memory. |
+| `Hal` | Hardware abstraction layer: platform hardware details | [`HalGetAdapter`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/_kernel/) is an obsolete DMA-adapter example; use `IoGetDmaAdapter` instead. |
+| `Io` | I/O manager: devices and I/O requests | [`IoCreateDevice`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-iocreatedevice) creates a driver device object. |
+| `Ke` | Kernel: scheduling, synchronization, interrupt priority | [`KeGetCurrentIrql`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-kegetcurrentirql) reports the current interrupt request level. |
+| `Mm` | Memory manager: virtual and physical memory | [`MmProbeAndLockPages`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-mmprobeandlockpages) probes and locks buffer pages. |
+| `Ob` | Object manager: object references and handles | [`ObReferenceObjectByHandle`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-obreferenceobjectbyhandle) checks a handle and references its object. |
+| `Po` | Power manager: device power transitions | [`PoRequestPowerIrp`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-porequestpowerirp) requests a device power operation. |
+| `Tm` | Kernel Transaction Manager: coordinated transactions | [`TmCommitTransaction`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-tmcommittransaction) initiates a transaction commit. |
+| `Nt` | Native system services | [`NtCreateFile`](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile) is a native file-service entry. |
+| `Zw` | The paired native-service naming convention | [`ZwCreateFile`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-zwcreatefile) reaches the corresponding file service. |
+
+<MarginNote kind="brief">A prefix identifies a family of routines; it grants no privilege. The processor's mode, the API's requirements, and the request's permissions still determine what a caller can do.</MarginNote>
+
+`Nt` and `Zw` need one extra distinction. For system calls from **user mode**,
+their versions behave alike and treat arguments as untrusted user input. From
+**kernel mode**, `Zw` treats parameters as coming from a trusted kernel source;
+`Nt` uses the calling thread's previous mode to decide how to interpret and
+validate them. This is a calling-context rule, not a way for a user program
+to gain ring 0. Microsoft's [Nt/Zw explanation](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/using-nt-and-zw-versions-of-the-native-system-services-routines)
+describes the distinction.
+
+Older examples need a version check. [`ExAllocatePool`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-exallocatepool)
+is deprecated; Microsoft's [migration guide](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/updating-deprecated-exallocatepool-calls)
+replaces it with `ExAllocatePool2` for drivers targeting Windows 10 version 2004
+or later. `HalGetAdapter` remains listed for existing drivers, but the documented
+replacement is [`IoGetDmaAdapter`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-iogetdmaadapter).
+An old name in a stack can explain the subsystem without being a good choice
+for new code.
 
 ## Why a kernel bug takes the whole machine down
 
@@ -43953,6 +44150,10 @@ Large pages can finish earlier: a page-directory-pointer entry may map 1 GiB, an
 
 With the common 48-bit virtual-address form, bits 63–48 must repeat bit 47. An address that breaks this rule is **noncanonical**. The lab rejects it before reading the capture:
 
+Optional: practise the sign-extension check for this four-level, 48-bit address model.
+
+<SpeedType id="canonical-address-check" title="Check a canonical address" recall={[{"text": "address.0 >> 48", "hint": "Move the upper sixteen bits down so they can be compared."}, {"text": "(address.0 >> 47) & 1", "hint": "Move bit forty-seven to the low position, then isolate it."}, {"text": "upper == expected", "hint": "Accept only when the upper bits match the required sign extension."}]}>
+
 ```rust
 fn ensure_canonical(address: VirtualAddress) -> Result<(), MemoryError> {
     let upper = address.0 >> 48;
@@ -43966,6 +44167,8 @@ fn ensure_canonical(address: VirtualAddress) -> Result<(), MemoryError> {
     }
 }
 ```
+
+</SpeedType>
 
 Rejecting impossible input gives a clearer error than following nonsense offsets into a file.
 
@@ -44074,6 +44277,10 @@ Three checks handle three different failures: the address may not fit `usize`, a
 
 Each table entry is eight little-endian bytes. Its low present bit must be set before the address bits are trusted:
 
+Optional: practise locating one eight-byte table entry and refusing an absent mapping.
+
+<SpeedType id="page-table-present-bit" title="Check one page-table entry" recall={[{"text": "table + index * 8", "hint": "Advance from the table base by the index times the entry size."}, {"text": "entry & 1 == 0", "hint": "Reject the entry when its low present bit is clear."}, {"text": "Ok(entry)", "hint": "Return the entry only after the present-bit check passed."}]}>
+
 ```rust
 fn table_entry(
     &self,
@@ -44090,6 +44297,8 @@ fn table_entry(
     Ok(entry)
 }
 ```
+
+</SpeedType>
 
 The error includes the failed level and physical entry address. That context is far more useful than “read failed.”
 
@@ -49921,6 +50130,31 @@ fresh presses, because there are two rising edges.
 A **rising edge** is that transition from zero to one. Separating levels
 from edges matters in ordinary game input too. A held key can span many
 commands while describing one physical press.
+
+Optional: practise counting rising edges with this toy function. Each `bool`
+sample is released (`false`) or held (`true`), and `previous` starts released;
+`usize` is the returned count.
+
+<SpeedType id="fresh-button-edges" title="Count fresh button presses" recall={[{"text": "held && !previous", "hint": "Count a sample only when the button is held now and was released before."}, {"text": "presses += 1", "hint": "Add exactly one for this new press."}, {"text": "previous = held", "hint": "Remember the current button state for the next sample."}]}>
+
+```rust
+fn fresh_presses(samples: &[bool]) -> usize {
+    let mut previous = false;
+    let mut presses = 0;
+    for &held in samples {
+        if held && !previous {
+            presses += 1;
+        }
+        previous = held;
+    }
+    presses
+}
+```
+
+</SpeedType>
+
+The five samples `[false, true, true, false, true]` return `2`. Keeping a
+button held does not add another press.
 
 ## Its histories answer different questions
 
