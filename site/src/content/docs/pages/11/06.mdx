@@ -92,6 +92,52 @@ numbers.
 
 <CodeTrace trace="handoff-address-translation" />
 
+## Place the virtual address inside a process map
+
+Before translating one page, identify the architecture and address-space
+configuration. Microsoft's [default 32-bit Windows map](https://learn.microsoft.com/en-us/windows/win32/memory/virtual-address-space)
+gives a **32-bit process on 32-bit Windows** a lower 2 GiB user range
+(`0x00000000`–`0x7FFFFFFF`) and an upper 2 GiB system range
+(`0x80000000`–`0xFFFFFFFF`). Those are address ranges, not amounts of installed
+or resident RAM. Modules, heaps, stacks, mapped files, and free holes occupy
+parts of the user range rather than filling it uniformly.
+
+<Frame caption="The default 32-bit Windows split gives equal 2 GiB virtual ranges to user and system space. User-region locations are schematic, not fixed addresses or physical RAM.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/windows-32bit-address-map.svg`} width="480" height="410" style="width:30rem;max-width:100%;height:auto;" alt="The lower range 00000000 through 7FFFFFFF contains user mappings and holes; the upper range 80000000 through FFFFFFFF belongs to the system. Modules, heaps, and stacks are illustrative scattered regions inside the user half." loading="lazy" decoding="async" />
+</Frame>
+
+ASLR and allocation history can move those user regions; Microsoft describes
+the image-randomization behavior under [`DYNAMICBASE`](https://learn.microsoft.com/en-us/cpp/build/reference/dynamicbase-use-address-space-layout-randomization).
+The [limits table](https://learn.microsoft.com/en-us/windows/win32/memory/memory-limits-for-windows-releases)
+also gives the exceptions: 4GT plus a large-address-aware image can extend a
+32-bit process to 3 GiB on 32-bit Windows; on 64-bit Windows, a large-address-aware
+32-bit process can have 4 GiB. A native 64-bit process has a different map.
+Do not apply the diagram's split to this lesson's x86-64 capture merely because
+both use Windows.
+
+<MarginNote kind="brief">A legal address range can contain unmapped holes. The range tells you where an address could fit; the current page tables tell you whether an access can work.</MarginNote>
+
+### Segmentation and paging are different stages
+
+A simplified upward-growing **segment** has a base and an inclusive limit.
+For a one-byte access, check the offset against the limit, then add it to the
+base to form a linear address. **Paging** divides that linear address space
+into fixed-size pages and maps each page to a physical frame, with access
+permissions. Adjacent virtual pages need not reach adjacent physical frames.
+
+<Frame caption="Two independent examples compare a base-and-limit segment with a 4 KiB page mapping. They are not consecutive steps in one worked address.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/segments-and-pages.svg`} width="480" height="386" style="width:30rem;max-width:100%;height:auto;" alt="An offset 0234 within segment limit 1FFF combines with base 00400000 to form linear 00400234; offset 2000 is rejected. Separately, virtual 4234 uses page 4 and offset 234. Mapping page 4 to frame base 001A0000 gives physical 001A0234." loading="lazy" decoding="async" />
+</Frame>
+
+Intel's [memory-management guide](https://cdrdv2-public.intel.com/874249/253668-090-sdm-vol-3a.pdf)
+describes how the mechanisms combine. Windows normally uses a **flat**
+application address model rather than separate variable-size application
+segments; [Microsoft's x86 overview](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/x86-architecture)
+states that model. Page tables supply the process mappings and page permissions.
+In 64-bit mode, most traditional segment bases are ignored, while FS/GS still
+have special uses. A segment register is therefore not an alternative process
+page table. The next section follows the paging structures used by the capture.
+
 ## CR3 points to the first translation table
 
 On ordinary x86-64 systems using four-level paging, the CPU’s `CR3` register identifies the physical base of the top table. The virtual address supplies four nine-bit indices and a twelve-bit offset:

@@ -162,6 +162,19 @@ let image_base = match magic {
 };
 ```
 
+PE32+ also **omits `BaseOfData`**; its eight-byte `ImageBase` starts in the
+space where PE32 has that four-byte data landmark. Offsets here are relative
+to the optional header, as specified by [Microsoft's PE format](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format):
+
+| Field | PE32 | PE32+ |
+| --- | --- | --- |
+| `BaseOfCode` | Four bytes at +20 | Four bytes at +20 |
+| `BaseOfData` | Four bytes at +24 | Absent |
+| `ImageBase` | Four bytes at +28 | Eight bytes at +24 |
+
+`BaseOfData` being absent does not mean the image has no data sections.
+The section rows still describe their RVAs and sizes.
+
 The games used by the memory-patching chapters are the specified 32-bit course builds, so their magic should be `0x10B`. The parser supports both formats because a tool should explain what it found instead of guessing.
 
 <ConceptLab
@@ -203,6 +216,28 @@ for index in 0..section_count {
 ```
 
 `.text` is normally readable and executable. `.rdata` is normally readable. `.data` is normally readable and writable. Names are only conventions; the characteristic flags are what the loader actually uses to set each section's page protection.
+
+## Linked code still needs a file-to-image map
+
+**Static linking** copies the needed library implementation into the output
+module. **DLL linking** keeps that implementation in another module and
+records how to find its exported functions. An import library can help link
+an EXE to a DLL without copying the DLL's implementation into the EXE.
+Microsoft's [DLL overview](https://learn.microsoft.com/en-us/windows/win32/dlls/about-dynamic-link-libraries)
+describes load-time and run-time linking. Once loaded, the DLL uses the
+calling process's virtual address space and the calling thread's stack.
+
+Whichever linking choice produced the module, its file bytes still need the
+section map. For an illustrative `.text` row with raw start `0x400` and RVA
+start `0x1000`, file byte `0x520` is `0x120` bytes into the section. Its RVA
+is `0x1120`; at live base `0x00400000`, its virtual address is `0x00401120`.
+This example assumes the byte lies inside that section's file-backed data.
+
+<Frame caption="Static and DLL linking package implementations differently. A separate worked section still maps file offset 0x520 to RVA 0x1120 and live VA 0x00401120.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/linking-file-to-image.svg`} width="480" height="466" style="width:30rem;max-width:100%;height:auto;" alt="Static linking puts library implementation into an output module; DLL linking connects to a separate image in the same process. In the independent section example, raw start 0400 maps to RVA start 1000, so file 0520 becomes RVA 1120 and VA 00401120 at base 00400000." loading="lazy" decoding="async" />
+</Frame>
+
+<MarginNote kind="brief">Static storage is a lifetime term; static linking is a packaging choice. Neither makes a file offset equal to a live virtual address.</MarginNote>
 
 ## Run the real lab
 

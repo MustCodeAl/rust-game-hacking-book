@@ -44,6 +44,55 @@ When x86 executes `call`, it places a return address on the stack before jumping
 
 The call stack a debugger shows is a reconstruction, and it may be incomplete. Optimizations can inline functions, reuse stack space, or omit traditional frame pointers. Confirm an important caller by returning to it or placing a breakpoint at its call site and reproducing the action.
 
+### Distinguish the frame from the object it points to
+
+The stack is one place a running function keeps its bookkeeping and temporary
+values. It is not the home of every object the function uses:
+
+| Storage role | Typical contents | Lifetime to check |
+| --- | --- | --- |
+| Thread stack | Active call frames, saved return addresses, some local values | The current frame ends when the function returns; the thread has its own stack. |
+| Heap allocation | Dynamically allocated objects or buffers | The allocation lasts until its owner releases it, which may be later than this call. |
+| Static or module data | Globals, constants, and other long-lived data | Data remains for the program or module lifetime. |
+
+These are roles in virtual memory, not three physical kinds of RAM. Windows
+describes [thread stacks](https://learn.microsoft.com/en-us/windows/win32/procthread/thread-stack-size)
+and [heaps](https://learn.microsoft.com/en-us/windows/win32/memory/heap-functions);
+Microsoft's [C++ storage-duration guide](https://learn.microsoft.com/en-us/cpp/cpp/storage-classes-cpp)
+explains why a local static value can survive repeated calls. A compiler can
+also keep a local in a register or eliminate it entirely.
+
+<Frame caption="A pointer inside a stack frame can refer to a heap object with a different lifetime. Region positions are schematic.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/stack-heap-static-lifetimes.svg`} width="480" height="340" style="width:30rem;max-width:100%;height:auto;" alt="A callee stack frame contains a pointer that leads to an object in a heap allocation. Separately, module data holds globals and constants. Returning ends the frame, while the heap owner releases its object independently." loading="lazy" decoding="async" />
+</Frame>
+
+<MarginNote kind="brief">The location of a pointer is not the location of its object. Ending a raw-pointer stack slot does not release its heap allocation. An owning local can release that allocation when it is dropped during return.</MarginNote>
+
+### Read one concrete 32-bit call frame
+
+Here is an illustrative **near call with no arguments**, not an address from
+Wesnoth. A five-byte `call` at `0x00401020` must resume at `0x00401025`.
+Start with `esp = 0x0012FF90` and caller `ebp = 0x0012FFC0`:
+
+| Step | Stack pointer | What is saved or restored |
+| --- | --- | --- |
+| `call` | `0x0012FF8C` | Four-byte return address `0x00401025`. |
+| `push ebp`; `mov ebp, esp` | `0x0012FF88` | Old EBP is saved; new EBP marks this frame. |
+| `sub esp, 0x10` | `0x0012FF78` | Sixteen bytes are available for locals below EBP. |
+| `mov esp, ebp`; `pop ebp` | `0x0012FF8C` | Local space is released and caller EBP is restored. |
+| Plain `ret` | `0x0012FF90` | Saved address becomes EIP, so execution resumes after the call. |
+
+<Frame caption="A conventional EBP frame makes the saved return address visible at EBP + 4. The values are illustrative and the call has no arguments.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/x86-stack-frame-return.svg`} width="480" height="390" style="width:30rem;max-width:100%;height:auto;" alt="The return slot is at 0012FF8C, old EBP at 0012FF88, and sixteen local bytes extend down to 0012FF78. After the epilogue and plain RET, EIP is 00401025 and ESP is restored to 0012FF90." loading="lazy" decoding="async" />
+</Frame>
+
+Intel's [`CALL` and `RET` descriptions](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html)
+define the instruction behavior. The EBP prologue is a conventional frame
+layout, not something `call` creates by itself. Releasing or popping stack
+space need not erase its old bytes, so readable leftovers do not prove a
+local object is still alive. The compiler caveats above explain why a real
+optimized call may have a different layout.
+
 ## Establish context by following the observed call chain
 
 Here, **establishing context** means connecting a stored change to the
