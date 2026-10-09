@@ -1912,3 +1912,12 @@ Agent verification independently checked standard encoders, both bit rows/XML, o
 Added nine complete32-bit instruction encodings to lesson5.6, including immediate little-endian order, the shared83opcode's add/sub ModR/M distinction, relative JE and stack operations. The worked ModR/M fields explain why one opcode is insufficient. Linked Intel's manuals and the existing toy CPU encoding table instead of conflating software bytecode with x86 machine code.
 
 Before the owner's latest request to avoid repeated example-code checks, an independent assembler produced the expected21object bytes for allnineforms; the object was never executed. Primary Intel encoding references were checked. Existing source code stays unchanged; actual site/browser/link/contrast checks are inT59. No lab programs/tests ran.
+
+
+## T62 — Fill later-chapter typing gaps (2026-10-08)
+
+Added six optional concept drills:5.2boundedRVAs,11.5explicitwritepermissions,11.7page/offsetsplit,12.7canonicaladdresses,12.8presentbits,15.3freshbuttonpresses. All15readerchapters now contain typing practice; total50snippets. Five existing listings are unchanged inside SpeedType wrappers. One short pure Rust counter teaches the existing five-sample rising-edge example. Seventeen exact authored fragments provide semantic hints while the unchanged runtime keeps gaps sparse. Stable unique IDs and separate saved copy/recall records remain.
+
+Agent source-preservation/unique-fragment checks and the independent32trace counter oracle pass. Root's full browser gate passes100phone/desktopgroups,4,560actions and1,184maskedcharacterobservations, including wrong/correct keys, Backspace, hints, reveal/hide, reset, completion, focus return and storage separation. New drill screenshots at420/1280 were inspected; no page errors/overflow. Build/cheapchecks/alltenpalettes pass as recorded inT59. The owner then clarified that example-code verification need not repeat for each commit. No further example execution was done.
+
+Strict TypeScript migration, the approved balanced chapter/page-length map, full modern semantic reader phases and remaining memory/network/backend content remain unfinished. Current TokenSave index is the freshly synced generated gh-pages checkout; source-worktree reads are rejected by its root boundary, so narrow fresh source slices were used after TokenSave attempts. No owner files, primary generated checkout or lab executables were edited/run.

@@ -5,7 +5,9 @@ read `CLAUDE.md`, `BOOK_REVISION_PLAN.md`, and `BOOK_REVISION_PROGRESS.md`.** Th
 Academy": a beginner (about 15 years old) book, Astro 7 + Starlight in `site/`, live at
 https://mustcodeal.github.io/rust-game-hacking-book/ (served from branch `gh-pages`).
 
-## Current checkpoint — 2026-10-08 (T52–T58; read before historical backlogs)
+## Current checkpoint — 2026-10-08 (T52–T62; read before historical backlogs)
+
+T59–T62 add Windows API conventions/prefixes, ASCII/Unicode/Base64 notes with original art, a concrete x86 opcode table and six later-chapter typing drills. All15readerchapters now have practice,50snippets total. Shared build/link/quiz/account/audio/chat/contrast and100typing-browser groups pass; publication receipt belongs in the newest ledger. Larger migration/map/modern-reader/network/backend work remains unfinished.
 
 T57/T58 finish the low-cost source-preview/read-here requests: server-highlighted, native no-script disclosures; five redundant controls suppressed; strictly typed explicit on-page playback using the existing static transcript, voice/rate keys and full lesson URL. Verification and publication receipt are in the newest ledger entries. The rest of the migration, approved map and modern/content overhaul remains unfinished.
 
