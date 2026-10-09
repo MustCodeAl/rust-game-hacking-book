@@ -12,6 +12,40 @@ T C P may split one game message across several segments or combine bytes from s
 
 A socket is an operating-system object representing one endpoint. A T C P connection is identified by source address, source port, destination address, and destination port—the four-tuple used below.
 
+Section: Follow a join request beyond loopback.
+
+Our capture stays local. To understand the wider journey, imagine a client joining match 42 and downloading its map from assets.example. Configuration, name lookup, delivery, and game permission solve different parts of that trip.
+
+Section: Find a destination before connecting.
+
+On a typical IPv4 LAN, DHCP gives a device an address lease and network configuration; options can supply a router and DNS servers. It configures the device, not the remote game’s identity. DHCP and its options specify that exchange. Static configuration and other address-assignment systems are also possible.
+
+DNS resolves a name such as assets.example to records including i p addresses. A resolver can reuse an answer until its cache lifetime expires; name resolution does not deliver the map. The client then connects to the chosen endpoint. DNS concepts explain this separate lookup.
+
+HTTP is the web’s request/response protocol. HTTPS carries that exchange over an authenticated, encrypted connection. A CDN can serve a cached map from an edge location. A cache miss may require an origin fetch; DNS answer caching and content caching have different lifetimes. Account requests still need their own authentication and cache policy. Cloudflare’s request journey shows these boundaries.
+
+Section: Wrap the bytes across a LAN.
+
+A LAN, or local area network, joins nearby devices through links such as Ethernet or Wi-Fi. In this example, an Ethernet frame carries an i p packet, which carries a U D P, user datagram protocol, datagram, which carries game bytes. This wrapping is encapsulation. A switch forwards link frames; a router forwards the i p packet onto another link with a new link frame. Physical signaling carries the bits on each link.
+
+The OSI model names seven conceptual layers: application, presentation, session, transport, network, data link, and physical. The Internet’s T C P/i p model commonly groups application work, transport, Internet/i p, and link work. These models describe responsibilities, not seven mandatory headers. Our existing layer board remains useful: identify the job before assigning a name. Internet host requirements organize the protocol suite by these responsibilities.
+
+Section: Choose the delivery contract, then the application protocol.
+
+If middle bytes are lost, T C P recovers them before exposing later bytes in its ordered stream. U D P can deliver a later datagram without the missing one; the game decides whether to replace stale state or add its own recovery. Neither transport acknowledgment proves the server accepted a purchase. T C P and U D P specify those different contracts.
+
+A socket is the local operating-system endpoint already introduced above. A WebSocket is a two-way framed-message protocol, useful for browser lobby chat. The RFC 6455 handshake uses HTTP/1.1 Upgrade; wss protects the exchange with TLS, Transport Layer Security, which authenticates the server and protects data in transit. HTTP/3 also has a WebSocket mapping, so an Upgrade handshake is not universal. Game authorization remains separate.
+
+QUIC v1 runs over U D P but supplies its own reliable streams and loss recovery, using TLS 1.3 for connection security. HTTP/3 maps HTTP requests and responses onto QUIC. Loss affecting one stream need not block unrelated stream delivery, although streams share connection congestion limits. QUIC is not “unreliable HTTP,” and HTTP/3 is not a synonym for every game’s U D P protocol. The standards are QUIC v1, QUIC with TLS, and HTTP/3.
+
+Clarification: A socket names an endpoint; WebSocket names a message protocol. QUIC builds reliable streams over U D P. An encrypted channel still needs game-specific identity and action checks.
+
+Section: Other names belong at other boundaries.
+
+Publishing the map might use FTP, which separates control and data connections, or SFTP, which transfers files over encrypted SSH. SFTP is different from FTPS, FTP secured with TLS. A web server might use FastCGI to pass requests to a persistent application worker; the player’s side still uses HTTP. Web3 applications may use blockchain-backed records, but a ledger is not a replacement for sockets or real-time match transport. Likewise, Base64 only encodes bytes: an encoded login value has not thereby been encrypted.
+
+With those boundaries separate, return to the controlled local capture. We can now ask which interface, direction, and protocol layer produced each row.
+
 Section: Capture answers “what crossed,” not “why”.
 
 A network trace records bytes and timing at one capture point. It does not contain the sender’s variable names, the receiver’s interpretation, or any record of which UI action caused which packet. That link comes from changing one thing at a time:

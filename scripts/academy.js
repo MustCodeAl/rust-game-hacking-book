@@ -40,6 +40,7 @@
     textSize: { attribute: "academyTextSize", key: "gha-text-size", values: ["small", "standard", "large"], fallback: "standard", control: "data-text-size-choice" },
     tier: { attribute: "academyTier", key: "gha-settings-tier", values: ["basic", "advanced", "detailed"], fallback: "basic", control: "data-tier-choice" },
     drawer: { attribute: "academyDrawer", key: "gha-drawer", values: ["popover", "sheet"], fallback: "popover", control: "data-drawer-choice" },
+    appearance: { attribute: "academyAppearance", key: "gha-appearance", values: ["original", "modern"], fallback: "original", control: "data-appearance-choice" },
     depth: { attribute: "academyDepth", key: "gha-depth", values: ["flat", "soft"], fallback: "flat", control: "data-depth-choice" },
     surface: { attribute: "academySurface", key: "gha-surface", values: ["default", "unified"], fallback: "default", control: "data-surface-choice" },
     inlineCode: { attribute: "academyInlineCode", key: "gha-inline-code", values: ["classic", "soft"], fallback: "classic", control: "data-inline-code-choice" },
