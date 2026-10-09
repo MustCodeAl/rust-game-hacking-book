@@ -265,6 +265,44 @@ enforces the access tokens and integrity levels from Lesson 11.5, the page
 protections from Lesson 11.7, and the signing rules that decide which drivers
 may load at all (Lesson 12.4).
 
+## Recognize the subsystem in a kernel routine's name
+
+Driver documentation and debugger stacks often use short prefixes as clues
+to a routine's subsystem. The table connects those names to the responsibilities
+above; the linked routines are reading examples, not extra lab steps.
+
+| Prefix | Conceptual meaning | Representative documented routine |
+| --- | --- | --- |
+| `Cm` | Configuration manager: registry operations | [`CmRegisterCallbackEx`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-cmregistercallbackex) registers a registry callback. |
+| `Ex` | Executive support: shared kernel helpers | [`ExAllocatePool2`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-exallocatepool2) allocates kernel pool memory. |
+| `Hal` | Hardware abstraction layer: platform hardware details | [`HalGetAdapter`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/_kernel/) is an obsolete DMA-adapter example; use `IoGetDmaAdapter` instead. |
+| `Io` | I/O manager: devices and I/O requests | [`IoCreateDevice`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-iocreatedevice) creates a driver device object. |
+| `Ke` | Kernel: scheduling, synchronization, interrupt priority | [`KeGetCurrentIrql`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-kegetcurrentirql) reports the current interrupt request level. |
+| `Mm` | Memory manager: virtual and physical memory | [`MmProbeAndLockPages`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-mmprobeandlockpages) probes and locks buffer pages. |
+| `Ob` | Object manager: object references and handles | [`ObReferenceObjectByHandle`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-obreferenceobjectbyhandle) checks a handle and references its object. |
+| `Po` | Power manager: device power transitions | [`PoRequestPowerIrp`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-porequestpowerirp) requests a device power operation. |
+| `Tm` | Kernel Transaction Manager: coordinated transactions | [`TmCommitTransaction`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-tmcommittransaction) initiates a transaction commit. |
+| `Nt` | Native system services | [`NtCreateFile`](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile) is a native file-service entry. |
+| `Zw` | The paired native-service naming convention | [`ZwCreateFile`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-zwcreatefile) reaches the corresponding file service. |
+
+<MarginNote kind="brief">A prefix identifies a family of routines; it grants no privilege. The processor's mode, the API's requirements, and the request's permissions still determine what a caller can do.</MarginNote>
+
+`Nt` and `Zw` need one extra distinction. For system calls from **user mode**,
+their versions behave alike and treat arguments as untrusted user input. From
+**kernel mode**, `Zw` treats parameters as coming from a trusted kernel source;
+`Nt` uses the calling thread's previous mode to decide how to interpret and
+validate them. This is a calling-context rule, not a way for a user program
+to gain ring 0. Microsoft's [Nt/Zw explanation](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/using-nt-and-zw-versions-of-the-native-system-services-routines)
+describes the distinction.
+
+Older examples need a version check. [`ExAllocatePool`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-exallocatepool)
+is deprecated; Microsoft's [migration guide](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/updating-deprecated-exallocatepool-calls)
+replaces it with `ExAllocatePool2` for drivers targeting Windows 10 version 2004
+or later. `HalGetAdapter` remains listed for existing drivers, but the documented
+replacement is [`IoGetDmaAdapter`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-iogetdmaadapter).
+An old name in a stack can explain the subsystem without being a good choice
+for new code.
+
 ## Why a kernel bug takes the whole machine down
 
 When user-mode code follows a bad pointer, the processor raises a page fault

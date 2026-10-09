@@ -249,6 +249,69 @@ fn resolve_virtual_query() -> windows::core::Result<FARPROC> {
 
 The types make the two encodings visible instead of silently mixing them.
 
+## Read the Windows signature before translating it
+
+Microsoft's C documentation uses names such as `DWORD`, `BOOL`, and `HANDLE`
+to describe the API's binary contract. Match that contract rather than choosing
+a Rust type just because its name sounds similar:
+
+| Windows spelling | What it means at the boundary | Rust reading rule |
+| --- | --- | --- |
+| `DWORD` | Unsigned 32-bit integer, even in a 64-bit process | Usually `u32`; it does not grow into `usize`. |
+| `BOOL` | Signed 32-bit integer Boolean value | Raw `i32`, or the binding's projected type or result; Rust `bool` has a different representation. For Boolean truth, test nonzero rather than equality to 1. |
+| `HANDLE` | Opaque, pointer-sized object handle | Use the binding's handle type; it is not a Rust reference that you may dereference. |
+
+These distinctions come from [Windows coding conventions](https://learn.microsoft.com/en-us/windows/win32/learnwin32/windows-coding-conventions)
+and [Windows data types](https://learn.microsoft.com/en-us/windows/win32/winprog/windows-data-types).
+Read each function's return-value section too: its success and failure rules
+can be more specific than its return type.
+
+The lab's string-width mistake is one instance of a broader convention.
+In paired string APIs, `W` accepts UTF-16 code units and `A` accepts 8-bit text
+in the API's ANSI encoding; `A` is not a promise of ASCII or UTF-8. C headers
+may select an unsuffixed name using the `UNICODE` macro. Calling the explicit
+`W` function keeps the choice visible in Rust. See [Working with Strings](https://learn.microsoft.com/en-us/windows/win32/learnwin32/working-with-strings).
+
+The **ABI**, or application binary interface, also specifies how arguments and
+results pass between caller and callee. `WINAPI` and `CALLBACK` in C signatures
+mark a calling convention, not an access right. Generated bindings supply the
+matching declarations. For a callback declared with that convention, match its
+exact signature and [Rust's `extern "system"` ABI](https://doc.rust-lang.org/reference/items/external-blocks.html#abi):
+its underlying convention depends on the target, including `stdcall` on 32-bit
+Windows for non-variadic functions.
+
+<MarginNote kind="brief">A handle's size does not tell you who owns it. Check the API that produced it and its documented release rule; this lab's borrowed module handle must not be released with `FreeLibrary`.</MarginNote>
+
+The [`GetModuleHandleW` contract](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandlew)
+is the ownership rule behind that note. Likewise, a string pointer must stay
+valid for as long as the receiving API uses it; a pointer wrapper alone does
+not own its storage.
+
+### Which windows-rs crate does what?
+
+The crate names describe different jobs in the Rust bindings. They do not
+change which Windows layer runs a call or what the caller may access.
+
+| Crate | Role |
+| --- | --- |
+| [`windows`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows.md) | Generated projected APIs for Win32, COM, and WinRT, with typed values and conversions. This is the lab's API crate. |
+| [`windows-sys`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-sys.md) | Raw Windows ABI declarations; the caller manages pointer contracts, ownership, and error translation. |
+| [`windows-core`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-core.md) | Shared COM and WinRT interface types, traits, and projection support. |
+| [`windows-strings`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-strings.md) | Windows string representations, including owning strings and borrowed pointer wrappers. |
+| [`windows-result`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-result.md) | Windows status and error types, including `HRESULT` and `Result`. |
+
+The generation tools have separate jobs: [`windows-bindgen`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-bindgen.md)
+turns Windows metadata into Rust bindings; [`windows-metadata`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-metadata.md)
+reads and writes that metadata; [`windows-clang`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-clang.md)
+extracts C/C++ header declarations using libclang. The lab consumes pre-generated
+bindings. Add support or generation crates only when your own task needs them;
+many support types are already re-exported by the API crate.
+
+One similarly named crate, [`windows-reference`](https://github.com/microsoft/windows-rs/blob/master/docs/crates/windows-reference.md),
+boxes a value for a WinRT signature that requires `IReference<T>`. That is a
+Windows interface object, distinct from ordinary Rust borrowing with `&T`.
+The address inspector needs no such boxed value.
+
 ## Run it and compare two launches
 
 <Badge text="Windows VM" variant="note" />
