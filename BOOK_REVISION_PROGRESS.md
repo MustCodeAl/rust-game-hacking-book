@@ -1928,3 +1928,10 @@ T59–T62 publication receipt — 2026-10-08: four source steps08d4aa0,2b2d06e,d
 ## T63 — Remove finished origin branches (2026-10-08)
 
 At the owner's request, refreshed origin and audited feature heads against the published/source histories and active worktrees. Normally deleted12finished codex/gh-pages-*remote branches; all exact heads are ancestors of the new published Pages branch. Their full hashes and recovery history are recorded inBRANCH_CLEANUP_LOG.md. Kept active source/Pages/Claude checkout branches, historical archives, and the unmerged revert branch. Deletion succeeded for all12. This is repository housekeeping, with no product/example-code changes; earlier site checks were not repeated for documentation-only receipts. No force push, local owner checkout deletion or lab execution.
+
+
+## T64 — Repair TokenSave source lookup and recover disk headroom (2026-10-09)
+
+Initialized an independent TokenSave project in the persistent book-finish worktree, added codex/book-revision and MDX/SVG artifact indexing, and verified source-branch searches plus fresh source slices. Queries now explicitly pass that graph_root and graph_branch; the primary gh-pages index stays unchanged. The early fallback-index warning was resolved by tracking the source branch. Source graph reports696files. This local tool configuration is ignored by Git and does not alter the book.
+
+A disk-full error prevented automatic approval review from opening its writer lock. Removed72old/duplicate task-generated PNG captures (14,645,913bytes) and only the obsolete typing-hotfix dist (237,518,269bytes); source, migration backups, logs and current publication captures were preserved. The owner then freed further disk space (34GiB reported). Approval/init subsequently succeeded. No owner content, lab programs or source branches were deleted. Normal source exploration resumes through the repaired TokenSave selectors.
