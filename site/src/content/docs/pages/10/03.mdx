@@ -81,6 +81,33 @@ Windows refuses the requested access. Close a handle you no longer need.
 </ResponseField>
 </Fields>
 
+Optional: practise the three-argument call below. For a supplied PID, this
+helper asks only for basic process-query access and disables inheritance. A
+successful call gives it an owned `HANDLE`, which it immediately closes; an
+error returns through `?`. Real inspectors keep an ownership guard when more
+fallible work happens between opening and closing. These are the course's
+[`windows` 0.62 projected signatures](https://github.com/microsoft/windows-rs/blob/0.62.0/crates/libs/windows/src/Windows/Win32/System/Threading/mod.rs),
+with the paired [handle-release contract](https://github.com/microsoft/windows-rs/blob/0.62.0/crates/libs/windows/src/Windows/Win32/Foundation/mod.rs).
+
+<SpeedType id="win32-open-process-contract" title="Recall OpenProcess and its arguments" recall={[{"text": "OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)", "mask": "OpenProcess", "kind": "api", "hint": "Call the documented function that opens the selected process with requested rights."}, {"text": "OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)", "mask": "false", "kind": "argument", "hint": "Disable inheritance so a later child process does not receive this handle."}, {"text": "OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)", "mask": "PROCESS_QUERY_LIMITED_INFORMATION", "kind": "argument", "hint": "Request basic process queries without asking for memory-writing rights."}, {"text": "CloseHandle(handle)", "mask": "CloseHandle", "kind": "api", "hint": "Release the owned process handle when this small helper is finished."}, {"text": "Foundation::{CloseHandle, HANDLE}", "mask": "HANDLE", "kind": "import", "hint": "Import the opaque object-handle type from the Foundation module."}, {"text": "Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION}", "mask": "OpenProcess", "kind": "import", "hint": "Import the process-opening API from the Threading module."}, {"text": "let handle: HANDLE", "mask": "HANDLE", "kind": "type", "hint": "Use the binding’s object-handle type for the value returned by the call."}, {"text": "pid: u32", "mask": "u32", "kind": "type", "hint": "Represent the PID as a thirty-two-bit unsigned integer."}, {"text": "Ok(())", "mask": "Ok", "kind": "logic", "hint": "Return the success variant after opening and closing the handle succeeded."}]}>
+
+```rust
+use windows::Win32::{
+    Foundation::{CloseHandle, HANDLE},
+    System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
+};
+
+fn probe_query_access(pid: u32) -> windows::core::Result<()> {
+    // SAFETY: numeric PID, query-only rights, and inheritance disabled.
+    let handle: HANDLE = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }?;
+    // SAFETY: this function owns this valid handle and never uses it again.
+    unsafe { CloseHandle(handle) }?;
+    Ok(())
+}
+```
+
+</SpeedType>
+
 ## Treat a handle as a capability
 
 A capability combines a reference to an object with authority to perform particular operations. A process handle opened for limited queries can identify the process and ask for its image path, but it cannot become a memory-writing handle because a later function wishes it could.

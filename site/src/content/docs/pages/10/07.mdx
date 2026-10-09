@@ -10,6 +10,7 @@ sidebar:
   label: "11.9 From Win32 Calls to Kernel Services"
 ---
 import Frame from '../../../../components/kit/Frame.astro';
+import SpeedType from '../../../../components/kit/SpeedType.astro';
 import { Accordion, Badge, GitHub, CodeGroup, Tab } from '../../../../components/kit';
 import Visual from '../../../../components/Visual.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
@@ -200,37 +201,50 @@ PE export names are byte strings. The `s!` macro creates a terminated static `PC
 This original attempt mixes byte strings and wide strings. It is intentionally a **non-compiling example**: the Windows bindings reject the wrong parameter types before any call runs.
 
 ```rust title="Before: rejected string widths"
-fn resolve_virtual_query() -> windows::core::Result<FARPROC> {
+fn resolve_virtual_query() -> windows::core::Result<usize> {
     // SAFETY: static terminated strings outlive lookup; widths must match the API.
     let kernel32 = unsafe { GetModuleHandleW(s!("kernel32.dll")) }?;
 
     // SAFETY: the borrowed module stays loaded during this export lookup.
     let address = unsafe { GetProcAddress(kernel32, w!("VirtualQueryEx")) };
-    address.ok_or_else(windows::core::Error::from_win32)
+    address.ok_or_else(windows::core::Error::from_win32).map(|function| function as usize)
 }
 ```
 
 Use `w!` for the wide DLL filename and `s!` for the byte-encoded export name. Both strings are static and terminated; the DLL handle is borrowed for the lookup.
 
+In this version, `FARPROC` already means an optional generic function pointer.
+`ok_or_else` removes that `Option` wrapper; the helper returns its address as
+`usize` for display. It does not call that pointer as `VirtualQueryEx`. The
+[version-pinned type](https://github.com/microsoft/windows-rs/blob/0.62.0/crates/libs/windows/src/Windows/Win32/Foundation/mod.rs)
+and [lookup signature](https://github.com/microsoft/windows-rs/blob/0.62.0/crates/libs/windows/src/Windows/Win32/System/LibraryLoader/mod.rs)
+explain this return-type choice.
+
 <CodeGroup>
 <Tab label="Improved code">
 
+Optional: practise matching the full API names, module argument and address type to their jobs.
+
+<SpeedType id="win32-export-lookup" title="Recall the loader API contract" recall={[{"text": "GetModuleHandleW(w!(\"kernel32.dll\"))", "mask": "GetModuleHandleW", "kind": "api", "hint": "Borrow the handle of the module already loaded in this process."}, {"text": "GetProcAddress(kernel32, s!(\"VirtualQueryEx\"))", "mask": "GetProcAddress", "kind": "api", "hint": "Look up the named export in the borrowed module without calling it."}, {"text": "GetProcAddress(kernel32, s!(\"VirtualQueryEx\"))", "mask": "kernel32", "kind": "argument", "hint": "Pass the module whose export table should be searched."}, {"text": "Result<usize>", "mask": "usize", "kind": "type", "hint": "Return a platform-sized address value for display after successful lookup."}, {"text": "function as usize", "mask": "usize", "kind": "type", "hint": "Convert the found function pointer into an address-sized integer for printing."}, {"text": "ok_or_else", "mask": "ok_or_else", "kind": "logic", "hint": "Turn a missing export into a Windows error instead of treating it as a usable address."}]}>
+
 ```rust
-fn resolve_virtual_query() -> windows::core::Result<FARPROC> {
+fn resolve_virtual_query() -> windows::core::Result<usize> {
     // SAFETY: static terminated strings outlive lookup; widths must match the API.
     let kernel32 = unsafe { GetModuleHandleW(w!("kernel32.dll")) }?;
 
     // SAFETY: the borrowed module stays loaded during this export lookup.
     let address = unsafe { GetProcAddress(kernel32, s!("VirtualQueryEx")) };
-    address.ok_or_else(windows::core::Error::from_win32)
+    address.ok_or_else(windows::core::Error::from_win32).map(|function| function as usize)
 }
 ```
+
+</SpeedType>
 
 </Tab>
 <Tab label="Show the diff">
 
 ```diff
- fn resolve_virtual_query() -> windows::core::Result<FARPROC> {
+ fn resolve_virtual_query() -> windows::core::Result<usize> {
      // SAFETY: static terminated strings outlive lookup; widths must match the API.
 -    let kernel32 = unsafe { GetModuleHandleW(s!("kernel32.dll")) }?;
 +    let kernel32 = unsafe { GetModuleHandleW(w!("kernel32.dll")) }?;
@@ -238,7 +252,7 @@ fn resolve_virtual_query() -> windows::core::Result<FARPROC> {
      // SAFETY: the borrowed module stays loaded during this export lookup.
 -    let address = unsafe { GetProcAddress(kernel32, w!("VirtualQueryEx")) };
 +    let address = unsafe { GetProcAddress(kernel32, s!("VirtualQueryEx")) };
-     address.ok_or_else(windows::core::Error::from_win32)
+     address.ok_or_else(windows::core::Error::from_win32).map(|function| function as usize)
  }
 ```
 

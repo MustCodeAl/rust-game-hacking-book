@@ -1,0 +1,56 @@
+---
+// <MemoryMechanism kind="cdecl" id="cdecl-call-frame" />
+// <MemoryMechanism kind="translation" id="segment-page-paths" />
+// Complete worked defaults are server-rendered; optional controls enhance them.
+import '../styles/memory-mechanism.css';
+import { boardMarkup, defaultInput, hex, makeFrames, referenceCode, type MemoryKind } from '../scripts/memory-mechanism-model';
+interface Props { kind: MemoryKind; id: string; title?: string }
+const { kind, id, title = kind === 'cdecl' ? 'Follow a cdecl call and its cleanup' : 'Compare a segment with a page mapping' } = Astro.props;
+if ((kind !== 'cdecl' && kind !== 'translation') || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(id)) throw new Error('MemoryMechanism requires a supported kind and a unique valid id.');
+const frames = makeFrames(kind, defaultInput(kind));
+const final = frames.at(-1);
+if (!final) throw new Error('MemoryMechanism must have a worked result.');
+const help = kind === 'cdecl'
+  ? 'A bounded 32-bit near call with one four-byte integer argument. The helper adds seven, returns its result in EAX, and the cdecl caller releases the argument. This is an illustrative calling convention, not executed code.'
+  : 'Use the same small number as a segment offset and, independently, a virtual address. The segment has base 0x00400000 and an inclusive limit. Paging models one selected 4 KiB page entry; changing its frame moves that page. Large pages and read/write privilege checks are outside this model.';
+---
+<section class="memory-mechanism" id={id} data-memory-kind={kind} aria-labelledby={`${id}-title`}>
+  <header class="memory-mechanism__header"><span>Optional exploration</span><h3 id={`${id}-title`}>{title}</h3><p>{help}</p></header>
+  <div class="memory-mechanism__controls" data-memory-controls hidden data-reader-skip>
+    <fieldset aria-describedby={`${id}-input-help`}><legend>Change the example</legend>
+      {kind === 'cdecl' ? <>
+        <label>Integer argument <input type="number" min="0" max="255" step="1" value="21" data-memory-input="parameter" data-min="0" data-max="255" data-label="Argument" /></label>
+        <label>Starting ESP, hex <input type="text" value="0x0012FF90" spellcheck="false" data-memory-input="initialEsp" data-radix="16" data-min={0x0012ff00} data-max={0x00130000} data-align="4" data-label="Starting ESP" /></label>
+      </> : <>
+        <label>Offset / virtual address, hex <input type="text" value="0x1234" spellcheck="false" data-memory-input="address" data-radix="16" data-min="0" data-max="65535" data-label="Address" /></label>
+        <label>Inclusive segment limit, hex <input type="text" value="0x1FFF" spellcheck="false" data-memory-input="limit" data-radix="16" data-min="0" data-max="65535" data-label="Limit" /></label>
+        <label>Physical frame number <input type="number" min="0" max="4095" step="1" value="416" data-memory-input="frame" data-min="0" data-max="4095" data-label="Frame" /></label>
+        <label class="memory-mechanism__check"><input type="checkbox" checked data-memory-input="present" /> Selected page is present</label>
+      </>}
+      <p id={`${id}-input-help`}>{kind === 'cdecl' ? 'Argument: 0–255. ESP: 0x0012FF00–0x00130000, divisible by four.' : 'Address and limit: 0x0000–0xFFFF. Physical frame: 0–4095. Hex inputs accept an optional 0x prefix.'}</p>
+    </fieldset>
+    <p class="memory-mechanism__error" data-memory-error role="status" aria-live="polite"></p>
+    <div class="memory-mechanism__nav">
+      <button type="button" data-memory-previous>Back</button><button type="button" data-memory-next>First step</button>
+      <button type="button" data-memory-play aria-pressed="false">Play</button><button type="button" data-memory-reset>Reset worked example</button>
+    </div>
+    <p class="memory-mechanism__motion-note" data-memory-motion-note>Play starts only when chosen. Step works one action at a time.</p>
+  </div>
+  <p class="memory-mechanism__counter" data-memory-counter>{frames.length} / {frames.length}: {final.line}</p>
+  <p class="memory-mechanism__status" data-memory-status role="status" aria-live="polite" aria-atomic="true">{final.description}</p>
+  <div class="memory-mechanism__board" data-memory-board set:html={boardMarkup(final)}></div>
+  <dl class="memory-mechanism__facts" data-memory-facts>{final.facts.map(fact => <><dt>{fact.name}</dt><dd>{fact.value}</dd></>)}</dl>
+  <details class="memory-mechanism__reference" open><summary>Complete default worked example and listing</summary>
+    <p>This reference keeps the default values. The live picture above follows your input and selected step.</p>
+    <div class="memory-mechanism__table-wrap"><table><thead><tr><th scope="col">Action</th><th scope="col">Worked state</th></tr></thead>
+      <tbody>{frames.map(frame => <tr><th scope="row"><code>{frame.line}</code></th><td>{frame.kind === 'cdecl' ? `ESP ${hex(frame.esp)}; EBP ${hex(frame.ebp)}; EAX ${frame.eax ?? 'not set'}` : frame.description}</td></tr>)}</tbody>
+    </table></div>
+    <pre><code>{referenceCode(kind)}</code></pre>
+    <p>{kind === 'cdecl' ? 'A plain RET pops the return address, leaving the argument for caller cleanup. Released stack bytes can remain readable without being live objects. Compilers can omit this conventional EBP frame.' : 'The conceptual segment result is a linear address; the paging result is a physical address. Segment-limit failure and a not-present page are separate decisions. Modern Windows normally uses flat application segments plus paging.'}</p>
+  </details>
+  <noscript><p>The complete worked state and reference remain available with JavaScript off. Nothing here must be completed.</p></noscript>
+</section>
+<script>
+  import { mountMemoryMechanisms } from '../scripts/memory-mechanism';
+  mountMemoryMechanisms();
+</script>

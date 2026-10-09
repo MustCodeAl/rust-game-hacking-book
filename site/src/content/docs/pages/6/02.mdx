@@ -38,6 +38,108 @@ A **socket** is an operating-system object representing one endpoint. A TCP
 connection is identified by source address, source port, destination address,
 and destination port—the four-tuple used below.
 
+## Follow a join request beyond loopback
+
+Our capture stays local. To understand the wider journey, imagine a client
+joining match 42 and downloading its map from `assets.example`. Configuration,
+name lookup, delivery, and game permission solve different parts of that trip.
+
+### Find a destination before connecting
+
+On a typical IPv4 LAN, **DHCP** gives a device an address lease and network
+configuration; options can supply a router and DNS servers. It configures the
+device, not the remote game's identity. [DHCP](https://www.rfc-editor.org/rfc/rfc2131.html)
+and its [options](https://www.rfc-editor.org/rfc/rfc2132.html) specify that exchange.
+Static configuration and other address-assignment systems are also possible.
+
+**DNS** resolves a name such as `assets.example` to records including IP
+addresses. A resolver can reuse an answer until its cache lifetime expires;
+name resolution does not deliver the map. The client then connects to the
+chosen endpoint. [DNS concepts](https://www.rfc-editor.org/rfc/rfc1034.html)
+explain this separate lookup.
+
+HTTP is the web’s request/response protocol. **HTTPS** carries that exchange
+over an authenticated, encrypted connection. A **CDN** can serve a cached map
+from an edge location. A cache miss may require
+an origin fetch; DNS answer caching and content caching have different
+lifetimes. Account requests still need their own authentication and cache
+policy. [Cloudflare's request journey](https://developers.cloudflare.com/billing/understand/how-charges-accrue/)
+shows these boundaries.
+
+<Frame caption="An IPv4 lease configures the client. DNS returns an address; only the later HTTPS connection retrieves the asset from the CDN, with an origin fetch on a cache miss. Original CC0 artwork.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/network-foundations-dns-cdn.svg`} width="480" height="454" alt="DHCP supplies a client's IPv4 configuration. The client separately asks a DNS resolver about assets.example and receives an address. A later HTTPS asset request goes to a CDN edge, which serves an eligible cached copy or fetches the file from origin storage." loading="lazy" decoding="async" />
+</Frame>
+
+### Wrap the bytes across a LAN
+
+A **LAN**, or local area network, joins nearby devices through links such as
+Ethernet or Wi-Fi. In this example, an Ethernet frame carries an IP packet,
+which carries a UDP datagram, which carries game bytes. This wrapping is
+**encapsulation**. A switch forwards link frames; a router forwards the IP
+packet onto another link with a new link frame. Physical signaling carries the
+bits on each link.
+
+The **OSI model** names seven conceptual layers: application, presentation,
+session, transport, network, data link, and physical. The Internet's **TCP/IP
+model** commonly groups application work, transport, Internet/IP, and link
+work. These models describe responsibilities, not seven mandatory headers.
+Our existing layer board remains useful: identify the job before assigning a
+name. [Internet host requirements](https://www.rfc-editor.org/rfc/rfc1122.html)
+organize the protocol suite by these responsibilities.
+
+<Frame caption="The same game bytes are wrapped inside a UDP datagram, IP packet and Ethernet frame. A router replaces the link wrapper for the next hop. The OSI/TCP-IP mapping is conceptual, not a literal count of wire headers. Original CC0 artwork.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/network-foundations-lan-encapsulation.svg`} width="480" height="448" alt="Nested boxes show game bytes inside UDP, IP and Ethernet wrappers. A client sends through a LAN switch to a router; the next link uses a new link frame. A note maps OSI application, presentation and session work to the TCP/IP application group, transport to TCP or UDP, network to IP, and data link and physical work to links." loading="lazy" decoding="async" />
+</Frame>
+
+### Choose the delivery contract, then the application protocol
+
+If middle bytes are lost, **TCP** recovers them before exposing later bytes in
+its ordered stream. **UDP** can deliver a later datagram without the missing
+one; the game decides whether to replace stale state or add its own recovery.
+Neither transport acknowledgment proves the server accepted a purchase.
+[TCP](https://www.rfc-editor.org/rfc/rfc9293.html) and [UDP](https://www.rfc-editor.org/rfc/rfc768.html)
+specify those different contracts.
+
+<Frame caption="A, B and C are illustrative byte chunks on the TCP side and whole datagrams on the UDP side. Lost B delays later TCP bytes; raw UDP supplies no automatic retry. TCP application messages still need framing. Original CC0 artwork.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/network-foundations-tcp-udp.svg`} width="480" height="496" alt="TCP receives A, loses B, buffers C, and exposes B then C after recovery. UDP receives datagram A, loses datagram B, and can deliver C without recovering B. The game must decide whether a missing datagram needs a retry or a newer replacement." loading="lazy" decoding="async" />
+</Frame>
+
+A **socket** is the local operating-system endpoint already introduced above.
+A **WebSocket** is a two-way framed-message protocol, useful for browser lobby
+chat. The [RFC 6455](https://www.rfc-editor.org/rfc/rfc6455.html) handshake uses
+HTTP/1.1 Upgrade; `wss` protects the exchange with **TLS**, Transport Layer Security, which
+authenticates the server and protects data in transit. [HTTP/3 also has a WebSocket mapping](https://www.rfc-editor.org/rfc/rfc9220.html),
+so an Upgrade handshake is not universal. Game authorization remains separate.
+
+**QUIC v1** runs over UDP but supplies its own reliable streams and loss
+recovery, using TLS 1.3 for connection security. **HTTP/3** maps HTTP requests
+and responses onto QUIC. Loss affecting one stream need not block unrelated
+stream delivery, although streams share connection congestion limits. QUIC is
+not “unreliable HTTP,” and HTTP/3 is not a synonym for every game's UDP
+protocol. The standards are [QUIC v1](https://www.rfc-editor.org/rfc/rfc9000.html),
+[QUIC with TLS](https://www.rfc-editor.org/rfc/rfc9001.html), and [HTTP/3](https://www.rfc-editor.org/rfc/rfc9114.html).
+
+<Frame caption="The left branch shows the classic RFC 6455 secure WebSocket path; the right shows HTTP/3 over QUIC v1. Both use local socket endpoints, but their message and transport layers differ. Original CC0 artwork.">
+  <img src={`${import.meta.env.BASE_URL}assets/images/original/network-foundations-quic-http3-sockets.svg`} width="480" height="454" alt="A classic secure WebSocket uses WebSocket message frames, TLS and a TCP socket. HTTP/3 uses HTTP frames on QUIC streams, QUIC with TLS 1.3 security, and a UDP socket. Both paths continue through IP and link delivery; a socket is an API endpoint rather than an application message protocol." loading="lazy" decoding="async" />
+</Frame>
+
+<MarginNote kind="clarify">A socket names an endpoint; WebSocket names a message protocol. QUIC builds reliable streams over UDP. An encrypted channel still needs game-specific identity and action checks.</MarginNote>
+
+### Other names belong at other boundaries
+
+Publishing the map might use [FTP](https://www.rfc-editor.org/rfc/rfc959.html),
+which separates control and data connections, or [SFTP](https://man.openbsd.org/sftp),
+which transfers files over encrypted SSH. SFTP is different from [FTPS](https://www.rfc-editor.org/rfc/rfc4217.html),
+FTP secured with TLS. A web server might use [FastCGI](https://fastcgi-archives.github.io/FastCGI_Specification.html)
+to pass requests to a persistent application worker; the player's side still
+uses HTTP. **Web3** applications may use [blockchain-backed records](https://ethereum.org/en/developers/docs/dapps/),
+but a ledger is not a replacement for sockets or real-time match transport.
+Likewise, [Base64](https://www.rfc-editor.org/rfc/rfc4648.html) only encodes bytes:
+an encoded login value has not thereby been encrypted.
+
+With those boundaries separate, return to the controlled local capture. We can
+now ask which interface, direction, and protocol layer produced each row.
+
 ## Capture answers “what crossed,” not “why”
 
 A network trace records bytes and timing at one capture point. It does not contain the sender's variable names, the receiver's interpretation, or any record of which UI action caused which packet. That link comes from changing one thing at a time:
