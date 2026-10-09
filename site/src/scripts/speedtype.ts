@@ -506,6 +506,14 @@ function open(root: HTMLElement, block: HTMLElement, starter: Starter, fragments
   }
 
   function reset(rotate = false): void {
+    // Retired targets must be restored before the next plan clears their tags.
+    // Reset is an explicit whole-snippet action; ordinary keys keep the cached buffer.
+    seq.forEach((item, index) => {
+      const display = item.nl ? "↵" : item.ch;
+      item.el.textContent = display;
+      readableChars[index] = display;
+      item.el.removeAttribute("data-recall-hidden");
+    });
     if (recallMode) {
       if (rotate) rotation += 1;
       recallPlan = applyRecall(seq, source, fragments, focus, rotation);
