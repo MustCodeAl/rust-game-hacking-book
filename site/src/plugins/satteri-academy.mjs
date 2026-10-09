@@ -334,49 +334,106 @@ export function glossaryTerms() {
  * Link plain mentions of other lessons ("Lesson 2.1", "Lessons 4.2 and 4.3") to
  * those lessons, so a reader can follow one and a hover card can say what it
  * covers. A lesson is linked the first time it is mentioned on a page, and
- * never from its own page. Numbers are the displayed lesson numbers, which the
- * lesson index maps to each lesson's stable URL.
+ * never from its own page. Bare authored numbers retain their pre-balancing
+ * stable targets; visible labels come from the current stable-ID index.
  */
 export function lessonReferences() {
-	const slugOf = new Map(getLessonIndex().map(({ chapter, slug }) => [chapter, slug]));
-	// "Lesson 2.1", or "Lessons 2.1, 2.2, and 2.3" / "Lessons 2.1 and 2.2" / "Lessons 2.1–2.3".
+	// These aliases are historical identities. Never rebuild them from new slots.
+	const identity = JSON.parse(readFileSync(new URL('../data/lesson-identities.json', import.meta.url), 'utf8'));
+	const slugOf = new Map(Object.entries(identity.legacyQuizNumberToId));
+	const numberOf = new Map(getLessonIndex().map(({ slug, chapter }) => [slug, chapter]));
+	const oldOrder = [...slugOf.keys()].sort((a, b) => {
+		const [ac, al] = a.split('.').map(Number);
+		const [bc, bl] = b.split('.').map(Number);
+		return ac - bc || al - bl;
+	});
+	const oldPosition = new Map(oldOrder.map((number, index) => [number, index]));
 	const phrase = /\b(Lessons?)\s+(\d{1,2}\.\d{1,2})((?:(?:,\s*(?:and\s+|or\s+)?|\s+(?:and|or)\s+|\s*[–-]\s*)\d{1,2}\.\d{1,2})*)/g;
 
 	return ({ fileURL }) => {
 		const here = /\/content\/docs\/(pages\/\d+\/\d+)\.mdx$/.exec(fileURL?.pathname ?? '')?.[1];
 		if (!here) return null;
 		const seen = new Set([here]);
+		const plain = (value) => ({ type: 'text', value });
+		const reference = (oldNumber, prefix = '') => {
+			const slug = slugOf.get(oldNumber);
+			const text = prefix + (numberOf.get(slug) ?? oldNumber);
+			if (!slug || seen.has(slug)) return plain(text);
+			seen.add(slug);
+			return { type: 'element', tagName: 'a', properties: { href: `/${slug}/` }, children: [plain(text)] };
+		};
+		const refreshExplicit = (node, ctx) => {
+			if (!isMarkable(node, ctx)) return;
+			const href = node.properties?.href;
+			// External sites can reuse our path shape. Only our own origin qualifies.
+			if (typeof href !== 'string') return;
+			let path;
+			try {
+				const url = new URL(href, `${identity.siteOrigin}${identity.byId[here]?.route ?? `/${here}/`}`);
+				if (url.origin !== identity.siteOrigin) return;
+				path = decodeURIComponent(url.pathname);
+			}
+			catch { return; }
+			const slug = /(?:^|\/)(pages\/\d+\/\d+)\/?$/.exec(path)?.[1];
+			const number = numberOf.get(slug);
+			if (!number || !identity.byId[slug] || ![`/${slug}`, `/${slug}/`, identity.byId[slug].route, identity.byId[slug].route.replace(/\/$/, '')].includes(path)) return;
+			let changed = false;
+			const update = (child) => {
+				if (changed) return child;
+				if (child.type === 'text') {
+					const labelled = /(\bLessons?\s+)\d{1,2}\.\d{1,2}/;
+					const leading = /^(\s*)\d{1,2}\.\d{1,2}(?=\s|$)/;
+					if (labelled.test(child.value) || leading.test(child.value)) {
+						changed = true;
+						return { ...child, value: child.value.replace(labelled, `$1${number}`).replace(leading, `$1${number}`) };
+					}
+				} else if (child.type === 'element' && !UNMARKED_TAGS.has(child.tagName)) {
+					return { ...child, children: (child.children ?? []).map(update) };
+				}
+				return child;
+			};
+			const children = (node.children ?? []).map(update);
+			if (changed) ctx.replaceNode(node, [{ ...node, children }]);
+		};
 		return {
 			name: 'academy-lesson-references',
+			element: { filter: ['a'], visit: refreshExplicit },
 			text(node, ctx) {
 				const value = node.value;
 				if (!/Lessons?\s+\d/.test(value) || !isMarkable(node, ctx)) return;
-				const link = (slug, text) => ({
-					type: 'element',
-					tagName: 'a',
-					properties: { href: `/${slug}/` },
-					children: [{ type: 'text', value: text }],
-				});
 				const parts = [];
 				let last = 0;
 				phrase.lastIndex = 0;
 				for (let match; (match = phrase.exec(value)); ) {
 					const numbers = [...match[0].matchAll(/\d{1,2}\.\d{1,2}/g)];
-					// One lesson is linked as "Lesson 2.1"; a list links each number.
-					const singular = numbers.length === 1 && match[1] === 'Lesson';
-					for (const number of numbers) {
-						const slug = slugOf.get(number[0]);
-						if (!slug || seen.has(slug)) continue;
-						seen.add(slug);
-						const start = match.index + (singular ? 0 : number.index);
-						const end = match.index + number.index + number[0].length;
-						if (start > last) parts.push({ type: 'text', value: value.slice(last, start) });
-						parts.push(link(slug, value.slice(start, end)));
-						last = end;
+					if (!numbers.length) continue;
+					if (match.index > last) parts.push(plain(value.slice(last, match.index)));
+					if (numbers.length === 1) parts.push(reference(numbers[0][0], match[1] + ' '));
+					else {
+						parts.push(plain(match[1] === 'Lesson' ? 'Lessons ' : match[1] + ' '));
+						for (let i = 0; i < numbers.length; i++) {
+							const start = numbers[i], end = numbers[i + 1];
+							const separator = end ? value.slice(match.index + start.index + start[0].length, match.index + end.index) : '';
+							const from = oldPosition.get(start[0]), to = end ? oldPosition.get(end[0]) : undefined;
+							if (end && /^\s*[–-]\s*$/.test(separator) && from !== undefined && to !== undefined) {
+								// A moved interval is a list of the original stable lessons, not
+								// a newly numbered range that could include unrelated topics.
+								const span = oldOrder.slice(Math.min(from, to), Math.max(from, to) + 1);
+								if (from > to) span.reverse();
+								span.forEach((number, n) => { if (n) parts.push(plain(n === span.length - 1 ? ' and ' : ', ')); parts.push(reference(number)); });
+								i++;
+								const following = numbers[i + 1];
+								if (following) parts.push(plain(value.slice(match.index + end.index + end[0].length, match.index + following.index)));
+							} else {
+								parts.push(reference(start[0]));
+								if (end) parts.push(plain(separator));
+							}
+						}
 					}
+					last = match.index + match[0].length;
 				}
 				if (!parts.length) return;
-				if (last < value.length) parts.push({ type: 'text', value: value.slice(last) });
+				if (last < value.length) parts.push(plain(value.slice(last)));
 				ctx.replaceNode(node, parts);
 			},
 		};

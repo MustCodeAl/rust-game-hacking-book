@@ -3,6 +3,7 @@
 // shuffling options, and drawing related follow-up questions.
 import { inlineMarkdown } from '../lib/inline-md';
 import banks from '../data/lesson-quiz-banks.json';
+import { lessonIdentityById, lessonIdentityByDisplayedNumber } from '../lib/lesson-identity';
 
 interface Props {
 	id: string;
@@ -16,6 +17,8 @@ interface Props {
 	program?: string;
 	/** Lesson number; defaults to the current page's. */
 	chapter?: string;
+	/** Stable content ID; also supports print renders outside Starlight. */
+	lessonId?: string;
 }
 
 const { id, type = 'multiple-choice', title = 'Pause and predict', prompt, options = '', answer, explanation, alternatives = '', program = '' } =
@@ -23,13 +26,17 @@ const { id, type = 'multiple-choice', title = 'Pause and predict', prompt, optio
 // The print book renders lessons outside a Starlight page, where reading
 // `starlightRoute` throws rather than returning undefined.
 let lesson = Astro.props.chapter ?? '';
-if (!lesson) {
+let stableId = Astro.props.lessonId ?? '';
+if (!lesson || !stableId) {
 	try {
-		lesson = Astro.locals.starlightRoute.entry.data.chapter ?? '';
-	} catch {
-		lesson = '';
-	}
+		const entry = Astro.locals.starlightRoute.entry;
+		lesson ||= entry.data.chapter ?? '';
+		stableId ||= entry.id;
+	} catch { /* print renders can use the explicit current chapter */ }
 }
+const identity = lessonIdentityById(stableId) ?? lessonIdentityByDisplayedNumber(lesson);
+if (identity) { lesson = identity.number; stableId = identity.id; }
+const storageLesson = identity?.legacyQuizNumber ?? lesson;
 const optionList = options
 	.split('||')
 	.map((option) => option.trim())
@@ -58,7 +65,9 @@ const specification = JSON.stringify({
 	data-alternatives={alternatives}
 	data-quiz-chapter={lesson.split('.')[0]}
 	data-quiz-lesson={lesson}
-	data-quiz-seed={`${lesson}-${id}`}
+	data-quiz-lesson-id={stableId}
+	data-quiz-storage-lesson={storageLesson}
+	data-quiz-seed={`${storageLesson}-${id}`}
 >
 	<div class="academy-quiz__header" role="group" aria-label="Quiz heading">
 		<span class="academy-quiz__number" aria-hidden="true">🧩</span>

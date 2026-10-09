@@ -37,3 +37,5 @@ export { default as Tiles } from './Tiles.astro';
 export { default as Tooltip } from './Tooltip.astro';
 export { default as Update } from './Update.astro';
 export { default as Updates } from './Updates.astro';
+
+export { default as HexDisassemblyInspector } from '../HexDisassemblyInspector.astro';

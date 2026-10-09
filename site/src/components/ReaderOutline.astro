@@ -1,0 +1,64 @@
+---
+import type { StarlightRouteData } from '@astrojs/starlight/route-data';
+import '../styles/reader-navigation.css';
+
+interface Props {
+	toc: NonNullable<StarlightRouteData['toc']>;
+	id?: string;
+}
+const { toc, id = 'academy-reader-outline' } = Astro.props;
+type TocEntry = Props['toc']['items'][number];
+interface OutlineHeading { slug: string; text: string; depth: number }
+function flatten(items: TocEntry[], depth = 0): OutlineHeading[] {
+	return items.flatMap((item) => [
+		{ slug: item.slug, text: item.text, depth },
+		...flatten(item.children, depth + 1),
+	]);
+}
+const headings = flatten(toc.items);
+const titleId = `${id}-title`;
+const tooltipId = `${id}-tooltip`;
+---
+
+<section class="reader-outline not-content" data-reader-outline aria-label="On this page">
+	<button class="reader-outline__trigger" type="button" data-outline-open aria-controls={id} aria-expanded="false" hidden>
+		<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 6h14M7 12h14M7 18h14M3 6h.01M3 12h.01M3 18h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+		On this page<span class="sr-only"> · Alt+O</span>
+	</button>
+	<button class="reader-outline__backdrop" type="button" data-outline-dismiss tabindex="-1" aria-label="Close on this page" hidden />
+	<div class="reader-outline__shell" data-outline-shell>
+		<button class="reader-outline__close" type="button" data-outline-dismiss aria-label="Close on this page" hidden>×</button>
+		<details class="reader-outline__panel" id={id} data-outline-panel open>
+			<summary class="reader-outline__summary" title="Fold or expand on this page · Alt+O">
+				<span id={titleId}>On this page</span>
+				<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+			</summary>
+			<nav class="reader-outline__navigation" aria-labelledby={titleId}>
+				<span class="reader-outline__thumb" aria-hidden="true" />
+				<ol class="reader-outline__list">
+					{headings.map((heading) => <li style={`--outline-depth:${heading.depth}`}>
+						<a class="reader-outline__link" href={`#${heading.slug}`} data-outline-link data-outline-title={heading.text}>
+							<span class="reader-outline__notch" aria-hidden="true" /><span>{heading.text}</span>
+						</a>
+					</li>)}
+				</ol>
+			</nav>
+		</details>
+	</div>
+	<nav class="reader-outline__compact" data-outline-compact aria-label="On this page, section shortcuts" hidden>
+		<ol>
+			{headings.map((heading) => <li>
+				<a href={`#${heading.slug}`} data-outline-link data-outline-title={heading.text} aria-label={heading.text} aria-describedby={tooltipId} title={heading.text}>
+					<span class="reader-outline__notch" aria-hidden="true" />
+				</a>
+			</li>)}
+		</ol>
+		<span class="reader-outline__thumb" aria-hidden="true" />
+	</nav>
+	<span class="reader-outline__tooltip" id={tooltipId} data-outline-tooltip role="tooltip" hidden />
+</section>
+
+<script>
+	import { mountReaderNavigation } from '../scripts/reader-navigation';
+	mountReaderNavigation();
+</script>

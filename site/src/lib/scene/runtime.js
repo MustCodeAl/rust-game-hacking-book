@@ -2,8 +2,8 @@
 // moves the same elements through the scene's tracks so a reader can play,
 // pause, step, and scrub it. Nothing runs until a scene is near the screen, and
 // nothing moves unless the reader's motion settings allow it.
-import { format, transformOf, valuesAt, playerSpec } from './engine.mjs';
-import { renderScene } from './markup.mjs';
+import { format, transformOf, valuesAt, playerSpec } from './engine.ts';
+import { renderScene } from './markup.ts';
 
 const mounted = new WeakSet();
 const SPEEDS = [0.5, 1, 2];
@@ -11,12 +11,12 @@ const round = (n) => Math.round(n * 100) / 100;
 // Only selected simulations load their model code. Other scenes retain
 // their existing playback and static picture without loading the explorers.
 const explorers = {
-	'bfs-around-wall': () => import('../../scenes/bfs-around-wall.mjs'),
-	'world-to-screen': () => import('../../scenes/world-to-screen.mjs'),
-	'server-authority': () => import('../../scenes/server-authority.mjs'),
-	'detector-input-window': () => import('../../scenes/detector-input-window.mjs'),
-	'evidence-correlation': () => import('../../scenes/evidence-correlation.mjs'),
-	'edge-events': () => import('../../scenes/edge-events.mjs'),
+	'bfs-around-wall': () => import('../../scenes/bfs-around-wall.ts'),
+	'world-to-screen': () => import('../../scenes/world-to-screen.ts'),
+	'server-authority': () => import('../../scenes/server-authority.ts'),
+	'detector-input-window': () => import('../../scenes/detector-input-window.ts'),
+	'evidence-correlation': () => import('../../scenes/evidence-correlation.ts'),
+	'edge-events': () => import('../../scenes/edge-events.ts'),
 };
 
 export function mountScenes(scope = document) {

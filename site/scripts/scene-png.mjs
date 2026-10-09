@@ -7,7 +7,7 @@
 import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import sharp from 'sharp';
-import { renderScene } from '../src/lib/scene/markup.mjs';
+import { renderScene } from '../src/lib/scene/markup.ts';
 
 const [outDir, ...names] = process.argv.slice(2);
 if (!outDir) {
@@ -15,7 +15,7 @@ if (!outDir) {
 	process.exit(1);
 }
 const scenesDir = new URL('../src/scenes/', import.meta.url);
-const wanted = names.length ? names : readdirSync(scenesDir).filter((f) => f.endsWith('.mjs')).map((f) => f.slice(0, -4));
+const wanted = names.length ? names : readdirSync(scenesDir).filter((f) => f.endsWith('.ts')).map((f) => f.slice(0, -4));
 
 const PALETTE = {
 	plain: ['#f1f2f4', '#59636f'],

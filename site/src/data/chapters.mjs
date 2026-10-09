@@ -1,21 +1,21 @@
 // The book's chapters, in reading order. The sidebar, lesson headers, print
 // book, and llms.txt all read this list, so a new chapter is added once here.
 export const CHAPTERS = [
-	{ number: 1, area: 'foundations', title: 'Game Hacking Foundations', emoji: '🧠', summary: 'Connect computer and game loops to programming, Rust, memory, and a first scan.' },
-	{ number: 2, area: 'foundations', title: 'Instructions, Debuggers, and Addresses', emoji: '🔍', summary: 'Connect a built program to assembly, breakpoints, stable addresses, and reversible detours.' },
-	{ number: 3, area: 'foundations', title: 'Types, Object Layouts, and Boundaries', emoji: '🦀', summary: 'Decode bytes into numbers, then recover typed values, objects, and collections across process boundaries.' },
-	{ number: 4, area: 'foundations', title: 'Game State, Decisions, and Automation', emoji: '♟️', summary: 'Follow engine-owned state through snapshots, coordinates, decisions, feedback, and NPC behavior.' },
-	{ number: 5, area: 'runtime', title: 'Executable Files and Runtime Analysis', emoji: '🧰', summary: 'Read executable layout, then use scanning, disassembly, debugging, and traces to explain running code.' },
-	{ number: 6, area: 'runtime', title: 'In-Process Code, Hooks, and Input', emoji: '🛠️', summary: 'Build from DLL contracts to loading, hooks, input, commands, and reliable feature lifetimes.' },
-	{ number: 7, area: 'runtime', title: '3D Space, Rendering, and Tool Design', emoji: '🧭', summary: 'Turn coordinates into camera views and pixels, then integrate rendering features and menus.' },
-	{ number: 8, area: 'interfaces', title: 'Messages Across Networks and Processes', emoji: '🌐', summary: 'Follow messages from bytes and framing through protocol states, proxies, and local channels.' },
-	{ number: 9, area: 'interfaces', title: 'Game Files, Mods, and Trust', emoji: '🗂️', summary: 'Read text and binary saves, assets, and mods as formats with integrity and trust constraints.' },
-	{ number: 10, area: 'interfaces', title: 'Lua, Host Boundaries, and Virtual Machines', emoji: '🌙', summary: 'Express behavior through Lua, then connect computation limits to bytecode, values, and call frames.' },
-	{ number: 11, area: 'systems', title: 'Windows Process Internals', emoji: '🪟', summary: 'Connect build and object identity to access rights, memory, threads, kernel services, and dumps.' },
-	{ number: 12, area: 'systems', title: 'Process Boundaries and Physical Memory', emoji: '🛡️', summary: 'Trace DLL and driver boundaries before validating offline physical-memory captures.' },
-	{ number: 13, area: 'systems', title: 'Advanced Game Hacking', emoji: '🧩', summary: 'Use invariants and telemetry to explain integrity checks, value transforms, control gaps, and repairs.' },
-	{ number: 14, area: 'systems', title: 'Virtual Machines, Hardware, and Consoles', emoji: '🔌', summary: 'Connect guest execution and firmware to console architecture, hardware debugging, and software emulation.' },
-	{ number: 15, area: 'systems', title: 'Anti-Cheat: How Games Defend Themselves', emoji: '🛡️', summary: 'Protect server authority and information, interpret detector errors, and combine client protection with fair review.' },
+	{ number: 1, area: "foundations", title: "Computer, Game, and Code Foundations", emoji: "🧠", summary: "CPU and stored values → game objects → a small Rust program → an owned, resettable lab → memory, scanning, and bits" },
+	{ number: 2, area: "foundations", title: "Following Instructions and Addresses", emoji: "🔍", summary: "A changing value → assembly and a paused process → callers → moving addresses and pointer paths → preserved control flow" },
+	{ number: 3, area: "foundations", title: "Typed Memory, Ownership, and Object Layouts", emoji: "🦀", summary: "A checked boundary → deeper Rust at that boundary → decoded values → external copies → objects, collections, and text" },
+	{ number: 4, area: "foundations", title: "Game State and Bounded Decisions", emoji: "♟️", summary: "An engine frame → copied players → guarded actions → coordinates and grids → feedback, targets, paths, events, and basic NPC decisions" },
+	{ number: 5, area: "runtime", title: "Executable Maps, Instruction References, and Scans", emoji: "🧰", summary: "PE layouts and exports → precise instruction lookup → patterns and regions → decoding → tracing profiles and parallel captures" },
+	{ number: 6, area: "systems", title: "Windows Processes and Callable Interfaces", emoji: "🪟", summary: "Process resources → rights and owned handles → pages and threads → call contracts → engine scheduling, input queues, debug events, and bounded observation" },
+	{ number: 7, area: "runtime", title: "Camera Geometry and Rendering APIs", emoji: "🧭", summary: "Coordinate frames → pipeline state → OpenGL observations → collision and aim geometry → motion, radar, projection, and Direct3D interfaces" },
+	{ number: 8, area: "runtime", title: "In-Process Tools, Input, and Integration", emoji: "🛠️", summary: "DLL lifetime → loading → reversible detours and import hooks → game input and commands → rendered menus and snapshots → architecture and safe removal" },
+	{ number: 9, area: "interfaces", title: "Network Messages, Authority, and IPC", emoji: "🌐", summary: "Programs exchanging messages → what the server discloses → capture, parsing, and legal session order → clients, relays, local transports, and an engine example" },
+	{ number: 10, area: "interfaces", title: "Game Files, Mods, and Artifact Trust", emoji: "🗂️", summary: "Saved state and assets → inspect and edit a copied file → safe packages and reversible mods → hashes, exact build identity, signatures, and encryption" },
+	{ number: 11, area: "interfaces", title: "NPC Policy, Lua, and Script Execution", emoji: "🌙", summary: "Remembered observations and decisions → Lua and the host interface → bounded script policy → computability limits → bytecodes, values, and call frames" },
+	{ number: 12, area: "systems", title: "Loaders, Kernel Services, and Trust Boundaries", emoji: "🛡️", summary: "Module identity and loading → dynamic calls → kernel authority and system calls → driver requests → trust boundaries and failed checks" },
+	{ number: 13, area: "systems", title: "Physical Memory, Machines, and Hardware", emoji: "🔌", summary: "DMA and page translation → virtual guests → firmware and consoles → chip debug access → emulated instructions and time" },
+	{ number: 14, area: "systems", title: "Versioned Evidence, State, and Integrity", emoji: "🧩", summary: "An exact-build layout → bounded call logs and saved captures → state invariants and correlated telemetry → integrity signals and reversible representations" },
+	{ number: 15, area: "systems", title: "Defensive Design and Anti-Cheat", emoji: "🛡️", summary: "Why validation matters → server and client observations → detection and review → two isolated control-gap examples → documented protection and resilient game design" },
 ];
 
 // Reading colours identify subject areas, not a chapter's position in a cycle.

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import bfs, { exploration as bfsExplorer } from '../src/scenes/bfs-around-wall.mjs';
-import projection, { exploration as projectionExplorer } from '../src/scenes/world-to-screen.mjs';
-import { bfsModel, projectionModel } from '../src/lib/scene/explorers.mjs';
+import bfs, { exploration as bfsExplorer } from '../src/scenes/bfs-around-wall.ts';
+import projection, { exploration as projectionExplorer } from '../src/scenes/world-to-screen.ts';
+import { bfsModel, projectionModel } from '../src/lib/scene/explorers.ts';
 let cases = 0;
 const wallKeys = ['wall10', 'wall01', 'wall11', 'wall21'];
 const tiles = [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]];

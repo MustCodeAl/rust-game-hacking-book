@@ -3,6 +3,8 @@
 // button that opens the same section. The section is a heading id, so it still
 // works if the page is edited. Nothing is sent anywhere.
 
+import { currentLessonNumber } from '../lib/lesson-identity';
+
 const KEY = 'gha-last';
 const read = () => { try { return JSON.parse(window.localStorage.getItem(KEY) || 'null'); } catch { return null; } };
 const sectionNow = () => {
@@ -38,7 +40,8 @@ function show(link) {
 	if (!last || !/^pages\/\d+\/\d+$/.test(last.id || '')) return;
 	const base = link.dataset.resumeBase || '';
 	link.href = `${base}/${last.id}/${last.heading ? '#' + encodeURIComponent(last.heading) : ''}`;
-	link.querySelector('[data-resume-label]').textContent = `Continue Lesson ${last.lesson}`;
+	// Keep the saved route, heading and timestamp. Only the displayed number refreshes.
+	link.querySelector('[data-resume-label]').textContent = `Continue Lesson ${currentLessonNumber(last.id) ?? last.lesson}`;
 	const detail = link.querySelector('[data-resume-detail]');
 	detail.textContent = last.headingText && last.headingText !== last.title ? `${last.title} · ${last.headingText}` : last.title;
 	link.hidden = false;

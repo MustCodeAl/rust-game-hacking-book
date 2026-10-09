@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { authorityModel, inputWindowModel, correlationModel, edgeModel } from '../src/lib/scene/defence-explorers.mjs';
-import { playerSpec, valuesAt } from '../src/lib/scene/engine.mjs';
+import { authorityModel, inputWindowModel, correlationModel, edgeModel } from '../src/lib/scene/defence-explorers.ts';
+import { playerSpec, valuesAt } from '../src/lib/scene/engine.ts';
 let cases = 0;
 for (const score of [0, 3, 10]) for (const claim of [0, 4, 99, 100]) for (const available of [false, true]) for (const reachesCoin of [false, true]) {
   const model = authorityModel({ score, claim, available, reachesCoin });
@@ -41,7 +41,7 @@ for (const before of [0, 120, 200]) for (const after of [0, 145, 200]) for (cons
   cases++;
 }
 for (const name of ['server-authority', 'detector-input-window', 'evidence-correlation', 'edge-events']) {
-  const { default: worked, exploration } = await import(`../src/scenes/${name}.mjs`);
+  const { default: worked, exploration } = await import(`../src/scenes/${name}.ts`);
   assert.strictEqual(exploration.build(exploration.defaults).scene, worked);
   for (const field of exploration.fields) {
     const values = { ...exploration.defaults, [field.key]: field.type === 'checkbox' ? !field.start : field.min === field.start ? field.max : field.min };

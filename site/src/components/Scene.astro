@@ -1,13 +1,14 @@
 ---
 // An animation in which the things that really move or change in the system
-// move or change on the screen. Scenes live in src/scenes/<name>.mjs; see
+// move or change on the screen. Scenes live in src/scenes/<name>.ts; see
 // components/kit/README.md for what makes one worth having.
 //
 // The page holds the finished picture and the written steps, so printing, search,
 // the listening edition, and a browser without scripts all work. The script only
 // adds playback and, for selected scenes, bounded inputs that recompute the model.
-import { renderScene } from '../lib/scene/markup.mjs';
-import { playerSpec } from '../lib/scene/engine.mjs';
+import { renderScene } from '../lib/scene/markup.ts';
+import { playerSpec } from '../lib/scene/engine.ts';
+import type { SceneModule } from '../lib/scene/types.ts';
 import { inlineMarkdown } from '../lib/inline-md';
 import '../styles/scene.css';
 
@@ -16,11 +17,11 @@ interface Props {
 }
 
 const { name } = Astro.props;
-const scenes = import.meta.glob('../scenes/*.mjs', { eager: true }) as Record<string, { default: any; exploration?: any }>;
-const module = scenes[`../scenes/${name}.mjs`];
+const scenes = import.meta.glob<SceneModule>('../scenes/*.ts', { eager: true });
+const module = scenes[`../scenes/${name}.ts`];
 const sc = module?.default;
-if (!sc) throw new Error(`There is no scene called "${name}". Add src/scenes/${name}.mjs.`);
-const exploration = module.exploration;
+if (!sc) throw new Error(`There is no scene called "${name}". Add src/scenes/${name}.ts.`);
+const exploration = module?.exploration;
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 // One scene may appear once on a page, so its name is a stable id (a counter would change between builds).
@@ -39,7 +40,7 @@ const spec = JSON.stringify({ ...playerSpec(sc), explore: exploration ? name : u
 		<strong id={`${uid}-explore-title`}>Change the simulation</strong>
 		<p class="scene__invite">{exploration.invite}</p>
 		<div class="scene__fields">
-			{exploration.fields.map((field: any) => <label class:list={['scene__field', { 'scene__field--check': field.type === 'checkbox' }]} for={`${uid}-${field.key}`}>
+			{exploration.fields.map((field) => <label class:list={['scene__field', { 'scene__field--check': field.type === 'checkbox' }]} for={`${uid}-${field.key}`}>
 				{field.type === 'checkbox'
 					? <><input id={`${uid}-${field.key}`} data-scene-input={field.key} type="checkbox" checked={field.start} /><span>{field.label}</span></>
 					: <><span>{field.label} <output for={`${uid}-${field.key}`} data-scene-output={field.key}>{field.start}{field.unit || ''}</output></span><input id={`${uid}-${field.key}`} data-scene-input={field.key} type="range" min={field.min} max={field.max} step={field.step} value={field.start} /></>}

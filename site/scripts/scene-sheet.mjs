@@ -8,7 +8,7 @@
 // sheets/<name>.html.
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { renderScene } from '../src/lib/scene/markup.mjs';
+import { renderScene } from '../src/lib/scene/markup.ts';
 
 const [outDir, ...names] = process.argv.slice(2);
 if (!outDir) {
@@ -17,7 +17,7 @@ if (!outDir) {
 }
 
 const scenesDir = new URL('../src/scenes/', import.meta.url);
-const all = readdirSync(scenesDir).filter((file) => file.endsWith('.mjs')).map((file) => file.slice(0, -4));
+const all = readdirSync(scenesDir).filter((file) => file.endsWith('.ts')).map((file) => file.slice(0, -4));
 const wanted = names.length ? names : all;
 
 // The head of any built page that uses scenes carries the site's styles and settings script.

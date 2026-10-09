@@ -1,0 +1,67 @@
+---
+import '../styles/hex-disassembly.css';
+
+interface Props {
+	id?: string;
+	title?: string;
+	immediate?: number;
+}
+const { id = 'hex-disassembly-inspector', title = 'Match the bytes to the instruction', immediate = 25 } = Astro.props;
+const maximum = 0xffff_ffff;
+if (!Number.isInteger(immediate) || immediate < 0 || immediate > maximum) {
+	throw new Error('HexDisassemblyInspector immediate must be an unsigned 32-bit integer.');
+}
+const bytes = Array.from({ length: 4 }, (_, index) => ((immediate >>> (index * 8)) & 0xff).toString(16).padStart(2, '0').toUpperCase());
+const inputId = `${id}-immediate`;
+const helpId = `${id}-help`;
+const statusId = `${id}-status`;
+---
+
+<section class="hex-disassembly not-content" id={id} data-hex-inspector data-hex-initial={immediate} aria-labelledby={`${id}-title`}>
+	<header class="hex-disassembly__header">
+		<strong id={`${id}-title`}>{title}</strong>
+		<span>32-bit x86 · one instruction</span>
+	</header>
+	<p id={helpId}>The opcode <code>B8</code> means <code>mov eax, imm32</code>. Its next four bytes hold the immediate, least significant byte first. Point to or focus a byte or an assembly term to see its partner. Select one to keep the pair marked.</p>
+	<div class="hex-disassembly__controls" data-hex-controls hidden>
+		<label for={inputId}>Immediate, unsigned <input id={inputId} type="number" min="0" max={maximum} step="1" value={immediate} inputmode="numeric" data-hex-input aria-describedby={`${helpId} ${statusId}`} /></label>
+		<button type="button" data-hex-reset>Reset</button>
+	</div>
+	<div class="hex-disassembly__representations">
+		<div class="hex-disassembly__representation">
+			<p class="hex-disassembly__label">Instruction bytes</p>
+			<div class="hex-disassembly__bytes" role="group" aria-label="Instruction byte roles">
+				<button type="button" class="hex-disassembly__part hex-disassembly__part--flow" data-hex-pair="opcode" aria-pressed="false" aria-label="Opcode byte B8. Select its matching mnemonic." disabled>B8</button>
+				{bytes.map((byte, index) => <button type="button" class="hex-disassembly__part hex-disassembly__part--data" data-hex-pair="operand" data-hex-byte={index} aria-pressed="false" aria-label={`Immediate byte ${index + 1}: ${byte}. Select its matching value.`} disabled>{byte}</button>)}
+			</div>
+		</div>
+		<div class="hex-disassembly__representation">
+			<p class="hex-disassembly__label">Assembly</p>
+			<div class="hex-disassembly__assembly" role="group" aria-label="Assembly roles">
+				<button type="button" class="hex-disassembly__part hex-disassembly__part--flow" data-hex-pair="opcode" aria-pressed="false" aria-label="Mnemonic mov. Select its matching opcode byte." disabled>mov</button>
+				<code class="hex-disassembly__register" data-register-name="eax">eax,</code>
+				<button type="button" class="hex-disassembly__part hex-disassembly__part--data" data-hex-pair="operand" data-hex-value aria-pressed="false" aria-label={`Immediate value ${immediate}. Select its matching operand bytes.`} disabled>{immediate}</button>
+			</div>
+		</div>
+	</div>
+	<p class="hex-disassembly__key"><span class="hex-disassembly__key-flow">Opcode ↔ mnemonic</span><span class="hex-disassembly__key-data">Operand bytes ↔ value</span></p>
+	<p id={statusId} class="hex-disassembly__status" data-hex-status role="status" aria-live="polite" aria-atomic="true">{immediate} is <span data-hex-value-base>0x{immediate.toString(16).toUpperCase()}</span>. Encoding: B8 {bytes.join(' ')}.</p>
+	<details class="hex-disassembly__reference" open>
+		<summary>Read the byte layout</summary>
+		<div class="hex-disassembly__table-scroll">
+			<table>
+				<thead><tr><th>Position</th><th>Byte</th><th>Meaning</th></tr></thead>
+				<tbody>
+					<tr><th scope="row">+0</th><td><code>B8</code></td><td>Opcode: copy imm32 into EAX</td></tr>
+					{bytes.map((byte, index) => <tr><th scope="row">+{index + 1}</th><td><code data-hex-reference-byte={index}>{byte}</code></td><td>Immediate bits {index * 8}–{index * 8 + 7}{index === 0 ? ' (least significant)' : ''}</td></tr>)}
+				</tbody>
+			</table>
+		</div>
+	</details>
+	<noscript><p>The listing and byte table show the complete default example: <code>mov eax, {immediate}</code> encodes as <code>B8 {bytes.join(' ')}</code>.</p></noscript>
+</section>
+
+<script>
+	import { mountHexDisassemblyInspectors } from '../scripts/hex-disassembly';
+	mountHexDisassemblyInspectors();
+</script>
