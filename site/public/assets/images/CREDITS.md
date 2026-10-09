@@ -168,3 +168,7 @@ These 57 distinct original geometric drawings are dedicated to CC0 1.0. Each is 
 | `finish-later-kernel-fault-scope.svg` | Illustrates the paragraph’s concrete one-process versus whole-system fault scope, keeping this lesson’s read-only/conceptual framing. | `site/scripts/make-finish-later-art.py` |
 | `finish-later-cross-page-read.svg` | Shows the exact 32-byte/8-byte page split and noncontiguous physical destinations after the retranslation algorithm’s owned-buffer explanation. | `site/scripts/make-finish-later-art.py` |
 | `finish-later-reset-data-bss.svg` | Draws the exact startup copy-versus-zero work beside the two writable-counter examples, with the lesson’s emulated address ranges. | `site/scripts/make-finish-later-art.py` |
+
+## Encoding illustration — 2026-10-08
+
+`original/hi-base64-groups.svg` is original Game Hacking Academy geometric artwork, dedicated to the public domain under CC0 1.0 Universal. It illustrates the independently checked RFC 4648 grouping of the UTF-8 bytes for `HI` into `SEk=`; no third-party image assets. Its hand-authored SVG source includes the license, title and description.
