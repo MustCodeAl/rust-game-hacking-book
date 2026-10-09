@@ -1,6 +1,6 @@
 How an N P C, non player character, Sees, Chooses, and Remembers
 
-Lesson 4.12 followed a toy guard through sixteen ticks of sensing, deciding, and acting. This lesson opens up what it described in words: the arithmetic behind the guard’s view cone and line of sight, two other ways games choose what an N P C does, and where each of the guard’s fields sits in memory. The earlier lesson is the first-pass behavior model; this is the worked explanation you can return to when a real guard’s choices or bytes need closer inspection. The geometry starts in two dimensions here and becomes the basis for the three-dimensional questions in Chapter 7.
+Lesson 4.10 followed a toy guard through sixteen ticks of sensing, deciding, and acting. This lesson opens up what it described in words: the arithmetic behind the guard’s view cone and line of sight, two other ways games choose what an N P C does, and where each of the guard’s fields sits in memory. The earlier lesson is the first-pass behavior model; this is the worked explanation you can return to when a real guard’s choices or bytes need closer inspection. The geometry starts in two dimensions here and becomes the basis for the three-dimensional questions in Chapter 7.
 
 Section: The three checks in code.
 
@@ -38,7 +38,7 @@ The test direction.dot(self.facing) less than VIEW_CONE_COS therefore rejects ev
 
 For the player at (4, 3), the dot product of (0.8, 0.6) with the facing (1, 0) is 0.8 times 1 + 0.6 times 0 equals 0.8, at least 0.5, so the player is inside the cone. (An inverse cosine, the calculator function that turns a cosine back into an angle, puts them about 37 degrees from the facing.) A player at (0, 5) has direction (0 divided by 5, 5 divided by 5) equals (0, 1) and a dot product of 0 times 1 + 1 times 0 equals 0, a full 90 degrees to the side, so the guard does not see them.
 
-The code never computes an angle. Turning a dot product back into an angle would need that inverse cosine, a much slower function. Comparing the dot product with a cosine worked out once, when the constant was written, gives the same answer with two multiplications and one addition. Lesson 4.7 uses the same comparison in three dimensions, for a camera’s field of view.
+The code never computes an angle. Turning a dot product back into an angle would need that inverse cosine, a much slower function. Comparing the dot product with a cosine worked out once, when the constant was written, gives the same answer with two multiplications and one addition. Lesson 4.4 uses the same comparison in three dimensions, for a camera’s field of view.
 
 In brief: The guard checks its view cone by comparing a dot product with a number worked out once. It never computes an angle.
 
@@ -46,7 +46,7 @@ Section: Line of sight.
 
 The last check, line_of_sight, walks from the guard toward the target in steps of SIGHT_STEP equals 0.1 and tests each sample point against the walls. Each wall is an axis-aligned box, meaning its sides run along the x and y axes, stored as two corners, min and max. A point is inside when both of its coordinates lie between the corners.
 
-On tick 8 of Lesson 4.12’s run, the guard stands at (4, 0), the player at (8, 0), and a wall fills the box from (5.5, minus 1) to (6.5, 1) between them. The samples are (4.0, 0), (4.1, 0), (4.2, 0), and so on. By (5.6, 0) a sample is inside the wall, because 5.5 less than or equal to 5.6 less than or equal to 6.5 and minus 1 less than or equal to 0 less than or equal to 1, so the function returns false long before it reaches the player.
+On tick 8 of Lesson 4.10’s run, the guard stands at (4, 0), the player at (8, 0), and a wall fills the box from (5.5, minus 1) to (6.5, 1) between them. The samples are (4.0, 0), (4.1, 0), (4.2, 0), and so on. By (5.6, 0) a sample is inside the wall, because 5.5 less than or equal to 5.6 less than or equal to 6.5 and minus 1 less than or equal to 0 less than or equal to 1, so the function returns false long before it reaches the player.
 
 A line can also slip past a wall. From (0, 0) to (4, 3), the line rises 3 for every 4 across, so every point on it has y equals 3 divided by 4 times x equals 0.75 times x. A wall from (2, minus 1) to (3, 1) covers x from 2 to 3, where the line’s y runs from 0.75 times 2 equals 1.5 to 0.75 times 3 equals 2.25, higher than the wall’s top edge at y equals 1. No sample lands inside, and the guard sees the player. The lab’s tests check both cases.
 
@@ -54,7 +54,7 @@ Stepping has a blind spot: a wall thinner than 0.1 can sit between two samples a
 
 Section: Choose among actions: utility scoring.
 
-A state machine answers “which mode am I in?” Some decisions are better framed as “which of these options is best right now?” Utility A I, artificial intelligence, gives every option a score computed from the situation and runs the highest one. The second demo in the lab from Lesson 4.12 scores three options for a fighter:
+A state machine answers “which mode am I in?” Some decisions are better framed as “which of these options is best right now?” Utility A I, artificial intelligence, gives every option a score computed from the situation and runs the highest one. The second demo in the lab from Lesson 4.10 scores three options for a fighter:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
@@ -84,15 +84,15 @@ Compare it with the guard’s state diagram. The four arrows into Flee, one from
 
 Section: The guard’s structure, byte by byte.
 
-Lesson 4.12 numbered the guard’s states for a toy C++ layout. Here is the whole structure. The lab cannot show one itself, because its Rust types use Rust’s default layout, which lets the compiler order fields however it likes. In C++, the fields of a plain structure sit in memory in the order they are declared:
+Lesson 4.10 numbered the guard’s states for a toy C++ layout. Here is the whole structure. The lab cannot show one itself, because its Rust types use Rust’s default layout, which lets the compiler order fields however it likes. In C++, the fields of a plain structure sit in memory in the order they are declared:
 
 Code example. The code’s comments explain: hexadecimal 1 5 to hexadecimal 1 7: padding
 
 Every float and uint32_t takes 4 bytes, so the offsets count up in fours: 0, 4, 8, 12 (hexadecimal 0 C), and 16 (hexadecimal 1 0). The state is stored as a single byte at 20, which is hexadecimal 1 4 (1 times 16 + 4). The next field is 4 bytes wide, and its alignment requires it to start at a multiple of 4. Bytes 21, 22, and 23 are not, so the compiler leaves them as padding, and seen_for starts at 24, which is hexadecimal 1 8 (1 times 16 + 8). search_ticks follows at 28, hexadecimal 1 C (1 times 16 + 12), and target_id at 32, hexadecimal 2 0 (2 times 16). The structure ends at 36 bytes, hexadecimal 2 4 (2 times 16 + 4).
 
-Here is the guard at the end of tick 5 of Lesson 4.12’s run, mid-chase. It has seen the player on ticks 1 to 5, so seen_for is 5, and chase steps of 1 on ticks 3, 4, and 5 have taken it to (3, 0), still facing east. Its health is still the 100 that the lab gives every new guard:
+Here is the guard at the end of tick 5 of Lesson 4.10’s run, mid-chase. It has seen the player on ticks 1 to 5, so seen_for is 5, and chase steps of 1 on ticks 3, 4, and 5 have taken it to (3, 0), still facing east. Its health is still the 100 that the lab gives every new guard:
 
-The target field is an id rather than a pointer. Some games store a raw pointer to the target object instead, and that pointer goes stale when the target is destroyed and its memory reused, the problem that generation-checked handles in Lesson 3.6 solve.
+The target field is an id rather than a pointer. Some games store a raw pointer to the target object instead, and that pointer goes stale when the target is destroyed and its memory reused, the problem that generation-checked handles in Lesson 3.10 solve.
 
 Narration: An id survives its target being destroyed in a way a raw pointer does not: the lookup simply finds nothing, instead of reading a reused address.
 

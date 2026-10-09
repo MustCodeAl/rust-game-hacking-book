@@ -2,7 +2,7 @@ Direct3D Interfaces and Vtables
 
 Section: The OpenGL method does not transfer.
 
-Lesson 7.3 found glDrawElements by its exported name, then detoured an instruction inside it. OpenGL is a C A P I, application programming interface: opengl32.dll exports that function, so GetProcAddress can hand you its entry address. Lesson 6.5 used the import table as a different redirection point for named functions.
+Lesson 7.3 found glDrawElements by its exported name, then detoured an instruction inside it. OpenGL is a C A P I, application programming interface: opengl32.dll exports that function, so GetProcAddress can hand you its entry address. Lesson 8.4 used the import table as a different redirection point for named functions.
 
 An export is a function a D L L, dynamic link library, makes findable by name. Ask GetProcAddress for Present in d3d11.dll, or inspect that D L L’s export list: the method is not there. Neither are DrawIndexed and Draw. The public names are mostly creators such as D3D11CreateDevice, not the method that runs once per frame. Lesson 5.3 showed where a P E, portable executable, file stores its export list; this lookup now uses that file-format detail.
 
@@ -10,7 +10,7 @@ This is not obfuscation. Direct3D is built on COM, the Component Object Model �
 
 Section: A COM interface stores a table of methods.
 
-A C++ object may begin with a pointer to a table of function addresses, called a vtable. A COM interface pointer uses that arrangement as a published A B I, application binary interface, contract, rather than leaving it for us to infer from disassembly. Lesson 3.4 showed the same memory shape in a game object:
+A C++ object may begin with a pointer to a table of function addresses, called a vtable. A COM interface pointer uses that arrangement as a published A B I, application binary interface, contract, rather than leaving it for us to infer from disassembly. Lesson 3.8 showed the same memory shape in a game object:
 
 Picture a numbered control panel. Button 8 on an IDXGISwapChain is labeled Present by the interface contract, but the panel does not contain a universal street address for the code behind it. One object supplies a vtable pointer; slot 8 in that table supplies the function pointer for this implementation. The panel picture helps with the stable number. The two real memory reads below are what locate the code in this process:
 
@@ -44,7 +44,7 @@ Here is a useful lab technique. To learn where Present lives in your own running
 
 Objects of one interface implementation commonly share a vtable. A temporary object therefore gives a candidate function address for that implementation. Confirm that the real swap chain in this process uses the same method entry before relying on it; another implementation may use a different table.
 
-There are now three distinct ways to find code: a named export asks a D L L for a public function, a byte pattern searches for an instruction sequence, and this temporary COM object supplies the address of its own method. Only the last one tells us where this object’s Present implementation lives. It still requires a compatibility check against the actual object and runtime. Lesson 5.4 expands the byte-pattern case.
+There are now three distinct ways to find code: a named export asks a D L L for a public function, a byte pattern searches for an instruction sequence, and this temporary COM object supplies the address of its own method. Only the last one tells us where this object’s Present implementation lives. It still requires a compatibility check against the actual object and runtime. Lesson 5.7 expands the byte-pattern case.
 
 Do not copy that absolute pointer from a separate helper process into a game. Each process has its own virtual address space, and a graphics runtime or driver can expose a different implementation. To study a separate offline target, inspect its own swap chain or create the probe inside its process using the D L L lifecycle from Chapter 6. A module-relative address may be translated only after confirming the same module build and method body in both processes. Microsoft’s virtual-address documentation explains why identical numbers alone do not identify the same object.
 
@@ -58,11 +58,11 @@ Narration: Several objects can use the same vtable. Changing one shared slot may
 
 Code example. The code’s comments explain: 🛡️ SAFETY: `slot` points into the vtable read from a live swap chain, the index was derived from the interface declaration, and the original pointer is stored so `Drop` can put it back.
 
-Restore the previous protection rather than leaving the page writable. A page you widened stays widened for the life of the process. This short code shows the two protection changes and the pointer swap; a complete hook guard must also roll back if the second protection change fails. Lesson 6.4 applies the same verification and rollback reasoning to patched instruction bytes.
+Restore the previous protection rather than leaving the page writable. A page you widened stays widened for the life of the process. This short code shows the two protection changes and the pointer swap; a complete hook guard must also roll back if the second protection change fails. Lesson 8.3 applies the same verification and rollback reasoning to patched instruction bytes.
 
 Section: The replacement must match the A B I exactly.
 
-A COM method has a hidden first parameter — the interface pointer, the same this you met in Lesson 3.4 — and uses the system convention:
+A COM method has a hidden first parameter — the interface pointer, the same this you met in Lesson 3.8 — and uses the system convention:
 
 In brief: A COM method receives its interface pointer before the visible arguments; the replacement must include that hidden receiver.
 
@@ -88,7 +88,7 @@ Holding a lock across the forwarded call deadlocks — that is, two paths end up
 
 The device can be recreated underneath you. A resolution change or an alt-tab causes ResizeBuffers, and in Direct3D 9 a lost device causes Reset. Cached textures, render targets, and fonts created against the old device are invalid afterwards. Treat those calls as the signal to drop and rebuild anything you allocated.
 
-Present is not guaranteed to be your thread. Whatever the replacement touches is shared with the render thread, so it needs the discipline from Lesson 4.11: copy a small fixed-size sample, return, and analyze elsewhere. A lock, an allocation, or a file write on this path is a frame-time cost paid thousands of times per second.
+Present is not guaranteed to be your thread. Whatever the replacement touches is shared with the render thread, so it needs the discipline from Lesson 6.11: copy a small fixed-size sample, return, and analyze elsewhere. A lock, an allocation, or a file write on this path is a frame-time cost paid thousands of times per second.
 
 Section: What this technique does and does not tell you.
 

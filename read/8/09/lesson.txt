@@ -2,11 +2,11 @@ In-Game Menus and Text Rendering
 
 Section: A third option between a window and an overlay.
 
-Lesson 6.8 put the menu in its own window, which is the right default: it cannot corrupt the game’s graphics state, and you can close the game without losing it.
+Lesson 8.6 put the menu in its own window, which is the right default: it cannot corrupt the game’s graphics state, and you can close the game without losing it.
 
-But you have already met a function that draws text inside the game. In Lesson 3.8 you traced Wesnoth’s print function; Lesson 6.4 then used its call site for a verified, reversible text hook. In Lesson 7.9 you called AssaultCube’s print function at this value to label players. That function already knows the font, the scale, the screen size, and the right moment in the frame to draw. Calling it is the cheapest way to put a menu on screen, because the hard graphics work is done and you are only supplying strings.
+But you have already met a function that draws text inside the game. In Lesson 3.11 you traced Wesnoth’s print function; Lesson 8.3 then used its call site for a verified, reversible text hook. In Lesson 7.9 you called AssaultCube’s print function at this value to label players. That function already knows the font, the scale, the screen size, and the right moment in the frame to draw. Calling it is the cheapest way to put a menu on screen, because the hard graphics work is done and you are only supplying strings.
 
-The trade is that you are now running inside the game’s render path, so the hook must finish quickly. A file read, sleep, or blocking channel receive there delays the game’s next frame; Lesson 4.11 measures the same cost in a per-frame recorder.
+The trade is that you are now running inside the game’s render path, so the hook must finish quickly. A file read, sleep, or blocking channel receive there delays the game’s next frame; Lesson 6.11 measures the same cost in a per-frame recorder.
 
 Section: What a game’s interface is made of.
 
@@ -16,7 +16,7 @@ Text. A font is turned into a glyph atlas, a texture holding every character as 
 
 Layout. Elements sit in boxes. Anchoring pins a box to part of the screen: a 200 times 50 box anchored to the bottom-right corner of a 1280 times 720 screen with a 20-pixel margin is at x equals 1280 minus 20 minus 200 equals 1060 and y equals 720 minus 20 minus 50 equals 650. In a flex layout, boxes in a row share the space by weight: in a 600-pixel row, three boxes with weights 1, 2, and 1 get 150, 300, and 150 pixels. A grid layout assigns boxes to rows and columns, and size limits keep a box between a smallest and a largest size.
 
-Scaling. Interfaces are usually designed for a reference size, such as 1920 times 1080, and scaled by the smaller of width divided by 1920 and height divided by 1080. On a 1280 times 720 screen both are 0.6667, so a 300-pixel button is drawn 200 pixels wide. The window’s scale factor from Lesson 6.7 multiplies the result again.
+Scaling. Interfaces are usually designed for a reference size, such as 1920 times 1080, and scaled by the smaller of width divided by 1920 and height divided by 1080. On a 1280 times 720 screen both are 0.6667, so a 300-pixel button is drawn 200 pixels wide. The window’s scale factor from Lesson 6.9 multiplies the result again.
 
 Stretchable art. A button picture with decorated corners cannot simply be stretched. Nine-slice drawing cuts it into a 3 times 3 grid: the four corners keep their size, the four edges stretch in one direction, and the centre stretches in both. Drawing a picture with 16-pixel corners as a 200 times 60 button gives four 16 times 16 corners, top and bottom edges 200 minus 32 equals 168 wide, side edges 60 minus 32 equals 28 tall, and a 168 times 28 centre.
 
@@ -28,7 +28,7 @@ Popups. A context menu is a box created at the cursor when the right button is p
 
 Where it is drawn. Most interface is drawn over the finished 3D picture. It can also be drawn into a texture and placed on a surface in the world, such as a screen on a wall, and a label that follows an object uses the projection from Lesson 7.9.
 
-Lesson 6.8 contrasts the two ways such code is written: an immediate-mode interface redraws every element on every frame from the current state, and a retained-mode interface keeps a tree of elements in memory and changes them when something happens.
+Lesson 8.6 contrasts the two ways such code is written: an immediate-mode interface redraws every element on every frame from the current state, and a retained-mode interface keeps a tree of elements in memory and changes them when something happens.
 
 Alternative: Drawing location and interface storage are separate choices: the same saved menu settings can drive either a separate window or an in-game text pass.
 
@@ -46,7 +46,7 @@ Lesson 7.9 already identified such a site in AssaultCube: the final print hook a
 
 Section: Reconstruct the contract before you call it.
 
-Calling a function you found is Lesson 6.1’s problem, not a new one. Before the first call, answer its four parts:
+Calling a function you found is Lesson 6.7’s problem, not a new one. Before the first call, answer its four parts:
 
 which arguments it takes, and in what order — typically a screen position and a string;
 
@@ -64,7 +64,7 @@ Keep an owned buffer alive for at least as long as the frame, and give the funct
 
 Code example. The code’s comments explain: ✅ `lines` outlives the call, and the trailing zero is explicit because a C-style text function reads until it finds one.
 
-CString is the same tool Lesson 3.8 used at the C boundary, and for the same reason: it guarantees the terminating zero and rejects interior zero bytes instead of silently truncating your text.
+CString is the same tool Lesson 3.11 used at the C boundary, and for the same reason: it guarantees the terminating zero and rejects interior zero bytes instead of silently truncating your text.
 
 Section: Colour is usually a marker inside the string.
 
@@ -72,7 +72,7 @@ Many engines let a string carry its own formatting. The mechanism is nearly alwa
 
 Two consequences follow, and both matter.
 
-The marker and index are consumed, not drawn, so the string’s byte length is larger than the number of visible characters. That is the same distinction Lesson 3.8 drew between bytes, code units, scalars, and what a reader sees; a menu that lines up columns by counting bytes will be crooked.
+The marker and index are consumed, not drawn, so the string’s byte length is larger than the number of visible characters. That is the same distinction Lesson 3.11 drew between bytes, code units, scalars, and what a reader sees; a menu that lines up columns by counting bytes will be crooked.
 
 And the exact marker is a fact about one build. Confirm it by drawing a string containing a candidate byte and watching what happens, rather than trusting the number above.
 
@@ -96,7 +96,7 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Section: GetAsyncKeyState reports a level, not a press.
 
-Lesson 6.7 made this point about input paths and it decides how a menu feels. GetAsyncKeyState answers “is this key down right now?”, which is true on every frame of one press. A menu that acts on that answer scrolls the whole list in a fraction of a second.
+Lesson 6.9 made this point about input paths and it decides how a menu feels. GetAsyncKeyState answers “is this key down right now?”, which is true on every frame of one press. A menu that acts on that answer scrolls the whole list in a fraction of a second.
 
 What a menu needs is the edge — the frame where the key changed from up to down — which means remembering the previous frame:
 
@@ -104,20 +104,20 @@ In brief: A menu advances on a press transition, rather than on every frame in w
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The lab test holds the key for ten frames and asserts the cursor moved exactly one row. That is the behavior to aim for, and it is the same edge-versus-level distinction Lesson 4.10 used for bot events.
+The lab test holds the key for ten frames and asserts the cursor moved exactly one row. That is the behavior to aim for, and it is the same edge-versus-level distinction Lesson 4.9 used for bot events.
 
 Section: Build the strings without allocating every frame.
 
 The render path runs thousands of times per second. Clear and reuse one buffer rather than allocating a fresh Vec per frame; the lab asserts the buffer’s capacity is unchanged after a second render.
 
-The menu should also own only its own state. Keep the same split Lesson 6.8 used: the menu produces settings and commands, and the worker reads them. A menu that reaches directly into game memory while the render thread is drawing has put a second writer on the same data.
+The menu should also own only its own state. Keep the same split Lesson 8.6 used: the menu produces settings and commands, and the worker reads them. A menu that reaches directly into game memory while the render thread is drawing has put a second writer on the same data.
 
 Section: Restore the site, not just the feature.
 
-Closing the menu is a display change. Unloading the tool is a lifetime change, and Lesson 7.12’s ordering applies without modification: stop the worker, wait for it to leave the hooked path, restore the displaced bytes, then release the D L L, dynamic link library. While an in-flight frame is still executing the detour, the hook is draining: no new calls should enter, but the current call must finish before its code is removed. Lesson 6.10 established this lifetime rule for a general hook manager; the render hook is another application of it.
+Closing the menu is a display change. Unloading the tool is a lifetime change, and Lesson 8.8’s ordering applies without modification: stop the worker, wait for it to leave the hooked path, restore the displaced bytes, then release the D L L, dynamic link library. While an in-flight frame is still executing the detour, the hook is draining: no new calls should enter, but the current call must finish before its code is removed. Lesson 8.10 established this lifetime rule for a general hook manager; the render hook is another application of it.
 
 Section: Scope.
 
-This is the same offline, version-pinned lab used since Chapter 7, and the same menu model as Lesson 6.8 rendered somewhere else. The transferable skill — calling a function you recovered, with a contract you proved, from a hook that runs at a known point in a frame — is what a debug HUD, a benchmarking overlay, and an accessibility tool all do.
+This is the same offline, version-pinned lab used since Chapter 7, and the same menu model as Lesson 8.6 rendered somewhere else. The transferable skill — calling a function you recovered, with a contract you proved, from a hook that runs at a known point in a frame — is what a debug HUD, a benchmarking overlay, and an accessibility tool all do.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/8/09/

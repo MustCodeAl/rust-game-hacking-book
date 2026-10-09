@@ -1,4 +1,5 @@
 import { choiceValues, drawBatch, fingerprint, isCorrect, restoreAttempt, shuffleOrder } from './quiz-session.mjs';
+import { recoverQuizAttempt } from './quiz-identity-migration.mjs';
 
 const mounted = new WeakSet();
 // Optional sound: reading-audio.js plays these only when the reader has turned effects on.
@@ -21,10 +22,15 @@ export function mountQuiz(root) {
   const pool = [...byId.keys()];
   const size = Math.min(batchSize, pool.length);
   const revision = fingerprint(questions);
-  const storageKey = 'gha-quiz:v7:' + root.dataset.quizLesson + ':' + root.dataset.quizId;
-  let saved = null;
-  try { saved = restoreAttempt(localStorage.getItem(storageKey), questions, size, revision); } catch {}
-  let attempt = saved || fresh();
+  let storage = null;
+  try { storage = window.localStorage; } catch { /* storage can be refused */ }
+  const recovery = recoverQuizAttempt(storage, {
+    legacyNumber: root.dataset.quizStorageLesson || root.dataset.quizLesson || '',
+    displayNumber: root.dataset.quizLesson || '',
+    quizId: root.dataset.quizId || '',
+  }, raw => restoreAttempt(raw, questions, size, revision));
+  const storageKey = recovery.storageKey;
+  let attempt = recovery.attempt || fresh();
   const header = root.querySelector('.academy-quiz__header');
   if (root.dataset.quizLesson) header.querySelector('h3').textContent = 'Lesson ' + root.dataset.quizLesson + ' quiz';
   root.querySelectorAll(':scope > :not(.academy-quiz__header):not(script)').forEach(node => node.remove());

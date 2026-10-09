@@ -16,7 +16,7 @@ Second, the word “shared” in the memory column. A gaming PC gives the C P U 
 
 The shared pool has to satisfy its hungriest reader, the G P U, so consoles build it from graphics memory. The PlayStation 5’s memory bus is 256 bits wide, one wire per bit, and each wire carries 14 billion bits per second. That is 256 times 14 equals 3,584 billion bits per second, and dividing by 8 bits per byte gives 448 GB every second, for the C P U and G P U alike.
 
-The third difference is not in the table because it is the table: every PlayStation 5 has the same chip, the same memory, and the same clock speeds. A PC game has to run on thousands of combinations of parts; a console game is tuned for exactly one. At 60 frames per second, each frame gets 1,000 milliseconds divided by 60 approximately 16.7 milliseconds for all of its work, from game logic and physics to rendering (Lesson 4.1). A measurement on one console holds for every console, so developers can spend that budget almost to the last millisecond. They can even compile their shaders ahead of time for the one G P U and ship the results on the disc, a luxury that emulators lack, as Lesson 14.7 shows.
+The third difference is not in the table because it is the table: every PlayStation 5 has the same chip, the same memory, and the same clock speeds. A PC game has to run on thousands of combinations of parts; a console game is tuned for exactly one. At 60 frames per second, each frame gets 1,000 milliseconds divided by 60 approximately 16.7 milliseconds for all of its work, from game logic and physics to rendering (Lesson 4.1). A measurement on one console holds for every console, so developers can spend that budget almost to the last millisecond. They can even compile their shaders ahead of time for the one G P U and ship the results on the disc, a luxury that emulators lack, as Lesson 13.9 shows.
 
 Sharing the PC’s instruction set does not make a console game a PC game, though. Its machine code calls the console’s own operating system and graphics interfaces, such as a console version of Direct3D 12 on Xbox and Sony’s own interfaces on PlayStation, which is why moving a console game to PC is still porting work.
 
@@ -24,7 +24,7 @@ Section: The software stack: a hypervisor and two partitions.
 
 When Microsoft introduced the Xbox One in 2013, it described the console as running three operating systems at once: a hypervisor that owns the hardware, a game partition that runs the current game, and a Windows-based partition for the home screen and apps. Other consoles differ in the details, but the same shape keeps appearing:
 
-A partition here is a virtual machine in the sense of Lesson 14.1: an operating system that sees only the cores, memory, and devices the hypervisor gives it. The split pays for itself three ways:
+A partition here is a virtual machine in the sense of Lesson 13.3: an operating system that sees only the cores, memory, and devices the hypervisor gives it. The split pays for itself three ways:
 
 Predictable timing. The game partition has C P U cores and memory reserved for it, so a background download cannot steal time from a frame. With 16.7 milliseconds per frame, a background task that takes 2 milliseconds at the wrong moment is a visible stutter.
 
@@ -36,13 +36,13 @@ Most console chips also contain a small, separate security processor. It starts 
 
 Section: Secure boot: a chain of trust.
 
-When a console powers on, which code runs first, and why should anyone trust it? Secure boot answers with a chain of trust: each stage checks the digital signature (Lesson 9.8) of the next stage before running it, and refuses if the check fails.
+When a console powers on, which code runs first, and why should anyone trust it? Secure boot answers with a chain of trust: each stage checks the digital signature (Lesson 10.8) of the next stage before running it, and refuses if the check fails.
 
 Alternative: Think of boot as a relay of checked handoffs: each trusted stage verifies the next before letting that stage run.
 
 The first link is the boot ROM, a small program written into the chip when it is manufactured, which no software, update, or owner can change. It is the root of trust: every later stage is trusted only because an earlier stage checked it, and the chain ends at the one piece of code that needs no check because nobody can alter it.
 
-Each check is a digital signature, the same mechanism Windows uses on programs: the console maker signs every stage with a private key kept in its own buildings, and the console checks each signature with the matching public key, which can check signatures but cannot make them (Lesson 9.8 walks through how). The boot ROM needs that public key to check the first signature, and the key must be as unchangeable as the ROM. Chips can keep such values in eFuses: physical bits set once during manufacturing and then locked against ordinary software writes. Lesson 14.5 returns to how those bits can also lock a hardware debug port. A 2,048-bit RSA public key would need 2,048 of them. Chips store a SHA-256 hash of the key instead, which is 256 bits and so 256 fuses, and the key itself travels in flash storage alongside the bootloader:
+Each check is a digital signature, the same mechanism Windows uses on programs: the console maker signs every stage with a private key kept in its own buildings, and the console checks each signature with the matching public key, which can check signatures but cannot make them (Lesson 10.8 walks through how). The boot ROM needs that public key to check the first signature, and the key must be as unchangeable as the ROM. Chips can keep such values in eFuses: physical bits set once during manufacturing and then locked against ordinary software writes. Lesson 13.7 returns to how those bits can also lock a hardware debug port. A 2,048-bit RSA public key would need 2,048 of them. Chips store a SHA-256 hash of the key instead, which is 256 bits and so 256 fuses, and the key itself travels in flash storage alongside the bootloader:
 
 Before it runs a single instruction of the bootloader, the boot ROM:
 
@@ -70,15 +70,15 @@ When an update fixes a security hole, it raises the security version to 4 and bl
 
 Section: Code signing and encrypted game packages.
 
-The chain does not stop at boot. Everything a console runs, including system updates, apps, and every game, must carry the platform holder’s signature, which the system software checks before launching it. Unsigned code simply does not run. On Windows, by contrast, an Authenticode signature (Lesson 9.8) is optional for ordinary programs, and an unsigned program runs after a warning, because the owner decides.
+The chain does not stop at boot. Everything a console runs, including system updates, apps, and every game, must carry the platform holder’s signature, which the system software checks before launching it. Unsigned code simply does not run. On Windows, by contrast, an Authenticode signature (Lesson 10.8) is optional for ordinary programs, and an unsigned program runs after a warning, because the owner decides.
 
-Game packages are also encrypted, and the two protections do different jobs (Lesson 9.9). The signature proves that the package came, unchanged, from the platform holder. The encryption hides the contents, so the code cannot be read, or copied to run elsewhere, outside a console holding the right keys. Those keys stay inside the security processor, which decrypts content for the game without ever handing the keys to the game or to the system software. Digital purchases add a licence check before anything is decrypted.
+Game packages are also encrypted, and the two protections do different jobs (Lesson 10.10). The signature proves that the package came, unchanged, from the platform holder. The encryption hides the contents, so the code cannot be read, or copied to run elsewhere, outside a console holding the right keys. Those keys stay inside the security processor, which decrypts content for the game without ever handing the keys to the game or to the system software. Digital purchases add a licence check before anything is decrypted.
 
-Signing everything has a consequence for memory. Code that a program writes for itself at run time was never signed, so consoles generally do not let ordinary games mark memory as both writable and executable, the combination that Lesson 11.7 treats as a place where data can become code. That rule returns in Lesson 14.7, because an emulator’s fastest technique needs exactly that combination.
+Signing everything has a consequence for memory. Code that a program writes for itself at run time was never signed, so consoles generally do not let ordinary games mark memory as both writable and executable, the combination that Lesson 6.5 treats as a place where data can become code. That rule returns in Lesson 13.9, because an emulator’s fastest technique needs exactly that combination.
 
 Section: Why a console is harder to modify than a PC.
 
-The deeper difference is whose interests the protections serve. A PC’s security defends its owner against other people: malware, other users, network attackers. The owner is the administrator and may switch any of it off. A console’s security also defends the platform holder and game publishers against the owner: against copying games, against cheating in online play, and against running unapproved software. So a console is built so that its owner cannot switch the protections off, down to debug ports locked with fuses (Lesson 14.5).
+The deeper difference is whose interests the protections serve. A PC’s security defends its owner against other people: malware, other users, network attackers. The owner is the administrator and may switch any of it off. A console’s security also defends the platform holder and game publishers against the owner: against copying games, against cheating in online play, and against running unapproved software. So a console is built so that its owner cannot switch the protections off, down to debug ports locked with fuses (Lesson 13.7).
 
 Game developers still need to debug. Licensed studios receive development kits: consoles with debugging enabled and different keys, which run unsigned test builds. A retail console lacks those permissions by design.
 
@@ -104,6 +104,6 @@ Because a console runs only signed code, unofficial homebrew depends on a flaw s
 
 On the other side, homebrew developers and some researchers argue that owners should be able to run their own code on hardware they bought, and that preserving old software depends on it. Where the line falls depends on the country, the device, and exactly what is done, and this lesson is not legal advice.
 
-This book stays out of that territory: none of its labs modify a console. Lesson 14.7 studies console software from the other side, with an emulator running on your own PC and programs you are allowed to run.
+This book stays out of that territory: none of its labs modify a console. Lesson 13.9 studies console software from the other side, with an emulator running on your own PC and programs you are allowed to run.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/14/05/

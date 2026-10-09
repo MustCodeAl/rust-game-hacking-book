@@ -2,7 +2,7 @@ Binary Saves and Hex Editing
 
 Section: A binary save is not text.
 
-Lesson 9.2 edited Flare’s text avatar.txt save. Its build=5,1,1,2 line records a character whose Physical attribute is 5 and is readable in any text editor. Many saves are not. They store numbers as raw bytes, the same way a u32 sits in memory, because that is smaller and faster to load. Open one in a text editor and most bytes turn into boxes, blanks, or stray symbols. Worse, saving it from a text editor can quietly change bytes, for example by converting line endings, which corrupts the file.
+Lesson 10.2 edited Flare’s text avatar.txt save. Its build=5,1,1,2 line records a character whose Physical attribute is 5 and is readable in any text editor. Many saves are not. They store numbers as raw bytes, the same way a u32 sits in memory, because that is smaller and faster to load. Open one in a text editor and most bytes turn into boxes, blanks, or stray symbols. Worse, saving it from a text editor can quietly change bytes, for example by converting line endings, which corrupts the file.
 
 A hex editor shows a file as what it is: a numbered sequence of bytes, each written as two hexadecimal digits. In byte-overwrite mode, it can save the exact replacement bytes without decoding the whole file as text. HxD and ImHex are common examples; they show the same three columns, so nothing in this lesson depends on which one you use.
 
@@ -76,7 +76,7 @@ Alternative: A length prefix measures the string from its beginning; a terminato
 
 Section: Find a field by comparing two saves.
 
-The layout above was handed to you. A real game’s layout usually is not, so its fields are found by comparison, the byte-level version of Lesson 9.2’s two-save diff: save once, change exactly one value in the game, save again, and compare the two files. Most hex editors have a compare view that highlights the bytes that differ.
+The layout above was handed to you. A real game’s layout usually is not, so its fields are found by comparison, the byte-level version of Lesson 10.2’s two-save diff: save once, change exactly one value in the game, save again, and compare the two files. Most hex editors have a compare view that highlights the bytes that differ.
 
 Suppose Nia earns 1,000 gold, taking her from 250 to 1,250, and nothing else changes. Offsets hexadecimal 0 0 to hexadecimal 0 5 are identical in both saves, so the strips start at hexadecimal 0 6:
 
@@ -84,7 +84,7 @@ Offsets 6 and 7 changed from FA 00 to E2 04. hexadecimal E 2 is 14 times 16 + 2 
 
 Offset hexadecimal 0 F changed as well, from 4A to 36, although nothing else in the game changed. A byte that changes whenever any other value changes is the mark of a checksum, the subject of the next section.
 
-In a real game the diff also catches bytes that change on their own, such as play time, a timestamp, or a random seed. Lesson 9.2 separates those by repeating the comparison with several values; the real field follows the in-game number every time.
+In a real game the diff also catches bytes that change on their own, such as play time, a timestamp, or a random seed. Lesson 10.2 separates those by repeating the comparison with several values; the real field follows the in-game number every time.
 
 Section: Why one edited byte breaks the save.
 
@@ -102,7 +102,7 @@ The fix is to do what the game does when it saves: recompute the checksum. For 1
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-A plain sum has a blind spot: adding numbers in a different order gives the same total, so swapping two bytes goes unnoticed. That is why real formats more often use a CRC-32, a 32-bit checksum designed to change when bytes are reordered, or a hash. The editing procedure stays the same: work out which bytes are covered, which algorithm runs, where the result is stored, and in which byte order, as listed in Lesson 9.2. If the check uses a secret key, as a MAC does, or a digital signature, it cannot be recomputed without that key; Lesson 9.9 explains why.
+A plain sum has a blind spot: adding numbers in a different order gives the same total, so swapping two bytes goes unnoticed. That is why real formats more often use a CRC-32, a 32-bit checksum designed to change when bytes are reordered, or a hash. The editing procedure stays the same: work out which bytes are covered, which algorithm runs, where the result is stored, and in which byte order, as listed in Lesson 10.2. If the check uses a secret key, as a MAC does, or a digital signature, it cannot be recomputed without that key; Lesson 10.10 explains why.
 
 Section: Edit without losing the original.
 
@@ -114,17 +114,17 @@ Type over bytes; do not insert them. Hex editors have an overwrite mode, which r
 
 A longer name is the one edit that must insert bytes. Renaming Nia to Grace means inserting two bytes, changing the length byte from 03 to 05, and recomputing the checksum at its new offset, 17. Getting any one of the three wrong makes the loader refuse the file.
 
-A program that edits saves should write the result to a temporary file and then replace the original in one step, as in Lesson 9.2, so a crash mid-write cannot leave half a save.
+A program that edits saves should write the result to a temporary file and then replace the original in one step, as in Lesson 10.2, so a crash mid-write cannot leave half a save.
 
 Section: When a hex editor cannot help.
 
 Everything above depends on each field being stored as plain bytes at a known place. Two common designs break that assumption:
 
-A compressed save stores an encoded form of the data. gzip, a common compression format, starts its files with 1F 8B, the same bytes Lesson 8.2 found at the start of Wesnoth’s network payloads. The gold field is not anywhere in the file as plain bytes, and changing one compressed byte changes how everything after it decompresses; gzip’s own CRC-32 at the end of the stream then fails. The file has to be decompressed, edited, and compressed again with a tool that understands the format.
+A compressed save stores an encoded form of the data. gzip, a common compression format, starts its files with 1F 8B, the same bytes Lesson 9.3 found at the start of Wesnoth’s network payloads. The gold field is not anywhere in the file as plain bytes, and changing one compressed byte changes how everything after it decompresses; gzip’s own CRC-32 at the end of the stream then fails. The file has to be decompressed, edited, and compressed again with a tool that understands the format.
 
-An encrypted save looks like random bytes: no readable text in the character column, and every value from 00 to FF appearing about equally often. Changing the encrypted bytes, the ciphertext, changes what they decrypt to in ways nobody can choose, and authenticated encryption, covered in Lesson 9.9, refuses the altered file outright. Without the key there is nothing to edit.
+An encrypted save looks like random bytes: no readable text in the character column, and every value from 00 to FF appearing about equally often. Changing the encrypted bytes, the ciphertext, changes what they decrypt to in ways nobody can choose, and authenticated encryption, covered in Lesson 10.10, refuses the altered file outright. Without the key there is nothing to edit.
 
-The two-save comparison tells these cases apart quickly. A plain format changes a handful of bytes, as it did above; a compressed file, or one encrypted afresh on every save, changes almost everything from the first difference onward. If the save turns out to be text after all, Lesson 9.2’s key/value editing is simpler than any hex edit.
+The two-save comparison tells these cases apart quickly. A plain format changes a handful of bytes, as it did above; a compressed file, or one encrypted afresh on every save, changes almost everything from the first difference onward. If the save turns out to be text after all, Lesson 10.2’s key/value editing is simpler than any hex edit.
 
 Section: The lab.
 

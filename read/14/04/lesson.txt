@@ -1,6 +1,6 @@
 Hardware Debugging with J T A G
 
-Every debugger in this book so far has been a program asking other software for permission. The debugger of Lesson 5.7 asks Windows to pause a thread, and Windows agrees because the debugger holds the right access. Lesson 11.10 showed the processor enforcing a boundary between user mode and the kernel, and Lesson 14.1 put a hypervisor underneath the kernel. This lesson goes below all of them, to a debugger that asks no software at all, because it is wired into the chip.
+Every debugger in this book so far has been a program asking other software for permission. The debugger of Lesson 6.10 asks Windows to pause a thread, and Windows agrees because the debugger holds the right access. Lesson 12.4 showed the processor enforcing a boundary between user mode and the kernel, and Lesson 13.3 put a hypervisor underneath the kernel. This lesson goes below all of them, to a debugger that asks no software at all, because it is wired into the chip.
 
 A console’s boot and signing rules can restrict software tools. A physical debug port crosses a different boundary, which is why shipped devices usually lock it too. To see how the port gained such reach, start with its original job: finding bad solder joints.
 
@@ -20,7 +20,7 @@ capture: record the level currently on its pin, 1 or 0;
 
 drive: put a chosen level onto the pin, overriding the chip’s own logic.
 
-The cells are wired one after another into a shift register: a row of one-bit cells in which, on every clock tick, each cell takes its neighbour’s value, so a new bit enters at one end and the bit at the far end falls out. The captured levels can therefore leave one at a time through a single wire while a new pattern arrives through another. This row is the chip’s boundary-scan register, and Lesson 14.6 shifts a four-pin chip’s register one clock at a time.
+The cells are wired one after another into a shift register: a row of one-bit cells in which, on every clock tick, each cell takes its neighbour’s value, so a new bit enters at one end and the bit at the far end falls out. The captured levels can therefore leave one at a time through a single wire while a new pattern arrives through another. This row is the chip’s boundary-scan register, and Lesson 13.8 shifts a four-pin chip’s register one clock at a time.
 
 Alternative: A shift register is a conveyor for captured bits: each clock moves them one place, allowing many pin readings to leave through one wire.
 
@@ -48,9 +48,9 @@ Shift moves the register one place toward TDO per clock, so a 32-bit register ta
 
 Update copies the new pattern to the register’s outputs in one step, so the pins never see the in-between patterns the register passes through while bits ripple along.
 
-The standard defines 16 states in all. The path above exists twice: once for a data register, such as the boundary-scan register, and once for the instruction register, described next. The remaining states choose between the two copies, leave the shifting, and let the debugger pause partway through a scan and resume without starting over. Lesson 14.6 draws all 16 states and follows them one clock at a time.
+The standard defines 16 states in all. The path above exists twice: once for a data register, such as the boundary-scan register, and once for the instruction register, described next. The remaining states choose between the two copies, leave the shifting, and let the debugger pause partway through a scan and resume without starting over. Lesson 13.8 draws all 16 states and follows them one clock at a time.
 
-One more property makes the controller impossible to lose: from any state, five clocks with TMS at 1 reach Test-Logic-Reset, as Lesson 14.6 checks state by state. A debugger unsure where the controller is sends five 1s on TMS and starts again from a known place.
+One more property makes the controller impossible to lose: from any state, five clocks with TMS at 1 reach Test-Logic-Reset, as Lesson 13.8 checks state by state. A debugger unsure where the controller is sends five 1s on TMS and starts again from a known place.
 
 Section: Instructions choose which register sits in the chain.
 
@@ -62,7 +62,7 @@ EXTEST and SAMPLE/PRELOAD select the boundary-scan register for board tests like
 
 IDCODE is optional but nearly universal. It selects a 32-bit register holding a number that identifies the chip: its manufacturer, its part number, and its version. A chip that has one selects it automatically on reset.
 
-Those two small registers let a debugger explore a board it knows nothing about. Right after reset, one data scan reads the ID of every chip that has one. And with every chip in BYPASS, each chip adds exactly one bit to the chain, so timing a single 1 from TDI to TDO counts the chips. Lesson 14.6 does both on a two-chip board.
+Those two small registers let a debugger explore a board it knows nothing about. Right after reset, one data scan reads the ID of every chip that has one. And with every chip in BYPASS, each chip adds exactly one bit to the chain, so timing a single 1 from TDI to TDO counts the chips. Lesson 13.8 does both on a two-chip board.
 
 Narration: With every chip contributing one BYPASS bit, the delay of a test bit reveals the chain length without reading each chip’s full data register.
 
@@ -84,7 +84,7 @@ The difference from Chapter 5 is where the request goes. A Windows debugger asks
 
 In brief: A hardware debug request reaches chip-level control, rather than asking the operating system to pause one selected thread.
 
-Arm’s Cortex-M processors, found in a great many microcontrollers, the single-chip computers inside things like keyboards and game controllers, show how ordinary the mechanism is. Their debug controls sit at fixed addresses in the memory map, and the debug logic includes a memory access port that performs bus reads and writes for the debugger. So halting the core takes one memory write: a value with its halt bit set, written into a debug control register, stops the core before its next instruction, and reading R A M, random access memory, afterwards takes one memory read. Lesson 14.6 builds that value bit by bit and follows the write to the core.
+Arm’s Cortex-M processors, found in a great many microcontrollers, the single-chip computers inside things like keyboards and game controllers, show how ordinary the mechanism is. Their debug controls sit at fixed addresses in the memory map, and the debug logic includes a memory access port that performs bus reads and writes for the debugger. So halting the core takes one memory write: a value with its halt bit set, written into a debug control register, stops the core before its next instruction, and reading R A M, random access memory, afterwards takes one memory read. Lesson 13.8 builds that value bit by bit and follows the write to the core.
 
 Section: SWD: the same debugger on two wires.
 
@@ -92,11 +92,11 @@ Four signals, or five with TRST, are a lot for a small microcontroller with twen
 
 Every transaction begins with an 8-bit request that names a register and says whether it will be read or written. The wire then turns around, and the chip answers with a 3-bit acknowledgement: OK, WAIT, or FAULT. A read then delivers 32 data bits and a parity bit, an extra bit chosen to make the number of 1s even, so that a single bit damaged on the wire shows up as an odd count:
 
-Many chips offer both protocols on shared pins, with SWDIO on the TMS pin and SWCLK on the TCK pin, and a special bit sequence switches the port from one to the other. Behind either protocol sits the same debug port, so halting, stepping, and memory access work the same way. Lesson 14.6 builds the first request a debugger usually sends, bit by bit.
+Many chips offer both protocols on shared pins, with SWDIO on the TMS pin and SWCLK on the TCK pin, and a special bit sequence switches the port from one to the other. Behind either protocol sits the same debug port, so halting, stepping, and memory access work the same way. Lesson 13.8 builds the first request a debugger usually sends, bit by bit.
 
 Section: Why shipped devices lock the port.
 
-Everything above needs one thing: an open debug port. The debug logic does not care what software the chip runs. A debugger that can halt the core and read memory can read whatever that memory holds, such as encryption keys, a game console’s decrypted code, or a phone owner’s data. It can also write memory, so it can change code that secure boot (Lesson 14.4) checked a moment earlier. The protections of Chapters 11 and 12 — privilege levels, memory protection, the kernel boundary — are all enforced by the processor that the debugger has just stopped.
+Everything above needs one thing: an open debug port. The debug logic does not care what software the chip runs. A debugger that can halt the core and read memory can read whatever that memory holds, such as encryption keys, a game console’s decrypted code, or a phone owner’s data. It can also write memory, so it can change code that secure boot (Lesson 13.6) checked a moment earlier. The protections of Chapters 11 and 12 — privilege levels, memory protection, the kernel boundary — are all enforced by the processor that the debugger has just stopped.
 
 So production devices close the port, in layers from weakest to strongest:
 
@@ -110,12 +110,12 @@ Require authentication. The port stays present but locked until the debugger pro
 
 Secure debug authentication is a challenge and a signed answer:
 
-Each part closes a specific gap. The nonce, a number used once (Lesson 9.9), makes old answers useless, because a recorded signature covers a different number. The chip ID makes each answer good for one unit, so a signature leaked from a repair bench unlocks nothing else. The private key never leaves the maker, so knowing exactly how the protocol works, as you now do, does not help anyone forge an answer.
+Each part closes a specific gap. The nonce, a number used once (Lesson 10.10), makes old answers useless, because a recorded signature covers a different number. The chip ID makes each answer good for one unit, so a signature leaked from a repair bench unlocks nothing else. The private key never leaves the maker, so knowing exactly how the protocol works, as you now do, does not help anyone forge an answer.
 
 The lock follows the chip through its life. Chips usually leave the chip factory open for manufacturing tests, are locked as the last step before a product ships, and may enter a return-for-analysis state, reachable only through authentication, if a unit comes back broken. Each step is a one-way fuse change. The hardware that reads those fuses is built to fail closed: designers assume someone will try to disturb the check itself, so any fuse reading other than a clean “open” leaves debug off.
 
 A product shipped with its debug port open is a well-known and often repeated mistake. Fixing it costs almost nothing at the factory and is nearly impossible once the devices are in customers’ hands. Development boards sold for learning embedded programming are the opposite case: they leave SWD open on purpose and document it, because their owners are the developers.
 
-The J T A G lab is in Lesson 14.6: a simulated two-chip scan chain that you drive one clock at a time.
+The J T A G lab is in Lesson 13.8: a simulated two-chip scan chain that you drive one clock at a time.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/14/04/

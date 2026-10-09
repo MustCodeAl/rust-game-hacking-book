@@ -18,7 +18,7 @@ kernel mode, ring 0, for the kernel and drivers;
 
 user mode, ring 3, for everything else: games, browsers, debuggers, and every tool in this book.
 
-Lesson 11.9 introduced the two modes as permission levels. The processor records the current level in two bits of one of its registers, which Lesson 11.11 reads in a debugger. What matters here is what the processor refuses to do while the level is 3.
+Lesson 12.5 introduced the two modes as permission levels. The processor records the current level in two bits of one of its registers, which Lesson 12.6 reads in a debugger. What matters here is what the processor refuses to do while the level is 3.
 
 Section: What ring 3 is not allowed to do.
 
@@ -26,7 +26,7 @@ At ring 3 the processor refuses two kinds of thing.
 
 Privileged instructions. Some instructions only make sense for whoever runs the machine. hlt stops the processor until the next interrupt. cli turns interrupts off, which would silence the timer the kernel relies on to take the processor back. mov c r 3, r a x switches to a different set of page tables, which selects a process’s whole view of memory. The physical-memory lessons in Chapter 12 will follow those page tables. wrmsr rewrites the processor’s internal settings. At ring 3, each of these raises a general-protection fault instead of running, and the kernel turns the fault into an exception that normally ends the program.
 
-Memory marked for the kernel. Page-table entries carry a user/supervisor bit, bit 2. When it is 0 on a present mapping, a ring-3 access causes a page fault. Windows reserves a system range of virtual addresses for the kernel. In a traditional shared page table, kernel pages can be mapped there alongside a game’s pages, but their supervisor bit still blocks the game. With KVA shadow, the user-mode page table omits most kernel mappings and keeps only the pages needed to enter the kernel; entry code switches to the fuller kernel page table. In either arrangement, a game cannot read or write the kernel’s privileged pages. Lesson 11.11 compares the flag bits of a user page and a kernel page.
+Memory marked for the kernel. Page-table entries carry a user/supervisor bit, bit 2. When it is 0 on a present mapping, a ring-3 access causes a page fault. Windows reserves a system range of virtual addresses for the kernel. In a traditional shared page table, kernel pages can be mapped there alongside a game’s pages, but their supervisor bit still blocks the game. With KVA shadow, the user-mode page table omits most kernel mappings and keeps only the pages needed to enter the kernel; entry code switches to the fuller kernel page table. In either arrangement, a game cannot read or write the kernel’s privileged pages. Lesson 12.6 compares the flag bits of a user page and a kernel page.
 
 Put the two checks together and user-mode code is boxed in. It cannot run the instructions that change privilege or page mappings, and it cannot alter the kernel’s page tables.
 
@@ -46,13 +46,13 @@ In brief: A system call enters a kernel-chosen service path; it does not let the
 
 Section: Follow one call into the kernel and back.
 
-Take a read like the ones in Lesson 11.5: a handle to the game opened with only query and read rights, and a request for 4 bytes at address shown here. Here is the whole round trip:
+Take a read like the ones in Lesson 6.3: a handle to the game opened with only query and read rights, and a request for 4 bytes at address shown here. Here is the whole round trip:
 
-Your tool’s call passes through kernel32.dll and kernelbase.dll, the layers that Lesson 11.9 followed down the stack, to NtReadVirtualMemory in ntdll.dll. That function is only a few instructions long: it puts a service number, which tells the kernel which of its routines to run, into the e a x register, and executes syscall.
+Your tool’s call passes through kernel32.dll and kernelbase.dll, the layers that Lesson 12.5 followed down the stack, to NtReadVirtualMemory in ntdll.dll. That function is only a few instructions long: it puts a service number, which tells the kernel which of its routines to run, into the e a x register, and executes syscall.
 
 On the other side, the kernel’s entry code moves onto a stack of its own and saves your registers. Then the kernel’s own NtReadVirtualMemory checks the request before touching anything. Both address ranges, the 4 bytes in the game and your tool’s buffer, must lie in user space, which is why ReadProcessMemory can never read kernel memory, whatever handle you hold. And the handle must carry the right the operation needs: PROCESS_VM_READ for a read, which this handle has, or PROCESS_VM_WRITE for a write, which it lacks. A handle’s rights are fixed when it is opened, and nothing done with it afterward can add one.
 
-Only then does the kernel copy the 4 bytes into your buffer. It puts a status code in e a x, here STATUS_SUCCESS, which is 0, and executes sysret, the reverse of syscall, which drops the level back to 3 and resumes your thread after its syscall. On a failure, kernelbase.dll turns the status into the error number that GetLastError reports, such as 5 for access denied. Lesson 11.11 follows each step with the values involved, including the arithmetic of the rights check.
+Only then does the kernel copy the 4 bytes into your buffer. It puts a status code in e a x, here STATUS_SUCCESS, which is 0, and executes sysret, the reverse of syscall, which drops the level back to 3 and resumes your thread after its syscall. On a failure, kernelbase.dll turns the status into the error number that GetLastError reports, such as 5 for access denied. Lesson 12.6 follows each step with the values involved, including the arithmetic of the rights check.
 
 Section: How the kernel regains control.
 
@@ -66,7 +66,7 @@ Section: What the kernel does with its authority.
 
 Section: It schedules threads.
 
-A computer has a handful of processor cores and, at any moment, hundreds or thousands of threads (Lesson 11.8 described ready, running, and waiting threads). The kernel’s scheduler decides which ready thread runs on each core. Timer interrupts are one opportunity to reconsider that choice; a thread blocking for input or a lock is another. Timer resolution and interrupt scheduling vary by Windows version, hardware, and power state, so a fixed tick interval is not a reliable description of every game session.
+A computer has a handful of processor cores and, at any moment, hundreds or thousands of threads (Lesson 6.6 described ready, running, and waiting threads). The kernel’s scheduler decides which ready thread runs on each core. Timer interrupts are one opportunity to reconsider that choice; a thread blocking for input or a lock is another. Timer resolution and interrupt scheduling vary by Windows version, hardware, and power state, so a fixed tick interval is not a reliable description of every game session.
 
 When a running thread stops to wait for input, a lock, or a timer, or when its turn is interrupted, the scheduler can pick another thread. Changing threads is a context switch: the kernel saves the old thread’s registers into its context, loads the new thread’s registers, and, if the new thread belongs to a different process, loads that process’s top-level page-table address into c r 3. The program never sees the switch. Its registers come back exactly as they were.
 
@@ -74,21 +74,21 @@ Alternative: A context switch changes the bookmark and working registers for an 
 
 Section: It manages every process’s memory.
 
-Each process has its own page tables, and only the kernel writes them. Reserving an address range and committing storage are distinct operations, as Lesson 11.7 showed. Even after a page is committed, Windows may assign its physical frame only on first access. That access faults, the kernel supplies a zeroed page so old data cannot leak between processes, updates the mapping, and retries the instruction. The game normally never sees this handled fault. Lesson 11.7 looked at the result from outside, and Lesson 12.7 will examine how physical memory fits beneath that view.
+Each process has its own page tables, and only the kernel writes them. Reserving an address range and committing storage are distinct operations, as Lesson 6.5 showed. Even after a page is committed, Windows may assign its physical frame only on first access. That access faults, the kernel supplies a zeroed page so old data cannot leak between processes, updates the mapping, and retries the instruction. The game normally never sees this handled fault. Lesson 6.5 looked at the result from outside, and Lesson 13.1 will examine how physical memory fits beneath that view.
 
 Narration: A first-access page fault can be normal: the kernel supplies the page and retries the instruction. A fault does not always mean the game has crashed.
 
 Section: It handles interrupts.
 
-When a device needs attention, because a key was pressed, a disk transfer finished, or a network packet arrived, it raises an interrupt. The processor finishes its current instruction, saves where it was, enters ring 0 if it was not there already, and runs the handler for that vector. The interrupted code, kernel or user, resumes afterward as if nothing had happened. Handlers must be short, because other work on that core waits while they run; Lesson 12.4 shows how drivers split the work.
+When a device needs attention, because a key was pressed, a disk transfer finished, or a network packet arrived, it raises an interrupt. The processor finishes its current instruction, saves where it was, enters ring 0 if it was not there already, and runs the handler for that vector. The interrupted code, kernel or user, resumes afterward as if nothing had happened. Handlers must be short, because other work on that core waits while they run; Lesson 12.7 shows how drivers split the work.
 
 Section: It owns devices through drivers.
 
-Ordinary user programs reach devices through operating-system interfaces rather than writing device registers directly. A driver knows a device’s register layout and command protocol, and Windows routes requests through the relevant driver stack. Lesson 12.4 follows one request down to the hardware.
+Ordinary user programs reach devices through operating-system interfaces rather than writing device registers directly. A driver knows a device’s register layout and command protocol, and Windows routes requests through the relevant driver stack. Lesson 12.7 follows one request down to the hardware.
 
 Section: It enforces security checks.
 
-The processor enforces privileged-instruction and page-permission checks in hardware. Windows checks handle rights and validates request ranges in the kernel, where the caller cannot simply skip the decision. The kernel also enforces the access tokens and integrity levels from Lesson 11.5, the page protections from Lesson 11.7, and the signing rules that decide which drivers may load at all (Lesson 12.4).
+The processor enforces privileged-instruction and page-permission checks in hardware. Windows checks handle rights and validates request ranges in the kernel, where the caller cannot simply skip the decision. The kernel also enforces the access tokens and integrity levels from Lesson 6.3, the page protections from Lesson 6.5, and the signing rules that decide which drivers may load at all (Lesson 12.7).
 
 Section: Recognize the subsystem in a kernel routine’s name.
 
@@ -104,11 +104,11 @@ Section: Why a kernel bug takes the whole machine down.
 
 When user-mode code follows a bad pointer, the processor raises a page fault and the kernel handles it. The kernel checks its records, finds that nothing valid lives at that address, and turns the fault into an access-violation exception for that one process. The program’s own handler, a debugger, or Windows Error Reporting deals with it, and in the worst case one process ends. The kernel is the safety net under every user-mode program.
 
-There is no separate part of Windows that can repair arbitrary damage to its own kernel state. A hypervisor may isolate a whole guest from the host, as Lesson 14.1 will show, but it cannot resume a guest kernel whose internal records are already corrupted. Kernel code does catch faults it expects, such as touching a user buffer that another thread may have freed; the copy behind ReadProcessMemory is written to catch exactly those. But a driver that follows a bad pointer by mistake can raise an unexpected fault inside the kernel, and kernel code and drivers share an address space and a set of data structures: the scheduler’s lists, the memory manager’s page records, and the locks that guard them. The fault may have struck halfway through updating one of those structures, with a lock still held. Windows cannot generally prove which of its own records remain sound, and carrying on could write corrupted data to disk. For an unrecoverable kernel failure, Windows stops on purpose.
+There is no separate part of Windows that can repair arbitrary damage to its own kernel state. A hypervisor may isolate a whole guest from the host, as Lesson 13.3 will show, but it cannot resume a guest kernel whose internal records are already corrupted. Kernel code does catch faults it expects, such as touching a user buffer that another thread may have freed; the copy behind ReadProcessMemory is written to catch exactly those. But a driver that follows a bad pointer by mistake can raise an unexpected fault inside the kernel, and kernel code and drivers share an address space and a set of data structures: the scheduler’s lists, the memory manager’s page records, and the locks that guard them. The fault may have struck halfway through updating one of those structures, with a lock still held. Windows cannot generally prove which of its own records remain sound, and carrying on could write corrupted data to disk. For an unrecoverable kernel failure, Windows stops on purpose.
 
-That deliberate stop is a bug check, better known as the blue screen. Windows shows a stop code, such as hexadecimal 5 0 PAGE_FAULT_IN_NONPAGED_AREA or hexadecimal D 1 DRIVER_IRQL_NOT_LESS_OR_EQUAL, writes a crash dump of the whole machine if it can (Lesson 11.12 will capture a dump of one process), and restarts.
+That deliberate stop is a bug check, better known as the blue screen. Windows shows a stop code, such as hexadecimal 5 0 PAGE_FAULT_IN_NONPAGED_AREA or hexadecimal D 1 DRIVER_IRQL_NOT_LESS_OR_EQUAL, writes a crash dump of the whole machine if it can (Lesson 14.3 will capture a dump of one process), and restarts.
 
-This is why the book keeps its labs in user mode and inside a virtual machine. The kernel trust lesson will make that design choice concrete with a read-only driver inventory. A crash in a user-mode lab ends one process, and even a bug check inside a virtual machine stops only that virtual machine (Lesson 14.1).
+This is why the book keeps its labs in user mode and inside a virtual machine. The kernel trust lesson will make that design choice concrete with a read-only driver inventory. A crash in a user-mode lab ends one process, and even a bug check inside a virtual machine stops only that virtual machine (Lesson 13.3).
 
 Section: Why some anti-cheat runs a kernel component.
 

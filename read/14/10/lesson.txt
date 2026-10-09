@@ -1,6 +1,6 @@
 J T A G Scan Chains and Debug Access
 
-Lesson 14.5 explained what J T A G is for and what each of its parts does. This lesson drives those parts one clock at a time, from a four-bit shift register to the packet that opens an SWD session, and ends with a lab that simulates a two-chip scan chain.
+Lesson 13.7 explained what J T A G is for and what each of its parts does. This lesson drives those parts one clock at a time, from a four-bit shift register to the packet that opens an SWD session, and ends with a lab that simulates a two-chip scan chain.
 
 Section: Two clock edges and two default levels.
 
@@ -22,11 +22,11 @@ Check clock 1: TDO receives b0, which is 1. Then b0 takes b1’s 0, b1 takes b2�
 
 The same four clocks did two jobs. They read the pins out in order, pin 0 to pin 3, and they loaded a new pattern. The first bit sent travelled furthest and ended in b0; the last bit sent stopped in b3:
 
-Look at the register after clock 2: 1 1 1 1, a pattern nobody asked for. While bits ripple through, the register passes through meaningless in-between values. If the pins followed the register directly, they would flicker through every one of them. So each cell has a second one-bit store, called a latch, that actually drives the pin, and the latch copies the shifted value only once the whole pattern is in place. That copy is the Update step of Lesson 14.5.
+Look at the register after clock 2: 1 1 1 1, a pattern nobody asked for. While bits ripple through, the register passes through meaningless in-between values. If the pins followed the register directly, they would flicker through every one of them. So each cell has a second one-bit store, called a latch, that actually drives the pin, and the latch copies the shifted value only once the whole pattern is in place. That copy is the Update step of Lesson 13.7.
 
 Section: The TAP controller: all 16 states.
 
-Lesson 14.5 followed the main path through the TAP controller: Capture, Shift, and Update. Here is the whole machine. At every rising edge of TCK it moves to one of two next states, chosen by whether TMS is 0 or 1. The diagram writes the 16 state names without hyphens; the standard spells them Test-Logic-Reset, Run-Test/Idle, Select-DR-Scan, Capture-DR, and so on.
+Lesson 13.7 followed the main path through the TAP controller: Capture, Shift, and Update. Here is the whole machine. At every rising edge of TCK it moves to one of two next states, chosen by whether TMS is 0 or 1. The diagram writes the 16 state names without hyphens; the standard spells them Test-Logic-Reset, Run-Test/Idle, Select-DR-Scan, Capture-DR, and so on.
 
 The machine has two matching columns. States ending in DR work on a data register, such as the boundary-scan register; states ending in IR work on the instruction register. Down each column:
 
@@ -44,7 +44,7 @@ Test-Logic-Reset is the state in which the chip ignores the test logic and works
 
 Each state does its work on the rising edge that leaves it. The capture happens on the clock that moves from Capture-DR to Shift-DR, and the last bit of a scan is shifted by the same clock that raises TMS to leave Shift-DR for Exit1-DR. To shift 64 bits, the debugger sends 63 clocks with TMS at 0 and then the 64th with TMS at 1. Getting from a fresh reset to the first shift takes four clocks:
 
-Lesson 14.5 said that five clocks with TMS at 1 reach Test-Logic-Reset from any state. To check it, hold TMS at 1 and work outward from Test-Logic-Reset, following the arrows labelled TMS 1:
+Lesson 13.7 said that five clocks with TMS at 1 reach Test-Logic-Reset from any state. To check it, hold TMS at 1 and work outward from Test-Logic-Reset, following the arrows labelled TMS 1:
 
 The rows cover 1 + 1 + 3 + 4 + 6 equals 15 states, and Test-Logic-Reset itself needs 0 clocks, so all 16 are accounted for and none needs more than five. From Shift-DR, for example, the path is Exit1-DR, Update-DR, Select-DR-Scan, Select-IR-Scan, and Test-Logic-Reset. Extra clocks do no harm, because Test-Logic-Reset stays put while TMS is 1, so a debugger that is unsure of the state sends five 1s on TMS and starts from a known place. And because an undriven TMS reads as 1, a chip whose test port is not connected to anything sits in Test-Logic-Reset permanently and works normally.
 
@@ -88,7 +88,7 @@ Bits 11 to 0 are hexadecimal 4 7 7, which is 4 times 256 + 7 times 16 + 7 equals
 
 Section: Halting a Cortex-M core with one write.
 
-Lesson 14.5 showed that a Cortex-M debugger halts the core with an ordinary memory write through the debug port. The register it writes is DHCSR, the Debug Halting Control and Status Register, at address shown here, described in Arm’s public architecture manual. Its low three bits are:
+Lesson 13.7 showed that a Cortex-M debugger halts the core with an ordinary memory write through the debug port. The register it writes is DHCSR, the Debug Halting Control and Status Register, at address shown here, described in Arm’s public architecture manual. Its low three bits are:
 
 Every write must also carry hexadecimal A 0 5 F in the upper 16 bits, or the processor ignores it. That key is printed in the public manual, so it is not a password. It stops a stray write from buggy software halting the core by accident.
 
@@ -102,13 +102,13 @@ step one instruction while halted: this value + 4 + 1 equals this value;
 
 resume: this value + 1 equals this value.
 
-The write travels through the memory access port of Lesson 14.5. The port has an address register and a data register, called TAR and DRW in Arm’s documentation: write an address to the first, then read or write the second, and the port performs that bus access.
+The write travels through the memory access port of Lesson 13.7. The port has an address register and a data register, called TAR and DRW in Arm’s documentation: write an address to the first, then read or write the second, and the port performs that bus access.
 
 The second read fetches the first word of the chip’s R A M, random access memory,, which starts at this value on Cortex-M. Core registers come through two more memory-mapped registers, one to choose a register by number and one to carry its value.
 
 Section: Inside an SWD request.
 
-Lesson 14.5 showed the shape of an SWD read: an 8-bit request, a turnaround, a 3-bit acknowledgement, 32 data bits, and a parity bit. The request’s eight bits, in the order they are sent, are:
+Lesson 13.7 showed the shape of an SWD read: an 8-bit request, a turnaround, a 3-bit acknowledgement, 32 data bits, and a parity bit. The request’s eight bits, in the order they are sent, are:
 
 Start: always 1.
 
