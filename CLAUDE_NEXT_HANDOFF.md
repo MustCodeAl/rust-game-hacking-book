@@ -35,4 +35,10 @@ Build; links0; quiz/account/audio/chat/contrast;420/1280screenshots/no errors or
 Commit and push source, then official `CHROME_PATH=... node scripts/publish-pages.mjs` only with clean tree. Never edit or force-push gh-pages. Verify exact Pages deployment, links0 and114processed-diagram pages. Pause source edits while publisher builds. Update progress with actual check results and limits; create the requested AI ledger at response end.
 
 
-Final release gates: assembled build334/155listening/991visuals exits0; links0;155quiz pools/3,226questions; account512/audio/chat15; six strict scoped gates plus new IDE/support TS gate0;29compatibility entries verified.20changed-page width groups pass; all10Original and10Modern palette combinations fail0. Actual main IDE80clicks/14keys/20inputs plus256CPU/145trace/848state checks pass; reader support10clicks/16keys passes. Publication/deployment receipt follows after push.
+Final release gates: assembled build334/155listening/989visuals exits0; links0;155quiz pools/3,226questions; account512/audio/chat15; six strict scoped gates plus new IDE/support TS gate0;29compatibility entries verified.20changed-page width groups pass; all10Original and10Modern palette combinations fail0. Actual main IDE80clicks/14keys/20inputs plus256CPU/145trace/848state checks pass; reader support10clicks/16keys passes. Publication/deployment receipt follows after push.
+
+
+Publication: implementation source `1d7dc186038f20eb277725313402a026528b895c` pushed before official Pages commit `45cd78181fb9762ebf0b57ce0f82cc3c4203afb0`. Publisher exits0; post-publication links334/0broken and origin/gh-pages processed-diagram page count114. Exact deployment38082986103 was in progress at first inspection; final status follows. No force push. Inspected actual main CPU420/trace1280 captures. Modern sidebar progress counter text still appears cramped/stacked beside rings at1280; include that targeted polish in the next audit.
+
+
+Final deployment receipt: GitHub Pages run38082986103 completed successfully for exact Pages45cd78181fb9762ebf0b57ce0f82cc3c4203afb0. Public14/11HTML contains the new debugger, reader HUD and compact actionbar. Only documentation receipts changed after implementation source1d7dc186; no further site changes need publication.
