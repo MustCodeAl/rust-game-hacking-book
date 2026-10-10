@@ -29,10 +29,8 @@ When debug symbols exist for a build, they give the real names and layouts, so t
 
 ## A pattern name communicates intent
 
-Design patterns are shared names for recurring design decisions. They do not
-all exist merely to “remove dependencies,” and two patterns can produce
-similar-looking machine code. Their important difference is often **intent**:
-why the pieces are separated and what kind of change the design expects.
+A design pattern names recurring roles and expected changes, not just
+dependency removal. Similar machine-code shapes can have different **intent**.
 
 For example, both State and Strategy may delegate through a function table.
 State usually represents behavior that changes as an object moves through a
@@ -45,8 +43,107 @@ be tested separately. Do not add a factory, observer, or trait hierarchy only
 because the name sounds professional. A smaller function or enum is often the
 clearer design.
 
-In a compiled game, a pattern name describes a likely role. It does not
-recreate the original source or prove what the programmer intended.
+A pattern name is a likely role, not a recovered source name or proof of intent.
+
+## Programming paradigms: ways to organize a purchase
+
+A **programming paradigm** is a style for organizing instructions and
+responsibilities. It does not change what a purchase means. Ada still
+starts with 100 gold, pays 25 if she can, and ends with 75. The styles
+answer a different question: *where should the affordability check and subtraction live, and how should
+other code use it?*
+
+The examples below revisit the guarded purchase from [Lesson 1.4](/pages/1/04/).
+For each isolated fragment, the caller starts with mutable `gold` of 100 and
+`cost` of 25. A minimal player record and the shared calculation are:
+
+```rust
+struct Player {
+    gold: u32,
+}
+
+fn spend_if_possible(gold: u32, cost: u32) -> u32 {
+    if gold >= cost {
+        return gold - cost;
+    }
+    return gold;
+}
+```
+
+This compares source organization. It does not imply that a Rust record has
+the C++ virtual-table layout examined later in this lesson.
+
+| Style | Main idea | Our purchase example |
+| --- | --- | --- |
+| Procedural or imperative | Write the steps that change state | Check gold, then subtract cost. |
+| Object-oriented | Put related data and behavior together | A `Player` has gold and a `buy` method. |
+| Functional | Calculate an output from inputs without changing hidden state | `spend_if_possible(100, 25)` returns 75. |
+| Event-driven | Run a handler when something happens | A Buy click calls the purchase function. |
+
+### Procedural: follow the steps
+
+The direct-update version is procedural. It says **how** to update the
+variable, in order:
+
+```rust
+if gold >= cost {
+    gold = gold - cost;
+}
+```
+
+That is often the clearest way to begin. It becomes awkward only if every
+screen and bot copies the same purchase steps, because a later change to the affordability check
+would have to be repeated everywhere. Our named function solves
+that duplication.
+
+<MarginNote kind="narration">If ten screens each copy the purchase steps, one change to the affordability check means ten edits, and missing one leaves the screens disagreeing. A named function keeps a single copy.</MarginNote>
+
+### Object-oriented: keep behavior with its data
+
+A `Player` record already keeps related data together. A method can put
+the purchase behavior beside that record, so `ada.buy(25)` reads as an
+action on Ada. [The Rust Primer](/pages/1/05/#put-behavior-next-to-a-struct-with-impl)
+shows the same organization with `impl Runner` and explains why a method
+receives editable access to its runner. Rust methods do not require class inheritance;
+[Lesson 3.8](/pages/3/03/) later examines how a compiled C++ game's
+classes and methods appear in memory.
+
+### Functional: make the result visible
+
+Our `spend_if_possible` function illustrates a functional style. Given
+100 and 25, it returns 75. It does not secretly reach out and change
+Ada. The caller decides whether to store the answer:
+
+```rust
+let next_gold = spend_if_possible(100, 25); // 75
+```
+
+That makes the calculation easy to check with different inputs. A larger
+program can mix this style with state-changing methods; the two are
+useful for different jobs.
+
+### Event-driven: respond when something happens
+
+A real game stays open instead of running `main` once and closing. A
+Buy click can produce an **event**, and the interface or game engine can
+call a registered **handler** in response:
+
+```rust
+fn on_buy_click(player: &mut Player) {
+    player.gold = spend_if_possible(player.gold, 25);
+}
+```
+
+This shows the handler's job, not a complete window setup. A game also
+updates and draws while no one clicks. [Lesson 6.9](/pages/8/06/)
+explains Windows messages and game loops; [Lesson 4.9](/pages/4/07/)
+compares events with checking for changes on a schedule. For now, notice
+that the event-driven style decides **when** the purchase calculation
+runs.
+
+One game can use all four styles: an event calls a handler, which asks a
+player method to update state using a small calculation. A paradigm is a
+way to organize work, not a team you must join forever.
 
 ## Start from what the code does, not class names
 
