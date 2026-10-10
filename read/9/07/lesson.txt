@@ -1,5 +1,27 @@
 File Hashes and Digital Signatures
 
+Section: Why one edited byte breaks the save.
+
+The book’s invented GSAV format makes the byte-integrity question concrete. Its offline character Nia has level 3, 250 gold, and this complete 19-byte save:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The last four bytes are a checksum: a number computed from the other bytes and stored beside them, so the loader can detect damage. This format uses the simplest checksum there is. It adds up every byte from offset 0 to the byte just before the checksum and stores the total as a little-endian u32. For Nia’s save, bytes 0 to 14 add up like this:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The stored checksum is the same number:
+
+The loader repeats that sum every time it opens the file:
+
+Now type gold over as 9,999 and change nothing else. 9,999 is 39 times 256 + 15, and 39 equals 2 times 16 + 7 equals hexadecimal 2 7 while 15 equals hexadecimal 0 F, so 9,999 is hexadecimal 2 7 0 F and its little-endian bytes are 0F 27 00 00. The old gold bytes added 250 to the sum; the new ones add 15 + 39 equals 54. The loader’s total becomes 842 minus 250 + 54 equals 646, the stored checksum still says 842, and the loader refuses the save as corrupt.
+
+The fix is to do what the game does when it saves: recompute the checksum. For 1,250 gold, the gold bytes E2 04 00 00 add 226 + 4 equals 230 instead of 250, so the total is 842 minus 250 + 230 equals 822. That is 3 times 256 + 54, and 54 equals 3 times 16 + 6 equals hexadecimal 3 6, so the checksum is hexadecimal 3 3 6, stored as 36 03 00 00: exactly what save B contained. The complete edited file is:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A plain sum has a blind spot: adding numbers in a different order gives the same total, so swapping two bytes goes unnoticed. That is why real formats more often use a CRC-32, a 32-bit checksum designed to change when bytes are reordered, or a hash. The editing procedure stays the same: work out which bytes are covered, which algorithm runs, where the result is stored, and in which byte order, as listed in Lesson 10.2. If the check uses a secret key, as a MAC does, or a digital signature, it cannot be recomputed without that key; Lesson 10.10 explains why.
+
 Section: A hash and a signature answer different questions.
 
 The manifest in Lesson 10.7 records the bytes before and after a mod installation. Its hash detects an unexpected later change. To decide whether a downloaded game or mod came from the publisher you expected, we need a different question: who approved these bytes?

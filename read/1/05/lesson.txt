@@ -114,11 +114,11 @@ The shape of each runner became larger, but the stamina check did not need a spe
 
 Section: Put behavior next to a struct with impl.
 
-The complete program uses a separate dash(runner, 4) function. Rust also lets us attach behavior to the Runner type in an impl block. This alternative method performs the same guarded subtraction:
+An impl Runner block attaches a method to the record type. &mut self gives that method editable access to its receiving runner, just as dash receives &mut Runner. A short method can reuse the existing check:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-self means the runner receiving the method call. &mut self gives the method temporary editable access to that runner, like the earlier &mut Runner parameter. You can add this impl block below the two-runner program and replace dash(runner, 4) in the first loop with runner.try_dash(4). The result stays Mira 8 and Sol 3. The method organizes the code differently; it keeps the same stamina check and subtraction. In Rust, a struct holds fields and an impl gives it methods; class inheritance is not required.
+In the full program’s first loop, runner.try_dash(4) has the same result as dash(runner, 4): Mira 8 and Sol 3. Rust methods organize behavior; class inheritance is not required. Lesson 3.4 keeps the full direct-check alternative and its original practice. Use that alternative in place of this method, not as a second method with the same name.
 
 Section: Model two possible outcomes with enum and match.
 
@@ -130,67 +130,41 @@ This prints Need 2 more stamina. The if chooses which outcome to construct. matc
 
 Section: Try the growable collections in Rust.
 
-Different questions call for different collections. A vector keeps a growable sequence of samples. A hash map finds a value by a key. A queue keeps actions in arrival order. Try their Rust forms in a separate scratch run after the two-runner example. The use line makes the two standard library collection types available by their short names:
+The two-runner program uses a fixed array. A vector can instead grow as new values arrive:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-vec! starts a growable vector with two samples, push adds a third, and [1] selects the second sample because positions start at zero. The hash map associates the key "Mira" with 8, so get("Mira") can find the amount without scanning a list of names. The queue adds actions at the back and takes the oldest from the front; after the first pop, "rest" is still waiting.
+The vector now holds 12, 8, and 6. A hash map finds a value by key; a queue takes actions in arrival order. Lesson 3.3 gives their complete Rust examples, including a missing map entry or an empty queue.
 
 Section: Express a repeated query with an iterator.
 
-A loop is useful when you want to show each step. An iterator can express the same repeated question as a short pipeline. Count how many runners have enough stamina for a 4-point dash:
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-.iter() walks borrowed values from the array.copied() makes cheap u32 copies, filter keeps the values that satisfy the condition, and count counts those kept. |stamina| *stamina greater than or equal to 4 is a closure: a small unnamed function supplied right where it is used. *stamina reads the number passed to that closure. The longer for version says the same thing:
-
-Code example. The code’s comments explain: ready is 2
-
-Use the form that makes the value transformation easiest to read. Later labs also use .map(...) to transform each item and .collect() to gather results; the logic is still “visit each item, do something, then produce an answer.”
-
-Both the map lookup and the queue removal may fail to produce an item: the name might be absent or the queue empty. Their results therefore use Some(value) or None. The next section shows the same shape with the stamina check and subtraction. A grid and graph need their own operations; Lesson 4.8 uses them for map tiles and paths.
+An iterator repeatedly yields items. For stamina values 8, 3, and 6, a query keeping values at least 4 counts two ready runners. The loop forms above show how such repetition works. The full iterator/loop comparison and original practice follow the collection examples when we examine bounded sequences.
 
 Section: When a result might be missing.
 
-An array’s [1] asks for a position directly; using an index outside its bounds would fail at runtime. Its .get(1) method instead gives an Option: Some(value) when that position exists, or None when it does not. This is the same Some used in the hash-map example above:
+.get(1) returns an Option: Some(value) when that array position exists, or None when it does not. if let runs its block only for the matching shape and names the value inside it:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The code prints Second dash cost: 10. With .get(5), the answer would be None, and the print would be skipped. if let means “run this block if the result has the Some shape, and give its inner value the name cost.”
+This prints 10. .get(5) would give None and skip the print, while direct out-of-bounds indexing would fail at runtime. A missing answer differs from a valid zero: 4_u32.checked_sub(4) gives Some(0), whereas 2_u32.checked_sub(4) gives None. No negative unsigned value is invented. These calculations return an answer; they do not change a runner’s fields.
 
-The same idea can report a dash that cannot be made. A missing answer needs a different shape from a valid result of zero:
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-checked_sub gives Some(8) for (12, 4), because the subtraction fits in u32. It gives None for (2, 4), because an unsigned value cannot hold the negative answer. For (4, 4), the answer is Some(0), not None; zero is a valid remaining amount. This differs from dash, which returned false and left the runner’s stamina unchanged on a failed dash. The return type tells the caller which story it will receive. In Rust, the last expression without a semicolon is the returned value; here that expression is the checked_sub result.
-
-Narration: Signalling failure with a special number such as minus one lets a caller forget to check it. An Option makes the caller deal with None before using the value.
-
-The default run returns Some(0). Lower stamina below the cost and the result becomes None; it never manufactures a negative unsigned value.
-
-Another common Rust type, Result, represents either a success (Ok) or an error (Err) when the reason for failure matters. The official Option documentation has more examples when you need them.
+Lesson 3.2 keeps the complete remaining-stamina function, its original practice, and the zero-versus-missing trace.
 
 Section: Give a failure a reason with Result.
 
-Option fits “there may be no item.” Sometimes you need to know why an operation failed. Suppose a small tool reads a dash cost as text. "4" can become a u32; "tired" cannot. Rust’s parse operation returns a Result: Ok(cost) or Err(error).
+Option says whether a value exists. Result<T, E> says either Ok(value) or Err(reason). Parsing the text "4" as a u32 succeeds; "tired" is not a whole number. The caller handles both possibilities:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The ::<u32> tells parse which number type we want. match selects one arm by the shape of the result and gives the value inside that arm a name. For "4", the first arm prints Cost: 4. Change the text to "tired" and the error arm runs instead. Both possibilities are written down, so the caller cannot silently treat invalid text as a valid zero cost.
-
-The letters T and E stand for the success-value type and error type. You do not need to invent a custom error type yet. Lesson 3.1 returns useful errors from a memory reader and explains where to handle them.
+::<u32> selects the numeric type. For "4", the success arm prints Cost: 4; for "tired", the error arm runs. Invalid input is not a valid zero cost. T names the success type and E the error type.
 
 Section: Stop a sequence early with ?.
 
-Sometimes a function has several steps, and each step can fail. Rust’s ? keeps the successful value moving through the sequence and returns an error immediately when that step fails:
+? continues with an Ok value or immediately returns an Err to the caller. The function’s return type must support that failure:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-For "4", parse produces Ok(4)? gives 4 to cost, and the function returns Ok(4). For "tired", parse produces Err, so the function stops before Ok(cost) and passes that error to its caller. The caller’s match still decides what to do with it. Read ? as “continue with the value, or return the error now.”
-
-Alternative: Think of an assembly line with a stop button: each step passes the part along, and the first bad part halts the line and goes back to the caller.
-
-The angle brackets in Result<u32, ParseIntError> supply concrete types to a reusable type: success holds a u32, error holds a parse error. Option<u32>, Vec<u32>, and HashMap<&str, u32> use the same generic pattern with different values inside.
+The final expression without a semicolon supplies the returned value. Here success is Ok(cost); a failed parse returns before that line. The caller still decides how to handle the failure. Lesson 3.2 keeps the complete two-input caller and original parser practice, then contrasts that parse error with a domain-specific purchase failure.
 
 Section: Recognize a few later Rust boundaries.
 

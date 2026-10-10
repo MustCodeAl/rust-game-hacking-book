@@ -1602,139 +1602,55 @@ algorithm, instead of copying a solution to a different question.
 
 ## Choose a collection for the question
 
-The fixed array of two `Player` records was enough when we knew there were
-exactly two. What if players can join, we need one player's score by name,
-or we must handle pending actions in arrival order? Those are different
-questions, and different collections make each one natural:
-
-| Collection | Picture it as | Good first use | Important limit |
-| --- | --- | --- | --- |
-| Array, `[T; N]` | numbered slots with a fixed count | two known players, three prices | its count does not grow |
-| Vector, `Vec<T>` | numbered slots that can grow | players joining or a history of health samples | removing from the middle shifts later items |
-| Hash map, `HashMap<K, V>` | a key pointing to its value | find Ada's gold by her name or ID | a key may be missing; order is not the promise |
-| Queue, `VecDeque<T>` | a line of waiting items | handle actions in arrival order | it is for the next item, not fast arbitrary lookup |
-| Grid | rows and columns | map tiles at `(row, column)` | boundaries must be checked |
-| Graph | places and their connections | waypoints and reachable paths | you must store and inspect the connections |
-
-`T` stands for the kind of item stored. A vector of `u32` values, for
-example, is written `Vec<u32>`. `K` and `V` stand for a map's key and
-value types. A queue can be implemented with Rust's `VecDeque`, which
-lets us add at the back and take from the front.
-
-The array we used has a fixed number of slots. A vector keeps numbered
-slots but can grow, which fits a history of gold samples:
+The array above has two fixed `Player` slots. A vector can grow when the
+number of values changes; this small history gains one new sample:
 
 ```rust
 let mut recent_gold = vec![100, 75];
 recent_gold.push(65);
 ```
 
-A hash map instead answers “what value belongs to this key?” A queue
-answers “what item arrived next?” [The Rust Primer](/pages/1/05/#try-the-growable-collections-in-rust)
-runs all three as small code examples, including what happens when a
-lookup or queue has no answer.
-
-A grid can be a vector of rows, so `tiles[row][column]` reaches a tile.
-A graph stores which waypoints connect; [Lesson 4.9](/pages/4/06/) uses
-one to search for a route. These are arrangements of data, not magic
-algorithms. Choose by the operation you need: **next by position, look up
-by key, take the oldest, or visit neighbors**. [Lesson 3.6](/pages/3/05/)
-shows how their layouts can be recognized in a running game.
-
-<MarginNote kind="alternative">Picture a vector as numbered lockers, a hash map as a coat check where a ticket finds your coat, and a queue as a line at a shop.</MarginNote>
-
-```mermaid
-flowchart TD
-    Ask["What do I need to find?"] --> Pos{"a numbered position?"}
-    Pos -->|yes| Vec["array or vector"]
-    Pos -->|no| Key{"a named key?"}
-    Key -->|yes| Map["hash map"]
-    Key -->|no| Next{"the next waiting item?"}
-    Next -->|yes| Queue["queue"]
-    Next -->|no| Neighbor["a tile or connected neighbor? grid or graph"]
-```
+The values are now 100, 75, and 65. A hash map instead looks up a value by
+key, and a queue takes waiting items in arrival order. `T` in `Vec<T>` names
+the stored item type. A grid groups rows and columns; a graph records
+connections. The operation you need determines the useful arrangement.
+[Lesson 3.3 compares these choices](/pages/1/14/#choose-a-collection-for-the-question)
+with the full table and decision diagram before its bounded byte examples.
 
 <span id="programming-paradigms-ways-to-organize-the-same-rule" aria-hidden="true" />
 
 ## Programming paradigms: ways to organize a purchase
 
-A **programming paradigm** is a style for organizing instructions and
-responsibilities. It does not change what a purchase means. Ada still
-starts with 100 gold, pays 25 if she can, and ends with 75. The styles
-answer a different question: *where should the affordability check and subtraction live, and how should
-other code use it?*
-
-| Style | Main idea | Our purchase example |
-| --- | --- | --- |
-| Procedural or imperative | Write the steps that change state | Check gold, then subtract cost. |
-| Object-oriented | Put related data and behavior together | A `Player` has gold and a `buy` method. |
-| Functional | Calculate an output from inputs without changing hidden state | `spend_if_possible(100, 25)` returns 75. |
-| Event-driven | Run a handler when something happens | A Buy click calls the purchase function. |
+A **programming paradigm** organizes instructions and responsibilities.
+The same guarded purchase still gives 75 for `(100, 25)` and keeps 10 for
+`(10, 25)`. These four styles decide where and when that work happens:
 
 ### Procedural: follow the steps
 
-The first version we wrote is procedural. It says **how** to update the
-variable, in order:
-
-```rust
-if gold >= cost {
-    gold = gold - cost;
-}
-```
-
-That is often the clearest way to begin. It becomes awkward only if every
-screen and bot copies the same purchase steps, because a later change to the affordability check
-would have to be repeated everywhere. Our named function solves
-that duplication.
-
-<MarginNote kind="narration">If ten screens each copy the purchase steps, one price change means ten edits, and missing one leaves the screens disagreeing. A named function keeps a single copy.</MarginNote>
+Check `gold >= cost`, then update gold only on the permitted path. Our
+named function keeps that check in one place instead of copying it into
+every caller.
 
 ### Object-oriented: keep behavior with its data
 
-A `Player` record already keeps related data together. A method can put
-the purchase behavior beside that record, so `ada.buy(25)` reads as an
-action on Ada. [The Rust Primer](/pages/1/05/#put-behavior-next-to-a-struct-with-impl)
-shows the same organization with `impl Runner` and explains why a method
-receives editable access to its runner. Rust methods do not require class inheritance;
-[Lesson 3.4](/pages/3/03/) later examines how a compiled C++ game's
-classes and methods appear in memory.
+A method such as `ada.buy(25)` groups the purchase behavior with Ada's
+record. Rust's `impl` syntax in the next lesson shows how a method receives
+the record it uses.
 
 ### Functional: make the result visible
 
-Our `spend_if_possible` function illustrates a functional style. Given
-100 and 25, it returns 75. It does not secretly reach out and change
-Ada. The caller decides whether to store the answer:
-
-```rust
-let next_gold = spend_if_possible(100, 25); // 75
-```
-
-That makes the calculation easy to check with different inputs. A larger
-program can mix this style with state-changing methods; the two are
-useful for different jobs.
+`spend_if_possible(100, 25)` calculates 75 without secretly changing Ada.
+The caller decides whether to store the returned value.
 
 ### Event-driven: respond when something happens
 
-A real game stays open instead of running `main` once and closing. A
-Buy click can produce an **event**, and the interface or game engine can
-call a registered **handler** in response:
+A Buy click can produce an event. Its handler asks the purchase function to
+update that player's gold. The event decides **when** the calculation runs;
+the affordability check still decides whether spending is allowed.
 
-```rust
-fn on_buy_click(player: &mut Player) {
-    player.gold = spend_if_possible(player.gold, 25);
-}
-```
-
-This shows the handler's job, not a complete window setup. A game also
-updates and draws while no one clicks. [Lesson 6.7](/pages/8/06/)
-explains Windows messages and game loops; [Lesson 4.10](/pages/4/07/)
-compares events with checking for changes on a schedule. For now, notice
-that the event-driven style decides **when** the purchase calculation
-runs.
-
-One game can use all four styles: an event calls a handler, which asks a
-player method to update state using a small calculation. A paradigm is a
-way to organize work, not a team you must join forever.
+One game can combine these styles. [Lesson 3.9 keeps the complete comparison
+and source fragments](/pages/3/04/#programming-paradigms-ways-to-organize-a-purchase)
+beside the object-oriented code clues they help interpret.
 
 ## An abstraction hides details behind a smaller interface
 
@@ -2212,33 +2128,24 @@ display whether each dash succeeded.
 
 ## Put behavior next to a struct with `impl`
 
-The complete program uses a separate `dash(runner, 4)` function. Rust
-also lets us attach behavior to the `Runner` type in an `impl` block.
-This alternative method performs the same guarded subtraction:
-
-<SpeedType id="runner-impl" title="Type the Runner methods" recall={[{"text": "&mut self, cost: u32", "hint": "Borrow this runner for editing and accept an unsigned cost."}, {"text": "self.stamina < cost", "hint": "Reject a cost larger than the current amount."}, {"text": "self.stamina - cost", "hint": "Spend the cost from this runner’s field."}]}>
+An `impl Runner` block attaches a method to the record type. `&mut self`
+gives that method editable access to its receiving runner, just as
+`dash` receives `&mut Runner`. A short method can reuse the existing check:
 
 ```rust
 impl Runner {
     fn try_dash(&mut self, cost: u32) -> bool {
-        if self.stamina < cost {
-            return false;
-        }
-        self.stamina = self.stamina - cost;
-        return true;
+        dash(self, cost)
     }
 }
 ```
 
-</SpeedType>
-
-`self` means the runner receiving the method call. `&mut self` gives
-the method temporary editable access to that runner, like the earlier
-`&mut Runner` parameter. You can add this `impl` block below the
-two-runner program and replace `dash(runner, 4)` in the first loop with
-`runner.try_dash(4)`. The result stays Mira 8 and Sol 3. The method
-organizes the code differently; it keeps the same stamina check and subtraction. In Rust, a `struct` holds fields and an `impl` gives it methods;
-class inheritance is not required.
+In the full program's first loop, `runner.try_dash(4)` has the same result
+as `dash(runner, 4)`: Mira 8 and Sol 3. Rust methods organize behavior;
+class inheritance is not required. [Lesson 3.4 keeps the full direct-check
+alternative and its original practice](/pages/1/15/#put-behavior-next-to-a-struct-with-impl).
+Use that alternative in place of this method, not as a second method with
+the same name.
 
 ## Model two possible outcomes with `enum` and `match`
 
@@ -2280,94 +2187,32 @@ number such as `-1`.
 
 ## Try the growable collections in Rust
 
-Different questions call for different collections. A vector keeps a
-growable sequence of samples. A hash map finds a value by a key. A queue
-keeps actions in arrival order. Try their Rust forms in a separate scratch
-run after the two-runner example. The `use` line makes the two standard
-library collection types available by their short names:
+The two-runner program uses a fixed array. A vector can instead grow as
+new values arrive:
 
 ```rust
-use std::collections::{HashMap, VecDeque};
-
 let mut recent_stamina = vec![12, 8];
 recent_stamina.push(6);
-let second_sample = recent_stamina[1];
-println!("Second sample: {second_sample}");
-
-let mut stamina_by_name = HashMap::new();
-stamina_by_name.insert("Mira", 8);
-if let Some(amount) = stamina_by_name.get("Mira") {
-    println!("Mira has {amount} stamina");
-}
-
-let mut pending = VecDeque::new();
-pending.push_back("dash");
-pending.push_back("rest");
-if let Some(action) = pending.pop_front() {
-    println!("Next action: {action}");
-}
 ```
 
-`vec!` starts a growable vector with two samples, `push` adds a third,
-and `[1]` selects the second sample because positions start at zero.
-The hash map associates the key `"Mira"` with 8, so `get("Mira")` can
-find the amount without scanning a list of names. The queue adds actions
-at the back and takes the oldest from the front; after the first pop,
-`"rest"` is still waiting.
+The vector now holds 12, 8, and 6. A hash map finds a value by key; a queue
+takes actions in arrival order. [Lesson 3.3 gives their complete Rust
+examples](/pages/1/14/#try-the-growable-collections-in-rust), including a missing
+map entry or an empty queue.
 
 ### Express a repeated query with an iterator
 
-A loop is useful when you want to show each step. An **iterator** can
-express the same repeated question as a short pipeline. Count how many
-runners have enough stamina for a 4-point dash:
-
-<SpeedType id="rust-filter-ready" title="Count runners with enough stamina" recall={[{"text": "filter", "hint": "Keep only values that satisfy a condition."}, {"text": "*stamina >= 4", "hint": "Read the borrowed number and compare it with the dash cost."}, {"text": "count", "hint": "Consume the kept items and return how many there are."}]}>
-
-```rust
-let stamina_samples = [8_u32, 3, 6];
-let ready = stamina_samples
-    .iter()
-    .copied()
-    .filter(|stamina| *stamina >= 4)
-    .count();
-println!("{ready} runners can dash"); // 2
-```
-
-</SpeedType>
-
-`.iter()` walks borrowed values from the array, `.copied()` makes cheap
-`u32` copies, `filter` keeps the values that satisfy the condition, and
-`count` counts those kept. `|stamina| *stamina >= 4` is a **closure**: a small
-unnamed function supplied right where it is used. `*stamina` reads the
-number passed to that closure. The longer `for` version says the same
-thing:
-
-```rust
-let stamina_samples = [8_u32, 3, 6];
-let mut ready = 0;
-for stamina in stamina_samples {
-    if stamina >= 4 {
-        ready += 1;
-    }
-}
-// ready is 2
-```
-
-Use the form that makes the value transformation easiest to read. Later labs also use `.map(...)`
-to transform each item and `.collect()` to gather results; the logic is
-still “visit each item, do something, then produce an answer.”
-
-Both the map lookup and the queue removal may fail to produce an item:
-the name might be absent or the queue empty. Their results therefore
-use `Some(value)` or `None`. The next section shows the same shape with
-the stamina check and subtraction. A grid and graph need their own operations; [Lesson 4.9](/pages/4/06/) uses them for map tiles and paths.
+An iterator repeatedly yields items. For stamina values 8, 3, and 6, a
+query keeping values at least 4 counts two ready runners. The loop forms
+above show how such repetition works. [The full iterator/loop comparison
+and original practice](/pages/1/14/#express-a-repeated-query-with-an-iterator)
+follow the collection examples when we examine bounded sequences.
 
 ## When a result might be missing
 
-An array's `[1]` asks for a position directly; using an index outside
-its bounds would fail at runtime. Its `.get(1)` method instead gives an
-`Option`: `Some(value)` when that position exists, or `None` when it
-does not. This is the same `Some` used in the hash-map example above:
+`.get(1)` returns an `Option`: `Some(value)` when that array position
+exists, or `None` when it does not. `if let` runs its block only for the
+matching shape and names the value inside it:
 
 ```rust
 let dash_costs = [4, 10];
@@ -2376,50 +2221,22 @@ if let Some(cost) = dash_costs.get(1) {
 }
 ```
 
-The code prints `Second dash cost: 10`. With `.get(5)`, the answer would be
-`None`, and the print would be skipped. `if let` means “run this block if
-the result has the `Some` shape, and give its inner value the name
-`cost`.”
+This prints 10. `.get(5)` would give `None` and skip the print, while direct
+out-of-bounds indexing would fail at runtime. A missing answer differs from
+a valid zero: `4_u32.checked_sub(4)` gives `Some(0)`, whereas
+`2_u32.checked_sub(4)` gives `None`. No negative unsigned value is invented.
+These calculations return an answer; they do not change a runner's fields.
 
-The same idea can report a dash that cannot be made. A missing
-answer needs a different shape from a valid result of zero:
+<span id="trace-rust-checked-option" aria-hidden="true" />
 
-<SpeedType id="rust-checked-stamina" title="Return a possible remaining amount" recall={[{"text": "stamina: u32, cost: u32", "hint": "Accept the available amount and the requested amount, both unsigned 32-bit values."}, {"text": "Option<u32>", "hint": "The answer may contain an unsigned number or no number."}, {"text": "checked_sub", "hint": "Use subtraction that reports when the answer does not fit."}]}>
-
-```rust
-fn remaining_after_dash(stamina: u32, cost: u32) -> Option<u32> {
-    stamina.checked_sub(cost)
-}
-```
-
-</SpeedType>
-
-`checked_sub` gives `Some(8)` for `(12, 4)`, because the subtraction
-fits in `u32`. It gives `None` for `(2, 4)`, because an unsigned value
-cannot hold the negative answer. For `(4, 4)`, the answer is
-`Some(0)`, not `None`; zero is a valid remaining amount. This differs
-from `dash`, which returned `false` and left the runner's stamina unchanged
-on a failed dash. The return type tells the caller which story
-it will receive. In Rust, the last expression without a semicolon is
-the returned value; here that expression is the `checked_sub` result.
-
-<MarginNote kind="narration">Signalling failure with a special number such as minus one lets a caller forget to check it. An Option makes the caller deal with None before using the value.</MarginNote>
-
-<CodeTrace trace="rust-checked-option" label="Explore Some zero and a missing answer" />
-
-The default run returns `Some(0)`. Lower stamina below the cost and the result becomes `None`; it never manufactures a negative unsigned value.
-
-Another common Rust type, `Result`, represents either a success (`Ok`)
-or an error (`Err`) when the reason for failure matters. The
-[official `Option` documentation](https://doc.rust-lang.org/std/option/)
-has more examples when you need them.
+[Lesson 3.2 keeps the complete remaining-stamina function, its original
+practice, and the zero-versus-missing trace](/pages/1/13/#when-a-result-might-be-missing).
 
 ## Give a failure a reason with `Result`
 
-`Option` fits “there may be no item.” Sometimes you need to know **why**
-an operation failed. Suppose a small tool reads a dash cost as text.
-`"4"` can become a `u32`; `"tired"` cannot. Rust's `parse` operation
-returns a `Result`: `Ok(cost)` or `Err(error)`.
+`Option` says whether a value exists. `Result<T, E>` says either
+`Ok(value)` or `Err(reason)`. Parsing the text `"4"` as a `u32` succeeds;
+`"tired"` is not a whole number. The caller handles both possibilities:
 
 ```rust
 match "4".parse::<u32>() {
@@ -2428,60 +2245,27 @@ match "4".parse::<u32>() {
 }
 ```
 
-The `::<u32>` tells `parse` which number type we want. `match` selects
-one arm by the **shape** of the result and gives the value inside that
-arm a name. For `"4"`, the first arm prints `Cost: 4`. Change the text
-to `"tired"` and the error arm runs instead. Both possibilities are
-written down, so the caller cannot silently treat invalid text as a
-valid zero cost.
-
-| Question | Rust shape | Example |
-| --- | --- | --- |
-| Might there be no value? | `Option<T>`: `Some` or `None` | No item at index 5. |
-| Might an operation fail with a reason? | `Result<T, E>`: `Ok` or `Err` | Text is not a whole number. |
-
-The letters `T` and `E` stand for the success-value type and error type.
-You do not need to invent a custom error type yet. [Lesson 3.1](/pages/3/01/#errors-are-part-of-the-function) returns useful errors
-from a memory reader and explains where to handle them.
+`::<u32>` selects the numeric type. For `"4"`, the success arm prints
+`Cost: 4`; for `"tired"`, the error arm runs. Invalid input is not a valid
+zero cost. `T` names the success type and `E` the error type.
 
 ### Stop a sequence early with `?`
 
-Sometimes a function has several steps, and each step can fail. Rust's
-`?` keeps the successful value moving through the sequence and returns
-an error immediately when that step fails:
-
-<SpeedType id="read-dash-cost" title="Type the dash-cost parser" recall={[{"text": "text: &str", "hint": "Borrow the input text without taking ownership."}, {"text": "parse::<u32>()?", "hint": "Parse an unsigned number, continuing on success and returning early on error."}, {"text": "Ok(cost)", "hint": "Wrap the successful amount in the success variant."}]}>
+`?` continues with an `Ok` value or immediately returns an `Err` to the
+caller. The function's return type must support that failure:
 
 ```rust
 fn read_dash_cost(text: &str) -> Result<u32, std::num::ParseIntError> {
     let cost = text.parse::<u32>()?;
     Ok(cost)
 }
-
-fn main() {
-    for text in ["4", "tired"] {
-        match read_dash_cost(text) {
-            Ok(cost) => println!("Cost: {cost}"),
-            Err(error) => println!("Invalid cost: {error}"),
-        }
-    }
-}
 ```
 
-</SpeedType>
-
-For `"4"`, `parse` produces `Ok(4)`, `?` gives `4` to `cost`, and the
-function returns `Ok(4)`. For `"tired"`, `parse` produces `Err`, so
-the function stops before `Ok(cost)` and passes that error to its caller.
-The caller's `match` still decides what to do with it. Read `?` as
-**“continue with the value, or return the error now.”**
-
-<MarginNote kind="alternative">Think of an assembly line with a stop button: each step passes the part along, and the first bad part halts the line and goes back to the caller.</MarginNote>
-
-The angle brackets in `Result<u32, ParseIntError>` supply concrete types
-to a reusable type: success holds a `u32`, error holds a parse error.
-`Option<u32>`, `Vec<u32>`, and `HashMap<&str, u32>` use the same
-**generic** pattern with different values inside.
+The final expression without a semicolon supplies the returned value.
+Here success is `Ok(cost)`; a failed parse returns before that line.
+The caller still decides how to handle the failure. [Lesson 3.2 keeps the
+complete two-input caller and original parser practice](/pages/1/13/#stop-a-sequence-early-with-),
+then contrasts that parse error with a domain-specific purchase failure.
 
 ## Recognize a few later Rust boundaries
 
@@ -7723,6 +7507,41 @@ traces simulate those examples in the page; changing a control never reads
 or writes another program's memory. Every trace starts with a worked run.
 Typing and recall practice are optional.
 
+## When a result might be missing
+
+A checked subtraction can report a dash that cannot be made. A missing
+answer needs a different shape from a valid result of zero:
+
+<SpeedType id="rust-checked-stamina" title="Return a possible remaining amount" recall={[{"text": "stamina: u32, cost: u32", "hint": "Accept the available amount and the requested amount, both unsigned 32-bit values."}, {"text": "Option<u32>", "hint": "The answer may contain an unsigned number or no number."}, {"text": "checked_sub", "hint": "Use subtraction that reports when the answer does not fit."}]}>
+
+```rust
+fn remaining_after_dash(stamina: u32, cost: u32) -> Option<u32> {
+    stamina.checked_sub(cost)
+}
+```
+
+</SpeedType>
+
+`checked_sub` gives `Some(8)` for `(12, 4)`, because the subtraction
+fits in `u32`. It gives `None` for `(2, 4)`, because an unsigned value
+cannot hold the negative answer. For `(4, 4)`, the answer is
+`Some(0)`, not `None`; zero is a valid remaining amount. This differs
+from `dash`, which returned `false` and left the runner's stamina unchanged
+on a failed dash. The return type tells the caller which story
+it will receive. In Rust, the last expression without a semicolon is
+the returned value; here that expression is the `checked_sub` result.
+
+<MarginNote kind="narration">Signalling failure with a special number such as minus one lets a caller forget to check it. An Option makes the caller deal with None before using the value.</MarginNote>
+
+<CodeTrace trace="rust-checked-option" label="Explore Some zero and a missing answer" />
+
+The default run returns `Some(0)`. Lower stamina below the cost and the result becomes `None`; it never manufactures a negative unsigned value.
+
+Another common Rust type, `Result`, represents either a success (`Ok`)
+or an error (`Err`) when the reason for failure matters. The
+[official `Option` documentation](https://doc.rust-lang.org/std/option/)
+has more examples when you need them.
+
 ## Transform a present value with `map`
 
 An `Option<u32>` contains a number or contains no number. `map` applies a
@@ -7776,6 +7595,16 @@ price. Use distinct error variants when callers need to distinguish them.
 
 ## Carry a failure reason through `Result`
 
+`Option` answers whether a value exists; `Result` can explain a failure:
+
+| Question | Rust shape | Example |
+| --- | --- | --- |
+| Might there be no value? | `Option<T>`: `Some` or `None` | No item at index 5. |
+| Might an operation fail with a reason? | `Result<T, E>`: `Ok` or `Err` | Text is not a whole number. |
+
+`T` and `E` name the success-value and error types. [Lesson 3.1](/pages/3/01/#errors-are-part-of-the-function)
+applies this distinction to a memory reader and explains where to handle errors.
+
 `Result::map` changes an `Ok` value and leaves `Err` alone. `map_err` changes
 an error and leaves `Ok` alone. `and_then` chains another operation that can
 return an error. The success path keeps flowing; the first error passes
@@ -7820,6 +7649,45 @@ subtraction; an excessive cost stops before `Ok(left)`. Returning zero gold
 after an exact-price purchase is still success.
 
 <CodeTrace trace="idiom-result-chain" />
+
+### Stop a sequence early with `?`
+
+The previous purchase used short domain reasons. This parser instead
+propagates the standard library's parse error unchanged, then shows both
+inputs through a complete caller:
+
+<SpeedType id="read-dash-cost" title="Type the dash-cost parser" recall={[{"text": "text: &str", "hint": "Borrow the input text without taking ownership."}, {"text": "parse::<u32>()?", "hint": "Parse an unsigned number, continuing on success and returning early on error."}, {"text": "Ok(cost)", "hint": "Wrap the successful amount in the success variant."}]}>
+
+```rust
+fn read_dash_cost(text: &str) -> Result<u32, std::num::ParseIntError> {
+    let cost = text.parse::<u32>()?;
+    Ok(cost)
+}
+
+fn main() {
+    for text in ["4", "tired"] {
+        match read_dash_cost(text) {
+            Ok(cost) => println!("Cost: {cost}"),
+            Err(error) => println!("Invalid cost: {error}"),
+        }
+    }
+}
+```
+
+</SpeedType>
+
+For `"4"`, `parse` produces `Ok(4)`, `?` gives `4` to `cost`, and the
+function returns `Ok(4)`. For `"tired"`, `parse` produces `Err`, so
+the function stops before `Ok(cost)` and passes that error to its caller.
+The caller's `match` still decides what to do with it. Read `?` as
+**“continue with the value, or return the error now.”**
+
+<MarginNote kind="alternative">Think of an assembly line with a stop button: each step passes the part along, and the first bad part halts the line and goes back to the caller.</MarginNote>
+
+The angle brackets in `Result<u32, ParseIntError>` supply concrete types
+to a reusable type: success holds a `u32`, error holds a parse error.
+`Option<u32>`, `Vec<u32>`, and `HashMap<&str, u32>` use the same
+**generic** pattern with different values inside.
 
 ## Give each state only the data it needs
 
@@ -7911,6 +7779,103 @@ Rust collections let us learn those decisions in a small local example.
 The [previous lesson](/pages/1/13/) explains the `Option` and `Result`
 values returned when a check fails.
 
+## Choose a collection for the question
+
+The guarded purchase in [Lesson 1.4](/pages/1/04/) used two `Player` records,
+Ada and Bo. A fixed array was enough when we knew there were exactly two. What if players can join, we need one player's score by name,
+or we must handle pending actions in arrival order? Those are different
+questions, and different collections make each one natural:
+
+| Collection | Picture it as | Good first use | Important limit |
+| --- | --- | --- | --- |
+| Array, `[T; N]` | numbered slots with a fixed count | two known players, three prices | its count does not grow |
+| Vector, `Vec<T>` | numbered slots that can grow | players joining or a history of health samples | removing from the middle shifts later items |
+| Hash map, `HashMap<K, V>` | a key pointing to its value | find Ada's gold by her name or ID | a key may be missing; order is not the promise |
+| Queue, `VecDeque<T>` | a line of waiting items | handle actions in arrival order | it is for the next item, not fast arbitrary lookup |
+| Grid | rows and columns | map tiles at `(row, column)` | boundaries must be checked |
+| Graph | places and their connections | waypoints and reachable paths | you must store and inspect the connections |
+
+`T` stands for the kind of item stored. A vector of `u32` values, for
+example, is written `Vec<u32>`. `K` and `V` stand for a map's key and
+value types. A queue can be implemented with Rust's `VecDeque`, which
+lets us add at the back and take from the front.
+
+The array we used has a fixed number of slots. A vector keeps numbered
+slots but can grow, which fits a history of gold samples:
+
+```rust
+let mut recent_gold = vec![100, 75];
+recent_gold.push(65);
+```
+
+A hash map answers “what value belongs to this key?” A queue answers
+“what item arrived next?” The following Rust fragments use all three,
+including a lookup or queue removal with no answer.
+
+A grid can be a vector of rows, so `tiles[row][column]` reaches a tile.
+A graph stores which waypoints connect; [Lesson 4.8](/pages/4/06/) uses
+one to search for a route. These are arrangements of data, not magic
+algorithms. Choose by the operation you need: **next by position, look up
+by key, take the oldest, or visit neighbors**. [Lesson 3.10](/pages/3/05/)
+shows how their layouts can be recognized in a running game.
+
+<MarginNote kind="alternative">Picture a vector as numbered lockers, a hash map as a coat check where a ticket finds your coat, and a queue as a line at a shop.</MarginNote>
+
+```mermaid
+flowchart TD
+    Ask["What do I need to find?"] --> Pos{"a numbered position?"}
+    Pos -->|yes| Vec["array or vector"]
+    Pos -->|no| Key{"a named key?"}
+    Key -->|yes| Map["hash map"]
+    Key -->|no| Next{"the next waiting item?"}
+    Next -->|yes| Queue["queue"]
+    Next -->|no| Neighbor["a tile or connected neighbor? grid or graph"]
+```
+
+## Try the growable collections in Rust
+
+Different questions call for different collections. A vector keeps a
+growable sequence of samples. A hash map finds a value by a key. A queue
+keeps actions in arrival order. These fragments reuse the Primer's Mira
+stamina values, separately from its complete two-runner program. The `use`
+line makes the two standard
+library collection types available by their short names:
+
+```rust
+use std::collections::{HashMap, VecDeque};
+
+let mut recent_stamina = vec![12, 8];
+recent_stamina.push(6);
+let second_sample = recent_stamina[1];
+println!("Second sample: {second_sample}");
+
+let mut stamina_by_name = HashMap::new();
+stamina_by_name.insert("Mira", 8);
+if let Some(amount) = stamina_by_name.get("Mira") {
+    println!("Mira has {amount} stamina");
+}
+
+let mut pending = VecDeque::new();
+pending.push_back("dash");
+pending.push_back("rest");
+if let Some(action) = pending.pop_front() {
+    println!("Next action: {action}");
+}
+```
+
+`vec!` starts a growable vector with two samples, `push` adds a third,
+and `[1]` selects the second sample because positions start at zero.
+The hash map associates the key `"Mira"` with 8, so `get("Mira")` can
+find the amount without scanning a list of names. The queue adds actions
+at the back and takes the oldest from the front; after the first pop,
+`"rest"` is still waiting.
+
+Both the map lookup and the queue removal may fail to produce an item:
+the name might be absent or the queue empty. Their results therefore
+use `Some(value)` or `None`. [Lesson 3.2](/pages/1/13/) develops that
+possible-value shape with checked subtraction and fallible operations.
+The grid/graph distinction above connects these choices to map tiles and paths.
+
 ## Read an iterator chain one item at a time
 
 An **iterator** yields a sequence of items on demand. `filter` keeps items
@@ -7945,6 +7910,43 @@ with `.iter()`; for copyable numbers, `.iter().copied()` yields values
 while keeping the original collection.
 
 <CodeTrace trace="idiom-filter-map-fold" />
+
+### Express a repeated query with an iterator
+
+A second query counts runners with at least 4 stamina. Unlike the doubled
+total above, its result is how many items pass the predicate:
+
+<SpeedType id="rust-filter-ready" title="Count runners with enough stamina" recall={[{"text": "filter", "hint": "Keep only values that satisfy a condition."}, {"text": "*stamina >= 4", "hint": "Read the borrowed number and compare it with the dash cost."}, {"text": "count", "hint": "Consume the kept items and return how many there are."}]}>
+
+```rust
+let stamina_samples = [8_u32, 3, 6];
+let ready = stamina_samples
+    .iter()
+    .copied()
+    .filter(|stamina| *stamina >= 4)
+    .count();
+println!("{ready} runners can dash"); // 2
+```
+
+</SpeedType>
+
+`.iter().copied()` keeps the original array while yielding cheap `u32`
+copies. The filter predicate still borrows each candidate, so `*stamina`
+reads its number. `count` consumes the kept values. The equivalent loop is:
+
+```rust
+let stamina_samples = [8_u32, 3, 6];
+let mut ready = 0;
+for stamina in stamina_samples {
+    if stamina >= 4 {
+        ready += 1;
+    }
+}
+// ready is 2
+```
+
+Both forms produce 2. Choose the form that makes the question and each
+value transformation clearest.
 
 ## Use `windows` for neighboring samples
 
@@ -8173,6 +8175,51 @@ struct keeps a borrow. Lifetimes describe validity, not a number of seconds.
 <MarginNote kind="clarify">Writing a lifetime on a reference does not manufacture storage. Returning a reference to a function's own temporary array still fails: that array is gone when the function returns.</MarginNote>
 
 <CodeTrace trace="idiom-borrowed-slice" />
+
+## Put behavior next to a struct with `impl`
+
+The Primer's `Runner` record supplies the receiver's fields:
+
+```rust
+struct Runner {
+    name: String,
+    stamina: u32,
+    health: u32,
+    max_health: u32,
+}
+```
+
+This is record context for the method below, not a second record definition
+to paste into the complete [Mira/Sol program](/pages/1/05/#grow-one-runner-into-the-full-two-runner-program).
+Replace the Primer's brief forwarding method with this direct-check
+alternative; keep one `try_dash` definition.
+
+An `impl` block attaches behavior to `Runner`. This alternative method
+performs the same guarded subtraction as the Primer's `dash` function:
+
+<SpeedType id="runner-impl" title="Type the Runner methods" recall={[{"text": "&mut self, cost: u32", "hint": "Borrow this runner for editing and accept an unsigned cost."}, {"text": "self.stamina < cost", "hint": "Reject a cost larger than the current amount."}, {"text": "self.stamina - cost", "hint": "Spend the cost from this runner’s field."}]}>
+
+```rust
+impl Runner {
+    fn try_dash(&mut self, cost: u32) -> bool {
+        if self.stamina < cost {
+            return false;
+        }
+        self.stamina = self.stamina - cost;
+        return true;
+    }
+}
+```
+
+</SpeedType>
+
+`self` means the runner receiving the method call. `&mut self` gives
+the method temporary editable access to that runner, like the earlier
+`&mut Runner` parameter. Place this alternative `impl` block below the
+two-runner program, replacing the forwarding method, and use
+`runner.try_dash(4)`. The result stays Mira 8 and Sol 3. The method
+organizes the code differently; it keeps the same stamina check and subtraction. In Rust, a `struct` holds fields and an `impl` gives it methods;
+class inheritance is not required.
 
 ## Give numbers different types when they mean different things
 
@@ -10188,10 +10235,8 @@ When debug symbols exist for a build, they give the real names and layouts, so t
 
 ## A pattern name communicates intent
 
-Design patterns are shared names for recurring design decisions. They do not
-all exist merely to “remove dependencies,” and two patterns can produce
-similar-looking machine code. Their important difference is often **intent**:
-why the pieces are separated and what kind of change the design expects.
+A design pattern names recurring roles and expected changes, not just
+dependency removal. Similar machine-code shapes can have different **intent**.
 
 For example, both State and Strategy may delegate through a function table.
 State usually represents behavior that changes as an object moves through a
@@ -10204,8 +10249,107 @@ be tested separately. Do not add a factory, observer, or trait hierarchy only
 because the name sounds professional. A smaller function or enum is often the
 clearer design.
 
-In a compiled game, a pattern name describes a likely role. It does not
-recreate the original source or prove what the programmer intended.
+A pattern name is a likely role, not a recovered source name or proof of intent.
+
+## Programming paradigms: ways to organize a purchase
+
+A **programming paradigm** is a style for organizing instructions and
+responsibilities. It does not change what a purchase means. Ada still
+starts with 100 gold, pays 25 if she can, and ends with 75. The styles
+answer a different question: *where should the affordability check and subtraction live, and how should
+other code use it?*
+
+The examples below revisit the guarded purchase from [Lesson 1.4](/pages/1/04/).
+For each isolated fragment, the caller starts with mutable `gold` of 100 and
+`cost` of 25. A minimal player record and the shared calculation are:
+
+```rust
+struct Player {
+    gold: u32,
+}
+
+fn spend_if_possible(gold: u32, cost: u32) -> u32 {
+    if gold >= cost {
+        return gold - cost;
+    }
+    return gold;
+}
+```
+
+This compares source organization. It does not imply that a Rust record has
+the C++ virtual-table layout examined later in this lesson.
+
+| Style | Main idea | Our purchase example |
+| --- | --- | --- |
+| Procedural or imperative | Write the steps that change state | Check gold, then subtract cost. |
+| Object-oriented | Put related data and behavior together | A `Player` has gold and a `buy` method. |
+| Functional | Calculate an output from inputs without changing hidden state | `spend_if_possible(100, 25)` returns 75. |
+| Event-driven | Run a handler when something happens | A Buy click calls the purchase function. |
+
+### Procedural: follow the steps
+
+The direct-update version is procedural. It says **how** to update the
+variable, in order:
+
+```rust
+if gold >= cost {
+    gold = gold - cost;
+}
+```
+
+That is often the clearest way to begin. It becomes awkward only if every
+screen and bot copies the same purchase steps, because a later change to the affordability check
+would have to be repeated everywhere. Our named function solves
+that duplication.
+
+<MarginNote kind="narration">If ten screens each copy the purchase steps, one change to the affordability check means ten edits, and missing one leaves the screens disagreeing. A named function keeps a single copy.</MarginNote>
+
+### Object-oriented: keep behavior with its data
+
+A `Player` record already keeps related data together. A method can put
+the purchase behavior beside that record, so `ada.buy(25)` reads as an
+action on Ada. [The Rust Primer](/pages/1/05/#put-behavior-next-to-a-struct-with-impl)
+shows the same organization with `impl Runner` and explains why a method
+receives editable access to its runner. Rust methods do not require class inheritance;
+[Lesson 3.8](/pages/3/03/) later examines how a compiled C++ game's
+classes and methods appear in memory.
+
+### Functional: make the result visible
+
+Our `spend_if_possible` function illustrates a functional style. Given
+100 and 25, it returns 75. It does not secretly reach out and change
+Ada. The caller decides whether to store the answer:
+
+```rust
+let next_gold = spend_if_possible(100, 25); // 75
+```
+
+That makes the calculation easy to check with different inputs. A larger
+program can mix this style with state-changing methods; the two are
+useful for different jobs.
+
+### Event-driven: respond when something happens
+
+A real game stays open instead of running `main` once and closing. A
+Buy click can produce an **event**, and the interface or game engine can
+call a registered **handler** in response:
+
+```rust
+fn on_buy_click(player: &mut Player) {
+    player.gold = spend_if_possible(player.gold, 25);
+}
+```
+
+This shows the handler's job, not a complete window setup. A game also
+updates and draws while no one clicks. [Lesson 6.9](/pages/8/06/)
+explains Windows messages and game loops; [Lesson 4.9](/pages/4/07/)
+compares events with checking for changes on a schedule. For now, notice
+that the event-driven style decides **when** the purchase calculation
+runs.
+
+One game can use all four styles: an event calls a handler, which asks a
+player method to update state using a small calculation. A paradigm is a
+way to organize work, not a team you must join forever.
 
 ## Start from what the code does, not class names
 
@@ -35146,6 +35290,55 @@ build=30,30,30,30
 
 Reloading the disposable character shows all four values as 30.
 
+## The magic number and the version say what the file is
+
+The book's invented binary `GSAV` save records Nia at level 3 with 250
+gold. Its first four bytes are `47 53 41 56`. As ASCII codes they are:
+
+- `0x47 = 4 × 16 + 7 = 71`: `G`;
+- `0x53 = 5 × 16 + 3 = 83`: `S`;
+- `0x41 = 4 × 16 + 1 = 65`: `A`;
+- `0x56 = 5 × 16 + 6 = 86`: `V`.
+
+That fixed starting pattern is a **magic number**. The loader checks it
+before treating bytes as fields. A PNG likewise has a fixed signature;
+renaming either file changes neither its bytes nor its format.
+
+The next two bytes, `01 00`, are the little-endian layout **version** 1.
+A loader uses the version to select a known layout; an editor must refuse
+an unknown version because fields may have moved. The
+[GSAV lab](/pages/9/09/#the-lab) returns `UnsupportedVersion` for anything
+other than 1.
+
+## A length-prefixed string
+
+`GSAV` puts the name's byte length at offset 11 (`0x0B`), then the text at
+offset 12. For `Nia`, `03` announces three bytes:
+
+<MemoryStrip
+  cells="0x0B=03|0x0C=4E|0x0D=69|0x0E=61"
+  groups="0-0:length: 3|1-3:`N` `i` `a`"
+  groups2="1-3:4 × 16 + 14 = 78, 6 × 16 + 9 = 105, 6 × 16 + 1 = 97"
+  caption="The length byte says how many bytes of text follow. There is no end marker."
+/>
+
+The checksum follows the text, so it starts at `12 + 3 = 15`. Changing
+the name to the five-byte `Grace` moves it to `12 + 5 = 17` and grows the
+whole save to `17 + 4 = 21` bytes. A tool assuming offset 15 would now
+read the wrong field.
+
+Check the prefix against the actual file size before trusting it. A
+damaged byte `C8` means `12 × 16 + 8 = 200`; its claimed name ends at
+`12 + 200 = 212`, beyond a 19-byte file. The lab requires
+`12 + length + 4` to equal the real size and returns an error otherwise.
+
+Other formats end the text with a terminator, often C's `00` byte. A prefix
+counts bytes; a terminator marks the end. A nearby number matching the
+text's byte count is a clue, then test it with names of different lengths.
+Neither convention measures the number of displayed characters.
+
+<MarginNote kind="alternative">A length prefix measures the string from its beginning; a terminator marks its ending. Both separate text from the bytes that follow.</MarginNote>
+
 ## Write atomically
 
 Do not overwrite the original in place. Write a temporary sibling, flush it, then rename:
@@ -35407,7 +35600,7 @@ Read it in five chunks: validate the three arguments, locate exactly one field, 
 
 ## Checksums and integrity fields
 
-If one small value change also changes a separate fixed-size region, the file may contain a checksum.
+If one small value change also changes a separate fixed-size region, the file may contain a checksum. [Lesson 10.8](/pages/9/07/#why-one-edited-byte-breaks-the-save) works through the `GSAV` sum; [Lesson 10.3](/pages/9/09/) keeps the exact two-save hex comparison.
 
 Do not patch until you understand:
 
@@ -35575,21 +35768,13 @@ to the next. Two things follow:
 
 ## The magic number and the version say what the file is
 
-The first four bytes, `47 53 41 56`, are ASCII codes. In decimal they are
-4 × 16 + 7 = 71 (`G`), 5 × 16 + 3 = 83 (`S`), 4 × 16 + 1 = 65 (`A`), and
-5 × 16 + 6 = 86 (`V`). A fixed byte pattern at the start of a file that
-identifies its format is called a **magic number**. The loader checks it before
-anything else: a file that does not begin with `GSAV` is some other kind of
-file, and reading its bytes as gold and levels would produce nonsense. A PNG
-image likewise begins with a fixed signature; renaming either file does not
-change its bytes or format. We will use that same idea again when checking
-mod archives.
+`47 53 41 56` spells `GSAV` in ASCII. This fixed starting pattern is a
+**magic number**: the loader refuses other formats before decoding fields.
+The next two bytes, `01 00`, give layout version 1. An unknown version must
+be refused because its fields may have moved. The lab returns
+`UnsupportedVersion` in that case.
 
-The next two bytes, `01 00`, are the **version**: a number the game's developers
-raise whenever they change the layout. A loader reads the version to choose the
-right layout, and an editor that meets a version it does not know has to refuse
-the file, because the fields may have moved. The lab returns an
-`UnsupportedVersion` error for anything other than 1.
+[Lesson 10.2 explains the format and version checks](/pages/9/02/#the-magic-number-and-the-version-say-what-the-file-is).
 
 ## Multi-byte numbers are stored lowest byte first
 
@@ -35616,41 +35801,21 @@ almost always the right one.
 
 ## A length-prefixed string
 
-A name has no fixed size, so this format stores its length first. The byte at
-offset 11 (`0x0B`) is `03`, so exactly 3 bytes of text follow, at offsets 12,
-13, and 14. Text stored this way is a **length-prefixed string**.
+A **length-prefixed string** stores its byte count before its text. Here
+offset 11 contains `03`, so the next three bytes, `4E 69 61`, spell `Nia`.
+The checksum begins at offset `12 + 3 = 15`. A five-byte name moves it to
+offset 17 and grows the whole file to 21 bytes.
 
-<MemoryStrip
-  cells="0x0B=03|0x0C=4E|0x0D=69|0x0E=61"
-  groups="0-0:length: 3|1-3:`N` `i` `a`"
-  groups2="1-3:4 × 16 + 14 = 78, 6 × 16 + 9 = 105, 6 × 16 + 1 = 97"
-  caption="The length byte says how many bytes of text follow. There is no end marker."
-/>
-
-This layout has two consequences:
-
-- Everything after the name moves when the name's length changes. With `Nia`,
-  the checksum starts at 12 + 3 = 15. With a five-letter name such as `Grace`,
-  it starts at 12 + 5 = 17, and the file grows to 17 + 4 = 21 bytes. A tool that
-  assumes the checksum always sits at offset 15 breaks on the first longer name.
-- The length byte has to be checked against the file before it is trusted. A
-  damaged save whose length byte reads `C8`, which is 12 × 16 + 8 = 200, claims
-  a name that runs up to offset 12 + 200 = 212, far past the end of a 19-byte
-  file. The lab compares 12 + length + 4 with the real file size and returns an
-  error instead of reading past the end.
-
-Other formats mark the end of a string instead, most often with a `00` byte
-after the text, the convention C uses. In an unfamiliar save, a byte just
-before some text that equals the number of characters after it is the
-fingerprint of a length-prefixed string.
-
-<MarginNote kind="alternative">A length prefix measures the string from its beginning; a terminator marks its ending. Both separate text from the bytes that follow.</MarginNote>
+The loader checks that `12 + length + 4` equals the file's real size before
+reading the name or checksum. A damaged length of 200 cannot describe this
+19-byte file. [Lesson 10.2 works through those bounds and the terminator
+alternative](/pages/9/02/#a-length-prefixed-string).
 
 ## Find a field by comparing two saves
 
 The layout above was handed to you. A real game's layout usually is not, so its
-fields are found by comparison, the byte-level version of Lesson 9.2's two-save
-diff: save once, change exactly one value in the game, save again, and compare
+fields are found by comparison, the byte-level version of
+[Lesson 10.2's two-save diff](/pages/9/02/#make-two-controlled-saves): save once, change exactly one value in the game, save again, and compare
 the two files. Most hex editors have a compare view that highlights the bytes
 that differ.
 
@@ -35684,17 +35849,16 @@ game changed. A byte that changes whenever any other value changes is the mark
 of a checksum, the subject of the next section.
 
 In a real game the diff also catches bytes that change on their own, such as
-play time, a timestamp, or a random seed. Lesson 9.2 separates those by
+play time, a timestamp, or a random seed.
+[Lesson 10.2](/pages/9/02/#make-two-controlled-saves) separates those by
 repeating the comparison with several values; the real field follows the
 in-game number every time.
 
 ## Why one edited byte breaks the save
 
-The last four bytes are a **checksum**: a number computed from the other bytes
-and stored beside them, so the loader can detect damage. This format uses the
-simplest checksum there is. It adds up every byte from offset 0 to the byte
-just before the checksum and stores the total as a little-endian `u32`. For
-Nia's save, bytes 0 to 14 add up like this:
+The final four bytes store a **checksum**, computed from the bytes before
+them. This toy format adds those bytes and stores the sum as a
+little-endian `u32`. The original save's sum is 842:
 
 ```text
 magic    47 53 41 56   71 + 83 + 65 + 86  = 305   total 305
@@ -35705,59 +35869,28 @@ length   03            3                  =   3   total 562
 name     4E 69 61      78 + 105 + 97      = 280   total 842
 ```
 
-The stored checksum is the same number:
-
-<MemoryStrip
-  cells="0x0F=4A|0x10=03|0x11=00|0x12=00"
-  groups="0-0:× 1|1-1:× 256|2-2:× 65,536|3-3:× 16,777,216"
-  groups2="0-3:0x4A is 4 × 16 + 10 = 74, and 74 + 3 × 256 = 842"
-  caption="The stored checksum, lowest byte first: 842, which is `0x34A` because 842 = 3 × 256 + 74."
-/>
-
-The loader repeats that sum every time it opens the file:
-
-```mermaid
-flowchart TD
-    A["Read the whole file"] --> B{"First four bytes<br/>are GSAV?"}
-    B -->|"no"| X["Refuse the file"]
-    B -->|"yes"| C{"Version is 1?"}
-    C -->|"no"| X
-    C -->|"yes"| D{"File size equals<br/>12 + name length + 4?"}
-    D -->|"no"| X
-    D -->|"yes"| E["Add up every byte<br/>before the checksum"]
-    E --> F{"Sum equals the<br/>stored checksum?"}
-    F -->|"no"| X
-    F -->|"yes"| G["Decode the fields and load"]
-```
-
-<CodeTrace trace="scene-gsav-loader" />
-
-<Scene name="gsav-loader" />
-
-Now type gold over as 9,999 and change nothing else. 9,999 is 39 × 256 + 15,
-and 39 = 2 × 16 + 7 = `0x27` while 15 = `0x0F`, so 9,999 is `0x270F` and its
-little-endian bytes are `0F 27 00 00`. The old gold bytes added 250 to the sum;
-the new ones add 15 + 39 = 54. The loader's total becomes 842 − 250 + 54 = 646,
-the stored checksum still says 842, and the loader refuses the save as corrupt.
-
-The fix is to do what the game does when it saves: recompute the checksum. For
-1,250 gold, the gold bytes `E2 04 00 00` add 226 + 4 = 230 instead of 250, so
-the total is 842 − 250 + 230 = 822. That is 3 × 256 + 54, and 54 = 3 × 16 + 6 =
-`0x36`, so the checksum is `0x336`, stored as `36 03 00 00`: exactly what save B
-contained. The complete edited file is:
+The stored bytes `4A 03 00 00` also mean `74 + 3 × 256 = 842`.
+Editing gold changes its contribution to that sum. For 1,250 gold,
+`E2 04 00 00` contributes `226 + 4 = 230` in place of 250, so the new sum
+is `842 − 250 + 230 = 822`. Its checksum is `36 03 00 00`. The complete
+consistent file is:
 
 ```text
 47 53 41 56 01 00 E2 04 00 00 03 03 4E 69 61 36 03 00 00
 ```
 
-A plain sum has a blind spot: adding numbers in a different order gives the same
-total, so swapping two bytes goes unnoticed. That is why real formats more often
-use a CRC-32, a 32-bit checksum designed to change when bytes are reordered, or
-a hash. The editing procedure stays the same: work out which bytes are covered,
-which algorithm runs, where the result is stored, and in which byte order, as
-listed in [Lesson 9.2](/pages/9/02/#checksums-and-integrity-fields). If the
-check uses a secret key, as a MAC does, or a digital signature, it cannot be
-recomputed without that key; [Lesson 9.9](/pages/9/08/) explains why.
+Changing gold to 9,999 without updating the checksum instead gives a
+computed sum of 646 while the stored value stays 842, so the loader
+refuses the file. The lab validates the original before editing and
+recomputes the checksum afterward; giving existing damage a fresh checksum
+would conceal it.
+
+A plain sum detects some damage but cannot establish who approved the
+bytes. [Lesson 10.8 keeps the full calculation, loader trace and scene,
+and the distinction from a hash or signature](/pages/9/07/#why-one-edited-byte-breaks-the-save).
+
+<span id="trace-scene-gsav-loader" aria-hidden="true" />
+<span id="scene-gsav-loader-title" aria-hidden="true" />
 
 ## Edit without losing the original
 
@@ -36965,6 +37098,84 @@ Canonical page: https://mustcodeal.github.io/rust-game-hacking-book/pages/9/07/
 Category: Game Files, Mods, and Artifact Trust
 Estimated reading time: 37 minutes
 Summary: Separate byte integrity from publisher identity through hashes, signatures, certificates, and Windows trust checks.
+
+## Why one edited byte breaks the save
+
+The book's invented `GSAV` format makes the byte-integrity question concrete.
+Its offline character Nia has level 3, 250 gold, and this complete 19-byte save:
+
+```text
+47 53 41 56 01 00 FA 00 00 00 03 03 4E 69 61 4A 03 00 00
+```
+
+The last four bytes are a **checksum**: a number computed from the other bytes
+and stored beside them, so the loader can detect damage. This format uses the
+simplest checksum there is. It adds up every byte from offset 0 to the byte
+just before the checksum and stores the total as a little-endian `u32`. For
+Nia's save, bytes 0 to 14 add up like this:
+
+```text
+magic    47 53 41 56   71 + 83 + 65 + 86  = 305   total 305
+version  01 00         1 + 0              =   1   total 306
+gold     FA 00 00 00   250 + 0 + 0 + 0    = 250   total 556
+level    03            3                  =   3   total 559
+length   03            3                  =   3   total 562
+name     4E 69 61      78 + 105 + 97      = 280   total 842
+```
+
+The stored checksum is the same number:
+
+<MemoryStrip
+  cells="0x0F=4A|0x10=03|0x11=00|0x12=00"
+  groups="0-0:× 1|1-1:× 256|2-2:× 65,536|3-3:× 16,777,216"
+  groups2="0-3:0x4A is 4 × 16 + 10 = 74, and 74 + 3 × 256 = 842"
+  caption="The stored checksum, lowest byte first: 842, which is `0x34A` because 842 = 3 × 256 + 74."
+/>
+
+The loader repeats that sum every time it opens the file:
+
+```mermaid
+flowchart TD
+    A["Read the whole file"] --> B{"First four bytes<br/>are GSAV?"}
+    B -->|"no"| X["Refuse the file"]
+    B -->|"yes"| C{"Version is 1?"}
+    C -->|"no"| X
+    C -->|"yes"| D{"File size equals<br/>12 + name length + 4?"}
+    D -->|"no"| X
+    D -->|"yes"| E["Add up every byte<br/>before the checksum"]
+    E --> F{"Sum equals the<br/>stored checksum?"}
+    F -->|"no"| X
+    F -->|"yes"| G["Decode the fields and load"]
+```
+
+<CodeTrace trace="scene-gsav-loader" />
+
+<Scene name="gsav-loader" />
+
+Now type gold over as 9,999 and change nothing else. 9,999 is 39 × 256 + 15,
+and 39 = 2 × 16 + 7 = `0x27` while 15 = `0x0F`, so 9,999 is `0x270F` and its
+little-endian bytes are `0F 27 00 00`. The old gold bytes added 250 to the sum;
+the new ones add 15 + 39 = 54. The loader's total becomes 842 − 250 + 54 = 646,
+the stored checksum still says 842, and the loader refuses the save as corrupt.
+
+The fix is to do what the game does when it saves: recompute the checksum. For
+1,250 gold, the gold bytes `E2 04 00 00` add 226 + 4 = 230 instead of 250, so
+the total is 842 − 250 + 230 = 822. That is 3 × 256 + 54, and 54 = 3 × 16 + 6 =
+`0x36`, so the checksum is `0x336`, stored as `36 03 00 00`: exactly what save B
+contained. The complete edited file is:
+
+```text
+47 53 41 56 01 00 E2 04 00 00 03 03 4E 69 61 36 03 00 00
+```
+
+A plain sum has a blind spot: adding numbers in a different order gives the same
+total, so swapping two bytes goes unnoticed. That is why real formats more often
+use a CRC-32, a 32-bit checksum designed to change when bytes are reordered, or
+a hash. The editing procedure stays the same: work out which bytes are covered,
+which algorithm runs, where the result is stored, and in which byte order, as
+listed in [Lesson 10.2](/pages/9/02/#checksums-and-integrity-fields). If the
+check uses a secret key, as a MAC does, or a digital signature, it cannot be
+recomputed without that key; [Lesson 10.9](/pages/9/08/) explains why.
 
 ## A hash and a signature answer different questions
 
@@ -45138,54 +45349,18 @@ or clock-configuration bug.
 
 ## Build a complete firmware project
 
-<Badge text="Emulator (QEMU)" variant="success" />
-
-The complete [`firmware-labs` project](/firmware-labs/README.md) contains these
-files. Keep their names and directory arrangement, including the hidden
-`.cargo` directory:
-
-<FileTree>
-
-- firmware-labs/
-  - Cargo.toml
-  - Cargo.lock
-  - .cargo/
-    - config.toml
-  - memory.x
-  - build.rs
-  - src/
-    - lib.rs
-    - main.rs
-
-</FileTree>
-
-[`src/lib.rs`](/firmware-labs/src/lib.rs) contains the controller and its tests.
-[`Cargo.toml`](/firmware-labs/Cargo.toml) declares the project and its runtime
-dependencies; [`Cargo.lock`](/firmware-labs/Cargo.lock) pins the full dependency
-set. [`build.rs`](/firmware-labs/build.rs) is a small helper that makes the memory
-map available to the linker. It runs on your computer during the build, so its
-use of `std` does not require an OS on the microcontroller.
-
-<GitHub path="firmware-labs/src/lib.rs" />
-
-You can obtain the source files from those links and the configuration link
-below, or use the
-[authored project folder](https://github.com/MustCodeAl/rust-game-hacking-book/tree/codex/book-revision/firmware-labs).
-The project uses Rust 2024 and requires Rust 1.85 or later.
+The [`firmware-labs` project](/firmware-labs/README.md) combines this rule
+with a target, memory map, runtime, and entry function. The full image
+follows; [the build reference](#firmware-project-reference) keeps its exact
+files and reproduction steps.
 
 ### The target and the layout answer different questions
 
-The Rust target is **`thumbv7m-none-eabi`**. It describes the Armv7-M architecture,
-bare-metal environment, and calling convention suitable for this Cortex-M3.
-It does not identify which pins the board wires to an LED or where a different
-chip keeps its flash. The
-[Rust target documentation](https://doc.rust-lang.org/rustc/platform-support/thumbv7m-none-eabi.html)
-describes the CPU requirements.
-
-<MarginNote kind="brief">The compilation target specifies the processor environment; the board configuration supplies its particular memory layout and peripherals.</MarginNote>
-
-The [`memory.x`](/firmware-labs/memory.x) linker configuration supplies our
-board model's layout:
+The [`thumbv7m-none-eabi` target](https://doc.rust-lang.org/rustc/platform-support/thumbv7m-none-eabi.html)
+selects Armv7-M instructions, a bare-metal environment, and a calling
+convention for Cortex-M3. It does not select board pins or a memory map.
+[`memory.x`](/firmware-labs/memory.x) declares the regions for the runtime's
+`link.x`: `ORIGIN` gives the starting address; `LENGTH` gives the capacity.
 
 ```text
 /* K means 1024 bytes in this linker script. */
@@ -45196,62 +45371,28 @@ MEMORY
 }
 ```
 
-`ORIGIN` is a region's starting address; `LENGTH` is its capacity. The linker
-places the program into these regions using the runtime's `link.x` script.
-A matching CPU instruction set with the wrong memory map still produces the
-wrong firmware for a board.
-
-The project's [`.cargo/config.toml`](/firmware-labs/.cargo/config.toml) selects
-the target, passes `-Tlink.x` to the linker, and tells Cargo how to run the image:
-
-```toml
-[build]
-target = "thumbv7m-none-eabi"
-
-[target.thumbv7m-none-eabi]
-rustflags = ["-C", "link-arg=-Tlink.x"]
-runner = [
-    "qemu-system-arm",
-    "-cpu", "cortex-m3",
-    "-machine", "lm3s6965evb",
-    "-nographic",
-    "-semihosting-config", "enable=on,target=native",
-    "-kernel",
-]
-```
-
-Cargo appends the built executable's path after `-kernel`. QEMU creates the
-selected machine and loads that image. `-nographic` uses terminal output;
-the semihosting option enables the reporting mechanism described next. This
-configuration follows the
-[Embedded Rust QEMU setup](https://doc.rust-lang.org/stable/embedded-book/start/qemu.html).
+<MarginNote kind="brief">The compilation target specifies the processor environment; the board configuration supplies its particular memory layout and peripherals.</MarginNote>
 
 ### `no_std` keeps Rust without assuming an OS
 
-The binary begins with `#![no_std]` and `#![no_main]`.
-[`no_std`](https://doc.rust-lang.org/stable/embedded-book/intro/no-std.html)
-uses Rust's `core` library without automatically linking the OS-oriented
-standard library. Arithmetic, structs, borrowing, arrays, slices, `Option`, and
-`Result` still work. File access, OS threads, and ordinary terminal printing
-do not appear automatically. Dynamic collections such as `Vec` require
-additional allocation support; our controller does not need them.
+[`#![no_std]`](https://doc.rust-lang.org/stable/embedded-book/intro/no-std.html)
+uses Rust's `core` without the OS-oriented standard library. Arithmetic,
+structs, borrowing, arrays, slices, `Option`, and `Result` still work; OS
+files, threads, and terminal printing do not appear automatically. `Vec`
+needs allocation support; this controller does not.
 
-`no_main` disables the normal application entry arrangement. The
-`#[entry]` attribute from `cortex-m-rt` marks the function that startup calls.
-Its `-> !` means it never returns: there is no desktop caller waiting for a
-return value.
+`#![no_main]` removes the normal application entry arrangement. The runtime's
+`#[entry]` marks the function called after startup. `-> !` means it never
+returns: there is no desktop caller waiting.
 
 ### Report results through the emulator
 
-**Semihosting** lets target code ask a supporting debugger or emulator to
-perform host-side operations. Here it sends text to QEMU's terminal. That is
-neither an emulated UART nor Windows providing `println!` to a guest process.
-The [`cortex-m-semihosting` interface](https://docs.rs/cortex-m-semihosting/latest/cortex_m_semihosting/)
-provides the output stream used below.
+**Semihosting** asks a supporting debugger or emulator to perform host-side
+operations. Here [`cortex-m-semihosting`](https://docs.rs/cortex-m-semihosting/latest/cortex_m_semihosting/)
+sends text to QEMU's terminal, without a guest OS or emulated UART. This is
+the full [`src/main.rs`](/firmware-labs/src/main.rs):
 
 <GitHub path="firmware-labs/src/main.rs" />
-
-This is the full [`src/main.rs`](/firmware-labs/src/main.rs):
 
 ```rust
 #![no_std] // Use core without an OS standard library.
@@ -45294,20 +45435,127 @@ fn panic(_information: &PanicInfo) -> ! {
 }
 ```
 
-`fmt::Write` supplies the writing operation used by `writeln!`.
-Opening the stream or writing can fail, so `run_trace` returns a `Result` and
-`?` propagates an error. The entry function converts that result into an
-emulator success or failure request. Formatting uses the fixed samples and
-controller state; it needs no growing string buffer.
+`fmt::Write` supplies output. `run_trace` uses `Result` and `?` for failed
+opens/writes; entry reports the outcome. Formatting needs no growing string.
 
-A [`panic_handler`](https://doc.rust-lang.org/nomicon/panic-handler.html)
-defines what this `no_std` application does if it panics. This one makes the
-emulator run fail. Physical firmware needs its own failure policy, such as
-placing outputs into a safe state and halting or restarting. Both exit calls
-in this file are QEMU test instrumentation, not a physical-device shutdown
-procedure.
+The [`panic_handler`](https://doc.rust-lang.org/nomicon/panic-handler.html)
+reports failure too. Both exits serve QEMU; a physical device needs safe
+outputs and its own halt or restart policy.
 
 ## Build and run the image
+
+[The build reference](#firmware-project-reference) contains the exact
+installation and run commands. Linking produces an **ELF** image with
+sections and addresses, at `target/thumbv7m-none-eabi/debug/lamp-firmware`.
+Debug metadata can enlarge that file without occupying flash. Its output is:
+
+```text
+sample 1: pressed=false, lamp=false
+sample 2: pressed=true, lamp=true
+sample 3: pressed=true, lamp=true
+sample 4: pressed=false, lamp=true
+sample 5: pressed=true, lamp=false
+sample 6: pressed=false, lamp=false
+```
+
+The held press stays on. QEMU exits successfully; the computer's OS runs
+the tools while the loaded firmware has no guest OS.
+
+## Take the same rule to a physical board
+
+A **HAL** (hardware abstraction layer) supplies operations such as reading
+pins while peripheral-access code reaches hardware registers. Choose the
+exact board's documented example; [the physical-board reference](#firmware-board-reference)
+keeps the complete configuration, polarity, and programming order.
+
+Replace fixed inputs with debounced observations and QEMU exits with a
+board-appropriate failure policy. **Polling** repeatedly checks input;
+an **interrupt** runs a handler for a configured event. Shared controller
+state needs synchronization; this example has one owner. A **watchdog**
+can reset a stalled device unless firmware services it, requiring an
+explicit recovery policy.
+
+## Debugging changes timing too
+
+The library checks the logical rule; QEMU exercises the compiled ARM image
+and startup. Neither proves physical wiring or electrical behavior.
+
+<MarginNote kind="narration">An emulated run can verify startup and compiled control behavior while missing a reversed physical pin or noisy button. Keep board observations distinct from emulator results.</MarginNote>
+
+Breakpoints stop the processor while external devices can continue.
+Timers, messages, and watchdogs may behave differently; printing also
+slows loops. Semihosting output does not measure normal execution speed.
+Compare timing with logging disabled. [The troubleshooting reference](#firmware-debug-reference)
+keeps the observation checklist and transport tradeoffs.
+
+## Optional build references
+
+Use these references to reproduce the emulated run or adapt the rule to
+physical hardware. The complete working firmware remains above.
+
+<span id="firmware-project-reference" aria-hidden="true" />
+
+<Accordion title="Optional build reference: project files, QEMU runner, and commands">
+
+<Badge text="Emulator (QEMU)" variant="success" />
+
+The complete [`firmware-labs` project](/firmware-labs/README.md) contains these
+files. Keep their names and directory arrangement, including the hidden
+`.cargo` directory:
+
+<FileTree>
+
+- firmware-labs/
+  - Cargo.toml
+  - Cargo.lock
+  - .cargo/
+    - config.toml
+  - memory.x
+  - build.rs
+  - src/
+    - lib.rs
+    - main.rs
+
+</FileTree>
+
+[`src/lib.rs`](/firmware-labs/src/lib.rs) contains the controller and its tests.
+[`Cargo.toml`](/firmware-labs/Cargo.toml) declares the project and its runtime
+dependencies; [`Cargo.lock`](/firmware-labs/Cargo.lock) pins the full dependency
+set. [`build.rs`](/firmware-labs/build.rs) is a small helper that makes the memory
+map available to the linker. It runs on your computer during the build, so its
+use of `std` does not require an OS on the microcontroller.
+
+<GitHub path="firmware-labs/src/lib.rs" />
+
+You can obtain the source files from those links and the configuration link
+below, or use the
+[authored project folder](https://github.com/MustCodeAl/rust-game-hacking-book/tree/codex/book-revision/firmware-labs).
+The project uses Rust 2024 and requires Rust 1.85 or later.
+
+The project's [`.cargo/config.toml`](/firmware-labs/.cargo/config.toml) selects
+the target, passes `-Tlink.x` to the linker, and tells Cargo how to run the image:
+
+```toml
+[build]
+target = "thumbv7m-none-eabi"
+
+[target.thumbv7m-none-eabi]
+rustflags = ["-C", "link-arg=-Tlink.x"]
+runner = [
+    "qemu-system-arm",
+    "-cpu", "cortex-m3",
+    "-machine", "lm3s6965evb",
+    "-nographic",
+    "-semihosting-config", "enable=on,target=native",
+    "-kernel",
+]
+```
+
+Cargo appends the built executable's path after `-kernel`. QEMU creates the
+selected machine and loads that image. `-nographic` uses terminal output;
+the semihosting option enables the reporting mechanism described next. This
+configuration follows the
+[Embedded Rust QEMU setup](https://doc.rust-lang.org/stable/embedded-book/start/qemu.html).
 
 Install stable Rust with rustup and an ARM system build of QEMU. The
 [QEMU downloads page](https://www.qemu.org/download/) provides platform-specific
@@ -45328,22 +45576,67 @@ cargo build --locked --bin lamp-firmware
 cargo run --locked --bin lamp-firmware
 ```
 
+### Target, runtime, and reporting details
+
+The Rust target is **`thumbv7m-none-eabi`**. It describes the Armv7-M architecture,
+bare-metal environment, and calling convention suitable for this Cortex-M3.
+It does not identify which pins the board wires to an LED or where a different
+chip keeps its flash. The
+[Rust target documentation](https://doc.rust-lang.org/rustc/platform-support/thumbv7m-none-eabi.html)
+describes the CPU requirements.
+
+The [`memory.x` mapping above](#the-target-and-the-layout-answer-different-questions)
+supplies this board model's regions.
+
+`ORIGIN` is a region's starting address; `LENGTH` is its capacity. The linker
+places the program into these regions using the runtime's `link.x` script.
+A matching CPU instruction set with the wrong memory map still produces the
+wrong firmware for a board.
+
+The binary begins with `#![no_std]` and `#![no_main]`.
+[`no_std`](https://doc.rust-lang.org/stable/embedded-book/intro/no-std.html)
+uses Rust's `core` library without automatically linking the OS-oriented
+standard library. Arithmetic, structs, borrowing, arrays, slices, `Option`, and
+`Result` still work. File access, OS threads, and ordinary terminal printing
+do not appear automatically. Dynamic collections such as `Vec` require
+additional allocation support; our controller does not need them.
+
+`no_main` disables the normal application entry arrangement. The
+`#[entry]` attribute from `cortex-m-rt` marks the function that startup calls.
+Its `-> !` means it never returns: there is no desktop caller waiting for a
+return value.
+
+**Semihosting** lets target code ask a supporting debugger or emulator to
+perform host-side operations. Here it sends text to QEMU's terminal. That is
+neither an emulated UART nor Windows providing `println!` to a guest process.
+The [`cortex-m-semihosting` interface](https://docs.rs/cortex-m-semihosting/latest/cortex_m_semihosting/)
+provides the output stream used in the complete main file above.
+
+The [complete main file above](#report-results-through-the-emulator)
+supplies these reporting steps.
+
+`fmt::Write` supplies the writing operation used by `writeln!`.
+Opening the stream or writing can fail, so `run_trace` returns a `Result` and
+`?` propagates an error. The entry function converts that result into an
+emulator success or failure request. Formatting uses the fixed samples and
+controller state; it needs no growing string buffer.
+
+A [`panic_handler`](https://doc.rust-lang.org/nomicon/panic-handler.html)
+defines what this `no_std` application does if it panics. This one makes the
+emulator run fail. Physical firmware needs its own failure policy, such as
+placing outputs into a safe state and halting or restarting. Both exit calls
+in this file are QEMU test instrumentation, not a physical-device shutdown
+procedure.
+
+### The linked image and model output
+
 The image is an **ELF** executable at
 `target/thumbv7m-none-eabi/debug/lamp-firmware`. ELF carries sections, addresses,
 and other information a loader or debugger can use. The file's total size is
 not the flash usage: debug metadata can occupy space in the file without being
 loaded into the microcontroller's flash.
 
-The trace should be:
-
-```text
-sample 1: pressed=false, lamp=false
-sample 2: pressed=true, lamp=true
-sample 3: pressed=true, lamp=true
-sample 4: pressed=false, lamp=true
-sample 5: pressed=true, lamp=false
-sample 6: pressed=false, lamp=false
-```
+The [worked trace above](#build-and-run-the-image) shows the expected result.
 
 QEMU then exits successfully. The two consecutive `true` inputs leave the lamp
 on, which is the essential difference from toggling on every held sample.
@@ -45354,7 +45647,11 @@ The computer's OS runs Cargo and QEMU. The **emulated firmware has no guest
 OS**. Its startup, control logic, and output requests all execute as part of
 the loaded image.
 
-## Take the same rule to a physical board
+</Accordion>
+
+<span id="firmware-board-reference" aria-hidden="true" />
+
+<Accordion title="Optional build reference: adapt to an exact physical board">
 
 The control rule is reusable; the board configuration is specific. Start with
 the exact development board's documented Rust board-support or **HAL**
@@ -45403,7 +45700,11 @@ A **watchdog** is a timer that can reset a stalled device unless firmware
 services it correctly; its configuration and recovery policy matter on real
 hardware, rather than being a cure for an unexplained bug.
 
-## Debugging changes timing too
+</Accordion>
+
+<span id="firmware-debug-reference" aria-hidden="true" />
+
+<Accordion title="Optional build reference: hardware observations and logging transports">
 
 Firmware debugging has two places to inspect: the rule and its hardware
 integration. The library tests in the project check that holding a press does
@@ -45411,8 +45712,6 @@ not toggle repeatedly and that a fresh controller starts with fresh state.
 They do not establish that a physical button is wired correctly. The QEMU run
 tests the compiled ARM image and its startup, but does not test a real board's
 electrical behaviour.
-
-<MarginNote kind="narration">An emulated run can verify startup and compiled control behavior while missing a reversed physical pin or noisy button. Keep board observations distinct from emulator results.</MarginNote>
 
 When a real device behaves differently, record the chip, board revision,
 toolchain, image version, and input conditions. Compare the intended state
@@ -45439,10 +45738,10 @@ but does not make it free. Record only the events needed
 to distinguish the competing explanations, and compare behaviour with logging
 disabled when investigating a timing problem.
 
-You have now built the software that runs after reset, rather than just a
-program launched by an OS. The next lesson uses these startup responsibilities
-to explain a console's larger boot chain; the hardware debugging lessons show
-how a probe can inspect a core below the application interface.
+</Accordion>
+
+The image joins reset, memory, and control logic. [Console architecture](/pages/14/05/)
+extends those startup responsibilities into a larger boot chain.
 
 ---
 ## Lesson 13.6 — How Game Consoles Are Built

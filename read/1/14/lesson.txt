@@ -2,6 +2,32 @@ Rust: Collections, Bounds, and Bytes
 
 A memory reader and a packet parser both receive sequences of bytes. Before using those bytes, they need to check the available length, decide how to group elements, and choose the numeric interpretation. Ordinary Rust collections let us learn those decisions in a small local example. The previous lesson explains the Option and Result values returned when a check fails.
 
+Section: Choose a collection for the question.
+
+The guarded purchase in Lesson 1.4 used two Player records, Ada and Bo. A fixed array was enough when we knew there were exactly two. What if players can join, we need one player’s score by name, or we must handle pending actions in arrival order? Those are different questions, and different collections make each one natural:
+
+T stands for the kind of item stored. A vector of u32 values, for example, is written Vec<u32>. K and V stand for a map’s key and value types. A queue can be implemented with Rust’s VecDeque, which lets us add at the back and take from the front.
+
+The array we used has a fixed number of slots. A vector keeps numbered slots but can grow, which fits a history of gold samples:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A hash map answers “what value belongs to this key?” A queue answers “what item arrived next?” The following Rust fragments use all three, including a lookup or queue removal with no answer.
+
+A grid can be a vector of rows, so tiles[row][column] reaches a tile. A graph stores which waypoints connect; Lesson 4.8 uses one to search for a route. These are arrangements of data, not magic algorithms. Choose by the operation you need: next by position, look up by key, take the oldest, or visit neighbors. Lesson 3.10 shows how their layouts can be recognized in a running game.
+
+Alternative: Picture a vector as numbered lockers, a hash map as a coat check where a ticket finds your coat, and a queue as a line at a shop.
+
+Section: Try the growable collections in Rust.
+
+Different questions call for different collections. A vector keeps a growable sequence of samples. A hash map finds a value by a key. A queue keeps actions in arrival order. These fragments reuse the Primer’s Mira stamina values, separately from its complete two-runner program. The use line makes the two standard library collection types available by their short names:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+vec! starts a growable vector with two samples, push adds a third, and [1] selects the second sample because positions start at zero. The hash map associates the key "Mira" with 8, so get("Mira") can find the amount without scanning a list of names. The queue adds actions at the back and takes the oldest from the front; after the first pop, "rest" is still waiting.
+
+Both the map lookup and the queue removal may fail to produce an item: the name might be absent or the queue empty. Their results therefore use Some(value) or None. Lesson 3.2 develops that possible-value shape with checked subtraction and fallible operations. The grid/graph distinction above connects these choices to map tiles and paths.
+
 Section: Read an iterator chain one item at a time.
 
 An iterator yields a sequence of items on demand. filter keeps items that satisfy a predicate, map transforms each kept item, and fold combines items into one running answer. The closures describe those operations; a consuming operation such as fold drives the sequence.
@@ -11,6 +37,18 @@ Code example. The surrounding prose explains this example; the full lesson conta
 For a budget of 8, filter keeps 3 and 8, map produces 6 and 16, and fold produces 22. This is a query, not a purchase: each price is checked against the same unchanged budget. It does not ask whether buying all the items together would be affordable.
 
 into_iter consumes this array and yields its u32 values. filter passes a reference to its predicate so an item can still be yielded after the check; *cost reads the borrowed number. map then receives each kept number by value. If you need to borrow the collection instead, start with .iter(); for copyable numbers.iter().copied() yields values while keeping the original collection.
+
+Section: Express a repeated query with an iterator.
+
+A second query counts runners with at least 4 stamina. Unlike the doubled total above, its result is how many items pass the predicate:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+.iter().copied() keeps the original array while yielding cheap u32 copies. The filter predicate still borrows each candidate, so *stamina reads its number. count consumes the kept values. The equivalent loop is:
+
+Code example. The code’s comments explain: ready is 2
+
+Both forms produce 2. Choose the form that makes the question and each value transformation clearest.
 
 Section: Use windows for neighboring samples.
 

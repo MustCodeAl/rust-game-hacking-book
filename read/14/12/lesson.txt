@@ -62,6 +62,60 @@ This separation lets us test the rule on the PC and then reuse it inside a firmw
 
 Section: Build a complete firmware project.
 
+The firmware-labs project combines this rule with a target, memory map, runtime, and entry function. The full image follows; the build reference keeps its exact files and reproduction steps.
+
+Section: The target and the layout answer different questions.
+
+The thumbv7m-none-eabi target selects Armv7-M instructions, a bare-metal environment, and a calling convention for Cortex-M3. It does not select board pins or a memory map. memory.x declares the regions for the runtime’s link.x: ORIGIN gives the starting address; LENGTH gives the capacity.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+In brief: The compilation target specifies the processor environment; the board configuration supplies its particular memory layout and peripherals.
+
+Section: no_std keeps Rust without assuming an O S.
+
+#![no_std] uses Rust’s core without the O S-oriented standard library. Arithmetic, structs, borrowing, arrays, slices, Option, and Result still work; O S files, threads, and terminal printing do not appear automatically. Vec needs allocation support; this controller does not.
+
+#![no_main] removes the normal application entry arrangement. The runtime’s #[entry] marks the function called after startup. to ! means it never returns: there is no desktop caller waiting.
+
+Section: Report results through the emulator.
+
+Semihosting asks a supporting debugger or emulator to perform host-side operations. Here cortex-m-semihosting sends text to QEMU’s terminal, without a guest O S or emulated UART. This is the full src/main.rs:
+
+Code example. The code’s comments explain: These are logical input samples, not GPIO reads.
+
+fmt::Write supplies output. run_trace uses Result and ? for failed opens/writes; entry reports the outcome. Formatting needs no growing string.
+
+The panic_handler reports failure too. Both exits serve QEMU; a physical device needs safe outputs and its own halt or restart policy.
+
+Section: Build and run the image.
+
+The build reference contains the exact installation and run commands. Linking produces an ELF image with sections and addresses, at target/thumbv7m-none-eabi/debug/lamp-firmware. Debug metadata can enlarge that file without occupying flash. Its output is:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The held press stays on. QEMU exits successfully; the computer’s O S runs the tools while the loaded firmware has no guest O S.
+
+Section: Take the same rule to a physical board.
+
+A HAL (hardware abstraction layer) supplies operations such as reading pins while peripheral-access code reaches hardware registers. Choose the exact board’s documented example; the physical-board reference keeps the complete configuration, polarity, and programming order.
+
+Replace fixed inputs with debounced observations and QEMU exits with a board-appropriate failure policy. Polling repeatedly checks input; an interrupt runs a handler for a configured event. Shared controller state needs synchronization; this example has one owner. A watchdog can reset a stalled device unless firmware services it, requiring an explicit recovery policy.
+
+Section: Debugging changes timing too.
+
+The library checks the logical rule; QEMU exercises the compiled ARM image and startup. Neither proves physical wiring or electrical behavior.
+
+Narration: An emulated run can verify startup and compiled control behavior while missing a reversed physical pin or noisy button. Keep board observations distinct from emulator results.
+
+Breakpoints stop the processor while external devices can continue. Timers, messages, and watchdogs may behave differently; printing also slows loops. Semihosting output does not measure normal execution speed. Compare timing with logging disabled. The troubleshooting reference keeps the observation checklist and transport tradeoffs.
+
+Section: Optional build references.
+
+Use these references to reproduce the emulated run or adapt the rule to physical hardware. The complete working firmware remains above.
+
+Additional detail: Optional build reference: project files, QEMU runner, and commands.
+
 The complete firmware-labs project contains these files. Keep their names and directory arrangement, including the hidden .cargo directory:
 
 Directoryfirmware-labs/ Cargo.tomlCargo.lockDirectory.cargo/ config.tomlmemory.xbuild.rsDirectorysrc/ lib.rsmain.rs
@@ -94,43 +148,11 @@ src/lib.rs contains the controller and its tests. Cargo.toml declares the projec
 
 You can obtain the source files from those links and the configuration link below, or use the authored project folder. The project uses Rust 2024 and requires Rust 1.85 or later.
 
-Section: The target and the layout answer different questions.
-
-The Rust target is thumbv7m-none-eabi. It describes the Armv7-M architecture, bare-metal environment, and calling convention suitable for this Cortex-M3. It does not identify which pins the board wires to an LED or where a different chip keeps its flash. The Rust target documentation describes the C P U, central processing unit, requirements.
-
-In brief: The compilation target specifies the processor environment; the board configuration supplies its particular memory layout and peripherals.
-
-The memory.x linker configuration supplies our board model’s layout:
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-ORIGIN is a region’s starting address; LENGTH is its capacity. The linker places the program into these regions using the runtime’s link.x script. A matching C P U instruction set with the wrong memory map still produces the wrong firmware for a board.
-
 The project’s .cargo/config.toml selects the target, passes -Tlink.x to the linker, and tells Cargo how to run the image:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 Cargo appends the built executable’s path after -kernel. QEMU creates the selected machine and loads that image. -nographic uses terminal output; the semihosting option enables the reporting mechanism described next. This configuration follows the Embedded Rust QEMU setup.
-
-Section: no_std keeps Rust without assuming an O S.
-
-The binary begins with #![no_std] and #![no_main]. no_std uses Rust’s core library without automatically linking the O S-oriented standard library. Arithmetic, structs, borrowing, arrays, slices, Option, and Result still work. File access, O S threads, and ordinary terminal printing do not appear automatically. Dynamic collections such as Vec require additional allocation support; our controller does not need them.
-
-no_main disables the normal application entry arrangement. The #[entry] attribute from cortex-m-rt marks the function that startup calls. Its to ! means it never returns: there is no desktop caller waiting for a return value.
-
-Section: Report results through the emulator.
-
-Semihosting lets target code ask a supporting debugger or emulator to perform host-side operations. Here it sends text to QEMU’s terminal. That is neither an emulated UART nor Windows providing println! to a guest process. The cortex-m-semihosting interface provides the output stream used below.
-
-This is the full src/main.rs:
-
-Code example. The code’s comments explain: These are logical input samples, not GPIO reads.
-
-fmt::Write supplies the writing operation used by writeln!. Opening the stream or writing can fail, so run_trace returns a Result and ? propagates an error. The entry function converts that result into an emulator success or failure request. Formatting uses the fixed samples and controller state; it needs no growing string buffer.
-
-A panic_handler defines what this no_std application does if it panics. This one makes the emulator run fail. Physical firmware needs its own failure policy, such as placing outputs into a safe state and halting or restarting. Both exit calls in this file are QEMU test instrumentation, not a physical-device shutdown procedure.
-
-Section: Build and run the image.
 
 Install stable Rust with rustup and an ARM system build of QEMU. The QEMU downloads page provides platform-specific installation options. On Windows, make sure the folder containing qemu-system-arm.exe is on PATH.
 
@@ -140,17 +162,37 @@ Terminal window
 
 Code example. The code’s comments explain: Install Rust's libraries for the Cortex-M3 target. Compile and link the image using the supplied dependency versions. Start the same image using the QEMU runner in .cargo/config.toml.
 
+Section: Target, runtime, and reporting details.
+
+The Rust target is thumbv7m-none-eabi. It describes the Armv7-M architecture, bare-metal environment, and calling convention suitable for this Cortex-M3. It does not identify which pins the board wires to an LED or where a different chip keeps its flash. The Rust target documentation describes the C P U, central processing unit, requirements.
+
+The memory.x mapping above supplies this board model’s regions.
+
+ORIGIN is a region’s starting address; LENGTH is its capacity. The linker places the program into these regions using the runtime’s link.x script. A matching C P U instruction set with the wrong memory map still produces the wrong firmware for a board.
+
+The binary begins with #![no_std] and #![no_main]. no_std uses Rust’s core library without automatically linking the O S-oriented standard library. Arithmetic, structs, borrowing, arrays, slices, Option, and Result still work. File access, O S threads, and ordinary terminal printing do not appear automatically. Dynamic collections such as Vec require additional allocation support; our controller does not need them.
+
+no_main disables the normal application entry arrangement. The #[entry] attribute from cortex-m-rt marks the function that startup calls. Its to ! means it never returns: there is no desktop caller waiting for a return value.
+
+Semihosting lets target code ask a supporting debugger or emulator to perform host-side operations. Here it sends text to QEMU’s terminal. That is neither an emulated UART nor Windows providing println! to a guest process. The cortex-m-semihosting interface provides the output stream used in the complete main file above.
+
+The complete main file above supplies these reporting steps.
+
+fmt::Write supplies the writing operation used by writeln!. Opening the stream or writing can fail, so run_trace returns a Result and ? propagates an error. The entry function converts that result into an emulator success or failure request. Formatting uses the fixed samples and controller state; it needs no growing string buffer.
+
+A panic_handler defines what this no_std application does if it panics. This one makes the emulator run fail. Physical firmware needs its own failure policy, such as placing outputs into a safe state and halting or restarting. Both exit calls in this file are QEMU test instrumentation, not a physical-device shutdown procedure.
+
+Section: The linked image and model output.
+
 The image is an ELF executable at target/thumbv7m-none-eabi/debug/lamp-firmware. ELF carries sections, addresses, and other information a loader or debugger can use. The file’s total size is not the flash usage: debug metadata can occupy space in the file without being loaded into the microcontroller’s flash.
 
-The trace should be:
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+The worked trace above shows the expected result.
 
 QEMU then exits successfully. The two consecutive true inputs leave the lamp on, which is the essential difference from toggling on every held sample. Some QEMU versions also print Timer with period zero, disabling; that model message is separate from the firmware trace.
 
 The computer’s O S runs Cargo and QEMU. The emulated firmware has no guest O S. Its startup, control logic, and output requests all execute as part of the loaded image.
 
-Section: Take the same rule to a physical board.
+Additional detail: Optional build reference: adapt to an exact physical board.
 
 The control rule is reusable; the board configuration is specific. Start with the exact development board’s documented Rust board-support or HAL (hardware abstraction layer) example. A HAL presents operations such as reading a pin or configuring a timer while handling many register details. Underneath it, peripheral-access code ultimately reads and writes hardware registers, the mechanism introduced in device registers.
 
@@ -170,11 +212,9 @@ probe-rs is one programming and debugging tool for supported chips and probes. A
 
 Polling checks an input repeatedly; an interrupt runs a handler when a configured event occurs. Either design can work. If an interrupt and the main loop both touch controller state, they need an explicit synchronization policy. The simple controller above has one owner and introduces no such shared access. A watchdog is a timer that can reset a stalled device unless firmware services it correctly; its configuration and recovery policy matter on real hardware, rather than being a cure for an unexplained bug.
 
-Section: Debugging changes timing too.
+Additional detail: Optional build reference: hardware observations and logging transports.
 
 Firmware debugging has two places to inspect: the rule and its hardware integration. The library tests in the project check that holding a press does not toggle repeatedly and that a fresh controller starts with fresh state. They do not establish that a physical button is wired correctly. The QEMU run tests the compiled ARM image and its startup, but does not test a real board’s electrical behaviour.
-
-Narration: An emulated run can verify startup and compiled control behavior while missing a reversed physical pin or noisy button. Keep board observations distinct from emulator results.
 
 When a real device behaves differently, record the chip, board revision, toolchain, image version, and input conditions. Compare the intended state transition with the observed one. Then check the boundary responsible for that input or output: pin polarity, debounce timing, timer rate, or register setup. Changing the control rule to compensate for a wiring mistake hides the cause.
 
@@ -182,6 +222,6 @@ Breakpoints stop the processor, while external devices can keep running; timers,
 
 RTT’s buffer policy matters too: a full blocking buffer can pause the program, while a nonblocking mode can discard output. Buffering or deferring text formatting reduces work on a time-sensitive path but does not make it free. Record only the events needed to distinguish the competing explanations, and compare behaviour with logging disabled when investigating a timing problem.
 
-You have now built the software that runs after reset, rather than just a program launched by an O S. The next lesson uses these startup responsibilities to explain a console’s larger boot chain; the hardware debugging lessons show how a probe can inspect a core below the application interface.
+The image joins reset, memory, and control logic. Console architecture extends those startup responsibilities into a larger boot chain.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/14/12/

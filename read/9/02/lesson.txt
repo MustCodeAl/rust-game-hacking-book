@@ -60,6 +60,34 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Reloading the disposable character shows all four values as 30.
 
+Section: The magic number and the version say what the file is.
+
+The book’s invented binary GSAV save records Nia at level 3 with 250 gold. Its first four bytes are 47 53 41 56. As A S C I I codes they are:
+
+hexadecimal 4 7 equals 4 times 16 + 7 equals 71: G;
+
+hexadecimal 5 3 equals 5 times 16 + 3 equals 83: S;
+
+hexadecimal 4 1 equals 4 times 16 + 1 equals 65: A;
+
+hexadecimal 5 6 equals 5 times 16 + 6 equals 86: V.
+
+That fixed starting pattern is a magic number. The loader checks it before treating bytes as fields. A PNG likewise has a fixed signature; renaming either file changes neither its bytes nor its format.
+
+The next two bytes, 01 00, are the little-endian layout version 1. A loader uses the version to select a known layout; an editor must refuse an unknown version because fields may have moved. The GSAV lab returns UnsupportedVersion for anything other than 1.
+
+Section: A length-prefixed string.
+
+GSAV puts the name’s byte length at offset 11 (hexadecimal 0 B), then the text at offset 12. For Nia, 03 announces three bytes:
+
+The checksum follows the text, so it starts at 12 + 3 equals 15. Changing the name to the five-byte Grace moves it to 12 + 5 equals 17 and grows the whole save to 17 + 4 equals 21 bytes. A tool assuming offset 15 would now read the wrong field.
+
+Check the prefix against the actual file size before trusting it. A damaged byte C8 means 12 times 16 + 8 equals 200; its claimed name ends at 12 + 200 equals 212, beyond a 19-byte file. The lab requires 12 + length + 4 to equal the real size and returns an error otherwise.
+
+Other formats end the text with a terminator, often C’s 00 byte. A prefix counts bytes; a terminator marks the end. A nearby number matching the text’s byte count is a clue, then test it with names of different lengths. Neither convention measures the number of displayed characters.
+
+Alternative: A length prefix measures the string from its beginning; a terminator marks its ending. Both separate text from the bytes that follow.
+
 Section: Write atomically.
 
 Do not overwrite the original in place. Write a temporary sibling, flush it, then rename:
@@ -134,7 +162,7 @@ Read it in five chunks: validate the three arguments, locate exactly one field, 
 
 Section: Checksums and integrity fields.
 
-If one small value change also changes a separate fixed-size region, the file may contain a checksum.
+If one small value change also changes a separate fixed-size region, the file may contain a checksum. Lesson 10.8 works through the GSAV sum; Lesson 10.3 keeps the exact two-save hex comparison.
 
 Do not patch until you understand:
 
