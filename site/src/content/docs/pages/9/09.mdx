@@ -13,8 +13,6 @@ import Frame from '../../../../components/kit/Frame.astro';
 import { GitHub, Panel } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
-import Scene from '../../../../components/Scene.astro';
-import CodeTrace from '../../../../components/CodeTrace.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## A binary save is not text
@@ -133,21 +131,13 @@ to the next. Two things follow:
 
 ## The magic number and the version say what the file is
 
-The first four bytes, `47 53 41 56`, are ASCII codes. In decimal they are
-4 × 16 + 7 = 71 (`G`), 5 × 16 + 3 = 83 (`S`), 4 × 16 + 1 = 65 (`A`), and
-5 × 16 + 6 = 86 (`V`). A fixed byte pattern at the start of a file that
-identifies its format is called a **magic number**. The loader checks it before
-anything else: a file that does not begin with `GSAV` is some other kind of
-file, and reading its bytes as gold and levels would produce nonsense. A PNG
-image likewise begins with a fixed signature; renaming either file does not
-change its bytes or format. We will use that same idea again when checking
-mod archives.
+`47 53 41 56` spells `GSAV` in ASCII. This fixed starting pattern is a
+**magic number**: the loader refuses other formats before decoding fields.
+The next two bytes, `01 00`, give layout version 1. An unknown version must
+be refused because its fields may have moved. The lab returns
+`UnsupportedVersion` in that case.
 
-The next two bytes, `01 00`, are the **version**: a number the game's developers
-raise whenever they change the layout. A loader reads the version to choose the
-right layout, and an editor that meets a version it does not know has to refuse
-the file, because the fields may have moved. The lab returns an
-`UnsupportedVersion` error for anything other than 1.
+[Lesson 10.2 explains the format and version checks](/pages/9/02/#the-magic-number-and-the-version-say-what-the-file-is).
 
 ## Multi-byte numbers are stored lowest byte first
 
@@ -174,41 +164,21 @@ almost always the right one.
 
 ## A length-prefixed string
 
-A name has no fixed size, so this format stores its length first. The byte at
-offset 11 (`0x0B`) is `03`, so exactly 3 bytes of text follow, at offsets 12,
-13, and 14. Text stored this way is a **length-prefixed string**.
+A **length-prefixed string** stores its byte count before its text. Here
+offset 11 contains `03`, so the next three bytes, `4E 69 61`, spell `Nia`.
+The checksum begins at offset `12 + 3 = 15`. A five-byte name moves it to
+offset 17 and grows the whole file to 21 bytes.
 
-<MemoryStrip
-  cells="0x0B=03|0x0C=4E|0x0D=69|0x0E=61"
-  groups="0-0:length: 3|1-3:`N` `i` `a`"
-  groups2="1-3:4 × 16 + 14 = 78, 6 × 16 + 9 = 105, 6 × 16 + 1 = 97"
-  caption="The length byte says how many bytes of text follow. There is no end marker."
-/>
-
-This layout has two consequences:
-
-- Everything after the name moves when the name's length changes. With `Nia`,
-  the checksum starts at 12 + 3 = 15. With a five-letter name such as `Grace`,
-  it starts at 12 + 5 = 17, and the file grows to 17 + 4 = 21 bytes. A tool that
-  assumes the checksum always sits at offset 15 breaks on the first longer name.
-- The length byte has to be checked against the file before it is trusted. A
-  damaged save whose length byte reads `C8`, which is 12 × 16 + 8 = 200, claims
-  a name that runs up to offset 12 + 200 = 212, far past the end of a 19-byte
-  file. The lab compares 12 + length + 4 with the real file size and returns an
-  error instead of reading past the end.
-
-Other formats mark the end of a string instead, most often with a `00` byte
-after the text, the convention C uses. In an unfamiliar save, a byte just
-before some text that equals the number of characters after it is the
-fingerprint of a length-prefixed string.
-
-<MarginNote kind="alternative">A length prefix measures the string from its beginning; a terminator marks its ending. Both separate text from the bytes that follow.</MarginNote>
+The loader checks that `12 + length + 4` equals the file's real size before
+reading the name or checksum. A damaged length of 200 cannot describe this
+19-byte file. [Lesson 10.2 works through those bounds and the terminator
+alternative](/pages/9/02/#a-length-prefixed-string).
 
 ## Find a field by comparing two saves
 
 The layout above was handed to you. A real game's layout usually is not, so its
-fields are found by comparison, the byte-level version of Lesson 9.2's two-save
-diff: save once, change exactly one value in the game, save again, and compare
+fields are found by comparison, the byte-level version of
+[Lesson 10.2's two-save diff](/pages/9/02/#make-two-controlled-saves): save once, change exactly one value in the game, save again, and compare
 the two files. Most hex editors have a compare view that highlights the bytes
 that differ.
 
@@ -242,17 +212,16 @@ game changed. A byte that changes whenever any other value changes is the mark
 of a checksum, the subject of the next section.
 
 In a real game the diff also catches bytes that change on their own, such as
-play time, a timestamp, or a random seed. Lesson 9.2 separates those by
+play time, a timestamp, or a random seed.
+[Lesson 10.2](/pages/9/02/#make-two-controlled-saves) separates those by
 repeating the comparison with several values; the real field follows the
 in-game number every time.
 
 ## Why one edited byte breaks the save
 
-The last four bytes are a **checksum**: a number computed from the other bytes
-and stored beside them, so the loader can detect damage. This format uses the
-simplest checksum there is. It adds up every byte from offset 0 to the byte
-just before the checksum and stores the total as a little-endian `u32`. For
-Nia's save, bytes 0 to 14 add up like this:
+The final four bytes store a **checksum**, computed from the bytes before
+them. This toy format adds those bytes and stores the sum as a
+little-endian `u32`. The original save's sum is 842:
 
 ```text
 magic    47 53 41 56   71 + 83 + 65 + 86  = 305   total 305
@@ -263,59 +232,28 @@ length   03            3                  =   3   total 562
 name     4E 69 61      78 + 105 + 97      = 280   total 842
 ```
 
-The stored checksum is the same number:
-
-<MemoryStrip
-  cells="0x0F=4A|0x10=03|0x11=00|0x12=00"
-  groups="0-0:× 1|1-1:× 256|2-2:× 65,536|3-3:× 16,777,216"
-  groups2="0-3:0x4A is 4 × 16 + 10 = 74, and 74 + 3 × 256 = 842"
-  caption="The stored checksum, lowest byte first: 842, which is `0x34A` because 842 = 3 × 256 + 74."
-/>
-
-The loader repeats that sum every time it opens the file:
-
-```mermaid
-flowchart TD
-    A["Read the whole file"] --> B{"First four bytes<br/>are GSAV?"}
-    B -->|"no"| X["Refuse the file"]
-    B -->|"yes"| C{"Version is 1?"}
-    C -->|"no"| X
-    C -->|"yes"| D{"File size equals<br/>12 + name length + 4?"}
-    D -->|"no"| X
-    D -->|"yes"| E["Add up every byte<br/>before the checksum"]
-    E --> F{"Sum equals the<br/>stored checksum?"}
-    F -->|"no"| X
-    F -->|"yes"| G["Decode the fields and load"]
-```
-
-<CodeTrace trace="scene-gsav-loader" />
-
-<Scene name="gsav-loader" />
-
-Now type gold over as 9,999 and change nothing else. 9,999 is 39 × 256 + 15,
-and 39 = 2 × 16 + 7 = `0x27` while 15 = `0x0F`, so 9,999 is `0x270F` and its
-little-endian bytes are `0F 27 00 00`. The old gold bytes added 250 to the sum;
-the new ones add 15 + 39 = 54. The loader's total becomes 842 − 250 + 54 = 646,
-the stored checksum still says 842, and the loader refuses the save as corrupt.
-
-The fix is to do what the game does when it saves: recompute the checksum. For
-1,250 gold, the gold bytes `E2 04 00 00` add 226 + 4 = 230 instead of 250, so
-the total is 842 − 250 + 230 = 822. That is 3 × 256 + 54, and 54 = 3 × 16 + 6 =
-`0x36`, so the checksum is `0x336`, stored as `36 03 00 00`: exactly what save B
-contained. The complete edited file is:
+The stored bytes `4A 03 00 00` also mean `74 + 3 × 256 = 842`.
+Editing gold changes its contribution to that sum. For 1,250 gold,
+`E2 04 00 00` contributes `226 + 4 = 230` in place of 250, so the new sum
+is `842 − 250 + 230 = 822`. Its checksum is `36 03 00 00`. The complete
+consistent file is:
 
 ```text
 47 53 41 56 01 00 E2 04 00 00 03 03 4E 69 61 36 03 00 00
 ```
 
-A plain sum has a blind spot: adding numbers in a different order gives the same
-total, so swapping two bytes goes unnoticed. That is why real formats more often
-use a CRC-32, a 32-bit checksum designed to change when bytes are reordered, or
-a hash. The editing procedure stays the same: work out which bytes are covered,
-which algorithm runs, where the result is stored, and in which byte order, as
-listed in [Lesson 9.2](/pages/9/02/#checksums-and-integrity-fields). If the
-check uses a secret key, as a MAC does, or a digital signature, it cannot be
-recomputed without that key; [Lesson 9.9](/pages/9/08/) explains why.
+Changing gold to 9,999 without updating the checksum instead gives a
+computed sum of 646 while the stored value stays 842, so the loader
+refuses the file. The lab validates the original before editing and
+recomputes the checksum afterward; giving existing damage a fresh checksum
+would conceal it.
+
+A plain sum detects some damage but cannot establish who approved the
+bytes. [Lesson 10.8 keeps the full calculation, loader trace and scene,
+and the distinction from a hash or signature](/pages/9/07/#why-one-edited-byte-breaks-the-save).
+
+<span id="trace-scene-gsav-loader" aria-hidden="true" />
+<span id="scene-gsav-loader-title" aria-hidden="true" />
 
 ## Edit without losing the original
 

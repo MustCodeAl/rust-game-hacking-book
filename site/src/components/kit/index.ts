@@ -39,3 +39,9 @@ export { default as Update } from './Update.astro';
 export { default as Updates } from './Updates.astro';
 
 export { default as HexDisassemblyInspector } from '../HexDisassemblyInspector.astro';
+export { default as Callout } from '../Callout.astro';
+export { default as CodeWindow } from '../CodeWindow.astro';
+export { default as IDECodeWindow } from '../IDECodeWindow.astro';
+export { default as DebuggerStepper } from '../DebuggerStepper.astro';
+export { default as LogicWaveform } from '../LogicWaveform.astro';
+export { default as CheatsheetHero } from '../CheatsheetHero.astro';

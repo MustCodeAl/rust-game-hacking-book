@@ -1,0 +1,59 @@
+---
+import IDECodeWindow from './IDECodeWindow.astro';
+import { validDebuggerSteps, type DebuggerStep } from '../data/debugger-model';
+import '../styles/debugger-stepper.css';
+
+interface Props {
+	id: string;
+	source: string[];
+	steps: DebuggerStep[];
+	title?: string;
+	language?: string;
+	filename?: string;
+	embedded?: boolean;
+}
+const { id, source, steps, title = 'Step through a recorded trace', language = 'asm', filename, embedded = false } = Astro.props;
+if (!id || !Array.isArray(source) || source.length === 0 || source.some((line: unknown) => typeof line !== 'string' || /[\r\n]/.test(line)) || !validDebuggerSteps(steps, source.length)) throw new Error('DebuggerStepper needs a unique id, individual source lines, and valid recorded snapshots.');
+const first = steps[0];
+if (!first) throw new Error('DebuggerStepper needs at least one recorded snapshot.');
+const payload = JSON.stringify({ steps, lineCount: source.length }).replaceAll('<', '\\u003c');
+---
+
+<section class:list={['debugger-stepper', 'not-content', { 'debugger-stepper--embedded': embedded }]} id={id} data-debugger-stepper aria-label={title}>
+	{!embedded && <header class="debugger-stepper__header"><strong id={`${id}-title`}>{title}</strong><span>Recorded snapshots</span></header>}
+	<div class="debugger-stepper__controls" data-debugger-controls hidden>
+		<button type="button" data-debugger-previous disabled>Previous</button>
+		<button type="button" data-debugger-next>Next</button>
+		<button type="button" data-debugger-reset>Reset</button>
+		<output data-debugger-position aria-label="Recorded step">1 / {steps.length}</output>
+	</div>
+	<ol class="debugger-stepper__notches" data-debugger-notches aria-label="Recorded snapshots" hidden>
+		{steps.map((step, index) => <li><button type="button" data-debugger-select={index} aria-label={`Snapshot ${index + 1}, source line ${step.line}`} aria-current={index === 0 ? 'step' : undefined}>{index + 1}</button></li>)}
+	</ol>
+	<div class="debugger-stepper__grid">
+		<div class="debugger-stepper__source" data-debugger-source><IDECodeWindow code={source.join('\n')} language={language} filename={filename} label="Recorded source listing" /></div>
+		<div class="debugger-stepper__inspection" data-debugger-inspection>
+			<h3>Registers and values</h3>
+			<dl class="debugger-stepper__values" data-debugger-values>
+				{Object.entries(first.registers).map(([name, value]) => <div><dt><code data-register-name={name}>{name}</code></dt><dd><code>{value}</code></dd></div>)}
+				{Object.entries(first.variables ?? {}).map(([name, value]) => <div><dt>{name}</dt><dd><code>{value}</code></dd></div>)}
+			</dl>
+			<ul class="debugger-stepper__stack" data-debugger-stack aria-label="Stack slots">
+				{first.stack?.map((slot) => <li data-stack-kind={slot.kind}><span>{slot.label}</span><code>{slot.value}</code><small>{slot.kind === 'return' ? 'return frame' : slot.kind === 'saved' ? 'saved register' : 'unallocated'}</small></li>)}
+			</ul>
+		</div>
+	</div>
+	<p class="debugger-stepper__description" data-debugger-description role="status" aria-live="polite" aria-atomic="true">Snapshot 1, source line {first.line}: {first.description}</p>
+	<div class="debugger-stepper__diff" data-debugger-diff aria-label="Changes from the previous snapshot">Initial recorded state.</div>
+	<p class="debugger-stepper__register-help" data-register-inspector role="status" aria-live="polite">Focus a register name to mark its matching source and inspection references.</p>
+	<details class="debugger-stepper__reference" open>
+		<summary>Read every snapshot of the lesson’s example</summary>
+		<ol>{steps.map((step, index) => <li><p><strong>Snapshot {index + 1}, line {step.line}.</strong> {step.description}</p><p>{[...Object.entries(step.registers), ...Object.entries(step.variables ?? {})].map(([name, value]) => `${name} = ${value}`).join('; ')}.</p>{step.stack && <p>Stack: {step.stack.map((slot) => `${slot.label}: ${slot.value} (${slot.kind})`).join('; ')}.</p>}</li>)}</ol>
+	</details>
+	<script type="application/json" data-debugger-model set:html={payload} />
+</section>
+
+<script>
+	import { mountDebuggerSteppers } from '../scripts/debugger-stepper';
+	mountDebuggerSteppers();
+</script>

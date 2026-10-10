@@ -49,10 +49,9 @@ let mut recent_gold = vec![100, 75];
 recent_gold.push(65);
 ```
 
-A hash map instead answers “what value belongs to this key?” A queue
-answers “what item arrived next?” [The Rust Primer](/pages/1/05/#try-the-growable-collections-in-rust)
-runs all three as small code examples, including what happens when a
-lookup or queue has no answer.
+A hash map answers “what value belongs to this key?” A queue answers
+“what item arrived next?” The following Rust fragments use all three,
+including a lookup or queue removal with no answer.
 
 A grid can be a vector of rows, so `tiles[row][column]` reaches a tile.
 A graph stores which waypoints connect; [Lesson 4.8](/pages/4/06/) uses
@@ -73,6 +72,50 @@ flowchart TD
     Next -->|yes| Queue["queue"]
     Next -->|no| Neighbor["a tile or connected neighbor? grid or graph"]
 ```
+
+## Try the growable collections in Rust
+
+Different questions call for different collections. A vector keeps a
+growable sequence of samples. A hash map finds a value by a key. A queue
+keeps actions in arrival order. These fragments reuse the Primer's Mira
+stamina values, separately from its complete two-runner program. The `use`
+line makes the two standard
+library collection types available by their short names:
+
+```rust
+use std::collections::{HashMap, VecDeque};
+
+let mut recent_stamina = vec![12, 8];
+recent_stamina.push(6);
+let second_sample = recent_stamina[1];
+println!("Second sample: {second_sample}");
+
+let mut stamina_by_name = HashMap::new();
+stamina_by_name.insert("Mira", 8);
+if let Some(amount) = stamina_by_name.get("Mira") {
+    println!("Mira has {amount} stamina");
+}
+
+let mut pending = VecDeque::new();
+pending.push_back("dash");
+pending.push_back("rest");
+if let Some(action) = pending.pop_front() {
+    println!("Next action: {action}");
+}
+```
+
+`vec!` starts a growable vector with two samples, `push` adds a third,
+and `[1]` selects the second sample because positions start at zero.
+The hash map associates the key `"Mira"` with 8, so `get("Mira")` can
+find the amount without scanning a list of names. The queue adds actions
+at the back and takes the oldest from the front; after the first pop,
+`"rest"` is still waiting.
+
+Both the map lookup and the queue removal may fail to produce an item:
+the name might be absent or the queue empty. Their results therefore
+use `Some(value)` or `None`. [Lesson 3.2](/pages/1/13/) develops that
+possible-value shape with checked subtraction and fallible operations.
+The grid/graph distinction above connects these choices to map tiles and paths.
 
 ## Read an iterator chain one item at a time
 
@@ -108,6 +151,43 @@ with `.iter()`; for copyable numbers, `.iter().copied()` yields values
 while keeping the original collection.
 
 <CodeTrace trace="idiom-filter-map-fold" />
+
+### Express a repeated query with an iterator
+
+A second query counts runners with at least 4 stamina. Unlike the doubled
+total above, its result is how many items pass the predicate:
+
+<SpeedType id="rust-filter-ready" title="Count runners with enough stamina" recall={[{"text": "filter", "hint": "Keep only values that satisfy a condition."}, {"text": "*stamina >= 4", "hint": "Read the borrowed number and compare it with the dash cost."}, {"text": "count", "hint": "Consume the kept items and return how many there are."}]}>
+
+```rust
+let stamina_samples = [8_u32, 3, 6];
+let ready = stamina_samples
+    .iter()
+    .copied()
+    .filter(|stamina| *stamina >= 4)
+    .count();
+println!("{ready} runners can dash"); // 2
+```
+
+</SpeedType>
+
+`.iter().copied()` keeps the original array while yielding cheap `u32`
+copies. The filter predicate still borrows each candidate, so `*stamina`
+reads its number. `count` consumes the kept values. The equivalent loop is:
+
+```rust
+let stamina_samples = [8_u32, 3, 6];
+let mut ready = 0;
+for stamina in stamina_samples {
+    if stamina >= 4 {
+        ready += 1;
+    }
+}
+// ready is 2
+```
+
+Both forms produce 2. Choose the form that makes the question and each
+value transformation clearest.
 
 ## Use `windows` for neighboring samples
 

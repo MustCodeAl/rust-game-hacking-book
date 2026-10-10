@@ -1,5 +1,10 @@
 ---
 import '../styles/cpu-step.css';
+import LogicWaveform from './LogicWaveform.astro';
+import DebuggerStepper from './DebuggerStepper.astro';
+import { CPU_SOURCE, cpuDebuggerSteps } from '../data/cpu-debugger';
+interface Props { id?: string }
+const { id = 'cpu-step-lda' } = Astro.props;
 ---
 
 <section class="cpu-step not-content" data-cpu-step data-reader-skip aria-label="Change a byte and step through LDA">
@@ -9,6 +14,7 @@ import '../styles/cpu-step.css';
 		<button type="button" data-cpu-next>Step</button>
 		<button type="button" data-cpu-reset>Reset</button>
 	</div>
+	<div class="cpu-step__modern-debugger"><DebuggerStepper id={`${id}-debugger`} source={CPU_SOURCE} steps={cpuDebuggerSteps(10)} title="LDA: one instruction, four actions" language="text" embedded /></div>
 	<ol class="cpu-step__actions" aria-label="Instruction actions">
 		<li data-cpu-action="0" aria-current="step">Fetch opcode</li>
 		<li data-cpu-action="1">Decode</li>
@@ -42,10 +48,33 @@ import '../styles/cpu-step.css';
 	</svg>
 	<p class="cpu-step__key">Underlined action: what Step does next. Outlined byte: the read source. Filled register: written by this action.</p>
 	<p data-cpu-status role="status" aria-live="polite">PC is 0x02. A is 0. Change RAM, then fetch the opcode.</p>
-	<noscript><p>The diagram above shows the starting state. The animation before it explains the complete instruction without these controls.</p></noscript>
+	<details class="cpu-step__reference" open><summary>Read all four instruction actions</summary>
+		<table><thead><tr><th>Action</th><th>PC</th><th>A</th><th>Cycles</th><th>What happened</th></tr></thead><tbody>
+			<tr><td>Starting state</td><td>0x02</td><td>0</td><td>2</td><td>RAM[0x80] holds 10.</td></tr>
+			<tr><td>Fetch opcode</td><td>0x03</td><td>0</td><td>3</td><td>Read 02 from program address 0x02.</td></tr>
+			<tr><td>Decode</td><td>0x03</td><td>0</td><td>3</td><td>02 means LDA. Decoding adds no memory read.</td></tr>
+			<tr><td>Fetch address</td><td>0x04</td><td>0</td><td>4</td><td>Read operand 80 from program address 0x03.</td></tr>
+			<tr><td>Read RAM into A</td><td>0x04</td><td>10</td><td>5</td><td>A becomes 10; Z stays 0; RAM still holds 10.</td></tr>
+		</tbody></table>
+	</details>
+	<details class="cpu-step__clock-modern"><summary>What does a rising clock edge do?</summary><LogicWaveform /></details>
 </section>
 
 <script>
 	import { mountCpuStepLabs } from '../scripts/cpu-step.js';
+	import { mountCpuDebuggers } from '../scripts/cpu-step-debugger';
 	mountCpuStepLabs();
+	mountCpuDebuggers();
 </script>
+
+<style>
+	.cpu-step__reference { margin-block: 0.75rem; font-size: 0.8rem; }
+	.cpu-step__reference summary, .cpu-step__clock-modern summary { cursor: pointer; }
+	.cpu-step__clock-modern { display: none; }
+	.cpu-step__modern-debugger { display: none; }
+	:global(:root[data-academy-appearance='modern']) .cpu-step__clock-modern { display: block; margin-block: 0.75rem; }
+	:global(:root[data-academy-appearance='modern']) .cpu-step__modern-debugger { display: block; }
+	:global(:root[data-academy-appearance='modern']) :is(.cpu-step__actions, .cpu-step__key, [data-cpu-next], [data-cpu-reset], [data-cpu-status], .cpu-step__reference) { display: none; }
+	:global(:root[data-academy-appearance='modern']) .cpu-step > svg { display: none; }
+	@media print { .cpu-step__clock-modern, .cpu-step__modern-debugger { display: block; } .cpu-step__reference::details-content, .cpu-step__clock-modern::details-content { content-visibility: visible; } }
+</style>

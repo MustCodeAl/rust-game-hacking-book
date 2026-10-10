@@ -3,7 +3,7 @@
 // under; chapters by their displayed number. Fetched on the first card a
 // reader opens, never on page load.
 import type { APIRoute } from 'astro';
-import { CHAPTERS, chapterArea, chapterTone } from '../../data/chapters.mjs';
+import { CHAPTERS, chapterArea, chapterTone } from '../../data/chapters.ts';
 import { lessonsInOrder } from '../../lib/lessons';
 
 export const GET: APIRoute = async () => {

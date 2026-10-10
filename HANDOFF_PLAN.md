@@ -5,13 +5,13 @@ read `CLAUDE.md`, `BOOK_REVISION_PLAN.md`, and `BOOK_REVISION_PROGRESS.md`.** Th
 Academy": a beginner (about 15 years old) book, Astro 7 + Starlight in `site/`, live at
 https://mustcodeal.github.io/rust-game-hacking-book/ (served from branch `gh-pages`).
 
-## Current checkpoint — 2026-10-09 (T68–T69; read before historical backlogs)
+## Current checkpoint — 2026-10-10 (T68–T72)
 
-T68 is published: source `e9f44717` → Pages `f08b45d9`, exact deployment `37996657613` succeeded. The approved 155-ID chapter map is applied: all 15 chapters contain 10–11 lessons. Stable URLs, legacy quiz keys and question payloads are preserved. Modern-only native TOC/scroll track, chapter rings/accordion, byte/disassembly inspector and semantic code geometry are integrated. All 62 scene modules are strict TypeScript. Do not reapply the formerly pending navigation, map or scene patches.
+Read `CLAUDE_NEXT_HANDOFF.md` first for the owner's low-usage publish-and-handoff request. The completed source release includes16shared TS modules,29typed Node tools, actual Modern IDE/reader support and approved page-length batches01–04. Full authored TypeScript migration, topic quiz additions and whole-book page lengths remain unfinished. Publication receipt and actual final check results follow at the bottom of BOOK_REVISION_PROGRESS.md. Do not reapply completed patches from the archived private drafts.
 
-T69 adds six later-chapter drills (58 total) with whole API/type/argument/computation recall and replaces the weak hierarchy picture with a responsive native diagram. Its verification and publication receipt are in the newest progress entry: source `7fe0dacb` → Pages `556c9e94`, deployment `37999943321` succeeded. Original remains the default, Modern is optional under Advanced. The native TypeScript speed client and dynamic memory widgets from T67 remain live. TokenSave uses the absolute book-finish `graph_root` and `graph_branch: codex/book-revision`.
+Already published: exact155-ID/15chapter map (10–11lessons each, stable URLs/legacy keys),58whole-token recall snippets, native memory hierarchy and linked byte-order diagrams, Windows/encoding/backend/network notes and earlier Modern navigation/semantic/hex/memory features. Source stays codex/book-revision; gh-pages is generated only. Original remains default; Modern is under Advanced Appearance.
 
-Remaining work: approved page-length consolidations; new-topic quiz companions; remaining modern reader components and full authored JavaScript → strict TypeScript. Agents are continuing private drafts for these, preserving current main. The saved original TS archive is recovery material, not an implementation to overwrite current modules with. Native-device/speech and real-provider limits remain recorded.
+TokenSave MUST select the absolute book-finish graph_root and graph_branch codex/book-revision. Native/browser/provider limits and unfinished work are preserved in the new handoff. No lab execution.
 
 T59–T62 add Windows API conventions/prefixes, ASCII/Unicode/Base64 notes with original art, a concrete x86 opcode table and six later-chapter typing drills. All15readerchapters now have practice,50snippets total. Shared build/link/quiz/account/audio/chat/contrast and100typing-browser groups pass; Published source beb44a9e to Pages b192236d; exactdeployment37878849262succeeds. Public content/typing checks and12finished-origin-branch deletions are recorded in the newest ledger. Larger migration/map/modern-reader/network/backend work remains unfinished.
 

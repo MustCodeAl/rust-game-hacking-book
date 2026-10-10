@@ -1,7 +1,7 @@
 // The glossary page's entries, for the endpoints that serve the term index and
-// the hover cards' definitions. The reading itself lives in glossary-terms.mjs.
+// the hover cards' definitions. The reading itself lives in glossary-terms.ts.
 import { getEntry } from 'astro:content';
-import { parseGlossary, type GlossaryEntry } from './glossary-terms.mjs';
+import { parseGlossary, type GlossaryEntry } from './glossary-terms.ts';
 
 export type { GlossaryEntry };
 

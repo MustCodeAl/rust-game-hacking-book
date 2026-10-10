@@ -3,12 +3,12 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import { ExpressiveCodeTheme } from '@astrojs/starlight/expressive-code';
 import { satteri } from '@astrojs/markdown-satteri';
-import { academyCodeTheme } from './src/data/code-theme.mjs';
-import { basePathLinks, glossaryTerms, lazyImages, lessonReferences, mathBlocks, mermaidBlocks, scrollableTables } from './src/plugins/satteri-academy.mjs';
-import { CHAPTERS, chapterTone } from './src/data/chapters.mjs';
-import { getLessonIndex } from './src/data/lesson-index.mjs';
-import { readerSettingsScript } from './src/data/reader-settings.mjs';
-import { BASE, SITE } from './src/data/site.mjs';
+import { academyCodeTheme } from './src/data/code-theme.ts';
+import { basePathLinks, glossaryTerms, lazyImages, lessonReferences, mathBlocks, mermaidBlocks, scrollableTables } from './src/plugins/satteri-academy.ts';
+import { CHAPTERS, chapterTone } from './src/data/chapters.ts';
+import { getLessonIndex } from './src/data/lesson-index.ts';
+import { readerSettingsScript } from './src/data/reader-settings.ts';
+import { BASE, SITE } from './src/data/site.ts';
 
 
 // Historical page URLs stay put as lessons move. The displayed chapter and

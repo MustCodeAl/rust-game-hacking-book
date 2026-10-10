@@ -8,6 +8,8 @@
 //
 // With JavaScript off, the server-rendered caption below shows the listing and the final state.
 import { TRACES, staticSummary } from '../scripts/code-trace.js';
+import { defaultTraceReference } from '../data/trace-reference';
+import '../styles/code-trace-debugger.css';
 
 interface Props {
 	trace: string;
@@ -15,8 +17,10 @@ interface Props {
 	label?: string;
 }
 const { trace, id = `trace-${trace}`, label = 'Step-by-step code trace' } = Astro.props;
-if (!TRACES[trace]) throw new Error(`CodeTrace: unknown trace "${trace}"`);
+const traceModel: unknown = (TRACES as Record<string, unknown>)[trace];
+if (!traceModel) throw new Error(`CodeTrace: unknown trace "${trace}"`);
 const summary = staticSummary(trace);
+const reference = defaultTraceReference(traceModel);
 ---
 
 <section class="concept-lab code-trace not-content" id={id} data-code-trace={trace} aria-label={label} data-reader-skip>
@@ -27,10 +31,16 @@ const summary = staticSummary(trace);
 		<p>Final values: {summary.vars.map(([name, value]) => `${name} = ${value}`).join('; ')}.</p>
 	</div>
 </section>
+<details class="code-trace-reference not-content" data-trace-reference data-reader-skip open>
+	<summary>Read every step of the lesson’s example</summary>
+	<ol>{reference.map((step, index) => <li><p><strong>Step {index + 1}, line {step.line}.</strong> {step.description}</p><p>{step.values.map(([name, value]) => `${name} = ${value}`).join('; ')}.</p>{step.memory.length > 0 && <p>Memory: {step.memory.map((cell) => `${cell.label} = ${cell.value}${cell.note ? ` (${cell.note})` : ''}`).join('; ')}.</p>}</li>)}</ol>
+</details>
 
 <script>
 	import { mountCodeTraces } from '../scripts/code-trace.js';
+	import { mountCodeTraceDebuggers } from '../scripts/code-trace-debugger';
 	mountCodeTraces();
+	mountCodeTraceDebuggers();
 </script>
 
 <style is:global>

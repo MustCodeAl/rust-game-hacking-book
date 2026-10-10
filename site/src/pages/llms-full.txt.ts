@@ -2,7 +2,7 @@
 // documentation retrieval tools.
 import type { APIRoute } from 'astro';
 import { getCollection, getEntry } from 'astro:content';
-import { chapterOf, compareLessons } from '../data/chapters.mjs';
+import { chapterOf, compareLessons } from '../data/chapters.ts';
 
 const withoutImports = (source: string) => source.replace(/^import .*;\n/gm, '').trim();
 

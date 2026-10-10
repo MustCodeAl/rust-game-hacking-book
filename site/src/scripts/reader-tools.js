@@ -1,4 +1,4 @@
-import { adaptReaderArticle, showReaderVariant, chunkSpeechBlocks, collectReadableBlocks, plainLessonText } from '../lib/reader-text.mjs';
+import { adaptReaderArticle, showReaderVariant, chunkSpeechBlocks, collectReadableBlocks, plainLessonText } from '../lib/reader-text.ts';
 
 function mountOne(toolbar) {
 	const article = document.getElementById(toolbar.dataset.articleId);

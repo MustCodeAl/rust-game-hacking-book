@@ -2,7 +2,7 @@
 // followed by every lesson, generated from the content collection.
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
-import { CHAPTERS, compareLessons } from '../data/chapters.mjs';
+import { CHAPTERS, compareLessons } from '../data/chapters.ts';
 import intro from '../data/llms-intro.txt?raw';
 import outro from '../data/llms-outro.txt?raw';
 
