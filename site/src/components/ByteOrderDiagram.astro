@@ -1,0 +1,43 @@
+---
+import { byteParts, unsignedHex, MAX_U32 } from '../lib/byte-order';
+import '../styles/byte-order-diagram.css';
+interface Props { id?: string; value?: number; title?: string }
+const { id = 'byte-order-diagram', value = 1000, title = 'Same number, two byte orders' } = Astro.props;
+const bytes = byteParts(value);
+const orders = [
+  { name: 'Little endian', detail: 'Least significant byte at the lowest address', bytes, kind: 'little' },
+  { name: 'Big endian', detail: 'Most significant byte at the lowest address', bytes: [...bytes].reverse(), kind: 'big' },
+];
+---
+<figure class="byte-order-diagram not-content" id={id} data-byte-order data-byte-initial={value} aria-labelledby={`${id}-title`}>
+  <figcaption><strong id={`${id}-title`}>{title}</strong><span>The value stays the same; its byte positions change.</span></figcaption>
+  <div class="byte-order-diagram__controls" data-byte-controls hidden>
+    <label for={`${id}-value`}>Unsigned number <input id={`${id}-value`} data-byte-input type="number" min="0" max={MAX_U32} step="1" value={value} inputmode="numeric" aria-describedby={`${id}-status`} /></label>
+    <button type="button" data-byte-preset="439041101">Try distinct bytes</button>
+    <button type="button" data-byte-reset>Reset</button>
+  </div>
+  <div class="byte-order-diagram__value" aria-label={`Decimal ${value}, hexadecimal 0x${unsignedHex(value)}`}>
+    <span><strong data-byte-decimal>{value.toLocaleString('en-US')}</strong> decimal</span>
+    <code>0x{[...bytes].reverse().map(byte => <span data-byte-digit={byte.index}>{byte.hex}</span>)}</code>
+    <small>most significant → least significant</small>
+  </div>
+  <div class="byte-order-diagram__orders">
+    {orders.map(order => <section aria-label={order.name}>
+      <h3>{order.name}</h3><p>{order.detail}</p>
+      <div class="byte-order-diagram__axis">Addresses increase <span aria-hidden="true">↓</span></div>
+      <ol>{order.bytes.map((byte, offset) => <li>
+        <code class="byte-order-diagram__address">0x{(0x1000 + offset).toString(16).toUpperCase()}</code>
+        <button type="button" data-byte-index={byte.index} data-byte-role="data" aria-pressed="false" aria-label={`${order.name}, address 0x${(0x1000 + offset).toString(16).toUpperCase()}, byte ${byte.hex}, weight ${byte.weight}. Select matching byte positions.`} disabled><span data-byte-content={byte.index}>{byte.hex}</span></button>
+        <span class="byte-order-diagram__weight">× {byte.weight.toLocaleString('en-US')}</span>
+      </li>)}</ol>
+      <p class="byte-order-diagram__equation" data-byte-equation={order.kind}>{order.bytes.filter(byte => byte.decimal !== 0).map(byte => `${byte.decimal} × ${byte.weight.toLocaleString('en-US')}`).join(' + ') || '0'} = {value.toLocaleString('en-US')}</p>
+    </section>)}
+  </div>
+  <p id={`${id}-status`} class="byte-order-diagram__status" data-byte-status role="status" aria-live="polite" aria-atomic="true">{value.toLocaleString('en-US')} occupies four bytes. Little endian: {bytes.map(byte => byte.hex).join(' ')}. Big endian: {[...bytes].reverse().map(byte => byte.hex).join(' ')}.</p>
+  <p class="byte-order-diagram__note">Point to or select a byte to find the same significance in both layouts. Byte order rearranges whole bytes; it does not reverse the bits inside each byte.</p>
+  <noscript><p>Both layouts above are the complete worked example. Each byte's weight determines its contribution to the same number.</p></noscript>
+</figure>
+<script>
+  import { mountByteOrderDiagrams } from '../scripts/byte-order-diagram';
+  mountByteOrderDiagrams();
+</script>
