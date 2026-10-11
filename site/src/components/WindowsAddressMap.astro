@@ -1,0 +1,76 @@
+---
+// A vertical, proportional map of a 32-bit Windows process address space. The user/system split is drawn to scale
+// (heights are shares of 4 GiB); what lives inside user space is deliberately drawn as unplaced, illustrative chips.
+// Every mode's markup is server-rendered; the script only switches between them. Explanations are always visible.
+import { SPLITS, addressHex, addressMap, derivation } from '../lib/address-translation';
+import '../styles/memory-diagrams.css';
+import '../styles/address-map.css';
+interface Props { id?: string; title?: string }
+const { id = 'windows-address-map', title = 'Where a 32-bit Windows program’s addresses go' } = Astro.props;
+const chips = [
+  { id: 'image', name: 'Program image', text: 'The .exe is mapped here. 0x00400000 is the linker’s default preferred base for a 32-bit executable; an image built with /DYNAMICBASE can be placed elsewhere by ASLR.' },
+  { id: 'heap', name: 'Heaps', text: 'Memory from the process heap and from VirtualAlloc comes from whatever free addresses exist, so heaps are scattered and their addresses change from run to run.' },
+  { id: 'stack', name: 'Thread stacks', text: 'Every thread has its own stack, commonly 1 MiB reserved by default. It is placed when the thread starts and grows toward lower addresses.' },
+  { id: 'dll', name: 'DLLs', text: 'Each loaded DLL, such as kernel32.dll, is mapped into user space. With ASLR, Windows chooses the base, and it can differ between boots.' },
+  { id: 'teb', name: 'TEB and PEB', text: 'The Thread Environment Block and Process Environment Block are small system structures mapped into user space. On 32-bit x86 the FS segment register points at the current thread’s TEB.' },
+] as const;
+const regionText: Record<string, string> = {
+  null: 'The first 64 KiB are never usable. A null pointer, or a small offset from one, lands here and causes an access violation. Windows reports 0x00010000 as the lowest address a program may use.',
+  user: 'Everything the program itself can map: its image, DLLs, heaps, stacks and mapped files, with free holes between them. This is an address range, not an amount of RAM in use.',
+  guard: 'The last 64 KiB below the boundary stay inaccessible too. Windows reports the address just before it as the highest address the program may use.',
+  system: 'Reserved for the operating system: the kernel, drivers and kernel data. User-mode code cannot read or write here, and a try is an access violation.',
+};
+const defaultMode = 'default';
+---
+<figure class="mdg wm not-content" id={id} data-pick-group data-wm aria-labelledby={`${id}-title`}>
+  <figcaption><strong id={`${id}-title`}>{title}</strong><span>Heights are shares of the 4 GiB (2<sup>32</sup> byte) address space, lowest address at the top. Point at a part, or tab to it, to read what it is.</span></figcaption>
+
+  <fieldset class="wm-modes mdg-controls" data-wm-controls data-reader-skip hidden>
+    <legend>Layout</legend>
+    <div class="wm-choices" role="radiogroup" aria-label="Address space layout">
+      {SPLITS.map(mode => <label class="wm-choice"><input type="radio" name={`${id}-mode`} value={mode.id} checked={mode.id === defaultMode} /><span>{mode.label}</span></label>)}
+    </div>
+  </fieldset>
+
+  {SPLITS.map(mode => {
+    const regions = addressMap(mode.id);
+    return <div class="wm-mode" data-wm-mode={mode.id} hidden={mode.id !== defaultMode}>
+      <p class="wm-modenote">{mode.note}</p>
+      <div class="wm-layout">
+        <div class="wm-bar" role="group" aria-label={`${mode.label}, lowest address first`}>
+          {regions.map(region => <div class="wm-seg" data-kind={region.kind} style={`--share:${region.percent}`}>
+            <code class="wm-tick">{addressHex(region.start)}</code>
+            {region.id === 'user'
+              ? <div class="wm-user">
+                  <button type="button" class="wm-label" data-pick={`${mode.id}-user`} aria-pressed="false" disabled><strong>User space</strong><span>{addressHex(region.start)} to {addressHex(region.end)}</span></button>
+                  <p class="wm-scatter" id={`${id}-${mode.id}-scatter`}>Placed inside it, positions illustrative:</p>
+                  <ul class="wm-chips" aria-labelledby={`${id}-${mode.id}-scatter`}>
+                    {chips.map(chip => <li><button type="button" data-pick={`${mode.id}-${chip.id}`} aria-pressed="false" disabled>{chip.name}</button></li>)}
+                  </ul>
+                </div>
+              : <button type="button" class="wm-label" data-pick={`${mode.id}-${region.id}`} aria-pressed="false" disabled><strong>{region.kind === 'system' ? 'System space' : 'Reserved'}</strong><span>{region.id === 'system' ? `${addressHex(region.start)} to ${addressHex(region.end)}` : '64 KiB'}</span></button>}
+          </div>)}
+          <code class="wm-tick wm-tick--end">0xFFFFFFFF</code>
+        </div>
+        <dl class="mdg-terms wm-terms">
+          {regions.map(region => <>
+            <dt data-pick-term={`${mode.id}-${region.id}`}>{region.id === 'null' ? 'Reserved low 64 KiB' : region.id === 'guard' ? 'Reserved top 64 KiB' : region.id === 'user' ? 'User space' : 'System space'}<small>{addressHex(region.start)} to {addressHex(region.end)}</small></dt>
+            <dd data-pick-term={`${mode.id}-${region.id}`}>{regionText[region.id]} <span class="wm-sum">Size: {derivation(region)}.</span></dd>
+          </>)}
+          {chips.map(chip => <>
+            <dt data-pick-term={`${mode.id}-${chip.id}`}>{chip.name}<small>position illustrative</small></dt>
+            <dd data-pick-term={`${mode.id}-${chip.id}`}>{chip.text}</dd>
+          </>)}
+        </dl>
+      </div>
+    </div>;
+  })}
+  <p class="mdg-note">The two big boundaries are real and drawn to scale; the 64 KiB reserved ends are drawn wider than their true share so they stay visible. Where the image, heaps, stacks and DLLs actually sit changes with ASLR and allocation history, so they are not placed. A native 64-bit process has a different map.</p>
+  <noscript><p class="mdg-note">The default layout above is complete without JavaScript.</p></noscript>
+</figure>
+<script>
+  import { mountDetailPickers } from '../scripts/detail-picker';
+  import { mountWindowsAddressMaps } from '../scripts/windows-address-map';
+  mountDetailPickers();
+  mountWindowsAddressMaps();
+</script>

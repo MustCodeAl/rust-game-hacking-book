@@ -181,7 +181,5 @@ Original Game Hacking Academy geometric diagrams, dedicated to CC0 1.0 Universal
 - `original/stack-heap-static-lifetimes.svg`
 - `original/x86-stack-frame-return.svg`
 - `original/linking-file-to-image.svg`
-- `original/windows-32bit-address-map.svg`
-- `original/segments-and-pages.svg`
 - `original/backend-service-ownership.svg`
 - `original/backend-transaction-consistency.svg`
