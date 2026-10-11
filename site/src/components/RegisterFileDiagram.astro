@@ -1,0 +1,83 @@
+---
+// One x86-64 register with five names. The complete default example (and a worked table) is server-rendered
+// text; the script only adds the write form, which recomputes the byte lanes with the same pure model.
+import { LANE_COUNT, REGISTER_VIEWS, START_VALUE, WORKED_WRITES, bitRange, describeEffect, describeWrite, laneBytes, registerHex, writeRegister, type RegisterView } from '../lib/register-file';
+import { toHex } from '../lib/hex-field';
+import '../styles/memory-diagrams.css';
+import '../styles/register-file.css';
+interface Props { id?: string; title?: string }
+const { id = 'register-file', title = 'One register, five names' } = Astro.props;
+const initialName = 'EAX' as const;
+const initialValue = 0xaabbccddn;
+const initial = writeRegister(START_VALUE, initialName, initialValue);
+const startBytes = laneBytes(START_VALUE);
+const worked = WORKED_WRITES.map(item => writeRegister(START_VALUE, item.name, item.value));
+const lanesLeftToRight = Array.from({ length: LANE_COUNT }, (_, i) => LANE_COUNT - 1 - i);
+const column = (view: RegisterView): number => LANE_COUNT + 1 - view.firstLane - view.lanes;
+const tag = { written: 'set', cleared: 'zero', kept: 'same' } as const;
+---
+<figure class="mdg rf not-content" id={id} data-register-file data-rf-start={START_VALUE.toString(16)} data-rf-initial-name={initialName} data-rf-initial-value={toHex(initialValue, 8)} aria-labelledby={`${id}-title`}>
+  <figcaption><strong id={`${id}-title`}>{title}</strong><span>RAX, EAX, AX, AH and AL are not five registers. They are five names for parts of one 64-bit register, drawn here as eight bytes.</span></figcaption>
+
+  <form class="mdg-controls rf-controls" data-rf-form data-reader-skip hidden novalidate>
+    <fieldset>
+      <legend>Write to</legend>
+      <div class="mdg-choices" role="radiogroup" aria-label="Register name to write">
+        {REGISTER_VIEWS.map(view => <label class="mdg-choice"><input type="radio" name={`${id}-target`} value={view.name} checked={view.name === initialName} /><span>{view.name}</span></label>)}
+      </div>
+    </fieldset>
+    <div class="rf-entry">
+      <label class="mdg-field rf-value">
+        <span class="mdg-field__label" data-rf-label>Value, up to 8 hex digits</span>
+        <span class="mdg-prefixed"><b aria-hidden="true">0x</b><input type="text" data-rf-input value={toHex(initialValue, 8)} inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-describedby={`${id}-help ${id}-error`} /></span>
+      </label>
+      <button type="submit" class="mdg-btn mdg-btn--primary">Write</button>
+      <button type="button" class="mdg-btn" data-rf-reset>Reset</button>
+    </div>
+    <p class="rf-preview" data-rf-preview>Instruction: <code>mov eax, 0x{toHex(initialValue, 8)}</code></p>
+    <p class="mdg-help" id={`${id}-help`} data-rf-help>Hex digits 0 to 9 and A to F. Shorter values are padded with zeros on the left. Each Write starts from the register as the last write left it.</p>
+    <p class="mdg-error" id={`${id}-error`} data-rf-error role="status" aria-live="polite"></p>
+  </form>
+
+  <div class="rf-board" role="group" aria-label="The eight bytes of RAX, most significant on the left">
+    <p class="rf-axis">Byte number, 7 on the left (most significant) to 0 on the right (least significant)</p>
+    <div class="rf-grid rf-ix" aria-hidden="true">{lanesLeftToRight.map(lane => <span>{lane}</span>)}</div>
+    <div class="rf-names" role="group" aria-label="Register names and the bytes each one covers">
+      {REGISTER_VIEWS.map(view => <div class="rf-name" data-rf-name={view.name} data-target={view.name === initialName ? 'true' : 'false'} style={`--col:${column(view)};--n:${view.lanes}`}>{view.name}</div>)}
+    </div>
+    <p class="rf-rowtitle">Before: RAX = <code data-rf-before>{registerHex(START_VALUE)}</code></p>
+    <ol class="rf-grid" data-rf-row="before" aria-label="Bytes before the write, most significant first">
+      {lanesLeftToRight.map(lane => <li class="rf-lane" data-lane={lane} data-change="kept"><b>{toHex(startBytes[lane] ?? 0, 2)}</b></li>)}
+    </ol>
+    <p class="rf-rowtitle">After <code data-rf-instr>{initial.instruction}</code>: RAX = <code data-rf-after>{registerHex(initial.after)}</code></p>
+    <ol class="rf-grid" data-rf-row="after" aria-label="Bytes after the write, most significant first">
+      {lanesLeftToRight.map(lane => {
+        const state = initial.lanes[lane];
+        return <li class="rf-lane" data-lane={lane} data-change={state?.change ?? 'kept'}><b>{toHex(state?.after ?? 0, 2)}</b><small>{tag[state?.change ?? 'kept']}</small></li>;
+      })}
+    </ol>
+    <ul class="rf-legend" aria-label="Key">
+      <li><b>set</b> written by the instruction</li><li><b>zero</b> cleared by the 32-bit rule</li><li><b>same</b> left alone</li>
+    </ul>
+  </div>
+  <p class="mdg-status" data-rf-status role="status" aria-live="polite" aria-atomic="true">{describeWrite(initial)}</p>
+
+  <dl class="mdg-terms" aria-label="What each name covers and what a write to it does">
+    {REGISTER_VIEWS.map(view => <><dt>{view.name} <small>({bitRange(view)}, {view.bits / 8} {view.bits === 8 ? 'byte' : 'bytes'})</small></dt><dd>{view.rule}</dd></>)}
+  </dl>
+
+  <h4>The same starting value, five different writes</h4>
+  <p class="mdg-note">Start with RAX = <code>{registerHex(START_VALUE)}</code>, whose bytes from byte 7 down to byte 0 are {startBytes.slice().reverse().map(b => toHex(b, 2)).join(' ')}. Each row below starts again from that value.</p>
+  <div class="mdg-table-wrap">
+    <table class="mdg-table mdg-table--stack rf-worked">
+      <thead><tr><th scope="col">Instruction</th><th scope="col">RAX afterwards</th><th scope="col">What happened to the bytes</th></tr></thead>
+      <tbody>{worked.map(item => <tr><td data-label="Instruction"><code>{item.instruction}</code></td><td data-label="RAX afterwards"><code>{registerHex(item.after)}</code></td><td data-label="What happened to the bytes">{describeEffect(item)}</td></tr>)}</tbody>
+    </table>
+  </div>
+  <p class="mdg-note">The AH and AL names exist because the 8086 had 8-bit halves; the 32-bit and 64-bit names were added later as the register grew. The zero-extension rule for EAX applies in 64-bit mode. In 32-bit mode (this course's target programs) EAX is the whole register and there is no RAX. Microsoft documents the x64 rules in its <a href="https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/x64-architecture">x64 architecture reference</a>.</p>
+  <noscript><p class="mdg-note">The default example and the worked table above are complete without JavaScript.</p></noscript>
+</figure>
+<script>
+  import { mountRegisterFiles } from '../scripts/register-file';
+  mountRegisterFiles();
+</script>
