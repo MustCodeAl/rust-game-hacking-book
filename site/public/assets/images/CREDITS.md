@@ -178,8 +178,6 @@ These 57 distinct original geometric drawings are dedicated to CC0 1.0. Each is 
 Original Game Hacking Academy geometric diagrams, dedicated to CC0 1.0 Universal; no third-party image assets. Each SVG embeds its title, description and license.
 
 - `original/memory-working-hierarchy.svg`
-- `original/stack-heap-static-lifetimes.svg`
-- `original/x86-stack-frame-return.svg`
 - `original/linking-file-to-image.svg`
 - `original/backend-service-ownership.svg`
 - `original/backend-transaction-consistency.svg`

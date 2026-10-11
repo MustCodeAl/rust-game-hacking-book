@@ -1,0 +1,68 @@
+/* StackFrameDiagram.astro: stack words with ESP/EBP markers, the registers, the instruction listing and the step list. */
+.sf-controls { align-items: center; }
+.sf-counter { color: var(--ink-soft); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.sf-stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; margin-top: .5rem; }
+.sf-now { display: grid; gap: .2rem; margin: 0 0 .6rem; padding: .55rem .75rem; border: .0625rem solid var(--line); border-left: .35rem solid var(--mdg-flow); border-radius: .35rem; background: color-mix(in oklch, var(--mdg-flow) 6%, var(--paper)); font-size: .9rem; line-height: 1.45; min-height: 7.5rem; align-content: start; }
+.sf-now strong { font-size: .95rem; overflow-wrap: anywhere; }
+.sf-now span { overflow-wrap: anywhere; }
+.sf-regs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; margin: 0 0 .6rem; }
+.sf-reg { display: grid; gap: .1rem; padding: .35rem .5rem; border: .0625rem solid var(--line); border-radius: .35rem; background: var(--paper); text-align: center; }
+.sf-reg small { font-weight: 700; color: var(--ink); }
+.sf-reg code { font-size: .88rem; font-weight: 700; overflow-wrap: anywhere; }
+.sf-reg em { min-height: 1em; font-size: .72rem; font-style: normal; color: var(--ink-soft); visibility: hidden; }
+.sf-reg[data-changed="true"] { border: .125rem solid var(--mdg-flow); background: color-mix(in oklch, var(--mdg-flow) 12%, var(--paper)); }
+.sf-reg[data-changed="true"] em { visibility: visible; }
+.sf-slots, .sf-reach-rows, .sf-listing, .sf-steps { margin: 0; padding: 0; list-style: none; }
+.sf-slots { display: grid; gap: .25rem; }
+.sf-slot, .sf-reach-row { --role: var(--ink-soft); display: grid; grid-template-columns: 3.4rem 5.4rem minmax(0, 1fr); gap: .1rem .4rem; align-items: center; margin: 0; padding: .3rem .5rem; border: .125rem solid var(--role); border-radius: .35rem; background: color-mix(in oklch, var(--role) 7%, var(--paper)); }
+.sf-slot[data-role="return"], .sf-reach-row[data-role="return"] { --role: var(--mdg-flow); }
+.sf-slot[data-role="saved-ebp"], .sf-reach-row[data-role="saved-ebp"] { --role: var(--mdg-data); }
+.sf-slot[data-role="local"], .sf-reach-row[data-role="buffer"] { --role: var(--mdg-ok); }
+.sf-reach-row[data-role="cookie"] { --role: var(--mdg-warn); }
+.sf-slot[data-role="free"] { border-style: dotted; }
+.sf-slot[data-fill="released"] { border-style: dashed; background: var(--paper); }
+.sf-slot[data-fill="empty"] { border-style: dotted; background: var(--paper); }
+.sf-marks { font-family: var(--mdg-mono); font-size: .74rem; font-weight: 700; line-height: 1.15; white-space: pre-wrap; }
+.sf-addr { font-size: .82rem; color: var(--ink-soft); }
+.sf-val { font-family: var(--mdg-mono); font-size: .88rem; overflow-wrap: anywhere; }
+.sf-label { grid-column: 2 / -1; font-size: .8rem; color: var(--ink-soft); line-height: 1.3; }
+.sf-label em { font-style: normal; font-weight: 700; color: var(--ink); }
+.sf-side h4 { margin-top: 0; }
+.sf-listing { display: grid; gap: .15rem; font-size: .84rem; }
+.sf-listing li { display: grid; grid-template-columns: 5.4rem 7.6rem minmax(0, 1fr); gap: .4rem; margin: 0; padding: .25rem .5rem; border-left: .25rem solid transparent; overflow-wrap: anywhere; }
+.sf-listing li[aria-current="true"] { border-left-color: var(--mdg-flow); background: color-mix(in oklch, var(--mdg-flow) 12%, var(--paper)); font-weight: 700; }
+.sf-bytes { color: var(--ink-soft); font-size: .8rem; }
+.sf-steps { display: grid; gap: .35rem; }
+.sf-step { margin: 0; padding: .5rem .75rem; border: .0625rem solid var(--line); border-radius: .35rem; transition: opacity .15s ease; }
+.sf-step p { margin: 0; }
+.sf-step-head { font-size: .92rem; }
+.sf-step-text { margin-top: .2rem; font-size: .86rem; line-height: 1.5; overflow-wrap: anywhere; }
+.sf-step[data-state="todo"] { opacity: .5; }
+.sf-step[data-state="active"] { border: .125rem solid var(--mdg-flow); background: color-mix(in oklch, var(--mdg-flow) 8%, var(--paper)); }
+.sf-reach { margin-top: 1.5rem; padding-top: 1rem; border-top: .0625rem solid var(--line); }
+.sf-reach h3 { margin: 0 0 .5rem; font-size: 1.05rem; }
+.sf-reach-controls { display: grid; gap: .6rem; }
+.sf-reach-controls input[type="number"] { box-sizing: border-box; width: 6rem; min-height: 2.75rem; padding: .4rem .6rem; border: .0625rem solid var(--mdg-data); border-radius: .5rem; background: var(--paper); color: var(--ink); font: inherit; font-family: var(--mdg-mono); }
+.sf-reach-controls input[aria-invalid="true"] { border-color: var(--mdg-bad); border-width: .125rem; }
+.sf-presets { display: flex; flex-wrap: wrap; gap: .35rem; }
+.sf-presets button { min-width: 2.75rem; font-family: var(--mdg-mono); font-weight: 700; }
+.sf-check { display: flex; align-items: center; gap: .6rem; min-height: 2.75rem; font-size: .92rem; cursor: pointer; }
+.sf-check input { width: 1.4rem; height: 1.4rem; margin: 0; }
+.sf-reach-rows { display: grid; gap: .25rem; margin-top: .6rem; }
+.sf-reach-row { grid-template-columns: 5.4rem minmax(0, 1fr); }
+.sf-reach-row .sf-label { grid-column: 1 / -1; }
+.sf-reach-row[data-hit="true"]:not([data-role="buffer"]):not([data-role="local"]) { --role: var(--mdg-bad); border-width: .25rem; border-style: double; background: color-mix(in oklch, var(--mdg-bad) 10%, var(--paper)); }
+.sf-reach-row[data-hit="true"][data-role="buffer"] { background: color-mix(in oklch, var(--mdg-ok) 14%, var(--paper)); }
+.sf-reach-row[data-hit="true"] .sf-val { font-weight: 700; }
+.sf-reach-table td:first-child { font-family: var(--mdg-mono); }
+.sf-defences { margin-top: .5rem; }
+html:not([data-academy-motion="off"]) .sf-step { transition: opacity .15s ease; }
+@container (min-width: 46rem) { .sf-stage { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } }
+@container (max-width: 30rem) {
+  .sf-slot { grid-template-columns: 2.9rem 5rem minmax(0, 1fr); }
+  .sf-listing li { grid-template-columns: 5rem minmax(0, 1fr); }
+  .sf-listing .sf-bytes { grid-column: 2; order: 3; }
+  .sf-reg code { font-size: .8rem; }
+}
+@media (prefers-reduced-motion: reduce) { .sf-step { transition: none; } }
+@media print { .sf-step[data-state] { opacity: 1 !important; } .sf-step[data-state="active"] { border: .0625rem solid var(--line); background: none; } }
