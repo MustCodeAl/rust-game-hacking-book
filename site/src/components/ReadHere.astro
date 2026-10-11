@@ -1,11 +1,37 @@
 ---
+// Read the lesson aloud without leaving the page. Starting reveals a compact player pinned to the bottom of the screen.
 interface Props { readerUrl: string; title: string }
 const { readerUrl, title } = Astro.props;
 ---
 <div class="read-here" data-read-here data-reader-url={readerUrl} data-reader-skip role="group" aria-label={`Read ${title} aloud on this page`}>
-  <button type="button" data-read-here-play disabled>Read here</button>
-  <button type="button" data-read-here-stop hidden>Stop</button>
-  <span data-read-here-status role="status" aria-live="polite"></span>
+  <button type="button" class="read-here__start" data-read-here-play disabled>Read here</button>
+  <span class="read-here__status" data-read-here-status role="status" aria-live="polite"></span>
+  <div class="read-here__bar" data-read-here-bar role="region" aria-label="Read aloud controls" hidden>
+    <p class="read-here__now" data-read-here-now aria-hidden="true"></p>
+    <progress class="read-here__progress" data-read-here-progress max="1" value="0" aria-label="Reading progress"></progress>
+    <div class="read-here__row">
+      <button type="button" data-read-here-back disabled title="Back to the start of this paragraph, or the one before it" aria-label="Previous paragraph">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 5h2.4v14H6zM19 5.5v13L9.6 12z" /></svg>
+      </button>
+      <button type="button" class="read-here__main" data-read-here-toggle aria-label="Pause reading">
+        <svg data-read-here-icon-play viewBox="0 0 24 24" aria-hidden="true" focusable="false" hidden><path d="M7 4.5v15l12-7.5z" /></svg>
+        <svg data-read-here-icon-pause viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 5h4v14h-4zM13.5 5h4v14h-4z" /></svg>
+        <span data-read-here-toggle-label>Pause</span>
+      </button>
+      <button type="button" data-read-here-forward disabled title="Forward to the next paragraph" aria-label="Next paragraph">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15.6 5H18v14h-2.4zM5 5.5v13L14.4 12z" /></svg>
+      </button>
+      <button type="button" class="read-here__speed" data-read-here-speed title="Reading speed: press to change">1×</button>
+      <details class="read-here__voice">
+        <summary>Voice</summary>
+        <div class="read-here__voice-panel">
+          <label>Voice <select data-read-here-voice aria-label="Read-aloud voice"><option value="">Browser default</option></select></label>
+          <button type="button" data-read-here-sample>Hear a sample</button>
+        </div>
+      </details>
+      <button type="button" class="read-here__stop" data-read-here-stop title="Stop reading">Stop</button>
+    </div>
+  </div>
   <noscript>Use the listening edition link for read-aloud tools.</noscript>
 </div>
 <script>
@@ -13,11 +39,30 @@ const { readerUrl, title } = Astro.props;
   mountReadHere();
 </script>
 <style>
-  .read-here { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .5rem; font-size: .82rem; }
-  .read-here button { padding: .3rem .6rem; border: .0625rem solid var(--line); border-radius: .3rem; background: var(--reader-panel, var(--paper)); color: var(--chapter-ink); font: inherit; cursor: pointer; }
-  .read-here button:focus-visible { outline: .125rem solid var(--chapter-accent); outline-offset: .125rem; }
-  .read-here button:disabled { cursor: default; opacity: .65; }
-  .read-here [hidden] { display: none; }
-  .read-here [role='status'] { color: var(--ink-soft); }
+  .read-here { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .5rem; font-size: .88rem; }
+  .read-here button, .read-here summary { min-height: 2.75rem; padding: .35rem .8rem; border: .0625rem solid var(--line); border-radius: .5rem; background: var(--reader-panel, var(--paper)); color: var(--chapter-ink, var(--ink)); font: inherit; cursor: pointer; }
+  .read-here__start { font-weight: 700; }
+  .read-here svg { width: 1.1rem; height: 1.1rem; fill: currentColor; flex: none; }
+  .read-here svg[hidden] { display: none; }
+  .read-here button:focus-visible, .read-here summary:focus-visible, .read-here select:focus-visible { outline: .15rem solid var(--chapter-accent); outline-offset: .15rem; }
+  .read-here button:disabled { cursor: default; opacity: .6; }
+  .read-here [hidden] { display: none !important; }
+  .read-here__status { color: var(--ink-soft); }
+  .read-here__bar { position: fixed; z-index: 80; right: 0; bottom: 0; left: 0; display: grid; gap: .45rem; padding: .6rem .75rem calc(.6rem + env(safe-area-inset-bottom)); border-top: .125rem solid var(--chapter-accent, var(--line)); background: var(--paper); box-shadow: 0 -.5rem 1.5rem color-mix(in oklch, var(--ink) 12%, transparent); font-size: .85rem; }
+  .read-here__now { margin: 0; color: var(--ink-soft); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 1.35em; }
+  .read-here__progress { width: 100%; height: .4rem; accent-color: var(--chapter-accent); }
+  .read-here__row { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+  .read-here__row > button, .read-here__row summary { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-width: 2.75rem; }
+  .read-here__main { background: var(--chapter-accent) !important; border-color: var(--chapter-accent) !important; color: var(--chapter-on-accent, var(--paper)) !important; font-weight: 700; }
+  .read-here__speed { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .read-here__voice summary { list-style: none; }
+  .read-here__voice summary::-webkit-details-marker { display: none; }
+  .read-here__voice-panel { position: absolute; bottom: calc(100% + .5rem); left: .75rem; right: .75rem; display: grid; gap: .5rem; max-width: 24rem; padding: .75rem; border: .0625rem solid var(--line); border-radius: .5rem; background: var(--paper); box-shadow: 0 .5rem 1.5rem color-mix(in oklch, var(--ink) 18%, transparent); }
+  .read-here__voice-panel label { display: grid; gap: .25rem; }
+  .read-here__voice-panel select { min-height: 2.75rem; width: 100%; padding: .35rem .5rem; border: .0625rem solid var(--line); border-radius: .35rem; background: var(--paper); color: var(--ink); font: inherit; }
+  .read-here__stop { margin-left: auto; }
+  :global(html[data-read-player='on'] body) { padding-bottom: calc(var(--read-player-height, 6rem) + 1rem); }
+  @media (max-width: 47.99rem) { :global(html[data-read-player='on']) :global(:is(.lesson-notes__fab, #context7-widget)) { transform: translateY(calc(-1 * var(--read-player-height, 6rem))); } }
+  @media (min-width: 48rem) { .read-here__bar { right: auto; left: 50%; bottom: 1rem; width: min(40rem, calc(100vw - 2rem)); transform: translateX(-50%); border: .0625rem solid var(--line); border-top: .125rem solid var(--chapter-accent, var(--line)); border-radius: .75rem; } }
   @media print { .read-here { display: none; } }
 </style>

@@ -1,4 +1,5 @@
 import { adaptReaderArticle, showReaderVariant, chunkSpeechBlocks, collectReadableBlocks, plainLessonText } from '../lib/reader-text.ts';
+import { chooseVoice, fillVoiceSelect, listVoices, speakSample } from './speech-voices';
 
 function mountOne(toolbar) {
 	const article = document.getElementById(toolbar.dataset.articleId);
@@ -18,6 +19,8 @@ function mountOne(toolbar) {
 	const speedLabel = toolbar.querySelector('[data-speech-speed-label]');
 	const speedName = toolbar.querySelector('[data-speech-speed-name]');
 	const voice = toolbar.querySelector('[data-speech-voice]');
+	const sample = toolbar.querySelector('[data-speech-sample]');
+	const now = toolbar.querySelector('[data-speech-now]');
 	const rate = toolbar.querySelector('[data-speech-rate]');
 	const rateValue = toolbar.querySelector('[data-speech-rate-value]');
 	const includeCode = toolbar.querySelector('[data-speech-code]');
@@ -56,6 +59,9 @@ function mountOne(toolbar) {
 		progressText.textContent = segments.length
 			? `${Math.min(index, segments.length)} of ${segments.length} passages`
 			: 'No readable text found';
+		const here = segments[Math.min(index, segments.length - 1)];
+		const active = state === 'speaking' || state === 'paused';
+		now.textContent = here && active ? (here.text.length > 140 ? `${here.text.slice(0, 137).trimEnd()}…` : here.text) : '';
 	}
 
 	function showControls() {
@@ -71,6 +77,7 @@ function mountOne(toolbar) {
 		speed.disabled = !supported;
 		voice.disabled = !supported;
 		rate.disabled = !supported;
+		sample.disabled = !supported || state === 'speaking';
 	}
 
 	function gather() {
@@ -82,23 +89,20 @@ function mountOne(toolbar) {
 
 	function updateVoices() {
 		if (!supported) return;
-		const selected = preferredVoice || voice.value;
-		const english = (item) => /^en(?:-|$)/i.test(item.lang);
-		const quality = (item) => /natural|neural|premium/i.test(item.name) ? 2 : /enhanced/i.test(item.name) ? 1 : 0;
-		voices = synth.getVoices().slice().sort((a, b) =>
-			Number(english(b)) - Number(english(a)) || quality(b) - quality(a) || (a.lang + a.name).localeCompare(b.lang + b.name),
-		);
-		const automatic = voices.find(english) || voices.find((item) => item.default) || voices[0];
-		voice.replaceChildren(new Option(automatic ? `Automatic · ${automatic.name}` : 'Browser default', ''));
-		voices.forEach((item) => {
-			voice.add(new Option(`${item.name} · ${item.lang}`, item.voiceURI || `${item.name}|${item.lang}`));
-		});
-		if ([...voice.options].some((option) => option.value === selected)) voice.value = selected;
+		voices = listVoices(synth);
+		fillVoiceSelect(voice, voices, preferredVoice || voice.value);
 	}
+	// A new voice starts the current passage again; reading on keeps it.
 	voice.addEventListener('change', () => {
 		preferredVoice = voice.value;
 		try { window.localStorage.setItem('gha-speech-voice', preferredVoice); } catch { /* page-only choice */ }
+		if (state !== 'speaking' && state !== 'paused') return;
+		generation += 1;
+		if (synth.paused) synth.resume();
+		synth.cancel();
+		if (state === 'speaking') speakNext(generation);
 	});
+	sample.addEventListener('click', () => speakSample(synth, chooseVoice(voices, voice.value), Number(rate.value)));
 
 	function speakNext(currentGeneration) {
 		if (currentGeneration !== generation || state !== 'speaking') return;
@@ -114,14 +118,15 @@ function mountOne(toolbar) {
 		started = false;
 		const utterance = new SpeechSynthesisUtterance(segment.text);
 		activeUtterance = utterance;
-		const chosen = voice.value ? voices.find((item) => (item.voiceURI || `${item.name}|${item.lang}`) === voice.value) : voices.find((item) => /^en(?:-|$)/i.test(item.lang));
-		if (chosen) utterance.voice = chosen;
+		const chosen = chooseVoice(voices, voice.value);
+		if (chosen) utterance.voice = chosen.voice;
 		utterance.lang = chosen?.lang || document.documentElement.lang || 'en';
 		utterance.rate = Number(rate.value);
 		utterance.onstart = () => {
 			if (currentGeneration !== generation) return;
 			started = true;
 			markActive(segment.element);
+			showProgress();
 			setStatus(`Reading passage ${index + 1} of ${segments.length}.`);
 		};
 		utterance.onend = () => {
