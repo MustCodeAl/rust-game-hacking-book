@@ -1,4 +1,4 @@
-// Generated from src/scripts/quiz-identity-migration.ts with strict TypeScript.
+// Generated from src/scripts/quiz-identity-migration.ts; edit TypeScript and run scripts/generate-quiz-compatibility.ts.
 export function quizStorageKey(number, quizId) {
     return `gha-quiz:v7:${number}:${quizId}`;
 }
