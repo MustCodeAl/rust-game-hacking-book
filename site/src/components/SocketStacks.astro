@@ -1,0 +1,68 @@
+---
+// Two message paths side by side, then the layout of one QUIC packet. Explanations are always visible text;
+// pointing at a part highlights it and its explanation.
+import '../styles/socket-stacks.css';
+interface Props { id?: string }
+const { id = 'socket-stacks' } = Astro.props;
+type Group = 'app' | 'security' | 'transport' | 'network';
+interface Layer { id: string; name: string; group: Group; text: string }
+const stacks: { id: string; title: string; layers: Layer[] }[] = [
+  { id: 'wss', title: 'Secure WebSocket (RFC 6455)', layers: [
+    { id: 'wss-msg', name: 'Game message', group: 'app', text: 'The text or bytes your game sends, such as "join lobby 7". Your own rules decide what it means and who may send it.' },
+    { id: 'wss-frame', name: 'WebSocket frame', group: 'app', text: 'A small header (opcode, length, a mask on frames the client sends) followed by the message. Frames keep message boundaries that raw TCP does not have.' },
+    { id: 'wss-tls', name: 'TLS 1.3 record', group: 'security', text: 'Encrypts and authenticates the frames. The server’s certificate proves who it is.' },
+    { id: 'wss-tcp', name: 'TCP connection', group: 'transport', text: 'Delivers the TLS bytes reliably and in order. One lost packet holds back everything after it on this connection.' },
+    { id: 'wss-sock', name: 'TCP socket', group: 'transport', text: 'The program’s endpoint for this connection, named by local and remote address and port. A socket is an operating-system object, not a message format.' },
+    { id: 'wss-ip', name: 'IP packets and link frames', group: 'network', text: 'Routers move the packets; each link wraps them in its own frame.' },
+  ] },
+  { id: 'h3', title: 'HTTP/3 (RFC 9114)', layers: [
+    { id: 'h3-msg', name: 'Game request', group: 'app', text: 'An HTTP request such as a map download or an account call.' },
+    { id: 'h3-frame', name: 'HTTP/3 frames', group: 'app', text: 'HEADERS and DATA frames carried on one request stream.' },
+    { id: 'h3-stream', name: 'QUIC streams', group: 'transport', text: 'Independent ordered byte streams inside one QUIC connection. Loss on one stream need not stall the others.' },
+    { id: 'h3-quic', name: 'QUIC packets with TLS 1.3', group: 'security', text: 'QUIC does its own loss recovery, congestion control and encryption. TLS 1.3 is part of its handshake.' },
+    { id: 'h3-sock', name: 'UDP socket', group: 'transport', text: 'A datagram endpoint. Each QUIC packet travels inside one UDP datagram.' },
+    { id: 'h3-ip', name: 'IP packets and link frames', group: 'network', text: 'The same delivery path as before.' },
+  ] },
+];
+interface Part { id: string; name: string; size: string; protection: 'Visible to the network' | 'Header-protected' | 'Encrypted and authenticated'; span: number; text: string }
+const parts: Part[] = [
+  { id: 'udp', name: 'UDP header', size: '8 bytes', protection: 'Visible to the network', span: 3, text: 'Source port, destination port, length and checksum. Routers, firewalls and address translators read these, so they cannot be hidden.' },
+  { id: 'flags', name: 'Flags byte', size: '1 byte', protection: 'Header-protected', span: 1, text: 'Says this is a short-header packet and holds the key phase and packet-number length. Some of its bits are masked by header protection.' },
+  { id: 'cid', name: 'Destination connection ID', size: '0 to 20 bytes', protection: 'Visible to the network', span: 3, text: 'Lets the receiver find the connection even if the sender’s address changed, for example when a phone moves from Wi-Fi to mobile data.' },
+  { id: 'pn', name: 'Packet number', size: '1 to 4 bytes', protection: 'Header-protected', span: 2, text: 'Counts packets so the receiver can acknowledge them. Header protection hides it from observers.' },
+  { id: 'stream', name: 'STREAM frame', size: 'varies', protection: 'Encrypted and authenticated', span: 5, text: 'Stream ID, offset, length and a slice of that stream’s data. The offset lets the receiver put slices back in order even if packets arrive out of order.' },
+  { id: 'other', name: 'Other frames', size: 'varies', protection: 'Encrypted and authenticated', span: 3, text: 'Acknowledgements, flow-control updates and more can share the same packet with STREAM frames.' },
+  { id: 'tag', name: 'Authentication tag', size: '16 bytes', protection: 'Encrypted and authenticated', span: 2, text: 'A checksum only the two endpoints can compute. If any protected byte changed on the way, the packet is rejected.' },
+];
+const protectionClass: Record<Part['protection'], string> = { 'Visible to the network': 'open', 'Header-protected': 'masked', 'Encrypted and authenticated': 'sealed' };
+---
+<figure class="ss not-content" id={id} data-pick-group aria-label="Secure WebSocket and HTTP/3 compared, then one QUIC packet">
+  <figcaption><strong>Two message paths, two socket types</strong><span>Both end at a socket, but the layers above it differ. Point at a layer to read what it does.</span></figcaption>
+  <div class="ss__stacks">
+    {stacks.map(stack => <section class="ss__stack" aria-label={stack.title}>
+      <h4>{stack.title}</h4>
+      <ol>{stack.layers.map(layer => <li data-group={layer.group}><button type="button" data-pick={layer.id} aria-pressed="false" disabled>{layer.name}</button></li>)}</ol>
+    </section>)}
+  </div>
+  <dl class="ss__terms">
+    {stacks.flatMap(stack => stack.layers).map(layer => <><dt data-pick-term={layer.id}>{layer.name}</dt><dd data-pick-term={layer.id}>{layer.text}</dd></>)}
+  </dl>
+  <ul class="ss__key" aria-label="Colour key">
+    <li data-group="app">Application meaning</li><li data-group="security">Protection</li><li data-group="transport">Delivery</li><li data-group="network">Routing and links</li>
+  </ul>
+
+  <h4 class="ss__subtitle">Inside one QUIC datagram (after the handshake)</h4>
+  <div class="ss__packet" role="group" aria-label="A QUIC short-header packet inside a UDP datagram, left to right">
+    {parts.map(part => <button type="button" data-pick={`q-${part.id}`} aria-pressed="false" disabled data-protection={protectionClass[part.protection]} style={`flex-grow:${part.span}`}>
+      <strong>{part.name}</strong><small>{part.size}</small><em>{part.protection}</em>
+    </button>)}
+  </div>
+  <dl class="ss__terms ss__terms--parts">
+    {parts.map(part => <><dt data-pick-term={`q-${part.id}`}>{part.name} <span>{part.protection}</span></dt><dd data-pick-term={`q-${part.id}`}>{part.text}</dd></>)}
+  </dl>
+  <p class="ss__note">Handshake packets use a longer header with version and both connection IDs; this is the layout most packets have afterwards. Sizes follow QUIC version 1 (RFC 9000 and RFC 9001).</p>
+</figure>
+<script>
+  import { mountDetailPickers } from '../scripts/detail-picker';
+  mountDetailPickers();
+</script>

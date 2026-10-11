@@ -1,0 +1,63 @@
+---
+// Two timelines of the same five messages with one packet lost: TCP holds later bytes back, UDP does not.
+// The default view is the finished run; the script lets the reader choose which packets are lost.
+import { DEFAULT_LOSS, describeLoss, simulateLoss } from '../lib/transport-loss';
+import { headerBytes, headers, timelineHtml, type Protocol } from '../lib/transport-loss-view';
+import '../styles/transport-loss.css';
+interface Props { id?: string; title?: string }
+const { id = 'transport-loss', title = 'One lost packet: TCP waits, UDP moves on' } = Astro.props;
+const result = simulateLoss(DEFAULT_LOSS);
+const protocols: { id: Protocol; name: string; blurb: string }[] = [
+  { id: 'tcp', name: 'TCP', blurb: 'Gives the game bytes in order, so one missing packet holds back everything after it.' },
+  { id: 'udp', name: 'UDP', blurb: 'Gives the game each datagram as it arrives, in whatever order, and never resends.' },
+];
+const fields = Array.from(new Map(Object.values(headers).flat(2).map(field => [field.label, field])).values());
+---
+<figure class="tl not-content" id={id} data-transport-loss data-tl-messages={DEFAULT_LOSS.messages} data-tl-lost={DEFAULT_LOSS.lost.join(',')} data-tl-timer={DEFAULT_LOSS.timer} aria-label={title}>
+  <figcaption><strong>{title}</strong><span>Five messages leave one per tick and need one tick to arrive. Packet 3 is lost on its first try. Choose other packets, or move through time.</span></figcaption>
+
+  <div class="tl__controls" data-tl-controls hidden>
+    <fieldset>
+      <legend>Packets lost on the first try</legend>
+      <div class="tl__toggles">
+        {Array.from({ length: DEFAULT_LOSS.messages }, (_value, index) => <button type="button" data-tl-toggle={index} aria-pressed={DEFAULT_LOSS.lost.includes(index)}>Packet {index + 1}</button>)}
+      </div>
+    </fieldset>
+    <label>Resend timer, in ticks <input type="number" data-tl-timer-input min="2" max="6" step="1" value={DEFAULT_LOSS.timer} inputmode="numeric" /></label>
+    <label class="tl__time">Time <input type="range" data-tl-time min="0" max={result.lastTick} step="1" value={result.lastTick} /> <output data-tl-clock>tick {result.lastTick}</output></label>
+    <div class="tl__buttons"><button type="button" data-tl-play aria-pressed="false">Play</button><button type="button" data-tl-reset>Reset</button></div>
+  </div>
+
+  {protocols.map(protocol => <section class="tl__proto" data-proto={protocol.id}>
+    <h4>{protocol.name} <span>{protocol.blurb}</span></h4>
+    <div class="tl__scroll" data-tl-view={protocol.id} set:html={timelineHtml(protocol.id, result, result.lastTick)} />
+  </section>)}
+
+  <ul class="tl__legend" aria-label="Legend">
+    <li><span class="tl__chip" data-kind="sent">1</span> sent</li>
+    <li><span class="tl__chip" data-kind="lost">1<i aria-hidden="true">✕</i></span> lost on the way</li>
+    <li><span class="tl__chip" data-kind="resent">1<i aria-hidden="true">↻</i></span> sent again by TCP</li>
+    <li><span class="tl__chip" data-kind="arrive">1</span> reaches the computer</li>
+    <li><span class="tl__chip" data-kind="held">1</span> held back</li>
+    <li><span class="tl__chip" data-kind="deliver">1</span> handed to the game</li>
+  </ul>
+  <p class="tl__summary" data-tl-summary role="status" aria-live="polite">{describeLoss(result)}</p>
+  <p class="tl__note">The timer is a simplification: real TCP can resend sooner when later packets arrive and the receiver keeps repeating the same acknowledgement. The ordering rule is real. TCP also needs a three-packet handshake before its first data; UDP can send at tick 0.</p>
+
+  <details class="tl__headers" open>
+    <summary>What each wrapper costs: a {headerBytes('udp')}-byte UDP header or a {headerBytes('tcp')}-byte TCP header</summary>
+    <div class="tl__header-pair">
+      {(['udp', 'tcp'] as Protocol[]).map(protocol => <div class="tl__header" data-header={protocol}>
+        <h5>{protocol.toUpperCase()} · {headerBytes(protocol)} bytes{protocol === 'tcp' ? ' without options' : ''}</h5>
+        {headers[protocol].map(row => <div class="tl__header-row">{row.map(field => <span style={`grid-column: span ${field.bits}`}><strong>{field.label}</strong><small>{field.bits} bits</small></span>)}</div>)}
+        {protocol === 'tcp' && <div class="tl__header-row tl__header-row--options"><span style="grid-column: span 32"><strong>Options</strong><small>0 to 40 more bytes, only when needed</small></span></div>}
+      </div>)}
+    </div>
+    <dl class="tl__fields">{fields.map(field => <><dt>{field.label}</dt><dd>{field.meaning}</dd></>)}</dl>
+  </details>
+  <noscript><p>The timelines above show the default run: packet 3 is lost, TCP resends it and releases packets 3 to 5 together, and UDP delivers packets 4 and 5 immediately without packet 3.</p></noscript>
+</figure>
+<script>
+  import { mountTransportLoss } from '../scripts/transport-loss';
+  mountTransportLoss();
+</script>

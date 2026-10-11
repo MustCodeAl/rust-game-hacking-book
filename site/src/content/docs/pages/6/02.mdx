@@ -12,6 +12,11 @@ sidebar:
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 import { CodeGroup, Frame, HoverCard, Tab } from '../../../../components/kit';
 import SortBoard from '../../../../components/SortBoard.astro';
+import FlowDiagram from '../../../../components/FlowDiagram.astro';
+import PacketPath from '../../../../components/PacketPath.astro';
+import TransportLoss from '../../../../components/TransportLoss.astro';
+import SocketStacks from '../../../../components/SocketStacks.astro';
+import { infrastructureFlows, protocolFlows } from '../../../../data/network-flows';
 
 ## Separate network layers before capturing
 
@@ -66,9 +71,9 @@ lifetimes. Account requests still need their own authentication and cache
 policy. [Cloudflare's request journey](https://developers.cloudflare.com/billing/understand/how-charges-accrue/)
 shows these boundaries.
 
-<Frame caption="An IPv4 lease configures the client. DNS returns an address; only the later HTTPS connection retrieves the asset from the CDN, with an origin fetch on a cache miss. Original CC0 artwork.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/network-foundations-dns-cdn.svg`} width="480" height="454" alt="DHCP supplies a client's IPv4 configuration. The client separately asks a DNS resolver about assets.example and receives an address. A later HTTPS asset request goes to a CDN edge, which serves an eligible cached copy or fetches the file from origin storage." loading="lazy" decoding="async" />
-</Frame>
+<FlowDiagram id="infra-flow" title="From joining a network to downloading a map" scenarios={infrastructureFlows} />
+
+An IPv4 lease configures the client. DNS returns an address; only the later HTTPS connection retrieves the asset from the CDN, with an origin fetch on a cache miss.
 
 ### Wrap the bytes across a LAN
 
@@ -87,9 +92,9 @@ Our existing layer board remains useful: identify the job before assigning a
 name. [Internet host requirements](https://www.rfc-editor.org/rfc/rfc1122.html)
 organize the protocol suite by these responsibilities.
 
-<Frame caption="The same game bytes are wrapped inside a UDP datagram, IP packet and Ethernet frame. A router replaces the link wrapper for the next hop. The OSI/TCP-IP mapping is conceptual, not a literal count of wire headers. Original CC0 artwork.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/network-foundations-lan-encapsulation.svg`} width="480" height="448" alt="Nested boxes show game bytes inside UDP, IP and Ethernet wrappers. A client sends through a LAN switch to a router; the next link uses a new link frame. A note maps OSI application, presentation and session work to the TCP/IP application group, transport to TCP or UDP, network to IP, and data link and physical work to links." loading="lazy" decoding="async" />
-</Frame>
+<PacketPath />
+
+The same game bytes are wrapped inside a UDP datagram or TCP segment, an IP packet and an Ethernet frame. A router replaces the link wrapper for the next hop. The OSI/TCP-IP mapping is conceptual, not a literal count of wire headers.
 
 ### Choose the delivery contract, then the application protocol
 
@@ -100,9 +105,9 @@ Neither transport acknowledgment proves the server accepted a purchase.
 [TCP](https://www.rfc-editor.org/rfc/rfc9293.html) and [UDP](https://www.rfc-editor.org/rfc/rfc768.html)
 specify those different contracts.
 
-<Frame caption="A, B and C are illustrative byte chunks on the TCP side and whole datagrams on the UDP side. Lost B delays later TCP bytes; raw UDP supplies no automatic retry. TCP application messages still need framing. Original CC0 artwork.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/network-foundations-tcp-udp.svg`} width="480" height="496" alt="TCP receives A, loses B, buffers C, and exposes B then C after recovery. UDP receives datagram A, loses datagram B, and can deliver C without recovering B. The game must decide whether a missing datagram needs a retry or a newer replacement." loading="lazy" decoding="async" />
-</Frame>
+<TransportLoss />
+
+TCP application messages still need framing: a lost packet changes timing, not message boundaries.
 
 A **socket** is the local operating-system endpoint already introduced above.
 A **WebSocket** is a two-way framed-message protocol, useful for browser lobby
@@ -119,11 +124,13 @@ not “unreliable HTTP,” and HTTP/3 is not a synonym for every game's UDP
 protocol. The standards are [QUIC v1](https://www.rfc-editor.org/rfc/rfc9000.html),
 [QUIC with TLS](https://www.rfc-editor.org/rfc/rfc9001.html), and [HTTP/3](https://www.rfc-editor.org/rfc/rfc9114.html).
 
-<Frame caption="The left branch shows the classic RFC 6455 secure WebSocket path; the right shows HTTP/3 over QUIC v1. Both use local socket endpoints, but their message and transport layers differ. Original CC0 artwork.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/network-foundations-quic-http3-sockets.svg`} width="480" height="454" alt="A classic secure WebSocket uses WebSocket message frames, TLS and a TCP socket. HTTP/3 uses HTTP frames on QUIC streams, QUIC with TLS 1.3 security, and a UDP socket. Both paths continue through IP and link delivery; a socket is an API endpoint rather than an application message protocol." loading="lazy" decoding="async" />
-</Frame>
+<SocketStacks />
 
 <MarginNote kind="clarify">A socket names an endpoint; WebSocket names a message protocol. QUIC builds reliable streams over UDP. An encrypted channel still needs game-specific identity and action checks.</MarginNote>
+
+To compare how these protocols begin, step through one conversation for each.
+
+<FlowDiagram id="protocol-flows" title="Eight protocols, one conversation each" scenarios={protocolFlows} initial="http" />
 
 ### Other names belong at other boundaries
 

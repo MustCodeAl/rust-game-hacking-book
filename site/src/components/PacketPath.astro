@@ -1,0 +1,78 @@
+---
+// One game message from send() to recv(): headers are added going down, removed going up.
+// The default view is complete (all wrappers, all steps); the script adds stepping and a size calculator.
+import { describeSizes, frameSizes, maxMessage, MAX_TCP_SEGMENT_DATA, type Transport } from '../lib/packet-model';
+import { osiLayers, pathSteps, sideNames, zoneNames, type Side } from '../data/packet-path';
+import '../styles/packet-path.css';
+interface Props { id?: string; message?: number; transport?: Transport; title?: string }
+const { id = 'packet-path', message = 24, transport = 'udp', title = 'The journey of one game message' } = Astro.props;
+const sizes = frameSizes(transport, message);
+const sides: Side[] = ['send', 'network', 'receive'];
+let counter = 0;
+const numbered = pathSteps.map(step => ({ step, number: ++counter }));
+---
+<figure class="pp not-content" id={id} data-dg data-packet-path data-pp-message={message} data-pp-transport={transport} aria-label={title}>
+  <figcaption><strong>{title}</strong><span>Headers are added on the way down, then removed on the way up. Play it step by step, or change the message size.</span></figcaption>
+
+  <div class="pp__calc" data-pp-calc hidden>
+    <div class="pp__segmented" role="group" aria-label="Transport protocol">
+      <button type="button" data-pp-transport="udp" aria-pressed={transport === 'udp'}>UDP</button>
+      <button type="button" data-pp-transport="tcp" aria-pressed={transport === 'tcp'}>TCP</button>
+    </div>
+    <label>Game message bytes <input type="number" data-pp-input inputmode="numeric" min="1" max={maxMessage(transport)} step="1" value={message} aria-describedby={`${id}-sizes`} /></label>
+    <button type="button" data-pp-reset>Reset</button>
+  </div>
+
+  <div class="pp__strip" data-pp-strip role="group" aria-label="Frame contents, outermost wrapper first">
+    {sizes.parts.map(part => <span class="pp__part" data-part={part.id}><strong>{part.label}</strong><b data-part-bytes={part.id}>{part.bytes} B</b></span>)}
+  </div>
+  <p class="pp__sizes" id={`${id}-sizes`} data-pp-sizes>{describeSizes(sizes)}</p>
+  <p class="pp__now" data-pp-now hidden></p>
+
+  {sides.map(side => <section class="pp__side" data-side={side}>
+    <h4>{sideNames[side]}</h4>
+    <ol start={(numbered.find(item => item.step.side === side)?.number) ?? 1}>
+      {numbered.filter(item => item.step.side === side).map(({ step, number }) =>
+        <li class="pp__step" data-dg-step data-dg-caption={`${number}. ${step.title}. ${step.caption}`} data-zone={step.zone} data-osi={step.osi} data-parts={step.parts.join(' ')} data-fresh={step.fresh.join(' ')} data-state="done">
+          <span class="pp__badge" aria-hidden="true">{number}</span>
+          <div>
+            <p class="pp__title"><span class="pp__zone">{zoneNames[step.zone]}</span> <strong>{step.title}</strong></p>
+            <p class="pp__caption">{step.caption}</p>
+          </div>
+        </li>)}
+    </ol>
+  </section>)}
+
+  <div class="pp__controls" data-dg-controls hidden>
+    <button type="button" data-dg-prev>Previous</button>
+    <button type="button" data-dg-play aria-pressed="false">Play</button>
+    <button type="button" data-dg-next>Step through</button>
+    <button type="button" data-dg-all>Show all</button>
+    <span class="pp__counter" data-dg-counter>All {pathSteps.length} steps shown</span>
+  </div>
+  <p class="pp__note" data-dg-motion-note></p>
+  <p class="sr-only" data-dg-status role="status" aria-live="polite" aria-atomic="true">Complete journey shown.</p>
+
+  <div class="pp__table-wrap"><table class="pp__layers" data-pp-layers>
+    <caption>The same layers, named two ways. The OSI model is a teaching map; real stacks follow the TCP/IP grouping.</caption>
+    <thead><tr><th scope="col">OSI layer</th><th scope="col">What lives there</th><th scope="col">TCP/IP model</th><th scope="col">Unit of data</th></tr></thead>
+    <tbody>
+      {osiLayers.map(layer => <tr data-osi-row={layer.id}>
+        <th scope="row">{layer.number}. {layer.name}</th>
+        <td>{layer.examples}</td>
+        {layer.number === 7 && <><td rowspan="3">Application</td><td rowspan="3">Data</td></>}
+        {layer.number === 4 && <><td>Transport</td><td>Segment (TCP) or datagram (UDP)</td></>}
+        {layer.number === 3 && <><td>Internet</td><td>Packet</td></>}
+        {layer.number === 2 && <><td rowspan="2">Link</td><td>Frame</td></>}
+        {layer.number === 1 && <td>Bit</td>}
+      </tr>)}
+    </tbody>
+  </table></div>
+  <p class="pp__note">Maximum data in one Ethernet frame: 1,500 bytes of IP packet, so {MAX_TCP_SEGMENT_DATA} bytes of TCP data or 1,472 bytes of UDP data without fragmentation.</p>
+</figure>
+<script>
+  import { mountDiagramPlayers } from '../scripts/diagram-player';
+  import { mountPacketPaths } from '../scripts/packet-path';
+  mountDiagramPlayers();
+  mountPacketPaths();
+</script>

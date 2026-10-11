@@ -1,0 +1,58 @@
+---
+// A message-flow diagram: lanes across the top, one numbered arrow per step, the explanation beside each.
+// Every step is plain server-rendered text; the script only adds Previous/Play/Next and tabs.
+import { stepRoute, stepSpan, type FlowScenario } from '../lib/flow-model';
+import '../styles/flow-diagram.css';
+interface Props { id: string; title: string; scenarios: readonly FlowScenario[]; initial?: string }
+const { id, title, scenarios, initial } = Astro.props;
+const tabbed = scenarios.length > 1;
+const kindTag: Record<string, string> = { request: 'Request', response: 'Reply', data: 'Data', control: 'Control', secure: 'Encrypted', local: 'Alone' };
+---
+<div class="flow" data-dg-tabs={tabbed ? '' : undefined} data-dg-tabs-initial={tabbed ? (initial ?? scenarios[0]?.id) : undefined}>
+  {tabbed && <div class="flow__tabs" role="tablist" aria-label={title} hidden>
+    {scenarios.map(scenario => <button type="button" role="tab" id={`${id}-${scenario.id}-tab`} aria-controls={`${id}-${scenario.id}`} aria-selected="false" tabindex="-1" data-dg-tab={scenario.id}>{scenario.tab}</button>)}
+  </div>}
+  {scenarios.map(scenario => {
+    const lanes = scenario.lanes.length;
+    return <figure class="flow__panel not-content" id={`${id}-${scenario.id}`} data-dg data-dg-panel={tabbed ? scenario.id : undefined} aria-label={scenario.title}>
+      <figcaption><strong>{scenario.title}</strong><span>{scenario.summary}</span></figcaption>
+      <div class="flow__lanes" style={`--lanes:${lanes}`} aria-hidden="true">
+        <div class="flow__lane-names">{scenario.lanes.map(lane => <span>{lane.label}</span>)}</div>
+      </div>
+      <ol class="flow__steps">
+        {scenario.steps.map((step, index) => {
+          const span = stepSpan(scenario, step);
+          const kind = step.kind ?? 'request';
+          return <li class="flow__step" data-dg-step data-dg-caption={`${index + 1}. ${step.label}. ${step.caption}`} data-dg-direction={span.direction === 'left' ? 'left' : 'right'} data-kind={kind} data-state="done"
+            style={`--lanes:${lanes};--start:${span.start};--end:${span.end + 1};--span:${span.end - span.start + 1}`}>
+            <div class="flow__track" aria-hidden="true">
+              {span.direction === 'self'
+                ? <span class="flow__self" data-direction="self"><b>{index + 1}</b></span>
+                : <span class="flow__arrow" data-direction={span.direction}><b>{index + 1}</b><i data-dg-dot></i></span>}
+            </div>
+            <div class="flow__text">
+              <p class="flow__label"><span class="flow__kind">{kindTag[kind]}</span> <strong>{step.label}</strong></p>
+              <p class="flow__route"><span class="sr-only">Step {index + 1}: </span>{stepRoute(scenario, step)}</p>
+              <p class="flow__caption">{step.caption}</p>
+            </div>
+          </li>;
+        })}
+      </ol>
+      <div class="flow__controls" data-dg-controls hidden>
+        <button type="button" data-dg-prev>Previous</button>
+        <button type="button" data-dg-play aria-pressed="false">Play</button>
+        <button type="button" data-dg-next>Step through</button>
+        <button type="button" data-dg-all>Show all</button>
+        <span class="flow__counter" data-dg-counter>All {scenario.steps.length} steps shown</span>
+      </div>
+      <p class="flow__note" data-dg-motion-note></p>
+      <p class="sr-only" data-dg-status role="status" aria-live="polite" aria-atomic="true">{scenario.summary}</p>
+    </figure>;
+  })}
+</div>
+<script>
+  import { mountDiagramPlayers } from '../scripts/diagram-player';
+  import { mountDiagramTabs } from '../scripts/diagram-tabs';
+  mountDiagramPlayers();
+  mountDiagramTabs();
+</script>
