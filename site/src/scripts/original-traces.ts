@@ -1,13 +1,19 @@
 // Authored, deterministic teaching models. They do not inspect or modify a game.
 // The book's shared CodeTrace engine registers ORIGINAL_TRACES alongside TRACES.
-const range = (id, label, min, max, value) => ({ id, label, type: 'range', min, max, step: 1, value });
-const select = (id, label, value, options) => ({ id, label, type: 'select', value, options: options.map(([value, label]) => ({ value, label })) });
-const hex = value => '0x' + value.toString(16).toUpperCase().padStart(4, '0');
-const bits = value => value.toString(2).padStart(8, '0');
+import { createTrace, range, select } from '../lib/traces-kit.ts';
+import type { Trace, TraceMemory, TraceStep, TraceVars } from '../lib/traces-types.ts';
 
-function record(initial) {
-	let vars = { ...initial };
-	const steps = [];
+const hex = (value: number): string => '0x' + value.toString(16).toUpperCase().padStart(4, '0');
+const bits = (value: number): string => value.toString(2).padStart(8, '0');
+
+interface Recorder {
+	readonly steps: TraceStep[];
+	add(line: number, say: string, changes?: TraceVars, mem?: TraceMemory): void;
+}
+
+function record(initial: TraceVars): Recorder {
+	let vars: TraceVars = { ...initial };
+	const steps: TraceStep[] = [];
 	return {
 		steps,
 		add(line, say, changes = {}, mem) {
@@ -17,8 +23,8 @@ function record(initial) {
 	};
 }
 
-export const ORIGINAL_TRACES = {
-  'original-network-topology': {
+export const ORIGINAL_TRACES: Readonly<Record<string, Trace>> = {
+  'original-network-topology': createTrace({
     title: 'The same movement request, three arrangements',
     intro: 'Choose where the request goes and whether a wall blocks it. This worked model compares message paths with the program that calculates the result.',
     code: ['start at (10, 15)', 'request move north', 'deliver input to the selected participants', 'check destination against the shared map', 'accept (10, 14) or keep (10, 15)', 'draw the accepted position'],
@@ -36,8 +42,8 @@ export const ORIGINAL_TRACES = {
       r.add(5, `Each player draws ${result}. ${peer ? 'Identical deterministic simulations give the same result in this example; other peer designs may assign authority differently.' : 'The server’s accepted result determines the final position, even when that program runs on a player’s computer.'}`);
       return r.steps;
     },
-  },
-	'original-class-instance': {
+  }),
+	'original-class-instance': createTrace({
 		title: 'One Player definition, two independent players',
 		intro: 'Choose who takes damage. Both players use the same method; each keeps a separate health field. This is explanatory pseudocode.',
 		code: [
@@ -64,8 +70,8 @@ export const ORIGINAL_TRACES = {
 			r.add(5, `${target} now has ${health[target]} health. ${target === 'Ada' ? 'Bo keeps 50' : 'Ada keeps 60'} health, and both gold fields stay unchanged.`, {}, mem());
 			return r.steps;
 		},
-	},
-	'original-nested-return': {
+	}),
+	'original-nested-return': createTrace({
 		title: 'Two calls need two return addresses',
 		intro: 'Change the starting score, then follow two nested near calls in this simplified 32-bit x86 example. Labels stand for instruction addresses.',
 		code: [
@@ -105,8 +111,8 @@ export const ORIGINAL_TRACES = {
 			r.add(8, `The result is ${start + 1}. Two calls returned in reverse order, and the stack pointer recovered its starting value.`, { EIP: 'done' }, mem());
 			return r.steps;
 		},
-	},
-	'original-bubbling': {
+	}),
+	'original-bubbling': createTrace({
 		title: 'The same gold write can have different callers',
 		intro: 'Choose an action and a player. First execute the small model, then inspect the recorded path from the write toward its callers. Inspection does not run the purchase again.',
 		code: [
@@ -141,8 +147,8 @@ export const ORIGINAL_TRACES = {
 			r.add(0, `Context: ${player} requested ${action === 'Buy' ? 'a purchase' : 'a fine payment'} for ${amount}; the check ${accepted ? 'accepted it' : 'rejected it'}, and gold ended at ${accepted ? initial - amount : initial}. Inspection changed no fields.`, { focus: 'dispatch' });
 			return r.steps;
 		},
-	},
-	'original-object-method': {
+	}),
+	'original-object-method': createTrace({
 		title: 'The receiver selects which object the method changes',
 		intro: 'This invented 32-bit layout puts health at base + 8. Choose an object and follow the same method body. The addresses and offsets are teaching values, not a game layout.',
 		code: [
@@ -173,8 +179,8 @@ export const ORIGINAL_TRACES = {
 			r.add(7, `${target} has ${result} health; ${target === 'Ada' ? 'Bo still has 50' : 'Ada still has 60'}. Sharing a method and field offset did not share the field's storage.`, {}, mem());
 			return r.steps;
 		},
-	},
-	'original-displaced-replay': {
+	}),
+	'original-displaced-replay': createTrace({
 		title: 'Preserve the input, replay the displaced work once',
 		intro: 'Choose a deliberate mistake to see its effect in a toy register model. This omits instruction relocation, flags, ABI details, threads, and patch bytes; the lesson below covers those contracts.',
 		inputs: [range('gold', 'Starting gold', 0, 100, 100), range('bonus', 'Original bonus', 1, 10, 5), select('strategy', 'Trampoline behavior', 'correct', [['correct', 'Save register; replay once'], ['skip', 'Save register; skip replay'], ['twice', 'Save register; replay twice'], ['clobber', 'Change register; replay once']])],
@@ -204,8 +210,8 @@ export const ORIGINAL_TRACES = {
 			r.add(8, `Store ${eax}. ${eax === gold + bonus ? 'This matches the original result.' : `The original result should have been ${gold + bonus}; the selected mistake changed the computation.`}`, { gold: eax, matches: eax === gold + bonus });
 			return r.steps;
 		},
-	},
-	'original-bit-operations': {
+	}),
+	'original-bit-operations': createTrace({
 		title: 'Change one byte, mask, or bit operation',
 		intro: 'Start with AND, then compare setting, flipping, shifting, and rotating. The strip shows eight positions, most significant first; every result remains one unsigned byte.',
 		inputs: [range('byte', 'Byte value', 0, 255, 5), range('mask', 'Mask value', 0, 255, 4), select('operation', 'Operation', 'and', [['and', 'AND: keep selected bits'], ['or', 'OR: set selected bits'], ['xor', 'XOR: flip selected bits'], ['not', 'NOT: flip all eight bits'], ['left', 'Shift left'], ['right', 'Shift right'], ['rotateLeft', 'Rotate left'], ['rotateRight', 'Rotate right']]), range('count', 'Shift or rotation count', 0, 7, 1)],
@@ -216,7 +222,7 @@ export const ORIGINAL_TRACES = {
 		run({ byte, mask, operation, count }) {
 			const results = { and: byte & mask, or: byte | mask, xor: byte ^ mask, not: (~byte) & 255, left: (byte << count) & 255, right: byte >>> count, rotateLeft: ((byte << count) | (byte >>> (8 - count))) & 255, rotateRight: ((byte >>> count) | (byte << (8 - count))) & 255 };
 			const result = results[operation];
-			const mem = (value, title) => ({ title, cells: Array.from({ length: 8 }, (_, i) => ({ label: `bit ${7 - i}: ${2 ** (7 - i)}`, value: String((value >>> (7 - i)) & 1) })) });
+			const mem = (value: number, title: string): TraceMemory => ({ title, cells: Array.from({ length: 8 }, (_, i) => ({ label: `bit ${7 - i}: ${2 ** (7 - i)}`, value: String((value >>> (7 - i)) & 1) })) });
 			const r = record({ byte, 'byte bits': bits(byte), mask, 'mask bits': bits(mask), count, operation, result: 'not computed yet' });
 			r.add(0, `${byte} is ${bits(byte)}. Add the weights of its 1 positions to recover the decimal value.`, {}, mem(byte, 'Input byte: eight positions'));
 			const usesMask = ['and', 'or', 'xor'].includes(operation);
@@ -234,8 +240,8 @@ export const ORIGINAL_TRACES = {
 			r.add(3, `${explanations[operation]} The result is ${bits(result)} = ${result}.`, { result, 'result bits': bits(result) }, mem(result, 'Result byte: same eight positions'));
 			return r.steps;
 		},
-	},
-	'original-vm-branch': {
+	}),
+	'original-vm-branch': createTrace({
 		title: 'A recovery point and a second VM solve different problems',
 		intro: 'Choose a snapshot, linked clone, or full clone, then follow one invented save-file change. This model runs in the page; it creates no virtual machine.',
 		code: [
@@ -258,5 +264,5 @@ export const ORIGINAL_TRACES = {
 			r.add(5, `Reset returns the test save to 100. ${snapshot ? 'You have one VM at its recorded starting condition.' : 'Before running both VMs, check network adapter addresses, guest network settings, and host sharing separately.'}`, { test: 100 });
 			return r.steps;
 		},
-	},
+	}),
 };
