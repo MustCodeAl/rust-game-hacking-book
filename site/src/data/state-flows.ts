@@ -41,7 +41,7 @@ export const staleSnapshotFlows: readonly FlowScenario[] = [
       { from: 'game', to: 'game', kind: 'local', label: 'Income tick: gold 100 → 110', caption: 'The game keeps running while the tool decides. The stored 100 is already out of date.' },
       { from: 'tool', to: 'game', kind: 'request', label: 'Capture again, just before writing', caption: 'The tool does not trust the old reading. It asks again immediately before the action.' },
       { from: 'game', to: 'tool', kind: 'response', label: 'gold = 110', caption: 'The fresh Snapshot contains 110.' },
-      { from: 'tool', to: 'tool', kind: 'local', label: '110 ≠ 100: Snapshots differ, do not write 888', caption: 'Whole-Snapshot equality fails because one field changed, so the requested 888 is refused. This check still cannot make the game’s later changes atomic.' },
+      { from: 'tool', to: 'tool', kind: 'local', label: '110 ≠ 100: differ, so do not write 888', caption: 'Whole-Snapshot equality fails because one field changed, so the requested 888 is refused. This check still cannot make the game’s later changes atomic.' },
     ],
   },
 ];

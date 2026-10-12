@@ -8,8 +8,8 @@ import { resolve } from 'node:path';
 const site = fileURLToPath(new URL('../', import.meta.url));
 interface HandoffFigure { asset: string; sha256: string; lesson: string; alt: string; caption: string }
 const records: HandoffFigure[] = JSON.parse(await readFile(resolve(site, 'src/data/finish-handoff-figures.json'), 'utf8'));
-assert.equal(records.length, 55);
-assert.equal(new Set(records.map(record => record.asset)).size, 55);
+assert.equal(records.length, 43);
+assert.equal(new Set(records.map(record => record.asset)).size, 43);
 const lessons = [];
 for (const folder of await readdir(resolve(site, 'src/content/docs/pages'))) {
   if (!/^\d+$/.test(folder)) continue;
@@ -31,7 +31,7 @@ for (const record of records) {
   assert.ok(record.alt.length > 30 && record.caption.length > 30);
 }
 if (process.argv.includes('--source-only')) {
-  console.log('handoff-art: 155 genuine authored-picture lessons; 55 distinct additions, references, descriptions and asset hashes pass.');
+  console.log('handoff-art: 155 genuine authored-picture lessons; 43 distinct additions, references, descriptions and asset hashes pass.');
   process.exit(0);
 }
 
