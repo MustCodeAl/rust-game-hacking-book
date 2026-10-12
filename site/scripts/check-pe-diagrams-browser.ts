@@ -9,6 +9,7 @@ import type { Locator, Page } from 'playwright';
 import { fromFileOffset, fromRva, fromVirtualAddress, hex, hex8 } from '../src/lib/pe-address.ts';
 import { fieldHex, layout } from '../src/lib/pe-map.ts';
 import { LINK_MODES, diskTotal } from '../src/lib/pe-linking.ts';
+import { STEPS, hex8 as hex8p, sceneAt } from '../src/lib/process-model.ts';
 
 const { chromium }: typeof import('playwright') = createRequire(import.meta.url)(process.env.PLAYWRIGHT_PATH || 'playwright');
 const base = (process.env.BOOK_BASE_URL || 'http://127.0.0.1:8772/rust-game-hacking-book/').replace(/\/?$/, '/');
@@ -312,7 +313,91 @@ async function pe(): Promise<void> {
   await off.close();
 }
 
-const suites: Record<string, () => Promise<void>> = { pe };
+async function processSuite(): Promise<void> {
+  for (const width of WIDTHS) {
+    const { page, errors, close } = await visit('pages/10/06/', width);
+    const fig = page.locator('#process-thread');
+    await fig.scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('#process-thread [data-dg-controls]')?.hidden === false);
+    const states = async (): Promise<string[]> => fig.locator('.pt-thread').evaluateAll(n => n.map(e => (e as HTMLElement).dataset.state ?? ''));
+    const reg = async (thread: string, name: string): Promise<string> => (await fig.locator(`[data-pt-reg="${thread}-${name}"]`).textContent()) ?? '';
+    const assertScene = async (index: number | null, label: string): Promise<void> => {
+      const scene = sceneAt(index);
+      same(await fig.locator('[data-pt-title]').textContent(), index === null ? scene.title : `Step ${index + 1} of ${STEPS.length}: ${scene.title}`, `${label}: title`);
+      same(await fig.locator('[data-pt-explain]').textContent(), scene.explain, `${label}: explanation`);
+      same(await states(), scene.threads.map(t => t.state), `${label}: thread states`);
+      for (const thread of scene.threads) {
+        same([await reg(thread.id, 'eip'), await reg(thread.id, 'esp'), await reg(thread.id, 'eax')], [hex8p(thread.registers.eip), hex8p(thread.registers.esp), String(thread.registers.eax)], `${label}: registers of thread ${thread.id}`);
+      }
+      same(await fig.locator('.pt-timeline li[data-state="done"]').count(), scene.tick, `${label}: ticks done`);
+      same(await fig.locator('[data-pt-cpu-head]').textContent(), scene.cpu.runner ? `The core is running thread ${scene.cpu.runner}` : 'The core is idle', `${label}: CPU heading`);
+      same(await fig.locator('[data-pt-switch]').isVisible(), scene.switching, `${label}: context-switch note`);
+      same(await fig.locator('[data-pt-process]').getAttribute('data-present'), String(scene.processPresent), `${label}: process present`);
+      same(await fig.locator('[data-pt-file]').getAttribute('data-lit'), String(scene.fileLit), `${label}: file lit`);
+      same(await fig.locator('[data-pt-score]').textContent(), scene.scoreWritten ? '10' : '0', `${label}: shared score`);
+    };
+    await assertScene(null, `process ${width} default`);
+    same(await fig.locator('[data-pt-cpu-regs]').textContent(), 'EIP 0x004012D2, ESP 0x00300000, EAX 6', `process ${width}: the default CPU registers`);
+    same(await fig.locator('.pt-step[data-state="done"]').count(), STEPS.length, `process ${width}: every step shows as done`);
+    await commonChecks(page, fig, `process ${width}`);
+    await shot(page, fig, 'process-default', width);
+    const next = fig.locator('[data-dg-next]');
+    for (let index = 0; index < STEPS.length; index++) {
+      await page.waitForFunction(() => document.querySelectorAll('#process-thread .pt-chip').length === 0, null, { timeout: 5000 });
+      await next.click();
+      if (index === 6 || index === 8) same(await fig.locator('.pt-chip').count(), 2, `process ${width}: step ${index + 1} moves two register chips (saved out, loaded in)`);
+      same(await fig.locator('[data-dg-counter]').textContent(), `Step ${index + 1} of ${STEPS.length}`, `process ${width}: counter at step ${index + 1}`);
+      await assertScene(index, `process ${width} step ${index + 1}`);
+      same(await fig.locator('.pt-step[data-state="active"]').count(), 1, `process ${width}: one active step at ${index + 1}`);
+      if (index === 0 || index === 3 || index === 6 || index === 9) { await commonChecks(page, fig, `process ${width} step ${index + 1}`); await shot(page, fig, `process-step${index + 1}`, width); }
+    }
+    await page.waitForFunction(() => document.querySelectorAll('#process-thread .pt-chip').length === 0);
+    checks++;
+    await fig.locator('[data-dg-prev]').click();
+    await assertScene(8, `process ${width} previous`);
+    await fig.locator('[data-dg-all]').click();
+    await assertScene(null, `process ${width} show all`);
+    await next.focus(); await page.keyboard.press('Enter');
+    same(await fig.locator('[data-dg-counter]').textContent(), `Step 1 of ${STEPS.length}`, `process ${width}: Enter on Step through`);
+    await fig.locator('[data-dg-all]').click();
+    await printChecks(page, fig, `process ${width}`, '.mdg-controls');
+    same(errors, [], `process ${width}: no page errors`);
+    await close();
+  }
+  // Play runs every step when motion is allowed, and is unavailable when it is not.
+  const play = await visit('pages/10/06/', 1280);
+  const figure = play.page.locator('#process-thread');
+  await figure.scrollIntoViewIfNeeded();
+  await play.page.waitForFunction(() => document.querySelector<HTMLElement>('#process-thread [data-dg-controls]')?.hidden === false);
+  await figure.locator('[data-dg-play]').click();
+  await play.page.waitForFunction(() => document.querySelector('#process-thread [data-dg-counter]')?.textContent === 'Step 10 of 10', null, { timeout: 30000 });
+  checks++;
+  await play.close();
+  const still = await visit('pages/10/06/', 1280, { reducedMotion: true });
+  await still.page.locator('#process-thread').scrollIntoViewIfNeeded();
+  await still.page.waitForFunction(() => document.querySelector<HTMLElement>('#process-thread [data-dg-controls]')?.hidden === false);
+  ok(await still.page.locator('#process-thread [data-dg-play]').isDisabled(), 'process: Play is disabled under reduced motion');
+  await still.page.locator('#process-thread [data-dg-next]').click();
+  same(await still.page.locator('#process-thread [data-dg-counter]').textContent(), 'Step 1 of 10', 'process: stepping still works under reduced motion');
+  for (let i = 0; i < 6; i++) await still.page.locator('#process-thread [data-dg-next]').click();
+  same(await still.page.locator('#process-thread [data-dg-counter]').textContent(), 'Step 7 of 10', 'process: reached the context-switch step');
+  same(await still.page.locator('#process-thread .pt-chip').count(), 0, 'process: no moving chips under reduced motion');
+  await still.close();
+  const dark = await visit('pages/10/06/', 420, { scheme: 'dark' });
+  await dark.page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await dark.page.locator('#process-thread').scrollIntoViewIfNeeded();
+  await commonChecks(dark.page, dark.page.locator('#process-thread'), 'process dark');
+  await shot(dark.page, dark.page.locator('#process-thread'), 'process-dark', 420);
+  await dark.close();
+  const off = await visit('pages/10/06/', 420);
+  await off.page.evaluate(() => { document.documentElement.dataset.academySemantic = 'off'; });
+  const border = await off.page.locator('#process-thread .pt-thread[data-thread="A"]').evaluate(el => getComputedStyle(el).borderTopColor);
+  const ink = await off.page.locator('#process-thread').evaluate(el => getComputedStyle(el).color);
+  same(border, ink, 'process: semantic off returns the thread border to ink');
+  await off.close();
+}
+
+const suites: Record<string, () => Promise<void>> = { pe, process: processSuite };
 try {
   for (const [name, run] of Object.entries(suites)) if (only.size === 0 || only.has(name)) { await run(); console.log(`ok ${name}`); }
 } finally {

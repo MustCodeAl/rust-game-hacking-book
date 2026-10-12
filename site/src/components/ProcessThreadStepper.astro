@@ -1,0 +1,101 @@
+---
+// Program, process and thread, stepped: the file on disk, the process that Windows builds from it, the threads inside the
+// process (shared memory, private stacks and registers) and one CPU core switching between two of them. Stepping uses the shared
+// diagram player; the picture is redrawn by ../scripts/process-thread from the same pure model that renders the default here.
+import {
+  GLOBAL_ADDRESS, SCHEDULE, SCORE_VALUE, SLICE_TICKS, STACK_BYTES, STEPS, THREADS, hex8, localAddress, sceneAt, stackRegion,
+  type ThreadView,
+} from '../lib/process-model';
+import { FILE_SIZE, PREFERRED_BASE, SECTIONS, SIZE_OF_HEADERS, SIZE_OF_IMAGE, hex } from '../lib/pe-address';
+import '../styles/memory-diagrams.css';
+import '../styles/process-thread.css';
+interface Props { id?: string; title?: string }
+const { id = 'process-thread', title = 'From a program file to a process to threads' } = Astro.props;
+const scene = sceneAt(null);
+const stateText: Record<ThreadView['state'], string> = { running: 'Running on the CPU', ready: 'Ready: waiting for a turn', absent: 'Not created yet' };
+const whereText: Record<ThreadView['where'], string> = { cpu: 'In the CPU now', context: 'Saved in its thread context', none: 'Not created yet' };
+const pieces = [{ name: 'Headers', bytes: SIZE_OF_HEADERS }, ...SECTIONS.map(section => ({ name: section.name, bytes: section.rawSize }))];
+const imageEnd = PREFERRED_BASE + SIZE_OF_IMAGE - 1;
+---
+<figure class="mdg pt not-content" id={id} data-dg data-pt aria-labelledby={`${id}-title`}>
+  <figcaption><strong id={`${id}-title`}>{title}</strong><span>One game from disk to running threads, ten steps. The numbers continue the sample file from lesson 5.1. Step through them, or read the complete picture below.</span></figcaption>
+
+  <div class="mdg-controls pt-controls" data-dg-controls hidden data-reader-skip>
+    <button type="button" class="mdg-btn" data-dg-prev>Previous</button>
+    <button type="button" class="mdg-btn mdg-btn--primary" data-dg-play aria-pressed="false">Play</button>
+    <button type="button" class="mdg-btn" data-dg-next>Step through</button>
+    <button type="button" class="mdg-btn" data-dg-all>Show all</button>
+    <span class="pt-counter" data-dg-counter>All {STEPS.length} steps shown</span>
+  </div>
+  <p class="mdg-note" data-dg-motion-note data-reader-skip></p>
+  <p class="mdg-sr" data-dg-status role="status" aria-live="polite" aria-atomic="true">Complete picture: two threads in one process, one CPU core switching between them.</p>
+
+  <p class="pt-now" data-pt-now><strong data-pt-title>{scene.title}</strong><span data-pt-explain>{scene.explain}</span></p>
+
+  <div class="pt-stage">
+    <section class="pt-zone pt-disk" data-pt-file data-lit={String(scene.fileLit)} aria-labelledby={`${id}-z1`}>
+      <h4 id={`${id}-z1`}><b>1</b> Program: a file on disk</h4>
+      <div class="pt-file">
+        <strong>game.exe</strong><code>{FILE_SIZE.toLocaleString('en-US')} bytes ({hex(FILE_SIZE)})</code>
+        <ul class="pt-pieces" aria-label="What the file holds, in file order">{pieces.map(piece => <li>{piece.name}<small>{hex(piece.bytes)}</small></li>)}</ul>
+      </div>
+      <p class="pt-zone-note">Instructions and data, written down. It sits still: no CPU time, no memory.</p>
+    </section>
+
+    <p class="pt-link" aria-hidden="true">Starting it asks Windows to build a process.</p>
+
+    <section class="pt-zone pt-ram" data-pt-process data-present={String(scene.processPresent)} aria-labelledby={`${id}-z2`}>
+      <h4 id={`${id}-z2`}><b>2</b> Process: its own space in memory</h4>
+      <p class="pt-none">No process yet: the file is still only a file.</p>
+      <div class="pt-process">
+        <ul class="pt-resources">
+          <li><strong>Address space</strong><span>The image sits at <code>{hex8(PREFERRED_BASE)}</code> to <code>{hex8(imageEnd)}</code>.</span></li>
+          <li><strong>Handle table</strong><span>References to the files, events and sockets this process opens.</span></li>
+          <li><strong>Shared by every thread</strong><span>Global <code>score</code> at <code>{hex8(GLOBAL_ADDRESS)}</code> holds <code data-pt-score>{scene.scoreWritten ? SCORE_VALUE : 0}</code>.</span></li>
+        </ul>
+        <h5 class="pt-sub"><b>3</b> Threads: paths of execution inside the process</h5>
+        <ul class="pt-threads">
+          {scene.threads.map(thread => <li class="pt-thread" data-thread={thread.id} data-state={thread.state}>
+            <p class="pt-thread-head"><strong>Thread {thread.id}</strong><span class="pt-state" data-pt-state>{stateText[thread.state]}</span></p>
+            <dl class="pt-facts">
+              <div><dt>Own stack ({STACK_BYTES / 0x100000} MiB)</dt><dd><code>{hex8(stackRegion(thread.id).low)}</code> to <code>{hex8(stackRegion(thread.id).high)}</code></dd></div>
+              <div><dt>Local variable</dt><dd><code>{hex8(localAddress(thread.id))}</code></dd></div>
+              <div><dt data-pt-where>{whereText[thread.where]}</dt><dd>EIP <code data-pt-reg={`${thread.id}-eip`}>{hex8(thread.registers.eip)}</code>, ESP <code data-pt-reg={`${thread.id}-esp`}>{hex8(thread.registers.esp)}</code>, EAX <code data-pt-reg={`${thread.id}-eax`}>{thread.registers.eax}</code></dd></div>
+            </dl>
+          </li>)}
+        </ul>
+      </div>
+    </section>
+
+    <p class="pt-link" aria-hidden="true">The scheduler gives a core to one thread at a time.</p>
+
+    <section class="pt-zone pt-cpu" aria-labelledby={`${id}-z4`}>
+      <h4 id={`${id}-z4`}><b>4</b> One CPU core: who runs now</h4>
+      <ol class="pt-timeline" aria-label={`Who runs on each of nine ticks, ${SLICE_TICKS} ticks per turn`}>
+        {SCHEDULE.map((who, index) => <li data-tick={index + 1} data-who={who} data-state={index + 1 <= scene.tick ? 'done' : 'todo'} data-turn-start={index % SLICE_TICKS === 0 ? 'true' : 'false'}><b>{who}</b><small>{index + 1}</small></li>)}
+      </ol>
+      <p class="pt-zone-note">Each turn lasts {SLICE_TICKS} ticks, and a tick here is one instruction.</p>
+      <div class="pt-cpu-box" data-pt-cpu data-switching={String(scene.switching)}>
+        <p class="pt-cpu-head" data-pt-cpu-head>{scene.cpu.runner ? `The core is running thread ${scene.cpu.runner}` : 'The core is idle'}</p>
+        <p class="pt-cpu-regs" data-pt-cpu-regs>{scene.cpu.registers ? <>EIP <code>{hex8(scene.cpu.registers.eip)}</code>, ESP <code>{hex8(scene.cpu.registers.esp)}</code>, EAX <code>{scene.cpu.registers.eax}</code></> : 'No thread has registers loaded.'}</p>
+        <p class="pt-switch" data-pt-switch hidden={!scene.switching}>Context switch: the registers of one thread were just saved to its context and the other's loaded.</p>
+      </div>
+    </section>
+  </div>
+
+  <h4>The steps</h4>
+  <ol class="pt-steps">
+    {STEPS.map((step, index) => <li class="pt-step" data-dg-step data-state="done" data-dg-caption={`Step ${index + 1} of ${STEPS.length}: ${step.title}. ${step.explain}`}>
+      <p class="pt-step-head"><b>Step {index + 1}</b> {step.title}</p>
+      <p class="pt-step-text">{step.explain}</p>
+    </li>)}
+  </ol>
+  <p class="mdg-note">The addresses are illustrative; a real run is placed by Windows and changes with ASLR. A real time slice lasts milliseconds, not three instructions, and the scheduler picks threads by priority and readiness. The shape is what matters: every thread keeps its own registers and stack, and the process memory is shared.</p>
+  <noscript><p class="mdg-note">The complete picture and all {STEPS.length} steps are shown above without JavaScript.</p></noscript>
+</figure>
+<script>
+  import { mountDiagramPlayers } from '../scripts/diagram-player';
+  import { mountProcessThreads } from '../scripts/process-thread';
+  mountDiagramPlayers();
+  mountProcessThreads();
+</script>

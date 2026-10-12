@@ -8,10 +8,12 @@ import {
 } from '../src/lib/pe-address.ts';
 import { E_LFANEW, PE_FORMATS, formatDifferences, layout, layoutProblems, nameParts, rangeText, rulerSegments } from '../src/lib/pe-map.ts';
 import { LINK_MODES, callsOf, diskTotal, imagesOf } from '../src/lib/pe-linking.ts';
+import { ENTRY_A, GLOBAL_ADDRESS, STEPS, localAddress, modelProblems, registersAfter, sceneAt, stackRegion } from '../src/lib/process-model.ts';
 
 let checks = 0;
 const eq = <T>(actual: T, expected: T, label: string): void => { assert.deepEqual(actual, expected, label); checks++; };
 const ok = (condition: unknown, label: string): void => { assert.ok(condition, label); checks++; };
+const throwsRange = (fn: () => unknown, label: string): void => { assert.throws(fn, RangeError, label); checks++; };
 
 // ---- the sample image ----
 eq(sectionProblems(), [], 'the sample section table obeys the alignment rules');
@@ -170,5 +172,41 @@ for (const mode of LINK_MODES) {
 }
 eq(imagesOf(LINK_MODES[0] ?? (() => { throw new Error('no static mode'); })()), ['game.exe image', 'ntdll.dll image'], 'static linking has no separate library image');
 eq(imagesOf(LINK_MODES[1] ?? (() => { throw new Error('no dynamic mode'); })()), ['game.exe image', 'library.dll image', 'ntdll.dll image'], 'dynamic linking maps a separate library image');
+
+// ---- program, process, thread ----
+eq(modelProblems(), [], 'the process example is consistent: whole turns, stacks one stack-size apart');
+// Entry point: base 0x00400000 + RVA 0x12C0 = 0x004012C0. The global is the start of .data: 0x00400000 + 0x4000 = 0x00404000.
+eq([ENTRY_A, GLOBAL_ADDRESS], [0x004012c0, 0x00404000], 'entry point and global address');
+// 1 MiB = 0x100000 per stack: A 0x00200000..0x002FFFFF (top 0x00300000), B 0x00300000..0x003FFFFF (top 0x00400000).
+eq([stackRegion('A'), stackRegion('B')], [{ low: 0x200000, high: 0x2fffff }, { low: 0x300000, high: 0x3fffff }], 'stack regions are 1 MiB each');
+eq([localAddress('A'), localAddress('B')], [0x2ffffc, 0x3ffffc], 'locals are one word below each stack top: 0x300000 - 4, 0x400000 - 4');
+// A runs ticks 1-3 and 7-9; B runs ticks 4-6. Each instruction is 3 bytes and adds 1 to EAX.
+eq(registersAfter('A', 3), { eip: 0x004012c0 + 9, esp: 0x300000, eax: 3 }, 'A after its first turn: EIP 0x4012C0 + 3 x 3 = 0x4012C9');
+eq(registersAfter('B', 3), { eip: 0x00401500, esp: 0x400000, eax: 0 }, 'B has not run after tick 3');
+eq(registersAfter('B', 6), { eip: 0x00401509, esp: 0x400000, eax: 3 }, 'B after its turn: 0x401500 + 9 = 0x401509');
+eq(registersAfter('A', 6), registersAfter('A', 3), 'A does not move while B runs');
+eq(registersAfter('A', 9), { eip: 0x004012d2, esp: 0x300000, eax: 6 }, 'A after nine ticks: 0x4012C0 + 6 x 3 = 0x4012D2');
+eq(STEPS.length, 10, 'ten steps');
+const first = sceneAt(0), switchToB = sceneAt(6), bRuns = sceneAt(7), switchToA = sceneAt(8), last = sceneAt(9), overview = sceneAt(null);
+eq([first.fileLit, first.processPresent, first.threads.map(t => t.state)], [true, false, ['absent', 'absent']], 'step 1: only the file exists');
+eq(sceneAt(1).processPresent, true, 'step 2 builds the process');
+eq(sceneAt(2).threads.map(t => t.state), ['ready', 'absent'], 'step 3: one thread, not yet scheduled');
+eq(sceneAt(3).threads.map(t => t.state), ['ready', 'ready'], 'step 4: two threads');
+eq([sceneAt(3).scoreWritten, sceneAt(4).scoreWritten], [false, true], 'the global score is written in the sharing step');
+eq([switchToB.switching, switchToB.cpu.runner, switchToB.tick], [true, 'B', 3], 'step 7 loads B after tick 3');
+eq(switchToB.cpu.registers, { eip: 0x00401500, esp: 0x400000, eax: 0 }, 'the CPU holds B’s starting registers after the switch');
+eq(switchToB.threads.find(t => t.id === 'A')?.registers, { eip: 0x004012c9, esp: 0x300000, eax: 3 }, 'A’s registers were saved: EAX 3, EIP 0x4012C9');
+eq(switchToB.threads.find(t => t.id === 'A')?.where, 'context', 'saved registers live in the thread context');
+eq([bRuns.cpu.runner, bRuns.tick, bRuns.cpu.registers?.eip], ['B', 6, 0x00401509], 'step 8: B finishes its turn');
+eq([switchToA.switching, switchToA.cpu.runner, switchToA.cpu.registers], [true, 'A', { eip: 0x004012c9, esp: 0x300000, eax: 3 }], 'step 9 restores A exactly as saved');
+eq(switchToA.threads.find(t => t.id === 'B')?.registers, { eip: 0x00401509, esp: 0x400000, eax: 3 }, 'B was saved: EAX 3, EIP 0x401509');
+eq([last.cpu.runner, last.tick, last.cpu.registers?.eax], ['A', 9, 6], 'step 10: A has run six instructions');
+eq(overview.index, null, 'the default scene has no step');
+eq([overview.tick, overview.cpu.registers, overview.title], [last.tick, last.cpu.registers, 'The complete picture'], 'the default scene is the final state with the overview text');
+ok(overview.explain.includes('A ran 6 instructions, B ran 3'), 'the overview counts instructions from the schedule: 6 and 3');
+ok(STEPS[0]?.explain.includes('14,336 bytes (0x00003800)'), 'step 1 gives the sample file size: 0x3800 = 14,336');
+ok(STEPS[1]?.explain.includes('0x00400000 to 0x00406FFF'), 'step 2 covers the image: 0x400000 + 0x7000 - 1 = 0x406FFF');
+ok(STEPS[4]?.explain.includes('0x002FFFFC') && STEPS[4]?.explain.includes('0x003FFFFC'), 'step 5 names both local addresses');
+throwsRange(() => sceneAt(10), 'a step past the end is refused');
 
 console.log(`check-pe-diagram-models: ${checks} checks passed`);
