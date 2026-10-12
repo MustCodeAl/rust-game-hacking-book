@@ -11,6 +11,8 @@ import { fieldHex, layout } from '../src/lib/pe-map.ts';
 import { LINK_MODES, diskTotal } from '../src/lib/pe-linking.ts';
 import { STEPS, hex8 as hex8p, sceneAt } from '../src/lib/process-model.ts';
 import { encode } from '../src/lib/text-encoding.ts';
+import { stepRoute, type FlowScenario } from '../src/lib/flow-model.ts';
+import { consistencyFlows, serviceFlows } from '../src/data/backend-flows.ts';
 import { outputHtml } from '../src/lib/text-encoding-view.ts';
 
 const { chromium }: typeof import('playwright') = createRequire(import.meta.url)(process.env.PLAYWRIGHT_PATH || 'playwright');
@@ -478,7 +480,78 @@ async function encodingSuite(): Promise<void> {
   await off.close();
 }
 
-const suites: Record<string, () => Promise<void>> = { pe, process: processSuite, encoding: encodingSuite };
+async function backendSuite(): Promise<void> {
+  const groups: [string, readonly FlowScenario[]][] = [['backend-service-flows', serviceFlows], ['backend-consistency-flows', consistencyFlows]];
+  for (const width of WIDTHS) {
+    const { page, errors, close } = await visit('pages/6/01/', width);
+    for (const [groupId, scenarios] of groups) {
+      const group = page.locator(`#${groupId}`);
+      await group.scrollIntoViewIfNeeded();
+      await page.waitForFunction(id => document.querySelector<HTMLElement>(`#${id} [role="tablist"]`)?.hidden === false, groupId);
+      same(await group.getByRole('tab').allTextContents(), scenarios.map(s => s.tab), `backend ${width} ${groupId}: one tab per scenario`);
+      same(await group.locator('[role="tab"][aria-selected="true"]').getAttribute('data-dg-tab'), scenarios[0]?.id ?? '', `backend ${width} ${groupId}: the first scenario is selected`);
+      for (const scenario of scenarios) {
+        await group.getByRole('tab', { name: scenario.tab, exact: true }).click();
+        const panel = group.locator(`[data-dg-panel="${scenario.id}"]`);
+        same(await group.locator('[data-dg-panel]:visible').count(), 1, `backend ${width} ${scenario.id}: only the chosen panel shows`);
+        same(await panel.locator('[data-dg-step]').count(), scenario.steps.length, `backend ${width} ${scenario.id}: step count`);
+        same(await panel.locator('[data-dg-step][data-state="done"]').count(), scenario.steps.length, `backend ${width} ${scenario.id}: the default shows every step`);
+        same(await panel.locator('.flow__lane-names span').allTextContents(), scenario.lanes.map(l => l.label), `backend ${width} ${scenario.id}: lane names`);
+        same(await panel.locator('.flow__label strong').allTextContents(), scenario.steps.map(s => s.label), `backend ${width} ${scenario.id}: step labels in order`);
+        same(await panel.locator('.flow__route').allInnerTexts().then(rows => rows.map(r => r.replace(/^Step \d+:\s*/, ''))), scenario.steps.map(s => stepRoute(scenario, s)), `backend ${width} ${scenario.id}: who talks to whom`);
+        same(await panel.locator('.flow__caption').allTextContents(), scenario.steps.map(s => s.caption), `backend ${width} ${scenario.id}: captions`);
+        await commonChecks(page, group, `backend ${width} ${scenario.id}`);
+        await shot(page, group, `backend-${scenario.id}`, width);
+      }
+      // Stepping through the first scenario, and keyboard tab movement.
+      const first = scenarios[0];
+      if (!first) throw new Error('no scenario');
+      await group.getByRole('tab', { name: first.tab, exact: true }).click();
+      const panel = group.locator(`[data-dg-panel="${first.id}"]`);
+      await panel.getByRole('button', { name: 'Step through' }).click();
+      same(await panel.locator('[data-state="active"]').count(), 1, `backend ${width} ${groupId}: one active step`);
+      same(await panel.locator('[data-state="todo"]').count(), first.steps.length - 1, `backend ${width} ${groupId}: the rest wait`);
+      await panel.getByRole('button', { name: 'Next step' }).click();
+      same(await panel.locator('[data-dg-step]').nth(1).getAttribute('data-state'), 'active', `backend ${width} ${groupId}: Next moves on`);
+      await shot(page, group, `backend-${groupId}-stepping`, width);
+      await panel.getByRole('button', { name: 'Previous' }).click();
+      same(await panel.locator('[data-dg-step]').first().getAttribute('data-state'), 'active', `backend ${width} ${groupId}: Previous goes back`);
+      await panel.getByRole('button', { name: 'Show all' }).first().click();
+      same(await panel.locator('[data-state="done"]').count(), first.steps.length, `backend ${width} ${groupId}: Show all returns to the full view`);
+      await group.getByRole('tab', { selected: true }).focus();
+      await page.keyboard.press('ArrowRight');
+      same(await group.locator('[role="tab"][aria-selected="true"]').getAttribute('data-dg-tab'), scenarios[1]?.id ?? '', `backend ${width} ${groupId}: ArrowRight selects the next tab`);
+      await page.keyboard.press('End');
+      same(await group.locator('[role="tab"][aria-selected="true"]').getAttribute('data-dg-tab'), scenarios[scenarios.length - 1]?.id ?? '', `backend ${width} ${groupId}: End selects the last tab`);
+      await page.keyboard.press('Home');
+      same(await group.locator('[role="tab"][aria-selected="true"]').getAttribute('data-dg-tab'), first.id, `backend ${width} ${groupId}: Home selects the first tab`);
+      // Print shows every panel and no controls.
+      await page.emulateMedia({ media: 'print' });
+      same(await group.locator('.flow__panel:visible').count(), scenarios.length, `backend ${width} ${groupId}: print shows every scenario`);
+      same(await group.locator('.flow__controls:visible, .flow__tabs:visible').count(), 0, `backend ${width} ${groupId}: print hides the controls`);
+      await page.emulateMedia({ media: 'screen' });
+    }
+    same(errors, [], `backend ${width}: no page errors`);
+    await close();
+  }
+  const dark = await visit('pages/6/01/', 420, { scheme: 'dark' });
+  await dark.page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  for (const [groupId] of groups) {
+    const group = dark.page.locator(`#${groupId}`);
+    await group.scrollIntoViewIfNeeded();
+    await commonChecks(dark.page, group, `${groupId} dark`);
+    await shot(dark.page, group, `${groupId}-dark`, 420);
+  }
+  await dark.close();
+  const off = await visit('pages/6/01/', 420);
+  await off.page.evaluate(() => { document.documentElement.dataset.academySemantic = 'off'; });
+  const edge = await off.page.locator('#backend-consistency-flows .flow__tabs button[aria-selected="true"]').evaluate(el => getComputedStyle(el).borderTopColor);
+  const ink = await off.page.locator('#backend-consistency-flows').evaluate(el => getComputedStyle(el).color);
+  same(edge, ink, 'backend: semantic off returns the selected tab to ink');
+  await off.close();
+}
+
+const suites: Record<string, () => Promise<void>> = { pe, process: processSuite, encoding: encodingSuite, backend: backendSuite };
 try {
   for (const [name, run] of Object.entries(suites)) if (only.size === 0 || only.has(name)) { await run(); console.log(`ok ${name}`); }
 } finally {

@@ -8,6 +8,8 @@ import {
 } from '../src/lib/pe-address.ts';
 import { E_LFANEW, PE_FORMATS, formatDifferences, layout, layoutProblems, nameParts, rangeText, rulerSegments } from '../src/lib/pe-map.ts';
 import { LINK_MODES, callsOf, diskTotal, imagesOf } from '../src/lib/pe-linking.ts';
+import { scenarioProblems, stepSpan, type FlowScenario } from '../src/lib/flow-model.ts';
+import { consistencyFlows, serviceFlows } from '../src/data/backend-flows.ts';
 import { MAX_CHARS, binaryParts, byteValues, checkText, encode, padSymbolsFor, symbolRule } from '../src/lib/text-encoding.ts';
 import { escapeHtml, outputHtml, resultText } from '../src/lib/text-encoding-view.ts';
 import { ENTRY_A, GLOBAL_ADDRESS, STEPS, localAddress, modelProblems, registersAfter, sceneAt, stackRegion } from '../src/lib/process-model.ts';
@@ -270,5 +272,38 @@ eq((outputHtml(encode('Hello!')).match(/class="te-block"/g) ?? []).length, 2, 's
 ok(outputHtml(encode('Hello!')).split('--cols:24').length === 3, 'both blocks are a full 24 columns wide');
 ok(outputHtml(encode('Game')).includes('--cols:12'), 'the fourth byte starts a second block of 8 bits plus 4 added: 2 groups, 12 columns');
 ok(outputHtml(encode('')).includes('te-empty'), 'the empty text shows its note');
+
+// ---- backend flow scenarios: ordering and ownership ----
+const allFlows = [...serviceFlows, ...consistencyFlows];
+eq(allFlows.map(s => scenarioProblems(s)), allFlows.map(() => []), 'every backend scenario is well formed: two to five lanes, labels of at most 44 characters');
+eq(new Set(allFlows.map(s => s.id)).size, allFlows.length, 'scenario ids are unique');
+eq([serviceFlows.map(s => s.id), consistencyFlows.map(s => s.id)], [['login', 'match', 'assets', 'owners'], ['purchase', 'retry', 'leaderboard']], 'the scenarios of both figures');
+const flow = (list: readonly FlowScenario[], id: string): FlowScenario => { const found = list.find(s => s.id === id); if (!found) throw new Error(`no scenario ${id}`); return found; };
+const at = (scenario: FlowScenario, label: string): number => { const i = scenario.steps.findIndex(step => step.label === label); if (i < 0) throw new Error(`no step "${label}" in ${scenario.id}`); return i; };
+const purchase = flow(consistencyFlows, 'purchase');
+// Begin -> read price and balance -> debit/item/receipt -> commit -> committed -> reply, in that order.
+const order = ['Begin transaction', 'Read the price (300) and the balance (1,000)', 'Debit to 700, add item, record P7', 'Commit', 'Committed', 'Item granted, balance 700 (P7)'].map(label => at(purchase, label));
+eq(order, [...order].sort((a, b) => a - b), 'the purchase happens in transaction order and the reply comes after the commit');
+eq(purchase.steps.filter(step => step.label === 'Commit').length, 1, 'exactly one commit');
+ok(purchase.steps[at(purchase, 'Debit to 700, add item, record P7')]?.caption.includes('1,000 − 300 = 700'), 'the debit step shows its subtraction');
+eq(purchase.steps[at(purchase, 'Debit to 700, add item, record P7')]?.from, 'db', 'the three changes are made by the database inside the transaction');
+eq(stepSpan(purchase, purchase.steps[at(purchase, 'Commit')] ?? (() => { throw new Error('no commit'); })()).direction, 'right', 'the commit goes from the service to the database');
+const retry = flow(consistencyFlows, 'retry');
+ok(!retry.steps.some(step => /debit|begin transaction|commit/i.test(step.label)), 'a retry never debits, begins or commits again');
+eq(at(retry, 'Look up the receipt for P7') < at(retry, 'The recorded result of P7'), true, 'the receipt is looked up before the recorded result is returned');
+ok(retry.steps.some(step => step.label.includes('balance 700')), 'the retry ends with the same balance, 700');
+const board = flow(consistencyFlows, 'leaderboard');
+eq([at(board, 'Committed: the score is 12'), at(board, 'Shows 10: an older view'), at(board, 'Rebuild the view from the new score'), at(board, 'Shows 12')], [1, 3, 4, 6], 'the leaderboard shows 10 after the database holds 12 and before it is rebuilt, then shows 12');
+const owners = flow(serviceFlows, 'owners');
+eq([owners.steps[at(owners, 'Accepted position (10, 14)')]?.from, owners.steps[at(owners, 'Balance: 1,000 coins')]?.from, owners.steps[at(owners, 'Count, possibly a few seconds old')]?.from], ['server', 'db', 'cache'], 'positions come from the match server, balances from the database, the lobby count from the cache');
+eq(owners.steps.filter(step => step.from === 'gateway' && step.to === 'client').length, 0, 'the gateway answers nothing itself: it only routes');
+const match = flow(serviceFlows, 'match');
+eq(at(match, 'Which worker owns match 42?') < at(match, 'Game command: move north'), true, 'the owner is looked up before commands are sent');
+eq(match.steps[at(match, 'Game command: move north')]?.to, 'server', 'commands go to the match server');
+const login = flow(serviceFlows, 'login');
+eq(at(login, 'Account found, password matches') < at(login, 'Session token'), true, 'the session token comes after the database confirms the account');
+const assets = flow(serviceFlows, 'assets');
+eq([assets.steps.filter(step => step.to === 'storage').length, assets.steps.filter(step => step.from === 'cdn' && step.to === 'client').length], [1, 2], 'one origin fetch serves two client downloads');
+eq(at(assets, 'Cache lookup: no copy yet') < at(assets, 'Fetch the file by its key'), true, 'the miss comes before the origin fetch');
 
 console.log(`check-pe-diagram-models: ${checks} checks passed`);
