@@ -10,6 +10,8 @@ import { fromFileOffset, fromRva, fromVirtualAddress, hex, hex8 } from '../src/l
 import { fieldHex, layout } from '../src/lib/pe-map.ts';
 import { LINK_MODES, diskTotal } from '../src/lib/pe-linking.ts';
 import { STEPS, hex8 as hex8p, sceneAt } from '../src/lib/process-model.ts';
+import { encode } from '../src/lib/text-encoding.ts';
+import { outputHtml } from '../src/lib/text-encoding-view.ts';
 
 const { chromium }: typeof import('playwright') = createRequire(import.meta.url)(process.env.PLAYWRIGHT_PATH || 'playwright');
 const base = (process.env.BOOK_BASE_URL || 'http://127.0.0.1:8772/rust-game-hacking-book/').replace(/\/?$/, '/');
@@ -397,7 +399,86 @@ async function processSuite(): Promise<void> {
   await off.close();
 }
 
-const suites: Record<string, () => Promise<void>> = { pe, process: processSuite };
+async function encodingSuite(): Promise<void> {
+  for (const width of WIDTHS) {
+    const { page, errors, close } = await visit('pages/3/07/', width);
+    const lab = page.locator('#text-encoding-lab');
+    await lab.scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => document.querySelector<HTMLFormElement>('#text-encoding-lab [data-te-form]')?.hidden === false);
+    const input = lab.locator('[data-te-input]');
+    const result = async (): Promise<string> => (await lab.locator('[data-te-result]').textContent()) ?? '';
+    const textOfModel = (text: string): Promise<string> => page.evaluate(html => { const holder = document.createElement('div'); holder.innerHTML = html; return holder.textContent ?? ''; }, outputHtml(encode(text)));
+    const outputText = async (): Promise<string> => (await lab.locator('[data-te-output]').textContent()) ?? '';
+    // The server-rendered worked example is exactly what the model renders.
+    same(await result(), 'SEk=', `encoding ${width}: the worked example is HI = SEk=`);
+    same(await outputText(), await textOfModel('HI'), `encoding ${width}: the server render equals the model render`);
+    same(await lab.locator('.te-table').first().locator('tbody tr').allInnerTexts().then(rows => rows.map(row => row.split(/\s+/).join(' '))), ['H 72 48 01001000', 'I 73 49 01001001'], `encoding ${width}: bytes table for HI`);
+    same(await lab.locator('.te-bits--group').evaluateAll(n => n.map(e => (e as HTMLElement).textContent ?? '')), ['010010', '000100', '100100'], `encoding ${width}: groups of six for HI`);
+    same(await lab.locator('.te-bits--group').last().locator('i.te-pad').count(), 2, `encoding ${width}: two pad bits in the last group`);
+    await commonChecks(page, lab, `encoding ${width}`);
+    await shot(page, lab, 'encoding-default', width);
+    // Typing: every length from 0 to 6 against Node's Buffer.
+    for (const text of ['', 'A', 'HI', 'Hel', 'Game', 'Hello', 'abc123', '~~~', '??>', 'a b', '<&">']) {
+      await input.fill(text);
+      const expected = text === '' ? '(empty)' : Buffer.from(text).toString('base64');
+      same(await result(), expected, `encoding ${width}: Base64 of ${JSON.stringify(text)}`);
+      same(await outputText(), await textOfModel(text), `encoding ${width}: steps for ${JSON.stringify(text)} match the model`);
+      same(await lab.locator('.te-table').first().locator('tbody tr').count(), text.length, `encoding ${width}: one table row per character of ${JSON.stringify(text)}`);
+      same(await lab.locator('.te-bits--group').count(), Math.ceil((text.length * 8) / 6), `encoding ${width}: groups for ${JSON.stringify(text)}`);
+      same(await lab.locator('.te-block').count(), Math.ceil(text.length / 3), `encoding ${width}: three-byte blocks for ${JSON.stringify(text)}`);
+      same(await input.getAttribute('aria-invalid'), null, `encoding ${width}: valid text is not flagged`);
+    }
+    // User text is shown as text, never parsed as markup.
+    same(await lab.locator('[data-te-output] script, [data-te-output] img').count(), 0, `encoding ${width}: no script or image elements from user text`);
+    same(await lab.locator('.te-table').first().locator('tbody th code').allTextContents(), ['<', '&', '"', '>'], `encoding ${width}: markup characters appear as characters`);
+    // Bits line up: a byte (8 columns) and a group (6 columns) share one column grid.
+    await input.fill('abc');
+    const geometry = await lab.locator('.te-block').first().evaluate(block => {
+      const rect = (el: Element): { left: number; right: number } => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right }; };
+      const bytes = [...block.querySelectorAll('.te-bits--byte')].map(rect), groups = [...block.querySelectorAll('.te-bits--group')].map(rect);
+      return { firstLeft: [bytes[0]?.left, groups[0]?.left], lastRight: [bytes[2]?.right, groups[3]?.right] };
+    });
+    ok(Math.abs((geometry.firstLeft[0] ?? 0) - (geometry.firstLeft[1] ?? 99)) < 1, `encoding ${width}: the first byte and the first group start in the same column`);
+    ok(Math.abs((geometry.lastRight[0] ?? 0) - (geometry.lastRight[1] ?? 99)) < 1.5, `encoding ${width}: three bytes and four groups end in the same column (24 bits)`);
+    await input.fill('HI');
+    await lab.locator('[data-te-preset="Game"]').click();
+    same(await result(), 'R2FtZQ==', `encoding ${width}: the Game preset: 4 bytes need == padding`);
+    same(await input.inputValue(), 'Game', `encoding ${width}: a preset fills the field`);
+    await lab.locator('[data-te-preset="abc123"]').click();
+    same(await result(), Buffer.from('abc123').toString('base64'), `encoding ${width}: the six-character preset`);
+    await commonChecks(page, lab, `encoding ${width} six characters`);
+    await shot(page, lab, 'encoding-six', width);
+    // Bounds: too long, not ASCII and control characters are refused; the last valid result stays.
+    await input.fill('abcdefg');
+    same(await input.getAttribute('aria-invalid'), 'true', `encoding ${width}: seven characters are flagged`);
+    ok((await lab.locator('[data-te-error]').textContent())?.includes('at most 6 characters'), `encoding ${width}: the error explains the bound`);
+    same(await result(), Buffer.from('abc123').toString('base64'), `encoding ${width}: invalid input leaves the last result`);
+    await shot(page, lab, 'encoding-error', width);
+    await input.fill('é');
+    same(await input.getAttribute('aria-invalid'), 'true', `encoding ${width}: a non-ASCII letter is flagged`);
+    ok((await lab.locator('[data-te-error]').textContent())?.includes('not a plain ASCII character'), `encoding ${width}: the error says why`);
+    await input.fill('Hi');
+    same([await input.getAttribute('aria-invalid'), await lab.locator('[data-te-error]').textContent()], [null, ''], `encoding ${width}: a valid text clears the error`);
+    await lab.locator('[data-te-preset="HI"]').click();
+    await printChecks(page, lab, `encoding ${width}`, '.mdg-controls');
+    same(errors, [], `encoding ${width}: no page errors`);
+    await close();
+  }
+  const dark = await visit('pages/3/07/', 420, { scheme: 'dark' });
+  await dark.page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await dark.page.locator('#text-encoding-lab').scrollIntoViewIfNeeded();
+  await commonChecks(dark.page, dark.page.locator('#text-encoding-lab'), 'encoding dark');
+  await shot(dark.page, dark.page.locator('#text-encoding-lab'), 'encoding-dark', 420);
+  await dark.close();
+  const off = await visit('pages/3/07/', 420);
+  await off.page.evaluate(() => { document.documentElement.dataset.academySemantic = 'off'; });
+  const border = await off.page.locator('#text-encoding-lab .te-bits--group').first().evaluate(el => getComputedStyle(el).borderTopColor);
+  const ink = await off.page.locator('#text-encoding-lab').evaluate(el => getComputedStyle(el).color);
+  same(border, ink, 'encoding: semantic off returns the group border to ink');
+  await off.close();
+}
+
+const suites: Record<string, () => Promise<void>> = { pe, process: processSuite, encoding: encodingSuite };
 try {
   for (const [name, run] of Object.entries(suites)) if (only.size === 0 || only.has(name)) { await run(); console.log(`ok ${name}`); }
 } finally {

@@ -8,6 +8,8 @@ import {
 } from '../src/lib/pe-address.ts';
 import { E_LFANEW, PE_FORMATS, formatDifferences, layout, layoutProblems, nameParts, rangeText, rulerSegments } from '../src/lib/pe-map.ts';
 import { LINK_MODES, callsOf, diskTotal, imagesOf } from '../src/lib/pe-linking.ts';
+import { MAX_CHARS, binaryParts, byteValues, checkText, encode, padSymbolsFor, symbolRule } from '../src/lib/text-encoding.ts';
+import { escapeHtml, outputHtml, resultText } from '../src/lib/text-encoding-view.ts';
 import { ENTRY_A, GLOBAL_ADDRESS, STEPS, localAddress, modelProblems, registersAfter, sceneAt, stackRegion } from '../src/lib/process-model.ts';
 
 let checks = 0;
@@ -208,5 +210,65 @@ ok(STEPS[0]?.explain.includes('14,336 bytes (0x00003800)'), 'step 1 gives the sa
 ok(STEPS[1]?.explain.includes('0x00400000 to 0x00406FFF'), 'step 2 covers the image: 0x400000 + 0x7000 - 1 = 0x406FFF');
 ok(STEPS[4]?.explain.includes('0x002FFFFC') && STEPS[4]?.explain.includes('0x003FFFFC'), 'step 5 names both local addresses');
 throwsRange(() => sceneAt(10), 'a step past the end is refused');
+
+// ---- text encodings: characters -> bytes -> Base64 ----
+const hi = encode('HI');
+// H = 72 = 0x48 = 01001000 (64 + 8); I = 73 = 0x49 = 01001001 (64 + 8 + 1).
+eq(hi.bytes.map(b => [b.decimal, b.hex, b.binary]), [['72', '48', '01001000'], ['73', '49', '01001001']], 'HI: decimal, hex and binary of the two bytes');
+eq(hi.bits, '0100100001001001', 'HI: the 16 bits joined');
+// 16 bits / 6 = 2.67 -> 3 groups; the last has 4 data bits (1001) plus 2 added zeros: 100100.
+eq(hi.groups.map(g => g.bits), ['010010', '000100', '100100'], 'HI: groups of six, last one padded with two zero bits');
+eq(hi.groups.map(g => g.padBits), [0, 0, 2], 'HI: only the last group carries pad bits, two of them');
+// 010010 = 16 + 2 = 18 -> S (capitals A=0..Z=25); 000100 = 4 -> E; 100100 = 32 + 4 = 36 -> 36 - 26 = 10 -> k.
+eq(hi.groups.map(g => [g.value, g.symbol]), [[18, 'S'], [4, 'E'], [36, 'k']], 'HI: group values and symbols');
+eq([hi.padSymbols, hi.base64], [1, 'SEk='], 'HI: three symbols need one = to reach four: SEk=');
+eq(resultText(hi), 'SEk=', 'the result line');
+eq(hi.bytes[0]?.explain, 'H is code 72. In hex, 72 = 4 × 16 + 8, so 48. In binary, 72 = 64 + 8, so 01001000.', 'the working for H');
+eq(hi.groups[2]?.explain, '100100 (1001 plus 2 added zero bits) = 32 + 4 = 36; 36 is in 26 to 51, the small letters (a is 26): 36 − 26 = 10, so the symbol is k.', 'the working for the third group');
+eq(hi.summary, '2 bytes × 8 = 16 bits. 16 ÷ 6 = 2.67, so 3 groups of six bits (the last one completed with 2 zero bits). 3 symbols need 1 “=” to reach 4, a multiple of four.', 'the summary sentence');
+eq(binaryParts(73), '64 + 8 + 1', '73 = 64 + 8 + 1');
+eq(binaryParts(32), '32', 'a single power of two');
+ok(symbolRule(63).includes('slash') && symbolRule(62).includes('plus') && symbolRule(52).includes('52 − 52 = 0'), 'the last alphabet rows');
+eq([0, 1, 2, 3, 4, 5, 6].map(n => padSymbolsFor(Math.ceil((n * 8) / 6))), [0, 2, 1, 0, 2, 1, 0], 'padding by number of bytes: 0, 2, 1 repeating');
+// Against Node's Buffer for every length from 0 to 6, exhaustively for one and two characters, and a seeded sample beyond.
+const printable = Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i));
+const base64Of = (text: string): string => Buffer.from(text).toString('base64');
+for (const text of ['', 'A', 'HI', 'Hel', 'Game', 'Hello', 'abc123', '~~~', '???', '>>>', '+/+/', 'Hi!', '  ', ' ']) eq(encode(text).base64, base64Of(text), `Base64 of ${JSON.stringify(text)} matches Node`);
+let mismatches = 0;
+for (const a of printable) { if (encode(a).base64 !== base64Of(a)) mismatches++; for (const b of printable) if (encode(a + b).base64 !== base64Of(a + b)) mismatches++; }
+eq(mismatches, 0, 'all 95 single characters and all 9,025 two-character texts match Node');
+let seed = 123456789;
+const next = (): number => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return seed >>> 0; };
+for (let length = 3; length <= MAX_CHARS; length++) {
+  let bad = 0;
+  for (let i = 0; i < 4000; i++) { const text = Array.from({ length }, () => printable[next() % 95] ?? ' ').join(''); const e = encode(text); if (e.base64 !== base64Of(text) || e.base64.length % 4 !== 0 || byteValues(e).join() !== [...Buffer.from(text)].join()) bad++; }
+  eq(bad, 0, `4,000 seeded ${length}-character texts match Node, with output a multiple of four symbols and the same bytes`);
+}
+for (const length of [0, 1, 2, 3, 4, 5, 6]) eq(encode('x'.repeat(length)).base64, base64Of('x'.repeat(length)), `${length} characters: padding matches Node`);
+for (const length of [0, 1, 2, 3, 4, 5, 6]) eq(encode('x'.repeat(length)).base64.length, Math.ceil(length / 3) * 4, `${length} characters give ${Math.ceil(length / 3) * 4} symbols`);
+eq(encode('').summary, 'No characters, so no bytes, no bits and no symbols: the Base64 of nothing is nothing.', 'the empty text has its own explanation');
+eq([encode('').bytes.length, encode('').groups.length, encode('').padSymbols, resultText(encode(''))], [0, 0, 0, '(empty)'], 'the empty text produces nothing');
+// Bounds: at most six printable ASCII characters.
+eq(checkText(''), null, 'empty is allowed');
+eq(checkText('abcdef'), null, 'six characters are allowed');
+ok(checkText('abcdefg')?.includes('at most 6 characters'), 'seven characters are refused');
+ok(checkText('é')?.includes('not a plain ASCII character'), 'an accented letter is refused: two bytes in UTF-8');
+ok(checkText('😀') !== null, 'an emoji is refused');
+ok(checkText('a\nb') !== null && checkText('\u007f') !== null, 'control characters and DEL are refused');
+eq([checkText(' '), checkText('~')], [null, null], 'space and tilde are the ends of the printable range');
+assert.throws(() => encode('é'), RangeError, 'encode refuses what checkText refuses');
+checks++;
+// The HTML view: escaped, and shaped as the browser check expects.
+eq(escapeHtml('<&">\''), '&lt;&amp;&quot;&gt;&#39;', 'the five HTML characters are escaped');
+const hostile = outputHtml(encode('<&">'));
+ok(!hostile.includes('<&') && !hostile.includes('<script') && hostile.includes('&lt;') && hostile.includes('&amp;') && hostile.includes('&quot;'), 'user text never reaches the HTML unescaped');
+const html = outputHtml(hi);
+ok(html.includes('<code>SEk=</code>') && html.includes('18 → S') && html.includes('4 → E') && html.includes('36 → k'), 'the view shows the result and each group’s value and symbol');
+eq((html.match(/class="te-block"/g) ?? []).length, 1, 'HI fits in one block');
+ok(html.includes('--cols:18'), 'HI: 2 bytes = 16 columns, 3 groups = 18 columns, so the block is 18 wide');
+eq((outputHtml(encode('Hello!')).match(/class="te-block"/g) ?? []).length, 2, 'six bytes make two three-byte blocks');
+ok(outputHtml(encode('Hello!')).split('--cols:24').length === 3, 'both blocks are a full 24 columns wide');
+ok(outputHtml(encode('Game')).includes('--cols:12'), 'the fourth byte starts a second block of 8 bits plus 4 added: 2 groups, 12 columns');
+ok(outputHtml(encode('')).includes('te-empty'), 'the empty text shows its note');
 
 console.log(`check-pe-diagram-models: ${checks} checks passed`);
