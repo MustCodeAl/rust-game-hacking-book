@@ -87,6 +87,7 @@ export default defineConfig({
 				'./src/styles/design/index.css',
 				'./src/styles/reader-semantic.css',
 				'./src/styles/reader-modern.css',
+				'./src/styles/mobile-touch.css',
 			],
 			components: {
 				Head: './src/components/overrides/Head.astro',
