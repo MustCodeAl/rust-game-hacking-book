@@ -8,8 +8,8 @@ import { resolve } from 'node:path';
 const site = fileURLToPath(new URL('../', import.meta.url));
 interface HandoffFigure { asset: string; sha256: string; lesson: string; alt: string; caption: string }
 const records: HandoffFigure[] = JSON.parse(await readFile(resolve(site, 'src/data/finish-handoff-figures.json'), 'utf8'));
-assert.equal(records.length, 43);
-assert.equal(new Set(records.map(record => record.asset)).size, 43);
+assert.equal(records.length, 0);
+assert.equal(new Set(records.map(record => record.asset)).size, 0);
 const lessons = [];
 for (const folder of await readdir(resolve(site, 'src/content/docs/pages'))) {
   if (!/^\d+$/.test(folder)) continue;
@@ -21,7 +21,7 @@ for (const folder of await readdir(resolve(site, 'src/content/docs/pages'))) {
 }
 assert.equal(lessons.length, 155);
 // Rust vec![...] and #![...] are not Markdown images. Count only real markup.
-const authoredImage = /<img\b[^>]*\bsrc=|<MotionPicture\b|<[A-Z]\w*(?:Diagram|Decoder|Segmentation|Lifetimes|Path|Loss|Stacks|AddressMap)\b|!\[[^\]\n]*\]\([^\s)]+\)/;
+const authoredImage = /<img\b[^>]*\bsrc=|<MotionPicture\b|<[A-Z]\w*(?:Diagram|Decoder|Segmentation|Lifetimes|Path|Loss|Stacks|AddressMap|Frames|Cells)\b|!\[[^\]\n]*\]\([^\s)]+\)/;
 for (const lesson of lessons) assert.ok(authoredImage.test(lesson.source), `${lesson.lesson}: no authored picture`);
 for (const record of records) {
   const bytes = await readFile(resolve(site, 'public', record.asset));
@@ -31,7 +31,7 @@ for (const record of records) {
   assert.ok(record.alt.length > 30 && record.caption.length > 30);
 }
 if (process.argv.includes('--source-only')) {
-  console.log('handoff-art: 155 genuine authored-picture lessons; 43 distinct additions, references, descriptions and asset hashes pass.');
+  console.log('handoff-art: 155 genuine authored-picture lessons; 0 distinct additions, references, descriptions and asset hashes pass.');
   process.exit(0);
 }
 

@@ -2,6 +2,8 @@
 // A message-flow diagram: lanes across the top, one numbered arrow per step, the explanation beside each.
 // Every step is plain server-rendered text; the script only adds Previous/Play/Next and tabs.
 import { stepRoute, stepSpan, type FlowScenario } from '../lib/flow-model';
+import { guessIcon, iconMarkup, laneHues } from '../lib/diagram-visual';
+import '../styles/diagram-hues.css';
 import '../styles/flow-diagram.css';
 interface Props { id: string; title: string; scenarios: readonly FlowScenario[]; initial?: string }
 const { id, title, scenarios, initial } = Astro.props;
@@ -17,13 +19,21 @@ const kindTag: Record<string, string> = { request: 'Request', response: 'Reply',
     return <figure class="flow__panel not-content" id={`${id}-${scenario.id}`} data-dg data-dg-panel={tabbed ? scenario.id : undefined} aria-label={scenario.title}>
       <figcaption><strong>{scenario.title}</strong><span>{scenario.summary}</span></figcaption>
       <div class="flow__lanes" style={`--lanes:${lanes}`} aria-hidden="true">
-        <div class="flow__lane-names">{scenario.lanes.map(lane => <span>{lane.label}</span>)}</div>
+        <div class="flow__lane-names">{scenario.lanes.map((lane, position) => {
+          const icon = lane.icon ?? guessIcon(lane.id, lane.label);
+          return <span class="flow__lane" data-hue={lane.hue ?? laneHues[position % laneHues.length]}>
+            {icon && <svg class="flow__icon" viewBox="0 0 24 24" aria-hidden="true" set:html={iconMarkup[icon]} />}
+            <span>{lane.label}</span>
+          </span>;
+        })}</div>
       </div>
       <ol class="flow__steps">
         {scenario.steps.map((step, index) => {
           const span = stepSpan(scenario, step);
           const kind = step.kind ?? 'request';
-          return <li class="flow__step" data-dg-step data-dg-caption={`${index + 1}. ${step.label}. ${step.caption}`} data-dg-direction={span.direction === 'left' ? 'left' : 'right'} data-kind={kind} data-state="done"
+          const sender = scenario.lanes.findIndex(lane => lane.id === step.from);
+          const hue = scenario.lanes[sender]?.hue ?? laneHues[Math.max(sender, 0) % laneHues.length];
+          return <li class="flow__step" data-hue={hue} data-dg-step data-dg-caption={`${index + 1}. ${step.label}. ${step.caption}`} data-dg-direction={span.direction === 'left' ? 'left' : 'right'} data-kind={kind} data-state="done"
             style={`--lanes:${lanes};--start:${span.start};--end:${span.end + 1};--span:${span.end - span.start + 1}`}>
             <div class="flow__track" aria-hidden="true">
               {span.direction === 'self'

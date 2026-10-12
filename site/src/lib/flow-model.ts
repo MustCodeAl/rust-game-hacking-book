@@ -6,6 +6,10 @@ export type FlowKind = 'request' | 'response' | 'data' | 'control' | 'secure' | 
 export interface FlowLane {
   readonly id: string;
   readonly label: string;
+  /** Colour of the lane box and of the arrows it sends; lanes take blue, green, orange, purple, pink in order by default. */
+  readonly hue?: import('./diagram-visual').Hue;
+  /** Line icon in the lane box; a fitting one is guessed from the lane's id and label when omitted. */
+  readonly icon?: import('./diagram-visual').IconName;
 }
 
 export interface FlowStep {

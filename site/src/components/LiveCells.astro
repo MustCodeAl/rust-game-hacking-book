@@ -1,0 +1,49 @@
+---
+// A live calculator: a few labelled inputs, preset buttons and one colour-coded result frame that recomputes as you type.
+// Without JavaScript the page shows the default result (server-rendered from the same function) and the controls stay hidden.
+import { liveLabs } from '../lib/live-labs';
+import { frameBodyHtml } from '../lib/cell-html';
+import '../styles/diagram-hues.css';
+import '../styles/cell-frames.css';
+interface Props { lab: string }
+const lab = liveLabs[Astro.props.lab];
+if (!lab) throw new Error(`Unknown live lab: ${Astro.props.lab}`);
+const start = lab.compute(lab.defaults);
+---
+<div class="cells live" data-live={lab.id}>
+  <figure class="cells__figure live__figure not-content" aria-label={lab.title}>
+    <figcaption><strong>{lab.title}</strong><span>{lab.summary}</span></figcaption>
+    <div class="live__controls" data-live-controls hidden>
+      {lab.presets && <div class="live__presets" role="group" aria-label="Examples">
+        {lab.presets.map(preset => <button type="button" data-live-preset={JSON.stringify(preset.values)}>{preset.label}</button>)}
+      </div>}
+      <div class="live__inputs">
+        {lab.inputs.map(input => input.kind === 'bits'
+          ? <div class="live__field" role="group" aria-label={input.label}>
+              <span>{input.label}</span>
+              <div class="live__bits" data-live-input={input.id} data-live-kind="bits">
+                {[...(lab.defaults[input.id] ?? '')].map((digit, index) => <button type="button" data-live-bit={index} aria-pressed={digit === '1' ? 'true' : 'false'} aria-label={`Bit ${input.width - 1 - index}`}>{digit}</button>)}
+              </div>
+            </div>
+          : <label class="live__field">
+              <span>{input.label}</span>
+              {input.kind === 'choice'
+                ? <select data-live-input={input.id} data-live-kind="choice">{input.options.map(option => <option value={option.value} selected={option.value === lab.defaults[input.id]}>{option.label}</option>)}</select>
+                : input.kind === 'hex'
+                  ? <input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength={input.digits + 2} data-live-input={input.id} data-live-kind="hex" value={lab.defaults[input.id] ?? ''} />
+                  : <input type="number" inputmode="numeric" min={input.min} max={input.max} step={input.step ?? 1} data-live-input={input.id} data-live-kind="number" value={lab.defaults[input.id] ?? ''} />}
+            </label>)}
+      </div>
+    </div>
+    <div class="live__out" aria-live="polite" aria-atomic="true">
+      <p class="cells__label"><strong>{start.label}</strong></p>
+      <Fragment set:html={frameBodyHtml(start)} />
+    </div>
+    <p class="cells__caption live__caption" data-live-caption>{start.caption}</p>
+    <p class="live__error" role="alert" data-live-error hidden></p>
+  </figure>
+</div>
+<script>
+  import { mountLiveCells } from '../scripts/live-cells';
+  mountLiveCells();
+</script>

@@ -1,0 +1,46 @@
+---
+// A stepped state diagram: every step is one complete, colour-coded frame (titled panels of cell rows) with the changed
+// cells marked. All frames are plain server-rendered markup, stacked and complete without JavaScript; the shared player
+// only adds Previous/Play/Next and tabs, exactly as it does for FlowDiagram.
+import type { CellScenario } from '../lib/cell-model';
+import { frameBodyHtml } from '../lib/cell-html';
+import '../styles/diagram-hues.css';
+import '../styles/cell-frames.css';
+interface Props { id: string; title: string; scenarios: readonly CellScenario[]; initial?: string }
+const { id, title, scenarios, initial } = Astro.props;
+const tabbed = scenarios.length > 1;
+---
+<div class="cells" id={id} data-dg-tabs={tabbed ? '' : undefined} data-dg-tabs-initial={tabbed ? (initial ?? scenarios[0]?.id) : undefined}>
+  {tabbed && <div class="cells__tabs" role="tablist" aria-label={title} hidden>
+    {scenarios.map(scenario => <button type="button" role="tab" id={`${id}-${scenario.id}-tab`} aria-controls={`${id}-${scenario.id}`} aria-selected="false" tabindex="-1" data-dg-tab={scenario.id}>{scenario.tab}</button>)}
+  </div>}
+  {scenarios.map(scenario => (
+    <figure class="cells__figure not-content" id={`${id}-${scenario.id}`} data-dg data-dg-panel={tabbed ? scenario.id : undefined} aria-label={scenario.title}>
+      <figcaption><strong>{scenario.title}</strong><span>{scenario.summary}</span></figcaption>
+      <ol class="cells__steps">
+        {scenario.frames.map((frame, index) => (
+          <li class="cells__step" data-dg-step data-dg-caption={`${index + 1}. ${frame.label}. ${frame.caption}`} data-state="done">
+            <p class="cells__label"><b>{index + 1}</b> <strong>{frame.label}</strong></p>
+            <Fragment set:html={frameBodyHtml(frame)} />
+            <p class="cells__caption">{frame.caption}</p>
+          </li>
+        ))}
+      </ol>
+      <div class="cells__controls" data-dg-controls hidden>
+        <button type="button" data-dg-prev>Previous</button>
+        <button type="button" data-dg-play aria-pressed="false">Play</button>
+        <button type="button" data-dg-next>Step through</button>
+        <button type="button" data-dg-all>Show all</button>
+        <span class="cells__counter" data-dg-counter>All {scenario.frames.length} steps shown</span>
+      </div>
+      <p class="cells__note" data-dg-motion-note></p>
+      <p class="sr-only" data-dg-status role="status" aria-live="polite" aria-atomic="true">{scenario.summary}</p>
+    </figure>
+  ))}
+</div>
+<script>
+  import { mountDiagramPlayers } from '../scripts/diagram-player';
+  import { mountDiagramTabs } from '../scripts/diagram-tabs';
+  mountDiagramPlayers();
+  mountDiagramTabs();
+</script>
