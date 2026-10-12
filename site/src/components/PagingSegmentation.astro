@@ -1,0 +1,97 @@
+---
+// Two independent translators side by side: paging (page number + offset -> frame, present bit, page fault) and
+// segmentation (segment table base + inclusive limit, trap when the offset is past the limit). The default result of each
+// and a table of worked translations are server-rendered text; the script adds bounded inputs that recompute them.
+import { PAGE_TABLE, SEGMENT_TABLE, addressHex, pagingOutcome, pagingSteps, segmentOutcome, segmentSteps, splitBits, translatePage, translateSegment } from '../lib/address-translation';
+import { toHex } from '../lib/hex-field';
+import '../styles/memory-diagrams.css';
+import '../styles/address-translation.css';
+interface Props { id?: string; title?: string }
+const { id = 'paging-segmentation', title = 'Two ways to turn a program’s address into a real one' } = Astro.props;
+const pagingDefault = translatePage(0x4234);
+const segDefault = translateSegment(0, 0x0234);
+const bits = splitBits(0x4234);
+const pagePresets = [0x4234, 0x2fff, 0x7fff, 0x1000, 0x0000];
+const segPresets = [{ s: 0, o: 0x0234 }, { s: 0, o: 0x1fff }, { s: 0, o: 0x2000 }, { s: 1, o: 0x1000 }, { s: 3, o: 0 }];
+const worked = [
+  { kind: 'Paging', input: '0x4234', text: pagingOutcome(translatePage(0x4234)) },
+  { kind: 'Paging', input: '0x2FFF', text: pagingOutcome(translatePage(0x2fff)) },
+  { kind: 'Segmentation', input: 'S0 : 0x0234', text: segmentOutcome(translateSegment(0, 0x0234)) },
+  { kind: 'Segmentation', input: 'S0 : 0x2000', text: segmentOutcome(translateSegment(0, 0x2000)) },
+];
+---
+<figure class="mdg ps not-content" id={id} data-ps aria-labelledby={`${id}-title`}>
+  <figcaption><strong id={`${id}-title`}>{title}</strong><span>Two independent examples, not consecutive steps of one address. Each one starts from a number the program uses and ends in a number the hardware uses, or in a fault.</span></figcaption>
+
+  <section class="ps-panel" data-ps-panel="paging" aria-labelledby={`${id}-paging-h`}>
+    <h4 id={`${id}-paging-h`}>Paging: equal 4 KiB pages, looked up by number</h4>
+    <form class="mdg-controls ps-controls" data-ps-form="paging" data-reader-skip hidden novalidate>
+      <label class="mdg-field"><span class="mdg-field__label">Logical address, hex (0000 to 7FFF)</span>
+        <span class="mdg-prefixed"><b aria-hidden="true">0x</b><input type="text" data-ps-address value="4234" size="6" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-describedby={`${id}-paging-error`} /></span></label>
+      <div class="ps-presets" role="group" aria-label="Example logical addresses">
+        {pagePresets.map(p => <button type="button" class="mdg-btn" data-ps-page-preset={p}>{toHex(p, 4)}</button>)}
+      </div>
+      <p class="mdg-error" id={`${id}-paging-error`} data-ps-error="paging" role="status" aria-live="polite"></p>
+    </form>
+    <div class="ps-split" role="group" aria-label="The address split into a page number and an offset">
+      <div class="ps-part" data-part="page"><small>page number · 3 bits</small><strong data-ps-page-number>{pagingDefault.page}</strong></div>
+      <div class="ps-part" data-part="offset"><small>offset · 12 bits</small><strong data-ps-offset>0x{toHex(pagingDefault.offset, 3)}</strong></div>
+    </div>
+    <p class="ps-bits">0x<span data-ps-address-text>{toHex(0x4234, 4)}</span> in binary, 15 bits: <code data-ps-bits>{bits.page} {bits.offset}</code></p>
+    <div class="mdg-table-wrap">
+      <table class="mdg-table ps-table" data-ps-pagetable>
+        <caption>Page table (8 pages). The present bit says whether the page has a frame.</caption>
+        <thead><tr><th scope="col">Page</th><th scope="col">Present</th><th scope="col">Frame</th><th scope="col">Frame starts at</th></tr></thead>
+        <tbody>{PAGE_TABLE.map(e => <tr data-ps-row={e.page} aria-current={e.page === pagingDefault.page ? 'true' : undefined}><td>{e.page}</td><td>{e.present ? '1' : '0'}</td><td>{e.present ? `0x${toHex(e.frame, 3)}` : 'none'}</td><td>{e.present ? addressHex(e.frame * 0x1000) : 'none'}</td></tr>)}</tbody>
+      </table>
+    </div>
+    <ol class="ps-steps" data-ps-steps="paging">{pagingSteps(pagingDefault).map(step => <li>{step.replace(/^\d\. /, '')}</li>)}</ol>
+    <p class="ps-result" data-ps-result="paging" data-outcome={pagingDefault.kind === 'mapped' ? 'ok' : 'fault'} role="status" aria-live="polite">{pagingOutcome(pagingDefault)}</p>
+  </section>
+
+  <section class="ps-panel" data-ps-panel="segmentation" aria-labelledby={`${id}-seg-h`}>
+    <h4 id={`${id}-seg-h`}>Segmentation: variable-size pieces with a base and a limit</h4>
+    <form class="mdg-controls ps-controls" data-ps-form="segmentation" data-reader-skip hidden novalidate>
+      <label class="mdg-field"><span class="mdg-field__label">Segment</span>
+        <select data-ps-segment>{SEGMENT_TABLE.map(e => <option value={e.id} selected={e.id === 0}>S{e.id} ({e.name})</option>)}</select></label>
+      <label class="mdg-field"><span class="mdg-field__label">Offset, hex (0000 to FFFF)</span>
+        <span class="mdg-prefixed"><b aria-hidden="true">0x</b><input type="text" data-ps-offset-input value="0234" size="6" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-describedby={`${id}-seg-error`} /></span></label>
+      <div class="ps-presets" role="group" aria-label="Example segment and offset pairs">
+        {segPresets.map(p => <button type="button" class="mdg-btn" data-ps-seg-preset={`${p.s}:${p.o}`}>S{p.s} : {toHex(p.o, 4)}</button>)}
+      </div>
+      <p class="mdg-error" id={`${id}-seg-error`} data-ps-error="segmentation" role="status" aria-live="polite"></p>
+    </form>
+    <div class="ps-split" role="group" aria-label="The logical address as a segment number and an offset">
+      <div class="ps-part" data-part="page"><small>segment number</small><strong data-ps-seg-number>S{segDefault.segment}</strong></div>
+      <div class="ps-part" data-part="offset"><small>offset</small><strong data-ps-seg-offset>0x{toHex(segDefault.offset, 4)}</strong></div>
+    </div>
+    <div class="mdg-table-wrap">
+      <table class="mdg-table ps-table" data-ps-segtable>
+        <caption>Segment table. The limit is the last valid offset, so the segment holds limit + 1 bytes.</caption>
+        <thead><tr><th scope="col">Segment</th><th scope="col">Base</th><th scope="col">Limit</th><th scope="col">Size</th></tr></thead>
+        <tbody>{SEGMENT_TABLE.map(e => <tr data-ps-seg-row={e.id} aria-current={e.id === segDefault.segment ? 'true' : undefined}><td>S{e.id} {e.name}</td><td>{e.present ? addressHex(e.base) : 'none'}</td><td>{e.present ? `0x${toHex(e.limit, 4)}` : 'none'}</td><td>{e.present ? `${(e.limit + 1).toLocaleString('en-US')} bytes` : 'not in use'}</td></tr>)}</tbody>
+      </table>
+    </div>
+    <ol class="ps-steps" data-ps-steps="segmentation">{segmentSteps(segDefault).map(step => <li>{step.replace(/^\d\. /, '')}</li>)}</ol>
+    <p class="ps-result" data-ps-result="segmentation" data-outcome={segDefault.kind === 'ok' ? 'ok' : 'fault'} role="status" aria-live="polite">{segmentOutcome(segDefault)}</p>
+  </section>
+
+  <h4>Four worked translations</h4>
+  <div class="mdg-table-wrap">
+    <table class="mdg-table mdg-table--stack ps-worked">
+      <thead><tr><th scope="col">Method</th><th scope="col">Input</th><th scope="col">Result</th></tr></thead>
+      <tbody>{worked.map(w => <tr><td data-label="Method">{w.kind}</td><td data-label="Input"><code>{w.input}</code></td><td data-label="Result">{w.text}</td></tr>)}</tbody>
+    </table>
+  </div>
+  <dl class="mdg-terms ps-compare" aria-label="Paging compared with segmentation">
+    <dt>Piece size</dt><dd>Paging: every page is the same size (here 4 KiB), so any free frame fits any page. Segmentation: each segment has its own size, which is why every row has its own limit.</dd>
+    <dt>What is checked</dt><dd>Paging: the page&rsquo;s present bit (and, on real CPUs, access permissions). Segmentation: that the offset is not past the limit.</dd>
+    <dt>What goes wrong</dt><dd>Paging: a page fault when the page has no frame. Segmentation: a trap when the offset is past the limit or the segment is not in use.</dd>
+    <dt>Windows today</dt><dd>Windows normally uses flat segments (one big segment starting at zero) and does the real work with paging, so the page tables decide what each address means.</dd>
+  </dl>
+  <noscript><p class="mdg-note">The default results and the four worked translations above are complete without JavaScript.</p></noscript>
+</figure>
+<script>
+  import { mountPagingSegmentation } from '../scripts/paging-segmentation';
+  mountPagingSegmentation();
+</script>

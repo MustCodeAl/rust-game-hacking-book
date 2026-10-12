@@ -1,0 +1,119 @@
+---
+// One 32-bit call, stepped: the stack, ESP, EBP and EIP after every instruction, then a defensive look at what an
+// out-of-range write to a local buffer can reach. Stepping uses the shared diagram player; the stack picture is redrawn
+// by ../scripts/stack-frame from the same pure model that renders the default view here.
+import { BUFFER_BYTES, MAX_WRITTEN, PEAK_STATE, frameStates, hex8, listing, overflowReach } from '../lib/stack-frame';
+import '../styles/memory-diagrams.css';
+import '../styles/stack-frame.css';
+interface Props { id?: string; title?: string }
+const { id = 'stack-frame', title = 'Follow one call through the stack' } = Astro.props;
+const states = frameStates();
+const peak = states[PEAK_STATE];
+if (!peak) throw new Error('The stack model has no default state.');
+const lines = listing();
+const reach = overflowReach(16, false);
+const table = [8, 12, 16, 20].map(n => {
+  const damaged = (cookie: boolean): string => {
+    const list = overflowReach(n, cookie).rows.filter(row => row.bytesHit > 0 && row.role !== 'buffer' && row.role !== 'local').map(row => row.label).reverse();
+    return list.length === 0 ? 'only the buffer' : list.join(', ');
+  };
+  return { n, plain: damaged(false), cookie: damaged(true) };
+});
+---
+<figure class="mdg sf not-content" id={id} data-dg data-sf aria-labelledby={`${id}-title`}>
+  <figcaption><strong id={`${id}-title`}>{title}</strong><span>A near call with no arguments at 0x{hex8(lines[0]?.address ?? 0)}. Each step shows the three registers that move and the four-byte stack words, higher addresses at the top.</span></figcaption>
+
+  <div class="mdg-controls sf-controls" data-dg-controls hidden data-reader-skip>
+    <button type="button" class="mdg-btn" data-dg-prev>Previous</button>
+    <button type="button" class="mdg-btn mdg-btn--primary" data-dg-play aria-pressed="false">Play</button>
+    <button type="button" class="mdg-btn" data-dg-next>Step through</button>
+    <button type="button" class="mdg-btn" data-dg-all>Show all</button>
+    <span class="sf-counter" data-dg-counter>All {states.length} steps shown</span>
+  </div>
+  <p class="mdg-note" data-dg-motion-note data-reader-skip></p>
+  <p class="mdg-sr" data-dg-status role="status" aria-live="polite" aria-atomic="true">Frame at its fullest, while the function body runs.</p>
+
+  <div class="sf-stage">
+    <div class="sf-picture">
+      <p class="sf-now" data-sf-now><strong data-sf-title>The frame at its fullest, while the function body runs</strong><span data-sf-explain>{peak.explanation}</span></p>
+      <div class="sf-regs" role="group" aria-label="Registers">
+        {(['ESP', 'EBP', 'EIP'] as const).map(reg => <div class="sf-reg" data-reg={reg} data-changed="false">
+          <small>{reg}</small><code data-sf-reg={reg}>{hex8(reg === 'ESP' ? peak.esp : reg === 'EBP' ? peak.ebp : peak.eip)}</code><em>changed</em>
+        </div>)}
+      </div>
+      <ol class="sf-slots" aria-label="Stack words, higher addresses first">
+        {peak.slots.map(slot => <li class="sf-slot" data-slot={slot.address} data-role={slot.role} data-fill={slot.fill}>
+          <span class="sf-marks" data-sf-marks>{slot.marks.join(' ')}</span>
+          <code class="sf-addr">{hex8(slot.address)}</code>
+          <strong class="sf-val" data-sf-val>{slot.value}</strong>
+          <span class="sf-label">{slot.label} <em data-sf-fill>{slot.fill}</em></span>
+        </li>)}
+      </ol>
+    </div>
+    <div class="sf-side">
+      <h4>The instructions</h4>
+      <ol class="sf-listing" aria-label="Instruction listing">
+        {lines.map(line => <li data-addr={line.address} aria-current={line.address === peak.eip ? 'true' : undefined}>
+          <code class="sf-addr">{hex8(line.address)}</code><code class="sf-bytes">{line.bytes}</code><span>{line.text}</span>
+        </li>)}
+      </ol>
+      <p class="mdg-note">EIP always holds the address of the next instruction to run, so the highlighted line is the one that runs next. The addresses are illustrative.</p>
+    </div>
+  </div>
+
+  <h4>The steps</h4>
+  <ol class="sf-steps">
+    {states.map(state => <li class="sf-step" data-dg-step data-state="done" data-dg-caption={`Step ${state.index + 1} of ${states.length}: ${state.instruction}. ${state.explanation}`}>
+      <p class="sf-step-head"><b>Step {state.index + 1}</b> <code>{state.instruction}</code></p>
+      <p class="sf-step-text">{state.explanation}</p>
+    </li>)}
+  </ol>
+  <p class="mdg-note">Releasing stack space does not erase it: after leave and ret the old bytes are still in memory, but they are no longer part of any live frame. A compiler can also omit the EBP frame; this is the conventional layout.</p>
+
+  <section class="sf-reach" data-sf-reach aria-labelledby={`${id}-reach-h`}>
+    <h3 id={`${id}-reach-h`}>What can a write past the end of a local buffer reach?</h3>
+    <p>Suppose the function copies bytes into a {BUFFER_BYTES}-byte local buffer and never checks the length. A copy goes from lower to higher addresses, so past the end of the buffer lie, in order, the rest of the frame: saved EBP, the return address, then the caller&rsquo;s own data. Choose how many bytes the copy writes.</p>
+    <form class="mdg-controls sf-reach-controls" data-sf-reach-form data-reader-skip hidden novalidate>
+      <label class="mdg-field"><span class="mdg-field__label">Bytes written (0 to {MAX_WRITTEN})</span>
+        <input type="number" min="0" max={MAX_WRITTEN} step="1" value={reach.written} inputmode="numeric" data-sf-written aria-describedby={`${id}-reach-error`} /></label>
+      <div class="sf-presets" role="group" aria-label="Example lengths">
+        {[8, 9, 12, 16, 20].map(n => <button type="button" class="mdg-btn" data-sf-preset={n}>{n}</button>)}
+      </div>
+      <label class="sf-check"><input type="checkbox" data-sf-cookie /> <span>The compiler added a stack cookie</span></label>
+      <p class="mdg-error" id={`${id}-reach-error`} data-sf-reach-error role="status" aria-live="polite"></p>
+    </form>
+    <ol class="sf-reach-rows" data-sf-reach-rows aria-label="Stack words, higher addresses first">
+      {reach.rows.map(row => <li class="sf-reach-row" data-role={row.role} data-hit={row.bytesHit > 0 ? 'true' : 'false'}>
+        <code class="sf-addr">{hex8(row.address)}</code>
+        <strong class="sf-val" data-sf-hit>{row.bytesHit === 0 ? 'untouched' : `${row.bytesHit} of 4 bytes written`}</strong>
+        <span class="sf-label" data-sf-rowlabel>{row.label}</span>
+      </li>)}
+    </ol>
+    <p class="mdg-status" data-sf-verdict role="status" aria-live="polite" aria-atomic="true">{reach.verdict}</p>
+
+    <div class="mdg-table-wrap">
+      <table class="mdg-table mdg-table--stack sf-reach-table">
+        <caption>The same write, with and without a cookie. Byte n lands n &minus; 1 bytes above the start of the buffer.</caption>
+        <thead><tr><th scope="col">Bytes written</th><th scope="col">Words damaged, no cookie</th><th scope="col">Words damaged, with a cookie</th></tr></thead>
+        <tbody>{table.map(row => <tr><td data-label="Bytes written">{row.n}</td><td data-label="Words damaged, no cookie">{row.plain}</td><td data-label="Words damaged, with a cookie">{row.cookie}{row.n > BUFFER_BYTES ? '; the program stops before ret' : ''}</td></tr>)}</tbody>
+      </table>
+    </div>
+
+    <h4>Why bounds checks, cookies, DEP and ASLR exist</h4>
+    <dl class="mdg-terms sf-defences">
+      <dt>Bounds check</dt><dd>Compare the number of bytes to copy with the buffer size before copying, or use calls that take the size. With the check, the write never leaves the buffer and nothing else is needed.</dd>
+      <dt>Stack cookie</dt><dd>The compiler places a secret value between the locals and the saved EBP and checks it before the function returns. A copy that runs upward through the frame must cross the cookie, so the check fails and the program stops before ret runs. (Visual C++ calls this /GS.)</dd>
+      <dt>DEP / NX</dt><dd>Data Execution Prevention marks stack and heap memory as not executable, so bytes that were only ever data cannot be run as code even if the CPU is pointed at them.</dd>
+      <dt>ASLR</dt><dd>Address space layout randomisation places stacks, heaps and modules at different addresses on each run or boot, so a real program&rsquo;s return address is not a number anyone can know in advance. The values on this page are fixed only so you can follow the arithmetic.</dd>
+      <dt>Memory-safe code</dt><dd>Rust&rsquo;s checked indexing and slice copies panic on a length that does not fit instead of writing past the end. The protection is gone inside <code>unsafe</code> code and in C-style APIs.</dd>
+    </dl>
+    <p class="mdg-note">These are defences, not a guarantee: they make the bug harder to use, and the fix is still to remove it.</p>
+  </section>
+  <noscript><p class="mdg-note">The picture above shows the frame at its fullest, and every step, the default write and the table are complete without JavaScript.</p></noscript>
+</figure>
+<script>
+  import { mountDiagramPlayers } from '../scripts/diagram-player';
+  import { mountStackFrames } from '../scripts/stack-frame';
+  mountDiagramPlayers();
+  mountStackFrames();
+</script>

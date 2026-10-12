@@ -1,0 +1,89 @@
+---
+// Take one ModR/M byte apart: mod | reg | r/m, the 32-bit addressing form from Intel Table 2-2, and the bytes that follow.
+// The default byte and a worked table of real instructions are server-rendered text; the script adds the byte field,
+// the three pickers and the example buttons, and recomputes everything with the pure model in ../lib/modrm.
+import { EXAMPLES, EXAMPLE_BYTES, decodeModRM, describeFollow, describeMod, describeReg, describeRm, explainExample, regRows, rmRows } from '../lib/modrm';
+import { toHex } from '../lib/hex-field';
+import '../styles/memory-diagrams.css';
+import '../styles/modrm-decoder.css';
+interface Props { id?: string; title?: string; initial?: number }
+const { id = 'modrm-decoder', title = 'Take a ModR/M byte apart', initial = 0x45 } = Astro.props;
+const m = decodeModRM(initial);
+const rm = rmRows(m.mod);
+const regs = regRows();
+const fieldOf = (index: number): 'mod' | 'reg' | 'rm' => (index < 2 ? 'mod' : index < 5 ? 'reg' : 'rm');
+---
+<figure class="mdg mr not-content" id={id} data-modrm data-mr-initial={initial} aria-labelledby={`${id}-title`}>
+  <figcaption><strong id={`${id}-title`}>{title}</strong><span>One byte holds three fields. Pick or type a byte and see what each field says about the instruction's operands.</span></figcaption>
+
+  <form class="mdg-controls mr-controls" data-mr-form data-reader-skip hidden novalidate>
+    <div class="mr-entry">
+      <label class="mdg-field"><span class="mdg-field__label">ModR/M byte, hex</span>
+        <span class="mdg-prefixed"><b aria-hidden="true">0x</b><input type="text" data-mr-input value={m.hex} size="3" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-describedby={`${id}-error`} /></span></label>
+      <label class="mdg-field mr-sibfield" data-mr-sibfield hidden><span class="mdg-field__label">SIB byte, hex</span>
+        <span class="mdg-prefixed"><b aria-hidden="true">0x</b><input type="text" data-mr-sib-input value="24" size="3" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" /></span></label>
+    </div>
+    <div class="mr-pickers">
+      <label class="mdg-field"><span class="mdg-field__label">mod</span>
+        <select data-mr-select="mod">{[0, 1, 2, 3].map(v => <option value={v} selected={v === m.mod}>{v.toString(2).padStart(2, '0')}</option>)}</select></label>
+      <label class="mdg-field"><span class="mdg-field__label">reg</span>
+        <select data-mr-select="reg">{regs.map(r => <option value={r.reg} selected={r.reg === m.reg}>{r.bits} ({r.r32})</option>)}</select></label>
+      <label class="mdg-field"><span class="mdg-field__label">r/m</span>
+        <select data-mr-select="rm">{regs.map(r => <option value={r.reg} selected={r.reg === m.rm}>{r.bits}</option>)}</select></label>
+    </div>
+    <div class="mr-examples" role="group" aria-label="Example ModR/M bytes">
+      <span class="mdg-field__label">Try</span>
+      {EXAMPLE_BYTES.map(b => <button type="button" class="mdg-btn" data-mr-example={b} aria-pressed={b === initial ? 'true' : 'false'}>{toHex(b, 2)}</button>)}
+    </div>
+    <p class="mdg-error" id={`${id}-error`} data-mr-error role="status" aria-live="polite"></p>
+  </form>
+
+  <p class="mr-hex">ModR/M byte <code data-mr-hex>{m.hex}</code> = binary <code data-mr-binary>{m.modBits} {m.regBits} {m.rmBits}</code></p>
+  <div class="mr-byte" role="group" aria-label="The byte as eight bits: mod is the top two, reg the next three, r/m the last three">
+    <ol class="mr-bits">{m.binary.split('').map((bit, i) => <li class="mr-bit" data-field={fieldOf(i)} data-mr-bit={i}>{bit}</li>)}</ol>
+    <div class="mr-fields" aria-hidden="true">
+      <span class="mr-field" data-field="mod"><b>mod</b><span data-mr-label="mod">{m.modBits} = {m.mod}</span></span>
+      <span class="mr-field" data-field="reg"><b>reg</b><span data-mr-label="reg">{m.regBits} = {m.reg}</span></span>
+      <span class="mr-field" data-field="rm"><b>r/m</b><span data-mr-label="rm">{m.rmBits} = {m.rm}</span></span>
+    </div>
+  </div>
+
+  <dl class="mdg-terms" aria-label="What each field says">
+    <dt>mod = <span data-mr-text="mod-bits">{m.modBits}</span></dt><dd data-mr-text="mod">{describeMod(m.mod)}</dd>
+    <dt>reg = <span data-mr-text="reg-bits">{m.regBits}</span></dt><dd data-mr-text="reg">{describeReg(m)}</dd>
+    <dt>r/m = <span data-mr-text="rm-bits">{m.rmBits}</span></dt><dd data-mr-text="rm">{describeRm(m)}</dd>
+  </dl>
+  <p class="mr-result"><strong>Operand form from Table 2-2:</strong> <code data-mr-text="form">{m.addressForm}</code><br /><span data-mr-text="follow">{describeFollow(m)}</span></p>
+  <p class="mr-sib" data-mr-sib-out hidden></p>
+
+  <div class="mr-tables">
+    <div class="mdg-table-wrap">
+      <table class="mdg-table mr-table" data-mr-rmtable>
+        <caption>Table 2-2, the r/m rows for mod = <span data-mr-text="table-mod">{m.modBits}</span></caption>
+        <thead><tr><th scope="col">r/m</th><th scope="col">Operand</th><th scope="col">Byte if reg = 000</th></tr></thead>
+        <tbody data-mr-rmbody>{rm.map(r => <tr data-mr-rm={r.rm} aria-current={r.rm === m.rm ? 'true' : undefined}><td>{r.bits}</td><td>{r.form}</td><td>{r.hex}</td></tr>)}</tbody>
+      </table>
+    </div>
+    <div class="mdg-table-wrap">
+      <table class="mdg-table mr-table" data-mr-regtable>
+        <caption>Table 2-2, the reg rows</caption>
+        <thead><tr><th scope="col">reg</th><th scope="col">r8</th><th scope="col">r16</th><th scope="col">r32</th><th scope="col">83 /digit</th></tr></thead>
+        <tbody>{regs.map(r => <tr data-mr-reg={r.reg} aria-current={r.reg === m.reg ? 'true' : undefined}><td>{r.bits}</td><td>{r.r8}</td><td>{r.r16}</td><td>{r.r32}</td><td>/{r.reg} {r.group1}</td></tr>)}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <h4>Six real instructions, decoded</h4>
+  <div class="mdg-table-wrap">
+    <table class="mdg-table mdg-table--stack mr-worked">
+      <thead><tr><th scope="col">Bytes</th><th scope="col">Assembly</th><th scope="col">How the bytes read</th></tr></thead>
+      <tbody>{EXAMPLES.map(e => <tr><td data-label="Bytes">{e.bytes.map(b => toHex(b, 2)).join(' ')}</td><td data-label="Assembly"><code>{e.asm}</code></td><td data-label="How the bytes read">{e.opcodeNote} {explainExample(e)}</td></tr>)}</tbody>
+    </table>
+  </div>
+  <p class="mdg-note">The table reproduces the 32-bit rows of Intel's Table 2-2 (Intel SDM Volume 2, section 2.1.5). In 64-bit mode a REX prefix can extend each field to four bits, and mod 00 with r/m 101 means RIP-relative addressing instead of an absolute address. The MMX and XMM register columns of the Intel table are left out.</p>
+  <noscript><p class="mdg-note">The default byte, both tables and the six decoded instructions are complete without JavaScript.</p></noscript>
+</figure>
+<script>
+  import { mountModRMDecoders } from '../scripts/modrm-decoder';
+  mountModRMDecoders();
+</script>
