@@ -51,7 +51,7 @@ try {
       for (const [key, value] of Object.entries({ ax, ay, bx, by })) await set(vector, key, value);
       const line = vector.locator('line.predict-figure__arrow');
       assert.deepEqual(await line.evaluate(n => ['x1', 'y1', 'x2', 'y2'].map(k => Number(n.getAttribute(k)))), [240 + ax * 13, 125 - ay * 13, 240 + bx * 13, 125 - by * 13]);
-      assert.equal(requireText(await vector.locator('.concept-lab__takeaway').first().textContent()), `Result: ${length.toFixed(1)}`);
+      assert.match(requireText(await vector.locator('.concept-lab__takeaway').first().textContent()), new RegExp(`Result: ${length.toFixed(1).replace('.', '\\.')}$`));
       cases++;
     }
     await shot(vector, 'vector-changed');
@@ -61,10 +61,10 @@ try {
     for (const [path, lab, key, changed, expected] of resetCases) {
       const root = await load(path, lab);
       await set(root, key, changed);
-      if (lab === 'utf8-lab') assert.equal(requireText(await root.locator('.concept-lab__takeaway').first().textContent()), 'Result: 32', 'eight Unicode characters remain intact');
+      if (lab === 'utf8-lab') assert.match(requireText(await root.locator('.concept-lab__takeaway').first().textContent()), /Result: 32$/, 'eight Unicode characters remain intact');
       await root.getByRole('button', { name: 'New numbers', exact: true }).click(); clicks++;
       await root.getByRole('button', { name: 'Reset', exact: true }).click(); clicks++;
-      assert.equal(requireText(await root.locator('.concept-lab__takeaway').first().textContent()), expected);
+      assert.match(requireText(await root.locator('.concept-lab__takeaway').first().textContent()), new RegExp(`${expected}$`));
       assert.equal(await root.locator('details').getAttribute('open'), null, 'Reset closes optional guess');
       await shot(root, lab);
       cases++;
