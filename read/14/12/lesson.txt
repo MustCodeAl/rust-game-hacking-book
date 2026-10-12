@@ -34,6 +34,40 @@ The reset handler runs startup code. Among its jobs is preparing writable static
 
 For example, a writable counter that must start at 7 needs both a working location in R A M and an initial value in the image. Startup copies the 7 before the application uses the counter. A counter starting at zero needs a reserved R A M range, but the image need not carry a long run of zero bytes: startup can write the zeros. The linker and runtime agree on where these ranges begin and end. Local variables are separate; a compiler can keep them in registers or on the stack as the program executes.
 
+What startup does before Rust uses its staticsOn reset the R A M is not initialised. Startup copies .data from flash and zero-fills .bss.
+
+1 The memory map Flash: 256 KiBFlash contentshexadecimal 0 0 0 0 0 0 0 0 0x0003FFFFcode and vectors.data initial value: 7SRAM: 64 KiBRAM contentshexadecimal 2 0 0 0 0 0 0 0 0x2000FFFF.data counter ?.bss counter? Flash is 256 KiB at this value to this value. SRAM is 64 KiB at this value to this value.
+
+Section: Flash: 256 KiB.
+
+Section: SRAM: 64 KiB.
+
+2 After reset, R A M holds nothing useful Flash: 256 KiBFlash contentshexadecimal 0 0 0 0 0 0 0 0 0x0003FFFFcode and vectors.data initial value: 7SRAM: 64 KiBRAM contentshexadecimal 2 0 0 0 0 0 0 0 0x2000FFFF.data counter ??.bss counter ?? The .data and .bss counters have unknown contents.
+
+Section: Flash: 256 KiB.
+
+Section: SRAM: 64 KiB.
+
+3 Startup copies .data from flash Flash: 256 KiBFlash contentshexadecimal 0 0 0 0 0 0 0 0 0x0003FFFFcode and vectors.data initial value: 7SRAM: 64 KiB copy from flashRAM contentshexadecimal 2 0 0 0 0 0 0 0 0x2000FFFF.data counter 7.bss counter ?? The initial value 7 stored in flash is copied into the .data counter in R A M.
+
+Section: Flash: 256 KiB.
+
+Section: SRAM: 64 KiB.
+
+4 Startup zero-fills .bss Flash: 256 KiBFlash contentshexadecimal 0 0 0 0 0 0 0 0 0x0003FFFFcode and vectors.data initial value: 7SRAM: 64 KiB fill with zeroRAM contentshexadecimal 2 0 0 0 0 0 0 0 0x2000FFFF.data counter 7.bss counter 0 The reserved .bss counter is filled with zero.
+
+Section: Flash: 256 KiB.
+
+Section: SRAM: 64 KiB.
+
+5 Now Rust may use both counters Flash: 256 KiBFlash contentshexadecimal 0 0 0 0 0 0 0 0 0x0003FFFFcode and vectors.data initial value: 7SRAM: 64 KiBRAM contentshexadecimal 2 0 0 0 0 0 0 0 0x2000FFFF.data counter 7.bss counter 0 Both statics hold their expected starting values before main runs.
+
+Section: Flash: 256 KiB.
+
+Section: SRAM: 64 KiB.
+
+On reset the R A M is not initialised. Startup copies .data from flash and zero-fills .bss.
+
 The cortex-m-rt runtime provides the Cortex-M startup and vector arrangement used here. Our application supplies its memory map and Rust entry function. The runtime prepares static data, then calls that function. These responsibilities are why a source file containing fn main() alone is not a complete firmware image.
 
 Section: A bootloader is an additional stage.
