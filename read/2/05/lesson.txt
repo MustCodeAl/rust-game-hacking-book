@@ -22,11 +22,135 @@ The stack is one place a running function keeps its bookkeeping and temporary va
 
 These are roles in virtual memory, not three physical kinds of R A M, random access memory. Windows describes thread stacks and heaps; Microsoft’s C++ storage-duration guide explains why a local static value can survive repeated calls. A compiler can also keep a local in a register or eliminate it entirely.
 
+Three places, three lifetimesA pointer inside a stack frame can refer to a heap block with a different lifetime. Step through one call to watch each place start and end on its own. Region positions are schematic.
+
+The allocator hands back a block at this value. That number is stored in p, so p, a slot inside the stack frame, now refers to an object that is not inside the frame.
+
+The moment all three exist: allocate a unit on the heapThe allocator hands back a block at this value. That number is stored in p, so p, a slot inside the stack frame, now refers to an object that is not inside the frame.
+
+Section: Module dataLasts as long as the program.
+
+MAX_UNITS live 6 A global constant in the module’s data. It exists for the whole run of the program, or until the module is unloaded.
+
+Section: Thread stackLasts as long as each call.
+
+Caller’s frame live unit equals not set The frame of the function that calls recruit(). It stays until that function returns.
+
+recruit() frame live count equals 3, p equals this value Created by the call and released by the return. Its locals, including the pointer p, end with it.
+
+Section: HeapLasts until its owner frees it.
+
+Unit block live at this value: Unit { hp: 10 } A heap allocation. It lasts from allocation until its owner frees it, whatever the stack is doing.
+
+Section: The five steps.
+
+Step 1 The program is running Static data exists. The caller’s frame is on the stack. The heap holds no Unit yet, and its variable unit is not set.
+
+Step 2 Call recruit() The call creates a new frame on the stack, with room for count and the pointer p. p holds no address yet.
+
+Step 3 Allocate a Unit on the heap The allocator hands back a block at this value. That number is stored in p, so p, a slot inside the stack frame, now refers to an object that is not inside the frame.
+
+Step 4 recruit() returns the pointer Returning ends the frame, so count and p are released. The heap block is not part of the frame, so it stays. The caller received the number shown here and keeps it in unit.
+
+Step 5 The owner frees the block Freeing ends the block’s life. The caller’s variable still holds this value, but that number now names memory the program no longer owns: a dangling pointer. Static data is untouched throughout.
+
+The stack frame and the heap block are both ordinary virtual memory. What differs is who ends their life: the return for the frame, the owner for the block, and the program itself for static data. Ending a raw-pointer stack slot does not free the block it names. An owning local, such as a Rust Box or a C++ unique_ptr, frees its block when the frame ends.
+
 In brief: The location of a pointer is not the location of its object. Ending a raw-pointer stack slot does not release its heap allocation. An owning local can release that allocation when it is dropped during return.
 
 Section: Read one concrete 32-bit call frame.
 
 Here is an illustrative near call with no arguments, not an address from Wesnoth. A five-byte call at this value must resume at this value. Start with e s p equals this value and caller e b p equals this value:
+
+A conventional e b p frame makes the saved return address visible at e b p + 4. The values below are illustrative and the call has no arguments.
+
+Follow one call through the stackA near call with no arguments at this value. Each step shows the three registers that move and the four-byte stack words, higher addresses at the top.
+
+Frame at its fullest, while the function body runs.
+
+The frame at its fullest, while the function body runsThe body uses the locals at [e b p-hexadecimal 1 0] to [e b p-1]. e s p and e b p stay put. e i p moves on 10 bytes, from this value to this value, where leave is.
+
+0012FF90 caller data caller’s last pushed word (e s p pointed here before the call) live
+
+0012FF8C the numeric value shown return address live
+
+e b p 0012FF88 0012FFC0 saved e b p (the caller’s) live
+
+0012FF84 not initialised local, [e b p-4] live
+
+0012FF80 not initialised local, [e b p-8] live
+
+0012FF7C not initialised local, [e b p-hexadecimal C] live
+
+e s p 0012FF78 not initialised local, [e b p-hexadecimal 1 0] live
+
+0012FF74 — below the frame: not in use empty
+
+Section: The instructions.
+
+the numeric value shown E8 DB 00 00 00 call this value
+
+the numeric value shown (the next caller instruction)
+
+the numeric value shown 55 push e b p
+
+the numeric value shown 8B EC mov e b p, e s p
+
+the numeric value shown 83 EC 10 sub e s p, hexadecimal 1 0
+
+the numeric value shown (function body, 10 bytes, not shown)
+
+the numeric value shown C9 leave
+
+the numeric value shown C3 ret
+
+e i p always holds the address of the next instruction to run, so the highlighted line is the one that runs next. The addresses are illustrative.
+
+Section: The steps.
+
+Step 1 before the call e s p is this value, the caller’s last pushed word. e b p is this value, the caller’s frame base. e i p is this value, the call instruction.
+
+Step 2 call this value The return address is the next instruction: this value + 5 equals this value. call pushes it: e s p equals this value minus 4 equals this value, and this value is stored there. e i p becomes the call target this value (displacement hexadecimal D B from the end of the call).
+
+Step 3 push e b p e s p equals this value minus 4 equals this value. The caller’s e b p, this value, is stored there so it can be restored later.
+
+Step 4 mov e b p, e s p e b p equals e s p equals this value. From now on [e b p+4] equals this value is the return address and locals live below e b p.
+
+Step 5 sub e s p, hexadecimal 1 0 e s p equals this value minus hexadecimal 1 0 equals this value. The sixteen bytes from this value to this value are reserved for locals; nothing has initialised them.
+
+Step 6 function body runs The body uses the locals at [e b p-hexadecimal 1 0] to [e b p-1]. e s p and e b p stay put. e i p moves on 10 bytes, from this value to this value, where leave is.
+
+Step 7 leave leave is mov e s p, e b p (e s p equals this value) followed by pop e b p: e b p equals the word at this value equals this value, then e s p equals this value + 4 equals this value. The locals are released; their bytes are not erased.
+
+Step 8 ret ret pops the return address: e i p equals the word at this value equals this value, then e s p equals this value + 4 equals this value. Execution resumes right after the call.
+
+Releasing stack space does not erase it: after leave and ret the old bytes are still in memory, but they are no longer part of any live frame. A compiler can also omit the e b p frame; this is the conventional layout.
+
+Section: What can a write past the end of a local buffer reach?.
+
+Suppose the function copies bytes into a 8-byte local buffer and never checks the length. A copy goes from lower to higher addresses, so past the end of the buffer lie, in order, the rest of the frame: saved e b p, the return address, then the caller’s own data. Choose how many bytes the copy writes.
+
+0012FF94 untouched caller’s data
+
+0012FF90 untouched caller’s data
+
+0012FF8C 4 of 4 bytes written return address
+
+0012FF88 4 of 4 bytes written saved e b p
+
+0012FF84 4 of 4 bytes written buffer, bytes 5 to 8
+
+0012FF80 4 of 4 bytes written buffer, bytes 1 to 4
+
+0012FF7C untouched another local
+
+0012FF78 untouched another local
+
+8 bytes went past the buffer: the first 4 damaged the saved e b p and 4 bytes reached the return address. When the function runs ret, the C P U, central processing unit, loads e i p from those bytes, so the function returns wherever the written data says. This is the classic stack buffer overflow bug.
+
+Section: Why bounds checks, cookies, DEP and A S L R, address space layout randomization, exist.
+
+These are defences, not a guarantee: they make the bug harder to use, and the fix is still to remove it.
 
 Section: Follow a cdecl call and its cleanup.
 
