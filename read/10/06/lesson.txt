@@ -48,6 +48,24 @@ Narration: Two writers can each read the old gold before either stores its resul
 
 The player should have 1,000 + 500 minus 300 equals 1,200 and has 700. The reward vanished, because the purchase thread wrote a result computed from a value that was already out of date. Most runs interleave harmlessly, with one thread finishing before the other starts, which is why a race can pass every test and still fail for a player.
 
+Two threads update one gold valueBoth threads start from 1,000. Writing 1,500 and then 700 loses the reward; the intended combined result is 1,200.
+
+Request Read goldStep 1: Reward thread to Gold in memoryThe reward thread loads the value it will add 500 to.
+
+Reply 1,000Step 2: Gold in memory to Reward threadThe reward thread now holds a copy of 1,000.
+
+Request Read goldStep 3: Purchase thread to Gold in memoryThe purchase thread reads before the reward has written anything.
+
+Reply 1,000Step 4: Gold in memory to Purchase threadBoth threads hold the same copy of 1,000. Neither can see the other’s plan.
+
+Data Write 1,500Step 5: Reward thread to Gold in memory1,000 + 500 is stored.
+
+Data Write 700Step 6: Purchase thread to Gold in memoryThe purchase computed 1,000 minus 300 from its old copy and overwrites the 1,500.
+
+Alone Final gold: 700 (should be 1,200)Step 7: Gold in memory (alone)Each thread was correct on its own. The result is wrong because the read and the write were not one step.
+
+Both threads start from 1,000. Writing 1,500 and then 700 loses the reward; the intended combined result is 1,200.
+
 A mutex fixes it by making read, add, and write one unit: the purchase thread waits at step 2 until the reward thread has written 1,500, then reads 1,500 and writes 1,200. For a single number, an atomic add does the same job more cheaply; on x86, lock xadd performs the whole read, add, and write as one indivisible instruction.
 
 The lock has its own failure, deadlock. Moving gold from player A to player B means locking both. If one thread locks A and then waits for B, while another thread locks B and then waits for A, each holds what the other needs and neither ever continues. Taking locks in one agreed order, say always the lower player ID first, makes that cycle impossible, as Lesson 12.2 shows for the Windows loader lock.

@@ -44,6 +44,18 @@ Imagine two locks:
 
 Neither thread can continue. The dangerous second lock may be hidden inside a function that loads a D L L, initializes COM, sends a blocking cross-thread message, starts complex runtime work, or waits for another thread.
 
+A game thread and DllMain wait for each otherEach needed lock is already held by the opposite thread. The arrows are waits, not completed work.
+
+Control A takes game_lockStep 1: Thread A to game_lockThread A holds the game’s own lock while it works.
+
+Control B holds loader_lockStep 2: Thread B (in DllMain) to loader_lockDllMain runs while the loader lock is held, so Thread B holds it.
+
+Request A waits for loader_lockStep 3: Thread A to loader_lockThread A needs the loader lock and Thread B has it, so A stops here.
+
+Request B waits for game_lockStep 4: Thread B (in DllMain) to game_lockThread B needs the game lock and Thread A has it, so B stops here too. The wait cycle is closed and neither thread can continue.
+
+Each needed lock is already held by the opposite thread. The arrows are waits, not completed work.
+
 The version that catches most game tools is subtler, because you never write the second lock yourself:
 
 CreateThread returns success, so nothing appears to have gone wrong. The new thread then blocks before executing a single line of your code, and the wait never finishes. This is precisely why the shutdown sequence above joins worker threads outside the loader lock, and why starting real work belongs in an explicit start() that the host calls once loading has completed.

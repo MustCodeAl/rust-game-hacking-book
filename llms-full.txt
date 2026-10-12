@@ -9129,9 +9129,7 @@ pointer with the same number would inspect the tool's own memory. A process
 the Windows read uses that handle with the target address and a byte count.
 Lesson 11.6 later examines handles in more depth.
 
-<Frame caption="A separate four-byte example: the game has 64 00 00 00 at address 0x5000, encoding u32 100. Windows checks the target handle and copies those four bytes into the tool’s buffer. The tool then decodes its own copy; a local pointer numbered 0x5000 would use the tool’s address map.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/finish-early-process-memory-copy.svg`} width="480" height="300" alt="In a separate read example, game address 0x5000 contains four bytes 64 00 00 00. Windows checks the target handle and copies them into a tool-owned buffer, where they decode as u32 100. A local pointer with the same number uses the tool’s own map." loading="lazy" decoding="async" />
-</Frame>
+<FlowDiagram id="process-memory-copy" title="Reading four bytes from another process" scenarios={processReadFlows} />
 
 That read is the Windows function `ReadProcessMemory`. Its arguments split cleanly
 into what belongs to the game and what belongs to the tool:
@@ -20251,9 +20249,7 @@ was already out of date. Most runs interleave harmlessly, with one thread
 finishing before the other starts, which is why a race can pass every test and
 still fail for a player.
 
-<Frame caption={"Both readers start from 1,000. Writing 1,500 then 700 loses the reward; the intended combined result is 1,200."}>
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/finish-later-lost-gold-interleaving.svg`} width="480" height="308" alt={"Both threads read 1,000 gold. The reward thread writes 1,500, then the purchase thread overwrites it with 700 calculated from the old value. The correct combined result would be 1,200."} loading="lazy" decoding="async" />
-</Frame>
+<FlowDiagram id="lost-gold-interleaving" title="Two threads update one gold value" scenarios={lostGoldFlows} />
 
 A mutex fixes it by making read, add, and write one unit: the purchase thread
 waits at step 2 until the reward thread has written 1,500, then reads 1,500 and
@@ -28137,9 +28133,7 @@ flowchart TD
 
 Every box can fail and must clean up what earlier boxes created.
 
-<Frame caption={"The copied path is temporary workspace. Waiting for the loader separates its release from the loaded DLL’s lifetime and explicit start."}>
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/finish-later-loader-path-lifetime.svg`} width="480" height="278" alt={"The injector copies a NUL-terminated UTF-16 path to the exact course target. LoadLibraryW loads the DLL. After waiting for loading, the injector can release the path buffer and then call gha_start."} loading="lazy" decoding="async" />
-</Frame>
+<FlowDiagram id="loader-path-lifetime" title="The copied loader path and the loaded DLL" scenarios={loaderPathFlows} />
 
 ## Use a wide absolute path
 
@@ -29112,9 +29106,7 @@ flowchart TD
 
 When the patch owner is dropped, it puts the saved original pointer back into that same IAT slot.
 
-<Frame caption={"The call instruction stays in place. Installation changes its verified IAT destination, and removal restores that destination."}>
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/finish-later-iat-route.svg`} width="480" height="278" alt={"The same call through the MessageBoxW IAT slot reaches MessageBoxW before installation and hooked_message_box afterward. The replacement calls the saved original, and removal restores the saved slot."} loading="lazy" decoding="async" />
-</Frame>
+<FlowDiagram id="iat-route" title="One call instruction through three IAT slot states" scenarios={iatFlows} />
 
 ## Keep the function signature exact
 
@@ -29743,9 +29735,7 @@ painting a checkbox, or patch memory sixty times per second. Its job is to edit
 ordinary settings and send deliberate commands to a worker. That separation
 makes the interface responsive and the low-level code reviewable. 🎛️
 
-<Frame caption={"The checkbox edits ordinary settings. The worker receives a deliberate command and owns the resources that carry it out."}>
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/finish-later-menu-command-copy.svg`} width="480" height="264" alt={"A menu checkbox changes the owned Settings value. A command carries a settings copy through a channel to the worker, which owns process effects and cleanup."} loading="lazy" decoding="async" />
-</Frame>
+<FlowDiagram id="menu-command-copy" title="From a menu setting to a worker command" scenarios={menuCommandFlows} />
 
 ```mermaid
 flowchart LR
@@ -31097,9 +31087,7 @@ stateDiagram-v2
 
 There should be no `HalfPatched` state visible to executing threads.
 
-<Frame caption={"A separate drain example counts 2 → 1 → 0 active callbacks. Resources remain alive until callers drain; removal then restores the exact original bytes."}>
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/finish-later-hook-callback-drain.svg`} width="480" height="280" alt={"In a separate illustrative drain, new callback work is blocked while active calls fall from 2 to 1 to 0. Only after active callbacks reach zero can removal restore the exact site bytes and release the hook resources."} loading="lazy" decoding="async" />
-</Frame>
+<FlowDiagram id="hook-callback-drain" title="Removing a hook after its callbacks drain" scenarios={hookDrainFlows} />
 
 ## Preserve five contracts
 
@@ -38603,9 +38591,7 @@ those functions, and the quoted text is its argument. The host decides where
 the message appears. For this first script, we only need to know who runs it
 and who supplies `game.log`.
 
-<Frame caption={"The host runs the script, and the script’s game.log(\"observer started\") call sends its argument back through the host-supplied callback."}>
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/finish-later-lua-log-callback.svg`} width="480" height="291" alt={"The native host asks its Lua runtime to run a script. The script calls game.log with the exact message observer started, crossing back to the host-supplied logging callback."} loading="lazy" decoding="async" />
-</Frame>
+<FlowDiagram id="lua-log-callback" title="A script calls back into the host" scenarios={luaLogFlows} />
 
 ## Lua is dynamically typed
 
@@ -39189,9 +39175,7 @@ lua.globals().set("log", log)?;
 
 `create_function` converts Lua arguments into the requested host type. Passing a table where a `String` is required produces a Lua error instead of an unchecked cast.
 
-<Frame caption={"Two separate calls to the registered log callback: a string is converted to String; a table fails the callback’s type conversion."}>
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/finish-later-lua-typed-callback.svg`} width="480" height="285" alt={"For the registered log callback requiring a Rust String, a separate illustrative log(\"sample\") call reaches the host. Passing a table as log({}) produces a Lua type error instead of an unchecked cast."} loading="lazy" decoding="async" />
-</Frame>
+<FlowDiagram id="lua-typed-callback" title="A typed callback accepts or refuses its argument" scenarios={luaTypedFlows} />
 
 The first closure argument is the active `Lua` handle. It is named `_` here because logging does not need to create any Lua values.
 
@@ -39445,9 +39429,7 @@ slot is reused for a new entity, its generation changes. Suppose Lua remembers
 slot 3, generation 6. If that entity dies and slot 3 is reused at generation 7,
 the host rejects the stale pair rather than acting on the new occupant:
 
-<Frame caption={"The slot number remains 3, but generation 6 becomes 7. Checking both parts prevents the old handle from naming the new entity."}>
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/finish-later-lua-slot-generation.svg`} width="480" height="285" alt={"Lua remembers slot 3 at generation 6. After the old entity dies, the host reuses slot 3 at generation 7. The stored generation does not match, so the host rejects the stale handle instead of acting on the new entity."} loading="lazy" decoding="async" />
-</Frame>
+<FlowDiagram id="lua-slot-generation" title="A stale handle and a reused slot" scenarios={luaSlotFlows} />
 
 ```mermaid
 flowchart LR
@@ -41473,9 +41455,7 @@ flowchart LR
 
 Neither thread can continue. The dangerous second lock may be hidden inside a function that loads a DLL, initializes COM, sends a blocking cross-thread message, starts complex runtime work, or waits for another thread.
 
-<Frame caption={"The arrows are waits, not work completed. Each needed lock is already held by the opposite thread, closing the deadlock cycle."}>
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/finish-later-loader-lock-cycle.svg`} width="480" height="260" alt={"Thread A holds game_lock and waits for loader_lock. Thread B is in DllMain holding loader_lock and waits for game_lock. The closed wait cycle prevents either thread from continuing."} loading="lazy" decoding="async" />
-</Frame>
+<FlowDiagram id="loader-lock-cycle" title="A lock cycle with DllMain" scenarios={loaderLockFlows} />
 
 The version that catches most game tools is subtler, because you never write
 the second lock yourself:
@@ -42953,9 +42933,7 @@ hardware, it keeps the IRP, returns `STATUS_PENDING`, and completes the IRP
 later, from the code that runs when the device interrupts. Meanwhile the
 program's thread waits inside `ReadFile`.
 
-<Frame caption={"The toy read owns eight bytes of capacity. Only two event bytes are returned after the interrupt; K and E mark the event-byte prefix, not literal hardware values."}>
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/finish-later-pending-read-buffer.svg`} width="480" height="315" alt={"The toy keypad read supplies an eight-byte buffer. With no key event, the driver parks the IRP and reports STATUS_PENDING. A key interrupt later supplies two event bytes; the driver completes the IRP with a returned count of two, leaving six buffer bytes unused."} loading="lazy" decoding="async" />
-</Frame>
+<FlowDiagram id="pending-read-buffer" title="A pending read completes after an interrupt" scenarios={pendingReadFlows} />
 
 A `DeviceIoControl` request is checked twice. Each control code declares the
 rights that the caller's handle must hold, and the I/O manager refuses a
@@ -51496,9 +51474,7 @@ first permitted pickup consumes C and adds one point: `0 + 1 = 1`. A later
 delivery repeats that pickup. The server finds its committed result and
 returns it without adding another point.
 
-<Frame caption={"The first pickup commits consumption and score 1 together. A retry carrying the same identity returns that committed result, so score remains 1."}>
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/finish-later-pickup-retry-result.svg`} width="480" height="297" alt={"The toy server starts at score zero with coin C. The first valid pickup consumes C and commits score one. A repeated delivery of that same pickup returns the stored result and keeps the score at one instead of rewarding it again."} loading="lazy" decoding="async" />
-</Frame>
+<FlowDiagram id="pickup-retry-result" title="A retried pickup returns the stored result" scenarios={pickupRetryFlows} />
 
 <CodeTrace trace="scene-validated-pickup" />
 
