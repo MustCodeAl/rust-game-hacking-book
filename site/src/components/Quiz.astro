@@ -3,6 +3,8 @@
 // shuffling options, and drawing related follow-up questions.
 import { inlineMarkdown } from '../lib/inline-md';
 import banks from '../data/lesson-quiz-banks.json';
+import topics from '../data/lesson-quiz-topics.json';
+import { fingerprint, type QuizQuestion } from '../lib/quiz-session';
 import { lessonIdentityById, lessonIdentityByDisplayedNumber } from '../lib/lesson-identity';
 
 interface Props {
@@ -41,19 +43,30 @@ const optionList = options
 	.split('||')
 	.map((option) => option.trim())
 	.filter(Boolean);
-const authored = (banks as Record<string, { batchSize?: number; questions: any[] }>)[lesson];
-const questions = [{
-	id, type, prompt, options: optionList, answer, explanation,
-	alternatives: alternatives.split('||').filter(Boolean), program
-}, ...(authored?.questions ?? [])].map(question => ({
+const authored = (banks as Record<string, { batchSize?: number; questions: QuizQuestion[] }>)[lesson];
+const withHtml = (question: QuizQuestion) => ({
 	...question,
 	promptHTML: inlineMarkdown(question.prompt),
 	explanationHTML: inlineMarkdown(question.explanation),
 	optionsHTML: (question.options ?? []).map(inlineMarkdown)
-}));
+});
+const baseQuestions = [{
+	id, type, prompt, options: optionList, answer, explanation,
+	alternatives: alternatives.split('||').filter(Boolean), program
+}, ...(authored?.questions ?? [])].map(withHtml);
+// Topic questions are appended in published batches. Every earlier revision of the bank gets a proof (its ordered
+// question IDs and the fingerprint they had), so attempts saved before a batch was added still restore.
+const topicBatches = (topics as Record<string, { batches: QuizQuestion[][] }>)[lesson]?.batches ?? [];
+const questions = [...baseQuestions];
+const revisionProofs: { revision: string; questionIds: string[] }[] = [];
+for (const batch of topicBatches) {
+	revisionProofs.push({ revision: fingerprint(JSON.parse(JSON.stringify(questions))), questionIds: questions.map(question => question.id) });
+	questions.push(...batch.map(withHtml));
+}
 const specification = JSON.stringify({
-	batchSize: authored?.batchSize ?? Math.min(5, questions.length),
-	questions
+	batchSize: authored?.batchSize ?? Math.min(5, baseQuestions.length),
+	questions,
+	...(revisionProofs.length ? { revisionProofs } : {})
 }).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 ---
 

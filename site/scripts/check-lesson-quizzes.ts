@@ -33,17 +33,29 @@ function readBank(lesson: string, value: unknown): Bank | undefined {
   return { batchSize: value.batchSize, questions: value.questions };
 }
 
+/** Topic questions arrive in batches appended after the original bank; the page proves each earlier revision. */
+function readTopics(lesson: string, value: unknown): QuizQuestion[] {
+  if (value === undefined) return [];
+  assert.ok(isRecord(value) && Array.isArray(value.batches) && value.batches.length > 0, `${lesson} has malformed topic batches`);
+  return value.batches.flatMap((batch: unknown) => {
+    assert.ok(Array.isArray(batch) && batch.length > 0 && batch.every(isQuizQuestion), `${lesson} has a malformed topic batch`);
+    return batch;
+  });
+}
+
 const seeds = await readJson('src/data/lesson-quizzes.json');
 const banks = await readJson('src/data/lesson-quiz-banks.json');
-assert.ok(isRecord(seeds) && isRecord(banks), 'quiz data must be JSON objects keyed by lesson number');
+const topics = await readJson('src/data/lesson-quiz-topics.json');
+assert.ok(isRecord(seeds) && isRecord(banks) && isRecord(topics), 'quiz data must be JSON objects keyed by lesson number');
+for (const lesson of Object.keys(topics)) assert.ok(Object.hasOwn(seeds, lesson), `${lesson} has topic questions but no quiz`);
 
 let expanded = 0;
 let questionCount = 0;
 for (const [lesson, seed] of Object.entries(seeds)) {
   const bank = readBank(lesson, banks[lesson]);
-  const questions = [seedQuestion(lesson, seed), ...(bank?.questions ?? [])];
+  const questions: QuizQuestion[] = [seedQuestion(lesson, seed), ...(bank?.questions ?? []), ...readTopics(lesson, topics[lesson])];
   const size = bank?.batchSize ?? Math.min(5, questions.length);
-  const ids = questions.map(question => question.id);
+  const ids: string[] = questions.map(question => question.id);
   assert.equal(new Set(ids).size, ids.length, `${lesson} has duplicate IDs`);
   assert.equal(new Set(questions.map(question => question.prompt.trim().toLowerCase())).size, ids.length, `${lesson} repeats prompts`);
   for (const question of questions) {

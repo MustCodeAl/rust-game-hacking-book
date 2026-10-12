@@ -18,8 +18,8 @@ const lessonPaths = readdirSync(distPages, { recursive: true, encoding: 'utf8' }
   .map(file => 'pages/' + file.replace(/index\.html$/, ''))
   .sort();
 assert.equal(lessonPaths.length, 155, 'every lesson page is built');
-const featured = ['pages/1/01/', 'pages/10/08/', 'pages/15/09/'].filter(path => lessonPaths.includes(path));
-assert.equal(featured.length, 3);
+const featured = ['pages/1/01/', 'pages/10/08/', 'pages/15/09/', 'pages/6/02/'].filter(path => lessonPaths.includes(path));
+assert.equal(featured.length, 4);
 
 interface QuizFacts { quizId: string; lesson: string; storageLesson: string; ids: string[]; answers: Record<string, string>; batchSize: number }
 const counts = { questions: 0, clicks: 0, keys: 0, reloads: 0, mounted: 0, recovered: 0 };
@@ -169,6 +169,18 @@ try {
       await seed(key(known, known.storageLesson), attempt({ ids: [...ids.slice(0, size - 1), 'forged-question-id'] }));
       assert.equal(await progress(page), `Question 1 of ${size}`);
       assert.ok(!(await batchIds(page)).includes('forged-question-id'), 'forged IDs are ignored');
+      // A lesson that gained topic questions still restores an attempt saved against the earlier bank (revision proof).
+      const proof = await page.evaluate(() => {
+        const spec: { revisionProofs?: { revision: string; questionIds: string[] }[] } | null = JSON.parse(document.querySelector('[data-quiz-bank]')?.textContent ?? 'null');
+        return spec?.revisionProofs?.[0] ?? null;
+      });
+      if (proof) {
+        const oldIds = proof.questionIds.slice(0, size);
+        await seed(key(known, known.storageLesson), attempt({ revision: proof.revision, ids: oldIds, responses: Object.fromEntries(oldIds.slice(0, 2).map(id => [id, known.answers[id] ?? '0'])) }));
+        assert.equal(await progress(page), 'Question 3 of ' + size, 'an attempt saved before topic questions were added resumes');
+        assert.deepEqual(await batchIds(page), oldIds);
+        counts.recovered++;
+      }
       await seed(key(known, known.storageLesson), attempt({ revision: 'not-a-known-revision' }));
       assert.equal(await progress(page), `Question 1 of ${size}`, 'an unproven stale revision is ignored');
       await seed(key(known, known.storageLesson), '{not json');
