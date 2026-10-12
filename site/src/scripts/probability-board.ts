@@ -1,4 +1,4 @@
-import { required, type el as createElement } from './widget-dom.ts';
+import { required, type SliderControl, type el as createElement } from './widget-dom.ts';
 
 /** The four measured membership regions of two overlapping sets. */
 export interface VennCounts {
@@ -20,12 +20,6 @@ export interface VennModel {
   readonly pBoth: number | null;
   readonly pEither: number | null;
   readonly pBgivenA: number | null;
-}
-
-export interface SliderControl {
-  readonly wrap: HTMLLabelElement;
-  readonly input: HTMLInputElement;
-  update(): void;
 }
 
 /** The building blocks SimLab hands to this board (its own header, slider and preset row). */

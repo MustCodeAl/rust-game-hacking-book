@@ -3,6 +3,13 @@
 // at load time: Visual.astro, SortBoard.astro and FormulaBuilder.astro import
 // their widget modules on the server to print a caption without JavaScript.
 
+/** A labelled range input that keeps its readout in step with the slider. */
+export interface SliderControl {
+	readonly wrap: HTMLLabelElement;
+	readonly input: HTMLInputElement;
+	update(): void;
+}
+
 /** Creates an element typed by its tag, with an optional class name and text. */
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
 	const node = document.createElement(tag);
