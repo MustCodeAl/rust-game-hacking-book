@@ -1,0 +1,52 @@
+---
+// Static versus dynamic linking, drawn as the same vertical stack twice: the files on disk, the images in one process
+// (user mode), and the kernel below. A dashed connector is a function call that stays in user mode; a solid one is a system
+// call that crosses into the kernel. Both modes are server-rendered; the shared tab script only shows one at a time.
+import { LIBRARY_KIB, LINK_MODES, YOUR_CODE_KIB, diskTotal } from '../lib/pe-linking';
+import '../styles/memory-diagrams.css';
+import '../styles/pe-map.css';
+interface Props { id?: string; title?: string }
+const { id = 'linking-modes', title = 'Static and dynamic linking, in one process' } = Astro.props;
+const initial = 'static';
+---
+<figure class="mdg lk not-content" id={id} data-dg-tabs data-dg-tabs-initial={initial} aria-labelledby={`${id}-title`}>
+  <figcaption><strong id={`${id}-title`}>{title}</strong><span>Both pictures show the same program calling the same library. Choose how the library was linked and follow the call down to the kernel.</span></figcaption>
+  <div class="lk-tabs" role="tablist" aria-label="How the library was linked" hidden data-reader-skip>
+    {LINK_MODES.map(mode => <button type="button" role="tab" class="mdg-btn" id={`${id}-${mode.id}-tab`} aria-controls={`${id}-${mode.id}`} aria-selected="false" tabindex="-1" data-dg-tab={mode.id}>{mode.tab}</button>)}
+  </div>
+  {LINK_MODES.map(mode => <section class="lk-panel" id={`${id}-${mode.id}`} data-dg-panel={mode.id} aria-labelledby={`${id}-${mode.id}-h`}>
+    <h4 id={`${id}-${mode.id}-h`}>{mode.title}</h4>
+    <p class="lk-summary">{mode.summary}</p>
+    <div class="lk-stack">
+      <div class="lk-zone lk-disk">
+        <p class="lk-zone-title">On disk</p>
+        <ul class="lk-files">{mode.files.map(file => <li class="lk-file"><strong>{file.name}</strong><span>{file.kib} KiB</span><small>{file.inside}</small></li>)}</ul>
+      </div>
+      <div class="lk-zone lk-user">
+        <p class="lk-zone-title">In the running process: user mode, one address space</p>
+        <ol class="lk-chain">
+          {mode.stack.map(item => item.type === 'module'
+            ? <li class="lk-module" data-module={item.id}>
+                <strong>{item.title}</strong>
+                <ul class="lk-parts">{item.parts.map(part => <li>{part}</li>)}</ul>
+                <small>{item.note}</small>
+              </li>
+            : <li class="lk-call" data-kind={item.kind}><span>{item.label}</span></li>)}
+        </ol>
+      </div>
+      <div class="lk-zone lk-kernel"><strong>Windows kernel</strong><small>kernel mode: only the kernel and drivers run here</small></div>
+    </div>
+    <ul class="lk-facts">{mode.facts.map(fact => <li>{fact}</li>)}</ul>
+    <p class="lk-total"><b>Disk space for two programs that use this library:</b> {diskTotal(mode.id, 2).sum}{mode.id === 'static' ? ': each program carries its own copy.' : ': one library.dll file serves both.'}</p>
+  </section>)}
+  <ul class="lk-legend" aria-label="Key">
+    <li><i data-kind="function"></i>Function call: stays in user mode</li>
+    <li><i data-kind="system"></i>System call: crosses into the kernel</li>
+  </ul>
+  <p class="mdg-note">Sizes are illustrative: {YOUR_CODE_KIB} KiB of your code and a {LIBRARY_KIB} KiB library. On Windows a statically linked program still reaches the kernel through system DLLs such as ntdll.dll, because the system-call instruction lives there.</p>
+  <noscript><p class="mdg-note">Both pictures are shown above, one after the other, without JavaScript.</p></noscript>
+</figure>
+<script>
+  import { mountDiagramTabs } from '../scripts/diagram-tabs';
+  mountDiagramTabs();
+</script>
