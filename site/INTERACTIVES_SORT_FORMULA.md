@@ -12,8 +12,8 @@ Each component carries its own `<script>` import and `<style is:global>` block, 
 
 | File | Purpose |
 |---|---|
-| `src/components/SortBoard.astro` + `src/scripts/sort-board.js` | Drag or tap chips into 2-4 zones, or into a two-circle Venn. Data map: `BOARDS`. |
-| `src/components/FormulaBuilder.astro` + `src/scripts/formula-builder.js` | A formula with type-checked slots, step-by-step live evaluation, sliders, optional digit keypad. Data map: `FORMULAS`. |
+| `src/components/SortBoard.astro` + `src/scripts/sort-board.ts` | Drag or tap chips into 2-4 zones, or into a two-circle Venn. Data map: `BOARDS`. |
+| `src/components/FormulaBuilder.astro` + `src/scripts/formula-builder.ts` | A formula with type-checked slots, step-by-step live evaluation, sliders, optional digit keypad. Data map: `FORMULAS`. |
 
 ### Lessons (reader-facing number | path | widget)
 
@@ -44,7 +44,7 @@ definitions (precision, recall, `point(t)`) are the lesson's.
 
 ## How to add a board or formula (data only)
 
-### SortBoard (`BOARDS` in `src/scripts/sort-board.js`)
+### SortBoard (`BOARDS` in `src/scripts/sort-board.ts`)
 
 ```js
 'my-board': {
@@ -65,7 +65,7 @@ elsewhere turns it amber (dashed edge, so not colour-only) and shows `why[zone]`
 lesson's reason. "Mix them up" scatters, "Show me" restores the lesson's sorting and opens the full list of
 reasons, "Reset" restores and closes it. The no-JS version is a static list built from the same data.
 
-### FormulaBuilder (`FORMULAS` in `src/scripts/formula-builder.js`)
+### FormulaBuilder (`FORMULAS` in `src/scripts/formula-builder.ts`)
 
 ```js
 'my-formula': {

@@ -10,7 +10,7 @@ lesson's version"), invites ("Try changing..."), and always has Reset plus a one
 | File | What it is |
 |---|---|
 | `src/components/Visual.astro` | The mount point, the no-JavaScript caption (printed server-side from each entry's `caption`) and the whole `<style is:global>` block (classes `visual-lab__*` and SVG classes `v-*`, all colours from theme variables, so light and dark themes work). It does not edit any shared CSS or script. |
-| `src/scripts/visuals.js` | The data map `VISUALS` and three engines. Exports `VISUALS`, `mountVisuals` and `sha256`. It must not touch `document` at load time (Astro imports it on the server for the captions). |
+| `src/scripts/visuals.ts` | The data map `VISUALS` and three engines. Exports `VISUALS`, `mountVisuals` and `sha256`. It must not touch `document` at load time (Astro imports it on the server for the captions). |
 | `public/assets/images/original/{handle-table,context-switch,script-budgets}.svg` | Three new CC0 hand-written 480-wide figures (rows added to `CREDITS.md`). |
 
 ## Kinds and where they are placed

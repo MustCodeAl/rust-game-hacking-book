@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import {
 	createBehaviorTree, editBehaviorTree, tickBehaviorTree, validateBehaviorTree, TREE_LIMITS,
 } from '../src/scripts/behavior-tree-model.js';
-import { behaviorTreeModel } from '../src/scripts/sim-labs.js';
-import { FORMULAS, finishFormulaResult, workedExample } from '../src/scripts/formula-builder.js';
+import { behaviorTreeModel } from '../src/scripts/sim-labs.ts';
+import { FORMULAS, finishFormulaResult, workedExample } from '../src/scripts/formula-builder.ts';
 
 let checks = 0;
 const same = (actual, expected, reason) => { assert.deepEqual(actual, expected, reason); checks += 1; };

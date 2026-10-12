@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { SCENE_TRACES } from '../src/scripts/scene-traces.js';
-import { vennCountsModel } from '../src/scripts/probability-board.js';
+import { vennCountsModel } from '../src/scripts/probability-board.ts';
 
 const defaults = t => Object.fromEntries(t.inputs.map(i => [i.id, i.value]));
 const end = (key, changes = {}) => {
