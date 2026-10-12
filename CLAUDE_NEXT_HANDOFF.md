@@ -1,4 +1,8 @@
-# Claude continuation — 10 October 2026
+# Claude continuation — 12 October 2026 (latest note first)
+
+Latest state: the published edition equals source 28320b03 on `codex/book-revision`. Six unmerged, unverified agent branches hold unfinished work (`codex/ts-chrome`, `ts-learning`, `ts-reader`, `ts-traces`, `ts-widgets`, `codex/diagrams-pe`); BOOK_REVISION_PROGRESS.md T78 lists what each contains and the merge order. Review and gate each one before merging; do not publish any of it unverified. Build with `mise x -- bun run build` and publish with `mise x -- node scripts/publish-pages.mjs`. TokenSave does not index this worktree; use `rtk read` and `rtk rg` for it, one step at a time.
+
+# Claude continuation — 10 October 2026 (older, still useful)
 
 The owner asked to publish completed work and hand off because usage is low. Do not repeat finished work. Read this, then HANDOFF_PLAN.md, newest BOOK_REVISION_PROGRESS.md entries and CONTENT_PLAN.md. Source: `/Users/notlaggy/.codex/worktrees/book-finish/gamehackingacademy.github.io`, branch `codex/book-revision`; primary GitFolder checkout is generated gh-pages, preserve it. Latest publication hashes/results are appended below after release verification.
 
