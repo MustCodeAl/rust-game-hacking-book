@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mountReadingAudio } from '../src/scripts/reading-audio.js';
+import { mountReadingAudio } from '../src/scripts/reading-audio.ts';
 
 // Check consent and completion events without playing any sound.
 const events = new Map();
