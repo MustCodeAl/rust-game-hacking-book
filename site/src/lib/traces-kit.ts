@@ -3,7 +3,7 @@
  * `range` and `select` keep the input id and the option values as literal types, and `createTrace`
  * turns those declared inputs into the type of the `values` object that `run` and `code` receive.
  */
-import type { InputValues, RangeInput, SelectInput, Trace, TraceDefinition, TraceInput, TraceValues } from './traces-types.ts';
+import type { InputValues, ListedTrace, ListedTraceDefinition, RangeInput, SelectInput, Trace, TraceDefinition, TraceInput, TraceValues } from './traces-types.ts';
 
 /** A slider input. `step` defaults to 1. */
 export function range<const Id extends string>(id: Id, label: string, min: number, max: number, value: number, step = 1): RangeInput<Id> {
@@ -46,4 +46,10 @@ export function createTrace<const Inputs extends readonly TraceInput[] = readonl
     ...(inputs ? { inputs } : {}),
     run: (values) => definition.run(typed(values)),
   };
+}
+
+/** `createTrace` for a trace whose listing is a fixed array and whose inputs are all declared. */
+export function createListedTrace<const Inputs extends readonly TraceInput[]>(definition: ListedTraceDefinition<Inputs>): ListedTrace {
+  const { run } = createTrace(definition);
+  return { title: definition.title, intro: definition.intro, code: definition.code, inputs: definition.inputs, run };
 }

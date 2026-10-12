@@ -96,3 +96,9 @@ export interface TraceDefinition<Inputs extends readonly TraceInput[]> {
   readonly inputs?: Inputs;
   readonly run: (values: InputValues<Inputs>) => TraceStep[];
 }
+
+/** The same for a trace with a fixed listing and declared inputs. */
+export interface ListedTraceDefinition<Inputs extends readonly TraceInput[]> extends TraceDefinition<Inputs> {
+  readonly code: readonly string[];
+  readonly inputs: Inputs;
+}
