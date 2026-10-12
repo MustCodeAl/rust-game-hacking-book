@@ -1,11 +1,73 @@
 // One player per page, shared by desktop/mobile menus and the listening desk.
 // No audio context, media request, or sound until a reader chooses to start it.
-export function mountReadingAudio() {
-	const roots = [...document.querySelectorAll('[data-reading-audio]')];
+
+/** One tone of a chime: the frequencies it glides between (Hz) and its length (seconds). */
+type Tone = readonly [from: number, to: number, duration: number];
+const CHIME_FALLBACK: readonly Tone[] = [[440, 660, 0.12]];
+const CHIMES: Readonly<Record<string, readonly Tone[]>> = {
+	button: [[440, 660, 0.12]],
+	lesson: [[523.25, 783.99, 0.22]],
+	chapter: [[523.25, 1046.5, 0.32]],
+	correct: [[523.25, 523.25, 0.1], [659.25, 783.99, 0.16]],
+	wrong: [[246.94, 196, 0.2]],
+	finish: [[523.25, 523.25, 0.1], [659.25, 659.25, 0.1], [783.99, 1046.5, 0.24]],
+};
+const TRACK_NAMES: Readonly<Record<string, string>> = { 'soft-music': 'Soft music', 'quiet-rain': 'Quiet rain', 'night-keys': 'Night keys', 'warm-hum': 'Warm hum' };
+
+/** Safari's prefixed constructor is the only extra this file reads from the window. */
+type AudioWindow = Window & typeof globalThis & { readonly webkitAudioContext?: typeof AudioContext };
+
+/** The controls of one Reading sound menu; the page may hold several that share a player. */
+interface AudioPanel {
+	readonly root: HTMLElement;
+	readonly track: HTMLSelectElement;
+	readonly volume: HTMLInputElement;
+	readonly effects: HTMLInputElement;
+	readonly play: HTMLButtonElement;
+	readonly stop: HTMLButtonElement;
+	readonly summary: HTMLElement;
+	readonly status: HTMLElement;
+}
+
+function panelOf(root: HTMLElement): AudioPanel | null {
+	const track = root.querySelector<HTMLSelectElement>('[data-audio-track]');
+	const volume = root.querySelector<HTMLInputElement>('[data-audio-volume]');
+	const effects = root.querySelector<HTMLInputElement>('[data-audio-effects]');
+	const play = root.querySelector<HTMLButtonElement>('[data-audio-play]');
+	const stop = root.querySelector<HTMLButtonElement>('[data-audio-stop]');
+	const summary = root.querySelector<HTMLElement>('[data-audio-summary]');
+	const status = root.querySelector<HTMLElement>('[data-audio-status]');
+	return track && volume && effects && play && stop && summary && status ? { root, track, volume, effects, play, stop, summary, status } : null;
+}
+
+/** What a click on the page hit, as far as the generic button click needs to know. */
+interface ClickedButton {
+	readonly disabled: boolean;
+	closest(selector: string): unknown;
+	matches(selector: string): boolean;
+}
+const hasClosest = (target: EventTarget | null): target is EventTarget & { closest(selector: string): unknown } =>
+	target !== null && 'closest' in target && typeof target.closest === 'function';
+const isClickedButton = (value: unknown): value is ClickedButton =>
+	typeof value === 'object' && value !== null &&
+	'disabled' in value && typeof value.disabled === 'boolean' &&
+	'closest' in value && typeof value.closest === 'function' &&
+	'matches' in value && typeof value.matches === 'function';
+
+/** The `kind` a sound or completion event asks for, if it names one. */
+function chimeKind(event: Event): string | undefined {
+	const detail: unknown = 'detail' in event ? event.detail : undefined;
+	if (typeof detail !== 'object' || detail === null || !('kind' in detail)) return undefined;
+	return typeof detail.kind === 'string' ? detail.kind : undefined;
+}
+
+export function mountReadingAudio(): void {
+	const roots = [...document.querySelectorAll<HTMLElement>('[data-reading-audio]')];
 	if (!roots.length || document.documentElement.dataset.readingAudioReady) return;
 	document.documentElement.dataset.readingAudioReady = 'true';
-	let player = null;
-	let context = null;
+	const panels = roots.flatMap(root => { const panel = panelOf(root); return panel ? [panel] : []; });
+	let player: HTMLAudioElement | null = null;
+	let context: AudioContext | null = null;
 	let effects = false;
 	let track = 'soft-music';
 	let volume = 20;
@@ -15,21 +77,20 @@ export function mountReadingAudio() {
 	try { effects = localStorage.getItem('gha-audio-effects') === 'on'; } catch {}
 	if (effects) message = 'Soft effects on. Background sound stays paused.';
 
-	function render() {
+	function render(): void {
 		const playing = player && !player.paused;
-		for (const root of roots) {
-			root.querySelector('[data-audio-track]').value = track;
-			root.querySelector('[data-audio-volume]').value = String(volume);
-			root.querySelector('[data-audio-effects]').checked = effects;
-			const button = root.querySelector('[data-audio-play]');
-			button.textContent = playing ? 'Pause' : 'Play';
-			button.setAttribute('aria-label', `${playing ? 'Pause' : 'Play'} background sound`);
-			root.querySelector('[data-audio-stop]').disabled = !player;
-			root.querySelector('[data-audio-summary]').textContent = playing ? 'Playing' : effects ? 'Buttons on' : 'Off';
-			root.querySelector('[data-audio-status]').textContent = message;
+		for (const panel of panels) {
+			panel.track.value = track;
+			panel.volume.value = String(volume);
+			panel.effects.checked = effects;
+			panel.play.textContent = playing ? 'Pause' : 'Play';
+			panel.play.setAttribute('aria-label', `${playing ? 'Pause' : 'Play'} background sound`);
+			panel.stop.disabled = !player;
+			panel.summary.textContent = playing ? 'Playing' : effects ? 'Buttons on' : 'Off';
+			panel.status.textContent = message;
 		}
 	}
-	function stop() {
+	function stop(): void {
 		generation++;
 		if (player) {
 			player.pause();
@@ -40,7 +101,7 @@ export function mountReadingAudio() {
 		message = 'Background sound off.';
 		render();
 	}
-	async function play(root) {
+	async function play(root: HTMLElement): Promise<void> {
 		if (player && !player.paused) {
 			player.pause();
 			message = 'Background sound paused.';
@@ -58,29 +119,23 @@ export function mountReadingAudio() {
 		try {
 			await player.play();
 			if (attempt !== generation) return;
-			message = `${({ 'soft-music': 'Soft music', 'quiet-rain': 'Quiet rain', 'night-keys': 'Night keys', 'warm-hum': 'Warm hum' })[track] || 'Background sound'} playing.`;
+			message = `${TRACK_NAMES[track] || 'Background sound'} playing.`;
 		} catch {
 			if (attempt !== generation) return;
 			message = 'Sound could not start. Press Play to try again.';
 		}
 		render();
 	}
-	async function chime(kind = 'button') {
+	async function chime(kind: string = 'button'): Promise<void> {
 		if (!effects || volume === 0) return;
-		const AudioContext = window.AudioContext || window.webkitAudioContext;
-		if (!AudioContext) return;
+		const audioWindow: AudioWindow = window;
+		const AudioContextConstructor = audioWindow.AudioContext || audioWindow.webkitAudioContext;
+		if (!AudioContextConstructor) return;
 		try {
-			context ??= new AudioContext();
+			context ??= new AudioContextConstructor();
 			if (context.state === 'suspended') await context.resume();
 			if (!effects) return;
-			const notes = {
-				button: [[440, 660, 0.12]],
-				lesson: [[523.25, 783.99, 0.22]],
-				chapter: [[523.25, 1046.5, 0.32]],
-				correct: [[523.25, 523.25, 0.1], [659.25, 783.99, 0.16]],
-				wrong: [[246.94, 196, 0.2]],
-				finish: [[523.25, 523.25, 0.1], [659.25, 659.25, 0.1], [783.99, 1046.5, 0.24]],
-			}[kind] || [[440, 660, 0.12]];
+			const notes = CHIMES[kind] || CHIME_FALLBACK;
 			let when = context.currentTime;
 			for (const [from, to, duration] of notes) {
 				const tone = context.createOscillator();
@@ -100,24 +155,24 @@ export function mountReadingAudio() {
 			}
 		} catch { /* Sound is optional; reading controls still work. */ }
 	}
-	for (const root of roots) {
-		root.querySelector('[data-audio-play]').addEventListener('click', () => play(root));
-		root.querySelector('[data-audio-stop]').addEventListener('click', stop);
-		root.querySelector('[data-audio-track]').addEventListener('change', event => {
-			const selected = event.target.value;
+	for (const panel of panels) {
+		panel.play.addEventListener('click', () => play(panel.root));
+		panel.stop.addEventListener('click', stop);
+		panel.track.addEventListener('change', () => {
+			const selected = panel.track.value;
 			const wasPlaying = player && !player.paused;
 			stop();
 			track = selected;
-			if (wasPlaying) play(root); else render();
+			if (wasPlaying) play(panel.root); else render();
 		});
-		root.querySelector('[data-audio-volume]').addEventListener('input', event => {
-			volume = Number(event.target.value);
+		panel.volume.addEventListener('input', () => {
+			volume = Number(panel.volume.value);
 			if (player) player.volume = volume / 100;
 			try { localStorage.setItem('gha-audio-volume', String(volume)); } catch {}
 			render();
 		});
-		root.querySelector('[data-audio-effects]').addEventListener('change', event => {
-			effects = event.target.checked;
+		panel.effects.addEventListener('change', () => {
+			effects = panel.effects.checked;
 			try { localStorage.setItem('gha-audio-effects', effects ? 'on' : 'off'); } catch {}
 			render();
 			if (effects) chime();
@@ -125,11 +180,12 @@ export function mountReadingAudio() {
 		});
 	}
 	document.addEventListener('click', event => {
-		const button = event.target.closest('button');
+		const found: unknown = hasClosest(event.target) ? event.target.closest('button') : null;
+		const button = isClickedButton(found) ? found : null;
 		if (button && !button.disabled && !button.closest('[data-reading-audio], .academy-quiz, .concept-lab') && !button.matches('[data-done-toggle], [data-chapter-done]')) chime();
 	});
-	document.addEventListener('academy:sound', event => chime(event.detail?.kind));
-	document.addEventListener('academy:completed', event => chime(event.detail?.kind === 'chapter' ? 'chapter' : 'lesson'));
+	document.addEventListener('academy:sound', event => chime(chimeKind(event)));
+	document.addEventListener('academy:completed', event => chime(chimeKind(event) === 'chapter' ? 'chapter' : 'lesson'));
 	window.addEventListener('pagehide', () => { stop(); if (context) context.close().catch(() => {}); });
 	render();
 }
