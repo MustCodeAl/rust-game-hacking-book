@@ -7,7 +7,7 @@ import { buildCheatsheet } from '../src/lib/cheatsheet.ts';
 // sources without changing them or depending on a built dist directory.
 const site = process.env.CHEATSHEET_SITE || fileURLToPath(new URL('../', import.meta.url));
 const siteURL = pathToFileURL(site.replace(/\/$/, '') + '/');
-const { renderMarkdown } = await import(new URL('src/scripts/notes.js', siteURL).href) as { renderMarkdown(text: string): string };
+const { renderMarkdown } = await import(new URL('src/scripts/notes.ts', siteURL).href) as { renderMarkdown(text: string): string };
 const read = (path: string) => fs.readFile(new URL(path, siteURL), 'utf8');
 const seeds = JSON.parse(await read('src/data/lesson-quizzes.json'));
 const banks = JSON.parse(await read('src/data/lesson-quiz-banks.json'));
