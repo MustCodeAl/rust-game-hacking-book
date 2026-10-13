@@ -22,39 +22,49 @@ The stack is one place a running function keeps its bookkeeping and temporary va
 
 These are roles in virtual memory, not three physical kinds of R A M, random access memory. Windows describes thread stacks and heaps; Microsoft’s C++ storage-duration guide explains why a local static value can survive repeated calls. A compiler can also keep a local in a register or eliminate it entirely.
 
-Three places, three lifetimesA pointer inside a stack frame can refer to a heap block with a different lifetime. Step through one call to watch each place start and end on its own. Region positions are schematic.
+Three places, three lifetimesA pointer inside a stack frame can refer to a heap block with a different lifetime. Step through one call to watch each place start and end on its own. Positions are schematic.
 
-The allocator hands back a block at this value. That number is stored in p, so p, a slot inside the stack frame, now refers to an object that is not inside the frame.
+1 The program is running Module data: lasts as long as the programMAX_UNITS6liveThread stack: lasts as long as each callCaller’s frameunit equals not setliverecruit() frame—not created yetHeap: lasts until its owner frees itUnit block—not created yet Static data exists. The caller’s frame is on the stack. The heap holds no Unit yet, and its variable unit is not set.
 
-The moment all three exist: allocate a unit on the heapThe allocator hands back a block at this value. That number is stored in p, so p, a slot inside the stack frame, now refers to an object that is not inside the frame.
+Section: Module data: lasts as long as the program.
 
-Section: Module dataLasts as long as the program.
+Section: Thread stack: lasts as long as each call.
 
-MAX_UNITS live 6 A global constant in the module’s data. It exists for the whole run of the program, or until the module is unloaded.
+Section: Heap: lasts until its owner frees it.
 
-Section: Thread stackLasts as long as each call.
+2 Call recruit() Module data: lasts as long as the programMAX_UNITS6liveThread stack: lasts as long as each callCaller’s frameunit equals not setliverecruit() framecount equals 3, p equals not setliveHeap: lasts until its owner frees itUnit block—not created yet The call creates a new frame on the stack, with room for count and the pointer p. p holds no address yet.
 
-Caller’s frame live unit equals not set The frame of the function that calls recruit(). It stays until that function returns.
+Section: Module data: lasts as long as the program.
 
-recruit() frame live count equals 3, p equals this value Created by the call and released by the return. Its locals, including the pointer p, end with it.
+Section: Thread stack: lasts as long as each call.
 
-Section: HeapLasts until its owner frees it.
+Section: Heap: lasts until its owner frees it.
 
-Unit block live at this value: Unit { hp: 10 } A heap allocation. It lasts from allocation until its owner frees it, whatever the stack is doing.
+3 Allocate a Unit on the heap Module data: lasts as long as the programMAX_UNITS6liveThread stack: lasts as long as each callCaller’s frameunit equals not setliverecruit() framecount equals 3, p equals hexadecimal 0 0 A 4 1 F 0 0liveHeap: lasts until its owner frees it p points hereUnit blockat this value: Unit { hp: 10 }live The allocator hands back a block at this value. That number is stored in p, so p, a slot inside the stack frame, now refers to an object that is not inside the frame.
 
-Section: The five steps.
+Section: Module data: lasts as long as the program.
 
-Step 1 The program is running Static data exists. The caller’s frame is on the stack. The heap holds no Unit yet, and its variable unit is not set.
+Section: Thread stack: lasts as long as each call.
 
-Step 2 Call recruit() The call creates a new frame on the stack, with room for count and the pointer p. p holds no address yet.
+Section: Heap: lasts until its owner frees it.
 
-Step 3 Allocate a Unit on the heap The allocator hands back a block at this value. That number is stored in p, so p, a slot inside the stack frame, now refers to an object that is not inside the frame.
+4 recruit() returns the pointer Module data: lasts as long as the programMAX_UNITS6liveThread stack: lasts as long as each callCaller’s frameunit equals hexadecimal 0 0 A 4 1 F 0 0liverecruit() framereleased; old bytes may lingerreleasedHeap: lasts until its owner frees it unit points hereUnit blockat this value: Unit { hp: 10 }live Returning ends the frame, so count and p are released. The heap block is not part of the frame, so it stays. The caller received the number shown here and keeps it in unit.
 
-Step 4 recruit() returns the pointer Returning ends the frame, so count and p are released. The heap block is not part of the frame, so it stays. The caller received the number shown here and keeps it in unit.
+Section: Module data: lasts as long as the program.
 
-Step 5 The owner frees the block Freeing ends the block’s life. The caller’s variable still holds this value, but that number now names memory the program no longer owns: a dangling pointer. Static data is untouched throughout.
+Section: Thread stack: lasts as long as each call.
 
-The stack frame and the heap block are both ordinary virtual memory. What differs is who ends their life: the return for the frame, the owner for the block, and the program itself for static data. Ending a raw-pointer stack slot does not free the block it names. An owning local, such as a Rust Box or a C++ unique_ptr, frees its block when the frame ends.
+Section: Heap: lasts until its owner frees it.
+
+5 The owner frees the block Module data: lasts as long as the programMAX_UNITS6liveThread stack: lasts as long as each callCaller’s frameunit equals this value (dangling)liverecruit() framereleased; old bytes may lingerreleasedHeap: lasts until its owner frees itUnit blockfreedreleased Freeing ends the block’s life. The caller’s variable still holds this value, but that number now names memory the program no longer owns: a dangling pointer. Static data is untouched throughout.
+
+Section: Module data: lasts as long as the program.
+
+Section: Thread stack: lasts as long as each call.
+
+Section: Heap: lasts until its owner frees it.
+
+A pointer inside a stack frame can refer to a heap block with a different lifetime. Step through one call to watch each place start and end on its own. Positions are schematic.
 
 In brief: The location of a pointer is not the location of its object. Ending a raw-pointer stack slot does not release its heap allocation. An owning local can release that allocation when it is dropped during return.
 
