@@ -1,56 +1,40 @@
 ---
-// Static data, a stack frame and a heap block have three different lifetimes. Five steps tell one story; the picture
-// below shows the moment when all three exist, and the shared player steps through the rest.
-import { DEFAULT_STEP, ITEMS, lifeOf, lifetimeSteps } from '../lib/storage-lifetimes';
-import '../styles/memory-diagrams.css';
-import '../styles/storage-lifetimes.css';
+// Static data, a stack frame and a heap block have three different lifetimes. Five steps tell one story. Each step is
+// one colour-coded frame with the three places side by side; the shared stepper (CellFrames) plays them in order.
+import { ITEMS, lifeOf, lifetimeSteps } from '../lib/storage-lifetimes';
+import { cell, frame, hot, panel, row, type CellFrame, type CellScenario } from '../lib/cell-model';
+import type { Hue } from '../lib/diagram-visual';
+import CellFrames from './CellFrames.astro';
 interface Props { id?: string; title?: string }
 const { id = 'storage-lifetimes', title = 'Three places, three lifetimes' } = Astro.props;
+const places: readonly { place: 'static' | 'stack' | 'heap'; title: string; lasts: string; hue: Hue }[] = [
+  { place: 'static', title: 'Module data', lasts: 'lasts as long as the program', hue: 'blue' },
+  { place: 'stack', title: 'Thread stack', lasts: 'lasts as long as each call', hue: 'purple' },
+  { place: 'heap', title: 'Heap', lasts: 'lasts until its owner frees it', hue: 'green' },
+];
 const steps = lifetimeSteps();
-const start = steps[DEFAULT_STEP];
-if (!start) throw new Error('The lifetime model has no default step.');
-const places = [
-  { place: 'static', title: 'Module data', note: 'Lasts as long as the program' },
-  { place: 'stack', title: 'Thread stack', note: 'Lasts as long as each call' },
-  { place: 'heap', title: 'Heap', note: 'Lasts until its owner frees it' },
-] as const;
-const statusWord = { absent: 'not yet created', live: 'live', released: 'ended' } as const;
+const frames: CellFrame[] = steps.map((step, index) => {
+  const before = index > 0 ? steps[index - 1] : undefined;
+  return frame(step.title, step.caption, places.map(place => panel(`${place.title}: ${place.lasts}`, place.hue, [
+    ...ITEMS.filter(item => item.place === place.place).map(item => {
+      const life = lifeOf(step, item.id);
+      const value = step.values[item.id] ?? '';
+      const changed = before !== undefined && (lifeOf(before, item.id) !== life || before.values[item.id] !== value);
+      const dangling = value.includes('dangling');
+      const pointerNote = item.id === 'block' && life === 'live' ? (index === 2 ? 'p points here' : index === 3 ? 'unit points here' : undefined) : undefined;
+      const options = { sub: life === 'live' ? 'live' : life === 'absent' ? 'not created yet' : 'released' };
+      const shown = life === 'live'
+        ? (changed || dangling ? hot : cell)(value, dangling ? 'red' : place.hue, 1, options)
+        : cell(value, life === 'released' ? 'red' : 'gray', 1, { ...options, ghost: true });
+      return row(item.name, [shown], pointerNote ? { link: pointerNote } : {});
+    }),
+  ])), { side: true });
+});
+const scenario: CellScenario = {
+  id: 'story', tab: 'One call',
+  title,
+  summary: 'A pointer inside a stack frame can refer to a heap block with a different lifetime. Step through one call to watch each place start and end on its own. Positions are schematic.',
+  frames,
+};
 ---
-<figure class="mdg sl not-content" id={id} data-dg data-sl aria-labelledby={`${id}-title`}>
-  <figcaption><strong id={`${id}-title`}>{title}</strong><span>A pointer inside a stack frame can refer to a heap block with a different lifetime. Step through one call to watch each place start and end on its own. Region positions are schematic.</span></figcaption>
-  <div class="mdg-controls sl-controls" data-dg-controls hidden data-reader-skip>
-    <button type="button" class="mdg-btn" data-dg-prev>Previous</button>
-    <button type="button" class="mdg-btn mdg-btn--primary" data-dg-play aria-pressed="false">Play</button>
-    <button type="button" class="mdg-btn" data-dg-next>Step through</button>
-    <button type="button" class="mdg-btn" data-dg-all>Show all</button>
-    <span class="sl-counter" data-dg-counter>All {steps.length} steps shown</span>
-  </div>
-  <p class="mdg-note" data-dg-motion-note data-reader-skip></p>
-  <p class="mdg-sr" data-dg-status role="status" aria-live="polite" aria-atomic="true">{start.caption}</p>
-  <p class="sl-now" data-sl-now><strong data-sl-title>The moment all three exist: {start.title.toLowerCase()}</strong><span data-sl-caption>{start.caption}</span></p>
-  <div class="sl-places">
-    {places.map(place => <section class="sl-place" data-place={place.place} aria-label={place.title}>
-      <h4>{place.title}<small>{place.note}</small></h4>
-      <ul>
-        {ITEMS.filter(item => item.place === place.place).map(item => <li class="sl-item" data-item={item.id} data-life={lifeOf(start, item.id)}>
-          <strong>{item.name} <em data-sl-status>{statusWord[lifeOf(start, item.id)]}</em></strong>
-          <code data-sl-value>{start.values[item.id]}</code>
-          <span>{item.note}</span>
-        </li>)}
-      </ul>
-    </section>)}
-  </div>
-  <h4>The five steps</h4>
-  <ol class="sl-steps">
-    {steps.map(step => <li class="sl-step" data-dg-step data-state="done" data-dg-caption={`Step ${step.index + 1} of ${steps.length}: ${step.title}. ${step.caption}`}>
-      <p><b>Step {step.index + 1}</b> {step.title}</p><p class="sl-step-text">{step.caption}</p>
-    </li>)}
-  </ol>
-  <p class="mdg-note">The stack frame and the heap block are both ordinary virtual memory. What differs is who ends their life: the return for the frame, the owner for the block, and the program itself for static data. Ending a raw-pointer stack slot does not free the block it names. An owning local, such as a Rust Box or a C++ unique_ptr, frees its block when the frame ends.</p>
-</figure>
-<script>
-  import { mountDiagramPlayers } from '../scripts/diagram-player';
-  import { mountStorageLifetimes } from '../scripts/storage-lifetimes';
-  mountDiagramPlayers();
-  mountStorageLifetimes();
-</script>
+<CellFrames id={id} title={title} scenarios={[scenario]} />
