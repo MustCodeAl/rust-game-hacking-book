@@ -90,6 +90,7 @@ export default defineConfig({
 				'./src/styles/mobile-touch.css',
 				'./src/styles/mobile-chrome.css',
 				'./src/styles/notes-panel.css',
+				'./src/styles/kit-polish.css',
 			],
 			components: {
 				Head: './src/components/overrides/Head.astro',
