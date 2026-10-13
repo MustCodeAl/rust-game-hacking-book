@@ -79,8 +79,18 @@ export function mountMarginNotes() {
 	const layout = () => {
 		notes = Array.from(content.querySelectorAll('[data-margin-note]'));
 		notes.forEach(adopt);
-		const right = window.innerWidth - content.getBoundingClientRect().right >= neededSpace();
-		const left = content.getBoundingClientRect().left >= neededSpace();
+		// Free space is measured up to a visible sidebar, not the window edge: a comment hung over the table of contents or
+		// the lesson list covers it. With no room beside the text the comments fall back to small pins.
+		const visibleRect = selector => {
+			const element = document.querySelector(selector);
+			if (!element) return null;
+			const style = getComputedStyle(element), box = element.getBoundingClientRect();
+			return style.display === 'none' || style.visibility === 'hidden' || box.width < 40 ? null : box;
+		};
+		const rightPane = visibleRect('.right-sidebar'), leftPane = visibleRect('#starlight__sidebar, .sidebar-pane, nav.sidebar, .sidebar');
+		const limitRight = rightPane ? rightPane.left : window.innerWidth, limitLeft = leftPane ? leftPane.right : 0;
+		const right = limitRight - content.getBoundingClientRect().right >= neededSpace();
+		const left = content.getBoundingClientRect().left - limitLeft >= neededSpace();
 		notes.forEach(n => (n.dataset.side = n.dataset.preferredSide || 'right'));
 		const previousMode = root.dataset.noteMode;
 		if (window.innerWidth < 640) root.removeAttribute('data-note-mode');
