@@ -564,10 +564,7 @@
                 capture.host.removeAttribute("data-away");
                 anchor = y;
             }
-            else if (y > anchor + 12) {
-                capture.host.setAttribute("data-away", current.side);
-                anchor = y;
-            }
+            // The button used to slide out of view on a scroll down. Readers lost it, so it now always stays where it is.
         }, 60);
     }
     function start() {
