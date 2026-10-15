@@ -1,0 +1,101 @@
+---
+// File offset to RVA to live virtual address, for the sample image of lesson 5.1. Two strips drawn to the same scale show the
+// file and the loaded image; the section table below them is the converter; the form works any position through it.
+// The default (offset 0x0520 at base 0x00400000) is server-rendered in full; the script redraws from ../lib/pe-address.
+import {
+  FILE_ALIGNMENT, FILE_SIZE, LESSON_EXAMPLE, SECTIONS, SECTION_ALIGNMENT, SIZE_OF_HEADERS, SIZE_OF_IMAGE,
+  filePadding, fileSegments, fromFileOffset, hex, hex8, imageSegments, markers, rawEnd, virtualEnd, zeroTail,
+} from '../lib/pe-address';
+import '../styles/memory-diagrams.css';
+import '../styles/pe-map.css';
+interface Props { id?: string; title?: string }
+const { id = 'pe-address-calc', title = 'From a file offset to a live address' } = Astro.props;
+const start = fromFileOffset(LESSON_EXAMPLE.fileOffset, LESSON_EXAMPLE.base);
+const at = markers(start);
+const strips = [
+  { id: 'file', name: 'File on disk', total: FILE_SIZE, unit: 'file offset', segments: fileSegments(), marker: at.file, markerText: start.fileOffset === null ? '' : hex(start.fileOffset) },
+  { id: 'image', name: 'Image in memory', total: SIZE_OF_IMAGE, unit: 'RVA', segments: imageSegments(), marker: at.image, markerText: start.rva === null ? '' : hex(start.rva) },
+] as const;
+const presets = [
+  { label: 'Lesson example: file 0x0520', mode: 'file', value: '0520' },
+  { label: 'PE signature: file 0x0080', mode: 'file', value: '0080' },
+  { label: 'File padding: file 0x1F00', mode: 'file', value: '1F00' },
+  { label: 'Zero-filled tail: RVA 0x4600', mode: 'rva', value: '4600' },
+  { label: 'Between sections: RVA 0x2B00', mode: 'rva', value: '2B00' },
+  { label: 'Live address 0x00401120', mode: 'va', value: '00401120' },
+  { label: 'Past the end: file 0x4000', mode: 'file', value: '4000' },
+] as const;
+const modes = [{ id: 'file', label: 'File offset' }, { id: 'rva', label: 'RVA' }, { id: 'va', label: 'Virtual address' }] as const;
+---
+<figure class="mdg pa not-content" id={id} data-pa aria-labelledby={`${id}-title`}>
+  <figcaption><strong id={`${id}-title`}>{title}</strong><span>A section sits at one distance from the start of the file and a different distance from the start of the image. Both strips use the same scale, so the image is {SIZE_OF_IMAGE / FILE_SIZE} times as long as the file.</span></figcaption>
+
+  <div class="pa-strips" style={`--image-total:${SIZE_OF_IMAGE}`} role="group" aria-label="The file and the image, drawn to the same scale, lowest position at the top">
+    {strips.map(strip => <div class="pa-strip" data-strip={strip.id}>
+      <p class="pa-strip-title"><strong>{strip.name}</strong><small>{strip.total} bytes ({hex(strip.total)})</small></p>
+      <div class="pa-bar" style={`--total:${strip.total}`}>
+        {strip.segments.map(segment => <div class="pa-seg" data-kind={segment.kind} data-role={segment.section?.role ?? 'none'} style={`--bytes:${segment.bytes}`}>
+          {segment.kind !== 'gap' && segment.bytes >= 0x400 && <span class="pa-seg-text"><code>{hex(segment.start)}</code> {segment.label}</span>}
+        </div>)}
+        <div class="pa-marker" data-pa-marker={strip.id} style={`--at:${strip.marker ?? 0}`} hidden={strip.marker === null}><span class="pa-marker-text" data-pa-marker-text={strip.id}>{strip.markerText}</span></div>
+      </div>
+    </div>)}
+  </div>
+  <ul class="pa-key" aria-label="Key">
+    <li><i data-kind="section" data-role="code"></i>Section bytes that exist in both places</li>
+    <li><i data-kind="zero-fill" data-role="data"></i>Zero-filled by the loader: in memory only</li>
+    <li><i data-kind="gap" data-role="none"></i>Padding or unused space: no section owns it</li>
+  </ul>
+
+  <form class="pa-form mdg-controls" data-pa-form hidden novalidate data-reader-skip>
+    <fieldset class="mdg-field pa-modes">
+      <legend>Start from</legend>
+      <div class="mdg-choices" role="radiogroup" aria-label="What the value is">
+        {modes.map(mode => <label class="mdg-choice"><input type="radio" name={`${id}-mode`} value={mode.id} checked={mode.id === 'file'} /><span>{mode.label}</span></label>)}
+      </div>
+    </fieldset>
+    <label class="mdg-field"><span class="mdg-field__label">Value, in hex (1 to 8 digits)</span>
+      <span class="mdg-prefixed"><b>0x</b><input type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="10" data-pa-value value="0520" aria-describedby={`${id}-error`} /></span></label>
+    <label class="mdg-field"><span class="mdg-field__label">Module base, in hex</span>
+      <span class="mdg-prefixed"><b>0x</b><input type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="10" data-pa-base value="00400000" aria-describedby={`${id}-error`} /></span></label>
+    <div class="pa-presets" role="group" aria-label="Examples">
+      {presets.map(preset => <button type="button" class="mdg-btn" data-pa-preset data-mode={preset.mode} data-value={preset.value}>{preset.label}</button>)}
+    </div>
+    <p class="mdg-error" id={`${id}-error`} data-pa-error role="status" aria-live="polite"></p>
+  </form>
+
+  <div class="pa-result" data-pa-result>
+    <p class="pa-summary" data-pa-summary role="status" aria-live="polite" aria-atomic="true"><strong>{start.summary}</strong></p>
+    <ol class="pa-steps" data-pa-steps>{start.steps.map(step => <li>{step}</li>)}</ol>
+    <dl class="pa-values">
+      <div><dt>File offset</dt><dd data-pa-out="file">{start.fileOffset === null ? 'none' : hex(start.fileOffset)}</dd></div>
+      <div><dt>RVA</dt><dd data-pa-out="rva">{start.rva === null ? 'none' : hex(start.rva)}</dd></div>
+      <div><dt>Virtual address</dt><dd data-pa-out="va">{start.va === null ? 'none' : hex8(start.va)}</dd></div>
+    </dl>
+  </div>
+  <p class="mdg-note">If Windows loads the module at a different base (ASLR), the file offset and the RVA stay the same, and only the virtual address moves. The module base must be a multiple of 0x10000.</p>
+  <div class="mdg-table-wrap pa-table-wrap">
+    <table class="mdg-table pa-table">
+      <caption>The section table, with everything you need to convert either way. Alignments: {hex(FILE_ALIGNMENT)} in the file, {hex(SECTION_ALIGNMENT)} in memory.</caption>
+      <thead><tr><th scope="col">Section</th><th scope="col">In the file</th><th scope="col">In memory (RVA)</th><th scope="col">RVA − file offset</th><th scope="col">What does not match</th></tr></thead>
+      <tbody>{SECTIONS.map(section => {
+        const shift = section.virtualAddress - section.rawPointer;
+        const tail = zeroTail(section), pad = filePadding(section);
+        return <tr>
+          <th scope="row" data-label="Section">{section.name}<small> {section.holds}</small></th>
+          <td data-label="In the file"><span class="pa-cell pa-cell--mono"><code>{hex(section.rawPointer)}</code> to <code>{hex(rawEnd(section))}</code>, size <code>{hex(section.rawSize)}</code></span></td>
+          <td data-label="In memory (RVA)"><span class="pa-cell pa-cell--mono"><code>{hex(section.virtualAddress)}</code> to <code>{hex(virtualEnd(section))}</code>, size <code>{hex(section.virtualSize)}</code></span></td>
+          <td data-label="RVA − file offset"><span class="pa-cell pa-cell--mono"><code>{hex(section.virtualAddress)} &minus; {hex(section.rawPointer)} = +{hex(shift)}</code></span></td>
+          <td data-label="What does not match"><span class="pa-cell">{tail > 0 ? `${hex(section.virtualSize)} − ${hex(section.rawSize)} = ${hex(tail)} bytes are zero-filled in memory, from RVA ${hex(section.virtualAddress + section.rawSize)}.` : `${hex(section.rawSize)} − ${hex(section.virtualSize)} = ${hex(pad)} bytes at the end of the raw data are file padding that is never mapped.`}</span></td>
+        </tr>;
+      })}</tbody>
+    </table>
+  </div>
+  <p class="mdg-note">Headers are the exception: they are mapped at the start of the image, so for the first {hex(SIZE_OF_HEADERS)} bytes the RVA equals the file offset.</p>
+
+  <noscript><p class="mdg-note">The worked example above is complete without JavaScript.</p></noscript>
+</figure>
+<script>
+  import { mountPeAddressCalcs } from '../scripts/pe-address';
+  mountPeAddressCalcs();
+</script>

@@ -1,0 +1,89 @@
+---
+// The headers of a PE file as a vertical byte map. A to-scale ruler shows the first 0x400 bytes of the file; below it each
+// header is a part with its real file offsets, derived from the sizes before it. PE32 and PE32+ are both server-rendered
+// and the script only switches between them and opens or closes parts. Every explanation is always visible text.
+import { PE_FORMATS, fieldHex, formatDifferences, layout, nameParts, rangeText, rulerSegments } from '../lib/pe-map';
+import { SIZE_OF_HEADERS, hex } from '../lib/pe-address';
+import '../styles/memory-diagrams.css';
+import '../styles/pe-map.css';
+interface Props { id?: string; title?: string }
+const { id = 'pe-file-map', title = 'The headers of a PE file, byte by byte' } = Astro.props;
+const defaultFormat = 'pe32';
+const models = PE_FORMATS.map(format => ({ format, model: layout(format.id) }));
+const relativeTo: Record<string, string> = { coff: 'COFF header', standard: 'optional header', windows: 'optional header', directories: 'optional header', sections: 'section row' };
+const differences = formatDifferences();
+---
+<figure class="mdg pm not-content" id={id} data-pm data-pick-group aria-labelledby={`${id}-title`}>
+  <figcaption><strong id={`${id}-title`}>{title}</strong><span>Offsets are counted from the first byte of the file. Open a part to read its fields, and point at a field to highlight it. The sample file puts the PE signature at {hex(0x80)}.</span></figcaption>
+
+  <fieldset class="pm-controls mdg-controls" data-pm-controls hidden data-reader-skip>
+    <legend>Format</legend>
+    <div class="mdg-choices pm-choices" role="radiogroup" aria-label="PE format">
+      {PE_FORMATS.map(format => <label class="mdg-choice"><input type="radio" name={`${id}-format`} value={format.id} checked={format.id === defaultFormat} /><span>{format.label}</span></label>)}
+    </div>
+    <div class="pm-bulk">
+      <button type="button" class="mdg-btn" data-pm-open-all>Open all</button>
+      <button type="button" class="mdg-btn" data-pm-close-all>Close all</button>
+    </div>
+  </fieldset>
+
+  {models.map(({ format, model }) => <div class="pm-format" data-pm-format={format.id} hidden={format.id !== defaultFormat}>
+    <h4 class="pm-format-title">{format.label}: the optional header is {model.optionalBytes} bytes, so the section table starts at {hex(model.sectionTableStart)}</h4>
+    <div class="pm-ruler" aria-hidden="true">
+      {rulerSegments(model).map(segment => <span class="pm-seg" data-seg={segment.id} data-role={segment.role} style={`--bytes:${segment.bytes}`}></span>)}
+    </div>
+    <p class="pm-ruler-note"><code>0x0000</code> to <code>{hex(SIZE_OF_HEADERS - 1)}</code>: the first {hex(SIZE_OF_HEADERS)} bytes of the file ({SIZE_OF_HEADERS} bytes), drawn to scale. Section data begins right after.</p>
+    <ol class="pm-blocks">
+      {model.blocks.map(block => {
+        const bodyId = `${id}-${format.id}-${block.id}`;
+        return <li class="pm-block" data-block={block.id} data-role={block.role} data-open="true">
+          <h5 class="pm-head">
+            <button type="button" class="pm-toggle" aria-expanded="true" aria-controls={bodyId} disabled>
+              <code class="pm-start">{fieldHex(block.start)}</code>
+              <span class="pm-title"><strong>{block.title}</strong><small>{rangeText(block)}{block.bytes === 0 ? '' : ` · ${block.bytes} B`}</small></span>
+              <span class="pm-chev" aria-hidden="true"></span>
+            </button>
+          </h5>
+          <div class="pm-body" id={bodyId}>
+            <p class="pm-summary">{block.summary}</p>
+            <p class="pm-derive"><b>Where it starts.</b> {block.derivation}</p>
+            {block.text && <p class="pm-text">{block.text}</p>}
+            {block.fields.length > 0 && <dl class="pm-fields" aria-label={`${block.title}, field by field`}>
+              {block.fields.map(field => {
+                const pickId = `${format.id}-${field.id}`;
+                const note = relativeTo[block.id];
+                return <div class="pm-field" data-pick-term={pickId}>
+                  <dt><button type="button" class="pm-fbtn" data-pick={pickId} aria-pressed="false" disabled>
+                    <code class="pm-foff">{fieldHex(field.offset)}</code>
+                    <span class="pm-fname">{nameParts(field.name).map((part, index) => <>{index > 0 && <wbr />}{part}</>)}</span>
+                    <span class="pm-fsize">{field.bytes} {field.bytes === 1 ? 'byte' : 'bytes'}{note ? ` · ${note} + ${field.relative}` : ''}</span>
+                  </button></dt>
+                  <dd>
+                    <span class="pm-meaning">{field.meaning}</span>
+                    {field.value && <span class="pm-example"><b>In the sample:</b> <code>{field.value}</code>{field.why ? <span class="pm-why">{field.why}</span> : null}</span>}
+                  </dd>
+                </div>;
+              })}
+            </dl>}
+          </div>
+        </li>;
+      })}
+    </ol>
+  </div>)}
+
+  <div class="mdg-table-wrap pm-compare">
+    <table class="mdg-table mdg-table--stack">
+      <caption>What changes in PE32+. Offsets in the middle columns are counted from the start of the optional header.</caption>
+      <thead><tr><th scope="col">Field</th><th scope="col">PE32</th><th scope="col">PE32+</th></tr></thead>
+      <tbody>{differences.map(row => <tr><th scope="row">{row.what}</th><td data-label="PE32">{row.pe32}</td><td data-label="PE32+">{row.pe32plus}</td></tr>)}</tbody>
+    </table>
+  </div>
+  <p class="mdg-note">The sample file is built to match the lesson: four sections, a 0x200 FileAlignment and a 0x1000 SectionAlignment. Real files differ in e_lfanew (0x80 and 0xE8 are both common), in the DOS stub and in their section list; the structures and their order do not change.</p>
+  <noscript><p class="mdg-note">Every part is already open above, and the table lists what PE32+ changes, so nothing needs JavaScript.</p></noscript>
+</figure>
+<script>
+  import { mountDetailPickers } from '../scripts/detail-picker';
+  import { mountPeFileMaps } from '../scripts/pe-map';
+  mountDetailPickers();
+  mountPeFileMaps();
+</script>
