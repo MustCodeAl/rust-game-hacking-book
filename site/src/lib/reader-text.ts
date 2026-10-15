@@ -86,6 +86,7 @@ export function toSpeechText(value: unknown, seen: Set<string> = new Set()): str
 		if (seen.has(term)) return spoken;
 		seen.add(term);
 		const meaning = ACRONYMS[term];
+		if (!meaning) return spoken;
 		const after = whole.slice(offset + term.length).trimStart().toLowerCase();
 		const before = whole.slice(Math.max(0, offset - meaning.length - 4), offset).toLowerCase();
 		if (after.startsWith(`(${meaning.toLowerCase()}`) || before.includes(meaning.toLowerCase())) return spoken;

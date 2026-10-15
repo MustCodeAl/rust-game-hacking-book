@@ -11,7 +11,7 @@ const MAX_WIDTH = 680;
 function xml(value: unknown) {
   return String(value).replace(/[&<>"']/g, (character) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;',
-  } as Record<string, string>)[character]);
+  } as Record<string, string>)[character] ?? character);
 }
 
 function cellText(element: Element) {
@@ -106,20 +106,23 @@ export function tableMedia(table: Element): TableMedia | null {
   const available = MAX_WIDTH - 2;
   const scale = preferredTotal <= available ? 1
     : Math.max(0, (available - minimumTotal) / (preferredTotal - minimumTotal || 1));
-  const widths = preferredWidths.map((width, index) => minimumTotal > available
-    ? minimumWidths[index] * available / minimumTotal
-    : minimumWidths[index] + (width - minimumWidths[index]) * scale);
+  const widths = preferredWidths.map((width, index) => {
+    const minimumWidth = minimumWidths[index] ?? 0;
+    return minimumTotal > available
+      ? minimumWidth * available / minimumTotal
+      : minimumWidth + (width - minimumWidth) * scale;
+  });
   const xPositions = [1];
   for (const width of widths) xPositions.push(xPositions.at(-1)! + width);
 
   const rowHeights = rows.map(() => LINE_HEIGHT + VERTICAL_PADDING * 2);
   for (const [rowIndex, cells] of rows.entries()) {
     for (const cell of cells) {
-      const width = xPositions[cell.column + cell.span] - xPositions[cell.column];
+      const width = (xPositions[cell.column + cell.span] ?? 0) - (xPositions[cell.column] ?? 0);
       const characters = Math.max(1, Math.floor((width - HORIZONTAL_PADDING * 2) / CHARACTER_WIDTH + 1e-6));
       cell.lines = wrap(cell.text, characters);
       const required = cell.lines!.length * LINE_HEIGHT + VERTICAL_PADDING * 2;
-      if (cell.rowSpan === 1) rowHeights[rowIndex] = Math.max(rowHeights[rowIndex], required);
+      if (cell.rowSpan === 1) rowHeights[rowIndex] = Math.max(rowHeights[rowIndex] ?? 0, required);
     }
   }
   for (const [rowIndex, cells] of rows.entries()) {
@@ -127,7 +130,7 @@ export function tableMedia(table: Element): TableMedia | null {
       const end = rowIndex + cell.rowSpan;
       const actual = rowHeights.slice(rowIndex, end).reduce((sum, height) => sum + height, 0);
       const required = cell.lines!.length * LINE_HEIGHT + VERTICAL_PADDING * 2;
-      if (required > actual) rowHeights[end - 1] += required - actual;
+      if (required > actual) rowHeights[end - 1] = (rowHeights[end - 1] ?? 0) + (required - actual);
     }
   }
   const yPositions = [1];
@@ -137,10 +140,10 @@ export function tableMedia(table: Element): TableMedia | null {
   const parts = [`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Lesson table"><title>Lesson table</title>`];
   for (const [rowIndex, cells] of rows.entries()) {
     for (const cell of cells) {
-      const x = xPositions[cell.column];
-      const y = yPositions[rowIndex];
-      const cellWidth = xPositions[cell.column + cell.span] - x;
-      const cellHeight = yPositions[rowIndex + cell.rowSpan] - y;
+      const x = xPositions[cell.column] ?? 0;
+      const y = yPositions[rowIndex] ?? 0;
+      const cellWidth = (xPositions[cell.column + cell.span] ?? 0) - x;
+      const cellHeight = (yPositions[rowIndex + cell.rowSpan] ?? 0) - y;
       parts.push(`<rect x="${x.toFixed(2)}" y="${y}" width="${cellWidth.toFixed(2)}" height="${cellHeight}" fill="${cell.header ? '#e7eef4' : '#ffffff'}" stroke="#c8d3dd" stroke-width="0.65"/>`);
       for (const [lineIndex, line] of cell.lines!.entries()) {
         parts.push(`<text x="${(x + HORIZONTAL_PADDING).toFixed(2)}" y="${y + VERTICAL_PADDING + FONT_SIZE + lineIndex * LINE_HEIGHT}" fill="#1c2733" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="${FONT_SIZE}" font-weight="${cell.header ? 700 : 400}">${xml(line)}</text>`);

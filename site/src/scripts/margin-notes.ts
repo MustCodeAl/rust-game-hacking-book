@@ -1,22 +1,22 @@
 // Shared by authored and reader comments. Include it even when a lesson has no
 // authored MarginNote, and adopt each content area only once.
-const mounted = new WeakSet();
+const mounted = new WeakSet<Element>();
 
-export function mountMarginNotes() {
+export function mountMarginNotes(): void {
 	if (document.readyState === 'loading') {
 		document.addEventListener('DOMContentLoaded', mountMarginNotes, { once: true });
 		return;
 	}
-	const content = document.querySelector('.sl-markdown-content');
+	const content = document.querySelector<HTMLElement>('.sl-markdown-content');
 	if (!content || mounted.has(content)) return;
 	mounted.add(content);
 	const root = document.documentElement;
 	const LEFT = ['alternative', 'clarification', 'code note', 'math'];
-	const neededSpace = () => 16.5 * parseFloat(getComputedStyle(root).fontSize);
-	const isCode = node => !!node && (node.matches('pre, .expressive-code, .kit-speedtype, .kit-github, .code-trace, .code-blanks, [data-code-trace]') || !!node.querySelector('pre, .expressive-code'));
-	let notes = [];
-	const expanded = note => note.dataset.collapsed !== 'true' && (root.dataset.noteMode !== 'pin' || note.dataset.open === 'true');
-	const reflect = note => {
+	const neededSpace = (): number => 16.5 * parseFloat(getComputedStyle(root).fontSize);
+	const isCode = (node: Element | null): boolean => !!node && (node.matches('pre, .expressive-code, .kit-speedtype, .kit-github, .code-trace, .code-blanks, [data-code-trace]') || !!node.querySelector('pre, .expressive-code'));
+	let notes: HTMLElement[] = [];
+	const expanded = (note: HTMLElement): boolean => note.dataset.collapsed !== 'true' && (root.dataset.noteMode !== 'pin' || note.dataset.open === 'true');
+	const reflect = (note: HTMLElement): void => {
 		const button = note.querySelector('.margin-note__toggle');
 		if (!button) return;
 		const open = expanded(note);
@@ -24,13 +24,13 @@ export function mountMarginNotes() {
 		button.setAttribute('aria-expanded', String(open));
 		button.setAttribute('aria-label', (open ? 'Hide ' : 'Show ') + (note.getAttribute('aria-label') || '') + ' comment');
 	};
-	const collapse = note => {
+	const collapse = (note: HTMLElement): void => {
 		note.dataset.collapsed = 'true';
 		note.removeAttribute('data-open');
 		reflect(note);
 		if (root.dataset.noteMode) settle();
 	};
-	const toggle = note => {
+	const toggle = (note: HTMLElement): void => {
 		if (expanded(note)) { collapse(note); return; }
 		note.removeAttribute('data-collapsed');
 		if (root.dataset.noteMode === 'pin') {
@@ -40,7 +40,7 @@ export function mountMarginNotes() {
 		reflect(note);
 		if (root.dataset.noteMode) settle();
 	};
-	const adopt = note => {
+	const adopt = (note: HTMLElement): void => {
 		if (note.dataset.adopted) return;
 		note.dataset.adopted = 'true';
 		const label = (note.getAttribute('aria-label') || '').toLowerCase();
@@ -66,22 +66,23 @@ export function mountMarginNotes() {
 			if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(note); }
 		});
 	};
-	const settle = () => {
+	const settle = (): void => {
 		const bottoms = { left: 0, right: 0 };
 		notes.forEach(note => {
 			note.style.top = '';
-			const natural = note.offsetTop, side = note.dataset.side || 'right';
+			const natural = note.offsetTop;
+			const side = note.dataset.side === 'left' ? 'left' : 'right';
 			const top = Math.max(natural, bottoms[side] + 10);
 			if (top !== natural) note.style.top = top + 'px';
 			bottoms[side] = top + note.offsetHeight;
 		});
 	};
-	const layout = () => {
-		notes = Array.from(content.querySelectorAll('[data-margin-note]'));
+	const layout = (): void => {
+		notes = Array.from(content.querySelectorAll<HTMLElement>('[data-margin-note]'));
 		notes.forEach(adopt);
 		// Free space is measured up to a visible sidebar, not the window edge: a comment hung over the table of contents or
 		// the lesson list covers it. With no room beside the text the comments fall back to small pins.
-		const visibleRect = selector => {
+		const visibleRect = (selector: string): DOMRect | null => {
 			const element = document.querySelector(selector);
 			if (!element) return null;
 			const style = getComputedStyle(element), box = element.getBoundingClientRect();
@@ -106,12 +107,12 @@ export function mountMarginNotes() {
 	// Late image sizing still warrants layout, but never gates initialization.
 	window.addEventListener('load', layout);
 	let pending = 0, resizeTimer = 0;
-	const scheduleLayout = () => { cancelAnimationFrame(pending); pending = requestAnimationFrame(layout); };
+	const scheduleLayout = (): void => { cancelAnimationFrame(pending); pending = requestAnimationFrame(layout); };
 	new ResizeObserver(scheduleLayout).observe(content);
 	document.addEventListener('academy:reader-preference', scheduleLayout);
 	new MutationObserver(scheduleLayout).observe(root, { attributes: true, attributeFilter: ['data-academy-sidebar', 'data-academy-toc'] });
 	window.addEventListener('gha:bubbles', layout);
-	window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(layout, 150); });
+	window.addEventListener('resize', () => { window.clearTimeout(resizeTimer); resizeTimer = window.setTimeout(layout, 150); });
 	document.addEventListener('click', event => {
 		if (!(event.target instanceof Element) || !event.target.closest('[data-margin-note]')) notes.forEach(n => { n.removeAttribute('data-open'); reflect(n); });
 	});
