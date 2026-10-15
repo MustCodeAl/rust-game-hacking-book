@@ -1,5 +1,5 @@
 import { probabilityBoard } from './probability-board.js';
-import { createBehaviorTree, editBehaviorTree, tickBehaviorTree, treeNodeLabel, TREE_ACTIONS, TREE_TESTS } from './behavior-tree-model.js';
+import { createBehaviorTree, editBehaviorTree, tickBehaviorTree, treeNodeLabel, TREE_ACTIONS, TREE_TESTS } from './behavior-tree-model.ts';
 
 // Explorable simulations (see components/SimLab.astro). Each one opens with a
 // worked example and its explanation already showing; the reader changes the

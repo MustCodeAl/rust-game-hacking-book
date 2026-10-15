@@ -1,15 +1,21 @@
 // Worked Rust examples. These simulate values; they never execute reader code.
-const range = (id, label, min, max, value) => ({ id, label, type: 'range', min, max, step: 1, value });
-const select = (id, label, value, entries) => ({ id, label, type: 'select', value, options: entries.map(([value, label]) => ({ value, label })) });
-function record() {
-  const steps = [], vars = {};
+import { createListedTrace, range, select } from '../lib/traces-kit.ts';
+import type { ListedTrace, TraceMemory, TraceStep, TraceVars, VarValue } from '../lib/traces-types.ts';
+
+interface Recorder {
+  readonly steps: TraceStep[];
+  push(line: number, say: string, change?: TraceVars, mem?: TraceMemory): void;
+}
+
+function record(): Recorder {
+  const steps: TraceStep[] = [], vars: Record<string, VarValue> = {};
   return { steps, push(line, say, change = {}, mem) { Object.assign(vars, change); steps.push({ line, say, vars: { ...vars }, mem }); } };
 }
-const opt = value => value === null ? 'None' : `Some(${value})`;
-const bytes = values => ({ title: 'Owned byte buffer', cells: values.map((value, i) => ({ label: `+${i}`, value: value.toString(16).toUpperCase().padStart(2, '0') })) });
+const opt = (value: number | null): string => value === null ? 'None' : `Some(${value})`;
+const bytes = (values: readonly number[]): TraceMemory => ({ title: 'Owned byte buffer', cells: values.map((value, i) => ({ label: `+${i}`, value: value.toString(16).toUpperCase().padStart(2, '0') })) });
 
-export const RUST_IDIOM_TRACES = {
-  'idiom-option-chain': {
+export const RUST_IDIOM_TRACES: Readonly<Record<string, ListedTrace>> = {
+  'idiom-option-chain': createListedTrace({
     title: 'Transform a value, then ask a fallible question',
     intro: 'The middle inventory slot starts at 8. Change the slot and cost to see which closure gets called.',
     code: ['let costs = [4_u32, 8, 12];', 'let price = costs.get(slot).copied();', 'let doubled = price.map(|n| n * 2);', 'let left = doubled.and_then(|n| budget.checked_sub(n));', 'let result = left.ok_or("not affordable");'],
@@ -17,7 +23,7 @@ export const RUST_IDIOM_TRACES = {
     run({ slot, budget }) {
       const { steps, push } = record(), costs = [4, 8, 12];
       push(0, 'The array owns three prices. A slot beyond its length has no value.', { slot, budget, costs: '[4, 8, 12]' });
-      const price = slot < costs.length ? costs[slot] : null;
+      const price = slot < costs.length ? costs[slot] ?? null : null;
       push(1, price === null ? 'get returns None; copied also keeps None.' : `get lends the price; copied copies the u32 into Some(${price}).`, { price: opt(price) });
       const doubled = price === null ? null : price * 2;
       push(2, price === null ? 'map does not call its closure for None.' : `map calls the closure once: ${price} times 2 is ${doubled}.`, { doubled: opt(doubled) });
@@ -26,8 +32,8 @@ export const RUST_IDIOM_TRACES = {
       push(4, left === null ? 'ok_or turns missing success into an explicit error reason.' : 'ok_or keeps the successful amount, including zero.', { result: left === null ? 'Err(not affordable)' : `Ok(${left})` });
       return steps;
     },
-  },
-  'idiom-result-chain': {
+  }),
+  'idiom-result-chain': createListedTrace({
     title: 'A reason travels through Result and question mark',
     intro: 'Choose valid text, invalid text or an unaffordable cost. The first failure stops the sequence.',
     code: ['fn buy(text: &str, gold: u32) -> Result<u32, &\'static str> {', '    let cost = text.parse::<u32>().map_err(|_| "bad cost")?;', '    let left = gold.checked_sub(cost).ok_or("not enough gold")?;', '    Ok(left)', '}'],
@@ -44,8 +50,8 @@ export const RUST_IDIOM_TRACES = {
       push(3, 'The caller receives success and can choose what to do with the remaining amount.', { result: `Ok(${left})` });
       return steps;
     },
-  },
-  'idiom-result-combinators': {
+  }),
+  'idiom-result-combinators': createListedTrace({
     title: 'Result map changes success; and_then can fail again',
     intro: 'A small sensor reading becomes a doubled score. Try a missing reading or a score too large for u8.',
     code: ['let reading: Result<u8, &str> = input;', 'let score = reading.map(|n| u16::from(n) * 2);', 'let small = score.and_then(|n| u8::try_from(n)', '    .map_err(|_| "score too large"));'],
@@ -59,8 +65,8 @@ export const RUST_IDIOM_TRACES = {
       push(2, score <= 255 ? 'The next operation succeeds, so and_then keeps one Result layer.' : 'The next operation fails; map_err explains the conversion failure.', { small: score <= 255 ? `Ok(${score})` : 'Err(score too large)' });
       return steps;
     },
-  },
-  'idiom-state-enum': {
+  }),
+  'idiom-state-enum': createListedTrace({
     title: 'Only the current state carries its data',
     intro: 'A cooldown stores its remaining ticks; Ready has no cooldown count. Change the starting count.',
     code: ['enum Dash { Ready, Cooling { ticks: u32 } }', 'let state = Dash::Cooling { ticks };', 'let next = match state {', '    Dash::Cooling { ticks } if ticks > 1 => Dash::Cooling { ticks: ticks - 1 },', '    Dash::Cooling { .. } => Dash::Ready,', '    Dash::Ready => Dash::Ready,', '};'],
@@ -74,8 +80,8 @@ export const RUST_IDIOM_TRACES = {
       push(6, 'Exactly one arm produced the next state; every variant has an arm.');
       return steps;
     },
-  },
-  'idiom-patterns': {
+  }),
+  'idiom-patterns': createListedTrace({
     title: 'Name the successful shape, then test its meaning',
     intro: 'A missing player exits early. An existing player is then compared with the heal threshold.',
     code: ['let Some(health) = player_health else { return "no player"; };', 'let alive = matches!(health, 1..=100);', 'match health {', '    n if n < 25 && alive => "heal",', '    0 => "respawn",', '    _ => "wait",', '}'],
@@ -91,8 +97,8 @@ export const RUST_IDIOM_TRACES = {
       push(result === 'heal' ? 3 : result === 'respawn' ? 4 : 5, `The selected arm returns ${result}.`, { result });
       return steps;
     },
-  },
-  'idiom-filter-map-fold': {
+  }),
+  'idiom-filter-map-fold': createListedTrace({
     title: 'Keep affordable costs, transform them, then accumulate',
     intro: 'The shop has costs 3, 8 and 12. Each cost is checked independently against the same budget.',
     code: ['let prices = [3_u32, 8, 12];', 'let total = prices.into_iter()', '    .filter(|cost| *cost <= budget)', '    .map(|cost| cost * 2)', '    .fold(0, |sum, cost| sum + cost);'],
@@ -109,20 +115,20 @@ export const RUST_IDIOM_TRACES = {
       push(4, 'No items remain. The total is the fold accumulator, including zero when no price passed.', { total: sum });
       return steps;
     },
-  },
-  'idiom-windows': {
+  }),
+  'idiom-windows': createListedTrace({
     title: 'Overlapping windows keep neighboring samples together',
     intro: 'Change the middle position and watch which adjacent differences change.',
     code: ['let positions = [2_i32, middle, 10];', 'let deltas: Vec<i32> = positions.windows(2)', '    .map(|pair| pair[1] - pair[0])', '    .collect();'],
     inputs: [range('middle', 'Middle position', 0, 12, 6)],
     run({ middle }) {
-      const { steps, push } = record(); const positions = [2, middle, 10], deltas = [];
+      const { steps, push } = record(); const positions = [2, middle, 10], deltas: number[] = [], pairs: ReadonlyArray<readonly [number, number]> = [[2, middle], [middle, 10]];
       push(0, 'The array owns three samples. Each two-element window borrows consecutive elements.', { positions: `[${positions.join(', ')}]`, middle });
-      for (let i = 0; i < 2; i++) { push(1, 'The next window overlaps the previous one by one sample.', { pair: `[${positions[i]}, ${positions[i + 1]}]` }); deltas.push(positions[i + 1] - positions[i]); push(2, 'A window has exactly two elements, so these two indexes are in bounds.', { delta: deltas.at(-1) }); }
+      for (const [from, to] of pairs) { push(1, 'The next window overlaps the previous one by one sample.', { pair: `[${from}, ${to}]` }); deltas.push(to - from); push(2, 'A window has exactly two elements, so these two indexes are in bounds.', { delta: to - from }); }
       push(3, 'collect consumes the iterator into a new owned Vec. The original positions remain unchanged.', { deltas: `[${deltas.join(', ')}]` }); return steps;
     },
-  },
-  'idiom-chunks': {
+  }),
+  'idiom-chunks': createListedTrace({
     title: 'Fixed records leave a remainder that must be handled',
     intro: 'Two bytes make one toy record. Toggle a trailing byte to see why chunks_exact alone cannot validate a packet.',
     code: ['let records = bytes.chunks_exact(2);', 'let tail = records.remainder();', 'if !tail.is_empty() { return Err("partial record"); }', 'let totals: Vec<u16> = records', '    .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))', '    .collect();'],
@@ -137,8 +143,8 @@ export const RUST_IDIOM_TRACES = {
       push(4, 'The next pair becomes 9. Its bytes did not overlap the first pair.', { record: 9 });
       push(5, 'The complete packet yields two values.', { totals: '[4, 9]' }); return steps;
     },
-  },
-  'idiom-byte-conversion': {
+  }),
+  'idiom-byte-conversion': createListedTrace({
     title: 'A bounded slice becomes a number, then bytes again',
     intro: 'The default buffer holds the four bytes for 300. Try a short buffer; decoding stops before indexing.',
     code: ['fn read_gold(bytes: &[u8]) -> Option<u32> {', '    let raw: [u8; 4] = bytes.get(..4)?.try_into().ok()?;', '    Some(u32::from_le_bytes(raw))', '}', 'let encoded = gold.to_le_bytes();'],
@@ -151,8 +157,8 @@ export const RUST_IDIOM_TRACES = {
       const encoded = [gold & 255, (gold >>> 8) & 255, (gold >>> 16) & 255, (gold >>> 24) & 255];
       push(4, 'to_le_bytes chooses the same explicit order for writing. It does not depend on the host CPU.', { encoded: encoded.map(n => n.toString(16).toUpperCase().padStart(2, '0')).join(' ') }); return steps;
     },
-  },
-  'idiom-integer-safety': {
+  }),
+  'idiom-integer-safety': createListedTrace({
     title: 'Choose what an overflowing counter means',
     intro: 'A u8 holds 0 through 255. The three operations use three different policies for the same addition.',
     code: ['let count: u8 = start;', 'let checked = count.checked_add(gain);', 'let wrapping = count.wrapping_add(gain);', 'let saturating = count.saturating_add(gain);'],
@@ -164,8 +170,8 @@ export const RUST_IDIOM_TRACES = {
       push(2, 'wrapping_add keeps the low eight bits. Use this when the counter is intentionally cyclic.', { wrapping: total % 256 });
       push(3, 'saturating_add clamps at the largest value. Use this for a meter that must stop at its limit.', { saturating: Math.min(255, total) }); return steps;
     },
-  },
-  'idiom-layout': {
+  }),
+  'idiom-layout': createListedTrace({
     title: 'C layout includes alignment padding',
     intro: 'On the Windows x64 layout used here, changing gold changes bytes but leaves offsets and size alone.',
     code: ['#[repr(C)]', 'struct Record { tag: u8, gold: u32, zone: u16 }', 'let record = Record { tag: 1, gold, zone: 2 };', 'let offset = std::mem::offset_of!(Record, gold);', 'let size = std::mem::size_of::<Record>();'],
@@ -179,8 +185,8 @@ export const RUST_IDIOM_TRACES = {
       push(3, 'offset_of! reports gold at offset four for this target layout.', { gold_offset: 4 });
       push(4, 'Two tail padding bytes round the total up to a multiple of the struct alignment.', { size: 12 }); return steps;
     },
-  },
-  'idiom-borrowed-slice': {
+  }),
+  'idiom-borrowed-slice': createListedTrace({
     title: 'A returned view stays tied to its owner',
     intro: 'Change the requested length. A valid prefix borrows the buffer; too long gives None.',
     code: ['fn prefix<\'a>(bytes: &\'a [u8], count: usize) -> Option<&\'a [u8]> {', '    bytes.get(..count)', '}', 'let buffer = [10_u8, 20, 30, 40];', 'let view = prefix(&buffer, count);'],
@@ -192,8 +198,8 @@ export const RUST_IDIOM_TRACES = {
       push(1, count <= 4 ? 'get lends a view into the same allocation. It does not copy the elements.' : 'The end lies beyond the buffer; get returns None.', { view: count <= 4 ? `Some(&[${values.slice(0, count).join(', ')}])` : 'None', copied_bytes: 0 });
       push(4, 'A valid view can be used only while its owner is alive and the borrow permits it. The compiler checks this relationship.', { lifetime: 'view cannot outlive buffer' }); return steps;
     },
-  },
-  'idiom-newtype-display': {
+  }),
+  'idiom-newtype-display': createListedTrace({
     title: 'Give one number a type and a readable spelling',
     intro: 'The same numeric offset has a distinct type. Conversion and formatting do not validate a live address.',
     code: ['#[derive(Debug, Clone, Copy, PartialEq, Eq)]', 'struct Rva(u32);', 'impl From<u32> for Rva { fn from(n: u32) -> Self { Self(n) } }', 'impl std::fmt::Display for Rva {', '    fn fmt(&self, f: &mut std::fmt::Formatter<\'_>) -> std::fmt::Result {', '        write!(f, "RVA 0x{:X}", self.0)', '    }', '}', 'let offset: Rva = raw.into();', 'let label = offset.to_string();'],
@@ -206,8 +212,8 @@ export const RUST_IDIOM_TRACES = {
       push(5, 'Display writes an intended user-facing label into the formatter.', { label: `RVA 0x${raw.toString(16).toUpperCase()}` });
       push(9, 'to_string uses Display. The number has a clearer role, but its validity still depends on the target module.', { validated: false }); return steps;
     },
-  },
-  'idiom-trait-reader': {
+  }),
+  'idiom-trait-reader': createListedTrace({
     title: 'One capability lets a function use different readers',
     intro: 'Swap a deterministic fixture for a missing-data fixture. The function calls the same trait method.',
     code: ['trait GoldReader { fn gold(&self) -> Option<u32>; }', 'struct Fixture(u32);', 'impl GoldReader for Fixture {', '    fn gold(&self) -> Option<u32> { Some(self.0) }', '}', 'fn affordable(reader: &impl GoldReader, price: u32) -> bool {', '    reader.gold().is_some_and(|gold| gold >= price)', '}'],
@@ -219,8 +225,8 @@ export const RUST_IDIOM_TRACES = {
       push(6, reader === 'fixture' ? 'This implementation returns Some(20). The closure compares its number with the price.' : 'This implementation returns None. is_some_and skips the closure and returns false.', { gold: reader === 'fixture' ? 'Some(20)' : 'None', affordable: reader === 'fixture' && price <= 20 });
       push(7, 'Both readers use the same function. The trait does not grant operating-system access or turn missing data into a valid value.'); return steps;
     },
-  },
-  'idiom-builder': {
+  }),
+  'idiom-builder': createListedTrace({
     title: 'A builder accumulates choices before validating',
     intro: 'The default sampling limit is valid. Try zero; build reports an error before any sampler is started.',
     code: ['let draft = SamplerBuilder::default();', 'let draft = draft.limit(limit).label("gold");', 'let sampler = draft.build();'],
@@ -231,8 +237,8 @@ export const RUST_IDIOM_TRACES = {
       push(1, 'Each consuming method returns the updated draft so the next method can use it.', { limit, label: 'gold' });
       push(2, limit === 0 ? 'build rejects a zero limit. No ready sampler is produced.' : 'build checks the limit once and returns a ready sampler.', { validated: limit > 0, result: limit > 0 ? `Ok(Sampler { limit: ${limit}, label: gold })` : 'Err(limit must be positive)' }); return steps;
     },
-  },
-  'idiom-drop-guard': {
+  }),
+  'idiom-drop-guard': createListedTrace({
     title: 'A scope guard restores the local byte on either return',
     intro: 'The worked listing starts at 75 and temporarily stores 90. Choose normal or early return; both end the guard’s scope.',
     code: ['fn inspect(byte: &mut u8, stop: bool) -> Result<(), &\'static str> {', '    let guard = ByteGuard::replace(byte, 90);', '    println!("temporary value: {}", *guard.byte);', '    if stop { return Err("stopped early"); }', '    Ok(())', '}', '// ByteGuard::drop restores guard.saved through guard.byte.'],
@@ -246,8 +252,8 @@ export const RUST_IDIOM_TRACES = {
       push(6, 'Drop restores 75 before the caller can use its borrow again.', { byte: 75, guard: 'dropped' });
       return steps;
     },
-  },
-  'idiom-error-layers': {
+  }),
+  'idiom-error-layers': createListedTrace({
     title: 'Keep a typed reason, then add application context',
     intro: 'The library distinguishes malformed text from an excessive limit. The command adds the operation name.',
     code: ['fn parse_limit(text: &str) -> Result<u32, LimitError> {', '    let n: u32 = text.parse()?;', '    if n > 60 { return Err(LimitError::TooLarge(n)); }', '    Ok(n)', '}', 'let limit = parse_limit(text).context("load sampler limit")?;'],
@@ -259,5 +265,5 @@ export const RUST_IDIOM_TRACES = {
       else { const n = Number(text); push(1, 'Parsing succeeded; ? yields the number.', { n }); push(n > 60 ? 2 : 3, n > 60 ? 'The range check returns a distinct TooLarge variant.' : 'The library returns its validated amount.', { library: n > 60 ? `Err(LimitError::TooLarge(${n}))` : `Ok(${n})` }); }
       push(5, text === '12' ? 'The application receives success. Context does not change the number.' : 'The command attaches what it was doing while preserving the source error chain.', { application: text === '12' ? 'limit = 12' : 'error: load sampler limit → typed source' }); return steps;
     },
-  },
+  }),
 };

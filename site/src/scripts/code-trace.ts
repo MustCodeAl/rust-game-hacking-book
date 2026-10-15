@@ -7,7 +7,7 @@
 //     title, intro,                         // heading and one sentence of invitation
 //     code: ['line 0', 'line 1', ...],      // <= 12 ASCII lines (or code(values) -> lines)
 //     inputs: [                             // optional; each one re-runs the trace live
-//       { id, label, type: 'range', min, max, step, value, show: v => '...' },
+//       { id, label, type: 'range', min, max, step, value, show: (v: number) => '...' },
 //       { id, label, type: 'select', value: 'a', options: [{ value: 'a', label: '...' }] },
 //     ],
 //     run(values) -> [ { line, vars: { name: value }, say, mem? } ],
@@ -27,26 +27,29 @@
 // (it is also the caption shown with JavaScript off). Nothing here is graded.
 
 
-import { ORIGINAL_TRACES } from './original-traces.js';
-import { HANDOFF_TRACES } from './handoff-traces.js';
-import { SCENE_TRACES } from './scene-traces.js';
-import { ASSEMBLY_TRACES } from './assembly-traces.js';
-import { RUST_IDIOM_TRACES } from './rust-idiom-traces.js';
+import { ORIGINAL_TRACES } from './original-traces.ts';
+import { HANDOFF_TRACES } from './handoff-traces.ts';
+import { SCENE_TRACES } from './scene-traces.ts';
+import { ASSEMBLY_TRACES } from './assembly-traces.ts';
+import { RUST_IDIOM_TRACES } from './rust-idiom-traces.ts';
+import { createTrace } from '../lib/traces-kit.ts';
+import type { Trace, TraceInput, TraceMemory, TraceStep, TraceValues, TraceVars, VarValue } from '../lib/traces-types.ts';
 
 // Small syntax highlighter for lab code (Rust, Lua, Python-like, assembly).
-function academyGuessLang(text) {
+type Lang = 'asm' | 'lua' | 'py' | 'rust';
+function academyGuessLang(text: string): Lang {
   if (/^\s*(?:[a-z_]\w*:\s*)?(mov|lea|push|pop|jmp|call|ret|cmp|add|sub|inc|dec|imul|idiv|test|nop|int3|movzx|movsx|shl|shr|sar|and|or|xor|not|movss|addss|mulss|cvtsi2ss|cvttss2si|comiss)\b(?:\s|$)/im.test(text)) return "asm";
   if (/\b(local|function|then|elseif)\b/.test(text) && !/\bfn\b|\blet\b/.test(text)) return "lua";
   if (/^\s*(def |for .* in .*:|#)/m.test(text) && !/[{};]/.test(text)) return "py";
   return "rust";
 }
-function academyHighlight(text, lang) {
+function academyHighlight(text: string, lang: Lang): string {
   var KW = " fn let mut if else match return use struct enum impl for while in loop const pub as break continue local function end then elseif do not and or def import from mov lea push pop jmp call ret cmp add sub inc dec imul idiv test nop int3 movzx movsx shl shr sar xor movss addss mulss cvtsi2ss cvttss2si comiss ";
   var LIT = " true false nil None Some Ok Err self null True False ";
   var comment = lang === "lua" ? "--" : lang === "py" ? "#" : lang === "asm" ? ";" : "//";
-  var esc = function (s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
-  var span = function (k, s) { return '<span class="hl-' + k + '">' + esc(s) + "</span>"; };
-  var out = "", i = 0, m;
+  var esc = function (s: string) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
+  var span = function (k: string, s: string) { return '<span class="hl-' + k + '">' + esc(s) + "</span>"; };
+  var out = "", i = 0, m: RegExpExecArray | null;
   while (i < text.length) {
     var rest = text.slice(i);
     if (rest.indexOf(comment) === 0) { out += span("c", rest); break; }
@@ -62,7 +65,7 @@ function academyHighlight(text, lang) {
   return out;
 }
 
-const el = (tag, className, text) => {
+const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] => {
 	const node = document.createElement(tag);
 	if (className) node.className = className;
 	if (text !== undefined) node.textContent = text;
@@ -70,29 +73,43 @@ const el = (tag, className, text) => {
 };
 
 // ---------------------------------------------------------------- helpers
-const hex = (n, width = 8) => '0x' + (n >>> 0).toString(16).toUpperCase().padStart(width, '0');
-const hex2 = n => (n & 255).toString(16).toUpperCase().padStart(2, '0');
-const fix2 = n => n.toFixed(2);
-const plural = (n, one, many) => (n === 1 ? one : many);
+const hex = (n: number, width = 8): string => '0x' + (n >>> 0).toString(16).toUpperCase().padStart(width, '0');
+const hex2 = (n: number): string => (n & 255).toString(16).toUpperCase().padStart(2, '0');
+const fix2 = (n: number): string => n.toFixed(2);
+const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many);
 
-function recorder() {
-	const steps = [];
-	const vars = {};
-	const push = (line, say, change, mem) => {
+interface Recorder {
+	readonly steps: TraceStep[];
+	readonly push: (line: number, say: string, change?: TraceVars, mem?: TraceMemory) => void;
+}
+function recorder(): Recorder {
+	const steps: TraceStep[] = [];
+	const vars: Record<string, VarValue> = {};
+	const push: Recorder['push'] = (line, say, change, mem) => {
 		Object.assign(vars, change || {});
 		steps.push({ line, vars: { ...vars }, say, mem });
 	};
 	return { steps, push };
 }
 
+// The detour trace's listing depends on what the cave does; its run() reads the same listing to find each line.
+function detourListing(cave: 'good' | 'norestore' | 'noreplay'): string[] {
+	const lines = ['hook:  jmp cave  ; 6 bytes: jmp + nop padding'];
+	if (cave === 'norestore') lines.push('cave:  mov ecx, 1  ; added behaviour borrows ecx');
+	else lines.push('cave:  push ecx  ; save what we will change', '       mov ecx, 1  ; added behaviour borrows ecx', '       pop ecx  ; restore it');
+	if (cave !== 'noreplay') lines.push('       mov eax, [ecx]  ; replay displaced instruction', '       lea esi, [esi+0]  ; replay displaced instruction');
+	lines.push('       jmp 0x00CCAF90  ; first untouched instruction');
+	return lines;
+}
+
 // ---------------------------------------------------------------- traces
-export const TRACES = {
+export const TRACES: Readonly<Record<string, Trace>> = {
   ...ORIGINAL_TRACES,
   ...SCENE_TRACES,
   ...ASSEMBLY_TRACES,
   ...RUST_IDIOM_TRACES,
   ...HANDOFF_TRACES,
-  'rust-dash-branch': {
+  'rust-dash-branch': createTrace({
     title: 'A comparison chooses whether stamina changes',
     intro: 'Start with 12 stamina and a cost of 4. Change either input, then step through the path the comparison selects.',
     code: ['let mut stamina = start;', 'let cost = dash_cost;', 'if stamina >= cost {', '    stamina -= cost;', '} else {', '    println!("Rest first");', '}'],
@@ -111,8 +128,8 @@ export const TRACES = {
       push(6, `The branch ends with ${fits ? start - dash_cost : start} stamina. ${fits ? 'The guarded subtraction spent the cost.' : 'No subtraction ran on the failed path.'}`);
       return steps;
     },
-  },
-  'rust-dash-loop': {
+  }),
+  'rust-dash-loop': createTrace({
     title: 'The next attempt uses the amount left by the previous one',
     intro: 'The costs are 4, 10, and 2. Step through the worked example, then change the starting amount to see which attempts fit.',
     code: ['let mut stamina = start;', 'for cost in [4_u32, 10, 2] {', '    if stamina >= cost {', '        stamina -= cost;', '    }', '}', '// the loop has finished'],
@@ -121,7 +138,7 @@ export const TRACES = {
       const { steps, push } = recorder();
       let stamina = start;
       const costs = [4, 10, 2];
-      const memory = (current) => ({ title: 'Three costs visited in order', cells: costs.map((cost, i) => ({ label: 'attempt ' + (i + 1), value: String(cost), note: i === current ? 'current cost' : '' })) });
+      const memory = (current: number): TraceMemory => ({ title: 'Three costs visited in order', cells: costs.map((cost, i) => ({ label: 'attempt ' + (i + 1), value: String(cost), note: i === current ? 'current cost' : '' })) });
       push(0, `Begin with ${stamina} stamina. A new pass does not reset this binding.`, { start, stamina }, memory(-1));
       costs.forEach((cost, i) => {
         push(1, `Pass ${i + 1} takes cost ${cost} from the collection.`, { cost, attempt: i + 1 }, memory(i));
@@ -133,8 +150,8 @@ export const TRACES = {
       push(6, `All three costs have been visited. The final stamina is ${stamina}.`, {}, memory(-1));
       return steps;
     },
-  },
-  'rust-checked-option': {
+  }),
+  'rust-checked-option': createTrace({
     title: 'Some zero is different from no answer',
     intro: 'The default stamina equals the cost. Step through Some(0), then lower stamina to see the None path.',
     code: ['let remaining = stamina.checked_sub(cost);', 'match remaining {', '    Some(left) => println!("Left: {left}"),', '    None => println!("Not enough stamina"),', '}'],
@@ -154,10 +171,10 @@ export const TRACES = {
       push(4, fits ? `The result is ${remaining}; the caller can use the stored number.` : 'The result is None; the caller handles the missing answer explicitly.');
       return steps;
     },
-  },
+  }),
 
 	// Lesson 1.9: what Next Scan does to the candidate list.
-	'scan-narrowing': {
+	'scan-narrowing': createTrace({
 		title: 'What Next Scan does with each candidate',
 		intro: 'Three addresses held 100 at the first scan, then you recruited a unit. Step through how Next Scan keeps or drops each one. Try changing the gold the screen shows after the purchase, even back to 100.',
 		code: [
@@ -171,11 +188,11 @@ export const TRACES = {
 			'  # otherwise it is dropped',
 			'candidates = kept',
 		],
-		inputs: [{ id: 'gold', label: 'Gold on screen after the purchase', type: 'range', min: 70, max: 100, step: 1, value: 85, show: v => String(v) }],
+		inputs: [{ id: 'gold', label: 'Gold on screen after the purchase', type: 'range', min: 70, max: 100, step: 1, value: 85, show: (v: number) => String(v) }],
 		run({ gold }) {
 			const { steps, push } = recorder();
 			const names = ['A', 'B', 'C'];
-			const mem = (values, now) => ({
+			const mem = (values: readonly number[], now?: number): TraceMemory => ({
 				title: 'The four bytes at each candidate, read as a number',
 				cells: names.map((label, i) => ({ label: 'address ' + label, value: String(values[i]), note: now === i ? 'reading now' : '' })),
 			});
@@ -186,9 +203,9 @@ export const TRACES = {
 				? 'You act in the game, but the screen still shows 100, so nothing changed in memory. Keep that in mind for the end.'
 				: `The screen now shows ${gold}. B and C changed with it, but A, which only happened to be 100, did not.`, { new_gold: gold }, mem(after));
 			push(2, 'Start an empty list for the addresses that survive.', { kept: '(empty)' });
-			const kept = [];
+			const kept: string[] = [];
 			after.forEach((value, i) => {
-				const name = names[i];
+				const name = names[i] ?? '';
 				push(3, `Take the next candidate: ${name}.`, { addr: name }, mem(after, i));
 				push(4, `Read the four bytes at ${name} right now. They read as ${value}.`, { now: value }, mem(after, i));
 				if (value === gold) {
@@ -204,10 +221,10 @@ export const TRACES = {
 			push(8, end, { candidates: kept.join(', ') }, mem(after));
 			return steps;
 		},
-	},
+	}),
 
 	// Lesson 2.5: one subtract instruction as a state transition.
-	'sub-instruction': {
+	'sub-instruction': createTrace({
 		title: 'One instruction, step by step: sub dword ptr [esi+30h], eax',
 		intro: 'This is the instruction that changes gold, split into the steps the CPU performs. Try changing the price in eax and watch the four bytes and the flags.',
 		code: [
@@ -218,7 +235,7 @@ export const TRACES = {
 			'write_u32(address, new)',
 			'flags   = ZF, SF, CF, OF from this result',
 		],
-		inputs: [{ id: 'price', label: 'Price in eax', type: 'range', min: 0, max: 130, step: 1, value: 15, show: v => `${v} gold` }],
+		inputs: [{ id: 'price', label: 'Price in eax', type: 'range', min: 0, max: 130, step: 1, value: 15, show: (v: number) => `${v} gold` }],
 		run({ price }) {
 			const { steps, push } = recorder();
 			const esi = 0x0A3C1200;
@@ -227,7 +244,7 @@ export const TRACES = {
 			const result = (old - price) >>> 0;
 			const signed = result | 0;
 			const flag = { ZF: result === 0 ? 1 : 0, SF: result >>> 31, CF: old < price ? 1 : 0, OF: ((old ^ price) & (old ^ result)) >>> 31 };
-			const bytes = value => ({
+			const bytes = (value: number): TraceMemory => ({
 				title: `The four bytes at ${hex(address)} to ${hex(address + 3)}, lowest address first`,
 				cells: [0, 1, 2, 3].map(i => ({ label: '\u2026' + hex(address + i).slice(-4), value: hex2(value >>> (8 * i)) })),
 			});
@@ -247,10 +264,10 @@ export const TRACES = {
 			{ flags: `ZF=${flag.ZF} SF=${flag.SF} CF=${flag.CF} OF=${flag.OF}` });
 			return steps;
 		},
-	},
+	}),
 
 	// Lesson 2.6: a comparison chain that dispatches menu actions.
-	'menu-dispatch': {
+	'menu-dispatch': createTrace({
 		title: 'A comparison chain choosing a menu action',
 		intro: 'Each comparison asks one question about the number in eax, and the first yes picks the branch. Try the three values to see which destination each one reaches.',
 		code: [
@@ -292,20 +309,13 @@ export const TRACES = {
 			push(4, 'The chain moves on to the next constant, MENU_CANCEL. This lesson does not give that constant, so the trace stops here. A real chain keeps comparing until one matches or it runs out of tests.', {});
 			return steps;
 		},
-	},
+	}),
 
 	// Lesson 2.10: the round trip through a detour, and what each mistake does.
-	'detour-roundtrip': {
+	'detour-roundtrip': createTrace({
 		title: 'One trip through a detour',
 		intro: 'The game reaches the hook site, jumps into your cave and has to come back with the state it expects. Run the lesson\'s order first, then try the two mistakes in the menu. The register values are made up for the example; the hook address and bytes are the lesson\'s.',
-		code(v) {
-			const lines = ['hook:  jmp cave  ; 6 bytes: jmp + nop padding'];
-			if (v.cave === 'norestore') lines.push('cave:  mov ecx, 1  ; added behaviour borrows ecx');
-			else lines.push('cave:  push ecx  ; save what we will change', '       mov ecx, 1  ; added behaviour borrows ecx', '       pop ecx  ; restore it');
-			if (v.cave !== 'noreplay') lines.push('       mov eax, [ecx]  ; replay displaced instruction', '       lea esi, [esi+0]  ; replay displaced instruction');
-			lines.push('       jmp 0x00CCAF90  ; first untouched instruction');
-			return lines;
-		},
+		code(v) { return detourListing(v.cave); },
 		inputs: [{
 			id: 'cave', label: 'What the cave does', type: 'select', value: 'good',
 			options: [
@@ -316,8 +326,8 @@ export const TRACES = {
 		}],
 		run({ cave }) {
 			const { steps, push } = recorder();
-			const code = TRACES['detour-roundtrip'].code({ cave });
-			const at = text => code.findIndex(line => line.includes(text));
+			const code = detourListing(cave);
+			const at = (text: string): number => code.findIndex(line => line.includes(text));
 			const site = () => ({
 				title: 'The six bytes now at the hook site, 0x00CCAF8A to 0x00CCAF8F (.. is the distance to the cave)',
 				cells: ['E9', '..', '..', '..', '..', '90'].map((value, i) => ({ label: '\u2026' + hex(0x00CCAF8A + i).slice(-4), value, note: ['jmp', 'to cave', 'to cave', 'to cave', 'to cave', 'nop'][i] })),
@@ -340,10 +350,10 @@ export const TRACES = {
 			push(at('jmp 0x'), 'Jump to 0x00CCAF90, which is 0x00CCAF8A + 6, the first byte after the displaced instructions. The game continues with ecx, eax and the stack exactly as if the detour had never been there.', { ip: '0x00CCAF90' });
 			return steps;
 		},
-	},
+	}),
 
 	// Lesson 4.1: the fixed-timestep accumulator, with the lesson's three frames.
-	'fixed-timestep': {
+	'fixed-timestep': createTrace({
 		title: 'A game loop turning frames into fixed steps',
 		intro: 'Frames arrive at uneven times, but the rules advance in equal 16.67 ms steps. Step through the lesson\'s three frames, then try a different length for frame 3.',
 		code: [
@@ -355,7 +365,7 @@ export const TRACES = {
 			'        waiting = waiting - STEP',
 			'    draw()  # blend by what is left',
 		],
-		inputs: [{ id: 'third', label: 'Real time of frame 3', type: 'range', min: 5, max: 60, step: 1, value: 30, show: v => `${v} ms` }],
+		inputs: [{ id: 'third', label: 'Real time of frame 3', type: 'range', min: 5, max: 60, step: 1, value: 30, show: (v: number) => `${v} ms` }],
 		run({ third }) {
 			const { steps, push } = recorder();
 			const STEP = 1000 / 60;
@@ -382,13 +392,14 @@ export const TRACES = {
 				push(6, `Draw the frame. ${fix2(waiting)} ms is still waiting, which is ${blend}% of the way to the next step, so many engines blend the last two steps by that fraction.`, { blend: blend + '%' });
 			});
 			const total = frames.reduce((a, b) => a + b, 0);
-			steps[steps.length - 1].say = `After ${fix2(total)} ms of real time the game ran ${ran} ${plural(ran, 'step', 'steps')}, which is ${fix2(ran * STEP)} ms of game time, with ${fix2(waiting)} ms waiting. ${fix2(ran * STEP)} + ${fix2(waiting)} = ${fix2(ran * STEP + waiting)} ms, so no time was lost.`;
+			const final = steps[steps.length - 1];
+			if (final) final.say = `After ${fix2(total)} ms of real time the game ran ${ran} ${plural(ran, 'step', 'steps')}, which is ${fix2(ran * STEP)} ms of game time, with ${fix2(waiting)} ms waiting. ${fix2(ran * STEP)} + ${fix2(waiting)} = ${fix2(ran * STEP + waiting)} ms, so no time was lost.`;
 			return steps;
 		},
-	},
+	}),
 
 	// Lesson 4.8: the nearest-enemy decision as a plain loop.
-	'nearest-enemy': {
+	'nearest-enemy': createTrace({
 		title: 'Choosing the nearest valid enemy',
 		intro: 'The lesson\'s iterator chain, unrolled as a plain loop so you can see each decision. The player is at (0, 0). Try a garbage reading, a NaN, or an empty list.',
 		code: [
@@ -412,18 +423,20 @@ export const TRACES = {
 		}],
 		run({ enemies }) {
 			const { steps, push } = recorder();
-			const list = { lesson: [[3, 4], [1, 0]], huge: [[3, 4], [1, 0], [1000000, 0]], nan: [[3, 4], [1, 0], [NaN, 0]], empty: [] }[enemies];
-			const show = p => `(${Number.isNaN(p[0]) ? 'NaN' : p[0]}, ${p[1]})`;
-			const reasonable = p => Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[0]) < 100000 && Math.abs(p[1]) < 100000;
+			type Point = readonly [number, number];
+			const lists: Readonly<Record<'lesson' | 'huge' | 'nan' | 'empty', readonly Point[]>> = { lesson: [[3, 4], [1, 0]], huge: [[3, 4], [1, 0], [1000000, 0]], nan: [[3, 4], [1, 0], [NaN, 0]], empty: [] };
+			const list = lists[enemies];
+			const show = (p: Point): string => `(${Number.isNaN(p[0]) ? 'NaN' : p[0]}, ${p[1]})`;
+			const reasonable = (p: Point): boolean => Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[0]) < 100000 && Math.abs(p[1]) < 100000;
 			push(0, `The player is at (0, 0) and the list holds ${list.length} ${plural(list.length, 'enemy', 'enemies')}${list.length ? ': ' + list.map(show).join(', ') : ''}. Nothing has been chosen yet, so best starts as None.`, { enemies: list.length ? list.map(show).join(' ') : '(empty list)', best: 'None' });
 			push(1, 'best_d holds the shortest distance seen so far. It starts as the largest possible f32 so that the first valid enemy always beats it.', { best_d: 'f32::MAX' });
-			let best = null;
+			let best: Point | null = null;
 			let bestD = Infinity;
-			list.forEach(p => {
+			for (const p of list) {
 				push(2, `Take the next enemy, ${show(p)}.`, { e: show(p) });
 				if (!reasonable(p)) {
 					push(3, `${show(p)} is not reasonable: ${Number.isNaN(p[0]) ? 'NaN is not a finite number' : 'its x is far beyond the 100000 limit'}. The loop skips it and never measures a distance, so it cannot poison the comparison.`, { is_reasonable: 'false' });
-					return;
+					continue;
 				}
 				push(3, `${show(p)} passes the plausibility check: both coordinates are finite and under 100000.`, { is_reasonable: 'true' });
 				const d = Math.hypot(p[0], p[1]);
@@ -433,18 +446,18 @@ export const TRACES = {
 					bestD = d;
 					push(5, `${d} is smaller than the best distance so far, so ${show(p)} becomes the best.`, { best: `Some(${show(p)})`, best_d: String(d) });
 				} else {
-					push(5, `${d} is not smaller than ${bestD}, so the best enemy stays ${show(best)}.`, {});
+					push(5, `${d} is not smaller than ${bestD}, so the best enemy stays ${best ? show(best) : 'None'}.`, {});
 				}
-			});
+			}
 			push(7, best
 				? `The loop is over, so the answer is Some(${show(best)}), the enemy ${bestD} unit${bestD === 1 ? '' : 's'} away. Only coordinates that passed the check were ever compared.`
 				: 'Nothing valid was found, so the answer is None. Returning None is better than inventing a target.', {});
 			return steps;
 		},
-	},
+	}),
 
 	// Lesson 5.7: the life of one software breakpoint.
-	'breakpoint-cycle': {
+	'breakpoint-cycle': createTrace({
 		title: 'The two-step life of a software breakpoint',
 		intro: 'A breakpoint is more than one changed byte. Follow the bytes and the debugger\'s state through one hit, then try an int3 the debugger did not set.',
 		code: [
@@ -470,7 +483,7 @@ export const TRACES = {
 			const { steps, push } = recorder();
 			const addr = 0x00A31000;
 			const original = ['29', '46', '30'];
-			const cells = (bytes, ip) => ({
+			const cells = (bytes: readonly string[], ip?: number): TraceMemory => ({
 				title: `Example bytes at ${hex(addr)} (sub dword ptr [esi+30h], eax is 29 46 30)`,
 				cells: bytes.map((value, i) => ({ label: '\u2026' + hex(addr + i).slice(-4), value, note: ip === i ? 'ip points here' : '' })),
 			});
@@ -491,10 +504,10 @@ export const TRACES = {
 			push(9, 'Clear the trap flag and let the game run freely. The cycle ends where it began: armed, with the original byte safely in the map.', { trap_flag: 0 });
 			return steps;
 		},
-	},
+	}),
 
 	// Lesson 5.9: starting a trace creates system state that must be cleaned up.
-	'etw-cleanup': {
+	'etw-cleanup': createTrace({
 		title: 'Starting a trace, and cleaning up when something fails',
 		intro: 'Starting a recording creates system state that outlives the helper program. Follow it through a normal run, then try making a step fail.',
 		code: [
@@ -535,10 +548,10 @@ export const TRACES = {
 			push(7, 'The helper reports the saved file. Open it in Windows Performance Analyzer. Every path above ended with the recorder not running, and cleanup is part of correctness.', {});
 			return steps;
 		},
-	},
+	}),
 
 	// Lesson 6.1: how a caller reads a function's return value.
-	'call-site': {
+	'call-site': createTrace({
 		title: 'Reading a call site: what the caller does with the result',
 		intro: 'These four instructions call gha_start and branch on what it returns. Try different return values and watch which way the branch goes.',
 		code: [
@@ -548,7 +561,7 @@ export const TRACES = {
 			'jne start_failed',
 			'; zero: the success path continues here',
 		],
-		inputs: [{ id: 'result', label: 'Value gha_start returns in eax', type: 'range', min: 0, max: 9, step: 1, value: 0, show: v => String(v) }],
+		inputs: [{ id: 'result', label: 'Value gha_start returns in eax', type: 'range', min: 0, max: 9, step: 1, value: 0, show: (v: number) => String(v) }],
 		run({ result }) {
 			const { steps, push } = recorder();
 			push(0, 'xor ecx, ecx exclusive-ors a register with itself, which always gives zero. The caller is putting zero in the first argument register.', { ecx: '0 (first argument)' });
@@ -564,10 +577,10 @@ export const TRACES = {
 			}
 			return steps;
 		},
-	},
+	}),
 
 	// Lesson 6.3: every step of the loader can fail and must clean up.
-	'loader-cleanup': {
+	'loader-cleanup': createTrace({
 		title: 'Every step can fail, and cleanup still happens',
 		intro: 'The loader owns a block of memory in another process. Follow it through a clean run, then make a different step fail and see what still gets released. The addresses are made up for the example.',
 		code: [
@@ -620,24 +633,27 @@ export const TRACES = {
 			push(9, 'The function ends. remote is dropped, VirtualFreeEx releases the path block, and the handles close. The path was only needed while LoadLibraryW ran.', { remote_memory: 'released', process: 'closed', thread: 'closed' });
 			return steps;
 		},
-	},
+	}),
 };
 
 // ---------------------------------------------------------------- shared logic
-function defaults(trace) {
-	const values = {};
+/** The values the widget currently holds, one per input. */
+type Values = Record<string, string | number>;
+
+function defaults(trace: Trace): Values {
+	const values: Values = {};
 	for (const input of trace.inputs || []) values[input.id] = input.value;
 	return values;
 }
 
-function listing(trace, values) {
+function listing(trace: Trace, values: TraceValues): readonly string[] {
 	return typeof trace.code === 'function' ? trace.code(values) : trace.code;
 }
 
 // Steps with the previous step's mem carried forward.
-function runTrace(trace, values) {
+function runTrace(trace: Trace, values: TraceValues): TraceStep[] {
 	const steps = trace.run(values);
-	let last = null;
+	let last: TraceMemory | undefined;
 	for (const step of steps) {
 		if (step.mem) last = step.mem;
 		else step.mem = last;
@@ -645,28 +661,44 @@ function runTrace(trace, values) {
 	return steps;
 }
 
-function describeValue(input, value) {
-	if (input.type === 'select') return (input.options.find(o => o.value === value) || {}).label || String(value);
+function describeValue(input: TraceInput, value: string | number | undefined): string {
+	if (input.type === 'select') return input.options.find(o => o.value === value)?.label || String(value);
 	return input.show ? input.show(Number(value)) : String(value);
 }
 
+/** What the page shows with JavaScript off. */
+export interface StaticSummary {
+	readonly title: string;
+	readonly code: readonly string[];
+	readonly end: string;
+	readonly vars: ReadonlyArray<readonly [name: string, value: string]>;
+}
+
 // For the page's static (JavaScript off) caption: the listing and the final state.
-export function staticSummary(id) {
+export function staticSummary(id: string): StaticSummary {
 	const trace = TRACES[id];
+	if (!trace) throw new Error(`CodeTrace: unknown trace "${id}"`);
 	const values = defaults(trace);
 	const steps = runTrace(trace, values);
 	const last = steps[steps.length - 1];
+	if (!last) throw new Error(`CodeTrace: trace "${id}" recorded no steps`);
 	return {
 		title: trace.title,
 		code: listing(trace, values),
 		end: last.say,
-		vars: Object.entries(last.vars).map(([name, value]) => [name, String(value)]),
+		vars: Object.entries(last.vars).map(([name, value]): [string, string] => [name, String(value)]),
 	};
 }
 
 // ---------------------------------------------------------------- the widget
-function build(root, id) {
-	const trace = TRACES[id];
+/** One input's controls: the declared input, its slider or select, and the readout beside a slider. */
+interface Widget {
+	readonly input: TraceInput;
+	readonly control: HTMLSelectElement | HTMLInputElement;
+	readonly out: HTMLOutputElement;
+}
+
+function build(root: HTMLElement, trace: Trace): void {
 	const values = defaults(trace);
 	let steps = runTrace(trace, values);
 	let index = 0;
@@ -679,23 +711,28 @@ function build(root, id) {
 
 	// inputs
 	const controls = el('div', 'code-trace__controls');
-	const widgets = {};
+	const widgets: Record<string, Widget> = {};
 	for (const input of trace.inputs || []) {
 		const field = el('label', 'code-trace__field');
 		const out = el('output', 'code-trace__out');
-		let control;
+		let control: HTMLSelectElement | HTMLInputElement;
 		if (input.type === 'select') {
-			control = el('select');
+			const chooser = el('select');
 			for (const option of input.options) {
 				const node = el('option', '', option.label);
 				node.value = option.value;
-				control.append(node);
+				chooser.append(node);
 			}
+			control = chooser;
 		} else {
-			control = el('input');
-			Object.assign(control, { type: 'range', min: input.min, max: input.max, step: input.step });
+			const slider = el('input');
+			slider.type = 'range';
+			slider.min = String(input.min);
+			slider.max = String(input.max);
+			slider.step = String(input.step);
+			control = slider;
 		}
-		control.value = input.value;
+		control.value = String(input.value);
 		control.id = `${root.id}-${input.id}`;
 		field.htmlFor = control.id;
 		field.append(el('span', 'code-trace__field-label', input.label), control);
@@ -728,7 +765,7 @@ function build(root, id) {
 	say.setAttribute('aria-live', 'polite');
 	say.setAttribute('aria-atomic', 'true');
 	const count = el('span', 'code-trace__count');
-	const button = (label, className) => {
+	const button = (label: string, className?: string): HTMLButtonElement => {
 		const node = el('button', 'code-trace__btn ' + (className || ''), label);
 		node.type = 'button';
 		return node;
@@ -748,7 +785,7 @@ function build(root, id) {
 	footer.append(nav, diff, hint);
 	root.append(head, controls, grid, say, footer);
 
-	function renderCode() {
+	function renderCode(): void {
 		const lines = listing(trace, values);
 		const lang = academyGuessLang(lines.join('\n'));
 		codeList.replaceChildren(...lines.map((text, i) => {
@@ -760,9 +797,9 @@ function build(root, id) {
 		}));
 	}
 
-	function renderInputs() {
-		let different = [];
-		for (const { input, control, out } of Object.values(widgets)) {
+	function renderInputs(): void {
+		const different: string[] = [];
+		for (const { input, out } of Object.values(widgets)) {
 			if (input.type !== 'select') out.textContent = describeValue(input, values[input.id]);
 			if (String(values[input.id]) !== String(input.value)) different.push(`${input.label}: the lesson used "${describeValue(input, input.value)}"`);
 		}
@@ -770,24 +807,26 @@ function build(root, id) {
 		diff.textContent = different.length ? `Different from the lesson’s version. ${different.join('; ')}.` : '';
 	}
 
-	function render(flash) {
+	function render(flash: boolean): void {
 		const step = steps[index];
-		const before = index > 0 ? steps[index - 1] : null;
+		if (!step) return;
+		const before = index > 0 ? steps[index - 1] ?? null : null;
 
-		for (const row of codeList.children) {
+		for (const row of Array.from(codeList.children)) {
+			if (!(row instanceof HTMLElement)) continue;
 			const current = Number(row.dataset.line) === step.line;
 			row.classList.toggle('is-current', current);
 			if (current) row.setAttribute('aria-current', 'step'); else row.removeAttribute('aria-current');
 		}
 
-		const names = [];
+		const names: string[] = [];
 		for (const s of steps) for (const name of Object.keys(s.vars)) if (!names.includes(name)) names.push(name);
 		varBody.replaceChildren(...names.map(name => {
 			const set = name in step.vars;
 			const row = el('tr', 'code-trace__var');
 			const value = set ? String(step.vars[name]) : null;
 			const had = before && name in before.vars;
-			const was = had ? String(before.vars[name]) : null;
+			const was = before && had ? String(before.vars[name]) : null;
 			const changed = set && before && (!had || was !== value);
 			row.append(el('th', 'code-trace__name', name));
 			const cell = el('td', 'code-trace__value');
@@ -795,7 +834,7 @@ function build(root, id) {
 				row.classList.add('is-unset');
 				cell.append(el('span', 'code-trace__dim', 'not set yet'));
 			} else {
-				cell.append(el('span', 'code-trace__val', value));
+				cell.append(el('span', 'code-trace__val', value ?? ''));
 				if (changed) {
 					row.classList.add('is-changed');
 					if (flash) row.classList.add('is-flash');
@@ -813,7 +852,8 @@ function build(root, id) {
 			memBox.append(el('p', 'code-trace__mem-title', step.mem.title));
 			const strip = el('div', 'code-trace__cells');
 			step.mem.cells.forEach((c, i) => {
-				const old = prevMem && prevMem.cells[i] && prevMem.cells[i].label === c.label ? prevMem.cells[i] : null;
+				const candidate = prevMem?.cells[i];
+				const old = candidate && candidate.label === c.label ? candidate : null;
 				const changed = old && old.value !== c.value;
 				const cell = el('div', 'code-trace__cell');
 				if (changed) { cell.classList.add('is-changed'); if (flash) cell.classList.add('is-flash'); }
@@ -839,7 +879,7 @@ function build(root, id) {
 		root.dataset.steps = String(steps.length);
 	}
 
-	function go(to) {
+	function go(to: number): void {
 		const clamped = Math.max(0, Math.min(steps.length - 1, to));
 		if (clamped === index) return;
 		index = clamped;
@@ -852,7 +892,7 @@ function build(root, id) {
 	reset.addEventListener('click', () => {
 		for (const { input, control } of Object.values(widgets)) {
 			values[input.id] = input.value;
-			control.value = input.value;
+			control.value = String(input.value);
 		}
 		steps = runTrace(trace, values);
 		index = 0;
@@ -874,7 +914,7 @@ function build(root, id) {
 	}
 	root.addEventListener('keydown', event => {
 		if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-		const tag = event.target && event.target.tagName;
+		const tag = event.target instanceof Element ? event.target.tagName : undefined;
 		if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
 		if (event.key === 'ArrowRight') { event.preventDefault(); go(index + 1); }
 		else if (event.key === 'ArrowLeft') { event.preventDefault(); go(index - 1); }
@@ -887,11 +927,13 @@ function build(root, id) {
 	render(false);
 }
 
-export function mountCodeTraces() {
-	for (const root of document.querySelectorAll('[data-code-trace]')) {
+export function mountCodeTraces(): void {
+	for (const root of document.querySelectorAll<HTMLElement>('[data-code-trace]')) {
 		if (root.dataset.traceReady === 'true') continue;
-		if (!TRACES[root.dataset.codeTrace]) continue;
+		const id = root.dataset.codeTrace;
+		const trace = id === undefined ? undefined : TRACES[id];
+		if (!trace) continue;
 		root.dataset.traceReady = 'true';
-		build(root, root.dataset.codeTrace);
+		build(root, trace);
 	}
 }

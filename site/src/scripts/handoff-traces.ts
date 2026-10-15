@@ -1,18 +1,23 @@
 // Small deterministic models for the original handoff's uncovered lessons.
 // These listings are explanatory pseudocode. They never inspect or run a lab.
-const range = (id, label, min, max, value) => ({ id, label, type: 'range', min, max, step: 1, value });
-const select = (id, label, value, choices) => ({ id, label, type: 'select', value, options: choices.map(([value, label]) => ({ value, label })) });
-const hex = n => '0x' + n.toString(16).toUpperCase();
-const memory = (title, entries) => ({ title, cells: entries.map(([label, value, note = '']) => ({ label, value: String(value), note })) });
-function record(initial) {
-  let vars = { ...initial };
-  const steps = [];
+import { createListedTrace, range, select } from '../lib/traces-kit.ts';
+import type { InputValues, ListedTrace, TraceInput, TraceMemory, TraceStep, TraceVars } from '../lib/traces-types.ts';
+
+const hex = (n: number): string => '0x' + n.toString(16).toUpperCase();
+const memory = (title: string, entries: ReadonlyArray<readonly [label: string, value: string | number | boolean, note?: string]>): TraceMemory => ({ title, cells: entries.map(([label, value, note = '']) => ({ label, value: String(value), note })) });
+interface Recorder {
+  readonly steps: TraceStep[];
+  add(line: number, say: string, changes?: TraceVars, mem?: TraceMemory): void;
+}
+function record(initial: TraceVars): Recorder {
+  let vars: TraceVars = { ...initial };
+  const steps: TraceStep[] = [];
   return { steps, add(line, say, changes = {}, mem) {
     vars = { ...vars, ...changes };
     steps.push({ line, say, vars: { ...vars }, ...(mem ? { mem } : {}) });
   } };
 }
-const model = (title, intro, code, inputs, execute) => ({
+const model = <const Inputs extends readonly TraceInput[]>(title: string, intro: string, code: readonly string[], inputs: Inputs, execute: (r: Recorder, values: InputValues<Inputs>) => void): ListedTrace => createListedTrace({
   title, intro: 'Illustrative pseudocode model. ' + intro, code, inputs,
   run(values) {
     const r = record(values);
@@ -21,7 +26,7 @@ const model = (title, intro, code, inputs, execute) => ({
     return r.steps;
   },
 });
-export const HANDOFF_TRACES = {
+export const HANDOFF_TRACES: Readonly<Record<string, ListedTrace>> = {
   'handoff-evidence-scope': model('Separate an observation from its explanation',
     'Choose what you saw and whether the input was independently checked. A missing result leaves several possible causes.',
     ['record the visible motion', 'record whether the input arrived', 'keep unverified causes as possibilities', 'compare what each observation establishes', 'choose the next discriminating check', 'report the observed result and its limits'],
@@ -38,7 +43,7 @@ export const HANDOFF_TRACES = {
     'Change the coin count and follow an add-one calculation. A temporary result is not yet the stored game state.',
     ['RAM.gold = starting_gold', 'working = RAM.gold', 'working = working + 1', 'RAM.gold = working', 'display = RAM.gold', 'draw the copied display value'],
     [range('gold', 'Starting gold', 0, 200, 100)], (r, { gold }) => {
-      let stored = gold, working = 'not loaded', displayed = gold;
+      let stored = gold, working: string | number = 'not loaded', displayed = gold;
       const mem = () => memory('Three separate values', [['RAM.gold', stored], ['working', working], ['display', displayed]]);
       r.add(0, 'RAM and the last drawn display start at ' + gold + '.', { stored_gold: stored, working, display: displayed }, mem());
       working = gold; r.add(1, 'Copy the stored amount into a working register.', { working }, mem());
@@ -120,7 +125,7 @@ export const HANDOFF_TRACES = {
       const index = ordinal - 1; r.add(1, ordinal + ' - 1 = ' + index + '.', { index });
       const valid = index >= 0 && index < 3; r.add(2, 'There are three entries, indexed zero through two.', { valid });
       const values = ['RVA 0x1200', 'OTHER.RealName', 'RVA 0x1800'];
-      const entry = valid ? values[index] : 'missing'; r.add(3, valid ? 'Read the selected entry.' : 'The range check prevents an out-of-table access.', { entry });
+      const entry = valid ? values[index] ?? 'missing' : 'missing'; r.add(3, valid ? 'Read the selected entry.' : 'The range check prevents an out-of-table access.', { entry });
       const type = !valid ? 'missing' : index === 1 ? 'forwarder' : 'direct RVA'; r.add(4, index === 1 ? 'This fixture marks entry one as a string within the export directory, so it is a forwarder.' : 'Classify the bounded entry; an address-like number alone is not enough.', { type });
       r.add(5, 'Result: ordinal ' + ordinal + ' selects ' + entry + '. ' + (type === 'forwarder' ? 'Follow the forwarded DLL and name instead of treating its text bytes as code.' : 'Indexes and public ordinals remain different numbers.'));
     }),
@@ -405,10 +410,10 @@ export const HANDOFF_TRACES = {
     'Choose a page-table root and page in a tiny illustrative mapping. A virtual address needs its process map; an unmapped page has no invented RAM location.',
     ['select the address-space root', 'split virtual page and byte offset', 'look up the page in that root’s map', 'reject if the entry is absent', 'physical = frame * 4096 + offset', 'report the mapping and its owner'],
     [select('root', 'Page-table root', 'A', [['A', 'ProcessA root'], ['B', 'ProcessB root']]), range('page', 'Virtual page number', 0, 3, 1), range('offset', 'Byte offset in the page', 0, 4095, 26)], (r, { root, page, offset }) => {
-      const maps = { A: [5, 7, null, 2], B: [9, 3, 8, null] };
+      const maps: Readonly<Record<'A' | 'B', ReadonlyArray<number | null>>> = { A: [5, 7, null, 2], B: [9, 3, 8, null] };
       r.add(0, 'These four-entry maps illustrate context; they are not full x86 page tables.', { virtual_address: hex(page * 4096 + offset) });
       r.add(1, 'With 4 KiB pages, the offset must remain within 0..4095.', { virtual_page: page, byte_offset: offset });
-      const frame = maps[root][page]; r.add(2, 'Use the selected root rather than a global mapping.', { physical_frame: frame === null ? 'absent' : frame });
+      const frame = maps[root][page] ?? null; r.add(2, 'Use the selected root rather than a global mapping.', { physical_frame: frame === null ? 'absent' : frame });
       if (frame === null) { r.add(3, 'Stop before a physical read because this page is absent.', { physical_address: 'none' }); r.add(5, 'Result: virtual page ' + page + ' is unmapped under root ' + root + '.'); return; }
       const physical = frame * 4096 + offset; r.add(4, 'Combine the mapped frame and unchanged offset.', { physical_address: hex(physical) });
       r.add(5, 'Result: root ' + root + ' maps the virtual address to ' + hex(physical) + '. Choosing another valid root can give a different valid answer.');

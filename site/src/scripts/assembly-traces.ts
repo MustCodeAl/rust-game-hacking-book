@@ -2,42 +2,47 @@
 // a complete CPU, assembler, calling convention, or floating-point environment.
 // Intel SDM revision 093, volumes 1 and 2, was checked while authoring them.
 
-const hex = n => '0x' + (n >>> 0).toString(16).toUpperCase().padStart(8, '0');
-const byte = n => (n & 255).toString(16).toUpperCase().padStart(2, '0');
-const range = (id, label, min, max, value, step = 1) => ({ id, label, type: 'range', min, max, step, value });
-const select = (id, label, value, pairs) => ({ id, label, type: 'select', value, options: pairs.map(([value, label]) => ({ value, label })) });
+import { createTrace, range, select } from '../lib/traces-kit.ts';
+import type { Trace, TraceMemory, TraceStep, TraceVars, VarValue } from '../lib/traces-types.ts';
+
+const hex = (n: number): string => '0x' + (n >>> 0).toString(16).toUpperCase().padStart(8, '0');
+const byte = (n: number): string => (n & 255).toString(16).toUpperCase().padStart(2, '0');
 const defaults = { ZF: 0, SF: 0, CF: 0, OF: 0, PF: 1 };
-function record() {
-  const steps = [], vars = {};
+interface Recorder {
+  readonly steps: TraceStep[];
+  push(line: number, say: string, change?: TraceVars, mem?: TraceMemory): void;
+}
+function record(): Recorder {
+  const steps: TraceStep[] = [], vars: Record<string, VarValue> = {};
   return { steps, push(line, say, change = {}, mem) {
     Object.assign(vars, change);
     steps.push({ line, say, vars: { ...vars }, mem });
   } };
 }
-function resultFlags(n) {
+function resultFlags(n: number) {
   const u = n >>> 0;
   let ones = 0;
   for (let b = u & 255; b; b >>>= 1) ones += b & 1;
   return { ZF: Number(u === 0), SF: u >>> 31, PF: Number(ones % 2 === 0) };
 }
-function arithmetic(a, b, subtract = false) {
+function arithmetic(a: number, b: number, subtract = false) {
   const ua = a >>> 0, ub = b >>> 0;
   const result = (subtract ? ua - ub : ua + ub) >>> 0;
   const overflow = subtract ? ((ua ^ ub) & (ua ^ result)) : (~(ua ^ ub) & (ua ^ result));
   return { result, flags: { ...resultFlags(result), CF: Number(subtract ? ua < ub : ua + ub > 0xFFFFFFFF), OF: Number((overflow & 0x80000000) !== 0) } };
 }
-const bytes = (title, n) => ({ title, cells: [0, 1, 2, 3].map(i => ({ label: '+' + i, value: byte(n >>> (8 * i)), note: 'little-endian byte' })) });
-const bits = (title, n) => ({ title, cells: [3, 2, 1, 0].map(i => ({ label: 'bit ' + i, value: String((n >>> i) & 1), note: 'low four bits only' })) });
-const stack = (value, active) => ({ title: 'One illustrative stack slot; a pop does not erase its bytes', cells: [{ label: '0x00007FFC', value: String(value), note: active ? 'current top: esp points here' : 'inactive slot: esp is above it' }] });
-const floatBytes = (title, n) => {
+const bytes = (title: string, n: number): TraceMemory => ({ title, cells: [0, 1, 2, 3].map(i => ({ label: '+' + i, value: byte(n >>> (8 * i)), note: 'little-endian byte' })) });
+const bits = (title: string, n: number): TraceMemory => ({ title, cells: [3, 2, 1, 0].map(i => ({ label: 'bit ' + i, value: String((n >>> i) & 1), note: 'low four bits only' })) });
+const stack = (value: string | number, active: boolean): TraceMemory => ({ title: 'One illustrative stack slot; a pop does not erase its bytes', cells: [{ label: '0x00007FFC', value: String(value), note: active ? 'current top: esp points here' : 'inactive slot: esp is above it' }] });
+const floatBytes = (title: string, n: number): TraceMemory => {
   const data = new DataView(new ArrayBuffer(4)); data.setFloat32(0, n, true);
   return { title, cells: [0, 1, 2, 3].map(i => ({ label: '+' + i, value: byte(data.getUint8(i)), note: 'binary32 byte' })) };
 };
-const printable = n => Number.isNaN(n) ? 'NaN' : String(Object.is(n, -0) ? 0 : n);
+const printable = (n: number): string => Number.isNaN(n) ? 'NaN' : String(Object.is(n, -0) ? 0 : n);
 
-function addOrSubtract(kind) {
+function addOrSubtract(kind: 'add' | 'sub') {
   const subtract = kind === 'sub';
-  return {
+  return createTrace({
     title: subtract ? 'Subtract a price and inspect a borrow' : 'Add a reward and inspect overflow',
     intro: 'The example already works. Change the amount or boundary case, then compare the stored bits with the flags.',
     inputs: [select('case', 'Starting gold', 'ordinary', subtract ? [['ordinary', '100 gold'], ['signed-limit', '0x80000000: signed minimum']] : [['ordinary', '100 gold'], ['unsigned-limit', '0xFFFFFFFF: unsigned maximum'], ['signed-limit', '0x7FFFFFFF: signed maximum']]), range('amount', subtract ? 'Price' : 'Reward', 1, subtract ? 150 : 25, subtract ? 25 : 10)],
@@ -51,11 +56,11 @@ function addOrSubtract(kind) {
       push(2, `Store ${hex(result)} in gold. The mov does not repair overflow or change these flags.`, { gold: result }, bytes('Gold after the update', result));
       return steps;
     },
-  };
+  });
 }
-function incrementOrDecrement(kind) {
+function incrementOrDecrement(kind: 'inc' | 'dec') {
   const decrement = kind === 'dec';
-  return {
+  return createTrace({
     title: decrement ? 'Use one ammo while preserving carry' : 'Count a collected coin while preserving carry',
     intro: 'Carry starts at one here. Change the starting count and watch which flags change and which one survives.',
     inputs: [select('case', 'Starting count', 'ordinary', decrement ? [['ordinary', '1 ammo'], ['zero', '0: unsigned underflow'], ['signed-limit', '0x80000000: signed minimum']] : [['ordinary', '4 coins'], ['unsigned-limit', '0xFFFFFFFF: unsigned maximum'], ['signed-limit', '0x7FFFFFFF: signed maximum']])],
@@ -69,11 +74,11 @@ function incrementOrDecrement(kind) {
       push(2, `The stored count is ${hex(result)}. Check the new ZF/SF/OF when needed; do not treat the preserved CF as this operation's overflow test.`, { count: result }, bytes('Stored count', result));
       return steps;
     },
-  };
+  });
 }
-function extension(kind) {
+function extension(kind: 'movzx' | 'movsx') {
   const signed = kind === 'movsx';
-  return {
+  return createTrace({
     title: signed ? 'Keep the sign when widening a byte' : 'Widen a byte without a sign',
     intro: 'The byte starts at 255. Move the slider across 127 and 128 to explore the meaning of its top bit.',
     inputs: [range('value', 'Byte stored in the player record', 0, 255, 255)],
@@ -85,10 +90,13 @@ function extension(kind) {
       push(2, `Store the widened value ${result}. The original byte and the flags are unchanged.`, { expanded: result }, bytes('Four-byte destination', result));
       return steps;
     },
-  };
+  });
 }
 
-const branches = {
+interface Flags { readonly ZF: number; readonly SF: number; readonly CF: number; readonly OF: number; readonly PF: number }
+const JUMPS = ['je', 'jne', 'jb', 'jae', 'jbe', 'ja', 'jl', 'jge', 'jle', 'jg', 'jc', 'jnc', 'jo', 'jno', 'js', 'jns', 'jp', 'jnp'] as const;
+type JumpName = (typeof JUMPS)[number];
+const branches: Readonly<Record<JumpName, readonly [string, (flags: Flags) => boolean]>> = {
   je: ['equal / zero', f => f.ZF === 1], jne: ['not equal / nonzero', f => f.ZF === 0],
   jb: ['unsigned below', f => f.CF === 1], jae: ['unsigned above or equal', f => f.CF === 0],
   jbe: ['unsigned below or equal', f => f.CF === 1 || f.ZF === 1], ja: ['unsigned above', f => f.CF === 0 && f.ZF === 0],
@@ -99,9 +107,10 @@ const branches = {
   js: ['sign set', f => f.SF === 1], jns: ['sign clear', f => f.SF === 0],
   jp: ['even low-byte parity', f => f.PF === 1], jnp: ['odd low-byte parity', f => f.PF === 0],
 };
-const branchCase = name => ({ signed: [-1, 2], equal: [3, 3], ordinary: [2, 3], overflow: [-2147483648, 1] })[name];
-function callOrReturn(focus) {
-  return {
+const jumpChoices = JUMPS.map((key): readonly [JumpName, string] => [key, key + ': ' + branches[key][0]]);
+const branchCase = (name: 'signed' | 'equal' | 'ordinary' | 'overflow'): readonly [number, number] => ({ signed: [-1, 2], equal: [3, 3], ordinary: [2, 3], overflow: [-2147483648, 1] } as const)[name];
+function callOrReturn(focus: 'call' | 'ret') {
+  return createTrace({
     title: focus === 'call' ? 'Save a continuation before entering the helper' : 'Resume the caller from the stack',
     intro: 'The stack slot shows a symbolic return label instead of real machine-code bytes. Change the starting gold and follow the round trip.',
     inputs: [range('gold', 'Gold before the helper', 0, 20, 10)],
@@ -117,10 +126,10 @@ function callOrReturn(focus) {
       push(6, `The round trip ends with ${out.result} gold and the original esp. The saved stack bytes can remain, but they are no longer an active return address.`);
       return steps;
     },
-  };
+  });
 }
-function pushOrPop(focus) {
-  return {
+function pushOrPop(focus: 'push' | 'pop') {
+  return createTrace({
     title: focus === 'push' ? 'Save a temporary register value on the stack' : 'Recover the last saved value',
     intro: 'The worked example saves health, reuses the register, and restores it. Change health and inspect both esp and the stored bytes.',
     inputs: [range('health', 'Health value to preserve', 0, 100, 80)],
@@ -134,11 +143,11 @@ function pushOrPop(focus) {
       push(4, `Store the restored health value ${health}. The push/pop pair balanced esp and preserved the flags.`, { health }, bytes('Health after restoring ebx', health));
       return steps;
     },
-  };
+  });
 }
-function shift(kind) {
+function shift(kind: 'shl' | 'shr' | 'sar') {
   const right = kind !== 'shl', signed = kind === 'sar';
-  return {
+  return createTrace({
     title: kind === 'shl' ? 'Shift a packed value left' : signed ? 'Shift a signed movement delta right' : 'Shift a bit pattern right with zero fill',
     intro: 'Try a shift count of zero, one, then two. CF records the last bit lost; OF has a defined shift result only for a count of one.',
     inputs: [range('value', 'Starting 32-bit value', -16, 16, right ? -12 : 5), range('count', 'Shift count', 0, 3, 1)],
@@ -153,11 +162,11 @@ function shift(kind) {
       push(2, `Store ${hex(result)}. Its signed reading is ${result | 0}. ${signed ? 'For a nonzero count, signed right shift rounds negative values downward when discarded bits are nonzero.' : right ? 'Zero-fill right shift treats the original bit pattern as unsigned.' : 'Left shift keeps only the bits that fit in the selected width.'}`, { packed: result }, bytes('Stored 32-bit bit pattern', result));
       return steps;
     },
-  };
+  });
 }
-function logic(kind) {
+function logic(kind: 'and' | 'or' | 'xor' | 'not') {
   const mask = kind === 'and' ? 3 : 4;
-  return {
+  return createTrace({
     title: ({ and: 'Keep only the selected status bits', or: 'Set a status bit without clearing others', xor: 'Toggle one status bit', not: 'Invert every bit in the word' })[kind],
     intro: 'The boxes show only the low four bits; eax still contains a full 32-bit word. Change the starting flags and compare the operation.',
     inputs: [range('value', 'Starting status bits', 0, 15, 5)],
@@ -171,11 +180,11 @@ function logic(kind) {
       push(2, `Store ${hex(result)} in status. ${kind === 'not' ? 'The prior comparison flags still survive.' : 'ZF describes whether the complete result is zero, not whether one chosen status bit is clear.'}`, { status: result }, bytes('All four bytes of status', result));
       return steps;
     },
-  };
+  });
 }
 
-export const ASSEMBLY_TRACES = {
-  'asm-mov': {
+export const ASSEMBLY_TRACES: Readonly<Record<string, Trace>> = {
+  'asm-mov': createTrace({
     title: 'Copy ammo through registers into memory',
     intro: 'Change ammo, then watch the source survive both copies. A copy does not consume its source.',
     inputs: [range('ammo', 'Ammo in the player record', 0, 30, 12)],
@@ -187,8 +196,8 @@ export const ASSEMBLY_TRACES = {
       push(2, `Copy ecx into the display field. Both registers and the original ammo still contain ${ammo}.`, { display_ammo: ammo }, bytes('Display field after the store', ammo));
       return steps;
     },
-  },
-  'asm-lea': {
+  }),
+  'asm-lea': createTrace({
     title: 'Compute an address without reading the object',
     intro: 'Each toy player occupies 16 bytes. Change the player index and watch the address calculation.',
     inputs: [range('index', 'Player index', 0, 3, 2)],
@@ -201,10 +210,10 @@ export const ASSEMBLY_TRACES = {
       push(3, `lea adds base ${hex(0x1000)} + ${scaled}*4 + 8 = ${hex(address)}. It does not read health or change the flags left by shl.`, { eax: hex(address), 'memory read by lea': 'none' });
       return steps;
     },
-  },
+  }),
   'asm-add': addOrSubtract('add'), 'asm-sub': addOrSubtract('sub'),
   'asm-inc': incrementOrDecrement('inc'), 'asm-dec': incrementOrDecrement('dec'),
-  'asm-imul': {
+  'asm-imul': createTrace({
     title: 'Multiply a signed reward and detect truncation',
     intro: 'Try an ordinary reward, a negative adjustment, then a product too large for a signed 32-bit destination.',
     inputs: [select('case', 'Reward before multiplier', 'ordinary', [['ordinary', '6 coins'], ['negative', '-6 coin adjustment'], ['overflow', '1,073,741,824 coins']]), range('factor', 'Multiplier', 1, 4, 3)],
@@ -217,8 +226,8 @@ export const ASSEMBLY_TRACES = {
       push(2, `Store the low 32 bits, ${hex(result)}. ${overflow ? 'The overflow flags warn that this is not the full signed product.' : 'The signed product fits the destination.'}`, { reward: result }, bytes('Stored reward bits', result));
       return steps;
     },
-  },
-  'asm-idiv': {
+  }),
+  'asm-idiv': createTrace({
     title: 'Share signed coins and keep the remainder',
     intro: 'The worked example divides 23 coins among four players. Try a negative adjustment or zero players to see the boundary.',
     inputs: [range('coins', 'Signed coin total', -25, 25, 23), range('players', 'Number of players', 0, 6, 4)],
@@ -234,9 +243,9 @@ export const ASSEMBLY_TRACES = {
       push(4, `Each share is ${quotient}, with ${remainder} left over. The divisor stayed ${players}; a later branch needs a new comparison.`, { share: quotient }, bytes('Stored share bits', quotient));
       return steps;
     },
-  },
+  }),
   'asm-movzx': extension('movzx'), 'asm-movsx': extension('movsx'),
-  'asm-cmp': {
+  'asm-cmp': createTrace({
     title: 'Compare gold without spending it',
     intro: 'Change the price and watch gold stay fixed while the subtraction flags change.',
     inputs: [range('price', 'Shop price', 0, 150, 25)],
@@ -248,8 +257,8 @@ export const ASSEMBLY_TRACES = {
       push(2, 'ecx receives the same 100 gold. A following jump can read the comparison flags because mov does not change them.', { ecx: 100 });
       return steps;
     },
-  },
-  'asm-test': {
+  }),
+  'asm-test': createTrace({
     title: 'Inspect a status bit without clearing the others',
     intro: 'Bit 2 means stunned in this toy record. Change the status word to explore its zero/nonzero test.',
     inputs: [range('status', 'Player status bits', 0, 15, 5)],
@@ -261,8 +270,8 @@ export const ASSEMBLY_TRACES = {
       push(2, `The original status ${status} is still in both eax and ecx. The flags, not a changed status word, report the test.`, { ecx: status });
       return steps;
     },
-  },
-  'asm-jmp': {
+  }),
+  'asm-jmp': createTrace({
     title: 'Skip an instruction unconditionally',
     intro: 'Change the value on the skipped line. It never reaches the display because this path always jumps over it.',
     inputs: [range('skipped', 'Value written on the skipped line', 0, 99, 99)],
@@ -274,11 +283,11 @@ export const ASSEMBLY_TRACES = {
       push(3, `The skipped assignment never ran. Ammo receives five even though the skipped line would have written ${skipped}.`, { ammo: 5 }, bytes('Stored ammo', 5));
       return steps;
     },
-  },
-  'asm-jcc': {
+  }),
+  'asm-jcc': createTrace({
     title: 'Choose a branch by interpreting the same flags',
     intro: 'Start with signed -1 compared with 2. Switch between jl and jb to see why the same bits need the right signedness.',
-    inputs: [select('case', 'Compared values', 'signed', [['signed', '-1 versus 2'], ['equal', '3 versus 3'], ['ordinary', '2 versus 3'], ['overflow', 'signed minimum versus 1']]), select('jump', 'Conditional jump', 'jl', Object.entries(branches).map(([key, [name]]) => [key, key + ': ' + name]))],
+    inputs: [select('case', 'Compared values', 'signed', [['signed', '-1 versus 2'], ['equal', '3 versus 3'], ['ordinary', '2 versus 3'], ['overflow', 'signed minimum versus 1']]), select('jump', 'Conditional jump', 'jl', jumpChoices)],
     code(v) { const [a, b] = branchCase(v.case); return [`mov eax, ${a}`, `cmp eax, ${b}`, `${v.jump} selected`, 'mov [chosen], 0', 'jmp done', 'selected: mov [chosen], 1', 'done:']; },
     run({ case: mode, jump }) {
       const { steps, push } = record(), [a, b] = branchCase(mode), out = arithmetic(a, b, true), taken = branches[jump][1](out.flags);
@@ -290,12 +299,12 @@ export const ASSEMBLY_TRACES = {
       push(6, `The result is chosen=${taken ? 1 : 0}. A signed comparison and an unsigned comparison can legitimately choose different paths for identical bits.`);
       return steps;
     },
-  },
+  }),
   'asm-call': callOrReturn('call'), 'asm-ret': callOrReturn('ret'),
   'asm-push': pushOrPop('push'), 'asm-pop': pushOrPop('pop'),
   'asm-shl': shift('shl'), 'asm-shr': shift('shr'), 'asm-sar': shift('sar'),
   'asm-and': logic('and'), 'asm-or': logic('or'), 'asm-xor': logic('xor'), 'asm-not': logic('not'),
-  'asm-nop': {
+  'asm-nop': createTrace({
     title: 'Do nothing for one instruction, then continue',
     intro: 'Change the ammo value and step across nop. Watch the later subtraction do the actual work.',
     inputs: [range('ammo', 'Starting ammo', 1, 20, 6)],
@@ -308,8 +317,8 @@ export const ASSEMBLY_TRACES = {
       push(3, `The final ammo is ${out.result}. A nop is not a pause, a return, or a guarantee that later code will be safe.`, { ammo: out.result }, bytes('Ammo after the later subtraction', out.result));
       return steps;
     },
-  },
-  'asm-int3': {
+  }),
+  'asm-int3': createTrace({
     title: 'Raise a breakpoint exception before the next action',
     intro: 'The default stops at the breakpoint. Choose debugger continuation to explore what happens after the pause in this owned toy program.',
     inputs: [range('ammo', 'Ammo before the breakpoint', 1, 20, 6), select('action', 'Debugger decision', 'pause', [['pause', 'Inspect the paused context'], ['resume', 'Continue the owned toy program']])],
@@ -323,8 +332,8 @@ export const ASSEMBLY_TRACES = {
       push(3, `Continuation stores ${out.result} ammo. Without a handler or debugger decision, int3 is an exception, not an automatic no-op.`, { ammo: out.result }, bytes('Ammo after explicit continuation', out.result));
       return steps;
     },
-  },
-  'asm-movss': {
+  }),
+  'asm-movss': createTrace({
     title: 'Move one floating-point speed value',
     intro: 'Change the speed and follow the low 32 bits. The upper parts of legacy XMM registers depend on whether the source is memory or another register.',
     inputs: [range('speed', 'Toy speed as binary32', 0, 8, 2.5, 0.25)],
@@ -336,8 +345,8 @@ export const ASSEMBLY_TRACES = {
       push(2, `The memory store writes just four bytes, representing ${n}. It does not store all 128 bits of xmm1.`, { shown_speed: n }, floatBytes('Four bytes stored in shown_speed', n));
       return steps;
     },
-  },
-  'asm-addss': {
+  }),
+  'asm-addss': createTrace({
     title: 'Add a floating-point movement step',
     intro: 'The example uses binary32 values and round-to-nearest, ties-to-even. Change the step and compare the new low float with the unchanged integer flags.',
     inputs: [range('position', 'Position', -4, 8, 2.5, 0.25), range('step', 'Movement step', -2, 2, 0.5, 0.25)],
@@ -349,8 +358,8 @@ export const ASSEMBLY_TRACES = {
       push(2, `Store the new position ${result}. SIMD floating-point status in MXCSR is separate from the ZF/SF/CF/OF shown here.`, { position: result }, floatBytes('Position after adding', result));
       return steps;
     },
-  },
-  'asm-mulss': {
+  }),
+  'asm-mulss': createTrace({
     title: 'Scale a floating-point speed',
     intro: 'The worked example doubles speed. Try a half-speed or negative multiplier and follow the low binary32 value.',
     inputs: [range('speed', 'Starting speed', 0, 8, 2.5, 0.25), range('factor', 'Speed multiplier', -2, 3, 2, 0.25)],
@@ -362,8 +371,8 @@ export const ASSEMBLY_TRACES = {
       push(2, `The stored speed is ${printable(result)}. This float multiplication does not produce an integer carry flag.`, { speed: printable(result) }, floatBytes('Speed after scaling', result));
       return steps;
     },
-  },
-  'asm-cvtsi2ss': {
+  }),
+  'asm-cvtsi2ss': createTrace({
     title: 'Convert integer points into a float',
     intro: 'Try a small score, then 16,777,217. A numeric conversion can round even though an ordinary byte copy would not.',
     inputs: [select('case', 'Integer score', 'small', [['small', '7 points'], ['negative', '-7 point adjustment'], ['rounded', '16,777,217 points']])],
@@ -375,8 +384,8 @@ export const ASSEMBLY_TRACES = {
       push(2, `Store float ${out}. eax still holds integer ${n}; the legacy conversion preserved the upper 96 XMM bits.`, { score_float: out }, floatBytes('Converted binary32 score', out));
       return steps;
     },
-  },
-  'asm-cvttss2si': {
+  }),
+  'asm-cvttss2si': createTrace({
     title: 'Truncate a float toward zero',
     intro: 'Try positive and negative fractions, then invalid input. This example assumes the MXCSR invalid-operation exception is masked.',
     inputs: [select('case', 'Float score', 'positive', [['positive', '2.75 points'], ['negative', '-2.75 points'], ['too-large', '2,147,483,648 points'], ['nan', 'NaN: no ordered number']])],
@@ -389,8 +398,8 @@ export const ASSEMBLY_TRACES = {
       push(2, valid ? `Store integer ${out}; the float source and integer comparison flags did not change.` : 'The stored bits are 0x80000000. They also encode a valid signed minimum, so these bits alone cannot distinguish an invalid conversion.', { score_int: out }, bytes('Integer destination', out));
       return steps;
     },
-  },
-  'asm-comiss': {
+  }),
+  'asm-comiss': createTrace({
     title: 'Compare floats, including an unordered value',
     intro: 'The default speed is below its limit. Explore equality, a greater speed, and NaN; the unordered check must come before treating equality as valid.',
     inputs: [select('case', 'Observed speed', 'below', [['below', '2.5: below the 3.0 limit'], ['equal', '3.0: equal to the limit'], ['above', '4.0: above the limit'], ['nan', 'NaN with invalid exception masked']])],
@@ -406,5 +415,5 @@ export const ASSEMBLY_TRACES = {
       push(n < 3 ? 3 : 4, `The selected path is ${n < 3 ? 'wait for speed' : 'continue'}. A float comparison needs its own flag interpretation.`, { outcome: n < 3 ? 'wait for speed' : 'continue' });
       return steps;
     },
-  },
+  }),
 };
