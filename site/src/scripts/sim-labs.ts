@@ -1,19 +1,15 @@
-import { probabilityBoard } from './probability-board.js';
+import { probabilityBoard } from './probability-board.ts';
 import { createBehaviorTree, editBehaviorTree, tickBehaviorTree, treeNodeLabel, TREE_ACTIONS, TREE_TESTS } from './behavior-tree-model.ts';
+import type { ActionOutcome, BehaviorNode, BehaviorTree, ConditionTest, NodeDraft, TickResult, TreeAction, TreeEdit } from './behavior-tree-model.ts';
+import { el, required, type SliderControl } from './widget-dom.ts';
 
 // Explorable simulations (see components/SimLab.astro). Each one opens with a
 // worked example and its explanation already showing; the reader changes the
 // numbers to see why the result moves. Nothing is graded or required.
 
-const el = (tag, className, text) => {
-	const node = document.createElement(tag);
-	if (className) node.className = className;
-	if (text !== undefined) node.textContent = text;
-	return node;
-};
-const fmt = n => Math.round(n).toLocaleString('en-US');
+const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 
-function header(root, eyebrow, title, description) {
+function header(root: HTMLElement, eyebrow: string, title: string, description: string): void {
 	root.replaceChildren();
 	const copy = el('div', 'concept-lab__header-copy');
 	copy.append(el('span', 'concept-lab__eyebrow', eyebrow), el('h3', '', title), el('p', 'concept-lab__description', description));
@@ -22,7 +18,7 @@ function header(root, eyebrow, title, description) {
 	root.append(head);
 }
 
-function slider(id, label, min, max, step, value, show) {
+function slider(id: string, label: string, min: number, max: number, step: number, value: number, show: (value: number) => string): SliderControl {
 	const wrap = el('label');
 	wrap.htmlFor = id;
 	const out = el('output');
@@ -35,7 +31,7 @@ function slider(id, label, min, max, step, value, show) {
 	return { wrap, input, update };
 }
 
-function presets(items, apply) {
+function presets<T extends { readonly label: string }>(items: readonly T[], apply: (item: T) => void): HTMLDivElement {
 	const row = el('div', 'sim-lab__presets');
 	row.append(el('span', 'concept-lab__example-label', 'Try:'));
 	for (const item of items) {
@@ -48,12 +44,13 @@ function presets(items, apply) {
 }
 
 // ---------------------------------------------------------------- base rate
-function baseRate(root) {
+function baseRate(root: HTMLElement): void {
 	header(root, 'Explore it', 'Why a good detector can flag mostly honest players',
 		'Move the three sliders. The picture shows only the players the detector flagged: filled squares are cheaters it caught, rings are honest players it wrongly flagged.');
 	const POP = 100000;
 	const denominators = [10000, 3000, 1000, 300, 100, 30, 10];
-	const rarity = slider('sim-rarity', 'How common is cheating?', 0, 6, 1, 2, i => `1 in ${fmt(denominators[i])} players`);
+	const denominatorAt = (i: number): number => required(denominators[i], `rarity step ${i}`);
+	const rarity = slider('sim-rarity', 'How common is cheating?', 0, 6, 1, 2, i => `1 in ${fmt(denominatorAt(i))} players`);
 	const catches = slider('sim-catch', 'Detector catches this share of cheaters', 50, 100, 1, 99, v => v + '%');
 	const falsePositive = slider('sim-false', 'Detector wrongly flags this share of honest players', 0.1, 5, 0.1, 1, v => v.toFixed(1) + '%');
 	const controls = el('div', 'sim-lab__controls');
@@ -64,8 +61,8 @@ function baseRate(root) {
 	const legend = el('p', 'concept-lab__result-note');
 	const explain = el('p', 'sim-lab__explain');
 	explain.setAttribute('aria-live', 'polite');
-	const apply = ({ r, c, f }) => {
-		rarity.input.value = r; catches.input.value = c; falsePositive.input.value = f;
+	const apply = ({ r, c, f }: { readonly r: number; readonly c: number; readonly f: number }): void => {
+		rarity.input.value = String(r); catches.input.value = String(c); falsePositive.input.value = String(f);
 		[rarity, catches, falsePositive].forEach(s => s.update()); render();
 	};
 	root.append(controls,
@@ -74,8 +71,8 @@ function baseRate(root) {
 			{ label: 'Cheating is common', r: 6, c: 99, f: 1 },
 			{ label: 'A very careful detector', r: 2, c: 90, f: 0.1 },
 		], apply), cards, dots, legend, explain);
-	function render() {
-		const denominator = denominators[Number(rarity.input.value)];
+	function render(): void {
+		const denominator = denominatorAt(Number(rarity.input.value));
 		const cheaters = Math.round(POP / denominator);
 		const honest = POP - cheaters;
 		const caught = Math.round(cheaters * Number(catches.input.value) / 100);
@@ -107,7 +104,7 @@ function baseRate(root) {
 }
 
 // --------------------------------------------------------------- page table
-function pageTable(root) {
+function pageTable(root: HTMLElement): void {
 	header(root, 'Explore it', 'How one virtual address splits into four table indices and an offset',
 		'Type any 64-bit address in hexadecimal. The same bits are always cut into the same six pieces: 9 + 9 + 9 + 9 bits of index, then 12 bits of offset.');
 	const label = el('label', 'concept-lab__field');
@@ -119,15 +116,15 @@ function pageTable(root) {
 	error.setAttribute('aria-live', 'polite');
 	const fields = el('div', 'sim-lab__fields');
 	const explain = el('p', 'sim-lab__explain');
-	const apply = item => { input.value = item.value; render(); };
+	const apply = (item: { readonly value: string }): void => { input.value = item.value; render(); };
 	root.append(label, error, presets([
 		{ label: '0x0123 (the lesson’s address)', value: '0x0123' },
 		{ label: 'A typical user address', value: '0x00007FF612345678' },
 		{ label: 'Start of the upper half', value: '0xFFFF800000000000' },
 		{ label: 'Not a valid address', value: '0x0001000000000000' },
 	], apply), fields, explain);
-	const bits = (value, width) => value.toString(2).padStart(width, '0');
-	function render() {
+	const bits = (value: bigint, width: number) => value.toString(2).padStart(width, '0');
+	function render(): void {
 		const text = input.value.trim().replace(/[_\s]/g, '');
 		if (!/^(0x)?[0-9a-fA-F]{1,16}$/.test(text)) {
 			error.textContent = 'Enter up to 16 hexadecimal digits, such as 0x7FF612345678.';
@@ -135,11 +132,11 @@ function pageTable(root) {
 		}
 		error.textContent = '';
 		const address = BigInt('0x' + text.replace(/^0x/i, ''));
-		const part = (shift, width) => (address >> BigInt(shift)) & ((1n << BigInt(width)) - 1n);
+		const part = (shift: number, width: number) => (address >> BigInt(shift)) & ((1n << BigInt(width)) - 1n);
 		const top = part(48, 16), pml4 = part(39, 9), pdpt = part(30, 9), pd = part(21, 9), pt = part(12, 9), offset = part(0, 12);
 		const bit47 = (address >> 47n) & 1n;
 		const canonical = top === (bit47 ? 0xFFFFn : 0n);
-		const chips = [
+		const chips: readonly (readonly [name: string, value: bigint, width: number, bad?: boolean])[] = [
 			['Top 16 bits (63–48)', top, 16, !canonical], ['PML4 index (47–39)', pml4, 9], ['PDPT index (38–30)', pdpt, 9],
 			['Page directory index (29–21)', pd, 9], ['Page table index (20–12)', pt, 9], ['Offset in page (11–0)', offset, 12],
 		];
@@ -158,10 +155,10 @@ function pageTable(root) {
 }
 
 // ------------------------------------------------------------ checked range
-function checkedRange(root) {
+function checkedRange(root: HTMLElement): void {
 	header(root, 'Explore it', 'Why start + length must be checked for overflow before comparing',
 		'A request asks for some bytes starting at an offset. Change the numbers, or shrink the number width, and compare the unchecked sum with the checked one.');
-	const text = (id, name, value) => {
+	const text = (id: string, name: string, value: string) => {
 		const label = el('label', 'concept-lab__field');
 		const input = el('input', 'concept-lab__text-input');
 		Object.assign(input, { id, type: 'text', value, autocomplete: 'off', spellcheck: false });
@@ -172,7 +169,7 @@ function checkedRange(root) {
 	const widthLabel = el('label', 'concept-lab__field');
 	const width = el('select', 'concept-lab__text-input');
 	width.id = 'sim-width';
-	for (const bitsWide of [8, 16, 32, 64]) { const option = el('option', '', bitsWide + '-bit numbers'); option.value = bitsWide; width.append(option); }
+	for (const bitsWide of [8, 16, 32, 64]) { const option = el('option', '', bitsWide + '-bit numbers'); option.value = String(bitsWide); width.append(option); }
 	width.value = '64';
 	widthLabel.htmlFor = 'sim-width';
 	widthLabel.append(el('span', 'concept-lab__field-label', 'Number size'), width);
@@ -186,8 +183,8 @@ function checkedRange(root) {
 	const cards = el('div', 'sim-lab__cards');
 	const explain = el('p', 'sim-lab__explain');
 	explain.setAttribute('aria-live', 'polite');
-	const apply = item => {
-		width.value = item.w; start.input.value = item.s; length.input.value = item.l; region.input.value = item.r; render();
+	const apply = (item: { readonly w: number; readonly s: string; readonly l: string; readonly r: string }): void => {
+		width.value = String(item.w); start.input.value = item.s; length.input.value = item.l; region.input.value = item.r; render();
 	};
 	root.append(controls, error, presets([
 		{ label: 'The lesson’s overflow', w: 64, s: '0xFFFFFFFFFFFFFFFC', l: '16', r: '4096' },
@@ -195,11 +192,11 @@ function checkedRange(root) {
 		{ label: 'A normal read inside', w: 64, s: '0x100', l: '16', r: '4096' },
 		{ label: 'An honest read past the end', w: 64, s: '4090', l: '16', r: '4096' },
 	], apply), cards, explain);
-	function parse(value) {
+	function parse(value: string): bigint | null {
 		const v = value.trim().replace(/[_,]/g, '');
 		return /^(0x[0-9a-f]+|\d+)$/i.test(v) ? BigInt(v) : null;
 	}
-	function render() {
+	function render(): void {
 		const bitsWide = BigInt(width.value);
 		const max = (1n << bitsWide) - 1n;
 		const s = parse(start.input.value), l = parse(length.input.value), r = parse(region.input.value);
@@ -212,7 +209,7 @@ function checkedRange(root) {
 		const unchecked = wrapped <= r;
 		const checked = !overflow && exact <= r;
 		const truth = checked;
-		const card = (name, value, note) => {
+		const card = (name: string, value: string, note?: string) => {
 			const c = el('div', 'concept-lab__result-card');
 			c.append(el('span', 'concept-lab__result-label', name), el('strong', 'concept-lab__result-value', value));
 			if (note) c.append(el('small', 'concept-lab__result-note', note));
@@ -234,10 +231,10 @@ function checkedRange(root) {
 }
 
 // ------------------------------------------------------------ rva to offset
-function rvaOffset(root) {
+function rvaOffset(root: HTMLElement): void {
 	header(root, 'Explore it', 'Where does a memory address live inside the file?',
 		'A section is stored in the file and mapped into memory at different numbers. Change the section row or the RVA and follow the three steps that carry an address across.');
-	const field = (id, name, value) => {
+	const field = (id: string, name: string, value: string) => {
 		const label = el('label', 'concept-lab__field');
 		const input = el('input', 'concept-lab__text-input');
 		Object.assign(input, { id, type: 'text', value, autocomplete: 'off', spellcheck: false });
@@ -256,14 +253,14 @@ function rvaOffset(root) {
 	const steps = el('ol', 'concept-lab__steps');
 	const verdict = el('p', 'sim-lab__explain');
 	verdict.setAttribute('aria-live', 'polite');
-	const hexOf = n => '0x' + n.toString(16).toUpperCase().padStart(4, '0');
-	const number = value => { const v = value.trim().replace(/_/g, ''); return /^(0x[0-9a-f]+|\d+)$/i.test(v) ? Number(v) : NaN; };
+	const hexOf = (n: number) => '0x' + n.toString(16).toUpperCase().padStart(4, '0');
+	const number = (value: string): number => { const v = value.trim().replace(/_/g, ''); return /^(0x[0-9a-f]+|\d+)$/i.test(v) ? Number(v) : NaN; };
 	root.append(controls, error, presets([
 		{ label: '0x2340 (inside the file data)', v: '0x2340' }, { label: '0x2880 (the zero-filled tail)', v: '0x2880' },
 		{ label: '0x1FFF (before the section)', v: '0x1FFF' }, { label: '0x2900 (past the section)', v: '0x2900' },
 	], item => { rva.input.value = item.v; render(); }), steps, verdict);
-	function render() {
-		const [a, size, raw, ptr, r] = [va, vs, rs, rp, rva].map(f => number(f.input.value));
+	function render(): void {
+		const a = number(va.input.value), size = number(vs.input.value), raw = number(rs.input.value), ptr = number(rp.input.value), r = number(rva.input.value);
 		if ([a, size, raw, ptr, r].some(n => !Number.isFinite(n))) { error.textContent = 'Use whole numbers, decimal or 0x hexadecimal.'; return; }
 		error.textContent = '';
 		const lines = [`Is ${hexOf(r)} inside the section's memory range [${hexOf(a)}, ${hexOf(a + size)})? ${r >= a && r < a + size ? 'Yes' : 'No'}`];
@@ -286,7 +283,10 @@ function rvaOffset(root) {
 }
 
 // ----------------------------------------------------------------- torn read
-function tornRead(root) {
+type Era = 'A' | 'B';
+interface TornRead { text: string; era: Era; health?: number; id?: Era }
+
+function tornRead(root: HTMLElement): void {
 	header(root, 'Explore it', 'How one successful read after another can still describe nobody',
 		'A tool reads an enemy’s pointer and health in separate steps while the game keeps running. Choose when the game swaps enemy A for enemy B, and decide whether the tool also checks an id.');
 	const check = el('input'); check.type = 'checkbox'; check.id = 'sim-torn-check';
@@ -302,22 +302,22 @@ function tornRead(root) {
 	const verdict = el('p', 'sim-lab__explain');
 	verdict.setAttribute('aria-live', 'polite');
 	root.append(controls, steps, verdict);
-	function render() {
+	function render(): void {
 		const checked = check.checked;
 		const reads = checked ? ['pointer', 'id', 'health', 'id again'] : ['pointer', 'health'];
-		when.max = reads.length;
+		when.max = String(reads.length);
 		const k = Math.min(Number(when.value), reads.length);
-		when.value = k;
+		when.value = String(k);
 		whenText.textContent = k === 0 ? 'before the tool’s first read' : k === reads.length ? 'after the tool’s last read' : `between “${reads[k - 1]}” and “${reads[k]}”`;
-		const era = i => (i >= k ? 'B' : 'A');
-		const result = reads.map((name, i) => {
+		const era = (i: number): Era => (i >= k ? 'B' : 'A');
+		const result = reads.map((name, i): TornRead => {
 			if (name === 'pointer') return { text: `Read the pointer at 0x2000 → 0x5000`, era: era(i) };
 			if (name === 'health') return { text: `Read health at 0x5030 → ${era(i) === 'A' ? 120 : 87}`, era: era(i), health: era(i) === 'A' ? 120 : 87 };
 			return { text: `Read the id at the object → enemy ${era(i)}`, era: era(i), id: era(i) };
 		});
 		steps.replaceChildren(...result.map((r, i) => el('li', '', `${r.text}${i === k ? '   ← the game swapped just before this read' : ''}`)));
-		const health = result.find(r => r.health !== undefined);
-		const pointerEra = result[0].era;
+		const health = required(result.find(r => r.health !== undefined), 'the health read');
+		const pointerEra = required(result[0], 'the pointer read').era;
 		if (checked) {
 			const ids = result.filter(r => r.id).map(r => r.id);
 			verdict.textContent = ids[0] !== ids[1]
@@ -330,16 +330,19 @@ function tornRead(root) {
 		}
 	}
 	when.addEventListener('input', render);
-	check.addEventListener('change', () => { when.max = check.checked ? 4 : 2; when.value = check.checked ? 2 : 1; render(); });
+	check.addEventListener('change', () => { when.max = String(check.checked ? 4 : 2); when.value = String(check.checked ? 2 : 1); render(); });
 	render();
 }
 
 // -------------------------------------------------------------- lost update
-function lostUpdate(root) {
+type Who = 'reward' | 'purchase';
+interface Thread { pc: number; reg: number | null }
+
+function lostUpdate(root: HTMLElement): void {
 	header(root, 'Explore it', 'Two threads, one shared number: the order of their steps decides the result',
 		'The reward thread adds 500 and the purchase thread subtracts 300 from the same gold. Press the steps in any order, or turn on a lock, and watch the shared value and each thread’s private copy.');
 	const START = 1000, EXPECTED = 1200;
-	let gold, threads, lockHolder, log;
+	let gold: number, threads: Record<Who, Thread>, lockHolder: Who | null, log: string[];
 	const spec = { reward: { name: 'Reward thread', delta: 500, sign: '+' }, purchase: { name: 'Purchase thread', delta: -300, sign: '−' } };
 	const lockBox = el('input'); lockBox.type = 'checkbox'; lockBox.id = 'sim-lock';
 	const lockLabel = el('label'); lockLabel.htmlFor = lockBox.id;
@@ -351,30 +354,30 @@ function lostUpdate(root) {
 	verdict.setAttribute('aria-live', 'polite');
 	const controls = el('div', 'sim-lab__controls');
 	controls.append(lockLabel);
-	root.append(controls, presets([
+	root.append(controls, presets<{ readonly label: string; readonly order: readonly Who[] }>([
 		{ label: 'The lesson’s order', order: ['reward', 'purchase', 'reward', 'purchase', 'reward', 'purchase'] },
 		{ label: 'One finishes first', order: ['reward', 'reward', 'reward', 'purchase', 'purchase', 'purchase'] },
 	], item => { reset(); for (const who of item.order) step(who); render(); }), board, buttons, logList, verdict);
 	const labels = ['read the gold', 'calculate with its copy', 'write its result back'];
-	function reset() { gold = START; threads = { reward: { pc: 0, reg: null }, purchase: { pc: 0, reg: null } }; lockHolder = null; log = []; }
-	function blocked(who) { return lockBox.checked && lockHolder && lockHolder !== who && threads[who].pc === 0; }
-	function step(who) {
+	function reset(): void { gold = START; threads = { reward: { pc: 0, reg: null }, purchase: { pc: 0, reg: null } }; lockHolder = null; log = []; }
+	function blocked(who: Who): boolean { return lockBox.checked && lockHolder !== null && lockHolder !== who && threads[who].pc === 0; }
+	function step(who: Who): boolean {
 		const th = threads[who];
 		if (th.pc >= 3 || blocked(who)) return false;
 		if (th.pc === 0) { if (lockBox.checked) lockHolder = who; th.reg = gold; log.push(`${spec[who].name} reads the gold: its copy is ${th.reg}.`); }
-		else if (th.pc === 1) { th.reg = th.reg + spec[who].delta; log.push(`${spec[who].name} calculates: its copy becomes ${th.reg}.`); }
-		else { gold = th.reg; if (lockHolder === who) lockHolder = null; log.push(`${spec[who].name} writes ${th.reg} into the shared gold.`); }
+		else if (th.pc === 1) { th.reg = required(th.reg, 'the thread’s copy') + spec[who].delta; log.push(`${spec[who].name} calculates: its copy becomes ${th.reg}.`); }
+		else { gold = required(th.reg, 'the thread’s copy'); if (lockHolder === who) lockHolder = null; log.push(`${spec[who].name} writes ${th.reg} into the shared gold.`); }
 		th.pc++;
 		return true;
 	}
-	function render() {
+	function render(): void {
 		board.replaceChildren(
 			...[['Shared gold', String(gold), lockHolder ? `locked by the ${lockHolder} thread` : 'not locked'],
 				['Reward copy', threads.reward.reg === null ? '—' : String(threads.reward.reg), `step ${Math.min(threads.reward.pc, 3)} of 3`],
 				['Purchase copy', threads.purchase.reg === null ? '—' : String(threads.purchase.reg), `step ${Math.min(threads.purchase.pc, 3)} of 3`]]
 				.map(([name, value, note]) => { const c = el('div', 'concept-lab__result-card'); c.append(el('span', 'concept-lab__result-label', name), el('strong', 'concept-lab__result-value', value), el('small', 'concept-lab__result-note', note)); return c; }));
 		buttons.replaceChildren();
-		for (const who of ['reward', 'purchase']) {
+		for (const who of ['reward', 'purchase'] as const) {
 			const th = threads[who];
 			const b = el('button', 'concept-lab__example', th.pc >= 3 ? `${spec[who].name}: finished` : `${spec[who].name}: ${labels[th.pc]}${blocked(who) ? ' (waiting for the lock)' : ''}`);
 			b.type = 'button'; b.disabled = th.pc >= 3 || blocked(who);
@@ -396,16 +399,18 @@ function lostUpdate(root) {
 }
 
 // ------------------------------------------------------------- crash-safe save
-function crashSave(root) {
+type StrategyKey = 'inPlace' | 'replace';
+
+function crashSave(root: HTMLElement): void {
 	header(root, 'Explore it', 'What is left on disk if the game crashes at each moment?',
 		'Compare two ways to save the same character file. Slide the crash point along the steps and look at the files that survive.');
-	const OLD = ['xp=0', 'build=5,1,1,2'], NEW = ['xp=0', 'build=30,30,30,30'];
-	const strategies = {
+	const OLD: readonly [string, string] = ['xp=0', 'build=5,1,1,2'], NEW: readonly [string, string] = ['xp=0', 'build=30,30,30,30'];
+	const strategies: Record<StrategyKey, { readonly name: string; readonly steps: readonly string[] }> = {
 		inPlace: { name: 'Overwrite the file in place', steps: ['Open avatar.txt and empty it', 'Write the xp line', 'Write the build line (partly written)', 'Write the rest of the build line and close'] },
 		replace: { name: 'Write a temporary file, then replace', steps: ['Write the new bytes to a temporary file', 'Flush the temporary file and close it', 'Replace avatar.txt in one operation (the old one is kept as a backup)'] },
 	};
 	const choice = el('div', 'sim-lab__presets');
-	const names = Object.keys(strategies);
+	const names: readonly StrategyKey[] = ['inPlace', 'replace'];
 	const radios = names.map(key => {
 		const label = el('label'); const input = el('input'); Object.assign(input, { type: 'radio', name: 'sim-save-strategy', value: key, checked: key === 'inPlace' });
 		label.append(input, document.createTextNode(' ' + strategies[key].name)); choice.append(label); return input;
@@ -419,14 +424,14 @@ function crashSave(root) {
 	const files = el('div', 'sim-lab__fields');
 	const verdict = el('p', 'sim-lab__explain'); verdict.setAttribute('aria-live', 'polite');
 	root.append(choice, controls, stepsList, files, verdict);
-	const chip = (name, lines, bad) => { const c = el('div', 'sim-lab__chip' + (bad ? ' sim-lab__chip--bad' : '')); c.append(el('span', '', name), el('code', '', lines.length ? lines.join('\n') : '(empty file)')); return c; };
-	function render() {
-		const key = radios.find(r => r.checked).value; const s = strategies[key];
-		slider.max = s.steps.length;
-		const k = Math.min(Number(slider.value), s.steps.length); slider.value = k;
+	const chip = (name: string, lines: readonly string[], bad: boolean) => { const c = el('div', 'sim-lab__chip' + (bad ? ' sim-lab__chip--bad' : '')); c.append(el('span', '', name), el('code', '', lines.length ? lines.join('\n') : '(empty file)')); return c; };
+	function render(): void {
+		const picked = required(radios.find(r => r.checked), 'a chosen strategy').value; const key = required(names.find(name => name === picked), 'a known strategy'); const s = strategies[key];
+		slider.max = String(s.steps.length);
+		const k = Math.min(Number(slider.value), s.steps.length); slider.value = String(k);
 		sliderText.textContent = k === 0 ? 'nothing has happened yet' : `step ${k}: ${s.steps[k - 1]}`;
 		stepsList.replaceChildren(...s.steps.map((text, i) => el('li', '', (i < k ? '✓ ' : '· ') + text + (i === k - 1 && k < s.steps.length ? '   ← the crash comes right after this' : ''))));
-		let main, extra = [], bad = false, text;
+		let main: readonly string[], extra: HTMLElement[] = [], bad = false, text: string;
 		if (key === 'inPlace') {
 			main = k === 0 ? OLD : k === 1 ? [] : k === 2 ? [NEW[0]] : k === 3 ? [NEW[0], 'build=30,3'] : NEW;
 			bad = k >= 1 && k <= 3;
@@ -443,12 +448,12 @@ function crashSave(root) {
 		verdict.textContent = text;
 	}
 	slider.addEventListener('input', render);
-	radios.forEach(r => r.addEventListener('change', () => { slider.value = r.value === 'inPlace' ? 2 : 2; render(); }));
+	radios.forEach(r => r.addEventListener('change', () => { slider.value = String(r.value === 'inPlace' ? 2 : 2); render(); }));
 	render();
 }
 
 // ------------------------------------------------------------- input edges
-function inputEdge(root) {
+function inputEdge(root: HTMLElement): void {
 	header(root, 'Explore it', 'A held key versus a fresh press',
 		'Try holding or releasing frames. Counting held frames includes every frame the key is down; counting fresh presses includes only transitions from up to down.');
 	const frames = [0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0];
@@ -460,21 +465,22 @@ function inputEdge(root) {
 	});
 	const cards = el('div', 'sim-lab__cards');
 	const explain = el('p', 'sim-lab__explain'); explain.setAttribute('aria-live', 'polite');
-	const apply = item => { item.f.forEach((v, i) => { frames[i] = v; }); render(); };
+	const apply = (item: { readonly f: readonly number[] }): void => { item.f.forEach((v, i) => { frames[i] = v; }); render(); };
 	root.append(presets([
 		{ label: 'The lesson’s pattern', f: [0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
 		{ label: 'One long hold', f: [0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0] },
 		{ label: 'Three quick taps', f: [0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
 	], apply), row, cards, explain);
-	function render() {
+	function render(): void {
 		let level = 0, edge = 0;
 		frames.forEach((v, i) => {
 			const press = v === 1 && (i === 0 ? true : frames[i - 1] === 0);
 			if (v) level++; if (press) edge++;
-			cells[i].textContent = `${i + 1}${v ? (press ? ' ▲' : ' ■') : ' ·'}`;
-			cells[i].setAttribute('aria-label', `Frame ${i + 1}: key ${v ? 'down' : 'up'}${press ? ', fresh press' : ''}`);
-			cells[i].setAttribute('aria-pressed', String(!!v));
-			cells[i].style.fontWeight = v ? '700' : '400';
+			const cell = required(cells[i], 'a frame button');
+			cell.textContent = `${i + 1}${v ? (press ? ' ▲' : ' ■') : ' ·'}`;
+			cell.setAttribute('aria-label', `Frame ${i + 1}: key ${v ? 'down' : 'up'}${press ? ', fresh press' : ''}`);
+			cell.setAttribute('aria-pressed', String(!!v));
+			cell.style.fontWeight = v ? '700' : '400';
 		});
 		cards.replaceChildren(...[['Frames with the key down', String(level), '■ held, ▲ the fresh press'], ['Toggle on every held frame', String(level), 'one action per frame held'], ['Toggle only on fresh presses', String(edge), 'one action per transition to held']]
 			.map(([name, value, note]) => { const c = el('div', 'concept-lab__result-card'); c.append(el('span', 'concept-lab__result-label', name), el('strong', 'concept-lab__result-value', value), el('small', 'concept-lab__result-note', note)); return c; }));
@@ -486,7 +492,7 @@ function inputEdge(root) {
 }
 
 // ------------------------------------------------------------ server authority
-function serverAuthority(root) {
+function serverAuthority(root: HTMLElement): void {
 	header(root, 'Explore it', 'The client asks; the server decides',
 		'A client claims it moved. Change how far it says it moved and whether the server checks, and see where the player really ends up.');
 	const START = 100;
@@ -499,13 +505,13 @@ function serverAuthority(root) {
 	const lane = el('div', 'sim-lab__fields');
 	const explain = el('p', 'sim-lab__explain'); explain.setAttribute('aria-live', 'polite');
 	root.append(controls, cards, lane, explain);
-	function render() {
+	function render(): void {
 		const claimed = START + Number(jump.input.value), max = Number(limit.input.value);
 		const allowed = !check.checked || Number(jump.input.value) <= max;
 		const real = allowed ? claimed : START + max;
 		cards.replaceChildren(...[['Player was at', String(START), 'before this tick'], ['Client says', String(claimed), `a move of ${jump.input.value}`], ['The game state says', String(real), allowed ? 'the claim was accepted' : `clamped to ${max} per tick`]]
 			.map(([n, v, note]) => { const c = el('div', 'concept-lab__result-card'); c.append(el('span', 'concept-lab__result-label', n), el('strong', 'concept-lab__result-value', v), el('small', 'concept-lab__result-note', note)); return c; }));
-		const chip = (name, v) => { const c = el('div', 'sim-lab__chip'); c.append(el('span', '', name), el('code', '', '█'.repeat(Math.max(1, Math.round(v / 40))) + ' ' + v)); return c; };
+		const chip = (name: string, v: number) => { const c = el('div', 'sim-lab__chip'); c.append(el('span', '', name), el('code', '', '█'.repeat(Math.max(1, Math.round(v / 40))) + ' ' + v)); return c; };
 		lane.replaceChildren(chip('start', START), chip('client claim', claimed), chip('real position', real));
 		explain.textContent = !check.checked
 			? `⚠️ With no check the server trusts the client: a claimed move of ${jump.input.value} becomes the real position ${real}. Anything the client says becomes true, which is exactly what a modified client exploits.`
@@ -519,7 +525,7 @@ function serverAuthority(root) {
 }
 
 // ------------------------------------------------------------ report provenance
-function evidenceCorrelation(root) {
+function evidenceCorrelation(root: HTMLElement): void {
 	header(root, 'Explore it', 'How many events are behind the reports?',
 		'Try changing the event ID each source reports. Matching IDs describe the same event, so the ledger merges their deliveries and keeps their sources. A, B and C label toy events.');
 	const sources = ['Game log', 'Plugin', 'Player report', 'Later report'];
@@ -534,7 +540,7 @@ function evidenceCorrelation(root) {
 			option.value = id;
 			input.append(option);
 		}
-		input.value = initial[index];
+		input.value = required(initial[index], 'an initial event id');
 		label.htmlFor = input.id;
 		const name = el('span', 'concept-lab__field-label', source);
 		name.id = `${input.id}-label`;
@@ -550,20 +556,21 @@ function evidenceCorrelation(root) {
 	ledger.setAttribute('aria-label', 'Event ledger with report sources');
 	const explain = el('p', 'sim-lab__explain');
 	explain.setAttribute('aria-live', 'polite');
-	const apply = item => { inputs.forEach((input, index) => { input.value = item.events[index]; }); render(); };
+	const apply = (item: { readonly events: readonly string[] }): void => { inputs.forEach((input, index) => { input.value = required(item.events[index], 'an event id'); }); render(); };
 	root.append(controls, presets([
 		{ label: 'Reset to lesson’s example', events: initial },
 		{ label: 'All four describe A', events: ['A', 'A', 'A', 'A'] },
 		{ label: 'Three event IDs', events: ['A', 'B', 'C', 'C'] },
 	], apply), cards, ledger, explain);
-	function render() {
-		const groups = new Map();
+	function render(): void {
+		const groups = new Map<string, string[]>();
 		let deliveries = 0;
 		inputs.forEach((input, index) => {
 			if (!input.value) return;
 			deliveries += 1;
-			if (!groups.has(input.value)) groups.set(input.value, []);
-			groups.get(input.value).push(sources[index]);
+			let origins = groups.get(input.value);
+			if (!origins) { origins = []; groups.set(input.value, origins); }
+			origins.push(required(sources[index], 'a source name'));
 		});
 		cards.replaceChildren(...[
 			['Notifications delivered', String(deliveries), 'one per source that sent a report'],
@@ -587,7 +594,10 @@ function evidenceCorrelation(root) {
 }
 
 // Pure models also let the author check boundary cases without running a lab.
-export function inputWindowModel(samples, previous = 0) {
+export interface InputWindowStep { readonly index: number; readonly before: number; readonly current: number; readonly rising: boolean; readonly count: number }
+export interface InputWindow { readonly steps: InputWindowStep[]; readonly presses: number; readonly held: number; readonly previous: number }
+
+export function inputWindowModel(samples: readonly number[], previous = 0): InputWindow {
 	let count = 0;
 	const steps = samples.map((current, index) => {
 		const before = previous;
@@ -599,7 +609,7 @@ export function inputWindowModel(samples, previous = 0) {
 	return { steps, presses: count, held: samples.filter(value => value === 1).length, previous };
 }
 
-function detectorInputWindow(root) {
+function detectorInputWindow(root: HTMLElement): void {
 	header(root, 'Explore it', 'Count fresh presses inside a sample window',
 		'Try holding or releasing a sample. The counter adds a press only when the previous sample was released and the new one is held.');
 	const initial = [0, 1, 1, 0, 1];
@@ -623,7 +633,7 @@ function detectorInputWindow(root) {
 		{ label: 'Hold crosses the window', samples: [1, 1, 1, 1, 1], held: true },
 		{ label: 'Three taps', samples: [1, 0, 1, 0, 1], held: false },
 	], item => { values.splice(0, values.length, ...item.samples); start.checked = item.held; render(); }), samples, cards, trace, explain);
-	function render() {
+	function render(): void {
 		const result = inputWindowModel(values, start.checked ? 1 : 0);
 		cells.forEach((button, index) => {
 			button.textContent = `${index + 1}: ${values[index] ? 'held · 1' : 'released · 0'}`;
@@ -642,11 +652,28 @@ function detectorInputWindow(root) {
 	start.addEventListener('change', render); render();
 }
 
-export function behaviorTreeModel({ health, seen, distance, memory, combatFirst = false, running = true, tree }) {
+export interface BehaviorTreeInputs {
+	readonly health: number;
+	readonly seen: number;
+	readonly distance: number;
+	readonly memory: boolean;
+	readonly combatFirst?: boolean;
+	readonly running?: boolean;
+	readonly tree?: BehaviorTree;
+}
+
+export function behaviorTreeModel({ health, seen, distance, memory, combatFirst = false, running = true, tree }: BehaviorTreeInputs): TickResult {
 	return tickBehaviorTree(tree || createBehaviorTree({ combatFirst }), { health, seen, distance, memory, running });
 }
 
-function behaviorTree(root) {
+/** A node's fields without its id and children, writable while the editor fills them in. */
+type NodeFields = { -readonly [Field in keyof NodeDraft]: NodeDraft[Field] };
+const ACTION_OUTCOMES: readonly ActionOutcome[] = ['blackboard', 'success', 'failure', 'running'];
+const isActionOutcome = (value: string): value is ActionOutcome => ACTION_OUTCOMES.some(outcome => outcome === value);
+const isTreeAction = (value: string | undefined): value is TreeAction => TREE_ACTIONS.some(action => action === value);
+const isConditionTest = (value: string | undefined): value is ConditionTest => value !== undefined && Object.hasOwn(TREE_TESTS, value);
+
+function behaviorTree(root: HTMLElement): void {
 	header(root, 'Explore it', 'Watch a priority tree choose one action',
 		'Try changing the guard’s health, sight history, or distance. Each change shows a fresh tick through the tree. Optional editing lets you change its checks and arrows.');
 	const id = root.id || 'sim-behavior-tree';
@@ -659,7 +686,7 @@ function behaviorTree(root) {
 	const running = el('input'); running.type = 'checkbox'; running.id = `${id}-running`; running.checked = true;
 	const runningLabel = el('label'); runningLabel.htmlFor = running.id; runningLabel.append(running, document.createTextNode(' The chosen action is still running'));
 	const priorityLabel = el('label'); const priority = el('select', 'concept-lab__text-input'); priority.id = `${id}-priority`; priorityLabel.htmlFor = priority.id;
-	for (const [value, text] of [['health', 'Flee first'], ['combat', 'Combat first']]) { const option = el('option', '', text); option.value = value; priority.append(option); }
+	for (const [value, text] of [['health', 'Flee first'], ['combat', 'Combat first']] as const) { const option = el('option', '', text); option.value = value; priority.append(option); }
 	priorityLabel.append(el('span', '', 'Root priority order'), priority);
 	const controls = el('div', 'sim-lab__controls'); controls.append(health.wrap, seen.wrap, distance.wrap, memoryLabel, runningLabel, priorityLabel);
 	const tree = el('ol', 'sim-lab__tree'); tree.setAttribute('aria-label', 'Connected tree: parents above their indented children, in tick order');
@@ -668,7 +695,7 @@ function behaviorTree(root) {
 	const traceEmpty = el('p', 'concept-lab__example-label', 'Trace cleared. Run one tick or change an input to show a fresh trace.'); traceEmpty.hidden = true;
 	const explain = el('p', 'sim-lab__explain concept-lab__takeaway'); explain.dataset.kind = 'insight'; explain.setAttribute('aria-live', 'polite');
 	const actions = el('div', 'sim-lab__presets');
-	const button = (text, action, parent = actions) => { const node = el('button', 'concept-lab__example', text); node.type = 'button'; node.addEventListener('click', action); parent.append(node); return node; };
+	const button = (text: string, action: () => void, parent: HTMLElement = actions) => { const node = el('button', 'concept-lab__example', text); node.type = 'button'; node.addEventListener('click', action); parent.append(node); return node; };
 	button('Run one tick', () => render());
 	button('Reset', () => restore());
 	button('Clear trace', () => { traceVisible = false; render(false); });
@@ -676,16 +703,16 @@ function behaviorTree(root) {
 	const editor = el('details', 'sim-lab__tree-editor'); editor.dataset.treeEditor = '';
 	editor.append(el('summary', '', 'Edit the tree (optional)'), el('p', '', 'Try disconnecting the flee branch, moving patrol earlier, or changing a condition. The connected tree runs after each accepted edit. Detached branches stay on the workbench. Reset restores the lesson’s tree and inputs.'));
 	const fields = el('div', 'sim-lab__tree-fields');
-	const select = (key, label, items, parent = fields) => {
+	const select = (key: string, label: string, items: readonly (readonly [string, string])[], parent: HTMLElement = fields) => {
 		const wrap = el('label'), input = el('select', 'concept-lab__text-input'); input.id = `${id}-${key}`; wrap.htmlFor = input.id;
 		wrap.append(el('span', '', label), input); parent.append(wrap);
 		for (const [value, text] of items) { const option = el('option', '', text); option.value = value; input.append(option); }
 		return { wrap, input };
 	};
-	const definitions = [
+	const definitions: readonly (readonly [string, string])[] = [
 		['selector', 'Selector: first success or running'], ['sequence', 'Sequence: all children must succeed'],
-		...Object.entries(TREE_TESTS).map(([test, specification]) => [`condition:${test}`, `Condition: ${specification.label.toLowerCase()}`]),
-		...TREE_ACTIONS.map(action => [`action:${action}`, `Action: ${action}`]),
+		...Object.entries(TREE_TESTS).map(([test, specification]): [string, string] => [`condition:${test}`, `Condition: ${specification.label.toLowerCase()}`]),
+		...TREE_ACTIONS.map((action): [string, string] => [`action:${action}`, `Action: ${action}`]),
 	];
 	const nodePicker = select('tree-node', 'Node to change', []); nodePicker.input.dataset.treeNode = '';
 	const kind = select('tree-kind', 'Node behaviour', definitions);
@@ -702,7 +729,7 @@ function behaviorTree(root) {
 			if (changes.test === 'memory') changes.expected = expected.checked;
 			else changes.limit = limit.value.trim() ? Number(limit.value) : NaN;
 		}
-		if (changes.type === 'action') changes.outcome = outcome.input.value;
+		if (changes.type === 'action') { const chosen = outcome.input.value; if (isActionOutcome(chosen)) changes.outcome = chosen; }
 		applyEdit({ type: 'update', id: selected, changes }, 'Node changed. The trace follows the new behaviour.');
 	}, nodeActions).dataset.treeEdit = 'update';
 	const remove = button('Delete detached branch', () => applyEdit({ type: 'remove', id: selected }, 'Detached branch deleted.'), nodeActions); remove.dataset.treeEdit = 'remove';
@@ -711,8 +738,14 @@ function behaviorTree(root) {
 	const parentPicker = select('tree-parent', 'Parent of the arrow', [], edgeFields);
 	const childPicker = select('tree-child', 'Child of the arrow', [], edgeFields);
 	const edgeActions = el('div', 'sim-lab__presets');
-	for (const [label, type, direction] of [['Connect arrow', 'connect'], ['Disconnect arrow', 'disconnect'], ['Earlier', 'move', -1], ['Later', 'move', 1]]) {
-		button(label, () => applyEdit({ type, parent: parentPicker.input.value, child: childPicker.input.value, direction }, `${label}: the connected tree has been evaluated again.`), edgeActions).dataset.treeEdit = direction === -1 ? 'earlier' : direction === 1 ? 'later' : type;
+	const edgeEdits: readonly (readonly [label: string, edit: (parent: string, child: string) => TreeEdit, tag: string])[] = [
+		['Connect arrow', (parent, child) => ({ type: 'connect', parent, child }), 'connect'],
+		['Disconnect arrow', (parent, child) => ({ type: 'disconnect', parent, child }), 'disconnect'],
+		['Earlier', (parent, child) => ({ type: 'move', parent, child, direction: -1 }), 'earlier'],
+		['Later', (parent, child) => ({ type: 'move', parent, child, direction: 1 }), 'later'],
+	];
+	for (const [label, edit, tag] of edgeEdits) {
+		button(label, () => applyEdit(edit(parentPicker.input.value, childPicker.input.value), `${label}: the connected tree has been evaluated again.`), edgeActions).dataset.treeEdit = tag;
 	}
 	const newFields = el('div', 'sim-lab__tree-fields');
 	const newKind = select('tree-new-kind', 'New detached node', definitions, newFields);
@@ -725,32 +758,35 @@ function behaviorTree(root) {
 		{ label: 'Low health', health: 20, seen: 3, distance: 1, memory: true },
 		{ label: 'Search the last spot', health: 30, seen: 0, distance: 3, memory: true },
 		{ label: 'No sight or memory', health: 30, seen: 0, distance: 3, memory: false },
-	], values => { if (values.label.startsWith('Reset')) { restore(); return; } health.input.value = values.health; seen.input.value = values.seen; distance.input.value = values.distance; memory.checked = values.memory; running.checked = true; [health, seen, distance].forEach(item => item.update()); render(); }), el('p', 'concept-lab__example-label', 'Connected tree: children are checked from top to bottom'), tree, editor, el('p', 'concept-lab__example-label', 'One tick through the tree'), actions, trace, traceEmpty, explain);
+	], values => { if (values.label.startsWith('Reset')) { restore(); return; } health.input.value = String(values.health); seen.input.value = String(values.seen); distance.input.value = String(values.distance); memory.checked = values.memory; running.checked = true; [health, seen, distance].forEach(item => item.update()); render(); }), el('p', 'concept-lab__example-label', 'Connected tree: children are checked from top to bottom'), tree, editor, el('p', 'concept-lab__example-label', 'One tick through the tree'), actions, trace, traceEmpty, explain);
 
-	function definition(value, current) {
+	// The node a menu choice describes. A choice that names no known action or condition leaves that field out, and the model refuses the node with its own message.
+	function definition(value: string, current?: BehaviorNode): NodeFields {
 		const [type, detail] = value.split(':');
 		if (type === 'selector' || type === 'sequence') return { type, label: current?.label || `new ${type}` };
-		if (type === 'action') return { type, action: detail, outcome: current?.outcome || 'blackboard' };
-		return { type: 'condition', test: detail, ...(detail === 'memory' ? { expected: current?.expected ?? true } : { limit: current?.test === detail ? current.limit : TREE_TESTS[detail].limit }) };
+		if (type === 'action') return isTreeAction(detail) ? { type, action: detail, outcome: current?.outcome || 'blackboard' } : { type, outcome: current?.outcome || 'blackboard' };
+		if (!isConditionTest(detail)) return { type: 'condition' };
+		return { type: 'condition', test: detail, ...(detail === 'memory' ? { expected: current?.expected ?? true } : { limit: current?.test === detail ? current.limit ?? TREE_TESTS[detail].limit : TREE_TESTS[detail].limit }) };
 	}
-	function configureInspector() {
+	function configureInspector(): void {
 		const [type, test] = kind.input.value.split(':');
 		limitWrap.hidden = type !== 'condition' || test === 'memory';
 		expectedWrap.hidden = type !== 'condition' || test !== 'memory';
 		outcome.wrap.hidden = type !== 'action';
-		if (!limitWrap.hidden) {
+		if (!limitWrap.hidden && isConditionTest(test) && test !== 'memory') {
 			const specification = TREE_TESTS[test], current = model.nodes.find(node => node.id === selected);
 			Object.assign(limit, { min: specification.min, max: specification.max, step: specification.step, value: current?.test === test ? current.limit : specification.limit });
 			limitLabel.textContent = specification.label;
 		}
 	}
-	function fillOptions(input, nodes, value) {
+	function fillOptions(input: HTMLSelectElement, nodes: readonly BehaviorNode[], value: string | undefined): void {
 		input.replaceChildren(...nodes.map(node => { const option = el('option', '', `${node.id}: ${treeNodeLabel(node)}`); option.value = node.id; return option; }));
-		input.value = nodes.some(node => node.id === value) ? value : nodes[0]?.id || '';
+		const match = nodes.find(node => node.id === value);
+		input.value = match ? match.id : nodes[0]?.id || '';
 	}
-	function refreshEditor() {
+	function refreshEditor(): void {
 		if (!model.nodes.some(node => node.id === selected)) selected = model.root;
-		const current = model.nodes.find(node => node.id === selected), parent = model.nodes.find(node => node.children.includes(selected));
+		const current = required(model.nodes.find(node => node.id === selected), 'the selected node'), parent = model.nodes.find(node => node.children.includes(selected));
 		fillOptions(nodePicker.input, model.nodes, selected);
 		const isComposite = current.type === 'selector' || current.type === 'sequence';
 		kind.input.replaceChildren(...definitions.filter(([value]) => isComposite === ['selector', 'sequence'].includes(value)).map(([value, text]) => { const option = el('option', '', text); option.value = value; return option; }));
@@ -758,30 +794,30 @@ function behaviorTree(root) {
 		expected.checked = current.expected ?? true; outcome.input.value = current.outcome || 'blackboard';
 		configureInspector(); remove.disabled = selected === model.root || !!parent;
 		fillOptions(parentPicker.input, model.nodes.filter(node => node.type === 'selector' || node.type === 'sequence'), parentPicker.input.value || parent?.id || model.root);
-		fillOptions(childPicker.input, model.nodes.filter(node => node.id !== model.root), childPicker.input.value || (selected !== model.root ? selected : model.nodes[0].children[0]));
+		fillOptions(childPicker.input, model.nodes.filter(node => node.id !== model.root), childPicker.input.value || (selected !== model.root ? selected : model.nodes[0]?.children[0]));
 		const roots = model.nodes.filter(node => node.id !== model.root && !model.nodes.some(candidate => candidate.children.includes(node.id)));
 		detached.textContent = `Workbench: ${roots.length ? roots.map(treeNodeLabel).join('; ') : 'no detached branches'}. ${model.nodes.length}/24 nodes; branches can be at most 8 nodes deep.`;
 	}
-	function applyEdit(edit, message) {
+	function applyEdit(edit: TreeEdit, message: string): void {
 		const result = editBehaviorTree(model, edit);
 		editStatus.dataset.tone = result.ok ? 'info' : 'warn'; editStatus.dataset.toneExplicit = '1';
 		editStatus.textContent = result.ok ? message : result.error;
 		if (!result.ok) return;
 		model = result.tree; selected = result.selected; refreshEditor(); render();
 	}
-	function restore() {
+	function restore(): void {
 		model = createBehaviorTree(); selected = model.root;
-		health.input.value = 30; seen.input.value = 3; distance.input.value = 1; memory.checked = true; running.checked = true;
+		health.input.value = '30'; seen.input.value = '3'; distance.input.value = '1'; memory.checked = true; running.checked = true;
 		[health, seen, distance].forEach(item => item.update());
 		editStatus.textContent = 'The lesson’s tree and inputs are restored.'; editStatus.dataset.tone = 'info';
 		parentPicker.input.value = model.root; childPicker.input.value = 'flee'; refreshEditor(); render();
 	}
-	function render(showTrace = true) {
+	function render(showTrace = true): void {
 		if (showTrace) traceVisible = true;
 		const result = behaviorTreeModel({ tree: model, health: Number(health.input.value), seen: Number(seen.input.value), distance: Number(distance.input.value), memory: memory.checked, running: running.checked });
-		const nodes = new Map(model.nodes.map(node => [node.id, node]));
-		const drawNode = (nodeId, index) => {
-			const specification = nodes.get(nodeId), node = el('li'); node.dataset.status = result.statuses[nodeId] || 'not-visited'; node.dataset.treeNodeId = nodeId;
+		const nodes = new Map(model.nodes.map((node): [string, BehaviorNode] => [node.id, node]));
+		const drawNode = (nodeId: string, index?: number): HTMLLIElement => {
+			const specification = required(nodes.get(nodeId), `the node ${nodeId}`), node = el('li'); node.dataset.status = result.statuses[nodeId] || 'not-visited'; node.dataset.treeNodeId = nodeId;
 			const pick = el('button', 'sim-lab__tree-node'); pick.type = 'button'; pick.dataset.status = node.dataset.status;
 			pick.classList.toggle('is-selected', selected === nodeId);
 			pick.setAttribute('aria-label', `${treeNodeLabel(specification)}; ${result.statuses[nodeId] || 'not visited'}. Edit this node.`);
@@ -790,7 +826,7 @@ function behaviorTree(root) {
 				selected = nodeId; editor.open = true;
 				parentPicker.input.value = model.nodes.find(candidate => candidate.children.includes(selected))?.id || model.root;
 				childPicker.input.value = selected; refreshEditor(); render();
-				tree.querySelector(`[data-tree-node-id="${nodeId}"] > button`)?.focus();
+				tree.querySelector<HTMLElement>(`[data-tree-node-id="${nodeId}"] > button`)?.focus();
 			});
 			node.append(pick);
 			if (specification.children.length) { const children = el('ul'); children.append(...specification.children.map(drawNode)); node.append(children); }
@@ -799,8 +835,9 @@ function behaviorTree(root) {
 		tree.replaceChildren(drawNode(model.root));
 		trace.hidden = !traceVisible; traceEmpty.hidden = traceVisible;
 		trace.replaceChildren(...(traceVisible ? result.trace.map(step => el('li', '', step.text)) : []));
-		const first = nodes.get(model.root).children;
-		priority.disabled = nodes.get(model.root).type !== 'selector' || !first.includes('flee') || !first.includes('combat');
+		const rootNode = required(nodes.get(model.root), 'the root node');
+		const first = rootNode.children;
+		priority.disabled = rootNode.type !== 'selector' || !first.includes('flee') || !first.includes('combat');
 		priority.value = first.indexOf('combat') >= 0 && first.indexOf('combat') < first.indexOf('flee') ? 'combat' : 'health';
 		explain.textContent = `${result.action ? `Chosen action: ${result.action}` : 'No action selected'}; root result: ${result.status}. A sequence continues after success; a selector continues after failure. Both stop at running. Nodes marked “not visited” were never read this tick. Sight history and the remembered spot come from the blackboard; this tree does not move the guard or update those inputs.`;
 	}
@@ -808,19 +845,38 @@ function behaviorTree(root) {
 	kind.input.addEventListener('change', configureInspector);
 	priority.addEventListener('change', () => {
 		const child = priority.value === 'combat' ? 'combat' : 'flee', other = child === 'combat' ? 'flee' : 'combat';
-		let children = model.nodes.find(node => node.id === model.root).children;
+		const rootChildren = (): readonly string[] => required(model.nodes.find(node => node.id === model.root), 'the root node').children;
+		let children = rootChildren();
 		while (children.indexOf(child) > children.indexOf(other)) {
 			const edit = editBehaviorTree(model, { type: 'move', parent: model.root, child, direction: -1 });
 			if (!edit.ok) break;
-			model = edit.tree; children = model.nodes.find(node => node.id === model.root).children;
+			model = edit.tree; children = rootChildren();
 		}
 		refreshEditor(); render();
 	});
-	[health, seen, distance].forEach(item => item.input.addEventListener('input', render));
-	[memory, running].forEach(input => input.addEventListener('change', render)); refreshEditor(); render();
+	[health, seen, distance].forEach(item => item.input.addEventListener('input', () => render()));
+	[memory, running].forEach(input => input.addEventListener('change', () => render())); refreshEditor(); render();
 }
 
-export function scanCostModel({ mib, chunkKib, candidates, throughputMib, overheadUs }) {
+export interface ScanCostInputs {
+	readonly mib: number;
+	readonly chunkKib: number;
+	readonly candidates: number;
+	readonly throughputMib: number;
+	readonly overheadUs: number;
+}
+
+export interface ScanCost {
+	readonly bytes: number;
+	readonly calls: number;
+	readonly laterBytes: number;
+	readonly laterCalls: number;
+	readonly firstMs: number;
+	readonly laterMs: number;
+	readonly ratio: number | null;
+}
+
+export function scanCostModel({ mib, chunkKib, candidates, throughputMib, overheadUs }: ScanCostInputs): ScanCost {
 	const bytes = mib * 1048576;
 	const chunk = chunkKib * 1024;
 	const calls = Math.ceil(bytes / chunk);
@@ -830,14 +886,15 @@ export function scanCostModel({ mib, chunkKib, candidates, throughputMib, overhe
 	return { bytes, calls, laterBytes, laterCalls: candidates, firstMs, laterMs, ratio: candidates ? bytes / laterBytes : null };
 }
 
-function scanCost(root) {
+function scanCost(root: HTMLElement): void {
 	header(root, 'Explore it', 'Fewer bytes, fewer reads, or both?',
 		'Try changing the readable region or the surviving candidates. These illustrative estimates separate copying bytes from paying for each read call.');
 	const id = root.id || 'sim-scan-cost';
 	const sizes = [0, 1, 18, 40000, 1000000];
+	const sizeAt = (i: number): number => required(sizes[i], `candidate count ${i}`);
 	const region = slider(`${id}-region`, 'Readable memory', 100, 800, 100, 400, value => `${value} MiB`);
 	const chunk = slider(`${id}-chunk`, 'First-pass copy chunk', 4, 1024, 4, 64, value => `${value} KiB`);
-	const count = slider(`${id}-candidates`, 'Surviving four-byte candidates', 0, 4, 1, 3, value => fmt(sizes[value]));
+	const count = slider(`${id}-candidates`, 'Surviving four-byte candidates', 0, 4, 1, 3, value => fmt(sizeAt(value)));
 	const throughput = slider(`${id}-throughput`, 'Assumed copying rate', 50, 1000, 50, 500, value => `${value} MiB/s`);
 	const overhead = slider(`${id}-overhead`, 'Assumed overhead per read', 0, 100, 5, 15, value => `${value} microseconds`);
 	const controls = el('div', 'sim-lab__controls'); controls.append(region.wrap, chunk.wrap, count.wrap, throughput.wrap, overhead.wrap);
@@ -848,15 +905,15 @@ function scanCost(root) {
 		{ label: 'Reset: 400 MiB, 40,000 candidates', count: 3, chunk: 64, overhead: 15 },
 		{ label: 'Only 18 candidates', count: 2, chunk: 64, overhead: 15 },
 		{ label: 'Copying cost alone', count: 3, chunk: 64, overhead: 0 },
-	], item => { region.input.value = 400; throughput.input.value = 500; count.input.value = item.count; chunk.input.value = item.chunk; overhead.input.value = item.overhead; [region, chunk, count, throughput, overhead].forEach(control => control.update()); render(); }), cards, bars, explain);
-	function render() {
-		const result = scanCostModel({ mib: Number(region.input.value), chunkKib: Number(chunk.input.value), candidates: sizes[Number(count.input.value)], throughputMib: Number(throughput.input.value), overheadUs: Number(overhead.input.value) });
+	], item => { region.input.value = '400'; throughput.input.value = '500'; count.input.value = String(item.count); chunk.input.value = String(item.chunk); overhead.input.value = String(item.overhead); [region, chunk, count, throughput, overhead].forEach(control => control.update()); render(); }), cards, bars, explain);
+	function render(): void {
+		const result = scanCostModel({ mib: Number(region.input.value), chunkKib: Number(chunk.input.value), candidates: sizeAt(Number(count.input.value)), throughputMib: Number(throughput.input.value), overheadUs: Number(overhead.input.value) });
 		cards.replaceChildren(...[
 			['First-pass bytes', fmt(result.bytes), `${fmt(result.calls)} bounded chunk reads`],
 			['Filter-pass bytes', fmt(result.laterBytes), `${fmt(result.laterCalls)} separate four-byte reads`],
 		].map(([name, value, note]) => { const card = el('div', 'concept-lab__result-card'); card.append(el('span', 'concept-lab__result-label', name), el('strong', 'concept-lab__result-value', value), el('small', 'concept-lab__result-note', note)); return card; }));
 		const maximum = Math.max(result.firstMs, result.laterMs, 1);
-		bars.replaceChildren(...[['First pass', result.firstMs], ['Filter pass', result.laterMs]].map(([name, time]) => {
+		bars.replaceChildren(...([['First pass', result.firstMs], ['Filter pass', result.laterMs]] as const).map(([name, time]) => {
 			const row = el('div', 'sim-lab__cost-row'); const bar = el('meter'); bar.min = 0; bar.max = maximum; bar.value = time; bar.setAttribute('aria-label', `${name}: ${time.toFixed(2)} milliseconds in this model`);
 			row.append(el('span', '', name), bar, el('strong', '', `${time.toFixed(2)} ms`)); return row;
 		}));
@@ -867,58 +924,79 @@ function scanCost(root) {
 
 // A deliberately small AL/BL interpreter: integer arithmetic and the zero flag.
 // No eval, binary execution, memory access, privileged instructions, or APIs.
-export function toyAssemblyModel(source, limit = 64) {
-	const registers = { al: 0, bl: 0 };
-	const instructions = [];
-	const labels = new Map();
+type Register = 'al' | 'bl';
+const OPCODES = ['mov', 'add', 'sub', 'xor', 'cmp', 'inc', 'dec', 'jz', 'jnz', 'jmp', 'nop'] as const;
+type Opcode = (typeof OPCODES)[number];
+const isOpcode = (text: string | undefined): text is Opcode => OPCODES.some(code => code === text);
+const isRegister = (name: string | undefined): name is Register => name === 'al' || name === 'bl';
+
+export interface ToyInstruction { readonly op: Opcode; readonly args: readonly string[]; readonly sourceLine: number; readonly text: string }
+export interface ToyTraceStep extends ToyInstruction { readonly al: number; readonly bl: number; readonly zero: boolean; readonly next: number; readonly jumped: boolean }
+export interface ToyAssemblyResult {
+	readonly registers: Record<Register, number>;
+	readonly zero: boolean;
+	readonly trace: readonly ToyTraceStep[];
+	readonly error: string | null;
+	readonly complete?: boolean;
+}
+
+export function toyAssemblyModel(source: string, limit = 64): ToyAssemblyResult {
+	const registers: Record<Register, number> = { al: 0, bl: 0 };
+	const instructions: ToyInstruction[] = [];
+	const labels = new Map<string, number>();
 	const rows = String(source).split(/\r?\n/);
 	if (source.length > 4096 || rows.length > 128) return { registers, zero: false, trace: [], error: 'Keep the program under 128 source lines and 4,096 characters.' };
 	for (let index = 0; index < rows.length; index += 1) {
-		const text = rows[index].split(';')[0].trim().toLowerCase();
+		const text = (required(rows[index], 'a source row').split(';')[0] ?? '').trim().toLowerCase();
 		if (!text) continue;
 		const label = /^([a-z_][a-z0-9_]*):$/.exec(text);
-		if (label) {
-			if (labels.has(label[1])) return { registers, zero: false, trace: [], error: `Line ${index + 1}: label ${label[1]} is defined twice.` };
-			labels.set(label[1], instructions.length); continue;
+		const labelName = label?.[1];
+		if (labelName !== undefined) {
+			if (labels.has(labelName)) return { registers, zero: false, trace: [], error: `Line ${index + 1}: label ${labelName} is defined twice.` };
+			labels.set(labelName, instructions.length); continue;
 		}
 		const match = /^(mov|add|sub|xor|cmp|inc|dec|jz|jnz|jmp|nop)\b\s*(.*)$/.exec(text);
-		if (!match) return { registers, zero: false, trace: [], error: `Line ${index + 1}: use only the supported instructions listed below.` };
+		const op = match?.[1];
+		if (!match || !isOpcode(op)) return { registers, zero: false, trace: [], error: `Line ${index + 1}: use only the supported instructions listed below.` };
 		const args = match[2] ? match[2].split(',').map(part => part.trim()) : [];
-		const op = match[1];
 		const expected = /^(mov|add|sub|xor|cmp)$/.test(op) ? 2 : op === 'nop' ? 0 : 1;
 		if (args.length !== expected || args.some(arg => !arg)) return { registers, zero: false, trace: [], error: `Line ${index + 1}: ${op.toUpperCase()} needs ${expected} ${expected === 1 ? 'operand' : 'operands'}.` };
 		if (instructions.length >= 64) return { registers, zero: false, trace: [], error: 'Keep the program to at most 64 instructions.' };
 		instructions.push({ op, args, sourceLine: index + 1, text });
 	}
-	const number = text => /^(?:0x[0-9a-f]+|\d+)$/.test(text) ? Number(text) : NaN;
+	const number = (text: string): number => /^(?:0x[0-9a-f]+|\d+)$/.test(text) ? Number(text) : NaN;
 	for (const instruction of instructions) {
 		const { op, args, sourceLine } = instruction;
+		const first = args[0] ?? '', second = args[1] ?? '';
 		if (op.startsWith('j')) {
-			if (!labels.has(args[0])) return { registers, zero: false, trace: [], error: `Line ${sourceLine}: label ${args[0]} does not exist.` };
+			if (!labels.has(first)) return { registers, zero: false, trace: [], error: `Line ${sourceLine}: label ${first} does not exist.` };
 		} else if (op !== 'nop') {
-			if (!Object.hasOwn(registers, args[0])) return { registers, zero: false, trace: [], error: `Line ${sourceLine}: the destination must be AL or BL.` };
-			if (args.length === 2 && !Object.hasOwn(registers, args[1]) && !(Number.isInteger(number(args[1])) && number(args[1]) >= 0 && number(args[1]) <= 255)) return { registers, zero: false, trace: [], error: `Line ${sourceLine}: use AL, BL, or an immediate from 0 to 255.` };
+			if (!isRegister(first)) return { registers, zero: false, trace: [], error: `Line ${sourceLine}: the destination must be AL or BL.` };
+			if (args.length === 2 && !isRegister(second) && !(Number.isInteger(number(second)) && number(second) >= 0 && number(second) <= 255)) return { registers, zero: false, trace: [], error: `Line ${sourceLine}: use AL, BL, or an immediate from 0 to 255.` };
 		}
 	}
-	const trace = [];
+	const trace: ToyTraceStep[] = [];
 	let zero = false;
 	let pc = 0;
 	const stepLimit = Math.max(1, Math.min(64, Math.trunc(limit) || 64));
 	while (pc < instructions.length && trace.length < stepLimit) {
-		const instruction = instructions[pc];
+		const instruction = required(instructions[pc], `instruction ${pc}`);
 		const { op, args } = instruction;
-		const destination = args[0];
-		const operand = args.length === 2 ? (Object.hasOwn(registers, args[1]) ? registers[args[1]] : number(args[1])) : null;
+		const destination = args[0] ?? '', source = args[1] ?? '';
+		const target = isRegister(destination) ? destination : undefined;
+		// Only the two-operand instructions read this; the others have no second operand.
+		const operand = args.length === 2 ? (isRegister(source) ? registers[source] : number(source)) : 0;
 		let next = pc + 1;
 		let jumped = false;
-		if (op === 'mov') registers[destination] = operand;
-		else if (op === 'cmp') zero = registers[destination] === operand;
-		else if (op === 'jmp' || (op === 'jz' && zero) || (op === 'jnz' && !zero)) { next = labels.get(destination); jumped = true; }
-		else if (['add', 'sub', 'xor', 'inc', 'dec'].includes(op)) {
-			const old = registers[destination];
+		if (op === 'mov') registers[required(target, 'a destination register')] = operand;
+		else if (op === 'cmp') zero = registers[required(target, 'a destination register')] === operand;
+		else if (op === 'jmp' || (op === 'jz' && zero) || (op === 'jnz' && !zero)) { next = required(labels.get(destination), `label ${destination}`); jumped = true; }
+		else if (op === 'add' || op === 'sub' || op === 'xor' || op === 'inc' || op === 'dec') {
+			const register = required(target, 'a destination register');
+			const old = registers[register];
 			const result = op === 'add' ? old + operand : op === 'sub' ? old - operand : op === 'xor' ? old ^ operand : op === 'inc' ? old + 1 : old - 1;
-			registers[destination] = (result + 256) % 256;
-			zero = registers[destination] === 0;
+			registers[register] = (result + 256) % 256;
+			zero = registers[register] === 0;
 		}
 		trace.push({ ...instruction, al: registers.al, bl: registers.bl, zero, next, jumped });
 		pc = next;
@@ -926,10 +1004,12 @@ export function toyAssemblyModel(source, limit = 64) {
 	return { registers, zero, trace, error: pc < instructions.length ? `Stopped after ${stepLimit} instructions. A loop may still be running; change it and run again.` : null, complete: pc >= instructions.length };
 }
 
-function toyAssembly(root) {
+interface ToyProgram { readonly label: string; readonly source: string }
+
+function toyAssembly(root: HTMLElement): void {
 	header(root, 'Explore it', 'Run a small register program',
 		'Try changing an instruction, then Run. This page interprets a tiny AL/BL model; it does not run a lab program or real machine code.');
-	const programs = [
+	const programs: readonly [ToyProgram, ...ToyProgram[]] = [
 		{ label: 'Countdown', source: 'mov al, 3\ncount:\n  dec al\n  jnz count\nmov bl, 7' },
 		{ label: 'Byte wraps', source: 'mov al, 255\nadd al, 1\nmov bl, al' },
 		{ label: 'Branch skips', source: 'mov al, 5\ncmp al, 5\njz done\nmov bl, 99\ndone:\nnop' },
@@ -946,9 +1026,9 @@ function toyAssembly(root) {
 	const explain = el('p', 'sim-lab__explain concept-lab__takeaway'); explain.dataset.kind = 'insight'; explain.setAttribute('aria-live', 'polite');
 	const help = el('details', 'sim-lab__help'); help.append(el('summary', '', 'Supported instructions and model limits'), el('p', '', 'AL and BL hold unsigned values from 0 to 255. MOV copies without changing the zero flag. ADD, SUB, XOR, INC and DEC wrap to one byte and set zero from the result. CMP compares without changing registers. JZ jumps when zero is set; JNZ when it is clear. JMP always jumps, and NOP changes nothing. A label is a name on its own line ending in a colon. This model omits other flags, memory, the stack, instruction encoding and timing. Reaching the end stops; each run resets both registers and the zero flag to zero, and executes at most 64 instructions.'));
 	root.append(field, presets(programs, program => { input.value = program.source; render(); }), actions, cards, trace, explain, help);
-	function render() {
+	function render(): void {
 		const result = toyAssemblyModel(input.value);
-		cards.replaceChildren(...[['AL', result.registers.al], ['BL', result.registers.bl], ['Zero flag', result.zero ? 1 : 0]].map(([name, value]) => {
+		cards.replaceChildren(...([['AL', result.registers.al], ['BL', result.registers.bl], ['Zero flag', result.zero ? 1 : 0]] as const).map(([name, value]) => {
 			const card = el('div', 'concept-lab__result-card'); const badge = el('span', 'concept-lab__type-badge', name === 'Zero flag' ? 'FLAG' : 'U8');
 			card.append(badge, el('span', 'concept-lab__result-label', name), el('strong', 'concept-lab__result-value', String(value))); return card;
 		}));
@@ -962,13 +1042,14 @@ function toyAssembly(root) {
 	input.addEventListener('input', () => { explain.dataset.tone = 'info'; explain.textContent = 'The program changed. Choose Run to update the register values and execution log.'; }); render();
 }
 
-const SIMS = {
+const SIMS: Readonly<Record<string, (root: HTMLElement) => void>> = {
   'probability-board': root => probabilityBoard(root, { el, header, slider, presets }), 'base-rate': baseRate, 'page-table': pageTable, 'checked-range': checkedRange, 'rva-offset': rvaOffset, 'torn-read': tornRead, 'lost-update': lostUpdate, 'crash-save': crashSave, 'input-edge': inputEdge, 'server-authority': serverAuthority, 'evidence-correlation': evidenceCorrelation, 'detector-input-window': detectorInputWindow, 'behavior-tree': behaviorTree, 'scan-cost': scanCost, 'toy-assembly': toyAssembly };
 
-export function mountSimLabs() {
-	for (const root of document.querySelectorAll('[data-sim-lab]')) {
+export function mountSimLabs(): void {
+	for (const root of document.querySelectorAll<HTMLElement>('[data-sim-lab]')) {
 		if (root.dataset.simReady === 'true') continue;
-		const sim = SIMS[root.dataset.simLab];
+		const simName = root.dataset.simLab;
+		const sim = simName === undefined ? undefined : SIMS[simName];
 		if (!sim) continue;
 		root.dataset.simReady = 'true';
 		sim(root);

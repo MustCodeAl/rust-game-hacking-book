@@ -46,7 +46,7 @@ for (const [inputs, action] of cases) {
 	same(result.status, 'running', 'the chosen action is still running');
 	same(result.error, null, 'valid inputs do not report an error');
 }
-same(behaviorTreeModel({ ...blackboard, health: 20, combatFirst: true, tree: undefined }).action, 'attack', 'existing priority input still changes the first action');
+same(behaviorTreeModel({ ...blackboard, health: 20, combatFirst: true }).action, 'attack', 'existing priority input still changes the first action');
 same(tick(original, { running: false }).status, 'success', 'a finished action propagates success');
 same(tick(original, { health: 20 }).statuses.combat, undefined, 'flee short-circuits the later combat branch');
 same(tick(original, { seen: 2 }).statuses.range, undefined, 'failed sight check does not read distance');
@@ -156,14 +156,19 @@ same(tick(full).trace.length <= TREE_LIMITS.nodes * 2, true, 'detached workbench
 const worked = workedExample('camera-shake');
 if (!worked) throw new assert.AssertionError({ message: 'the authored shake example exists' });
 same(worked.value, 3.2, 'the authored shake example remains 3.2 px');
-const shake = FORMULAS['camera-shake'];
+const formula = (id: string): NonNullable<(typeof FORMULAS)[string]> => {
+	const found = FORMULAS[id];
+	if (!found) throw new assert.AssertionError({ message: `formula ${id} exists` });
+	return found;
+};
+const shake = formula('camera-shake');
 const finished: ReadonlyArray<readonly [number, number, number]> = [[0, 4, 4], [0.1, 3.2, 3.2], [0.25, 2, 2], [0.5, 0, 0], [1, -4, 0]];
 for (const [elapsed, raw, expected] of finished) {
 	const result = finishFormulaResult(shake, { a: 4, e: elapsed, f: 0.5 }, raw);
 	same(result.value, expected, `physical offset at ${elapsed}s`);
 	same(!!result.step, elapsed >= 0.5, 'the finished state has an explicit boundary explanation');
 }
-same(finishFormulaResult(FORMULAS['ray-point'], { o: 2, t: 10, d: 0.6 }, 8).value, 8, 'other formulas retain their arithmetic result');
+same(finishFormulaResult(formula('ray-point'), { o: 2, t: 10, d: 0.6 }, 8).value, 8, 'other formulas retain their arithmetic result');
 same(finishFormulaResult(shake, { a: 4, e: 1, f: 0 }, NaN).value, NaN, 'undefined arithmetic is not disguised as zero');
 
 console.log(`Behavior-tree and formula boundary checks: ${checks} passed.`);

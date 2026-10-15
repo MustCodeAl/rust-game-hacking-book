@@ -14,7 +14,51 @@
 //   spotlight item id explained when the board first opens
 //   summary   (countsByZone) => one sentence about what the sorted groups mean
 
-export const BOARDS = {
+import { el, required } from './widget-dom.ts';
+
+export interface ZoneSpec {
+	readonly id: string;
+	readonly name: string;
+	readonly sub: string;
+}
+
+export interface ItemSpec {
+	readonly id: string;
+	readonly label: string;
+	/** The zone the lesson puts this chip in. */
+	readonly home: string;
+	/** A sentence per zone; the one for `home` is the lesson's reason. */
+	readonly why: Readonly<Record<string, string>>;
+}
+
+/** How many chips sit in each zone, by zone id. */
+export type ZoneCounts = Readonly<Record<string, number>>;
+
+interface BoardBase {
+	readonly eyebrow: string;
+	readonly title: string;
+	readonly description: string;
+	readonly zones: readonly ZoneSpec[];
+	readonly items: readonly ItemSpec[];
+	/** The item id explained when the board first opens. */
+	readonly spotlight: string;
+	readonly summary: (counts: ZoneCounts) => string;
+}
+
+/** 2-4 boxes. */
+export interface ZonesBoard extends BoardBase {
+	readonly mode: 'zones';
+}
+
+/** A two-circle Venn: zones in the order left-only, both, right-only, then an optional outside zone. */
+export interface VennBoard extends BoardBase {
+	readonly mode: 'venn';
+	readonly venn: { readonly legend: string };
+}
+
+export type SortBoard = ZonesBoard | VennBoard;
+
+export const BOARDS: Readonly<Record<string, SortBoard>> = {
 	'menu-vs-worker': {
 		eyebrow: 'Sort it',
 		title: 'Who does what: the menu or the worker?',
@@ -120,9 +164,10 @@ export const BOARDS = {
 		],
 		spotlight: 'crate',
 		summary: c => {
-			const ratio = (a, b) => (a + b === 0 ? 'undefined (no denominator, so no score is invented)' : `${a} ÷ ${a + b} = ${(a / (a + b)).toFixed(2)}`);
-			const pl = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
-			return `${pl(c.tp, 'true positive')}, ${pl(c.fp, 'false positive')}, ${pl(c.fn, 'false negative')}, ${pl(c.tn, 'true negative')}. Precision (when it says player, how often is it right?) = ${ratio(c.tp, c.fp)}. Recall (of all player draws, how many did it find?) = ${ratio(c.tp, c.fn)}.`;
+			const { tp = 0, fp = 0, fn = 0, tn = 0 } = c;
+			const ratio = (a: number, b: number) => (a + b === 0 ? 'undefined (no denominator, so no score is invented)' : `${a} ÷ ${a + b} = ${(a / (a + b)).toFixed(2)}`);
+			const pl = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+			return `${pl(tp, 'true positive')}, ${pl(fp, 'false positive')}, ${pl(fn, 'false negative')}, ${pl(tn, 'true negative')}. Precision (when it says player, how often is it right?) = ${ratio(tp, fp)}. Recall (of all player draws, how many did it find?) = ${ratio(tp, fn)}.`;
 		},
 	},
 
@@ -241,18 +286,31 @@ export const BOARDS = {
 };
 
 // ------------------------------------------------------------------ helpers
-const el = (tag, className, text) => {
-	const node = document.createElement(tag);
-	if (className) node.className = className;
-	if (text !== undefined) node.textContent = text;
-	return node;
-};
+// A note is either a plain sentence or the explanation of one chip where it now sits.
+type SortNote = { readonly plain: string } | { readonly item: string; readonly landed?: boolean; readonly opening?: boolean };
 
-function mountBoard(root, board) {
-	const zoneById = Object.fromEntries(board.zones.map(z => [z.id, z]));
-	const itemById = Object.fromEntries(board.items.map(i => [i.id, i]));
-	const home = () => Object.fromEntries(board.items.map(i => [i.id, i.home]));
-	const state = { placed: home(), picked: null, note: null, dragging: null };
+interface SortState {
+	placed: Record<string, string>;
+	picked: string | null;
+	note: SortNote | null;
+	dragging: string | null;
+}
+
+interface ZoneElements {
+	readonly section: HTMLElement;
+	readonly bin: HTMLDivElement;
+	readonly count: HTMLSpanElement;
+	readonly put: HTMLButtonElement;
+	readonly index: number;
+}
+
+function mountBoard(root: HTMLElement, board: SortBoard): void {
+	const zoneById: Record<string, ZoneSpec> = Object.fromEntries(board.zones.map(z => [z.id, z]));
+	const itemById: Record<string, ItemSpec> = Object.fromEntries(board.items.map(i => [i.id, i]));
+	const zoneOf = (id: string): ZoneSpec => required(zoneById[id], `the zone ${id}`);
+	const itemOf = (id: string): ItemSpec => required(itemById[id], `the item ${id}`);
+	const home = (): Record<string, string> => Object.fromEntries(board.items.map(i => [i.id, i.home]));
+	const state: SortState = { placed: home(), picked: null, note: null, dragging: null };
 	const venn = board.mode === 'venn';
 
 	root.replaceChildren();
@@ -278,8 +336,9 @@ function mountBoard(root, board) {
 	body.append(invite, help);
 
 	// ---- zones
-	const zoneEls = {};
-	function makeZone(zone, index) {
+	const zoneEls: Record<string, ZoneElements> = {};
+	const zoneElOf = (id: string): ZoneElements => required(zoneEls[id], `the zone element ${id}`);
+	function makeZone(zone: ZoneSpec, index: number): HTMLElement {
 		const section = el('section', 'sort-board__zone');
 		section.dataset.zone = zone.id;
 		const headRow = el('div', 'sort-board__zone-head');
@@ -300,16 +359,17 @@ function mountBoard(root, board) {
 			place(state.picked, zone.id);
 		});
 		section.addEventListener('click', event => {
-			if (event.target.closest('.sort-board__chip, .sort-board__put')) return;
+			const target = event.target;
+			if (target instanceof Element && target.closest('.sort-board__chip, .sort-board__put')) return;
 			if (state.picked) place(state.picked, zone.id);
 		});
 		section.addEventListener('dragover', event => { if (state.dragging) { event.preventDefault(); section.classList.add('is-over'); } });
-		section.addEventListener('dragleave', event => { if (!section.contains(event.relatedTarget)) section.classList.remove('is-over'); });
+		section.addEventListener('dragleave', event => { const related = event.relatedTarget; if (!(related instanceof Node && section.contains(related))) section.classList.remove('is-over'); });
 		section.addEventListener('drop', event => {
 			event.preventDefault();
 			section.classList.remove('is-over');
-			const id = state.dragging || event.dataTransfer.getData('text/plain');
-			if (itemById[id]) place(id, zone.id);
+			const id = state.dragging || event.dataTransfer?.getData('text/plain');
+			if (id && itemById[id]) place(id, zone.id);
 		});
 		return section;
 	}
@@ -325,7 +385,8 @@ function mountBoard(root, board) {
 		grid.append(...board.zones.slice(0, 3).map(makeZone));
 		wrap.append(a, b, grid);
 		stage.append(legend, wrap);
-		if (board.zones[3]) { const out = makeZone(board.zones[3], 3); out.classList.add('sort-board__zone--outside'); stage.append(out); }
+		const outsideZone = board.zones[3];
+		if (outsideZone) { const out = makeZone(outsideZone, 3); out.classList.add('sort-board__zone--outside'); stage.append(out); }
 	} else {
 		stage.classList.add('sort-board__zones');
 		stage.append(...board.zones.map(makeZone));
@@ -338,7 +399,7 @@ function mountBoard(root, board) {
 	explain.setAttribute('role', 'status');
 	explain.setAttribute('aria-live', 'polite');
 	const actions = el('div', 'sort-board__actions');
-	const mkButton = (label, hint) => { const b = el('button', 'concept-lab__example', label); b.type = 'button'; if (hint) b.title = hint; return b; };
+	const mkButton = (label: string, hint?: string) => { const b = el('button', 'concept-lab__example', label); b.type = 'button'; if (hint) b.title = hint; return b; };
 	const mixBtn = mkButton('Mix them up', 'Scatter every chip, then see what each placement would mean');
 	const showBtn = mkButton('Show me', 'Put everything where the lesson puts it and list the reasons');
 	const resetBtn = mkButton('Reset', 'Back to the lesson’s sorting');
@@ -349,14 +410,15 @@ function mountBoard(root, board) {
 	const list = el('ul');
 	for (const item of board.items) {
 		const li = el('li');
-		li.append(el('strong', '', item.label), document.createTextNode(` → ${zoneById[item.home].name}. ${item.why[item.home]}`));
+		li.append(el('strong', '', item.label), document.createTextNode(` → ${zoneOf(item.home).name}. ${item.why[item.home]}`));
 		list.append(li);
 	}
 	why.append(list);
 	body.append(summary, explain, actions, why);
 
 	// ---- chips
-	const chipEls = {};
+	const chipEls: Record<string, HTMLButtonElement> = {};
+	const chipOf = (id: string): HTMLButtonElement => required(chipEls[id], `the chip ${id}`);
 	for (const item of board.items) {
 		const chip = el('button', 'sort-board__chip', item.label);
 		chip.type = 'button';
@@ -371,13 +433,15 @@ function mountBoard(root, board) {
 		});
 		chip.addEventListener('keydown', event => {
 			const n = Number(event.key);
-			if (n >= 1 && n <= board.zones.length) { event.preventDefault(); place(item.id, board.zones[n - 1].id, true); }
+			if (n >= 1 && n <= board.zones.length) { event.preventDefault(); place(item.id, required(board.zones[n - 1], `zone ${n}`).id, true); }
 			else if (event.key === 'Escape' && state.picked) { state.picked = null; render(); }
 		});
 		chip.addEventListener('dragstart', event => {
 			state.dragging = item.id;
-			event.dataTransfer.setData('text/plain', item.id);
-			event.dataTransfer.effectAllowed = 'move';
+			if (event.dataTransfer) {
+				event.dataTransfer.setData('text/plain', item.id);
+				event.dataTransfer.effectAllowed = 'move';
+			}
 			chip.classList.add('is-dragging');
 		});
 		chip.addEventListener('dragend', () => {
@@ -389,65 +453,66 @@ function mountBoard(root, board) {
 	}
 
 	// ---- behaviour
-	function place(id, zoneId, keepFocus) {
+	function place(id: string, zoneId: string, keepFocus?: boolean): void {
 		state.placed[id] = zoneId;
 		state.picked = null;
 		setNote({ item: id, landed: true });
-		render(keepFocus ? chipEls[id] : null);
-		if (keepFocus) chipEls[id].focus();
+		render(keepFocus ? chipOf(id) : null);
+		if (keepFocus) chipOf(id).focus();
 	}
 
-	function setNote(note) { state.note = note; }
+	function setNote(note: SortNote | null): void { state.note = note; }
 
-	function renderNote() {
+	function renderNote(): void {
 		explain.replaceChildren();
 		explain.classList.remove('is-different');
 		const note = state.note;
 		if (!note) return;
-		if (note.plain) { explain.append(el('p', '', note.plain)); return; }
-		const item = itemById[note.item];
-		const zoneId = state.placed[item.id];
-		const zone = zoneById[zoneId];
+		if ('plain' in note) { explain.append(el('p', '', note.plain)); return; }
+		const item = itemOf(note.item);
+		const zoneId = required(state.placed[item.id], `the placement of ${item.id}`);
+		const zone = zoneOf(zoneId);
 		const lead = el('p', 'sort-board__lead');
 		lead.append(el('strong', '', item.label), document.createTextNode(` → ${zone.name}`));
 		explain.append(lead);
 		if (zoneId === item.home) {
-			explain.append(el('p', '', (note.opening ? 'Here is a worked example. ' : '') + item.why[zoneId]));
+			explain.append(el('p', '', (note.opening ? 'Here is a worked example. ' : '') + required(item.why[zoneId], `the lesson's reason for ${item.id}`)));
 		} else {
 			explain.classList.add('is-different');
 			const tag = el('span', 'sort-board__tag', 'Different from the lesson');
 			const here = item.why[zoneId] || `Here it would be read as “${zone.name}”${zone.sub ? ' (' + zone.sub + ')' : ''}.`;
 			const p = el('p');
 			p.append(tag, document.createTextNode(' ' + here + ' '));
-			explain.append(p, el('p', '', `The lesson puts it under “${zoneById[item.home].name}”: ${item.why[item.home]}`));
+			explain.append(p, el('p', '', `The lesson puts it under “${zoneOf(item.home).name}”: ${item.why[item.home]}`));
 		}
 	}
 
-	function render(focusAfter) {
-		const active = focusAfter || (document.activeElement && root.contains(document.activeElement) && document.activeElement.classList.contains('sort-board__chip') ? document.activeElement : null);
-		const counts = Object.fromEntries(board.zones.map(z => [z.id, 0]));
+	function render(focusAfter?: HTMLElement | null): void {
+		const focused = document.activeElement;
+		const active = focusAfter || (focused instanceof HTMLElement && root.contains(focused) && focused.classList.contains('sort-board__chip') ? focused : null);
+		const counts: Record<string, number> = Object.fromEntries(board.zones.map(z => [z.id, 0]));
 		let off = 0;
 		for (const item of board.items) {
-			const zoneId = state.placed[item.id];
-			counts[zoneId]++;
-			const chip = chipEls[item.id];
+			const zoneId = required(state.placed[item.id], `the placement of ${item.id}`);
+			counts[zoneId] = (counts[zoneId] ?? 0) + 1;
+			const chip = chipOf(item.id);
 			const different = zoneId !== item.home;
 			if (different) off++;
-			zoneEls[zoneId].bin.append(chip);
+			zoneElOf(zoneId).bin.append(chip);
 			chip.classList.toggle('is-picked', state.picked === item.id);
 			chip.classList.toggle('is-off', different);
 			chip.setAttribute('aria-pressed', String(state.picked === item.id));
-			chip.setAttribute('aria-label', `${item.label}, in ${zoneById[zoneId].name}${different ? ', different from the lesson' : ''}`);
+			chip.setAttribute('aria-label', `${item.label}, in ${zoneOf(zoneId).name}${different ? ', different from the lesson' : ''}`);
 		}
 		for (const zone of board.zones) {
-			const z = zoneEls[zone.id];
+			const z = zoneElOf(zone.id);
 			z.count.textContent = `${counts[zone.id]} ${counts[zone.id] === 1 ? 'chip' : 'chips'}`;
 			z.section.classList.toggle('is-target', !!state.picked);
 			z.section.setAttribute('role', 'group');
 			z.section.setAttribute('aria-label', `${zone.name}, ${counts[zone.id]} ${counts[zone.id] === 1 ? 'chip' : 'chips'}`);
 			z.put.setAttribute('aria-disabled', state.picked ? 'false' : 'true');
-			z.put.textContent = state.picked ? `Put “${itemById[state.picked].label.slice(0, 24)}${itemById[state.picked].label.length > 24 ? '…' : ''}” here` : 'Put here';
-			z.put.setAttribute('aria-label', state.picked ? `Put ${itemById[state.picked].label} in ${zone.name}` : `Put the picked chip in ${zone.name}`);
+			z.put.textContent = state.picked ? `Put “${itemOf(state.picked).label.slice(0, 24)}${itemOf(state.picked).label.length > 24 ? '…' : ''}” here` : 'Put here';
+			z.put.setAttribute('aria-label', state.picked ? `Put ${itemOf(state.picked).label} in ${zone.name}` : `Put the picked chip in ${zone.name}`);
 		}
 		summary.textContent = board.summary(counts) + (off ? ` (${off} ${off === 1 ? 'chip differs' : 'chips differ'} from the lesson’s version.)` : '');
 		renderNote();
@@ -458,7 +523,7 @@ function mountBoard(root, board) {
 		const ids = board.zones.map(z => z.id);
 		let tries = 0;
 		do {
-			for (const item of board.items) state.placed[item.id] = ids[Math.floor(Math.random() * ids.length)];
+			for (const item of board.items) state.placed[item.id] = required(ids[Math.floor(Math.random() * ids.length)], 'a zone');
 			tries++;
 		} while (tries < 30 && board.items.filter(i => state.placed[i.id] !== i.home).length < Math.ceil(board.items.length / 2));
 		state.picked = null;
@@ -480,10 +545,11 @@ function mountBoard(root, board) {
 	render();
 }
 
-export function mountSortBoards() {
-	for (const root of document.querySelectorAll('[data-sort-board]')) {
+export function mountSortBoards(): void {
+	for (const root of document.querySelectorAll<HTMLElement>('[data-sort-board]')) {
 		if (root.dataset.mounted) continue;
-		const board = BOARDS[root.dataset.sortBoard];
+		const boardId = root.dataset.sortBoard;
+		const board = boardId === undefined ? undefined : BOARDS[boardId];
 		if (!board) continue;
 		root.dataset.mounted = 'true';
 		mountBoard(root, board);

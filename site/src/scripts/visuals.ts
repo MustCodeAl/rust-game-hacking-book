@@ -10,18 +10,101 @@
 // This module must not touch `document` at load time: Visual.astro imports it on
 // the server to print each entry's caption for readers without JavaScript.
 
-const el = (tag, className, text) => {
-	const node = document.createElement(tag);
-	if (className) node.className = className;
-	if (text !== undefined) node.textContent = text;
-	return node;
-};
-const fmt = n => Math.round(n).toLocaleString('en-US');
-const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+import { el, required, type SliderControl } from './widget-dom.ts';
+
+/** The fill of a drawn box: green, amber, neutral or faded. */
+type Tone = 'ok' | 'warn' | 'n' | 'dim';
+
+interface VisualBase {
+	/** Printed for readers without JavaScript. */
+	readonly caption: string;
+}
+
+export interface ChoiceOption {
+	readonly label: string;
+	/** 'diff' marks a choice that differs from the lesson's version. */
+	readonly tone: 'ok' | 'diff';
+	readonly alt: string;
+	readonly says: string;
+}
+
+/** Radio options redraw an inline SVG (choice-driven diagrams). */
+export interface ChoiceVisual extends VisualBase {
+	readonly type: 'choice';
+	readonly width: number;
+	readonly height: number;
+	readonly title: string;
+	readonly intro: string;
+	readonly invite: string;
+	readonly question: string;
+	readonly draw: (index: number) => string;
+	readonly options: readonly ChoiceOption[];
+}
+
+/** What one bar row shows for the current slider value, mode and replay progress. */
+export interface RowReading {
+	readonly bar: number;
+	readonly tone?: 'warn' | '';
+	readonly text: string;
+}
+
+export interface CostRow {
+	readonly label: string;
+	/** A heading printed above this row. */
+	readonly group?: string;
+	/** True when the budget marker is drawn on this row. */
+	readonly marker?: boolean;
+	readonly scale?: (mode: number) => number;
+	readonly at: (value: number, mode: number, progress: number) => RowReading;
+}
+
+export interface CostMarker {
+	readonly at: number;
+	readonly label: string;
+}
+
+/** One result card: label, value and an optional note. */
+export type CostCard = readonly [label: string, value: string, note?: string];
+
+/** A slider grows DOM bars and a live steps count (work grows). */
+export interface CostVisual extends VisualBase {
+	readonly type: 'cost';
+	readonly title: string;
+	readonly intro: string;
+	readonly invite: string;
+	readonly slider: {
+		readonly label: string;
+		readonly values: readonly number[];
+		readonly start: number;
+		readonly format: (value: number) => string;
+	};
+	readonly modes?: { readonly legend: string; readonly options: readonly { readonly label: string }[] };
+	readonly scale: (mode: number) => number;
+	readonly marker?: (mode: number) => CostMarker;
+	readonly rows: readonly CostRow[];
+	/** One class suffix per cell ('on', 'warn' or '' for a plain cell). */
+	readonly cells?: (value: number, mode: number, progress: number) => readonly string[];
+	readonly cards: (value: number, mode: number, progress: number) => readonly CostCard[];
+	readonly takeaway: (value: number, mode: number) => { readonly text: string; readonly tone?: 'diff' };
+	readonly showMe: { readonly label: string; readonly index: number };
+	readonly run?: boolean;
+}
+
+/** A hand-written slider simulation (figure morphs). It has no title field of its own. */
+export interface CustomVisual extends VisualBase {
+	readonly type: 'custom';
+	readonly title?: undefined;
+	readonly mount: (root: HTMLElement) => void;
+}
+
+export type VisualEntry = ChoiceVisual | CostVisual | CustomVisual;
+
+const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
+const esc = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const reduceMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 let uid = 0;
 
-function header(root, eyebrow, title, description, invite) {
+function header(root: HTMLElement, eyebrow: string, title: string, description: string, invite?: string): void {
 	root.replaceChildren();
 	const copy = el('div', 'concept-lab__header-copy');
 	copy.append(el('span', 'concept-lab__eyebrow', eyebrow), el('h3', '', title), el('p', 'concept-lab__description', description));
@@ -31,7 +114,7 @@ function header(root, eyebrow, title, description, invite) {
 	if (invite) root.append(el('p', 'visual-lab__invite', invite));
 }
 
-function slider(id, label, min, max, step, value, show) {
+function slider(id: string, label: string, min: number, max: number, step: number, value: number, show: (value: number) => string): SliderControl {
 	const wrap = el('label', 'visual-lab__slider');
 	wrap.htmlFor = id;
 	const out = el('output');
@@ -44,7 +127,7 @@ function slider(id, label, min, max, step, value, show) {
 	return { wrap, input, update };
 }
 
-function button(label, onClick) {
+function button(label: string, onClick: () => void): HTMLButtonElement {
 	const b = el('button', 'concept-lab__example', label);
 	b.type = 'button';
 	b.addEventListener('click', onClick);
@@ -52,7 +135,7 @@ function button(label, onClick) {
 }
 
 // Radio group. Option 0 is always the lesson's version and carries a tick.
-function radios(legend, options, selected, onPick) {
+function radios(legend: string, options: readonly { readonly label: string }[], selected: number, onPick: (index: number) => void): { set: HTMLFieldSetElement; select(index: number): void } {
 	const name = `vz-${++uid}`;
 	const set = el('fieldset', 'visual-lab__choices');
 	set.append(el('legend', '', legend));
@@ -68,35 +151,35 @@ function radios(legend, options, selected, onPick) {
 		set.append(label);
 		return input;
 	});
-	return { set, select(index) { inputs[index].checked = true; } };
+	return { set, select(index: number) { required(inputs[index], `radio option ${index}`).checked = true; } };
 }
 
 // ------------------------------------------------------------ SVG building
 const S = {
-	svg(w, h, inner, label) {
+	svg(w: number, h: number, inner: string, label: string): string {
 		return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}" xmlns="http://www.w3.org/2000/svg"><defs><marker id="v-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" class="v-mk"/></marker></defs>${inner}</svg>`;
 	},
-	t(x, y, s, cls = '', anchor = 'start') {
+	t(x: number, y: number, s: string, cls = '', anchor = 'start'): string {
 		return `<text x="${x}" y="${y}" text-anchor="${anchor}" class="v-t ${cls}">${esc(s)}</text>`;
 	},
 	// A centred box; with several lines the first is bold and the rest are small.
-	box(x, y, w, h, tone, lines, extra = '') {
+	box(x: number, y: number, w: number, h: number, tone: Tone, lines: readonly string[], extra = ''): string {
 		const n = lines.length, lh = 15, y0 = y + h / 2 - (n - 1) * lh / 2 + 4;
 		const text = lines.map((s, k) => S.t(x + w / 2, y0 + k * lh, s, n > 1 ? (k === 0 ? 'v-b' : 'v-s v-sm') : '', 'middle')).join('');
 		return `<g class="v-bx ${extra}"><rect class="v-box v-${tone}" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/>${text}</g>`;
 	},
 	// A left-aligned box: bold title, small subtitle.
-	boxL(x, y, w, h, tone, title, sub, extra = '') {
+	boxL(x: number, y: number, w: number, h: number, tone: Tone, title: string, sub?: string, extra = ''): string {
 		const two = sub !== undefined && sub !== '';
 		return `<g class="v-bx ${extra}"><rect class="v-box v-${tone}" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/>${S.t(x + 12, y + (two ? h / 2 - 3 : h / 2 + 4), title, 'v-b')}${two ? S.t(x + 12, y + h / 2 + 13, sub, 'v-s v-sm') : ''}</g>`;
 	},
-	arrow(x1, y1, x2, y2, cls = '') {
+	arrow(x1: number, y1: number, x2: number, y2: number, cls = ''): string {
 		return `<path class="v-arrow ${cls}" d="M${x1} ${y1}L${x2} ${y2}"/>`;
 	},
 };
 
 // ------------------------------------------------------------- choice engine
-function choiceVisual(root, cfg) {
+function choiceVisual(root: HTMLElement, cfg: ChoiceVisual): void {
 	header(root, 'Explore it', cfg.title, cfg.intro, cfg.invite);
 	let current = 0;
 	const group = radios(cfg.question, cfg.options, 0, index => show(index));
@@ -109,9 +192,9 @@ function choiceVisual(root, cfg) {
 		button('Show me the next choice', () => { const next = (current + 1) % cfg.options.length; group.select(next); show(next); }),
 	);
 	root.append(group.set, figure, says, actions);
-	function show(index) {
+	function show(index: number): void {
 		current = index;
-		const option = cfg.options[index];
+		const option = required(cfg.options[index], `choice option ${index}`);
 		figure.innerHTML = S.svg(cfg.width, cfg.height, cfg.draw(index), option.alt);
 		says.textContent = option.says;
 		says.classList.toggle('visual-lab__explain--diff', option.tone === 'diff');
@@ -122,11 +205,11 @@ function choiceVisual(root, cfg) {
 // ----------------------------------------------------------------- cost engine
 // Bars grow with the slider; "Run it" replays the work from zero. Reduced
 // motion jumps straight to the finished picture.
-function costVisual(root, cfg) {
+function costVisual(root: HTMLElement, cfg: CostVisual): void {
 	header(root, 'Explore it', cfg.title, cfg.intro, cfg.invite);
 	const id = ++uid;
 	const values = cfg.slider.values;
-	const sl = slider(`vz-${id}-n`, cfg.slider.label, 0, values.length - 1, 1, cfg.slider.start, i => cfg.slider.format(values[i]));
+	const sl = slider(`vz-${id}-n`, cfg.slider.label, 0, values.length - 1, 1, cfg.slider.start, i => cfg.slider.format(required(values[i], `slider value ${i}`)));
 	let mode = 0, progress = 1, frame = 0;
 	const controls = el('div', 'visual-lab__controls');
 	controls.append(sl.wrap);
@@ -147,15 +230,16 @@ function costVisual(root, cfg) {
 		return { row, fill, marker, readout };
 	});
 	const legend = el('p', 'visual-lab__legend');
-	const cells = cfg.cells ? el('div', 'visual-lab__cells') : null;
+	const cellsFor = cfg.cells;
+	const cells = cellsFor ? el('div', 'visual-lab__cells') : null;
 	if (cells) cells.setAttribute('aria-hidden', 'true');
 	const cards = el('div', 'visual-lab__cards');
 	const explain = el('p', 'visual-lab__explain');
 	explain.setAttribute('aria-live', 'polite');
 	const actions = el('div', 'visual-lab__actions');
 	actions.append(
-		button('Reset', () => { stop(); sl.input.value = cfg.slider.start; sl.update(); mode = 0; modes?.select(0); render(); }),
-		button(cfg.showMe.label, () => { stop(); sl.input.value = cfg.showMe.index; sl.update(); render(); }),
+		button('Reset', () => { stop(); sl.input.value = String(cfg.slider.start); sl.update(); mode = 0; modes?.select(0); render(); }),
+		button(cfg.showMe.label, () => { stop(); sl.input.value = String(cfg.showMe.index); sl.update(); render(); }),
 	);
 	if (cfg.run) actions.append(button('Run it', play));
 	root.append(controls);
@@ -164,21 +248,21 @@ function costVisual(root, cfg) {
 	if (cells) root.append(cells);
 	root.append(cards, explain, actions);
 	sl.input.addEventListener('input', () => { stop(); render(); });
-	function stop() { cancelAnimationFrame(frame); progress = 1; }
-	function play() {
+	function stop(): void { cancelAnimationFrame(frame); progress = 1; }
+	function play(): void {
 		stop();
 		if (reduceMotion()) { render(); return; }
 		const start = performance.now();
 		progress = 0;
-		const tick = now => {
+		const tick = (now: number): void => {
 			progress = Math.min(1, (now - start) / 1500);
 			render();
 			if (progress < 1) frame = requestAnimationFrame(tick);
 		};
 		frame = requestAnimationFrame(tick);
 	}
-	function render() {
-		const v = values[Number(sl.input.value)];
+	function render(): void {
+		const v = required(values[Number(sl.input.value)], 'the slider value');
 		for (const { row, fill, marker, readout } of rows) {
 			const r = row.at(v, mode, progress);
 			const scale = (row.scale || cfg.scale)(mode);
@@ -192,8 +276,8 @@ function costVisual(root, cfg) {
 		}
 		legend.textContent = cfg.marker ? cfg.marker(mode).label : '';
 		legend.hidden = !cfg.marker;
-		if (cells) {
-			const list = cfg.cells(v, mode, progress);
+		if (cells && cellsFor) {
+			const list = cellsFor(v, mode, progress);
 			cells.replaceChildren(...list.map(kind => el('span', `visual-lab__cell${kind ? ` visual-lab__cell--${kind}` : ''}`)));
 		}
 		cards.replaceChildren(...cfg.cards(v, mode, progress).map(([label, value, note]) => {
@@ -210,21 +294,31 @@ function costVisual(root, cfg) {
 }
 
 const KiB = 1024, MiB = KiB * 1024, GiB = MiB * 1024;
-const fmtBytes = n => {
-	const unit = n >= GiB ? [GiB, 'GiB'] : n >= MiB ? [MiB, 'MiB'] : [KiB, 'KiB'];
+const fmtBytes = (n: number): string => {
+	const unit: readonly [number, string] = n >= GiB ? [GiB, 'GiB'] : n >= MiB ? [MiB, 'MiB'] : [KiB, 'KiB'];
 	const v = n / unit[0];
 	return `${Number.isInteger(v) ? v : v.toFixed(1)} ${unit[1]}`;
 };
 
 // ------------------------------------------------------------ choice diagrams
-const HASH_SOURCE = [
+interface HashSourceRow {
+	readonly rt: Tone;
+	readonly rl: readonly string[];
+	readonly ct: Tone;
+	readonly cl: readonly string[];
+	readonly vt: Tone;
+	readonly v: readonly string[];
+	readonly page: boolean;
+}
+
+const HASH_SOURCE: readonly HashSourceRow[] = [
 	{ rt: 'ok', rl: ['Hash recorded earlier', 'from a copy you trust'], ct: 'ok', cl: ['Recorded digest', 'e3b0 c442 …'], vt: 'ok', v: ['Digests differ: 7ac1… ≠ e3b0…', 'You learn these are not the recorded bytes.'], page: false },
 	{ rt: 'warn', rl: ['mod.zip.sha256', 'from the same page'], ct: 'warn', cl: ['The page’s digest', '7ac1 f90d …'], vt: 'warn', v: ['Digests agree: 7ac1… = 7ac1…', 'Success, but the attacker wrote both files.'], page: true },
 	{ rt: 'ok', rl: ['Publisher’s signature', 'inside a signed release'], ct: 'ok', cl: ['WinVerifyTrust', 'checks the signature'], vt: 'ok', v: ['Status is not 0: no valid signature', 'Windows says the publisher did not approve.'], page: false },
 ];
 
-function drawHashSource(i) {
-	const o = HASH_SOURCE[i];
+function drawHashSource(i: number): string {
+	const o = required(HASH_SOURCE[i], `hash source ${i}`);
 	return S.box(70, 8, 200, 42, 'warn', ['Download page', 'changed by an attacker'])
 		+ S.arrow(110, 50, 86, 74) + (o.page ? S.arrow(230, 50, 254, 74) : '')
 		+ S.box(6, 76, 160, 46, 'n', ['mod.zip', 'the attacker’s bytes'])
@@ -236,22 +330,22 @@ function drawHashSource(i) {
 		+ S.box(6, 220, 328, 48, o.vt, o.v);
 }
 
-const HANDLE_ROWS = [
+const HANDLE_ROWS: readonly (readonly (readonly [call: string, slot: readonly string[], tone: Tone])[])[] = [
 	[['1  OpenProcess → 0x12C', ['process', 'you own it'], 'n'], ['2  CloseHandle(0x12C)', ['free', 'released'], 'n'], ['3  CreateFileW → 0x12C', ['log file', 'a new owner'], 'n'], ['4  no second close', ['log file', 'still open'], 'ok']],
 	[['1  OpenProcess → 0x12C', ['process', 'you own it'], 'n'], ['2  CloseHandle forgotten', ['process', 'still held'], 'warn'], ['3  CreateFileW → 0x130', ['process', 'still held'], 'warn'], ['4  program keeps running', ['process', 'never released'], 'warn']],
 	[['1  OpenProcess → 0x12C', ['process', 'you own it'], 'n'], ['2  CloseHandle(0x12C)', ['free', 'released'], 'n'], ['3  CreateFileW → 0x12C', ['log file', 'a new owner'], 'n'], ['4  CloseHandle(0x12C)', ['log file', 'closed by mistake'], 'warn']],
 ];
 
-function drawHandleClose(i) {
+function drawHandleClose(i: number): string {
 	let out = S.t(8, 14, 'What your code does', 'v-s v-sm') + S.t(188, 14, 'Slot 0x12C refers to…', 'v-s v-sm');
-	HANDLE_ROWS[i].forEach(([call, slot, tone], k) => {
+	required(HANDLE_ROWS[i], `handle rows ${i}`).forEach(([call, slot, tone], k) => {
 		const y = 24 + k * 56;
 		out += S.t(8, y + 26, call, 'v-m v-sm') + S.arrow(170, y + 22, 184, y + 22) + S.box(188, y, 144, 44, tone, slot);
 	});
 	return out;
 }
 
-const LAYERS = [
+const LAYERS: readonly (readonly [title: string, sub: string])[] = [
 	['Your tool', ''],
 	['Win32: VirtualQueryEx', 'the documented contract'],
 	['ntdll: NtQueryVirtualMemory', 'native stub, not a stable contract'],
@@ -261,67 +355,77 @@ const LAYERS = [
 const LAYER_PATHS = [[0, 1, 2, 3, 4], [0, 2, 3, 4], [0, 3, 4]];
 const LAYER_CALL = ['calls VirtualQueryEx', 'calls NtQueryVirtualMemory', 'uses a number copied from one build'];
 
-function drawCallLayer(i) {
+function drawCallLayer(i: number): string {
 	const ys = [12, 68, 124, 180, 258], hs = [42, 44, 44, 44, 44];
-	const used = LAYER_PATHS[i];
-	const tone = i === 0 ? 'ok' : 'warn';
+	const top = (k: number): number => required(ys[k], `layer ${k} position`);
+	const height = (k: number): number => required(hs[k], `layer ${k} height`);
+	const used = required(LAYER_PATHS[i], `layer path ${i}`);
+	const tone: Tone = i === 0 ? 'ok' : 'warn';
 	let out = `<rect class="v-zone" x="4" y="236" width="332" height="74" rx="8"/>` + S.t(326, 250, 'kernel mode (ring 0)', 'v-s v-sm', 'end');
 	LAYERS.forEach(([title, sub], k) => {
 		const on = used.includes(k);
 		const entry = k === used[1];
-		const boxTone = k === 0 ? 'n' : on ? (entry ? tone : 'n') : 'dim';
-		out += S.boxL(50, ys[k], 284, hs[k], boxTone, title, k === 0 ? LAYER_CALL[i] : sub, on ? '' : 'v-skip');
-		out += `<circle class="v-node ${on ? 'v-node--on' : ''}" cx="24" cy="${ys[k] + hs[k] / 2}" r="6"/>` + S.arrow(30, ys[k] + hs[k] / 2, 48, ys[k] + hs[k] / 2, on ? '' : 'v-faint');
+		const boxTone: Tone = k === 0 ? 'n' : on ? (entry ? tone : 'n') : 'dim';
+		out += S.boxL(50, top(k), 284, height(k), boxTone, title, k === 0 ? LAYER_CALL[i] : sub, on ? '' : 'v-skip');
+		out += `<circle class="v-node ${on ? 'v-node--on' : ''}" cx="24" cy="${top(k) + height(k) / 2}" r="6"/>` + S.arrow(30, top(k) + height(k) / 2, 48, top(k) + height(k) / 2, on ? '' : 'v-faint');
 	});
-	used.forEach((k, n) => { if (n) { const p = used[n - 1]; out += S.arrow(24, ys[p] + hs[p] / 2 + 7, 24, ys[k] + hs[k] / 2 - 8); } });
+	used.forEach((k, n) => { if (n) { const p = required(used[n - 1], `layer path step ${n - 1}`); out += S.arrow(24, top(p) + height(p) / 2 + 7, 24, top(k) + height(k) / 2 - 8); } });
 	out += S.t(326, 25, 'user mode (ring 3)', 'v-s v-sm', 'end');
 	return out;
 }
 
-function drawFaultRing(i) {
+function drawFaultRing(i: number): string {
 	const proc = ['Your game', 'Browser', 'Your tool'];
 	const faulty = i === 0 ? 0 : -1;
 	let out = '';
 	proc.forEach((name, k) => {
 		const x = 6 + k * 112;
-		const state = i === 1 ? ['stopped', 'dim'] : k === faulty ? ['bad pointer', 'warn'] : ['keeps running', 'ok'];
+		const state: readonly [string, Tone] = i === 1 ? ['stopped', 'dim'] : k === faulty ? ['bad pointer', 'warn'] : ['keeps running', 'ok'];
 		out += S.box(x, 10, 104, 46, state[1], [name, state[0]]);
 		out += S.arrow(x + 52, 56, x + 52, 86, i === 1 ? 'v-faint' : '');
 	});
 	out += `<rect class="v-zone" x="4" y="88" width="332" height="112" rx="8"/>` + S.t(14, 106, 'Windows kernel (ring 0)', 'v-b v-sm');
-	const kernel = i === 0 ? ['ok', ['Kernel code', 'handles the fault']] : i === 1 ? ['warn', ['Kernel code', 'half-updated data']] : ['ok', ['Kernel code', 'expected the fault']];
-	const driver = i === 1 ? ['warn', ['A driver', 'bad pointer']] : ['n', ['A driver', 'not involved']];
+	const kernel: readonly [Tone, readonly string[]] = i === 0 ? ['ok', ['Kernel code', 'handles the fault']] : i === 1 ? ['warn', ['Kernel code', 'half-updated data']] : ['ok', ['Kernel code', 'expected the fault']];
+	const driver: readonly [Tone, readonly string[]] = i === 1 ? ['warn', ['A driver', 'bad pointer']] : ['n', ['A driver', 'not involved']];
 	out += S.box(14, 118, 150, 70, kernel[0], kernel[1]) + S.box(176, 118, 150, 70, driver[0], driver[1]);
-	const foot = [
+	const footings: readonly (readonly [Tone, readonly string[]])[] = [
 		['ok', ['Access violation for that one process', 'The rest of the machine keeps running']],
 		['warn', ['Bug check: stop code, crash dump, restart', 'Windows stops on purpose']],
 		['ok', ['The fault is caught; the copy returns an error', 'e.g. the copy behind ReadProcessMemory']],
-	][i];
+	];
+	const foot = required(footings[i], `fault footing ${i}`);
 	out += S.arrow(170, 200, 170, 214) + S.box(6, 216, 328, 50, foot[0], foot[1]);
 	return out;
 }
 
 const DRIVER_CHECKS = ['Publisher and signature', 'Hash and version vs baseline', 'Vulnerable-driver block policy', 'Which installer brought it'];
-const DRIVER_CASES = [
+interface DriverCase {
+	readonly r: readonly (readonly [string, Tone])[];
+	readonly v: readonly [Tone, readonly string[]];
+}
+
+const DRIVER_CASES: readonly DriverCase[] = [
 	{ r: [['known, valid', 'ok'], ['matches', 'ok'], ['not on the list', 'ok'], ['approved update', 'ok']], v: ['ok', ['An expected change: note it in the baseline', 'A baseline keeps ordinary changes quiet.']] },
 	{ r: [['known, valid', 'ok'], ['not in baseline', 'warn'], ['not on the list', 'ok'], ['ask who installed it', 'warn']], v: ['warn', ['New is not the same as malicious', 'It deserves a reason and a trusted origin.']] },
 	{ r: [['known, valid', 'ok'], ['not in baseline', 'warn'], ['on the block list', 'warn'], ['find the installer', 'warn']], v: ['warn', ['Blocked from loading where policy is enforced', 'Investigate in a disposable VM, not your PC.']] },
 	{ r: [['missing or invalid', 'warn'], ['not in baseline', 'warn'], ['not on the list', 'ok'], ['ask who installed it', 'warn']], v: ['warn', ['Do not guess from one filename', 'Confirm file, service, source and owner first.']] },
 ];
 
-function drawDriverBaseline(i) {
-	const c = DRIVER_CASES[i];
+function drawDriverBaseline(i: number): string {
+	const c = required(DRIVER_CASES[i], `driver case ${i}`);
 	let out = '';
 	DRIVER_CHECKS.forEach((name, k) => {
 		const y = 8 + k * 50;
-		out += S.t(8, y + 27, `${k + 1}  ${name}`, 'v-sm') + S.box(196, y, 138, 38, c.r[k][1], [c.r[k][0]], 'v-chip');
+		const [finding, findingTone] = required(c.r[k], `driver check ${k}`);
+		out += S.t(8, y + 27, `${k + 1}  ${name}`, 'v-sm') + S.box(196, y, 138, 38, findingTone, [finding], 'v-chip');
 	});
 	return out + S.box(6, 214, 328, 52, c.v[0], c.v[1]);
 }
 
 // One burst of 16 events (decisions are D): events 3, 7, 12 and 15.
 const BURST = 16, CAPACITY = 8, DECISIONS = [3, 7, 12, 15];
-function queueOutcome(policy) {
+type Policy = 'sample' | 'newest' | 'oldest' | 'block';
+function queueOutcome(policy: Policy): number[] {
 	const all = Array.from({ length: BURST }, (_, k) => k + 1);
 	if (policy === 'newest') return all.slice(0, CAPACITY);
 	if (policy === 'oldest') return all.slice(BURST - CAPACITY);
@@ -330,11 +434,12 @@ function queueOutcome(policy) {
 	const sampled = routine.filter((_, k) => k % 3 === 0);
 	return [...DECISIONS, ...sampled].sort((a, b) => a - b);
 }
-const POLICIES = ['sample', 'newest', 'oldest', 'block'];
+const POLICIES: readonly Policy[] = ['sample', 'newest', 'oldest', 'block'];
 
-function drawQueue(i) {
-	const kept = queueOutcome(POLICIES[i]), blocked = POLICIES[i] === 'block';
-	const cell = (x, y, n, state) => {
+function drawQueue(i: number): string {
+	const policy = required(POLICIES[i], `overflow policy ${i}`);
+	const kept = queueOutcome(policy), blocked = policy === 'block';
+	const cell = (x: number, y: number, n: number, state: 'kept' | 'dropped' | 'waiting') => {
 		const d = DECISIONS.includes(n);
 		const tone = state === 'dropped' ? 'dim' : state === 'waiting' ? 'warn' : d ? 'ok' : 'n';
 		return `<g class="v-bx"><rect class="v-box v-${tone}" x="${x}" y="${y}" width="38" height="30" rx="4"/>${S.t(x + 19, y + 15, d ? `${n} D` : String(n), d ? 'v-b v-sm' : 'v-sm', 'middle')}</g>`;
@@ -350,19 +455,21 @@ function drawQueue(i) {
 	const dropped = blocked ? 0 : BURST - kept.length;
 	out += S.box(6, 152, 160, 40, 'n', [`Dropped: ${dropped}`, blocked ? 'nothing dropped' : 'counted, never hidden'])
 		+ S.box(174, 152, 160, 40, lostDecisions || blocked ? 'warn' : 'ok', blocked ? ['Frame time: stalled', 'the game waits'] : [`Decisions lost: ${lostDecisions} of 4`, lostDecisions ? 'lower confidence' : 'evidence intact']);
-	const verdicts = [
+	const outcomes: readonly (readonly [Tone, readonly string[]])[] = [
 		['ok', ['Kept all 4 decisions + every 3rd routine event', 'Dropped 8 and counted them.']],
 		['warn', ['Kept events 1-8; decisions 12 and 15 were lost', 'Dropped 8 and counted them.']],
 		['warn', ['Kept the latest 9-16; decisions 3 and 7 lost', 'Dropped 8 and counted them.']],
 		['warn', ['The hook waits for room and the game stalls', 'A bounded queue with a policy keeps frames moving.']],
-	][i];
+	];
+	const verdicts = required(outcomes[i], `queue verdict ${i}`);
 	return out + S.box(6, 206, 328, 52, verdicts[0], verdicts[1]);
 }
 
 // ------------------------------------------------------------------ cost data
-const budgetStop = budget => (budget + 1) * 1000;
-const SCRIPT_BUDGETS = [100, 50, 200];
-const scriptRun = (v, budget) => {
+const budgetStop = (budget: number) => (budget + 1) * 1000;
+const SCRIPT_BUDGETS: readonly number[] = [100, 50, 200];
+const budgetOf = (mode: number): number => required(SCRIPT_BUDGETS[mode], `script budget ${mode}`);
+const scriptRun = (v: number, budget: number) => {
 	const wanted = v >= 300 ? Infinity : v * 1000;
 	const stop = budgetStop(budget);
 	const stopped = wanted >= stop;
@@ -371,16 +478,20 @@ const scriptRun = (v, budget) => {
 };
 
 const SIZES = [1 * MiB, 4 * MiB, 16 * MiB, 64 * MiB, 256 * MiB, 1 * GiB, 4 * GiB];
-const BUFFERS = [64 * KiB, 4 * KiB, 1 * MiB];
-const readCalls = (size, buffer) => Math.ceil(size / buffer) + 1;
+const BUFFERS: readonly [number, ...number[]] = [64 * KiB, 4 * KiB, 1 * MiB];
+const bufferOf = (mode: number): number => required(BUFFERS[mode], `buffer size ${mode}`);
+const readCalls = (size: number, buffer: number) => Math.ceil(size / buffer) + 1;
 
 // ----------------------------------------------------------- custom: SHA-256
 // A small synchronous SHA-256 so the digest can update on every keystroke.
-const PRIMES = (() => { const list = []; for (let n = 2; list.length < 64; n++) if (list.every(p => n % p)) list.push(n); return list; })();
-const frac32 = x => Math.floor((x - Math.floor(x)) * 4294967296) >>> 0;
+const PRIMES = (() => { const list: number[] = []; for (let n = 2; list.length < 64; n++) if (list.every(p => n % p)) list.push(n); return list; })();
+const frac32 = (x: number) => Math.floor((x - Math.floor(x)) * 4294967296) >>> 0;
 const K256 = PRIMES.map(p => frac32(Math.cbrt(p)));
 const H256 = PRIMES.slice(0, 8).map(p => frac32(Math.sqrt(p)));
-export function sha256(bytes) {
+// A checked read of one entry of a typed array or list that is always in range here.
+const numberAt = (list: ArrayLike<number>, index: number): number => required(list[index], 'a list entry');
+
+export function sha256(bytes: Uint8Array): string {
 	const H = Uint32Array.from(H256), w = new Uint32Array(64);
 	const length = bytes.length, total = ((length + 9 + 63) >> 6) << 6;
 	const padded = new Uint8Array(total);
@@ -389,28 +500,28 @@ export function sha256(bytes) {
 	const view = new DataView(padded.buffer);
 	view.setUint32(total - 8, Math.floor(length * 8 / 4294967296));
 	view.setUint32(total - 4, (length * 8) >>> 0);
-	const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+	const rotr = (x: number, n: number) => (x >>> n) | (x << (32 - n));
 	for (let offset = 0; offset < total; offset += 64) {
 		for (let i = 0; i < 16; i++) w[i] = view.getUint32(offset + i * 4);
 		for (let i = 16; i < 64; i++) {
-			const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
-			const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
-			w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+			const s0 = rotr(numberAt(w, i - 15), 7) ^ rotr(numberAt(w, i - 15), 18) ^ (numberAt(w, i - 15) >>> 3);
+			const s1 = rotr(numberAt(w, i - 2), 17) ^ rotr(numberAt(w, i - 2), 19) ^ (numberAt(w, i - 2) >>> 10);
+			w[i] = (numberAt(w, i - 16) + s0 + numberAt(w, i - 7) + s1) | 0;
 		}
-		let [a, b, c, d, e, f, g, h] = H;
+		let a = numberAt(H, 0), b = numberAt(H, 1), c = numberAt(H, 2), d = numberAt(H, 3), e = numberAt(H, 4), f = numberAt(H, 5), g = numberAt(H, 6), h = numberAt(H, 7);
 		for (let i = 0; i < 64; i++) {
-			const t1 = (h + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + K256[i] + w[i]) | 0;
+			const t1 = (h + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + numberAt(K256, i) + numberAt(w, i)) | 0;
 			const t2 = ((rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
 			h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
 		}
-		[a, b, c, d, e, f, g, h].forEach((x, i) => { H[i] = (H[i] + x) | 0; });
+		[a, b, c, d, e, f, g, h].forEach((x, i) => { H[i] = (numberAt(H, i) + x) | 0; });
 	}
 	return Array.from(H, x => (x >>> 0).toString(16).padStart(8, '0')).join('');
 }
 
-const popcount = n => { let c = 0; for (; n; n >>>= 1) c += n & 1; return c; };
+const popcount = (n: number) => { let c = 0; for (; n; n >>>= 1) c += n & 1; return c; };
 
-function hashAvalanche(root) {
+function hashAvalanche(root: HTMLElement): void {
 	header(root, 'Explore it', 'Change one tiny thing and watch the whole fingerprint change',
 		'The row of 64 hexadecimal digits is the SHA-256 fingerprint of the bytes above it. Amber digits differ from the original fingerprint.',
 		'Try changing: drag the slider to flip a different bit, or edit one character in the box. The row opens on a one-bit change: 100 becomes 101.');
@@ -436,13 +547,13 @@ function hashAvalanche(root) {
 	const explain = el('p', 'visual-lab__explain');
 	explain.setAttribute('aria-live', 'polite');
 	const actions = el('div', 'visual-lab__actions');
-	const setBit = k => { bits.input.value = k; bits.update(); if (k) input.value = new TextDecoder().decode(current()); else input.value = ORIGINAL; render(); };
+	const setBit = (k: number) => { bits.input.value = String(k); bits.update(); if (k) input.value = new TextDecoder().decode(current()); else input.value = ORIGINAL; render(); };
 	actions.append(button('Reset', () => setBit(START)), button('Show me: flip a different bit', () => setBit(4)), button('Show me: nothing changed', () => setBit(0)));
 	const controls = el('div', 'visual-lab__controls');
 	controls.append(bits.wrap);
 	root.append(field, controls, el('p', 'visual-lab__group', 'The bytes (hexadecimal)'), bytesRow, digests, cards, explain, actions);
-	const groups = (hex, other) => {
-		const row = [];
+	const groups = (hex: string, other?: string) => {
+		const row: HTMLSpanElement[] = [];
 		for (let g = 0; g < 8; g++) {
 			const group = el('span', 'visual-lab__hexgroup');
 			for (let k = 0; k < 8; k++) {
@@ -453,23 +564,24 @@ function hashAvalanche(root) {
 		}
 		return row;
 	};
-	function current() {
+	function current(): Uint8Array {
 		const flip = Number(bits.input.value);
 		if (!flip) return encoder.encode(input.value);
 		const copy = Uint8Array.from(base);
-		copy[Math.floor((flip - 1) / 8)] ^= 1 << ((flip - 1) % 8);
+		const flipped = Math.floor((flip - 1) / 8);
+		copy[flipped] = numberAt(copy, flipped) ^ (1 << ((flip - 1) % 8));
 		return copy;
 	}
-	function render() {
+	function render(): void {
 		const bytes = current();
 		const digest = sha256(bytes);
 		bytesRow.replaceChildren(...Array.from(bytes, (b, k) => el('span', `visual-lab__byte${b !== base[k] ? ' visual-lab__hex--diff' : ''}`, b.toString(16).padStart(2, '0'))));
 		originalRow.replaceChildren(...groups(baseDigest));
 		currentRow.replaceChildren(...groups(digest, baseDigest));
 		let inputBits = 8 * Math.abs(bytes.length - base.length);
-		for (let k = 0; k < Math.min(bytes.length, base.length); k++) inputBits += popcount(bytes[k] ^ base[k]);
+		for (let k = 0; k < Math.min(bytes.length, base.length); k++) inputBits += popcount(numberAt(bytes, k) ^ numberAt(base, k));
 		let digits = 0, digestBits = 0;
-		for (let k = 0; k < 64; k++) if (digest[k] !== baseDigest[k]) { digits++; digestBits += popcount(parseInt(digest[k], 16) ^ parseInt(baseDigest[k], 16)); }
+		for (let k = 0; k < 64; k++) if (digest[k] !== baseDigest[k]) { digits++; digestBits += popcount(parseInt(digest.charAt(k), 16) ^ parseInt(baseDigest.charAt(k), 16)); }
 		cards.replaceChildren(...[['Input bits changed', fmt(inputBits), 'of the original bytes'], ['Digits changed', `${digits} of 64`, 'hexadecimal digits'], ['Fingerprint bits flipped', `${digestBits} of 256`, 'about half is typical']].map(([label, value, note]) => {
 			const card = el('div', 'concept-lab__result-card');
 			card.append(el('span', 'concept-lab__result-label', label), el('strong', 'concept-lab__result-value', value), el('small', 'concept-lab__result-note', note));
@@ -480,7 +592,7 @@ function hashAvalanche(root) {
 			: `You changed ${inputBits} bit${inputBits === 1 ? '' : 's'} of input and ${digestBits} of the 256 fingerprint bits flipped, with ${digits} of 64 digits different. A good hash scrambles about half the bits however small the edit, so the fingerprint says “these bytes changed”, never “where” or “how much”.`;
 		explain.classList.toggle('visual-lab__explain--diff', inputBits > 0);
 	}
-	input.addEventListener('input', () => { bits.input.value = 0; bits.update(); render(); });
+	input.addEventListener('input', () => { bits.input.value = '0'; bits.update(); render(); });
 	bits.input.addEventListener('input', () => setBit(Number(bits.input.value)));
 	setBit(START);
 }
@@ -488,23 +600,23 @@ function hashAvalanche(root) {
 // ------------------------------------------------- custom: timing threshold
 // 10,000 made-up timings of one trivial operation, built to match the lesson's
 // three numbers: median 1.2 us, 99th percentile 8.0 us, maximum 412 us.
-const TIMINGS = [[0.8, 1800], [1.0, 1500], [1.2, 1701], [1.5, 1899], [2, 1300], [3, 900], [5, 600], [8, 201], [9, 29], [12, 30], [20, 20], [45, 10], [120, 6], [260, 3], [412, 1]];
+const TIMINGS: readonly (readonly [number, number])[] = [[0.8, 1800], [1.0, 1500], [1.2, 1701], [1.5, 1899], [2, 1300], [3, 900], [5, 600], [8, 201], [9, 29], [12, 30], [20, 20], [45, 10], [120, 6], [260, 3], [412, 1]];
 const TOTAL = TIMINGS.reduce((sum, [, n]) => sum + n, 0);
-const EDGES = [0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
-const LIMITS = [1, 1.2, 2, 3, 5, 8, 10, 15, 20, 30, 50, 100, 200, 412, 450, 500];
-const fmtUs = t => (t < 10 ? String(t) : fmt(t));
-const axis = t => (Math.log2(t) - Math.log2(EDGES[0])) / (EDGES.length - 1) * 100;
+const EDGES: readonly [number, ...number[]] = [0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
+const LIMITS: readonly number[] = [1, 1.2, 2, 3, 5, 8, 10, 15, 20, 30, 50, 100, 200, 412, 450, 500];
+const fmtUs = (t: number) => (t < 10 ? String(t) : fmt(t));
+const axis = (t: number) => (Math.log2(t) - Math.log2(EDGES[0])) / (EDGES.length - 1) * 100;
 
-function timingThreshold(root) {
+function timingThreshold(root: HTMLElement): void {
 	header(root, 'Explore it', 'Where would you draw the line on a timing check?',
 		'Each bar counts ordinary timings of one tiny operation (10,000 on an idle machine; made-up numbers that match the lesson’s median, 99th percentile and maximum). The vertical line is your threshold.',
 		'Try changing: slide the threshold left and right, then move the pause to see which pauses it would notice.');
 	const id = ++uid;
-	const limit = slider(`vz-${id}-limit`, 'Your threshold', 0, LIMITS.length - 1, 1, LIMITS.indexOf(10), i => `${fmtUs(LIMITS[i])} µs`);
-	const pause = slider(`vz-${id}-pause`, 'A real pause lasts', 0, LIMITS.length - 1, 1, LIMITS.indexOf(50), i => `${fmtUs(LIMITS[i])} µs`);
+	const limit = slider(`vz-${id}-limit`, 'Your threshold', 0, LIMITS.length - 1, 1, LIMITS.indexOf(10), i => `${fmtUs(numberAt(LIMITS, i))} µs`);
+	const pause = slider(`vz-${id}-pause`, 'A real pause lasts', 0, LIMITS.length - 1, 1, LIMITS.indexOf(50), i => `${fmtUs(numberAt(LIMITS, i))} µs`);
 	const controls = el('div', 'visual-lab__controls');
 	controls.append(limit.wrap, pause.wrap);
-	const counts = EDGES.slice(0, -1).map((low, k) => TIMINGS.filter(([t]) => t > low && t <= EDGES[k + 1]).reduce((s, [, n]) => s + n, 0));
+	const counts = EDGES.slice(0, -1).map((low, k) => TIMINGS.filter(([t]) => t > low && t <= numberAt(EDGES, k + 1)).reduce((s, [, n]) => s + n, 0));
 	const top = Math.log10(Math.max(...counts) + 1);
 	const hist = el('div', 'visual-lab__hist');
 	hist.setAttribute('role', 'img');
@@ -515,9 +627,9 @@ function timingThreshold(root) {
 		bar.style.height = `${Math.max(2, Math.log10(n + 1) / top * 100)}%`;
 		bar.title = `${fmt(n)} samples`;
 		column.append(bar);
-		return { bar, low: EDGES[k] };
+		return { column, bar, low: numberAt(EDGES, k) };
 	});
-	hist.append(...bars.map(b => b.bar.parentElement));
+	hist.append(...bars.map(b => b.column));
 	const line = el('div', 'visual-lab__line');
 	const pauseMark = el('div', 'visual-lab__pause', 'pause');
 	hist.append(line, pauseMark);
@@ -528,7 +640,7 @@ function timingThreshold(root) {
 		ticks.append(tick);
 	}
 	const stats = el('div', 'visual-lab__stats');
-	for (const [name, t] of [['median 1.2', 1.2], ['99th 8.0', 8], ['max 412', 412]]) {
+	for (const [name, t] of [['median 1.2', 1.2], ['99th 8.0', 8], ['max 412', 412]] as const) {
 		const stat = el('span', '', name);
 		stat.style.left = `${axis(t)}%`;
 		if (t > 100) stat.classList.add('visual-lab__stat--end');
@@ -538,12 +650,12 @@ function timingThreshold(root) {
 	const cards = el('div', 'visual-lab__cards');
 	const explain = el('p', 'visual-lab__explain');
 	explain.setAttribute('aria-live', 'polite');
-	const apply = (t, p) => { limit.input.value = LIMITS.indexOf(t); if (p) pause.input.value = LIMITS.indexOf(p); limit.update(); pause.update(); render(); };
+	const apply = (t: number, p?: number) => { limit.input.value = String(LIMITS.indexOf(t)); if (p) pause.input.value = String(LIMITS.indexOf(p)); limit.update(); pause.update(); render(); };
 	const actions = el('div', 'visual-lab__actions');
 	actions.append(button('Reset', () => apply(10, 50)), button('Show me: 10 µs', () => apply(10)), button('Show me: just above 412 µs', () => apply(450)));
 	root.append(controls, stats, hist, ticks, unit, cards, explain, actions);
-	function render() {
-		const t = LIMITS[Number(limit.input.value)], p = LIMITS[Number(pause.input.value)];
+	function render(): void {
+		const t = numberAt(LIMITS, Number(limit.input.value)), p = numberAt(LIMITS, Number(pause.input.value));
 		const flagged = TIMINGS.filter(([s]) => s > t).reduce((sum, [, n]) => sum + n, 0);
 		bars.forEach(({ bar, low }) => bar.classList.toggle('visual-lab__bar--warn', low >= t));
 		line.style.left = `${axis(t)}%`;
@@ -554,7 +666,7 @@ function timingThreshold(root) {
 			card.append(el('span', 'concept-lab__result-label', label), el('strong', 'concept-lab__result-value', value), el('small', 'concept-lab__result-note', note));
 			return card;
 		}));
-		let text;
+		let text: string;
 		if (flagged === 0) text = `At ${fmtUs(t)} µs the line sits above every ordinary timing, so ordinary background activity never trips it. ${caught ? `A ${fmtUs(p)} µs pause would still be flagged.` : `But a ${fmtUs(p)} µs pause sits below it too, so this rule would almost never fire on the condition you meant to catch.`}`;
 		else text = `At ${fmtUs(t)} µs the line flags ${fmt(flagged)} of ${fmt(TOTAL)} ordinary timings (preemption, power management, page faults, and so on). ${caught ? `A ${fmtUs(p)} µs pause is above the line and gets flagged too, but the detector cannot tell it apart from those ordinary slow samples.` : `A ${fmtUs(p)} µs pause is below the line, so it is not noticed at all.`}`;
 		explain.textContent = text + ' No single number separates “ordinary but unlucky” from “actually paused”, which is why the lesson asks for distributions and repeated evidence.';
@@ -566,7 +678,7 @@ function timingThreshold(root) {
 }
 
 // --------------------------------------------------------------- the data map
-export const VISUALS = {
+export const VISUALS: Readonly<Record<string, VisualEntry>> = {
 	'hash-source': {
 		type: 'choice', width: 340, height: 276,
 		caption: 'If an attacker changes both mod.zip and the hash published next to it, the two agree and the check proves nothing. A hash you recorded yourself, or a publisher’s signature, would expose the swap.',
@@ -702,15 +814,15 @@ export const VISUALS = {
 		slider: { label: 'The script wants to run', values: Array.from({ length: 60 }, (_, i) => (i + 1) * 5), start: 7, format: v => (v >= 300 ? '300,000 or more (an endless loop)' : `${fmt(v * 1000)} instructions`) },
 		modes: { legend: 'The host’s budget', options: SCRIPT_BUDGETS.map((b, i) => ({ label: i === 0 ? `${b} hook calls (the lesson’s code)` : `${b} hook calls` })) },
 		scale: () => 300000,
-		marker: mode => ({ at: SCRIPT_BUDGETS[mode] * 1000, label: `The line marks the budget: ${SCRIPT_BUDGETS[mode]} hook calls, about ${fmt(SCRIPT_BUDGETS[mode] * 1000)} instructions. Each square below is one hook call.` }),
+		marker: mode => ({ at: budgetOf(mode) * 1000, label: `The line marks the budget: ${budgetOf(mode)} hook calls, about ${fmt(budgetOf(mode) * 1000)} instructions. Each square below is one hook call.` }),
 		rows: [
-			{ label: 'What the script wants to run', at: (v, mode) => { const r = scriptRun(v, SCRIPT_BUDGETS[mode]); return { bar: Math.min(r.wanted, 300000), text: r.wanted === Infinity ? 'never finishes' : `${fmt(r.wanted)}` }; } },
-			{ label: 'What the host lets it run', marker: true, at: (v, mode, p) => { const r = scriptRun(v, SCRIPT_BUDGETS[mode]); return { bar: r.executed * p, tone: r.stopped ? 'warn' : '', text: `${fmt(r.executed * p)}${r.stopped && p === 1 ? ', then stopped' : ''}` }; } },
+			{ label: 'What the script wants to run', at: (v, mode) => { const r = scriptRun(v, budgetOf(mode)); return { bar: Math.min(r.wanted, 300000), text: r.wanted === Infinity ? 'never finishes' : `${fmt(r.wanted)}` }; } },
+			{ label: 'What the host lets it run', marker: true, at: (v, mode, p) => { const r = scriptRun(v, budgetOf(mode)); return { bar: r.executed * p, tone: r.stopped ? 'warn' : '', text: `${fmt(r.executed * p)}${r.stopped && p === 1 ? ', then stopped' : ''}` }; } },
 		],
-		cells: (v, mode, p) => { const budget = SCRIPT_BUDGETS[mode], r = scriptRun(v, budget); const done = Math.floor(r.calls * p); const list = Array.from({ length: budget }, (_, k) => (k < done ? 'on' : '')); list.push(r.stopped && p === 1 ? 'warn' : ''); return list; },
-		cards: (v, mode, p) => { const budget = SCRIPT_BUDGETS[mode], r = scriptRun(v, budget); return [['Instructions run', fmt(r.executed * p), 'steps the VM took'], ['Hook calls', `${Math.floor(r.calls * p)} of ${budget}`, r.stopped ? 'the next one raised the error' : 'never above the budget'], ['Result', r.stopped ? 'stopped' : 'finished', r.stopped ? 'instruction budget exceeded' : 'ran to the end']]; },
+		cells: (v, mode, p) => { const budget = budgetOf(mode), r = scriptRun(v, budget); const done = Math.floor(r.calls * p); const list: string[] = Array.from({ length: budget }, (_, k) => (k < done ? 'on' : '')); list.push(r.stopped && p === 1 ? 'warn' : ''); return list; },
+		cards: (v, mode, p) => { const budget = budgetOf(mode), r = scriptRun(v, budget); return [['Instructions run', fmt(r.executed * p), 'steps the VM took'], ['Hook calls', `${Math.floor(r.calls * p)} of ${budget}`, r.stopped ? 'the next one raised the error' : 'never above the budget'], ['Result', r.stopped ? 'stopped' : 'finished', r.stopped ? 'instruction budget exceeded' : 'ran to the end']]; },
 		takeaway: (v, mode) => {
-			const budget = SCRIPT_BUDGETS[mode], r = scriptRun(v, budget);
+			const budget = budgetOf(mode), r = scriptRun(v, budget);
 			if (!r.stopped) return { text: `The script finished after ${fmt(r.wanted)} instructions: ${r.calls} hook calls, never more than the ${budget} allowed. Slide right to find where the hook steps in, or pick a smaller budget and watch that point move left.` };
 			const wants = r.wanted === Infinity ? 'to run forever, like while true do end' : `${fmt(r.wanted)} instructions`;
 			return { tone: 'diff', text: `The script wanted ${wants}, but the hook raises an error on call ${budget + 1}, after ${fmt(r.stop)} instructions, so the rest never ran. A runaway loop cannot freeze the game. Instructions are a count of work, not seconds: the hook is not a stopwatch.` };
@@ -729,12 +841,12 @@ export const VISUALS = {
 		scale: () => 4 * GiB,
 		rows: [
 			{ group: 'Memory in use', label: 'Read the whole file first (std::fs::read)', at: (v, mode, p) => ({ bar: v * p, text: fmtBytes(Math.max(KiB, v * p)) }) },
-			{ label: 'Read in chunks (the lesson’s loop)', at: (v, mode, p) => ({ bar: Math.min(BUFFERS[mode], v * p), text: `${fmtBytes(Math.min(BUFFERS[mode], Math.max(KiB, v * p)))} buffer, whatever the file size` }) },
+			{ label: 'Read in chunks (the lesson’s loop)', at: (v, mode, p) => ({ bar: Math.min(bufferOf(mode), v * p), text: `${fmtBytes(Math.min(bufferOf(mode), Math.max(KiB, v * p)))} buffer, whatever the file size` }) },
 			{ group: 'Read calls to the operating system', label: 'Whole file', scale: () => readCalls(4 * GiB, BUFFERS[0]), at: (v, mode, p) => ({ bar: p > 0 ? 1 : 0, text: '1 read' }) },
-			{ label: 'In chunks', scale: mode => readCalls(4 * GiB, BUFFERS[mode]), at: (v, mode, p) => { const n = Math.ceil(readCalls(v, BUFFERS[mode]) * p); return { bar: n, text: `${fmt(n)} reads` }; } },
+			{ label: 'In chunks', scale: mode => readCalls(4 * GiB, bufferOf(mode)), at: (v, mode, p) => { const n = Math.ceil(readCalls(v, bufferOf(mode)) * p); return { bar: n, text: `${fmt(n)} reads` }; } },
 		],
-		cards: (v, mode) => [['Whole file in memory', fmtBytes(v), 'grows with the file'], ['Chunk buffer', fmtBytes(BUFFERS[mode]), `${fmt(v / BUFFERS[mode])} times smaller`], ['Chunked read calls', fmt(readCalls(v, BUFFERS[mode])), 'includes the final read that returns 0']],
-		takeaway: (v, mode) => ({ text: `Reading all ${fmtBytes(v)} at once needs ${fmtBytes(v)} of free memory before hashing can even start. The lesson’s loop needs only its ${fmtBytes(BUFFERS[mode])} buffer, whatever the file size, at the price of ${fmt(readCalls(v, BUFFERS[mode]))} read calls instead of 1. Try a smaller buffer: memory shrinks again but the call count climbs.` }),
+		cards: (v, mode) => [['Whole file in memory', fmtBytes(v), 'grows with the file'], ['Chunk buffer', fmtBytes(bufferOf(mode)), `${fmt(v / bufferOf(mode))} times smaller`], ['Chunked read calls', fmt(readCalls(v, bufferOf(mode))), 'includes the final read that returns 0']],
+		takeaway: (v, mode) => ({ text: `Reading all ${fmtBytes(v)} at once needs ${fmtBytes(v)} of free memory before hashing can even start. The lesson’s loop needs only its ${fmtBytes(bufferOf(mode))} buffer, whatever the file size, at the price of ${fmt(readCalls(v, bufferOf(mode)))} read calls instead of 1. Try a smaller buffer: memory shrinks again but the call count climbs.` }),
 		showMe: { label: 'Show me the 4 GiB archive', index: 6 },
 		run: true,
 	},
@@ -771,10 +883,11 @@ export const VISUALS = {
 	},
 };
 
-export function mountVisuals() {
-	for (const root of document.querySelectorAll('[data-visual]')) {
+export function mountVisuals(): void {
+	for (const root of document.querySelectorAll<HTMLElement>('[data-visual]')) {
 		if (root.dataset.visualReady === 'true') continue;
-		const entry = VISUALS[root.dataset.visual];
+		const visualId = root.dataset.visual;
+		const entry = visualId === undefined ? undefined : VISUALS[visualId];
 		if (!entry) continue;
 		root.dataset.visualReady = 'true';
 		if (entry.type === 'choice') choiceVisual(root, entry);
