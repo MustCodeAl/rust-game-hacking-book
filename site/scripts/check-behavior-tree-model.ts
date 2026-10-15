@@ -3,8 +3,8 @@ import {
 	createBehaviorTree, editBehaviorTree, tickBehaviorTree, validateBehaviorTree, TREE_LIMITS,
 } from '../src/scripts/behavior-tree-model.ts';
 import type { BehaviorTree, EditResult, TreeAction, TreeEdit } from '../src/scripts/behavior-tree-model.ts';
-import { behaviorTreeModel } from '../src/scripts/sim-labs.js';
-import { FORMULAS, finishFormulaResult, workedExample } from '../src/scripts/formula-builder.js';
+import { behaviorTreeModel } from '../src/scripts/sim-labs.ts';
+import { FORMULAS, finishFormulaResult, workedExample } from '../src/scripts/formula-builder.ts';
 
 type Accepted = Extract<EditResult, { ok: true }>;
 

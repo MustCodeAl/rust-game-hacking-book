@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { SCENE_TRACES } from '../src/scripts/scene-traces.ts';
-import { vennCountsModel } from '../src/scripts/probability-board.js';
+import { vennCountsModel } from '../src/scripts/probability-board.ts';
 import type { ListedTrace, TraceValues, TraceVars } from '../src/lib/traces-types.ts';
 
 const defaults = (t: ListedTrace): TraceValues => Object.fromEntries(t.inputs.map((i): [string, string | number] => [i.id, i.value]));
