@@ -490,25 +490,22 @@ struct PlayerSnapshot {
 
 `#[repr(C)]` asks the compiler for a predictable C-compatible field layout. We only rely on a layout after confirming its offsets; guessing a struct from one screenshot is not enough.
 
-## `lea` does math, not a read
-
-`lea` stands for “load effective address.” It works out the address the brackets
-describe and stores that number, instead of reading whatever lives there. It is
-the one common instruction where brackets do not mean a memory access:
+`lea` (“load effective address”) is the one common instruction where brackets
+do not mean a memory access:
 
 ```nasm
 mov eax, [rcx+rdx*4]  ; eax = the four-byte value stored at rcx + rdx*4
 lea rax, [rcx+rdx*4]  ; rax = the address rcx + rdx*4 itself; nothing is read
 ```
 
-The `mov` reads into `eax` because the elements are four bytes wide. Reading
-into the eight-byte `rax` would take the next element along with it.
-
-The `*4` is a strong hint that this is array indexing: `rcx` holds the start of
-an array, `rdx` holds an index, and each step of the index moves four bytes
-because each element is four bytes wide. So this `lea` computes “the address of
-element number `rdx`,” which is exactly what code does just before handing one
-element to another function.
+`lea rax, [rcx+rdx*4]` stores the address
+`rcx + rdx*4` itself and reads nothing; `mov eax, [rcx+rdx*4]` reads the
+four-byte value stored there into the four-byte `eax` (the eight-byte `rax`
+would take the next element too). A `*4` scale usually steps through an array of
+four-byte elements, so with `rdx` = 2 the address is `rcx+8`. Compilers also
+use `lea` for plain arithmetic, so not every result is a pointer.
+[Lesson 5.4 traces `lea` beside `mov`](/pages/2/10/#lea) with addresses you
+can change.
 
 <MemoryStrip
   cells="rcx+0=10|rcx+4=20|rcx+8=30|rcx+12=40"
@@ -517,11 +514,9 @@ element to another function.
   caption="An array of four-byte numbers, with `rdx` = 2. `lea rax, [rcx+rdx*4]` puts the address `rcx+8` in `rax`. `mov eax, [rcx+rdx*4]` reads the number stored there, 30."
 />
 
-Compilers also use `lea` as a quick way to do plain arithmetic, since it can
-multiply and add in one instruction without disturbing the flags. Do not assume
-every `lea` result is a pointer.
-
 <MarginNote kind="alternative">Think of lea as asking a map for a house's street address, while mov with brackets walks inside and reads what is there.</MarginNote>
+
+<span id="lea-does-math-not-a-read" aria-hidden="true" />
 
 ## A five-question reading method
 

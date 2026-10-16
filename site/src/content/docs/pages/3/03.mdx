@@ -12,7 +12,7 @@ sidebar:
 import Frame from '../../../../components/kit/Frame.astro';
 import CellFrames from '../../../../components/CellFrames.astro';
 import { fieldDistanceCells } from '../../../../data/figure-cells-a';
-import { Badge, SpeedType, Steps } from '../../../../components/kit';
+import { Accordion, Badge, SpeedType, Steps } from '../../../../components/kit';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 import CodeTrace from '../../../../components/CodeTrace.astro';
@@ -307,80 +307,32 @@ This pattern is common, but the C++ language does not require one universal obje
 
 With single inheritance, the base-class part is often placed at the beginning of the derived object. A `BotPlayer` may therefore begin with all fields needed by `Player`, followed by bot-specific state.
 
-<MemoryStrip
-  cells="+0x00=vptr for base A|=A's fields|+0x10=vptr for base B|=B's fields|=derived fields"
-  groups="0-4:one allocation, one complete object"
-  groups2="2-3:what a pointer typed as B points at: 0x10 bytes in"
-  caption="Multiple inheritance, with an example offset. A method of `B` receives the object as a pointer to the `B` part, not to the start."
-/>
+Multiple inheritance can place several base parts, each with its own vptr,
+inside one allocation. A pointer typed as the second base then points a few
+bytes into the object, and a **thunk**, a tiny compiler-generated stub, may
+adjust `this` before jumping to the real method. So when two candidate bases
+always differ by the same small constant, they are usually two views of one
+object. **RTTI** (run-time type information), when a release build keeps it,
+can expose a class name near a virtual table; the name says nothing about where
+any field sits.
 
-Multiple inheritance can add more than one base subobject and more than one vptr. A method may even adjust `this` before using it. If two methods appear to use bases a fixed distance apart, do not immediately declare one of them wrong. You may be looking at two views of the same larger object.
+<span id="one-object-can-have-several-useful-identities" aria-hidden="true" />
 
-**RTTI** stands for run-time type information: extra data the compiler emits so
-that code can ask what class an object really is while the program is running.
-It is what makes `dynamic_cast` possible.
+One object can therefore answer three questions differently: which block was
+allocated, which base view a particular pointer addresses, and its **dynamic
+type**, the most-derived implementation virtual dispatch chooses.
+[Lesson 3.9 separates those identities](/pages/3/04/#one-object-can-have-several-useful-identities)
+with a multiple-inheritance layout and the thunk that adjusts `this`.
 
-When it is present it can expose type-descriptor clues near virtual tables,
-sometimes including a readable class name. That name tells you what the class
-was called and nothing more: release builds can strip RTTI entirely, and a
-name does not tell you where any of the class's fields sit.
+<span id="constructors-and-destructors-reveal-a-timeline" aria-hidden="true" />
 
-## One object can have several useful identities
-
-When inspecting object-oriented code, separate three questions:
-
-1. **Allocation identity:** which complete block of memory was created and must
-   eventually be released?
-2. **Subobject view:** which base-class-shaped part does this particular pointer
-   address?
-3. **Dynamic type:** which most-derived implementation will virtual dispatch
-   choose at this moment?
-
-These answers can differ. A pointer passed to a base-class method may point a
-few bytes into the complete allocation. A **thunk** — a tiny compiler-generated
-stub that fixes something up and then jumps to the real function — may adjust
-`this` before jumping to the real method. Subtracting every observed field from
-that adjusted pointer can produce negative offsets and a broken layout even
-though the pointer is valid for its particular base view.
-
-When two candidate bases always differ by the same small constant, they are
-usually two views of one object. The thunk or call site that adds the constant
-shows where the adjustment happens, and the constructor, which writes both
-vptrs, shows how the two views sit inside one allocation.
-
-## Constructors and destructors reveal a timeline
-
-A memory snapshot shows one state. Construction and destruction show how the
-state came to exist and which parts belong together.
-
-A constructor candidate often:
-
-- receives a newly allocated or caller-provided object address;
-- writes repeated default values at fixed offsets;
-- calls base constructors before initializing derived fields;
-- writes one or more vptr candidates, sometimes replacing an earlier base vptr;
-- returns the same object or passes it into a registration system.
-
-```mermaid
-flowchart LR
-    A["allocate the block"] --> B["base constructor:<br/>vptr = base table,<br/>base fields = defaults"]
-    B --> C["derived constructor:<br/>vptr = derived table,<br/>derived fields = defaults"]
-    C --> D["registered and used<br/>by the game"]
-    D --> E["destructor: unregister,<br/>release children"]
-    E --> F["block freed: every cached<br/>address to it is stale"]
-```
-
-None of those clues identifies a constructor alone, because an ordinary reset
-function can also fill fields with defaults. What a reset function does not do
-is run right after an allocation, call base constructors first, and switch the
-vptr from the base table to the derived table.
-
-Destructors provide the other half: they reveal child cleanup, unregistering,
-reference releases, pool returns, and the point after which a cached address is
-stale. For a memory tool, this lifetime boundary matters more than recovering
-the original C++ class name.
-
-<MarginNote kind="brief">Constructors show how an object comes to exist, and destructors show when old addresses stop being safe to trust.</MarginNote>
+A constructor and a destructor bracket that object's life. A constructor runs
+right after an allocation, calls base constructors first, and switches the vptr
+from the base table to the derived table; an ordinary reset function may fill
+the same defaults but does none of those three things. A destructor marks the
+point after which every cached address to the object is stale, which matters
+more to a memory tool than the original class name.
+[Lesson 3.10 follows that timeline from allocation to free](/pages/3/05/#follow-destruction-as-carefully-as-construction).
 
 ## Recover a structure step by step
 
@@ -422,7 +374,44 @@ let yaw = process.read_f32(player_base + 0x40)?;
 
 Reading fields separately is also friendlier to an incomplete layout. You do not need to invent hundreds of padding bytes just to inspect three confirmed values.
 
-## Build a read-only object-layout probe
+[The optional probe reference](#build-a-read-only-object-layout-probe)
+applies this rule to the confirmed AssaultCube fields with checked offsets and
+plausibility checks.
+
+## Common false conclusions
+
+**“Two nearby floats must be X and Y.”** They could be velocity, color, or a timer. Change one behavior at a time.
+
+**“The first pointer proves a vtable.”** Follow several entries and verify they point to executable methods.
+
+**“The debugger showed `ecx`, so it must always be `this`.”** Confirm the calling convention and watch how the method uses the value.
+
+**“The structure worked once, so it is finished.”** Compare instances and repeat after object destruction, respawn, and clean launches.
+
+**“A successful read proves the address is right.”** Windows can copy readable but unrelated bytes. Validate meaning, not only access.
+
+## The layout is a versioned model
+
+An object base is the start of one instance, and each field offset is a byte
+distance from that base. The hidden `this` argument selects the instance for
+a member call; a vptr commonly leads to its virtual-method table. Padding
+and inheritance can add gaps or make one object reachable through several
+base views. Those observations form a layout model for the tested game build,
+not a promise for every build. A remote object address remains an address in
+the game process, never a valid local Rust reference.
+
+The same technique appears in debuggers, crash analyzers, compatibility tools,
+profilers, and digital-forensics programs. Each one recovers structure from raw
+memory without the original source code.
+
+## Optional build reference
+
+The read-only probe below applies this lesson's layout to a live AssaultCube
+match. The reconstruction above does not depend on building or running it.
+
+<span id="build-a-read-only-object-layout-probe" aria-hidden="true" />
+
+<Accordion title="Optional build reference: a read-only object-layout probe">
 
 <Badge text="Windows VM" variant="note" />
 
@@ -518,7 +507,11 @@ fn read_player(process: &Process, player: ObjectAddress) -> anyhow::Result<Playe
 
 Why validate values after a successful Windows read? Because “four bytes were copied” does not mean “our class model is correct.” A stale pointer can still lead to readable memory. Rejecting impossible coordinates and flags catches some wrong-object guesses early.
 
-## Run the probe
+</Accordion>
+
+<span id="run-the-probe" aria-hidden="true" />
+
+<Accordion title="Optional build reference: run the probe">
 
 Use 32-bit AssaultCube 1.2.0.2 on Windows and start a private local match with bots. From the repository root:
 
@@ -545,28 +538,4 @@ Addresses and values will differ. The important checks are structural:
 - the probe refuses a player count above 32;
 - stopping the match produces a useful null-pointer error rather than a crash.
 
-## Common false conclusions
-
-**“Two nearby floats must be X and Y.”** They could be velocity, color, or a timer. Change one behavior at a time.
-
-**“The first pointer proves a vtable.”** Follow several entries and verify they point to executable methods.
-
-**“The debugger showed `ecx`, so it must always be `this`.”** Confirm the calling convention and watch how the method uses the value.
-
-**“The structure worked once, so it is finished.”** Compare instances and repeat after object destruction, respawn, and clean launches.
-
-**“A successful read proves the address is right.”** Windows can copy readable but unrelated bytes. Validate meaning, not only access.
-
-## The layout is a versioned model
-
-An object base is the start of one instance, and each field offset is a byte
-distance from that base. The hidden `this` argument selects the instance for
-a member call; a vptr commonly leads to its virtual-method table. Padding
-and inheritance can add gaps or make one object reachable through several
-base views. Those observations form a layout model for the tested game build,
-not a promise for every build. A remote object address remains an address in
-the game process, never a valid local Rust reference.
-
-The same technique appears in debuggers, crash analyzers, compatibility tools,
-profilers, and digital-forensics programs. Each one recovers structure from raw
-memory without the original source code.
+</Accordion>

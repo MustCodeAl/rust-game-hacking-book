@@ -65,9 +65,7 @@ flowchart LR
     C -->|"value became 92"| D["1 candidate"]
 ```
 
-Each scan keeps only the addresses that already survived every earlier one — the candidate set only shrinks.
-
-The scanner never rescans the whole process after the first pass. It re-reads only the surviving addresses. This makes later passes faster and preserves the history needed for filters such as increased, decreased, changed, and unchanged.
+The scanner never rescans the whole process after the first pass. It re-reads only the addresses that survived every earlier pass, so the candidate set only shrinks. This makes later passes faster and preserves the history needed for filters such as increased, decreased, changed, and unchanged.
 
 <MarginNote kind="brief">Each scan keeps only candidates that survived all earlier ones. The list can only shrink, which is why a few controlled changes narrow millions of bytes to one.</MarginNote>
 
@@ -92,7 +90,7 @@ memory and the scan reads twice the bytes. Programmers write that as **O(n)**,
 read "order n", where *n* is the size of the input. Some costs do not grow at
 all: finding one candidate's previous value in a hash table keyed by address
 takes about the same time with 40 candidates or 40,000, as
-[Lesson 3.6](/pages/3/05/#a-hash-table-arithmetic-picks-the-bucket) explains.
+[Lesson 3.10](/pages/3/05/#a-hash-table-arithmetic-picks-the-bucket) explains.
 That is **O(1)** on average: hashing one address chooses a bucket instead of
 reading the entire candidate list. Collisions and a badly overloaded table can
 make individual lookups slower, so this is not a promise of identical timing.
@@ -164,9 +162,7 @@ fn find_u32_in_chunk(base: usize, bytes: &[u8], wanted: u32) -> Vec<usize> {
 }
 ```
 
-For an aligned-only scan, step by four. For a general scan, `windows(4)` checks every byte offset.
-
-`wanted.to_le_bytes()` creates the exact four-byte representation used by the 32-bit Windows course games. `.windows(4)` yields overlapping four-byte slices, so a value may start at any byte. When a match appears, `base + offset` translates the local slice position back into the target’s virtual address.
+`wanted.to_le_bytes()` creates the exact four-byte representation used by the 32-bit Windows course games. `.windows(4)` yields overlapping four-byte slices, as in [Lesson 3.3](/pages/1/14/#use-windows-for-neighboring-samples), so a value may start at any byte; an aligned-only scan would step by four instead. When a match appears, `base + offset` translates the local slice position back into the target’s virtual address.
 
 The complete program reads 1 MiB chunks. Adjacent chunks overlap by three bytes because a four-byte value can begin in the final three positions of the earlier chunk. Without that overlap, a value split across the boundary would never exist in either local buffer as a complete four-byte window.
 
@@ -296,15 +292,11 @@ is added. Passing `&Filter` borrows the comparison choice because the comparison
 need to consume or copy it.
 :::
 
-Update `previous` for candidates that survive.
-
-The `Filter` enum makes every supported relationship explicit. A string such as `"decreased"` could be misspelled and discovered only at runtime; an enum lets the compiler force every `match` to handle each case. `previous` belongs beside the address because “changed” always compares two reads of the same candidate.
+Update `previous` for candidates that survive. It belongs beside the address because “changed” always compares two reads of the same candidate.
 
 ## Expect regions to disappear
 
-The target can free or change a region between enumeration and reading. Treat an unreadable candidate as removed, not as a reason to crash the scan.
-
-This is a normal race, not necessarily a bug. Between the region query and the read, the game can free an allocation, change its protection, or exit. The scanner’s snapshot is always slightly behind the running process. A robust tool reports skipped work and continues with the candidates it can still read.
+Between the region query and the read, the game can free an allocation, change its protection, or exit. This is a normal race, not necessarily a bug: treat an unreadable candidate as removed, not as a reason to crash the scan. The scanner’s snapshot is always slightly behind the running process. A robust tool reports skipped work and continues with the candidates it can still read.
 
 Return a scan report:
 
@@ -320,23 +312,14 @@ struct ScanReport {
 
 ## Bound the work
 
-Set limits for:
+A scan for a common value such as zero can produce millions of matches. Refuse or require a narrower range rather than exhausting memory. Each limit prevents a specific failure:
 
-- maximum region size per read;
-- chunk size, such as 1 MiB;
-- total candidates;
-- total scan time;
-- supported value types.
-
-A scan for a common value such as zero can produce millions of matches. Refuse or require a narrower range rather than exhausting memory.
-
-Each limit prevents a specific failure:
-
-- a chunk limit bounds each allocation and Windows copy;
-- a region limit avoids one suspicious mapping monopolizing the scan;
+- a chunk limit, such as 1 MiB, bounds each allocation and Windows copy;
+- a maximum region size per read avoids one suspicious mapping monopolizing the scan;
 - a candidate limit bounds local memory and later re-read time;
 - an output limit keeps the terminal usable;
-- a time or cancellation limit gives control back to the learner.
+- a time or cancellation limit gives control back to the learner;
+- a fixed list of supported value types keeps each comparison well defined.
 
 Without these limits, perfectly memory-safe code can still make an unusable program.
 
@@ -376,7 +359,7 @@ flowchart LR
 
 The UI should show the old and new value and require an explicit action.
 
-The second read closes a **time-of-check/time-of-use** gap. The candidate matched during the last filter, but the game kept running afterward. If the current value no longer equals `candidate.previous`, the address may be stale or the game may have updated that field; the write must stop rather than overwrite newer state.
+The second read closes a **time-of-check/time-of-use** gap. If the current value no longer equals `candidate.previous`, the address may be stale or the game may have updated that field; the write must stop rather than overwrite newer state.
 
 <MarginNote kind="alternative">Like glancing at a traffic light and then closing your eyes: the colour may change before you move. Re-check at the moment you act.</MarginNote>
 
@@ -555,8 +538,6 @@ Suppose Wesnoth displays `100` gold:
 9. The program re-reads that survivor immediately before writing.
 
 </Steps>
-
-This ordering explains why the program is more than a `ReadProcessMemory` loop. Its real job is maintaining trustworthy candidate state while the target keeps changing.
 
 ## Diagnose by phase
 
