@@ -210,15 +210,11 @@ magic byte such as `0x00` from secretly meaning “wildcard.” `zip` and `all` 
 pattern item.
 :::
 
-Read this function from the outside inward:
-
-1. `bytes.get(range)` requests a window without risking an out-of-bounds panic.
-2. `saturating_add` prevents the end calculation from wrapping to a small number.
-3. `zip` pairs every found byte with one pattern item.
-4. `all` returns `true` only when every pair is acceptable.
-5. `Any` accepts the found byte; `Exact(value)` accepts only that value.
-
-The function borrows both slices. It does not copy the module again and does not own the pattern. That is why its signature uses `&[u8]` and `&[PatternByte]`.
+`saturating_add` also keeps the end of the window from wrapping to a small
+number. [Lesson 3.3's checked slices and iterator
+chains](/pages/1/14/#check-slice-bounds-before-decoding-a-number) explain
+`get`, `zip`, and `all` step by step. The function only borrows the copied
+bytes and the pattern, so it never copies the module again.
 
 ## Scan safely
 
@@ -241,8 +237,6 @@ fn find_all(bytes: &[u8], pattern: &[PatternByte]) -> Vec<usize> {
         .collect()
 }
 ```
-
-Use `<=` so a match beginning at the final possible offset is included.
 
 For `n` input bytes and an `m`-byte pattern, this simple algorithm does at most roughly `n × m` comparisons. That is easy to reason about and fast enough for bounded course modules. More advanced search algorithms matter only after measurement shows this loop is the bottleneck.
 
@@ -477,7 +471,7 @@ fn main() {
 
 </Accordion>
 
-Notice the order: restrict to the correct module, restrict again to readable executable regions, copy each region, scan the safe local copy, then demand one result. A three-byte match identifies a candidate only; patching requires a separately verified address and expected bytes.
+A three-byte match identifies a candidate only; patching requires a separately verified address and expected bytes.
 
 ## When results are wrong
 
