@@ -98,9 +98,9 @@ restarts.
 
 <Visual kind="fault-ring" />
 
-This is why the book keeps its labs in user mode and inside a virtual machine.
-A crash in a user-mode lab ends one process, and even a bug check inside a
-virtual machine stops only that virtual machine ([Lesson 14.1](/pages/14/03/)).
+Inside a virtual machine, even a bug check stops only that virtual machine
+([Lesson 14.1](/pages/14/03/)), which is one more reason the book's labs run in
+user mode inside a virtual machine.
 
 ## Why the course labs stay in user mode
 
@@ -117,6 +117,28 @@ The course deliberately does not build:
 Those capabilities would expand the problem from studying one game process into controlling the operating system and concealing that control.
 
 Microsoft’s own driver security guidance begins with the same design question: confirm that a kernel driver is actually required. If a service or application can do the job, it is the lower-risk boundary.
+
+## Why Windows insists on signed drivers
+
+Loading a driver puts new code into ring 0, so Windows checks where a driver
+came from before loading it. 64-bit Windows refuses kernel-mode code without a
+valid digital signature, the kind of signature [Lesson 9.8](/pages/9/07/)
+checked on game files. Since Windows 10 version 1607, on a PC with Secure Boot
+on, a new driver must be signed by Microsoft itself, through its hardware
+developer program, which requires the publisher to prove its identity with an
+extended-validation certificate. **Secure Boot** is the firmware check that
+allows only signed boot components to start, which also keeps these signature
+checks from being relaxed before Windows is running. Developers' test-signing
+modes relax them on purpose, so they belong only on a disposable test machine,
+and this book never uses them.
+
+A signature answers two questions: who published this driver, and has it
+changed since? It does not say whether the code is safe, as the next section
+shows. Attackers look for old, legitimately signed drivers with an exploitable
+bug and load one to borrow it. Microsoft's answer is the **vulnerable driver
+blocklist**: a list of signed drivers known to be exploitable, which Windows
+refuses to load. Since the Windows 11 2022 update the blocklist is on by
+default, and it is always enforced when memory integrity is on.
 
 ## The defensive problem: trusted code can still be vulnerable
 
@@ -135,6 +157,33 @@ flowchart TD
 ```
 
 Do not “test” a suspicious driver by loading it on your daily computer. Use an isolated disposable virtual machine and vendor-provided analysis guidance.
+
+## Why a cheat driver endangers its own user
+
+Some cheats for online games ship as drivers, on the theory that ring 0 sees
+everything. Whatever such a driver does to a game, here is what it does to the
+machine running it:
+
+- **It runs with the kernel's full authority and comes from an anonymous
+  author.** Its bugs become bug checks and corrupted files on the user's own
+  computer, with no vendor, testing, or update process behind it.
+- **It often comes with instructions to switch protections off**, such as
+  Secure Boot, memory integrity, the vulnerable driver blocklist, or signature
+  checks. Each of those protects the machine against all kernel malware, not
+  only against cheats, and turning one off lowers the defense for everything.
+- **Many rely on an old signed driver with a known bug** to reach ring 0. The
+  bug cannot tell who is asking: while that driver is loaded, any other program
+  on the machine can send the same control code and read or write kernel
+  memory.
+- **A kernel driver is the most powerful place malware can live.** Installing
+  one from an anonymous seller hands that seller the whole computer: saved
+  passwords, browser sessions, banking, and the power to hide further software.
+- **Anti-cheat systems look for exactly these drivers**, and the penalties
+  usually apply to the whole account, sometimes to the hardware.
+
+The inventory below puts these habits into practice: know which drivers are
+installed, give every new one a reason and a trustworthy source, and never
+lower a Windows protection so that someone else's kernel code can load.
 
 ## Build a read-only driver inventory
 
