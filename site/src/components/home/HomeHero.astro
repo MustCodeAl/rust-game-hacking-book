@@ -1,41 +1,117 @@
 ---
+// The home page's opening: what the book is, where to start, and the book's
+// signature in action. The four boxes are Lesson 1.8's own example (a health
+// value of 100 stored as a little-endian u32 at 0x1000), drawn with the same
+// MemoryStrip the lesson uses. "Take a hit" applies the lesson's hit of 25, so
+// the bar and the first byte change together: 0x64 (100) becomes 0x4B (75).
+import { getCollection } from 'astro:content';
+import { compareLessons } from '../../data/chapters.ts';
+import MemoryStrip from '../MemoryStrip.astro';
+import { HEALTH, address, byteDerivation, u32Bytes } from '../identity/bytes';
+
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const lessons = (await getCollection('docs', (entry) => Boolean(entry.data.chapter)))
+	.sort((a, b) => compareLessons(a.data.chapter, b.data.chapter));
+const chapterCount = new Set(lessons.map((entry) => entry.data.chapter!.split('.')[0])).size;
+const first = lessons[0]!;
+
+// The excerpt is quoted only while Lesson 1.8 (page pages/1/08) still opens with it.
+const MEMORY_PAGE = 'pages/1/08';
+const EXCERPT = 'Suppose a health bar says 100. The player takes a hit, and the bar says 75. Somewhere inside the running game, a stored value changed.';
+const memoryLesson = lessons.find((entry) => entry.id === MEMORY_PAGE);
+const squash = (text: string) => text.replace(/\s+/g, ' ');
+const quoted = memoryLesson && squash(memoryLesson.body ?? '').includes(EXCERPT) ? memoryLesson : undefined;
+if (!quoted) console.warn(`[HomeHero] ${MEMORY_PAGE} no longer opens with the quoted excerpt; the hero shows the example without the quote.`);
+
+const cells = u32Bytes(HEALTH.start).map((byte, index) => `${address(HEALTH.address + index)}=${byte}`).join('|');
 ---
 
-<div class="academy-hero not-content">
-	<div class="academy-hero__copy">
-		<span class="eyebrow">A beginner-first systems field guide</span>
-		<h1>Learn what games are <em>really</em> doing.</h1>
-		<p>Memory, assembly, graphics, packets, and reverse engineering—explained in plain English, then explored with small buildable programs.</p>
-		<div class="hero-actions">
-			<a class="button button--primary hero-resume" data-resume-link data-resume-base={base} href={`${base}/pages/1/01/`} hidden>
-				<span data-resume-label>Continue reading</span> <span aria-hidden="true">→</span>
-				<small class="hero-resume__detail" data-resume-detail></small>
-			</a>
-			<a class="button button--primary" data-resume-start href={`${base}/pages/1/01/`}>Start lesson one <span aria-hidden="true">→</span></a>
-			<a class="button button--ghost" href="#course-map">See the course map</a>
-			<a class="button button--ghost" href={`${base}/glossary/`}>Browse the glossary</a>
+<section class="gha-hero not-content" aria-labelledby="gha-hero-title">
+	<h1 id="gha-hero-title" class="gha-hero__title">Learn how games work, down to the bytes.</h1>
+	<p class="gha-hero__lede">
+		Game Hacking Academy starts from how a computer runs a game and works up to memory, assembly, debuggers,
+		graphics, networks, game files and anti-cheat. {lessons.length} lessons explain one idea at a time, with every
+		number worked out. You do not need to know how to program yet.
+	</p>
+
+	<div class="gha-hero__actions hero-actions">
+		{/* A returning reader's Continue button is filled in after load. Reserving its place before the first paint keeps the page from jumping when it appears. */}
+		<script is:inline>try { var last = JSON.parse(localStorage.getItem('gha-last') || 'null'); if (last && /^pages\/\d+\/\d+$/.test(last.id)) document.documentElement.dataset.ghaResume = ''; } catch (e) {}</script>
+		<a class="button button--primary hero-resume" data-resume-link data-resume-base={base} href={`${base}/${first.id}/`} hidden>
+			<span data-resume-label>Continue reading</span>
+			<small class="hero-resume__detail" data-resume-detail></small>
+		</a>
+		<a class="button button--primary" data-resume-start href={`${base}/${first.id}/`}>Start Lesson {first.data.chapter}</a>
+		<a class="gha-hero__link" href="#course-map">See all {chapterCount} chapters</a>
+		<a class="gha-hero__link" href={`${base}/glossary/`}>Browse the glossary</a>
+	</div>
+
+	{quoted && (
+		<blockquote class="gha-hero__quote" data-tone="1">
+			<p>{EXCERPT}</p>
+			<footer>From <a href={`${base}/${quoted.id}/`}>Lesson {quoted.data.chapter}, {quoted.data.title}</a></footer>
+		</blockquote>
+	)}
+
+	<div class="gha-demo" data-gha-health={HEALTH.start} role="group" aria-labelledby="gha-demo-title">
+		<h2 id="gha-demo-title" class="sr-only">One value on screen and in memory</h2>
+
+		<div class="gha-demo__row gha-demo__row--screen">
+			<span class="gha-demo__label" aria-hidden="true">On screen</span>
+			<div class="gha-demo__screen">
+				<div class="gha-demo__bar" aria-hidden="true"><span class="gha-demo__fill" data-gha-fill></span></div>
+				<p class="gha-demo__value">Health <b data-gha-value>{HEALTH.start}</b></p>
+			</div>
 		</div>
-	</div>
-	<div class="academy-hero__terminal" aria-label="A tiny typed-code example">
-		<div class="terminal-bar"><span></span><span></span><span></span><b>first_lab.rs</b></div>
-		<pre><code><span class="code-dim">// Data has a type.</span>
-<span class="code-keyword">let</span> mut gold: u32 = 40;
 
-<span class="code-dim">// We can observe a change.</span>
-gold += 10;
+		<div class="gha-demo__row gha-demo__row--memory">
+			<span class="gha-demo__label" aria-hidden="true">In memory</span>
+			<MemoryStrip cells={cells} marks="0" label={`Four bytes at ${address(HEALTH.address)} holding health as a u32`} />
+		</div>
 
-assert_eq!(gold, 50);</code></pre>
-		<div class="terminal-status"><span>✓ clear</span><span>✓ safe</span><span>✓ yours</span></div>
+		<div class="gha-demo__foot">
+			<p class="gha-demo__derive">
+				<span data-gha-derive>{byteDerivation(HEALTH.start)}</span>. The other three bytes stay 00 while health
+				is below 256.
+			</p>
+			<button type="button" class="gha-demo__hit" data-gha-hit-button data-hit-label="Take a hit" data-reset-label="Restore health" hidden>Take a hit</button>
+		</div>
+		<p class="sr-only" aria-live="polite" data-gha-status></p>
 	</div>
-</div>
+</section>
 
 <script>
 	import { mountResume } from '../../scripts/resume-reading';
+	import { HEALTH, address, byteDerivation, hexByte } from '../identity/bytes';
+
 	mountResume();
+
+	for (const demo of document.querySelectorAll<HTMLElement>('[data-gha-health]')) {
+		const button = demo.querySelector<HTMLButtonElement>('[data-gha-hit-button]');
+		const fill = demo.querySelector<HTMLElement>('[data-gha-fill]');
+		const value = demo.querySelector<HTMLElement>('[data-gha-value]');
+		const derive = demo.querySelector<HTMLElement>('[data-gha-derive]');
+		const status = demo.querySelector<HTMLElement>('[data-gha-status]');
+		const low = demo.querySelector<HTMLElement>('.mem-cell .mem-cell__value');
+		if (!button || !fill || !value || !derive || !status || !low) continue;
+		let health: number = HEALTH.start;
+		const show = (announce: boolean): void => {
+			fill.style.setProperty('--gha-health', `${health}%`);
+			value.textContent = String(health);
+			low.textContent = hexByte(health);
+			derive.textContent = byteDerivation(health);
+			button.textContent = (health === 0 ? button.dataset.resetLabel : button.dataset.hitLabel) ?? '';
+			if (announce) status.textContent = `Health ${health}. The byte at ${address(HEALTH.address)} now holds 0x${hexByte(health)}.`;
+		};
+		button.addEventListener('click', () => {
+			health = health === 0 ? HEALTH.start : Math.max(0, health - HEALTH.hit);
+			show(true);
+		});
+		button.hidden = false;
+	}
 </script>
 
 <style is:global>
 	.hero-resume[hidden] { display: none; }
-	.hero-resume__detail { display: block; max-width: 22rem; margin-top: 0.15rem; font-size: 0.75em; font-weight: 400; opacity: 0.9; overflow-wrap: anywhere; }
+	.hero-resume__detail { display: block; max-width: 22rem; margin-top: 0.15rem; overflow: hidden; font-size: 0.75em; font-weight: 400; opacity: 0.9; text-overflow: ellipsis; white-space: nowrap; }
 </style>
