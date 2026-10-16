@@ -236,7 +236,9 @@ depth means near” until the projection and comparison convention are confirmed
 
 The depth buffer answers “which submitted fragment wins at this sample?” It does
 not answer whether an object is logically visible to gameplay. Collision queries,
-portals, fog-of-war systems, and server state may use entirely different data.
+portals, fog-of-war systems, and server state may use entirely different data;
+[Lesson 9.2](/pages/15/02/#withhold-information-the-client-does-not-need) shows
+why a server should not send a hidden enemy's position at all.
 
 <Frame caption="A depth-test experiment in the offline target.">
 
@@ -354,52 +356,13 @@ leaves a different trace:
 
 </Panel>
 
-## A frame is several passes
+<span id="a-frame-is-several-passes" aria-hidden="true" />
 
 Most frames are not drawn in one sweep. The engine renders the scene several times
-for different purposes, in order, and each sweep is a **pass**. A pass starts by
-clearing its target to a **clear colour**, and clearing depth to its farthest value, so
-the last frame's picture is not left behind:
-
-```mermaid
-flowchart LR
-    S["Shadow pass<br/>depth seen from the light"] --> O["Opaque pass<br/>solid objects"]
-    O --> K["Sky"]
-    K --> T["Transparent pass<br/>far to near"]
-    T --> X["Post-processing<br/>full-screen effects"]
-    X --> U["UI pass<br/>menus and text"]
-    U --> P["Present"]
-```
-
-- **Shadows.** The shadow pass draws the scene's depth as seen from the light into a
-  texture called a **shadow map**. In the main pass, each pixel's position is converted
-  to the light's view and compared with the stored depth: if something nearer was
-  stored, the pixel is in shadow. A surface point 7.50 away from the light would be
-  compared with its own stored depth, 7.50, and rounding could make it shadow itself,
-  so the test uses a small **bias**: shadowed only if the stored depth is less than
-  7.50 − 0.05 = 7.45. It is not, so the point is lit.
-- **Sky and fog.** A **skybox** is a cube texture drawn so that it always looks
-  infinitely far away. **Fog** blends a surface toward a haze colour with distance. With
-  the fog starting at 10 and ending at 50, a surface 30 away has the factor
-  `(50 − 30) ÷ (50 − 10) = 0.5`, so a surface of <Color value="rgb(200, 100, 50)" /> in haze
-  <Color value="rgb(150, 150, 150)" /> is drawn as <Color value="rgb(175, 125, 100)" />.
-- **Post-processing.** The finished picture is stored as a texture and a full-screen
-  rectangle is drawn with a shader that reads it. **Bloom** blurs the brightest parts and
-  adds them back, and **colour grading** remaps colours. **Tone mapping** compresses
-  **HDR** (high dynamic range) values, where lighting can produce colours above 1.0, into
-  the 0 to 1 range a display can show. A simple tone-mapping formula, `c ÷ (1 + c)`, turns a value of
-  4.0 into 0.8, a value of 1.0 into 0.5, and a value of 0.5 into 0.33, so bright values
-  are squeezed more than dim ones.
-- **Render to texture.** A pass can draw into an off-screen texture, not the screen.
-  The texture can then be used as a mirror, a security-camera monitor, a minimap, or a
-  screen shown inside the 3D world.
-- **More than one camera.** Each camera draws into its own rectangle, or its own
-  texture. Split-screen is two cameras drawing into the left and right halves of one
-  window.
-- **Forward and deferred.** A forward renderer lights each object as it draws it. A
-  **deferred** renderer first draws position, normal, and colour for every pixel into
-  extra textures, then lights the pixels in one later pass, which makes many lights
-  affordable but handles see-through surfaces less easily.
+for different purposes, and each sweep is a **pass**: shadows, then the solid
+objects, the sky, the see-through objects, full-screen effects, and finally menus
+and text. [Lesson 7.4](/pages/5/04/#a-frame-is-several-passes) follows each pass,
+because the same object can be drawn in more than one of them.
 
 ## Wider colours and smoother edges
 
@@ -410,16 +373,19 @@ An ordinary picture keeps each colour channel in 8 bits, which is 256 levels fro
 comes out at 1.4 and a lamp at 12.0. In an 8-bit picture both are cut off at 1.0 and
 look equally bright. **HDR** rendering draws into a texture whose channels are wider
 and floating-point, commonly 16 bits each, so the difference survives until the
-tone-mapping step at the end compresses the result into the 0 to 1 range of the
-display. With the `c ÷ (1 + c)` tone-mapping formula above, the wall becomes 1.4 ÷ 2.4 = 0.58 and
+**tone-mapping** step at the end of the frame compresses the result into the 0 to 1
+range of the display. A simple tone-mapping formula, `c ÷ (1 + c)`, turns a value of
+4.0 into 0.8, a value of 1.0 into 0.5, and a value of 0.5 into 0.33, so bright values
+are squeezed more than dim ones. With it, the wall becomes 1.4 ÷ 2.4 = 0.58 and
 the lamp 12 ÷ 13 = 0.92: still different, and both displayable.
 
 The wider pixels cost memory. A 1920 × 1080 picture has 1920 × 1080 = 2,073,600 pixels.
 With 4 channels of 1 byte it takes 2,073,600 × 4 = 8,294,400 bytes, about 8.3 MB. With
 4 channels of 2 bytes it takes 2,073,600 × 8 = 16,588,800 bytes, about 16.6 MB.
 
-HDR is also what makes bloom mean something. Bloom blurs only the part of each pixel
-above a threshold, here 1.0. The wall has 1.4 − 1.0 = 0.4 above it and the lamp has
+HDR is also what makes **bloom** mean something. Bloom is a full-screen effect that
+blurs the brightest parts of the picture and adds them back, and it blurs only the
+part of each pixel above a threshold, here 1.0. The wall has 1.4 − 1.0 = 0.4 above it and the lamp has
 12.0 − 1.0 = 11.0, so the lamp glows 11.0 ÷ 0.4 = 27.5 times as strongly. In the 8-bit
 picture both had 0 above the threshold, and nothing could glow.
 
@@ -592,54 +558,11 @@ Use the earliest observable difference to narrow the cause:
 This table is a diagnostic order, not proof. Some engines merge or reorder stages,
 and GPU-driven pipelines can construct visible lists on the GPU.
 
-## Build the Urban Terror 4.3.4 memory wallhack
+<span id="build-the-urban-terror-434-memory-wallhack" aria-hidden="true" />
+<span id="what-the-experiment-proves" aria-hidden="true" />
 
-The flag trace and frame-local state model above can be understood with the
-debugger alone. This pinned in-process implementation applies the verified
-detour and DLL lifecycle from [Lesson 6.4](/pages/8/03/) to the rendering
-boundary. Keep those ownership and restoration steps intact while following
-the exact build-specific addresses below.
-
-The `r_drawentities` trace in this exact build leads through the call at `0x0052F71F`. Inside the entity loop, `ebx` holds the current render entity at `0x0052D2FD`. The field at `[ebx+4]` cycles through values such as `0x0D`, `0x40`, `0x82`, and `0x83`.
-
-Hook this exact point:
-
-```text
-hook:    0x0052_D2FD
-resume:  0x0052_D303
-change:  write 0x0D to dword ptr [ebx+4]
-replay:  mov dword ptr [0x0102_AE98], ebx
-```
-
-A 32-bit detour cave has the same shape as the Wesnoth cave:
-
-```rust
-#[cfg(target_arch = "x86")]
-#[unsafe(naked)]
-unsafe extern "C" fn render_flag_cave() {
-    core::arch::naked_asm!(
-        "pushfd",
-        "pushad",
-        "mov dword ptr [ebx + 4], 0x0D",
-        "popad",
-        "popfd",
-        "mov dword ptr [0x0102_AE98], ebx",
-        "jmp {resume}",
-        resume = const 0x0052_D303,
-    );
-}
-```
-
-Install a six-byte verified detour at `0x0052D2FD`, enter a local game, enable `cg_thirdperson`, and add bots. The local player and bots should render through walls exactly as in the screenshot. Values `0x83` and `0x40` should not create the same effect; that comparison is how you prove `0x0D` is the relevant render state.
-
-Restore the original six hook bytes when the feature is disabled. This memory-based wallhack is intentionally kept as a full target-specific lab before the more general OpenGL approach.
-
-The DLL already contains the complete verified implementation. Build and inject it into `Quake3-UrT.exe`, enter a local bot match, and press **F1** to toggle this memory wallhook. Press **End** to stop and restore all six bytes. See [`install_urban_terror_memory_wallhook`](/windows-labs/src/windows_impl/game_hooks.rs) and the Urban Terror hotkey worker in [`dll.rs`](/windows-labs/src/windows_impl/dll.rs).
-
-<GitHub path="windows-labs/src/windows_impl/game_hooks.rs" />
-
-<GitHub path="windows-labs/src/windows_impl/dll.rs" />
-
-## What the experiment proves
-
-The comparison isolates how one CPU-side flag changes GPU behavior. It does not prove that every build uses the same flag, address, or rendering path, so keep the executable fingerprint and original bytes beside the result.
+The flag trace above leads to an exact-build in-process feature: the Urban Terror
+4.3.4 memory wallhack, which detours the entity loop and writes the render flag
+for every entity. It is in
+[Lesson 8.8](/pages/8/08/#build-the-urban-terror-434-memory-wallhack), after the
+DLL and detour lessons that its installation depends on.
