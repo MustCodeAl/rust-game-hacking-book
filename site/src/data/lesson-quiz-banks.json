@@ -15203,14 +15203,14 @@
       },
       {
         "id": "lua-alias-trace",
-        "prompt": "What does this Lua code print?\n```lua\nlocal a = { hp = 40 }\nlocal b = a\nb.hp = 10\nprint(a.hp)\n```",
+        "prompt": "In Lua, after `local a = { hp = 40 }`, `local b = a` and `b.hp = 10`, what does `print(a.hp)` show?",
         "options": [
-          "10, because both names refer to the same table",
           "40, because assigning to b made its own copy of the table",
+          "10, because both names refer to the same table",
           "nil, because b.hp created a new field only on b",
           "An error, because a table cannot be given two names"
         ],
-        "answer": "0",
+        "answer": "1",
         "explanation": "Assigning a table copies the reference, not the table. There is one hp field, so a change through b is seen through a.",
         "type": "multiple-choice"
       },
@@ -15333,15 +15333,15 @@
       },
       {
         "id": "lua-trust-differences",
-        "prompt": "Which difference between games changes how a Lua script's failures show up or what it can do?",
+        "prompt": "The same Lua script behaves differently in two games that both embed Lua. Which difference between the two hosts could explain it?",
         "options": [
-          "Its CPU, memory, and action limits",
-          "The color theme of the in-game console",
-          "The length of the script file's name",
-          "The number of comments inside the script"
+          "The script was turned into each game's machine code at install",
+          "Lua comments run as code in one game but are skipped in the other",
+          "Each host sets its own CPU, memory and action limits for scripts",
+          "Global names set in one game carry over into the other game"
         ],
-        "answer": "0",
-        "explanation": "Hosts differ in version, libraries, API rules, trust, resource limits, and error handling, so a script may behave differently from game to game.",
+        "answer": "2",
+        "explanation": "Hosts differ in Lua version, available libraries, exposed functions and their argument rules, trust, resource limits and error handling, so the same script can do different things. Lua source is not turned into machine code at install, comments never run, and each game has its own Lua state.",
         "type": "multiple-choice"
       }
     ]
@@ -15561,13 +15561,13 @@
         "id": "debug-record",
         "prompt": "Which item belongs in a debug record for a misbehaving call?",
         "options": [
-          "Active function, frame base, and open upvalues",
-          "The player's account password for the game",
-          "The full contents of every snapshot taken",
-          "The computer's desktop wallpaper image"
+          "Every snapshot taken so far, printed in full by default",
+          "Only the final error message, since frames are temporary",
+          "The active function, its frame base, and open upvalues",
+          "The player's login token, to tie each call to an account"
         ],
-        "answer": "0",
-        "explanation": "The lesson lists the bytecode position, frame base, argument tags, result count, open upvalues, callback name, and error chain. It warns against printing secrets or whole snapshots by default.",
+        "answer": "2",
+        "explanation": "Record the bytecode position, active function and frame base, argument tags, requested result count, open upvalues, callback name and error chain. Tokens and whole snapshots stay out of the record by default, and the final message alone hides where the call went wrong.",
         "type": "multiple-choice"
       }
     ]
@@ -15720,15 +15720,15 @@
       },
       {
         "id": "lua-squared-why",
-        "prompt": "Why does the ranking function return squared distance instead of true distance?",
+        "prompt": "A function ranks targets by distance but returns the squared distance, with no square root. Why does that still rank them correctly?",
         "options": [
-          "It keeps the nearest-to-farthest order without a square root",
-          "It makes every distance come out as an exact integer",
-          "It lets the function accept position tables with no fields",
-          "It converts the result into a new position table"
+          "Squared values are always smaller, so comparisons run faster",
+          "Squaring keeps the order of non-negative distances unchanged",
+          "Squaring turns every distance into an exact whole number",
+          "The squared value also tells which direction the target lies"
         ],
-        "answer": "0",
-        "explanation": "Squaring preserves the ordering of non-negative distances, so ranking works without calculating a square root. Squared values are not always integers.",
+        "answer": "1",
+        "explanation": "If one non-negative distance is smaller than another, its square is smaller too, so sorting by squared distance gives the same order and skips the square root. Squares are not always smaller or whole numbers, and they carry no direction.",
         "type": "multiple-choice"
       },
       {
@@ -16024,15 +16024,15 @@
       },
       {
         "id": "lock-across-script",
-        "prompt": "Why should the host not hold a mutable game-state lock while a script runs?",
+        "prompt": "Why should a host not hold a mutable game-state lock while a script runs?",
         "options": [
-          "Give Lua a copied snapshot and collect requests instead",
-          "Locks cannot be created inside an `mlua` host",
-          "Scripts run so fast that locks would never matter",
-          "The script needs the lock so it can edit state directly"
+          "Locks cannot be created by a program that embeds an interpreter",
+          "Holding a lock makes the interpreter skip its memory limit",
+          "The script may call a host function that needs the same lock",
+          "A held lock lets the script write to game state directly"
         ],
-        "answer": "0",
-        "explanation": "Holding the lock during untrusted script work invites trouble. The two-phase design runs Lua on a copy and applies validated requests afterward.",
+        "answer": "2",
+        "explanation": "A running script can call back into host functions. If one of them tries to take the lock the host already holds, that work waits on itself. Giving Lua a copied snapshot and applying its requests afterward means the lock is never held while script code runs.",
         "type": "multiple-choice"
       },
       {
@@ -16050,15 +16050,15 @@
       },
       {
         "id": "accepted-actions-delay",
-        "prompt": "Why does the host print accepted actions only after the script returns?",
+        "prompt": "A script queues three action requests, and the host prints which ones it accepted only after the script has returned. Why wait until then?",
         "options": [
-          "Lua proposes data, and the host decides what happens",
-          "Scripts cannot run until the host has printed",
-          "Printing earlier would delete the script's requests",
-          "The accepted list is computed by Lua's garbage collector"
+          "Each request already changed the game the moment it was queued",
+          "The host cannot print anything while an interpreter is loaded",
+          "Printing during the run would use up the script's memory budget",
+          "The requests are proposals until the host checks them afterward"
         ],
-        "answer": "0",
-        "explanation": "The delay is deliberate. A script's output is only a proposal until the host checks it.",
+        "answer": "3",
+        "explanation": "A script only proposes actions. The host validates and commits them after the script returns successfully, so nothing is accepted before then, and a script that fails halfway has its queued requests discarded.",
         "type": "multiple-choice"
       }
     ]
@@ -16650,15 +16650,15 @@
       },
       {
         "id": "callback-validate",
-        "prompt": "Which item belongs in a host callback's input checks?",
+        "prompt": "A host function exposed to scripts receives a target ID and a coordinate. Which check belongs in it before it acts?",
         "options": [
-          "Numeric finiteness, range, and referenced IDs",
-          "Whether the script file is long enough to run",
-          "Which Lua version wrote the script's comments",
-          "The colors the log output will be shown in"
+          "Only the argument types, since values are the script's job",
+          "The coordinate is finite and in range, and the ID exists",
+          "Nothing, if the script stayed inside its instruction budget",
+          "That the script file is shorter than the published size limit"
         ],
-        "answer": "0",
-        "explanation": "Validate argument types, string lengths, sequence lengths, numeric finiteness and range, referenced IDs, permissions, and rate budgets.",
+        "answer": "1",
+        "explanation": "A callback must validate what it receives: types, string and sequence lengths, finite numbers in range, IDs that exist now, permissions and rate budgets. Type checks alone do not prove the values make sense, and budgets and source limits guard other resources.",
         "type": "multiple-choice"
       },
       {
@@ -16990,7 +16990,7 @@
           "Group characters into tokens like name or integer",
           "Check the token order against the grammar",
           "Turn the program's meaning into bytecode steps",
-          "Run the bytecode using a stack of values now"
+          "Run the bytecode with a stack of values"
         ],
         "answer": "0",
         "explanation": "The lexer produces tokens like name, equals, integer, plus, integer. Grammar checking is the parser, and compiling and running are later stages.",
@@ -17154,15 +17154,15 @@
       },
       {
         "id": "four-failures",
-        "prompt": "A script's jump target points outside the program. Which kind of failure is this?",
+        "prompt": "Before any instruction runs, a checker finds a jump in the compiled bytecode that targets position 40 of a 12-instruction program. Which kind of failure is this?",
         "options": [
-          "Bytecode validation",
           "Lexing of the source",
+          "Bytecode validation",
           "Parsing of the grammar",
           "Execution of the code"
         ],
-        "answer": "0",
-        "explanation": "The lesson separates lexing, parsing, bytecode validation, and execution failures. A jump outside the program is invalid bytecode, a different stage from a type error at run time.",
+        "answer": "1",
+        "explanation": "The source was already lexed and parsed, and nothing has run yet. A jump outside the program is invalid bytecode, which a validation pass catches before execution; a type error or an exhausted budget would be an execution failure.",
         "type": "multiple-choice"
       },
       {
