@@ -179,7 +179,7 @@ export const clientChecksCells: readonly CellScenario[] = [{
       panel(undefined, 'blue', [row('game.exe', [c('SHA-256 9F2C…41AB', 'blue', 2), c('=', 'purple', 1), h('trusted 9F2C…41AB', 'green', 2, { sub: 'match' })])]),
     ]),
     frame('Modules: what is loaded in the game', 'An unknown module is worth a look; it is not proof of a cheat.', [
-      panel(undefined, 'blue', [row('Loaded', [c('game.exe', 'green'), c('overlay.dll', 'green', 1, { sub: 'supported' }), h('helper.dll', 'yellow', 1, { sub: 'unknown' })])]),
+      panel(undefined, 'blue', [row('Loaded', [c('game.exe', 'green'), c('hud.dll', 'green', 1, { sub: 'supported overlay' }), h('helper.dll', 'yellow', 1, { sub: 'unknown' })])]),
     ]),
     frame('Access: who opened the game', 'The same read rights, different purposes: check provenance and the game’s supported tools.', [
       panel(undefined, 'blue', [row('Handles to game.exe', [h('tool.exe', 'yellow', 2, { sub: 'read rights' }), c('crash reporter', 'green', 2, { sub: 'read rights' })])]),

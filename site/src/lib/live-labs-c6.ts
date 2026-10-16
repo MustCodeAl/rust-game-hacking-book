@@ -56,7 +56,7 @@ const hookWindow: LiveLab = {
     let lastCall = 0;
     for (let update = 1; update <= updates; update += 1) {
       if (stoppedIn) {
-        calls.push(c('not run', 'gray', 1, { ghost: true, sub: `update ${update}` }));
+        calls.push(c('–', 'gray', 1, { ghost: true, sub: `#${update}` }));
         counts.push(c('–', 'gray', 1, { ghost: true }));
         continue;
       }
@@ -64,13 +64,13 @@ const hookWindow: LiveLab = {
       if (count + perUpdate > HOOK_LIMIT) {
         lastCall = HOOK_LIMIT + 1 - count;
         stoppedIn = update;
-        calls.push(h(`${lastCall}`, 'red', 1, { sub: `update ${update}` }));
+        calls.push(h(`${lastCall}`, 'red', 1, { sub: `#${update}` }));
         counts.push(h('101 > 100', 'red', 1, { sub: 'error' }));
         continue;
       }
       count += perUpdate;
       carried.push(count);
-      calls.push(c(`${perUpdate}`, 'blue', 1, { sub: `update ${update}` }));
+      calls.push(c(`${perUpdate}`, 'blue', 1, { sub: `#${update}` }));
       counts.push(c(`${count}`, 'yellow', 1));
     }
     const fires = `${num(work)} ÷ 1,000 = ${num(perUpdate)}`;
@@ -80,7 +80,7 @@ const hookWindow: LiveLab = {
       : `Each update runs ${num(work)} instructions, so the hook fires ${fires} times. ${reset ? `The count starts again at 0 every update and never passes 100, so all ${updates} updates finish.` : `Never reset, the count reaches ${count} after ${updates} updates, still not more than 100, so all of them finish.`}`;
     return frame('Hook calls, update by update', caption, [
       panel('Hook calls counted', 'blue', [
-        row('Calls in this update', calls),
+        row('Calls in update #1, #2, …', calls),
         row(reset ? 'Count (reset each update)' : 'Count (carried over)', counts, { link: 'add to the count' }),
       ]),
       panel('Result', stoppedIn ? 'red' : 'green', [row('', [h(stoppedIn ? `Stopped in update ${stoppedIn}: instruction budget exceeded` : `All ${updates} updates finished`, stoppedIn ? 'red' : 'green', 4)])]),
@@ -132,7 +132,7 @@ const healthClamp: LiveLab = {
         row('Rule applied', [h(rule, 'purple', 4)]),
       ]),
       panel('Accepted state', holds ? 'green' : 'red', [
-        row('Stored health', [h(signed(stored), holds ? 'green' : 'red', 1, { sub: 'the deciding copy' }), c(`0 ≤ ${signed(stored)} ≤ ${max}: ${holds ? 'holds' : 'broken'}`, holds ? 'green' : 'red', 3)]),
+        row('Stored health (the deciding copy)', [h(signed(stored), holds ? 'green' : 'red', 1), c(`0 ≤ ${signed(stored)} ≤ ${max}: ${holds ? 'holds' : 'broken'}`, holds ? 'green' : 'red', 3)]),
         row('Health bar', [c(`shows ${signed(stored)}`, 'teal', 4, { sub: 'copies the accepted value' })], { link: 'the display follows' }),
       ]),
     ]);
@@ -179,9 +179,9 @@ const checksumCoverage: LiveLab = {
     return frame('Recompute, compare, decide', caption, [
       panel('Recompute from the record now', 'yellow', [
         row('Terms', [
-          c('7 × 31 = 217', 'yellow', 2, { sub: 'player_id' }), c(`+ ${num(health)}`, 'yellow', 1, { sub: 'health' }),
-          full ? c(`+ ${num(maxHealth)} × 128 = ${num(rotl(maxHealth, 7))}`, 'yellow', 3, { sub: 'max_health' }) : c('not covered', 'gray', 3, { ghost: true, sub: `max_health ${num(maxHealth)}` }),
-          c('+ 3 × 8,192 = 24,576', 'yellow', 2, { sub: 'generation' }),
+          c('217', 'yellow', 1, { sub: 'player_id × 31' }), c(`+ ${num(health)}`, 'yellow', 1, { sub: 'health' }),
+          full ? c(`+ ${num(rotl(maxHealth, 7))}`, 'yellow', 1, { sub: `max_health ${num(maxHealth)} × 128` }) : c('not covered', 'gray', 1, { ghost: true, sub: `max_health ${num(maxHealth)}` }),
+          c('+ 24,576', 'yellow', 1, { sub: 'generation 3 × 8,192' }),
         ]),
         row('Compare', [h(num(now), match ? 'green' : 'red', 3, { sub: 'recomputed now' }), c(match ? '=' : '≠', 'purple', 1), c(num(stored), 'blue', 4, { sub: 'stored when sealed' })], { link: 'add the terms' }),
       ]),

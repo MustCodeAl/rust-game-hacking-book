@@ -253,7 +253,7 @@ export const vmStackCells: readonly CellScenario[] = [{
 
 /** Lesson 13.3 (pages/13/03.mdx): evidence maps to a decision, and assessment is not validation. */
 const verdict = (label: string, caption: string, evidence: string, decision: string, hue: 'yellow' | 'orange' | 'green'): CellFrame => frame(label, caption, [
-  panel(undefined, 'purple', [row('Evidence, then next state', [h(evidence, 'yellow', 2, { sub: 'seen' }), h(decision, hue, 2, { sub: 'next state' })])]),
+  panel(undefined, 'purple', [row('Evidence, then next state', [h(evidence, 'yellow', 2, { sub: 'seen' }), h(decision, hue, 3, { sub: 'next state' })])]),
 ]);
 export const signalDiagnosisCells: readonly CellScenario[] = [{
   id: 'signal-decision', tab: 'From signal to decision',
@@ -263,7 +263,7 @@ export const signalDiagnosisCells: readonly CellScenario[] = [{
     verdict('One unusual fixture sample', 'A single odd sample is not enough to conclude anything.', 'one unusual sample', 'NeedsAnotherSample', 'yellow'),
     verdict('The same signal repeats', 'A repeat makes it worth finding out why.', 'a repeated signal', 'NeedsDiagnosis', 'orange'),
     frame('The signal is explained: back to Baseline', 'Explaining a signal does not check what the game accepts. Validation still happens where state changes.', [
-      panel(undefined, 'purple', [row('Evidence, then next state', [h('an explained signal', 'yellow', 2, { sub: 'seen' }), h('Baseline', 'green', 1, { sub: 'next state' }), c('still validate every change', 'red', 1)])]),
+      panel(undefined, 'purple', [row('Evidence, then next state', [h('an explained signal', 'yellow', 2, { sub: 'seen' }), h('Baseline', 'green', 2, { sub: 'next state' }), c('still validate every change', 'red', 2)])]),
     ]),
   ],
 }];
@@ -308,7 +308,7 @@ export const jtagCells: readonly CellScenario[] = [{
   summary: 'The clock and mode lines go to both chips at once. The data goes through them one after the other.',
   frames: [
     frame('Data runs through the chips in series', 'TDI feeds chip A, chip A feeds chip B, and chip B returns the data on TDO. Each clock moves every bit one place along the chain.', [
-      panel(undefined, 'blue', [row('Data path, TDI to TDO', [h('Debugger TDI', 'purple'), h('Chip A', 'blue'), h('Chip B', 'teal'), h('Debugger TDO', 'purple')])]),
+      panel(undefined, 'blue', [row('Data path, debugger TDI to debugger TDO', [h('TDI', 'purple', 1, { sub: 'debugger' }), h('Chip A', 'blue'), h('Chip B', 'teal'), h('TDO', 'purple', 1, { sub: 'debugger' })])]),
     ]),
     frame('TCK and TMS reach both chips in parallel', 'One clock and one mode line branch to every chip, so all of them step together.', [
       panel(undefined, 'orange', [row('TCK and TMS, in parallel', [h('Debugger', 'purple', 2), h('Chip A and Chip B at the same time', 'orange', 2)])]),
