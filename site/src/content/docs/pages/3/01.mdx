@@ -11,7 +11,7 @@ sidebar:
 ---
 import Frame from '../../../../components/kit/Frame.astro';
 import SpeedType from '../../../../components/kit/SpeedType.astro';
-import { GitHub, CodeGroup, Tab } from '../../../../components/kit';
+import { CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import OwnershipScope from '../../../../components/OwnershipScope.astro';
@@ -80,7 +80,7 @@ Use `usize` for address calculations, not for game values just because it is con
 The target process does not store the words `u32` or `f32` beside each value.
 For example, `00 00 20 41` reads as 1,092,616,192 with `u32` and 10.0 with
 `f32`; the type tells the reader which interpretation to use. We need the widths now
-to read memory safely. [Lesson 3.2](/pages/3/09/) derives the bit patterns
+to read memory safely. [Lesson 3.6](/pages/3/09/) derives the bit patterns
 behind those interpretations before we build the external reader.
 
 `usize` is large enough to index memory in the current build. It is 32 bits in
@@ -103,13 +103,11 @@ fn damage(target: PlayerId, amount: Health) { /* ... */ }
 ```
 
 These are **newtypes**. The wrapper tells the compiler that equal byte
-representations do not mean interchangeable values. The same technique
-keeps a remote address, a byte offset, and a game value from being passed
-to the wrong parameter just because all three happen to be integers.
-Chapter 1 first kept these ideas separate in words; a newtype can enforce
-the distinction in code.
-
-<MarginNote kind="alternative">Think of labelled jars: sugar and salt look alike, but the label stops you pouring one where the other belongs. A newtype is that label for numbers.</MarginNote>
+representations do not mean interchangeable values, so a remote address, a
+byte offset, and a game value cannot be swapped just because all three are
+integers. [Lesson 3.4 gives offsets and addresses their own
+newtypes](/pages/1/15/#give-numbers-different-types-when-they-mean-different-things)
+and derives the traits they need.
 
 ## Ownership and borrowing
 
@@ -184,15 +182,12 @@ pointer cast would silently depend on layout, alignment, size, and host byte
 order. Low-level code is easier to review when every conversion states its
 assumption.
 
-### A missing value at a memory boundary
+<span id="a-missing-value-at-a-memory-boundary" aria-hidden="true" />
 
-`Some(0)` holds a valid zero; `None` means no value was produced. The
-same distinction protects a memory read. `read_u32` returns
-`Some(number)` only after it has obtained four bytes and decoded them;
-if the local buffer is too short, it returns `None` instead of reading
-past the end. The `?` operator in this `Option`-returning function means
-“return `None` now if this step has no value.” The next boundary needs
-an actual error reason, so it uses `Result`.
+A three-byte buffer stops at the first `?` and gives `None`, which is
+different from a decoded `Some(0)`. [Lesson 3.3 follows each step of this checked
+decode](/pages/1/14/#check-slice-bounds-before-decoding-a-number). The next
+boundary needs an actual error reason, so it uses `Result`.
 
 ## Errors are part of the function
 
@@ -221,42 +216,11 @@ failed. Code reused by several lessons—such as a packet, PE (Portable Executab
 header-and-sections layout Windows uses for `.exe` and `.dll` files), or byte-pattern
 parser—benefits from a typed error enum. The caller can then handle truncated
 bytes differently from an unsupported size or invalid text. Those errors should
-also explain themselves when printed:
-
-```rust
-use std::{error::Error, fmt};
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ParseError {
-    Truncated,
-    TooLarge(usize),
-    InvalidUtf8,
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, output: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Truncated => output.write_str("the input ended too soon"),
-            Self::TooLarge(length) => {
-                write!(output, "the declared length ({length} bytes) is too large")
-            }
-            Self::InvalidUtf8 => output.write_str("the text is not valid UTF-8"),
-        }
-    }
-}
-
-impl Error for ParseError {}
-```
-
-`Debug` shows the exact failure variant while you debug a parser. `Display`
-gives the learner a useful sentence such as “the packet ended before the
-requested value.” Implementing `Error` lets the scanner, proxy, or PE inspector
-keep that parser failure underneath its own context instead of flattening it
-into a string. The portable
-[`rust-labs` implementation](/rust-labs/src/lib.rs) follows
-this pattern and tests the message produced for an oversized field. 🧭
-
-<GitHub path="rust-labs/src/lib.rs" />
+also explain themselves when printed. `Debug` shows the exact failure variant
+while you debug a parser. `Display` gives the learner a useful sentence such as
+“the input ended too soon.” [Lesson 3.5 implements both traits by hand for a
+parser error](/pages/1/16/#write-the-error-traits-by-hand), the code that
+`thiserror` would otherwise derive.
 
 ### Separate the cause from the decision
 

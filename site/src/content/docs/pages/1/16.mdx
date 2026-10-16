@@ -11,7 +11,7 @@ sidebar:
 ---
 import Frame from '../../../../components/kit/Frame.astro';
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import { MarginNote, SpeedType } from '../../../../components/kit';
+import { GitHub, MarginNote, SpeedType } from '../../../../components/kit';
 
 The [previous lesson](/pages/1/15/) gave values clear owners and useful
 interfaces. Ownership also answers a practical question: **who releases a
@@ -149,6 +149,47 @@ values; `maximum` then limits the amounts this application accepts.
 manifest with `cargo add thiserror`; a library exposing this error type keeps
 the enum in its public interface. The derive requires `Debug`, and
 `#[from]` also identifies the underlying error as a source.
+
+### Write the error traits by hand
+
+The derive writes code you can also write yourself. A parser shared by
+several tools, such as a packet, PE (Portable Executable, the
+header-and-sections layout Windows uses for `.exe` and `.dll` files), or
+byte-pattern parser, can implement the two traits directly:
+
+```rust
+use std::{error::Error, fmt};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ParseError {
+    Truncated,
+    TooLarge(usize),
+    InvalidUtf8,
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, output: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Truncated => output.write_str("the input ended too soon"),
+            Self::TooLarge(length) => {
+                write!(output, "the declared length ({length} bytes) is too large")
+            }
+            Self::InvalidUtf8 => output.write_str("the text is not valid UTF-8"),
+        }
+    }
+}
+
+impl Error for ParseError {}
+```
+
+`Debug` shows the exact failure variant while you debug a parser. `Display`
+gives the learner a useful sentence such as “the input ended too soon.”
+Implementing `Error` lets the scanner, proxy, or PE inspector keep that
+parser failure underneath its own context instead of flattening it into a
+string. The portable [`rust-labs` implementation](/rust-labs/src/lib.rs)
+follows this pattern and tests the message produced for an oversized field.
+
+<GitHub path="rust-labs/src/lib.rs" />
 
 ## An application adds the operation that failed
 
