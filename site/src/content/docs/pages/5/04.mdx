@@ -1,6 +1,6 @@
 ---
 title: "Render Categories and Color Probes"
-description: "Use temporary color to distinguish render categories while accounting for materials, lighting, blending, and color space."
+description: "Use temporary color to distinguish render categories while accounting for materials, lighting, blending, color space, and the several passes that draw one frame."
 chapter: "7.4"
 minutes: 20
 author: "attilathedud"
@@ -279,6 +279,52 @@ Keep state changes in the narrowest possible scope and test:
 Also test early returns and errors. Scope guards help with CPU state, but graphics
 APIs may require restoration on the render thread while the correct context is
 current. A guard dropped on another thread is not equivalent cleanup.
+
+## A frame is several passes
+
+Most frames are not drawn in one sweep. The engine renders the scene several times
+for different purposes, in order, and each sweep is a **pass**. A pass starts by
+clearing its target to a **clear colour**, and clearing depth to its farthest value, so
+the last frame's picture is not left behind:
+
+```mermaid
+flowchart LR
+    S["Shadow pass<br/>depth seen from the light"] --> O["Opaque pass<br/>solid objects"]
+    O --> K["Sky"]
+    K --> T["Transparent pass<br/>far to near"]
+    T --> X["Post-processing<br/>full-screen effects"]
+    X --> U["UI pass<br/>menus and text"]
+    U --> P["Present"]
+```
+
+- **Shadows.** The shadow pass draws the scene's depth as seen from the light into a
+  texture called a **shadow map**. In the main pass, each pixel's position is converted
+  to the light's view and compared with the stored depth: if something nearer was
+  stored, the pixel is in shadow. A surface point 7.50 away from the light would be
+  compared with its own stored depth, 7.50, and rounding could make it shadow itself,
+  so the test uses a small **bias**: shadowed only if the stored depth is less than
+  7.50 − 0.05 = 7.45. It is not, so the point is lit.
+- **Sky and fog.** A **skybox** is a cube texture drawn so that it always looks
+  infinitely far away. **Fog** blends a surface toward a haze colour with distance. With
+  the fog starting at 10 and ending at 50, a surface 30 away has the factor
+  `(50 − 30) ÷ (50 − 10) = 0.5`, so a surface of <Color value="rgb(200, 100, 50)" /> in haze
+  <Color value="rgb(150, 150, 150)" /> is drawn as <Color value="rgb(175, 125, 100)" />.
+- **Post-processing.** The finished picture is stored as a texture and a full-screen
+  rectangle is drawn with a shader that reads it. **Bloom** blurs the brightest parts and
+  adds them back, and **colour grading** remaps colours. **Tone mapping** compresses
+  **HDR** (high dynamic range) values, where lighting can produce colours above 1.0, into
+  the 0 to 1 range a display can show, as
+  [Lesson 7.2](/pages/5/02/#hdr-needs-wider-pixels) works through with numbers.
+- **Render to texture.** A pass can draw into an off-screen texture, not the screen.
+  The texture can then be used as a mirror, a security-camera monitor, a minimap, or a
+  screen shown inside the 3D world.
+- **More than one camera.** Each camera draws into its own rectangle, or its own
+  texture. Split-screen is two cameras drawing into the left and right halves of one
+  window.
+- **Forward and deferred.** A forward renderer lights each object as it draws it. A
+  **deferred** renderer first draws position, normal, and colour for every pixel into
+  extra textures, then lights the pixels in one later pass, which makes many lights
+  affordable but handles see-through surfaces less easily.
 
 ## Distinguish a category from a render pass
 

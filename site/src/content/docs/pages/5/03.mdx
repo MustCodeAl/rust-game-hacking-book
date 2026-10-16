@@ -1,6 +1,6 @@
 ---
 title: "OpenGL Draw Calls and State"
-description: "Understand what indexed OpenGL draws request, how bound state and shader inputs change their meaning, why many small draws cost frame time, and why observation must keep the render thread moving."
+description: "Understand what indexed OpenGL draws request, how bound state, depth settings and shader inputs change their meaning, and why observation must keep the render thread moving."
 chapter: "7.3"
 minutes: 40
 author: "attilathedud"
@@ -34,9 +34,10 @@ If the game makes a draw with `count = 9`, the wrapper records that value and
 then passes the same arguments to OpenGL. The picture should remain identical;
 only the separate observation log changes. The wrapper must preserve the
 exact ABI and forward every normal call.
-The pinned Urban Terror implementation later in this lesson instead detours
-an instruction **inside** `glDrawElements`, so it has a narrower restoration
-opportunity. Keep that difference visible when comparing the two designs.
+The pinned Urban Terror implementation in
+[Lesson 8.8](/pages/8/08/#turn-the-wrapper-into-the-actual-urban-terror-wallhack)
+instead detours an instruction **inside** `glDrawElements`, so it has a
+narrower restoration opportunity. Keep that difference visible when comparing the two designs.
 
 
 <Frame caption="An observing wrapper preserves the draw">
@@ -281,15 +282,16 @@ quality settings, and atlases can change it. A feature can be trusted to
 identify a category only after changing one thing at a time — the model, the
 map, a graphics setting — leaves it pointing at the same objects.
 
+This is a classification problem. A threshold such as `count > 500` separates the examples you observed, not necessarily the concept “player.” Test it against weapons, detailed scenery, menus, different models, and different graphics settings. Report false positives (something your classifier caught that is not a player) and false negatives (a player your classifier missed) instead of quietly turning a correlation into a definition.
+
 ## Shaders turn vertex records into pixels
 
-A **shader** is a small GPU program invoked many times in parallel. Two stages are
-central here:
-
-- a vertex shader reads one vertex (and often matrices) and produces clip-space
-  position plus values to interpolate;
-- a fragment shader runs for candidate covered samples and produces a color,
-  depth, or another render-target output.
+A **shader** is a small GPU program invoked many times in parallel. The vertex
+shader and fragment shader of
+[Lesson 7.2's pipeline](/pages/5/02/#follow-state-through-the-rendering-pipeline)
+are the two central here: the first turns one vertex into a clip-space position
+plus values to interpolate, and the second turns one covered sample into a
+color, depth, or other output.
 
 Values such as texture coordinates and normals are interpolated across a triangle.
 The fragment shader usually does not receive the original vertex value. This is why
@@ -329,61 +331,21 @@ for WebGPU. A driver, or the engine ahead of time, compiles them to the GPU's ow
 instructions. Engines that support several graphics APIs often write a shader once and
 translate it for each.
 
-### Variants, instancing, and shaders that do not draw
+<span id="variants-instancing-and-shaders-that-do-not-draw" aria-hidden="true" />
+<span id="why-many-small-draws-cost-frame-time" aria-hidden="true" />
 
-- **Variants.** One shader source can have switches, written as `#ifdef` lines, such
-  as "has a normal map" or "has fog." Each combination compiles to a separate
-  program, so three switches give 2 × 2 × 2 = 8 variants. Engines compile the ones a
-  scene needs, which is why a game can hitch the first time something new appears.
-- **Instancing.** To draw 1,000 copies of one tree mesh, the game makes one draw call
-  with 1,000 *instances*. A buffer holds each copy's transform, a 4 × 4 matrix of 16
-  four-byte floats, which is 64 bytes, so 1,000 copies take 64,000 bytes. Earlier we saw
-  that one draw can contain many objects; instancing is the deliberate version of it.
-- **Compute shaders.** A compute shader is not part of drawing. It is a general GPU
-  program that runs once for each item in a grid of work, reading and writing buffers.
-  Engines use it for particles, culling, mesh deformation, and post-processing.
-- **Post-processing shaders.** A fragment shader run over a full-screen rectangle, reading
-  the finished picture as a texture, produces effects such as bloom and colour grading
-  (Lesson 7.2).
-- **Extending the standard material.** Engines let a game add its own shader code and
-  extra vertex data, such as a per-vertex wind weight, to a standard material instead of
-  rewriting it.
+Shader variants, instancing, compute shaders, and the CPU cost of many small
+draws are worked through in
+[Lesson 7.11](/pages/5/11/#variants-instancing-and-shaders-that-do-not-draw),
+beside the bound state that each Direct3D draw carries.
 
-### Why many small draws cost frame time
+<span id="turn-the-wrapper-into-the-actual-urban-terror-wallhack" aria-hidden="true" />
 
-Each draw call costs the CPU something even if the GPU's share is tiny, because the
-driver checks the bound state and builds the commands. Suppose, as an illustration, one
-draw costs 5 microseconds of CPU time. Then 10,000 draws cost 10,000 × 5 = 50,000
-microseconds, which is 50 ms, three frames of the 16.67 ms budget from Lesson 4.1, with
-the GPU waiting. Instancing, merging meshes that share a material, texture atlases, and
-culling (Lesson 7.2) all exist to cut the number of draws.
+## Restore graphics state
 
-A **stress test** finds the limit by multiplying one thing, such as cubes, sprites,
-lights, animated characters, or text, and watching the frame time. If 1,000 cubes take
-4 ms and 4,000 take 16 ms, each costs 0.004 ms and the 16.67 ms budget runs out at about
-16.67 ÷ 0.004 = 4,167 cubes. Halving the window's pixel count tells you which processor
-is the limit: if the frame time does not change, the CPU, not the GPU, is the bottleneck.
-
-This is a classification problem. A threshold such as `count > 500` separates the examples you observed, not necessarily the concept “player.” Test it against weapons, detailed scenery, menus, different models, and different graphics settings. Report false positives (something your classifier caught that is not a player) and false negatives (a player your classifier missed) instead of quietly turning a correlation into a definition.
-
-## Turn the wrapper into the actual Urban Terror wallhack
-
-The API signature, draw-count interpretation, and sampling design above stand
-on their own. The exact-build detour below applies the DLL and patch lifecycle
-from [Lesson 6.4](/pages/8/03/) to one verified OpenGL instruction. Recheck
-the displaced instruction span and restoration path before running it.
-
-In Urban Terror 4.3.4, resolve `glDrawElements` from `opengl32.dll`. The historical build hooks the instruction at **`glDrawElements + 0x16`** and resumes six bytes later. This is not a function-entry wrapper: it is a real code cave in the middle of the OpenGL function. At this point in this 32-bit build, `EBX` holds `count`.
-
-Resolve these two OpenGL functions with `GetProcAddress`:
-
-```rust
-type GlDepthFunc = unsafe extern "system" fn(function: u32);
-type GlDepthRange = unsafe extern "system" fn(near: f64, far: f64);
-
-const GL_LEQUAL: u32 = 0x0203;
-const GL_ALWAYS: u32 = 0x0207;
-```
+OpenGL is a state machine: a call changes settings that remain active until
+another call changes them. Two depth settings show how much a later draw
+inherits:
 
 `glDepthRange(near, far)` controls where a fragment's depth lands in the
 depth buffer after projection, by remapping the normalized `-1..1` range onto
@@ -400,118 +362,15 @@ depth zero is drawn regardless of what is already in the buffer. It is the
 combination — flatten the depth, then stop testing it — that pushes
 highlighted geometry through walls; neither call does it alone.
 
-The six bytes we replace are one whole x86 instruction:
-
-```text
-8B B6 18 0A 00 00    mov esi, dword ptr [esi + 0xA18]
-```
-
-Before and after the patch, the six bytes at `glDrawElements + 0x16` look like
-this:
-
-<MemoryStrip
-  cells="+0x16=8B|+0x17=B6|+0x18=18|+0x19=0A|+0x1A=00|+0x1B=00"
-  groups="0-1:mov into `esi` from `[esi + displacement]`|2-5:displacement `0xA18`, lowest byte first"
-  caption="Before: one whole instruction. Read lowest byte first, `18 0A 00 00` is 0x18 + 0x0A × 256 = 24 + 2,560 = 2,584, which is `0xA18`."
-/>
-
-<MemoryStrip
-  cells="+0x16=E9|+0x17=??|+0x18=??|+0x19=??|+0x1A=??|+0x1B=90"
-  marks="0-4"
-  groups="0-4:`jmp` to the cave: `E9` plus a 4-byte distance|5-5:`nop`"
-  caption="After: the four `??` bytes hold the distance from `+0x1B`, the byte right after the jump (0x16 + 5 = 0x1B), to the cave, so they depend on where the DLL loaded. The cave returns to `+0x1C` (0x16 + 6 = 22 + 6 = 28 = 0x1C), so the `nop` never runs; it only fills the sixth byte so no fragment of the old instruction is left behind."
-/>
-
-The installer refuses to patch if those bytes do not match. It writes a five-byte near jump plus one `NOP`, and `LocalPatch` owns the saved bytes so dropping the patch restores them:
-
-```rust
-let draw_elements = resolve(opengl, s!("glDrawElements"))?;
-let hook = draw_elements.checked_add(0x16)
-    .context("glDrawElements hook address overflowed")?;
-DRAW_RETURN.store(hook + 6, Ordering::Release);
-
-const ORIGINAL: [u8; 6] = [0x8B, 0xB6, 0x18, 0x0A, 0x00, 0x00];
-let jump = near_jump(hook, urban_terror_opengl_cave as *const () as usize)?;
-let mut replacement = [0x90_u8; 6];
-replacement[..5].copy_from_slice(&jump);
-let patch = LocalPatch::apply(hook, &ORIGINAL, &replacement)?;
-```
-
-The cave saves the CPU flags and all general-purpose registers, passes the live `EBX` value to an ordinary helper, replays the displaced instruction, and returns to the byte immediately after it:
-
-```rust
-#[unsafe(naked)]
-unsafe extern "C" fn urban_terror_opengl_cave() {
-    core::arch::naked_asm!(
-        "pushfd",
-        "pushad",
-        "push ebx",
-        "call {apply}",
-        "add esp, 4",
-        "popad",
-        "popfd",
-        "mov esi, dword ptr [esi + 0xA18]",
-        "jmp dword ptr [{resume}]",
-        apply = sym apply_urban_terror_gl_state,
-        resume = sym DRAW_RETURN,
-    );
-}
-```
-
-Why save everything? The original OpenGL function expects its registers and flags to have particular values when it resumes. The compiler is free to use registers while `apply_urban_terror_gl_state` runs. Saving and restoring them makes the helper almost invisible to the interrupted function.
-
-The helper changes the live OpenGL state. A later non-highlighted draw restores normal depth state:
-
-```rust
-extern "C" fn apply_urban_terror_gl_state(count: u32) {
-    let highlighted = OPENGL_MODE.load(Ordering::Acquire) != OPENGL_OFF
-        && count > 500;
-
-    // 🛡️ SAFETY: these pointers were resolved from this process's opengl32.dll,
-    // and the game reached the cave on its OpenGL render thread.
-    unsafe {
-        if highlighted {
-            depth_range(0.0, 0.0);
-            depth_func(GL_ALWAYS);
-        } else {
-            depth_range(0.0, 1.0);
-            depth_func(GL_LEQUAL);
-        }
-    }
-}
-```
-
-Build the DLL for 32-bit Windows, inject it into `Quake3-UrT.exe`, enter a local match, and press **F2**. Geometry with `count > 500` is forced to the near plane and uses `GL_ALWAYS`, producing the player/weapon-through-wall result shown below. Press **F2** again or **End** to restore normal state and the original six code bytes.
-
-```powershell
-cargo build --release --target i686-pc-windows-msvc
-.\target\i686-pc-windows-msvc\release\injector.exe `
-  Quake3-UrT.exe `
-  .\target\i686-pc-windows-msvc\release\gha_windows_labs.dll
-```
-
-The complete compiled implementation—including export lookup, the naked cave, exact-byte verification, both graphics modes, and restoration—is in [`opengl_hooks.rs`](/windows-labs/src/windows_impl/opengl_hooks.rs). The hotkey worker is in [`dll.rs`](/windows-labs/src/windows_impl/dll.rs).
-
-<GitHub path="windows-labs/src/windows_impl/opengl_hooks.rs" />
-
-<GitHub path="windows-labs/src/windows_impl/dll.rs" />
-
-<Frame caption="The wallhack after count filtering, in the offline lab.">
-
-![Urban Terror wallhack after count filtering](/assets/images/5/3/urbanterror16.png)
-
-</Frame>
-
-The threshold is a confirmed property of this lesson build, not a universal player detector. Log counts while toggling third-person and adding/removing bots so you can see exactly which models it includes.
-
-## Restore graphics state
-
-OpenGL is a state machine: a call changes settings that remain active until another call changes them. This middle-of-function cave cannot surround one typed `glDrawElements` call, so it restores the normal state when the next non-highlighted draw arrives and when the feature is disabled. Pressing **End** also disables the mode before removing the code patch. That ordering prevents the game from being left with `GL_ALWAYS` active.
+The exact-build Urban Terror 4.3.4 wallhack applies that combination to
+player-sized draws from a cave inside `glDrawElements`. It is in
+[Lesson 8.8](/pages/8/08/#turn-the-wrapper-into-the-actual-urban-terror-wallhack),
+after the DLL loading and detour lessons that its installation depends on.
 
 State restoration must match what was changed. A robust typed wrapper queries or
 tracks the previous depth function, depth range, enabled client arrays, color, and
 bindings. Restoring guessed “defaults” works only until another legitimate render
-pass enters with different state. A middle-of-function cave has fewer safe options,
+pass enters with different state. A middle-of-function cave, like that one, has fewer safe options,
 which is a real limitation of that interception point rather than an implementation
 detail to ignore.
 

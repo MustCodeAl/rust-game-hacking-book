@@ -78,8 +78,10 @@ belongs to the game as a whole, so a resource fits.
 
 ## Events: messages with a short life
 
-An **event** carries one fact from the systems that notice it to the systems that
-care. The collision system does not know that a score or a sound exists; it sends
+An **event** says what changed rather than what is true now, the distinction
+[Lesson 4.9](/pages/4/07/#level-facts-and-edge-facts-answer-different-questions)
+draws for an outside observer. Inside an engine it carries one fact from the
+systems that notice it to the systems that care. The collision system does not know that a score or a sound exists; it sends
 `BrickHit` and moves on. Any number of systems can read it, and a new system, such
 as a particle burst, can be added later without touching the collision code.
 
@@ -174,8 +176,10 @@ only nearby pairs instead of all of them.
 ## Change detection: do work only for what changed
 
 Some work only needs doing when a value changed. A health bar must be redrawn when
-health changes, and not on every frame for every character. **Change detection**
-lets a system ask for exactly those entities.
+health changes, and not on every frame for every character. An outside tool finds
+such changes by [comparing two snapshots](/pages/4/07/#diff-two-validated-snapshots);
+an engine's **change detection** records them as they are written, so a system can
+ask for exactly those entities.
 
 The engine keeps a counter that rises with every frame. When a system writes a
 component, the engine stamps that value with the current counter. Each system
@@ -264,7 +268,10 @@ hold:
 - every system that was ordered *before* it has finished or been skipped;
 - its run conditions, covered next, are true.
 
-A ready system starts on any free CPU thread, so systems that touch different data
+The first condition is what prevents the lost update of
+[Lesson 6.6](/pages/10/06/#a-race-that-loses-an-update): two systems never write,
+or read and write, the same data at the same time. A ready system starts on any
+free thread of the engine's worker pool, so systems that touch different data
 run at the same time. When the order of two systems is not stated, the engine may
 run them either way round, and the order can even change from one frame to the
 next.
@@ -364,7 +371,12 @@ about.
 ## How components are stored: tables and sparse sets
 
 Lesson 4.1 said that each kind of component sits in its own run of memory. There are
-two common ways to arrange that, and an engine can offer both:
+two common ways to arrange that, and an engine can offer both: **table storage**,
+where entities with the same set of components share columns, and **sparse-set
+storage**, where one kind of component lives in its own pool. Tables make reading
+fast and adding a component slow; sparse sets make adding cheap and reading slower.
+
+<Accordion title="Optional reference: table and sparse-set storage compared">
 
 <Tabs sync="storage">
 <Tab label="Table storage">
@@ -407,6 +419,8 @@ one table. If each bullet may also carry any of 8 optional markers, up to 2⁸ =
 256 different sets can appear, so the same 10,000 bullets are spread over as many
 as 256 tables, about 10,000 ÷ 256 = 39 to a table. Each table is a separate run in
 memory, and a scan for one component finds it in many pieces.
+
+</Accordion>
 
 ## The same ideas in a real engine
 
@@ -531,5 +545,5 @@ symptom into a question:
 
 </Panel>
 
-Lesson 4.3 returns to one player and builds a snapshot of the game's state, the
-copy of those values that a tool can read without disturbing the game.
+[Lesson 6.9](/pages/8/06/) follows input from Windows into a frame like this one:
+polling, events, and window messages.
