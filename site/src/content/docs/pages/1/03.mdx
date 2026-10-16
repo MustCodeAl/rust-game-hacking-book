@@ -262,7 +262,7 @@ Lesson 1.4 will create values, change fields, and write a loop in Rust.
 
 A game's actual layout may differ from this source-level sketch. A memory
 tool has to infer fields from the bytes and the instructions that use them.
-[Lessons 3.4–3.6](/pages/3/03/) develop that recovery in detail, including
+[Lessons 3.8–3.10](/pages/3/03/) develop that recovery in detail, including
 alternative layouts and objects that move or disappear.
 
 ## Checks keep health inside its permitted range
@@ -288,7 +288,7 @@ when recovering a game's data.
 An address alone does not prove that a player record is still the same
 player. The game can remove a player and use that memory for someone else.
 For this first pass, remember that an address tells you *where* to look now;
-it does not guarantee an object's identity forever. Lesson 3.6 develops
+it does not guarantee an object's identity forever. Lesson 3.10 develops
 ways to recognize identity and lifetime.
 
 ## Inputs request actions
@@ -318,22 +318,20 @@ To move Ada, the game needs a way to describe where she is. In a small
 two-dimensional world, use two numbers: `x` for horizontal position and
 `y` for vertical position. Together, `(x, y)` are **coordinates**. Our
 example chooses positive `x` toward the right, positive `y` upward, and
-one unit as one tile's width. These are conventions chosen for this world,
-not conventions every engine shares.
+one unit as one tile's width. Another game can choose these conventions
+differently.
 
 Ada starts at `(2, 3)`. Moving one unit right gives `(3, 3)`: `x` changes
 from 2 to 3 and `y` stays 3. These are **world coordinates**, describing
 Ada's location in the game. Her **screen coordinates** describe where her
 picture appears on the display. If the camera follows Ada, she can move
 through the world while staying near the middle of the screen. Moving the
-camera changes the view without moving Ada in the world. Chapter 7
-develops these coordinate relationships for 3D games.
+camera changes the view without moving Ada in the world.
 
 Movement also takes time. Suppose Ada's speed is 4 world units per second
 and she moves right for one quarter of a second. The distance is
 4 × 0.25 = 1 unit. Starting at `(2, 3)`, she ends at `(3, 3)` if nothing
-blocks her. This explanatory pseudocode shows the calculation; it is not
-a complete program in a particular language:
+blocks her. This pseudocode shows the calculation:
 
 ```text
 # Inputs: x = 2, speed = 4 units/second, elapsed_seconds = 0.25.
@@ -342,13 +340,12 @@ x = x + distance
 # Result: distance = 1 unit and x = 3; y stays 3.
 ```
 
-The `#` lines describe the inputs and result. `*` means multiply, and the
-right side of the `x = x + distance` calculation is evaluated
-before its result replaces `x`. The elapsed time tells the game how much
-movement to apply. Updating ten times does not tell us how far Ada should
-move until we know how much time those updates represent.
-
-<MarginNote kind="alternative">Think of a road trip: distance is speed times time. Counting frames is like counting photos taken, which says nothing about how far you drove.</MarginNote>
+The `#` lines describe the inputs and result, and `*` means multiply. The
+elapsed time tells the game how much movement to apply.
+[Lesson 4.4](/pages/4/11/#extend-2d-coordinates-to-three-dimensions) adds a
+third axis and turns the difference between two positions into a distance
+and a direction; [Lesson 7.1](/pages/5/01/#screen-coordinates) follows a
+world position onto the screen.
 
 ## The world updates between pictures
 
@@ -416,24 +413,18 @@ A change between modes is a **transition**. A set of allowed modes and
 conditions and actions for moving between them is a **state machine**. Here, “state” names
 one behavior mode. Earlier, “game state” meant all the information the
 game remembers, including gold, health, position, and this mode. The mode
-is one part of that larger state.
-
-For this example, the game changes Ada's mode while keeping her player
-identity. A different game could remove the old character entity and
-create another. The visible respawn alone does not tell us whether it reused the player record or created another.
+is one part of that larger state. This game keeps Ada's player identity
+through the respawn; another could remove her character entity and create
+a new one, and the visible respawn alone does not tell us which.
 
 The game can also announce a particular occurrence: “Ada collected coin
-42.” Such an occurrence is an **event**. The pickup handler can award one gold,
-then notify the sound system and the display so they can play a pickup
-sound and show the changed amount. Those systems can react to the same
-event without each deciding whether the coin was available.
-
-The distinctions are useful when following a change. An action requests
-something, current state describes what is true, and an event reports
-what happened. “Collect coin 42” is the request; “Ada has 76 gold” is the
-resulting state; “coin 42 was collected” is the event. If the coin was
-already removed, the game can reject a second request instead of awarding
-gold again. Chapter 4 develops decisions and events in more detail.
+42.” Such an occurrence is an **event**. An action requests something,
+current state describes what is true, and an event reports what happened.
+“Collect coin 42” is the request; “Ada has 76 gold” is the resulting
+state; “coin 42 was collected” is the event. If the coin was already
+removed, the game can reject a second request instead of awarding gold
+again. [Lesson 4.9](/pages/4/07/#polling-is-not-the-same-as-reacting)
+turns repeated readings of state into events and shows when to act on one.
 
 ## The display can hold a copy
 
@@ -469,24 +460,20 @@ checks them against the shared game state it maintains, and sends accepted
 results to the participating clients. In a common shop design, the client
 sends the item ID Ada wants. The server looks up that item's price, compares
 it with the gold it stores for Ada, and either rejects the request or
-subtracts the price and records the purchased item. <HoverCard kind="reference" href="/pages/6/01/" body="Lesson 9.1 follows a move request from a game client to a server and back as framed bytes.">Lesson 9.1 follows such requests and replies.</HoverCard>
-Different games divide responsibility differently, so the important
-question is which side has authority over this particular decision.
+subtracts the price and records the purchased item.
 
 Suppose the server has 76 gold for Ada and the client's display shows
 999. The server accepts one 25-gold purchase and updates its value to 51.
 It sends the accepted result back to the client, which can then show 51.
 The display's 999 did not give the server more gold. A network delay can
 also leave a client temporarily showing an older result, even when
-neither program has a bug.
-
-<MarginNote kind="narration">In this shop design, the server uses the item ID to find a price and checks its own stored gold. The client's displayed amount does not pass or fail that check.</MarginNote>
-
-Some clients show an expected result before the server replies so an
-action feels responsive. If the server rejects the action, the client
-must correct that expectation. For now, distinguish the player's request,
-the local picture, and the accepted shared result. Chapter 8 follows the
-messages that connect them.
+neither program has a bug. Different games divide responsibility
+differently, so ask which side has authority over each particular
+decision. [Lesson 9.1](/pages/6/01/#client-and-server) follows such
+requests and replies, including a client that shows a predicted result
+and then corrects it, and
+[Lesson 9.2](/pages/15/02/#validate-an-action-in-the-current-world)
+checks a purchase against server-owned state.
 
 ## Save files preserve chosen state
 
@@ -495,23 +482,21 @@ the game ends that running instance. To continue later, it writes selected
 information to storage. Keeping information beyond the running process is
 **persistence**; a save file is one way to provide it.
 
-Consider the local version of our game, after Ada reaches 76 gold and
-60 health. A save could keep those values, her maximum health, position,
-and which coins she has collected. It need not keep the current pickup
-sound's playback position or the already prepared text `"Gold: 76"`.
-The game can recreate the display from gold when it loads the save.
+After Ada reaches 76 gold and 60 health, a save could keep those values,
+her maximum health, position, and which coins she has collected. It need
+not keep the pickup sound's playback position or the prepared text
+`"Gold: 76"`; the game can recreate the display from gold when it loads.
 
 Saving selects state at a particular moment. If the file stores 76 gold
 and Ada later spends 25 without saving again, live gold becomes 51 while
-the file still records 76. Loading that file can restore the earlier
-state. A save file and live state can disagree simply because they
-describe different moments.
+the file still records 76. A save file and live state can disagree simply
+because they describe different moments.
 
-Loading also creates new running records. A saved player ID can help the
-game reconnect related information, but a past RAM address does not give
-the new process a valid player record. Persistence keeps chosen meaning
-across runs; it does not promise the same memory locations. Chapter 9
-develops save files and other game resources.
+Loading creates new running records. A saved player ID can help the game
+reconnect related information, but a past RAM address does not give the
+new process a valid player record.
+[Lesson 10.1](/pages/9/01/#state-can-outlive-a-running-game) follows a
+real save from running memory to a file and back.
 
 ## From a world idea to stored bytes
 
