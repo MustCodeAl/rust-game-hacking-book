@@ -1,12 +1,13 @@
 // Publish the listening transcript as real article HTML. Chrome Reading mode
 // and URL importers can read it even when they do not execute page scripts.
-import { readFileSync, writeFileSync, readdirSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseHTML } from 'linkedom';
-import { adaptReaderArticle, collectReadableBlocks, plainLessonText, showReaderVariant } from '../src/lib/reader-text.ts';
-import type { ReaderVariants } from '../src/lib/reader-text.ts';
+import { adaptReaderArticle, collectReadableBlocks, figureLeftOut, nativeFigureRoots, plainLessonText, showReaderVariant } from '../src/lib/reader-text.ts';
+import type { FigurePicture, ReaderVariants } from '../src/lib/reader-text.ts';
+import type { FigureManifest, FigureRecord } from './reader-figures.ts';
 import { getLessonIndex } from '../src/data/lesson-index.ts';
 
 const directory = join(dirname(fileURLToPath(import.meta.url)), '../dist/read');
@@ -39,9 +40,26 @@ function publishPictures(article: HTMLElement) {
   packed.textContent = JSON.stringify(variants).replace(/</g, '\\u003c');
   showReaderVariant(article, false);
 }
+// Stills of the native figures, photographed by reader-figures.ts. Each one
+// goes where its figure was, as a silent picture.
+const figureManifest = join(pictureDirectory, 'figures.json');
+const stills = new Map<string, FigureRecord[]>();
+if (existsSync(figureManifest)) {
+  const manifest: FigureManifest = JSON.parse(readFileSync(figureManifest, 'utf8'));
+  for (const figure of manifest.figures) stills.set(figure.page, [...(stills.get(figure.page) ?? []), figure]);
+} else console.warn('reader-editions: no figure stills (run reader-figures first); native figures stay silent text.');
+function picturesFor(page: string, sourceHref: string): Map<string, FigurePicture> {
+  const folder = `${sourceHref.replace(/\/pages\/.*$/, '')}/assets/reader/figures/`;
+  return new Map((stills.get(page) ?? []).map((figure) => [figure.key, {
+    signature: figure.signature,
+    media: { src: folder + figure.wide.file, width: figure.wide.width, height: figure.wide.height, alt: '', narrow: { src: folder + figure.narrow.file, width: figure.narrow.width, height: figure.narrow.height } },
+  }]));
+}
 let lessons = 0;
 let blocks = 0;
 let diagrams = 0;
+let figures = 0;
+let pictured = 0;
 for (const folder of readdirSync(directory, { withFileTypes: true })) {
   if (!folder.isDirectory()) continue;
   for (const lesson of readdirSync(join(directory, folder.name), { withFileTypes: true })) {
@@ -51,9 +69,13 @@ for (const folder of readdirSync(directory, { withFileTypes: true })) {
     const article = document.getElementById('reader-article');
     const tools = document.querySelector<HTMLElement>('[data-reader-tools]');
     if (!article || !tools) throw new Error(`Reader article missing: ${path}`);
-    adaptReaderArticle(article);
+    const sourceHref = article.dataset.sourceHref ?? '';
+    if (!sourceHref.endsWith(`/pages/${folder.name}/${lesson.name}/`)) throw new Error(`Reader source URL does not match ${path}`);
+    figures += nativeFigureRoots(article).filter((figure) => !figureLeftOut(figure)).length;
+    adaptReaderArticle(article, picturesFor(`${folder.name}/${lesson.name}`, sourceHref));
     publishPictures(article);
     const narration = collectReadableBlocks(article);
+    pictured += narration.filter((block) => block.media?.narrow).length;
     if (narration.length < 2) throw new Error(`Reader transcript incomplete: ${path}`);
     writeFileSync(path, document.toString());
     writeFileSync(join(dirname(path), 'lesson.txt'), plainLessonText(tools.dataset.title ?? 'Lesson', tools.dataset.sourceUrl ?? '', narration));
@@ -64,4 +86,4 @@ for (const folder of readdirSync(directory, { withFileTypes: true })) {
 }
 const expected = getLessonIndex().length;
 if (lessons !== expected) throw new Error(`Expected ${expected} listening editions, found ${lessons}.`);
-console.log(`reader-editions: published ${lessons} listening articles and TXT files; ${blocks} blocks, ${diagrams} preserved visuals (silent during narration).`);
+console.log(`reader-editions: published ${lessons} listening articles and TXT files; ${blocks} blocks, ${diagrams} preserved visuals (silent during narration), including ${pictured} of ${figures} native figures as stills.`);

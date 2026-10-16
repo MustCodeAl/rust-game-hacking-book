@@ -18,7 +18,10 @@ export function transcriptPassages(html: string): Passage[] {
   if (!raw) throw new Error('Listening text is unavailable.');
   const parsed: unknown = JSON.parse(raw);
   if (!record(parsed) || !Array.isArray(parsed.prose)) throw new Error('Listening text is unavailable.');
-  const blocks = parsed.prose.filter((block: unknown): block is SpeechBlock => record(block) && typeof block.text === 'string' && !block.media && block.kind !== 'code');
+  // Pictures, tables and figures stay silent even when the build had no still
+  // for a figure and kept only its caption (the same kinds reader-text.ts skips).
+  const blocks = parsed.prose.filter((block: unknown): block is SpeechBlock => record(block) && typeof block.text === 'string' && !block.media
+    && !['code', 'diagram', 'table', 'image'].includes(String(block.kind)));
   const result: Passage[] = [];
   blocks.forEach((block, blockIndex) => {
     // Bound each browser utterance at a word boundary. Prose comes from the

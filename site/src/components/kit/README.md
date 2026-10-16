@@ -48,6 +48,16 @@ decoration; if the page reads as well without it, leave it out.
 - **Write for the listening edition.** Explain necessary results in real prose.
   Scene steps and diagram labels remain available visually and in print, without
   an automatic spoken recital. A final scene frame must still show a useful result.
+- **Native figures become silent pictures in the listening edition.** CellFrames,
+  FlowDiagram, LiveCells, StorageLifetimes, the `figure.mdg` diagrams and the other
+  roots in `NATIVE_FIGURES` (`src/lib/reader-text.ts`) are photographed in their
+  print form by `scripts/reader-figures.ts` at build time (every step shown, controls
+  hidden, a 640 px and a 360 px phone still) and shown there in place, never read
+  aloud. So a figure's print styles must show all its steps and hide its controls,
+  its controls carry `data-reader-skip` (or a `data-*-controls` attribute), and its
+  first `figcaption strong` and `span` give the title and summary used for the alt
+  text. A new figure component joins by adding its root selector to `NATIVE_FIGURES`.
+  Interactive labs (`.concept-lab` and friends) stay out of the listening edition.
 - **Maths needs no dollar-sign care.** Only `$$ ... $$` is maths, so a price or a
   shell variable is safe.
 
