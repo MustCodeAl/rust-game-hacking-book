@@ -179,15 +179,13 @@ export const bfsChainCells: readonly CellScenario[] = [{
   summary: 'Each visited cell remembers the cell it was reached from. Walk those links from the goal, then reverse the list.',
   frames: [
     frame('Follow the parent links backward from the goal', 'Goal (2,0) was reached from (2,1), which came from (1,1), then (0,1), then the start, which has no parent.', [
-      panel('Backward chain', 'orange', [row('Cells, goal first', route(['(2,0)', '(2,1)', '(1,1)', '(0,1)', '(0,0)'], 'goal', 'start, no parent', 'orange', 0))]),
+      plain(row('Backward chain, goal first', route(['(2,0)', '(2,1)', '(1,1)', '(0,1)', '(0,0)'], 'goal', 'start, no parent', 'orange', 0))),
     ]),
-    frame('Reverse the list to get the forward route', 'Reading the same cells in the opposite order gives the way from the start to the goal.', [
-      panel('Backward chain', 'orange', [row('Cells, goal first', route(['(2,0)', '(2,1)', '(1,1)', '(0,1)', '(0,0)'], 'goal', 'start', 'orange', null))]),
-      panel('Forward route', 'green', [row('Cells, start first', route(['(0,0)', '(0,1)', '(1,1)', '(2,1)', '(2,0)'], 'start', 'goal', 'green', 0), { link: 'reverse' })]),
-    ]),
-    frame('Four moves, around the wall at (1,0)', 'The route takes four moves because the cell (1,0) is a wall.', [
-      panel('Forward route', 'green', [row('Cells, start first', route(['(0,0)', '(0,1)', '(1,1)', '(2,1)', '(2,0)'], 'start', 'goal', 'green', null))]),
-      panel('Blocked', 'red', [row('Wall', [h('(1,0)', 'red', 1, { sub: 'not walkable' })])]),
+    frame('Reverse the list to get the forward route', 'Reading the same cells in the opposite order gives the way from the start to the goal: four moves, around the wall at (1,0).', [
+      plain(
+        row('Backward chain, goal first', route(['(2,0)', '(2,1)', '(1,1)', '(0,1)', '(0,0)'], 'goal', 'start', 'orange', null)),
+        row('Forward route, start first', route(['(0,0)', '(0,1)', '(1,1)', '(2,1)', '(2,0)'], 'start', 'goal', 'green', 0), { link: 'reverse' }),
+      ),
     ]),
   ],
 }];
@@ -199,22 +197,14 @@ export const yawPitchCells: readonly CellScenario[] = [{
   summary: 'The top-down triangle gives yaw; the side triangle, built on the ground distance, gives pitch. The camera is at the origin.',
   frames: [
     frame('Top-down: a 3 by 4 triangle', 'Seen from above, the target is 3 along x and 4 along y, so it is 5 away on the ground.', [
-      panel('Top-down view (x, y)', 'blue', [
+      plain(
         row('Legs', [c('dx = 3', 'blue', 3), c('dy = 4', 'green', 4)]),
-        row('Ground distance', [h('√(3² + 4²) = 5', 'orange', 7)], { link: 'Pythagoras' }),
-        row('yaw', [h('atan2(4, 3) ≈ 53.13°', 'purple', 7, { sub: 'measured from positive x' })], { link: 'angle of the triangle' }),
-      ]),
+        row('Ground distance and yaw', [h('√(3² + 4²) = 5', 'orange', 1, { sub: 'Pythagoras' }), h('atan2(4, 3) ≈ 53.13°', 'purple', 1, { sub: 'yaw, from positive x' })], { link: 'from the two legs' }),
+      ),
     ]),
-    frame('Side view: ground distance 5, height 5', 'Seen from the side, the target is 5 along the ground and 5 up.', [
-      panel('Side view', 'teal', [
-        row('Legs', [c('ground = 5', 'orange', 5), c('height = 5', 'green', 5)]),
-        row('pitch', [h('atan2(5, 5) = 45°', 'purple', 10, { sub: 'up from the ground plane' })], { link: 'angle of the triangle' }),
-      ]),
+    frame('Side view: ground distance 5, height 5', 'Seen from the side, the target is 5 along the ground and 5 up. The camera turns by the yaw, 53.13°, then tilts up by this pitch.', [
+      plain(row('Legs, then the angle', [c('ground = 5', 'orange'), c('height = 5', 'green'), h('atan2(5, 5) = 45°', 'purple', 2, { sub: 'pitch, up from the ground' })])),
     ]),
-    frame('Together: aim 53.13° around and 45° up', 'The camera at the origin turns by the yaw, then tilts by the pitch.', [
-      panel('Yaw (top-down)', 'blue', [row('yaw', [h('≈ 53.13°', 'purple', 1)])]),
-      panel('Pitch (side)', 'teal', [row('pitch', [h('45°', 'purple', 1)])]),
-    ], { side: true }),
   ],
 }];
 
@@ -224,19 +214,14 @@ export const comReadsCells: readonly CellScenario[] = [{
   title: 'A COM method address takes two memory reads',
   summary: 'The first field of the object points to a table of method pointers. Slot 8 of that table is the method.',
   frames: [
-    frame('The object, and its first field', 'The swap-chain object lives at 0x000001F48A200000. Its first field is a pointer to the vtable.', [
-      panel('Swap-chain object', 'blue', [row('Object', [h('first field', 'orange', 1, { sub: 'vtable pointer' }), c('other fields', 'gray', 3, { ghost: true })], { ticks: { left: '0x000001F48A200000' } })]),
-    ]),
-    frame('Read 1: the first field is the vtable address', 'Reading that field gives 0x00007FFA1C305000, the start of the vtable.', [
-      panel('Swap-chain object', 'blue', [row('Object', [h('0x00007FFA1C305000', 'orange', 1, { sub: 'read 1' }), c('other fields', 'gray', 3, { ghost: true })], { ticks: { left: '0x000001F48A200000' } })]),
-      panel('vtable', 'purple', [row('Method pointers', [c('slots 0 to 7', 'purple', 8, { bracket: '8 slots × 8 bytes = 0x40', ghost: true }), c('slot 8', 'purple', 2)], { ticks: { left: '0x00007FFA1C305000' }, link: 'points to' })]),
+    frame('Read 1: the first field is the vtable address', 'The swap-chain object lives at 0x000001F48A200000. Reading its first field gives 0x00007FFA1C305000, the start of the vtable.', [
+      plain(row('Swap-chain object', [h('0x00007FFA1C305000', 'orange', 2, { sub: 'first field: read 1' }), c('other fields', 'gray', 2, { ghost: true })], { ticks: { left: '0x000001F48A200000' } })),
     ]),
     frame('Slot 8 is at offset 0x40', 'Eight slots of eight bytes put slot 8 at 0x00007FFA1C305000 + 0x40 = 0x00007FFA1C305040.', [
-      panel('vtable', 'purple', [row('Method pointers', [c('slots 0 to 7', 'purple', 8, { bracket: '+ 0x40', ghost: true }), h('slot 8', 'orange', 2, { sub: '0x00007FFA1C305040' })], { ticks: { left: '0x00007FFA1C305000' } })]),
+      plain(row('vtable', [c('slots 0 to 7', 'purple', 8, { bracket: '8 slots × 8 bytes = 0x40', ghost: true }), h('slot 8', 'orange', 2, { sub: '0x00007FFA1C305040' })], { ticks: { left: '0x00007FFA1C305000' } })),
     ]),
     frame('Read 2: slot 8 holds the Present code address', 'Reading slot 8 gives 0x00007FFA1C289A10, where the Present implementation starts.', [
-      panel('vtable', 'purple', [row('Method pointers', [c('slots 0 to 7', 'purple', 8, { ghost: true }), c('slot 8', 'purple', 2, { sub: 'read 2' })], { ticks: { left: '0x00007FFA1C305000' } })]),
-      panel('Code', 'green', [row('Present', [h('Present implementation', 'green', 1, { sub: '0x00007FFA1C289A10' })], { link: 'jump target' })]),
+      plain(row('Slot 8, then the code it names', [c('slot 8', 'purple', 1, { sub: 'read 2' }), h('Present implementation', 'green', 2, { sub: '0x00007FFA1C289A10' })])),
     ]),
   ],
 }];

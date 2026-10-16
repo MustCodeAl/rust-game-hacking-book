@@ -11,7 +11,9 @@ sidebar:
 ---
 import SimLab from '../../../../components/SimLab.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
-import { Accordion, Frame } from '../../../../components/kit';
+import { Accordion, SpeedType } from '../../../../components/kit';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 [Lesson 4.10](/pages/4/09/) followed a toy guard through sixteen ticks of
@@ -29,6 +31,8 @@ One method runs
 in their cheapest-first order. The first two use `Vec2`, the lab's pair of x
 and y coordinates; the last uses the wall list:
 
+<SpeedType id="c3-can-see" title="Recall the three sight checks" recall={[{"text": "offset.normalized()", "mask": "normalized", "kind": "api", "hint": "Turn the offset into a length-1 direction, or nothing when the offset has no length."}, {"text": "direction.dot(self.facing)", "mask": "facing", "kind": "argument", "hint": "Compare the target's direction with the unit vector the guard looks along."}, {"text": "line_of_sight(self.position, target, walls)", "mask": "walls", "kind": "argument", "hint": "Pass the solid boxes the sight line must not cross."}, {"text": "self.position, target", "mask": "position", "kind": "argument", "hint": "Start the sight line where the guard stands."}, {"text": "< VIEW_CONE_COS", "mask": "VIEW_CONE_COS", "kind": "logic", "hint": "Reject a direction whose cosine falls below the constant that stands for 60 degrees."}]}>
+
 ```rust
 fn can_see(&self, target: Vec2, walls: &[Wall]) -> bool {
     let offset = target - self.position;
@@ -45,15 +49,15 @@ fn can_see(&self, target: Vec2, walls: &[Wall]) -> bool {
 }
 ```
 
+</SpeedType>
+
 The `return false` lines reject a target as soon as a check fails.
 `normalized()` returns an optional direction because a zero-length
 arrow has no direction; the `let Some(direction) ... else` branch
 handles that case. The following sections work through each calculation
 with positions you can draw on a grid.
 
-<Frame caption="A visible target must pass all three checks">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/npc-decision-gates.svg`} width="480" height="206" alt="An NPC tests distance, view angle, and obstacles before treating a player as visible." loading="lazy" decoding="async" />
-</Frame>
+<LiveCells lab="npc-sight-checks" />
 
 The first two checks read `offset`, the arrow from the guard to the target: the
 target's position minus the guard's, the same subtraction as in
@@ -158,18 +162,23 @@ coordinates lie between the corners.
 On tick 8 of [Lesson 4.12's run](/pages/4/09/#one-run-tick-by-tick), the guard
 stands at (4, 0), the player at (8, 0), and a wall fills the box from (5.5, −1)
 to (6.5, 1) between them. The samples are (4.0, 0), (4.1, 0), (4.2, 0), and so
-on. By (5.6, 0) a sample is inside the wall, because 5.5 ≤ 5.6 ≤ 6.5 and
-−1 ≤ 0 ≤ 1, so the function returns `false` long before it reaches the player.
+on. The 16th, (5.5, 0), is the first inside the wall, because 5.5 ≤ 5.5 ≤ 6.5
+and −1 ≤ 0 ≤ 1 (a point on the edge counts as inside), so the function returns
+`false` long before it reaches the player.
 
-<Frame caption="The selected sample (5.6, 0) lies inside both bounds of the tick-8 wall. Any contained sample stops the walk. Only selected dots are shown; the actual spacing is 0.1 world units.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/los-samples.png`} width="480" height="240" style="width:480px;max-width:100%;height:auto;" alt="Sight samples meet the wall between guard (4, 0) and player (8, 0); the bounds check rejects an inside sample." loading="lazy" decoding="async" />
-</Frame>
+<PredictReveal
+  id="c3-thin-wall"
+  setup="Same guard at (4, 0) and player at (8, 0), samples every 0.1: x = 4.0, 4.1, 4.2 and so on. This time a thin wall covers only x from 5.62 to 5.68 (y from −1 to 1)."
+  question="Does line_of_sight find the thin wall?"
+  options={[
+    { label: 'Yes: it returns false', why: 'Only a sample inside the bounds stops the walk. The samples nearest the wall are 5.6 and 5.7, and 5.6 < 5.62 while 5.7 > 5.68, so neither is inside.' },
+    { label: 'No: every sample misses it, so the guard sees the player', correct: true, why: 'The wall is 5.68 − 5.62 = 0.06 wide, thinner than the 0.1 step. Samples 5.6 and 5.7 land on either side, all 40 samples test clear, and the function returns true. Try the thin-wall example below.' },
+  ]}
+>
 
-<MemoryStrip
-  cells="x 4.0=guard|x 4.1 to 5.4=clear|x 5.5 to 6.5=wall|x 6.6 to 7.9=not tested|x 8.0=player"
-  marks="2"
-  caption="Tick 8's line of sight along y = 0, each box labelled by its x values. The walk stops at the first sample inside the wall and never tests the rest."
-/>
+<LiveCells lab="sight-walk" />
+
+</PredictReveal>
 
 <Accordion title="Optional reference: the lab's second line-of-sight test">
 
@@ -182,8 +191,8 @@ cases.
 
 </Accordion>
 
-Stepping has a blind spot: a wall thinner than 0.1 can sit between two samples
-and be missed. It also costs more with distance. A check across the full view
+Besides that blind spot for walls thinner than the step, stepping costs more
+with distance. A check across the full view
 distance takes 10 ÷ 0.1 = 100 samples, each tested against every wall. Engines
 instead compute exactly where a ray crosses each collision shape, a **ray
 cast**, but the question they answer is the same one.

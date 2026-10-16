@@ -10,7 +10,8 @@ sidebar:
   label: "6.11 Sampling Game State Under Load"
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import { Accordion, Badge, GitHub } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -31,10 +32,6 @@ A call logger, frame observer, or value recorder has two jobs with different tim
 2. format and store that fact somewhere durable.
 
 Writing a file can pause for filesystem, antivirus, indexing, or device activity. If the same thread is also handling a debugger event or time-sensitive sample, one slow write can disturb the program being measured.
-
-<Frame caption="A short capture separates timing from storage">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/capture-queue.svg`} width="480" height="206" alt="The game thread captures a small event into a bounded queue and a writer formats and saves it later." loading="lazy" decoding="async" />
-</Frame>
 
 A telemetry pipeline separates those jobs:
 
@@ -141,14 +138,25 @@ match sender.try_send(event) {
 
 Dropping an event sounds bad, but silently pausing every target thread can be worse. **Report sample loss explicitly.** The final report prints both written and dropped counts.
 
-Picture the queue as 128 numbered spaces between the sampler and the writer.
-Suppose the writer stalls while 127 spaces are occupied. The next sample takes
-space 128. Another sample arrives before the writer removes anything, so
-`try_send` returns `Full`; the sampler increments `dropped` to 1 and continues.
-When the writer resumes and removes one event, a later sample can enter again.
+<PredictReveal
+  id="c3-queue-stall"
+  setup="The sampler sends one GoldEvent every 50 ms into the empty 128-slot queue. Then the disk pauses, and the writer removes nothing for 10 seconds."
+  question="How many of the samples sent during those 10 seconds does the sampler drop?"
+  options={[
+    { label: 'None: the queue absorbs the pause', why: 'The queue holds only 128 events. In 10 seconds the sampler sends 10,000 ÷ 50 = 200, so 72 have no free slot.' },
+    { label: '72', correct: true, why: '10,000 ms ÷ 50 ms = 200 samples arrive. The first 128 fill the empty queue; the other 200 − 128 = 72 get Full, and each adds 1 to dropped.' },
+    { label: 'All 200', why: 'try_send fails only when the queue is full. The first 128 samples find free slots and are written once the writer resumes.' },
+  ]}
+>
+
+<LiveCells lab="queue-stall" />
+
+</PredictReveal>
+
+When the writer resumes and removes events, later samples can enter again.
 The queue absorbed a short delay, but it did not make the disk faster or keep
-every sample. In the finished log, the count of one dropped event warns that
-the measured timeline has a gap even if the surrounding gold values look flat.
+every sample. In the finished log, a nonzero dropped count warns that the
+measured timeline has a gap even if the surrounding gold values look flat.
 
 Different tools can choose different policies:
 
