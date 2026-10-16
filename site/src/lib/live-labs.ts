@@ -10,6 +10,7 @@ import { labsC3 } from './live-labs-c3';
 import { labsC4 } from './live-labs-c4';
 import { labsC5 } from './live-labs-c5';
 import { labsC6 } from './live-labs-c6';
+import { labsRea } from './live-labs-rea';
 
 const text = (values: LiveValues, id: string): string => values[id] ?? '';
 
@@ -245,4 +246,4 @@ const baseRate: LiveLab = {
   },
 };
 
-export const liveLabs: Readonly<Record<string, LiveLab>> = Object.fromEntries([controlCode, rotateBits, pageBit, wrappedRange, crossPage, baseRate, ...labsC1, ...labsC2, ...labsC3, ...labsC4, ...labsC5, ...labsC6].map(lab => [lab.id, lab]));
+export const liveLabs: Readonly<Record<string, LiveLab>> = Object.fromEntries([controlCode, rotateBits, pageBit, wrappedRange, crossPage, baseRate, ...labsC1, ...labsC2, ...labsC3, ...labsC4, ...labsC5, ...labsC6, ...labsRea].map(lab => [lab.id, lab]));
