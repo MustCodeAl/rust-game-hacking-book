@@ -30,6 +30,8 @@ function lexicalTokens(source: string): LexicalToken[] {
   }
   return result;
 }
+// Independent oracle for the revealed start of a long blank: eight or more characters show their first three, fourteen or more four.
+const revealOf = (length: number) => length >= 14 ? 4 : length >= 8 ? 3 : 0;
 function fitsFocus(kind: RecallKind | undefined, focus: string) {
   if (focus === 'calls') return kind === 'api' || kind === 'argument';
   if (focus === 'imports') return kind === 'import' || kind === 'type';
@@ -65,18 +67,19 @@ async function inspectMasks(panel: Locator, source: string, fragments: RecallFra
   }
   const tokens = lexicalTokens(source), total = (source.match(/[!-~]/g) || []).length;
   const hidden = gaps.reduce((sum, gap) => sum + gap.token.length, 0), budget = Math.floor(total * 0.15);
+  const shown = (token: { start: number; end: number }) => ({ start: token.start + revealOf(token.end - token.start), end: token.end });
   assert.ok(gaps.length > 0 && gaps.length <= 3, `${id}: one to three sparse gaps`);
-  for (const gap of gaps) assert.ok(tokens.some(token => token.start === gap.start && token.end === gap.end), `${id}: complete token ${JSON.stringify(gap.token)}, never middle letters`);
+  for (const gap of gaps) assert.ok(tokens.some(token => shown(token).start === gap.start && token.end === gap.end), `${id}: ${JSON.stringify(gap.token)} is the end of a complete token after its revealed first letters, never middle letters`);
   for (let i = 1; i < gaps.length; i++) assert.ok(gaps[i].start - gaps[i-1].end >= 8, `${id}: gaps separated by at least eight source characters`);
   const focus = await panel.getAttribute('data-speedtype-focus') || 'mixed';
   const eligible = explicitCandidates(source, fragments, focus);
   for (const gap of gaps) {
-    if (fragments.every(fragment => fragment.mask)) assert.ok(eligible.some(candidate => candidate.start === gap.start && candidate.end === gap.end), `${id}: target belongs to an authored fragment and selected focus`);
+    if (fragments.every(fragment => fragment.mask)) assert.ok(eligible.some(candidate => shown(candidate).start === gap.start && candidate.end === gap.end), `${id}: target belongs to an authored fragment and selected focus`);
   }
   if (hidden > budget) {
     assert.equal(gaps.length, 1, `${id}: budget exception is one indivisible token`);
     assert.ok(hidden <= total * 0.25, `${id}: at least75% of nonspace code remains visible`);
-    if (fragments.every(fragment => fragment.mask)) assert.ok(!eligible.some(candidate => candidate.token.length <= budget), `${id}:15% used whenever an authored complete token fits`);
+    if (fragments.every(fragment => fragment.mask)) assert.ok(!eligible.some(candidate => candidate.token.length - revealOf(candidate.token.length) <= budget), `${id}:15% used whenever an authored complete token fits`);
     assert.notEqual(await panel.getAttribute('data-speedtype-budget-exception'), null);
   } else assert.equal(await panel.getAttribute('data-speedtype-budget-exception'), null);
   return { hidden, total, gaps, focus };
@@ -228,11 +231,11 @@ try {
             const focused = await inspectMasks(panel, source, fragments, id);
             if (id === 'win32-open-process-contract' && focus === 'calls') {
               const call = source.indexOf('OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)');
-              assert.ok(focused.gaps.some(gap => gap.start === call && gap.token === 'OpenProcess'), 'The actual OpenProcess call is hidden as one complete11-character token');
+              assert.ok(focused.gaps.some(gap => gap.start === call + 3 && gap.token === 'nProcess'), 'The actual OpenProcess call keeps its first three letters and hides the rest of the 11-character token');
               assert.ok(focused.gaps.some(gap => gap.token === 'false'), 'The complete inheritance argument is a target');
             }
             if (id === 'win32-open-process-contract' && focus === 'imports') {
-              const matched = explicitCandidates(source, fragments, focus).filter(candidate => focused.gaps.some(gap => gap.start === candidate.start && gap.end === candidate.end));
+              const matched = explicitCandidates(source, fragments, focus).filter(candidate => focused.gaps.some(gap => gap.start === candidate.start + revealOf(candidate.end - candidate.start) && gap.end === candidate.end));
               assert.ok(matched.some(candidate => candidate.kind === 'import'), 'A complete import member is targeted');
               assert.ok(matched.some(candidate => candidate.kind === 'type'), 'A complete handle/PID type is targeted');
             }

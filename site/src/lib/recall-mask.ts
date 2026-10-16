@@ -14,6 +14,8 @@ export interface RecallTarget {
   readonly start: number;
   readonly end: number;
   readonly token: string;
+  /** Leading characters of a long token that stay visible, so only the rest is blank. */
+  readonly revealed: number;
   readonly hint: string;
   readonly kind: RecallKind;
 }
@@ -43,6 +45,11 @@ const SEPARATION = 8;
 const PREFERRED_RATIO = 0.15;
 // One indivisible token can exceed the preferred budget, but most code must stay visible.
 const SINGLE_TOKEN_RATIO = 0.25;
+
+/** A long blank is easier with a start to build on: eight or more characters show their first three, fourteen or more show four. */
+export function revealedPrefix(length: number): number {
+  return length >= 14 ? 4 : length >= 8 ? 3 : 0;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -145,7 +152,7 @@ export function createRecallPlan(
         const key = `${token.start}:${token.end}`;
         if (occupied.has(key)) continue;
         occupied.add(key);
-        candidates.push({ start: token.start, end: token.end, token: mask, hint: fragment.hint, kind });
+        candidates.push({ start: token.start, end: token.end, token: mask, revealed: revealedPrefix(mask.length), hint: fragment.hint, kind });
       }
       contextStart = source.indexOf(fragment.text, contextStart + Math.max(1, fragment.text.length));
     }
@@ -159,15 +166,16 @@ export function createRecallPlan(
     target.end + SEPARATION <= previous.start || target.start >= previous.end + SEPARATION);
   for (const target of ordered) {
     if (selected.length >= MAX_GAPS) break;
-    if (hiddenCharacters + target.token.length > budget || !separated(target)) continue;
+    const blank = target.token.length - target.revealed;
+    if (hiddenCharacters + blank > budget || !separated(target)) continue;
     selected.push(target);
-    hiddenCharacters += target.token.length;
+    hiddenCharacters += blank;
   }
   if (!selected.length) {
-    const whole = ordered.find(target => target.token.length <= eligibleCharacters * SINGLE_TOKEN_RATIO);
+    const whole = ordered.find(target => target.token.length - target.revealed <= eligibleCharacters * SINGLE_TOKEN_RATIO);
     if (whole) {
       selected.push(whole);
-      hiddenCharacters = whole.token.length;
+      hiddenCharacters = whole.token.length - whole.revealed;
     }
   }
   return {

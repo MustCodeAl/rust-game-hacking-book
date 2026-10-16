@@ -141,7 +141,8 @@ function applyRecall(
   for (const item of seq) {
     delete item.recallHint;
     for (const target of plan.targets) {
-      if (item.offset >= target.start && item.offset + item.ch.length <= target.end && !item.auto) {
+      // A long blank keeps its first few letters visible; only the rest is hidden.
+      if (item.offset >= target.start + target.revealed && item.offset + item.ch.length <= target.end && !item.auto) {
         item.recallHint = target.hint;
         break;
       }
