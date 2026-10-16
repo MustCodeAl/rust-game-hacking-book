@@ -4,6 +4,12 @@
 // purple = rules and control, yellow = arithmetic, gray = unused.
 import { cell as c, frame, hot as h, panel, row, type Cell, type CellFrame } from './cell-model';
 import type { LiveLab, LiveValues } from './live-model';
+import { labsC1 } from './live-labs-c1';
+import { labsC2 } from './live-labs-c2';
+import { labsC3 } from './live-labs-c3';
+import { labsC4 } from './live-labs-c4';
+import { labsC5 } from './live-labs-c5';
+import { labsC6 } from './live-labs-c6';
 
 const text = (values: LiveValues, id: string): string => values[id] ?? '';
 
@@ -239,4 +245,4 @@ const baseRate: LiveLab = {
   },
 };
 
-export const liveLabs: Readonly<Record<string, LiveLab>> = Object.fromEntries([controlCode, rotateBits, pageBit, wrappedRange, crossPage, baseRate].map(lab => [lab.id, lab]));
+export const liveLabs: Readonly<Record<string, LiveLab>> = Object.fromEntries([controlCode, rotateBits, pageBit, wrappedRange, crossPage, baseRate, ...labsC1, ...labsC2, ...labsC3, ...labsC4, ...labsC5, ...labsC6].map(lab => [lab.id, lab]));
