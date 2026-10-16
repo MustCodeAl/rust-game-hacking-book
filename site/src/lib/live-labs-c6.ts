@@ -34,7 +34,7 @@ const hookWindow: LiveLab = {
   inputs: [
     { kind: 'number', id: 'work', label: 'Instructions in each update', min: 0, max: 1000000, step: 1000 },
     { kind: 'number', id: 'updates', label: 'Updates to run (1 to 8)', min: 1, max: 8 },
-    { kind: 'choice', id: 'reset', label: 'The count goes back to 0', options: [{ value: 'session', label: 'never (one budget per session)' }, { value: 'update', label: 'at the start of every update' }] },
+    { kind: 'choice', id: 'reset', label: 'The count goes back to 0', options: [{ value: 'session', label: 'never' }, { value: 'update', label: 'every update' }] },
   ],
   defaults: { work: '30000', updates: '5', reset: 'session' },
   presets: [
@@ -97,7 +97,7 @@ const healthClamp: LiveLab = {
     { kind: 'number', id: 'health', label: 'Health now', min: 0, max: 1000 },
     { kind: 'number', id: 'max', label: 'max_health', min: 1, max: 1000 },
     { kind: 'number', id: 'change', label: 'Change (damage is negative)', min: -1000, max: 1000 },
-    { kind: 'choice', id: 'clamp', label: 'The control', options: [{ value: 'zero', label: 'max(new, 0): only the lower bound' }, { value: 'both', label: 'clamp to 0 and to max_health' }, { value: 'none', label: 'no control' }] },
+    { kind: 'choice', id: 'clamp', label: 'The control', options: [{ value: 'zero', label: 'max(new, 0)' }, { value: 'both', label: '0 to max_health' }, { value: 'none', label: 'none' }] },
   ],
   defaults: { health: '90', max: '100', change: '30', clamp: 'zero' },
   presets: [
@@ -124,11 +124,13 @@ const healthClamp: LiveLab = {
         : `${sum} is outside 0 to ${max}. The control turns it into ${stored}, so the invariant holds and the health bar shows ${stored}.`
       : `${sum}. ${mode === 'zero' ? `max(${raw}, 0) only raises values below 0, and ${raw} is not below 0, so it passes unchanged.` : 'Nothing limits it.'} ${signed(stored)} breaks 0 ≤ health ≤ ${max}, and the health bar copies the broken value.`;
     return frame('Request, control, accepted state', caption, [
-      panel('The request', 'blue', [row('health + change', [
-        c(`${health}`, 'blue', 1, { sub: 'health now' }), c(sign, 'yellow', 1, { sub: change < 0 ? 'damage' : 'heal' }),
-        h(`= ${signed(raw)}`, raw < 0 || raw > max ? 'red' : 'yellow', 2, { sub: 'before the control' }),
-      ])]),
-      panel('The control', 'purple', [row('Rule applied', [h(rule, 'purple', 4)])]),
+      panel('The request, then the control', 'purple', [
+        row('health + change', [
+          c(`${health}`, 'blue', 1, { sub: 'health now' }), c(sign, 'yellow', 1, { sub: change < 0 ? 'damage' : 'heal' }),
+          h(`= ${signed(raw)}`, raw < 0 || raw > max ? 'red' : 'yellow', 2, { sub: 'before the control' }),
+        ]),
+        row('Rule applied', [h(rule, 'purple', 4)]),
+      ]),
       panel('Accepted state', holds ? 'green' : 'red', [
         row('Stored health', [h(signed(stored), holds ? 'green' : 'red', 1, { sub: 'the deciding copy' }), c(`0 ≤ ${signed(stored)} ≤ ${max}: ${holds ? 'holds' : 'broken'}`, holds ? 'green' : 'red', 3)]),
         row('Health bar', [c(`shows ${signed(stored)}`, 'teal', 4, { sub: 'copies the accepted value' })], { link: 'the display follows' }),
@@ -148,7 +150,7 @@ const checksumCoverage: LiveLab = {
   inputs: [
     { kind: 'number', id: 'health', label: 'health now', min: 0, max: 65535 },
     { kind: 'number', id: 'max', label: 'max_health now', min: 0, max: 65535 },
-    { kind: 'choice', id: 'cover', label: 'The checksum covers', options: [{ value: 'short', label: 'player_id, health, generation (no max_health)' }, { value: 'full', label: 'all four fields (covered_checksum)' }] },
+    { kind: 'choice', id: 'cover', label: 'The checksum covers', options: [{ value: 'short', label: 'no max_health' }, { value: 'full', label: 'all four fields' }] },
   ],
   defaults: { health: '80', max: '60', cover: 'short' },
   presets: [
@@ -183,8 +185,10 @@ const checksumCoverage: LiveLab = {
         ]),
         row('Compare', [h(num(now), match ? 'green' : 'red', 3, { sub: 'recomputed now' }), c(match ? '=' : '≠', 'purple', 1), c(num(stored), 'blue', 4, { sub: 'stored when sealed' })], { link: 'add the terms' }),
       ]),
-      panel('verify: both clauses', 'purple', [row('Clauses', [h(`checksum ${match ? 'matches' : 'differs'}`, match ? 'green' : 'red', 2), h(`${health} ≤ ${maxHealth}: ${inRange ? 'yes' : 'no'}`, inRange ? 'green' : 'red', 2)])]),
-      panel('Result', pass && !changed.length ? 'green' : 'red', [row('', verdict)]),
+      panel('verify: both clauses, then the result', pass && !changed.length ? 'green' : 'red', [
+        row('Clauses', [h(`checksum ${match ? 'matches' : 'differs'}`, match ? 'green' : 'red', 2), h(`${health} ≤ ${maxHealth}: ${inRange ? 'yes' : 'no'}`, inRange ? 'green' : 'red', 2)]),
+        row('Result', verdict),
+      ]),
     ]);
   },
 };
@@ -213,7 +217,7 @@ const twoStage: LiveLab = {
     const page = Math.floor(gva / 0x1000);
     const offset = gva % 0x1000;
     const digits = gva.toString(16).toUpperCase().padStart(8, '0');
-    const split = panel('Split the address', 'blue', [row(`page ${hx(page, 3)} · offset ${hx(offset, 3)}`, [...digits].map((digit, index) => index < 5 ? c(digit, 'orange', 1, index === 4 ? { sub: 'page' } : {}) : h(digit, 'blue', 1, index === 7 ? { sub: 'offset' } : {})))]);
+    const split = panel('Split the address', 'blue', [row(`page ${hx(page, 3)} (orange) · offset ${hx(offset, 3)} (blue)`, [...digits].map((digit, index) => index < 5 ? c(digit, 'orange') : h(digit, 'blue')))]);
     const guestFrame = GUEST_TABLES.get(page);
     if (guestFrame === undefined) {
       return frame('Stage 1 refuses', `The guest’s own tables have no entry for page ${hx(page, 3)}, so the processor raises an ordinary page fault inside the guest. Stage 2 is never consulted.`, [
@@ -252,7 +256,7 @@ const jtagShift: LiveLab = {
   summary: 'On each clock b0 leaves through TDO, every bit moves one place toward TDO, and the TDI bit enters at b3.',
   inputs: [
     { kind: 'bits', id: 'captured', label: 'Captured pin levels, b3 to b0', width: 4 },
-    { kind: 'choice', id: 'tdi', label: 'TDI sends, first bit first', options: [{ value: '1100', label: '1, 1, 0, 0 (the lesson)' }, { value: '0000', label: '0, 0, 0, 0' }, { value: '1111', label: '1, 1, 1, 1' }, { value: '1010', label: '1, 0, 1, 0' }] },
+    { kind: 'choice', id: 'tdi', label: 'TDI sends, first bit first', options: [{ value: '1100', label: '1, 1, 0, 0' }, { value: '0000', label: '0, 0, 0, 0' }, { value: '1111', label: '1, 1, 1, 1' }, { value: '1010', label: '1, 0, 1, 0' }] },
     { kind: 'number', id: 'clocks', label: 'Clocks run (0 to 4)', min: 0, max: 4 },
   ],
   defaults: { captured: '1101', tdi: '1100', clocks: '4' },
