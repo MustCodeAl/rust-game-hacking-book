@@ -7899,15 +7899,15 @@
       },
       {
         "id": "jtag-shift-64",
-        "prompt": "The debugger is in Shift-DR and wants to shift exactly 64 bits through a data register. How does it set TMS?",
+        "prompt": "The controller is in Shift-DR in the middle of a long scan, and the debugger needs to pause to fetch more data. Which TMS levels on the next two clocks park it in Pause-DR, and does a bit shift on the way?",
         "options": [
-          "63 clocks with TMS at 0, then a 64th clock with TMS at 1",
-          "64 clocks with TMS at 0, then a 65th clock with TMS at 1",
-          "64 clocks with TMS at 1, since each clock leaves the state",
-          "1 clock with TMS at 1, then 64 clocks with TMS at 0"
+          "0 then 0; Shift-DR leads straight to Pause-DR and nothing shifts",
+          "1 then 0; the clock that leaves Shift-DR still shifts one bit",
+          "1 then 1; this goes to Exit1-DR and then holds in Pause-DR",
+          "1 then 0; no bit shifts, because TMS was 1 when it left"
         ],
-        "answer": "0",
-        "explanation": "The clock that raises TMS to leave Shift-DR for Exit1-DR also shifts the last bit, because each state does its work on the rising edge that leaves it.",
+        "answer": "1",
+        "explanation": "From Shift-DR, TMS at 1 moves to Exit1-DR, and TMS at 0 then moves to Pause-DR, where the controller can wait. Each state does its work on the edge that leaves it, so the clock leaving Shift-DR shifts one more bit, and a debugger counting bits must include it.",
         "type": "multiple-choice"
       },
       {
@@ -8655,15 +8655,15 @@
     "questions": [
       {
         "id": "emulator-jnz-falls-through",
-        "prompt": "At step 11 of the trace, `JNZ 0x02` does not jump. Why not?",
-        "answer": "0",
-        "explanation": "`JNZ` jumps only while Z is 0, and Z records whether the last result was zero. The instruction just before it, `DEX`, computed X = 1 − 1 = 0, so Z became 1. `ADD` sets Z too, but `DEX` ran after it, and neither `STA` nor `JNZ` changes Z.",
+        "prompt": "A loop ends with `DEX` (X = X - 1, and Z = 1 if X becomes 0) followed by `JNZ` (jump while Z is 0). X was 1 before `DEX`. Why does `JNZ` not jump this time?",
+        "answer": "2",
+        "explanation": "`JNZ` jumps only while Z is 0, and Z records whether the last result was zero. `DEX` computed X = 1 - 1 = 0, so Z became 1 and the jump falls through to the next instruction.",
         "type": "multiple-choice",
         "options": [
-          "DEX at step 10 made X zero, so Z became 1",
-          "A holds 20 at that point, which is not zero",
-          "0x02 is not a valid jump target in this memory",
-          "JNZ can jump only once for each run of a program"
+          "JNZ tests the accumulator, which is not zero",
+          "The jump target is not a valid address in memory",
+          "DEX made X zero, so the zero flag Z became 1",
+          "JNZ can jump only once in each run of a program"
         ]
       },
       {
@@ -8902,28 +8902,28 @@
       },
       {
         "id": "emu8-cheat-overwritten",
-        "prompt": "Frame 1 ends after step 8 and the cheat writes 99 to gold. What does step 9 do to that 99?",
+        "prompt": "A game has loaded gold (15) into register A and added 5, and then a frame ends before its store instruction runs. At the frame boundary a cheat writes 99 to gold in RAM. What happens when the store runs in the next frame?",
         "options": [
-          "It stores A's 20 over it, because A already held the new total",
-          "It leaves the 99 alone, because the cheat wrote it later than the game did",
-          "It adds 5 to the 99, because `ADD #5` runs against gold",
+          "It leaves the 99 alone, because the cheat wrote later than the game",
+          "It writes A's 20 over the 99, because A already held the total",
+          "It writes 104, because the store adds 5 to whatever RAM now holds",
           "It stops the program, because gold changed behind the game's back"
         ],
-        "answer": "0",
-        "explanation": "The game had already loaded gold into A and added 5 before the cheat wrote to RAM. A cheat can lose a race against a value held in a register.",
+        "answer": "1",
+        "explanation": "The game copied gold into A and added 5 before the cheat wrote to RAM. A store only copies A to memory, so it puts 20 back over the cheat's 99: a cheat can lose a race against a value held in a register.",
         "type": "multiple-choice"
       },
       {
         "id": "emu8-frame2-cost",
-        "prompt": "Frame 2 has a budget of 17 cycles. Why does it finish the whole program?",
+        "prompt": "A frame with a 17-cycle budget starts with five instructions left: a store (3 cycles), a decrement (1), a jump that is not taken (2), another store (3) and a halt (1). Does the program finish in this frame?",
         "options": [
-          "Steps 9 to 13 cost 3 + 1 + 2 + 3 + 1 = 10 cycles, well inside the budget",
-          "Steps 9 to 13 cost 3 + 2 + 3 + 1 + 3 = 12 cycles, which is just inside the budget",
-          "Frame 2 gets an unlimited budget, because the program has already halted",
-          "The cheat adds cycles to the budget, because it writes to RAM at the end"
+          "Yes, but only because an untaken jump costs nothing at all",
+          "No: a frame can run at most four instructions before it ends",
+          "No: a halt must wait for the start of a fresh frame to run",
+          "Yes: they cost 3 + 1 + 2 + 3 + 1 = 10 cycles, inside the 17"
         ],
-        "answer": "0",
-        "explanation": "Steps 9 to 13 are `STA 0x80`, `DEX`, `JNZ` falling through, `STA 0xF0` and `HLT`. The display shows 20 at step 12, and the cheat writes 99 to RAM again at the frame's end.",
+        "answer": "3",
+        "explanation": "The five instructions cost 3 + 1 + 2 + 3 + 1 = 10 cycles. The run loop starts each one while fewer than 17 cycles are used, so all five run and the halt ends the program with 7 cycles of the budget unused.",
         "type": "multiple-choice"
       },
       {
@@ -9115,15 +9115,15 @@
       },
       {
         "id": "rights-write-bit",
-        "prompt": "The same handle holds rights 0x0D, and a different operation needs rights 0x02. Why is it denied?",
+        "prompt": "A handle holds rights 0x0D, and an operation needs rights 0x02. What does the bitwise AND give, and is the operation allowed?",
         "options": [
-          "`0x02` is a bit that is 0 in `0x0D`, so the AND is `0x00`",
-          "`0x02` is covered, so the AND is `0x02` and it is allowed",
-          "`0x02` is covered, so the AND is `0x0F` and it is allowed",
-          "`0x0D` is larger than `0x02`, so the AND is `0x0D`"
+          "`0x02`, which covers the requirement, so it is allowed",
+          "`0x0F`, which covers the requirement, so it is allowed",
+          "`0x00`, since bit 1 is clear in `0x0D`, so it is denied",
+          "`0x0D`, the handle's rights, so it is allowed"
         ],
-        "answer": "0",
-        "explanation": "0x0D is 1101 in binary and 0x02 is 0010. They share no set bit, so the AND is 0 and the right is missing.",
+        "answer": "2",
+        "explanation": "0x0D is 1101 in binary and 0x02 is 0010. They share no set bit, so the AND is 0x00: the required bit is missing and the operation is denied.",
         "type": "multiple-choice"
       },
       {
@@ -9816,13 +9816,13 @@
         "id": "emu-legal-line",
         "prompt": "Which statement about the legal side of emulation is closest to the truth in many countries?",
         "options": [
-          "Writing an emulator is generally lawful; copying games is not",
+          "Writing an emulator is usually lawful; downloading games is not",
           "Emulators are illegal everywhere, whatever they contain",
           "Downloading games is lawful if you own the matching console",
           "Copyright does not apply to old games"
         ],
         "answer": "0",
-        "explanation": "Court cases have treated reverse engineering for compatibility as fair use, and many emulators replace original firmware with their own code. This is not legal advice.",
+        "explanation": "Court cases have treated reverse engineering for compatibility as fair use, and many emulators replace original firmware with their own code. Downloading a console's firmware or games is generally infringement, although some countries allow dumps of games you own. This is not legal advice.",
         "type": "multiple-choice"
       }
     ]
@@ -10003,13 +10003,13 @@
         "id": "vm-both-stages-allow",
         "prompt": "A guest page is read-only in the hypervisor's stage-2 entry, but the guest's own page-table entry says read-write. The guest writes to it. What happens?",
         "options": [
-          "The access fails, because an access succeeds only if both stages allow it",
           "The write succeeds, because the guest's own tables decide permissions for its pages",
-          "The write succeeds, and the hypervisor copies the page so it can be written",
+          "The write is stopped and the hypervisor gets an exit; both stages must allow it",
+          "The guest kernel gets an ordinary page fault and must fix its own entry",
           "The write succeeds, because stage 1 overrides stage 2 for writable pages"
         ],
-        "answer": "0",
-        "explanation": "Stage-2 entries carry their own read, write and execute permissions, and the hardware needs both stages to agree. The guest cannot override the hypervisor's restriction by editing its own tables.",
+        "answer": "1",
+        "explanation": "Stage-2 entries carry their own read, write and execute permissions, and an access succeeds only if both stages allow it. A stage-2 refusal goes to the hypervisor as a VM exit, not to the guest as a page fault, so the guest cannot override the restriction by editing its own tables.",
         "type": "multiple-choice"
       },
       {
@@ -10027,7 +10027,7 @@
       },
       {
         "id": "vm-snapshot-read-block3",
-        "prompt": "The disk figure shows blocks 1 and 4 written since the snapshot. A guest now reads block 3. Where does the data come from?",
+        "prompt": "After a snapshot, a guest writes new data to blocks 1 and 4 of its virtual disk. It now reads block 3. Where does the data come from?",
         "options": [
           "The frozen base, because the delta holds no newer copy of block 3",
           "The delta, because every read after a snapshot is served from it",
@@ -10401,7 +10401,7 @@
     "questions": [
       {
         "id": "vm-two-stage-translation",
-        "prompt": "Using the same mappings as the worked example, which host physical address holds the byte at guest virtual address `0x0040_3F00`?",
+        "prompt": "A guest's own page tables map guest virtual page 0x403 to guest frame 0x1F7, and the hypervisor maps guest frame 0x1F7 to host frame 0x52E3. Pages are 4 KiB. Which host physical address holds the byte at guest virtual address `0x0040_3F00`?",
         "answer": "0",
         "explanation": "`0x0040_3F00` lies on the same guest virtual page, `0x403`, at offset `0xF00`. Stage 1 maps page `0x403` to guest frame `0x1F7`, giving `0x001F_7F00`, which is only a guest physical address. Stage 2 maps frame `0x1F7` to host frame `0x52E3`. The offset never changes, so the answer is `0x52E3` × `0x1000` + `0xF00` = `0x052E_3F00`.",
         "type": "multiple-choice",
@@ -10440,15 +10440,15 @@
       },
       {
         "id": "vm-popf-belief",
-        "prompt": "On processors without hardware virtualization, why could a guest kernel in a less-privileged ring not be managed purely by trapping and emulating its privileged instructions?",
+        "prompt": "On an older x86 processor without VT-x, a guest kernel running in ring 3 executes `popf` to switch interrupts back on. What actually happens?",
         "options": [
-          "Some sensitive instructions silently misbehave instead of faulting",
-          "Guest kernels cannot execute any instruction outside the most privileged ring",
-          "Every instruction faults, which would be far too slow",
-          "Hypervisors cannot read the registers of a guest"
+          "The processor faults, and the hypervisor turns interrupts on for it",
+          "The flag is left off with no fault, but the guest thinks it is on",
+          "The real interrupt flag changes, so the host's interrupts turn on",
+          "The instruction is skipped, and the guest kernel crashes at once"
         ],
-        "answer": "0",
-        "explanation": "In a less-privileged ring, some instructions simply leave a flag alone and raise no fault. Nothing traps, so the hypervisor cannot emulate them and the guest carries on with a false belief.",
+        "answer": "1",
+        "explanation": "In ring 3, `popf` silently leaves the interrupt flag unchanged and raises no fault. Nothing traps, so the hypervisor cannot emulate the change, and the guest kernel carries on with a false belief about its interrupts.",
         "type": "multiple-choice"
       },
       {
@@ -10773,13 +10773,13 @@
         "id": "15.1-bank-13",
         "prompt": "Which telemetry makes a flag easier to reproduce?",
         "options": [
+          "The final verdict and the player's ban count",
+          "A video clip from the flagged player's screen",
           "Rule version, server state, and command timing",
-          "Player nickname, menu theme, and screen wallpaper",
-          "Account age, desktop font, and window position",
-          "File icon, chat color, and preferred resolution"
+          "The player's total hours played and rank"
         ],
-        "answer": "0",
-        "explanation": "Record the rule and game context that produced the decision."
+        "answer": "2",
+        "explanation": "To reproduce a decision, record the version of the check, the server state it read and the command timing. A verdict or ban count gives no reason, a client video can omit what the server knew, and playtime does not show why the check failed."
       },
       {
         "id": "15.1-bank-14",
@@ -10838,13 +10838,13 @@
         "id": "15.2-bank-04",
         "prompt": "Which purchase operations must be applied together?",
         "options": [
+          "The debit and a receipt email sent to the player",
+          "The price check and the client's cached price",
           "The currency debit and the purchased reward",
-          "The menu animation and its displayed text",
-          "The account nickname and the message timestamp",
-          "The sound volume and the chosen item icon"
+          "The reward and the client's inventory screen"
         ],
-        "answer": "0",
-        "explanation": "Applying payment and reward together prevents concurrent double spending."
+        "answer": "2",
+        "explanation": "The debit and the reward change server-owned state and must succeed or fail together, or two concurrent requests could both spend the same old balance. Emails, cached client prices and inventory screens are not authoritative state."
       },
       {
         "id": "15.2-bank-05",
@@ -10898,25 +10898,25 @@
         "id": "15.2-bank-09",
         "prompt": "Which timing belongs beside a command's claimed time?",
         "options": [
-          "The original server observation time",
-          "The player's chosen desktop clock theme",
-          "The oldest replay's unverified start time",
-          "The timestamp of an unrelated account creation"
+          "The client's clock reading when it sent the command",
+          "The server's own time when the command arrived",
+          "The time the replay file was later written",
+          "The player's average reaction time so far"
         ],
-        "answer": "0",
-        "explanation": "Compare client timing claims with authoritative timing and bounded history."
+        "answer": "1",
+        "explanation": "A command's claimed time is the client's statement. Recording the server's own arrival time beside it lets later checks bound and compare the claim; another client clock reading is just one more claim."
       },
       {
         "id": "15.2-bank-10",
-        "prompt": "What protects a hidden enemy position from client inspection?",
+        "prompt": "A minimap shows enemies only when a teammate can see them. Where should that visibility filter run?",
         "options": [
-          "Withholding its unrelated position at the server",
-          "Receiving its position but hiding the label",
-          "Drawing its position in an invisible color",
-          "Encrypting a local label after receiving its position"
+          "In the client's minimap code, before markers are drawn",
+          "In the graphics driver, as each marker is rendered",
+          "In a scanner on the player's PC that blocks radar tools",
+          "On the server, before positions are sent to the client"
         ],
-        "answer": "0",
-        "explanation": "Information already delivered to the client has been disclosed."
+        "answer": "3",
+        "explanation": "Any filter that runs on the player's machine works on data the client already received, so a modified client can skip it. Filtering on the server means hidden enemies' positions never reach the client at all."
       },
       {
         "id": "15.2-bank-11",
@@ -11021,7 +11021,7 @@
       },
       {
         "id": "15.3-bank-05",
-        "prompt": "What does the inspected 30-slot declaration establish?",
+        "prompt": "A detector's source declares a recent-history array with 30 slots. What does that number establish?",
         "options": [
           "The chosen recent-history storage capacity",
           "A universal threshold proving every cheat",
@@ -11045,15 +11045,15 @@
       },
       {
         "id": "15.3-bank-07",
-        "prompt": "What does old 0.5 and sample 1 produce?",
+        "prompt": "A weighted measurement uses (old times 9 plus sample) divided by 10. Starting from 0.8, a new sample of 0 gives which value?",
         "options": [
-          "A weighted value of 0.55",
-          "A weighted value of 0.50",
-          "A weighted value of 0.95",
-          "A weighted value of 1.00"
+          "A weighted value of 0.80",
+          "A weighted value of 0.72",
+          "A weighted value of 0.70",
+          "A weighted value of 0.00"
         ],
-        "answer": "0",
-        "explanation": "The calculation is (0.5 times 9 plus 1) divided by 10."
+        "answer": "1",
+        "explanation": "(0.8 times 9 plus 0) divided by 10 = 7.2 divided by 10 = 0.72. A single 0 lowers the value by a tenth of itself; it does not subtract a fixed 0.1 or replace the history."
       },
       {
         "id": "15.3-bank-08",
@@ -11230,15 +11230,15 @@
       },
       {
         "id": "15.4-bank-08",
-        "prompt": "Why might a signed driver still be blocked?",
+        "prompt": "A game's anti-cheat driver is signed and legitimate, but it exposes an operation that ends any process on request. Why is that a risk to every machine it is installed on?",
         "options": [
-          "It is known to expose vulnerable operations",
-          "Its signature automatically has no identifying value",
-          "Every signed component must always be rejected",
-          "Its local checksum determines the server's rules"
+          "The signature expires as soon as another program calls the driver",
+          "Other software can load the same signed driver and use that operation",
+          "Only the game can open the driver, so the risk stays inside the game",
+          "Windows checks each caller's intent before it runs a driver request"
         ],
-        "answer": "0",
-        "explanation": "Driver loading policy can account for known vulnerabilities as well as signatures."
+        "answer": "1",
+        "explanation": "A legitimately signed driver loads wherever its signature is accepted, and its exposed operations run with kernel authority. Malware can load or open the same driver and borrow the operation, which is why vulnerable signed drivers end up on blocklists and need fixed, revoked or constrained interfaces."
       },
       {
         "id": "15.4-bank-09",
@@ -11367,7 +11367,7 @@
       },
       {
         "id": "15.5-bank-05",
-        "prompt": "What is the base rate in this example?",
+        "prompt": "When evaluating a cheat detector, what is the base rate?",
         "options": [
           "How common cheating is among tested players",
           "How many signals one player generates each tick",
@@ -11379,7 +11379,7 @@
       },
       {
         "id": "15.5-bank-06",
-        "prompt": "How many cheat when one in 1,000 of 100,000 cheats?",
+        "prompt": "In a population of 100,000 players, one in 1,000 cheats. How many players cheat?",
         "options": [
           "100 players",
           "1,000 players",
@@ -11387,11 +11387,11 @@
           "99,900 players"
         ],
         "answer": "0",
-        "explanation": "Divide the population by one thousand."
+        "explanation": "Divide the population by one thousand: 100,000 ÷ 1,000 = 100."
       },
       {
         "id": "15.5-bank-07",
-        "prompt": "How many honest players are in that toy population?",
+        "prompt": "A population of 100,000 players contains 100 cheaters. How many honest players does it contain?",
         "options": [
           "99,900 players",
           "99,000 players",
@@ -11415,7 +11415,7 @@
       },
       {
         "id": "15.5-bank-09",
-        "prompt": "What does a 1 percent false-positive rate among 99,900 yield?",
+        "prompt": "A detector wrongly flags 1 percent of honest players. How many of 99,900 honest players does it flag?",
         "options": [
           "999 wrongly flagged players",
           "99 wrongly flagged players",
@@ -11427,7 +11427,7 @@
       },
       {
         "id": "15.5-bank-10",
-        "prompt": "Which count is the full flagged group?",
+        "prompt": "A detector flags 99 of 100 cheaters and 999 of 99,900 honest players. Which count is the full flagged group?",
         "options": [
           "99 plus 999 gives 1,098",
           "100 plus 999 gives 1,099",
@@ -11463,15 +11463,15 @@
       },
       {
         "id": "15.5-bank-13",
-        "prompt": "Why use nine flagged people per dot?",
+        "prompt": "Cheating becomes ten times rarer, but a detector still catches 99 percent of cheaters and wrongly flags 1 percent of honest players. What happens to its precision?",
         "options": [
-          "Nine divides both flagged counts exactly",
-          "Nine is a measured threshold for real anti-cheat",
-          "Nine is the number of detector types in every game",
-          "Nine is the exact proportion of cheating accounts"
+          "It rises, because fewer cheaters means fewer mistakes",
+          "It stays the same, because the detector's rates did not change",
+          "It falls, because false flags now outnumber true ones even more",
+          "It falls to zero, because no cheater can be caught any more"
         ],
-        "answer": "0",
-        "explanation": "The chosen grouping gives 11 cheating dots and 111 honest dots."
+        "answer": "2",
+        "explanation": "Precision depends on the base rate. With ten times fewer cheaters the detector finds about ten times fewer true cases, but the honest population barely changes, so it raises almost the same number of false flags. In a 100,000-player example precision falls from about 9 percent to about 1 percent."
       },
       {
         "id": "15.5-bank-14",
@@ -11518,37 +11518,37 @@
         "id": "15.6-bank-03",
         "prompt": "Which details help preserve a forwarded signal's meaning?",
         "options": [
+          "The name of the service that forwarded it last",
+          "A fresh timestamp from each service it passes",
           "Originating event and game/detector versions",
-          "Report color and the recipient's display resolution",
-          "Desktop font and the sender's favorite map",
           "A verdict with its trace and source removed"
         ],
-        "answer": "0",
-        "explanation": "Event identity and versions prevent a copied report from becoming a new measurement."
+        "answer": "2",
+        "explanation": "Keeping the originating event identifier and the game and detector versions lets a later service recognise a copy of an old observation. A forwarder's name or a new timestamp at each hop makes a copied report look like a new measurement."
       },
       {
         "id": "15.6-bank-04",
-        "prompt": "How many events do three notifications about A represent?",
+        "prompt": "In twenty cases, signal A flags six and signal B flags five, and two cases are flagged by both. How many distinct cases are flagged by at least one signal?",
         "options": [
-          "One underlying event",
-          "Two independent events",
-          "Three independent events",
-          "Four underlying events"
+          "11, from 6 + 5",
+          "9, from 6 + 5 - 2",
+          "13, from 6 + 5 + 2",
+          "2, the cases flagged by both"
         ],
-        "answer": "0",
-        "explanation": "Different routes do not create additional occurrences of the event."
+        "answer": "1",
+        "explanation": "Adding 6 and 5 counts the two shared cases twice, so subtract them once: 6 + 5 - 2 = 9. That is the union; the 2 shared cases are the intersection."
       },
       {
         "id": "15.6-bank-05",
-        "prompt": "What does a later event B add to the ledger?",
+        "prompt": "Signal A flags six of twenty cases, and two of those six are also flagged by signal B. What is P(B given A)?",
         "options": [
-          "A second distinct event",
-          "Three more copies of event A",
-          "A proof that event A was malicious",
-          "A guarantee of independent detector errors"
+          "2 out of 20, which is 0.10",
+          "6 out of 20, which is 0.30",
+          "2 out of 6, about 0.33",
+          "5 out of 6, about 0.83"
         ],
-        "answer": "0",
-        "explanation": "A distinct event adds an observation without proving statistical independence."
+        "answer": "2",
+        "explanation": "P(B given A) looks only at the cases A already flagged. Two of those six are also flagged by B, so it is 2 out of 6, about 0.33, not 2 out of the whole 20."
       },
       {
         "id": "15.6-bank-06",
@@ -11737,27 +11737,27 @@
       },
       {
         "id": "15.7-bank-07",
-        "prompt": "What affects whether device isolation is actually active?",
+        "prompt": "What affects whether an IOMMU's device isolation is actually active on a PC?",
         "options": [
+          "Whether the game is running in full-screen mode",
+          "Whether the anti-cheat driver is signed",
           "Firmware and operating-system configuration",
-          "The player's chosen glossary hover-card style",
-          "The current color of a game's health bar",
-          "The alphabetical order of network message names"
+          "How many CPU cores the processor has"
         ],
-        "answer": "0",
-        "explanation": "A capability must be configured correctly to enforce its policy."
+        "answer": "2",
+        "explanation": "An IOMMU restricts device memory access only when firmware enables it and the operating system configures its policy. Signing a driver, the display mode or the core count does not turn that isolation on."
       },
       {
         "id": "15.7-bank-08",
-        "prompt": "What can greater local privilege reveal about never-sent enemy data?",
+        "prompt": "Why does a defense against kernel-assisted cheats still need server validation?",
         "options": [
-          "Nothing that was never delivered from the server",
-          "The complete value without a server observation",
-          "The hidden data whenever a device performs DMA",
-          "Every enemy position from the local health value"
+          "Kernel code cannot read game memory, so the server must do it",
+          "Local controls can fail, but the server still owns accepted results",
+          "Driver blocklists stop every kernel cheat, so validation is a backup",
+          "Server validation lets the server inspect each player's drivers"
         ],
-        "answer": "0",
-        "explanation": "Local access cannot create missing remote information."
+        "answer": "1",
+        "explanation": "Driver policy, integrity protections and updates each cover part of the local problem, and any of them can be bypassed or misconfigured. Validating actions against server-owned state protects the shared result whatever ran on the client; the server cannot see a player's drivers."
       },
       {
         "id": "15.7-bank-09",
@@ -11838,7 +11838,7 @@
     "questions": [
       {
         "id": "15.8-bank-01",
-        "prompt": "What does the product comparison's date indicate?",
+        "prompt": "A comparison of anti-cheat products says it was checked on a given date. What does that date tell a reader?",
         "options": [
           "Architecture was checked at that time",
           "Detection rates were measured for every product",
@@ -11898,15 +11898,15 @@
       },
       {
         "id": "15.8-bank-06",
-        "prompt": "What do the lifetime animation's seconds represent?",
+        "prompt": "Vanguard runs with kernel privilege, yet VALORANT's servers still limit which enemy positions they send to each client. Why?",
         "options": [
-          "Slowed illustrative time for viewing",
-          "Measured boot durations for every named product",
-          "Exact driver startup performance on a tested PC",
-          "A benchmark comparing all current game servers"
+          "Kernel drivers cannot read the network traffic sent to the game",
+          "Withheld data cannot leak even if local protection is bypassed",
+          "Sending fewer positions makes the kernel driver load faster",
+          "The servers are unable to send more than a few positions"
         ],
-        "answer": "0",
-        "explanation": "The scene teaches intervals, not startup performance."
+        "answer": "1",
+        "explanation": "Kernel protection tries to stop tools from reading the client, but it can be bypassed. Data the server never sends cannot be read on the client at all, so server-side visibility limits protect hidden information independently of local privilege."
       },
       {
         "id": "15.8-bank-07",
@@ -12071,15 +12071,15 @@
       },
       {
         "id": "15.9-bank-06",
-        "prompt": "What should a retry return after coin C was consumed?",
+        "prompt": "To make a reward request safe to retry after a lost reply, what must the server store?",
         "options": [
-          "Its committed result without another reward",
-          "A second point because the packet arrived again",
-          "A new coin with an unrelated operation identity",
-          "A ban without examining why delivery repeated"
+          "The client's clock time when it first sent it",
+          "A request identity and the result it committed",
+          "The number of times the player pressed the button",
+          "A ban flag for any account that sends it twice"
         ],
-        "answer": "0",
-        "explanation": "Use identity and the stored outcome to make reward retries safe."
+        "answer": "1",
+        "explanation": "With an identity for each reward operation and its committed result, the server can recognise a repeated delivery and return the stored outcome instead of applying the reward again. Client clocks and press counts do not identify the operation, and a retry is not evidence of cheating."
       },
       {
         "id": "15.9-bank-07",
@@ -12119,15 +12119,15 @@
       },
       {
         "id": "15.9-bank-10",
-        "prompt": "What should be bounded per client?",
+        "prompt": "Which limits should a server enforce for each connected client?",
         "options": [
-          "Parsing, queued work, history, and request load",
-          "Only the chosen name displayed above the player",
-          "Only the client's menu animation frame rate",
-          "Only the number of glossary definitions viewed"
+          "The bytes it sends, but not the requests it receives",
+          "The number of logins, since sessions cost the most",
+          "The client's frame rate, so it cannot act too fast",
+          "Parsing, queued work, history, and request load"
         ],
-        "answer": "0",
-        "explanation": "Resource limits protect the server from excessive work."
+        "answer": "3",
+        "explanation": "Each client can make the server parse input, queue work, keep history and handle requests, so each of those needs a bound with an explicit overflow or disconnect policy. Outgoing bytes, logins or the client's own frame rate do not limit the work a client causes."
       },
       {
         "id": "15.9-bank-11",
@@ -15203,14 +15203,14 @@
       },
       {
         "id": "lua-alias-trace",
-        "prompt": "What does this Lua code print?\n```lua\nlocal a = { hp = 40 }\nlocal b = a\nb.hp = 10\nprint(a.hp)\n```",
+        "prompt": "In Lua, after `local a = { hp = 40 }`, `local b = a` and `b.hp = 10`, what does `print(a.hp)` show?",
         "options": [
-          "10, because both names refer to the same table",
           "40, because assigning to b made its own copy of the table",
+          "10, because both names refer to the same table",
           "nil, because b.hp created a new field only on b",
           "An error, because a table cannot be given two names"
         ],
-        "answer": "0",
+        "answer": "1",
         "explanation": "Assigning a table copies the reference, not the table. There is one hp field, so a change through b is seen through a.",
         "type": "multiple-choice"
       },
@@ -15333,15 +15333,15 @@
       },
       {
         "id": "lua-trust-differences",
-        "prompt": "Which difference between games changes how a Lua script's failures show up or what it can do?",
+        "prompt": "The same Lua script behaves differently in two games that both embed Lua. Which difference between the two hosts could explain it?",
         "options": [
-          "Its CPU, memory, and action limits",
-          "The color theme of the in-game console",
-          "The length of the script file's name",
-          "The number of comments inside the script"
+          "The script was turned into each game's machine code at install",
+          "Lua comments run as code in one game but are skipped in the other",
+          "Each host sets its own CPU, memory and action limits for scripts",
+          "Global names set in one game carry over into the other game"
         ],
-        "answer": "0",
-        "explanation": "Hosts differ in version, libraries, API rules, trust, resource limits, and error handling, so a script may behave differently from game to game.",
+        "answer": "2",
+        "explanation": "Hosts differ in Lua version, available libraries, exposed functions and their argument rules, trust, resource limits and error handling, so the same script can do different things. Lua source is not turned into machine code at install, comments never run, and each game has its own Lua state.",
         "type": "multiple-choice"
       }
     ]
@@ -15561,13 +15561,13 @@
         "id": "debug-record",
         "prompt": "Which item belongs in a debug record for a misbehaving call?",
         "options": [
-          "Active function, frame base, and open upvalues",
-          "The player's account password for the game",
-          "The full contents of every snapshot taken",
-          "The computer's desktop wallpaper image"
+          "Every snapshot taken so far, printed in full by default",
+          "Only the final error message, since frames are temporary",
+          "The active function, its frame base, and open upvalues",
+          "The player's login token, to tie each call to an account"
         ],
-        "answer": "0",
-        "explanation": "The lesson lists the bytecode position, frame base, argument tags, result count, open upvalues, callback name, and error chain. It warns against printing secrets or whole snapshots by default.",
+        "answer": "2",
+        "explanation": "Record the bytecode position, active function and frame base, argument tags, requested result count, open upvalues, callback name and error chain. Tokens and whole snapshots stay out of the record by default, and the final message alone hides where the call went wrong.",
         "type": "multiple-choice"
       }
     ]
@@ -15720,15 +15720,15 @@
       },
       {
         "id": "lua-squared-why",
-        "prompt": "Why does the ranking function return squared distance instead of true distance?",
+        "prompt": "A function ranks targets by distance but returns the squared distance, with no square root. Why does that still rank them correctly?",
         "options": [
-          "It keeps the nearest-to-farthest order without a square root",
-          "It makes every distance come out as an exact integer",
-          "It lets the function accept position tables with no fields",
-          "It converts the result into a new position table"
+          "Squared values are always smaller, so comparisons run faster",
+          "Squaring keeps the order of non-negative distances unchanged",
+          "Squaring turns every distance into an exact whole number",
+          "The squared value also tells which direction the target lies"
         ],
-        "answer": "0",
-        "explanation": "Squaring preserves the ordering of non-negative distances, so ranking works without calculating a square root. Squared values are not always integers.",
+        "answer": "1",
+        "explanation": "If one non-negative distance is smaller than another, its square is smaller too, so sorting by squared distance gives the same order and skips the square root. Squares are not always smaller or whole numbers, and they carry no direction.",
         "type": "multiple-choice"
       },
       {
@@ -16024,15 +16024,15 @@
       },
       {
         "id": "lock-across-script",
-        "prompt": "Why should the host not hold a mutable game-state lock while a script runs?",
+        "prompt": "Why should a host not hold a mutable game-state lock while a script runs?",
         "options": [
-          "Give Lua a copied snapshot and collect requests instead",
-          "Locks cannot be created inside an `mlua` host",
-          "Scripts run so fast that locks would never matter",
-          "The script needs the lock so it can edit state directly"
+          "Locks cannot be created by a program that embeds an interpreter",
+          "Holding a lock makes the interpreter skip its memory limit",
+          "The script may call a host function that needs the same lock",
+          "A held lock lets the script write to game state directly"
         ],
-        "answer": "0",
-        "explanation": "Holding the lock during untrusted script work invites trouble. The two-phase design runs Lua on a copy and applies validated requests afterward.",
+        "answer": "2",
+        "explanation": "A running script can call back into host functions. If one of them tries to take the lock the host already holds, that work waits on itself. Giving Lua a copied snapshot and applying its requests afterward means the lock is never held while script code runs.",
         "type": "multiple-choice"
       },
       {
@@ -16050,15 +16050,15 @@
       },
       {
         "id": "accepted-actions-delay",
-        "prompt": "Why does the host print accepted actions only after the script returns?",
+        "prompt": "A script queues three action requests, and the host prints which ones it accepted only after the script has returned. Why wait until then?",
         "options": [
-          "Lua proposes data, and the host decides what happens",
-          "Scripts cannot run until the host has printed",
-          "Printing earlier would delete the script's requests",
-          "The accepted list is computed by Lua's garbage collector"
+          "Each request already changed the game the moment it was queued",
+          "The host cannot print anything while an interpreter is loaded",
+          "Printing during the run would use up the script's memory budget",
+          "The requests are proposals until the host checks them afterward"
         ],
-        "answer": "0",
-        "explanation": "The delay is deliberate. A script's output is only a proposal until the host checks it.",
+        "answer": "3",
+        "explanation": "A script only proposes actions. The host validates and commits them after the script returns successfully, so nothing is accepted before then, and a script that fails halfway has its queued requests discarded.",
         "type": "multiple-choice"
       }
     ]
@@ -16650,15 +16650,15 @@
       },
       {
         "id": "callback-validate",
-        "prompt": "Which item belongs in a host callback's input checks?",
+        "prompt": "A host function exposed to scripts receives a target ID and a coordinate. Which check belongs in it before it acts?",
         "options": [
-          "Numeric finiteness, range, and referenced IDs",
-          "Whether the script file is long enough to run",
-          "Which Lua version wrote the script's comments",
-          "The colors the log output will be shown in"
+          "Only the argument types, since values are the script's job",
+          "The coordinate is finite and in range, and the ID exists",
+          "Nothing, if the script stayed inside its instruction budget",
+          "That the script file is shorter than the published size limit"
         ],
-        "answer": "0",
-        "explanation": "Validate argument types, string lengths, sequence lengths, numeric finiteness and range, referenced IDs, permissions, and rate budgets.",
+        "answer": "1",
+        "explanation": "A callback must validate what it receives: types, string and sequence lengths, finite numbers in range, IDs that exist now, permissions and rate budgets. Type checks alone do not prove the values make sense, and budgets and source limits guard other resources.",
         "type": "multiple-choice"
       },
       {
@@ -16990,7 +16990,7 @@
           "Group characters into tokens like name or integer",
           "Check the token order against the grammar",
           "Turn the program's meaning into bytecode steps",
-          "Run the bytecode using a stack of values now"
+          "Run the bytecode with a stack of values"
         ],
         "answer": "0",
         "explanation": "The lexer produces tokens like name, equals, integer, plus, integer. Grammar checking is the parser, and compiling and running are later stages.",
@@ -17154,15 +17154,15 @@
       },
       {
         "id": "four-failures",
-        "prompt": "A script's jump target points outside the program. Which kind of failure is this?",
+        "prompt": "Before any instruction runs, a checker finds a jump in the compiled bytecode that targets position 40 of a 12-instruction program. Which kind of failure is this?",
         "options": [
-          "Bytecode validation",
           "Lexing of the source",
+          "Bytecode validation",
           "Parsing of the grammar",
           "Execution of the code"
         ],
-        "answer": "0",
-        "explanation": "The lesson separates lexing, parsing, bytecode validation, and execution failures. A jump outside the program is invalid bytecode, a different stage from a type error at run time.",
+        "answer": "1",
+        "explanation": "The source was already lexed and parsed, and nothing has run yet. A jump outside the program is invalid bytecode, which a validation pass catches before execution; a type error or an exhausted budget would be an execution failure.",
         "type": "multiple-choice"
       },
       {
@@ -21934,7 +21934,7 @@
       },
       {
         "id": "inv-proxy-menu",
-        "prompt": "A menu button is greyed out unless the player may heal. In the proxy table, what real property does that button stand in for?",
+        "prompt": "A menu button is greyed out unless the player may heal. Which real property is the button only a stand-in for?",
         "options": [
           "The engine policy actually permits the state change",
           "The health bar's cache currently matches the entity",
@@ -22051,15 +22051,15 @@
       },
       {
         "id": "inv-diagram-missing",
-        "prompt": "Which transition is not in the Alive / Downed / Removed state diagram?",
+        "prompt": "An entity's state machine allows Alive → Downed, Downed → Alive (revive), Downed → Removed and Alive → Removed. A trace shows Alive → Downed → Removed → Alive. What does the last step show?",
         "options": [
-          "Removed to Alive",
-          "Downed to Alive by revive",
-          "Downed to Removed by timeout",
-          "Alive to Removed by despawn"
+          "A normal revive, since Downed may become Alive again",
+          "A transition the machine forbids, so some rule failed",
+          "A despawn, which sends a removed entity back to Alive",
+          "Nothing, since a trace may list states in any order"
         ],
-        "answer": "0",
-        "explanation": "Removed leads only to the end of the diagram. Revive, timeout, and despawn are all listed as allowed transitions.",
+        "answer": "1",
+        "explanation": "Removed has no outgoing transition, so Removed → Alive is not in the allowed set. Seeing it in a trace means some code changed the state without going through the rules. A revive starts from Downed, not from Removed.",
         "type": "multiple-choice"
       },
       {
@@ -22121,15 +22121,15 @@
       },
       {
         "id": "tel-interleaving",
-        "prompt": "Why did the adjacency reading of that log reach the wrong conclusion even though no events were missing?",
+        "prompt": "A complete log lists two overlapping actions' events in arrival order. A reader pairs each effect with the decision just above it and calls a refused action successful. What caused the mistake?",
         "options": [
+          "The sequence numbers were reordered, so effects came first",
+          "The monotonic clock jumped between the two decisions",
           "Two actions interleaved, and the reader assumed they had not",
-          "Sequence numbers were reordered so that 43 came before 42",
-          "The monotonic clock jumped between events 42 and 43",
-          "A dropped event hid the real decision for action 7"
+          "A dropped event hid the real decision for one action"
         ],
-        "answer": "0",
-        "explanation": "The evidence was complete. Ordering alone misled, which is why detection rules join on the correlation ID, not on neighbouring lines.",
+        "answer": "2",
+        "explanation": "Nothing was missing or out of order. The two actions' events were mixed together, so the line above an effect was not always its own decision. Detection rules join decision and effect on the correlation ID, not on neighbouring lines.",
         "type": "multiple-choice"
       },
       {
@@ -22347,7 +22347,7 @@
       },
       {
         "id": "int-uncovered-field",
-        "prompt": "A checksum covers some fields of a record but not its limit field. The limit is then lowered below the current value and nothing recomputes the checksum. What happens when it is verified?",
+        "prompt": "A checksum covers some fields of a record but not its limit field. The limit is then lowered below the current value and nothing recomputes the stored checksum. When the checksum is recomputed and compared, what happens?",
         "options": [
           "It still matches, since the limit field was never covered",
           "It fails, since any change to a record changes its checksum",
@@ -22386,11 +22386,11 @@
       },
       {
         "id": "int-not-crypto",
-        "prompt": "What kind of claim does the toy checksum make?",
+        "prompt": "A record stores a checksum computed with a fixed formula and no secret key. What kind of claim can that checksum support?",
         "options": [
           "It signals accidental corruption; it is not cryptographic authentication",
           "It proves that the record was written by the game itself, not by a tool",
-          "It prevents anyone from changing a record unless they hold the secret key",
+          "It stops deliberate edits, as long as the formula stays unpublished",
           "It encrypts the record so the health value stays secret from other programs"
         ],
         "answer": "0",
@@ -22625,14 +22625,14 @@
       },
       {
         "id": "ad-threshold-high",
-        "prompt": "With the same numbers, what is wrong with setting the threshold above 412 us?",
+        "prompt": "An idle machine times a tiny operation 10,000 times: median 1.2 us, 99th percentile 8 us, maximum 412 us. What is wrong with a pause-detection threshold above 412 us?",
         "options": [
+          "It would trip on ordinary samples several times each minute, like a low threshold",
+          "It would change the median of the baseline measurements taken on the clean run",
           "Almost nothing would trigger it, including the very condition you meant to catch",
-          "It would trip on ordinary samples several times each minute, just as 10 us does",
-          "It would change the median of the baseline measurements taken on the clean fixture",
-          "It would make the maximum value fall below the 99th percentile of the same samples"
+          "It would make the maximum value fall below the 99th percentile of the samples"
         ],
-        "answer": "0",
+        "answer": "2",
         "explanation": "No single number separates ordinary from paused cleanly. A very high limit is quiet because the rule is too blind to fire.",
         "type": "multiple-choice"
       },
@@ -22690,7 +22690,7 @@
       },
       {
         "id": "ad-last-row",
-        "prompt": "The test matrix has an invalid health command with no environment signals. What is expected?",
+        "prompt": "A test sends an invalid health command while every anti-debug signal is quiet. What result should the test expect?",
         "options": [
           "The environment is ordinary, the command is rejected, and health is unchanged",
           "The command is accepted, since the quiet environment shows no sign of a debugger",
@@ -22760,7 +22760,7 @@
     "questions": [
       {
         "id": "ob-secret-words",
-        "prompt": "Which pair of the five terms involves a secret?",
+        "prompt": "Of compression, serialization, obfuscation, authentication and encryption, which two need a secret?",
         "options": [
           "Authentication and encryption",
           "Obfuscation and encryption",
@@ -22955,15 +22955,15 @@
       },
       {
         "id": "ob-toy-tag",
-        "prompt": "Why is the toy tag beside an encoded value not cryptographic authentication?",
+        "prompt": "A game stores a small tag beside an encoded value, computed by a simple formula with a key kept in the same process. Why is the tag not cryptographic authentication?",
         "options": [
-          "Anyone who knows the algorithm and key can recompute it",
           "It is stored in plain bytes, and plain bytes can be copied",
+          "Anyone who can read the key and formula can make a valid tag",
           "It is shorter than a hash, so collisions are certain",
           "It is checked after decoding rather than before"
         ],
-        "answer": "0",
-        "explanation": "A toy integrity relation catches accidental changes. It does not stop a party who can reproduce the relation.",
+        "answer": "1",
+        "explanation": "A toy integrity relation catches accidental changes. Authentication relies on a key the editor cannot obtain and a design that resists forgery; with the key in the same process and a simple formula, an editor can recompute a matching tag.",
         "type": "multiple-choice"
       },
       {
@@ -22981,7 +22981,7 @@
       },
       {
         "id": "ob-mutation-tag",
-        "prompt": "What should a mutation test do with the toy tag?",
+        "prompt": "A value is stored with a tag meant to catch changes. What should a mutation test of that tag do?",
         "options": [
           "Flip each encoded bit and confirm the tag check refuses the changed sample",
           "Flip each plain bit and confirm that the decode of it still works as before",
@@ -22994,14 +22994,14 @@
       },
       {
         "id": "ob-auth-enc-nonce",
-        "prompt": "Which row of the comparison table describes authenticated encryption?",
+        "prompt": "Which description fits authenticated encryption?",
         "options": [
-          "Nonces make repeated values encrypt differently, and a built-in tag detects changes",
-          "Repeated values may reveal obvious patterns, and any tag is an optional ad-hoc add-on to it",
-          "No durable secret is needed, and the analysis recovers the transform itself from reading it",
-          "The purpose is to change the representation, with no promise of secrecy made at all"
+          "Repeated values may show obvious patterns, and any tag is an optional add-on",
+          "No durable secret is needed, and analysis just recovers the transform",
+          "Nonces make repeats encrypt differently, and a built-in tag detects changes",
+          "It only changes the representation and makes no promise of secrecy"
         ],
-        "answer": "0",
+        "answer": "2",
         "explanation": "Authenticated encryption keeps data secret and detects modification. Reversible obfuscation only changes representation.",
         "type": "multiple-choice"
       },
@@ -23264,7 +23264,7 @@
       },
       {
         "id": "gl-repair-shape",
-        "prompt": "What is the repair for all three weak controls?",
+        "prompt": "A greyed-out button, a one-field checksum and a debugger flag are each trusted as permission for a game effect. What repair fits all three?",
         "options": [
           "Enforce the invariant at the effect boundary; keep the proxy as a clue",
           "Add more proxy checks until every known path is covered by at least one of them",
@@ -23355,7 +23355,7 @@
       },
       {
         "id": "gl-checksum-repair",
-        "prompt": "Which fields does the repaired relation cover?",
+        "prompt": "A record holds a player ID, health, maximum health, a generation and a checksum that covers only health. What should the repaired check cover?",
         "options": [
           "Player ID, health, maximum health, and generation, plus a separate range check",
           "Health only, with a much stronger multiplier so that changes are noticed more",
@@ -23368,7 +23368,7 @@
       },
       {
         "id": "gl-mutation-suite",
-        "prompt": "What does the regression suite for the checksum repair do?",
+        "prompt": "A checksum was repaired to cover four fields instead of one. What should its regression suite do?",
         "options": [
           "Mutates each covered field in turn, expects failure, and keeps a valid record passing",
           "Mutates only health, because that is the field the old checksum already covered",
@@ -23479,13 +23479,13 @@
         "id": "bypass-wrap-sum",
         "prompt": "In an unsigned 64-bit calculation that wraps silently, an offset is 2 below the largest value and the length is 8. What does offset + length evaluate to?",
         "options": [
-          "6, so a check against a limit of 4,096 wrongly passes",
-          "2^64 + 6, which is larger than the limit and fails the check",
+          "2^64 + 5, which is larger than the limit and fails the check",
+          "5, so a check against a limit of 4,096 wrongly passes",
           "A panic in every build, so the check never runs",
           "The largest value, because the sum saturates"
         ],
-        "answer": "0",
-        "explanation": "The sum is computed modulo 2^64, so it wraps past zero to a small number. Nothing panics in a release build, and the comparison on the wrapped number is simply true.",
+        "answer": "1",
+        "explanation": "The largest value is 2^64 - 1, so the offset is 2^64 - 3. Adding 8 gives 2^64 + 5, and dropping the 2^64 that does not fit leaves 5. Nothing panics in a release build, and 5 <= 4,096 is simply true.",
         "type": "multiple-choice"
       },
       {
@@ -23635,12 +23635,12 @@
         "id": "bypass-single-thread",
         "prompt": "A teammate says, \"We are single-threaded, so we can skip reviewing for cached-decision bugs.\" What is the best reply?",
         "options": [
-          "Nothing raced in the lab; a stale answer needs only an input that changed afterwards",
-          "True for most code, but the lab's cache is shared with a background timer thread",
-          "One thread is enough, as long as the cache is cleared whenever the program starts",
-          "Single-threaded code is safe here, though an optimised build can reorder the cache reads"
+          "True, because a stale cache needs a second thread to change it",
+          "One thread is enough, as long as the cache is cleared at startup",
+          "Single-threaded code is safe, but an optimised build may reorder reads",
+          "No race is needed: a cached answer goes stale once its input changes"
         ],
-        "answer": "0",
+        "answer": "3",
         "explanation": "The answer simply outlived the input it was computed from. No unlucky timing or second thread is needed, so single-threaded code can have this bug too.",
         "type": "multiple-choice"
       },
@@ -30829,13 +30829,13 @@
         "id": "original-6-10-restore-replay",
         "prompt": "An observer restores EAX but skips the displaced addition. Why is the original behavior still broken?",
         "options": [
-          "Restoring input does not execute the missing addition.",
-          "Restoring input automatically doubles the addition.",
-          "The original value no longer needs any continuation.",
-          "The caller must use a different decimal notation now."
+          "The jump back now lands inside an instruction and decodes garbage",
+          "Restoring a register does not perform the addition that was skipped",
+          "EAX also has to be cleared to zero before control jumps back",
+          "Restoring EAX rolls back the gold value that was already stored"
         ],
-        "answer": "0",
-        "explanation": "Preservation protects live state. The displaced operation still has to run with its original meaning before continuation.",
+        "answer": "1",
+        "explanation": "Preserving EAX only protects live state. The addition the detour displaced still has to run once, with its original meaning, before continuation; without it the bonus is never added.",
         "type": "multiple-choice"
       },
       {
@@ -30853,15 +30853,15 @@
       },
       {
         "id": "original-6-10-scratch",
-        "prompt": "The observer adds 10 to a live register and leaves it changed. What can fail even if the displaced addition runs once?",
+        "prompt": "A detour's observer adds 10 to a live register for its own calculation and leaves it changed. The displaced addition is then replayed once. What goes wrong?",
         "options": [
-          "The object changes identity because its method is shared.",
-          "The process restores its disk snapshot automatically.",
-          "The original addition receives the wrong starting value.",
-          "The original addition loses its decimal representation."
+          "The addition runs twice, because the register changed",
+          "The jump bytes are overwritten by the register value",
+          "The replayed addition starts from the wrong value",
+          "Nothing, because replaying the addition resets it"
         ],
         "answer": "2",
-        "explanation": "Temporary observer calculations must not leak into live values the original path expects.",
+        "explanation": "The original path expects the register to hold its incoming value. The observer's leftover change becomes the input to the replayed addition, so the result is off by 10 even though the addition ran exactly once. Observer work must preserve and restore live registers.",
         "type": "multiple-choice"
       },
       {
