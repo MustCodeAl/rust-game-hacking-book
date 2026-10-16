@@ -680,7 +680,7 @@
         "prompt": "Why is it wrong to keep weakening a pattern until it matches an unknown build?",
         "options": [
           "It can return success on the wrong code; the goal is the same instruction in every named build",
-          "It makes the pattern longer, which would exceed the limit the lesson sets for byte signatures",
+          "It makes the pattern longer than the matcher can compare against one window",
           "It changes the module's fingerprint, so the supported builds are then rejected by the scanner",
           "It is allowed, as long as the final pattern matches at least one location in that build"
         ],
@@ -1202,15 +1202,15 @@
       },
       {
         "id": "scan-write-refused",
-        "prompt": "A tool refuses to write to an address because the value there no longer matches what it last read. What is the safeguard preventing?",
+        "prompt": "A value is stored in memory as a 16-bit integer, but the scanner searches for it as a 32-bit integer. Why does the search rarely find it?",
         "options": [
-          "Overwriting a spot that changed since it was checked and may now hold something else",
-          "Writing a value that is too large to fit in the memory page at that address",
-          "Writing to memory that belongs to the tool's own process instead of the target",
-          "Writing the same value twice, which would waste time and show up in the target"
+          "16-bit values are kept big-endian, so the two bytes come in reverse",
+          "Its 4-byte window also covers two unrelated bytes, which are rarely zero",
+          "A 32-bit search steps four bytes, so short values fall between steps",
+          "A 32-bit search reads short values as negative numbers, so none match"
         ],
-        "answer": "0",
-        "explanation": "A stale reading means the candidate may no longer be the value you wanted. Refusing and asking for a fresh scan is the safety check working as intended.",
+        "answer": "1",
+        "explanation": "A 16-bit 100 is stored as 64 00. A 32-bit search wants 64 00 00 00, so it matches only where the two bytes after the field happen to be zero. Searching with the field's real type keeps each comparison well defined.",
         "type": "multiple-choice"
       },
       {
@@ -1228,7 +1228,7 @@
       },
       {
         "id": "scan-zero-first-pass",
-        "prompt": "The first pass finds zero candidates. Which phase should you inspect first, according to the troubleshooting table?",
+        "prompt": "A memory scan for a known value finds zero candidates on its first pass. What should you check first?",
         "options": [
           "Value type, endianness, range permissions, or the target build",
           "The guarded write, since it runs before the first candidate is stored",
@@ -1684,7 +1684,7 @@
         "options": [
           "Code is readable and executable; variables are readable and writable",
           "Code is writable and executable; constants are readable and writable",
-          "Code is read-just and not executable; variables are executable too",
+          "Code is read-only and not executable; variables are executable too",
           "Every section is readable, writable and executable together at once"
         ],
         "answer": "0",
@@ -1697,7 +1697,7 @@
         "options": [
           "The 32-bit format, usually called PE32",
           "The 64-bit format, usually called PE32+",
-          "A DOS-just header with no modern header after it",
+          "A DOS header alone, with no modern header after it",
           "A header that has no optional header"
         ],
         "answer": "0",
@@ -29097,7 +29097,7 @@
         "prompt": "Why is adding a live module base to a file offset compared with adding meters to seconds?",
         "options": [
           "They are in different spaces, so the sum has no useful meaning",
-          "Both are measured in bytes, so the sum just breaks for large values",
+          "Both count bytes, so the sum is fine unless the values are huge",
           "Both are addresses, so the sum is simply an address",
           "The sum overflows, since both numbers are too large"
         ],
@@ -29120,7 +29120,7 @@
       },
       {
         "id": "zero-tail",
-        "prompt": "The same section has a virtual size of 0x1400 and a raw size of 0x1000. RVA 0x4080 is 0x1080 into the section. Is there a byte for it in the file?",
+        "prompt": "A section starts at RVA 0x3000, with a virtual size of 0x1400 and a raw size of 0x1000. RVA 0x4080 is 0x1080 into the section. Is there a byte for it in the file?",
         "options": [
           "No: 0x1080 is past the 0x1000 raw bytes, so it is zero-filled",
           "Yes: it is inside the virtual size, so the file stores that byte too",
@@ -29265,7 +29265,7 @@
         "id": "bytes-match",
         "prompt": "After printing the live address, what must you confirm in x64dbg before using it?",
         "options": [
-          "The bytes and disassembly match the lesson",
+          "The bytes match the expected instruction",
           "The address is a multiple of 4",
           "The live base equals the preferred base",
           "The address is below 0x00400000"
@@ -29376,7 +29376,7 @@
         "options": [
           "The optional header has different sizes in the two formats",
           "The directories live in a separate file in the 64-bit format",
-          "Directories exist just in files of the 64-bit format",
+          "The 32-bit format stores no data directories at all",
           "The position of the directories is random in every file"
         ],
         "answer": "0",
@@ -29402,7 +29402,7 @@
         "options": [
           "An undeclared entry would lie outside the header's declared data",
           "Entry zero is empty in most files, so reading it is wasteful of time",
-          "Entries can just be read in pairs, so a count is needed first",
+          "Entries are read two at a time, so a count is needed first",
           "The count tells the parser which version of the format is in use"
         ],
         "answer": "0",
@@ -29468,7 +29468,7 @@
           "A wrapped sum could turn a huge value into a small, valid one",
           "Checked addition is faster than plain addition in most of the cases",
           "File fields are negative, which plain addition cannot handle well",
-          "Plain addition can just add two values that are exactly the same size"
+          "Plain addition cannot add values that were read from a file"
         ],
         "answer": "0",
         "explanation": "Numbers come from an untrusted file, so a wrapped sum could pass later bounds checks wrongly. A checked addition returns an error instead.",
@@ -30084,7 +30084,7 @@
       },
       {
         "id": "call-repeated-hit",
-        "prompt": "A call breakpoint is hit again and again at the same address. According to the troubleshooting table, what is the likely cause?",
+        "prompt": "A call breakpoint is hit again and again at the same address, and the thread never moves on. What is the likely cause?",
         "options": [
           "`EIP` was not rewound, or the call was re-armed too early",
           "The thread ID was missing from the stepping map when the single-step arrived",
