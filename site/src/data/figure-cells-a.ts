@@ -47,7 +47,7 @@ export const addressReadCells: readonly CellScenario[] = [{
 
 /** Lesson 2.11 (pages/2/11.mdx): call saves a return address on the stack, ret takes it back. */
 const callFrame = (label: string, caption: string, esp: ReturnType<typeof c>, eax: ReturnType<typeof c>, stackTop: ReturnType<typeof c>): CellFrame => frame(label, caption, [plain(
-  row('Registers, then the stack', [esp, eax, stackTop, c('caller’s data', 'blue', 2, { sub: 'at S' })], { ticks: { left: 'registers', right: 'stack: S − 4, then S' } }),
+  row('Registers, then the stack', [esp, eax, stackTop, c('caller', 'blue', 2, { sub: 'data at S' })], { ticks: { left: 'registers', right: 'stack: S − 4, then S' } }),
 )]);
 export const callReturnCells: readonly CellScenario[] = [{
   id: 'call-ret', tab: 'call and ret',
@@ -115,8 +115,8 @@ export const fieldDistanceCells: readonly CellScenario[] = [{
 
 /** Lesson 6.7 (pages/3/08.mdx): the saved address stays the same while the bytes behind it change owner. */
 const lifetimeRow = (bytes: readonly string[], owner: 'caller' | 'other', bytesHot: boolean, read: ReturnType<typeof c>) => row('Saved pointer → its 4 bytes → read', [
-  c('0x0A401000', 'orange', 2, { sub: 'saved pointer' }),
-  ...bytes.map((byte, index) => (bytesHot ? h : c)(byte, owner === 'caller' ? 'blue' : 'gray', 1, index === 0 ? { sub: owner === 'caller' ? 'caller’s' : 'other code’s' } : {})),
+  c('0x0A401000', 'orange', 3, { sub: 'saved pointer' }),
+  ...bytes.map(byte => (bytesHot ? h : c)(byte, owner === 'caller' ? 'blue' : 'gray')),
   read,
 ]);
 export const pointerLifetimeCells: readonly CellScenario[] = [{
@@ -124,13 +124,13 @@ export const pointerLifetimeCells: readonly CellScenario[] = [{
   title: 'A saved pointer can outlive the data it points to',
   summary: 'The address in the saved pointer never changes. What is stored at that address does.',
   frames: [
-    frame('During the call: the pointer is valid', 'The caller lends a buffer at 0x0A401000 holding 100 (64 00 00 00). The DLL saves that address.', [
+    frame('During the call: the pointer is valid', 'The caller’s buffer (blue) holds 100 as 64 00 00 00.', [
       plain(lifetimeRow(['64', '00', '00', '00'], 'caller', false, h('100', 'green', 2, { sub: 'correct' }))),
     ]),
-    frame('After the call: freed and reused', 'The caller frees the buffer. Other code gets the same 4 bytes and stores 300 (2C 01 00 00).', [
+    frame('After the call: freed and reused', 'Other code (gray) now owns those bytes and stores 300 as 2C 01 00 00.', [
       plain(lifetimeRow(['2C', '01', '00', '00'], 'other', true, c('not read', 'gray', 2, { ghost: true }))),
     ]),
-    frame('Later: the same pointer reads 300', 'The address is still mapped, so the read succeeds. It returns 300, which never belonged to the caller.', [
+    frame('Later: the same pointer reads 300', 'The address is still mapped, so the read succeeds with the wrong value.', [
       plain(lifetimeRow(['2C', '01', '00', '00'], 'other', false, h('300', 'red', 2, { sub: 'wrong data' }))),
     ]),
   ],
