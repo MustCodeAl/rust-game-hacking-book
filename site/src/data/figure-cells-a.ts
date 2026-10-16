@@ -32,10 +32,7 @@ export const addressReadCells: readonly CellScenario[] = [{
   title: 'One address calculation, two different instructions',
   summary: 'Both forms compute 0x1010. lea stops there; mov goes on to read the memory at that address.',
   frames: [
-    frame('Start from the base register: 0x1000', 'The address calculation begins with the value in the base register.', [
-      panel('Address arithmetic', 'orange', [row('Running address', [h('0x1000', 'orange', 4, { sub: 'base' })])]),
-    ]),
-    frame('Add index × scale: 2 × 4 = 8', 'The index register holds 2 and the scale is 4, so eight bytes are added.', [
+    frame('Base 0x1000, plus index × scale: 2 × 4 = 8', 'The calculation starts from the base register, 0x1000. The index register holds 2 and the scale is 4, so eight bytes are added.', [
       panel('Address arithmetic', 'orange', [
         row('Base', [c('0x1000', 'orange', 4)]),
         row('index × scale', [h('+ 8', 'yellow', 4, { sub: '2 × 4' })], { link: 'add' }),
@@ -129,8 +126,7 @@ export const fieldDistanceCells: readonly CellScenario[] = [{
   title: 'The yaw field is the same distance from every player’s base',
   summary: 'Two separate allocations: one at 0x12340000, the other at a different base. Each has yaw 0x40 bytes after its start.',
   frames: [
-    frame('First player: base 0x12340000', 'The first allocation starts at 0x12340000.', [panel('Player 1', 'blue', [row('Player allocation', [h('base', 'blue', 2, { sub: '0x12340000' }), c('other fields', 'gray', 4, { ghost: true }), c('yaw', 'orange', 2, { sub: '?' })])])]),
-    frame('Its yaw is 0x40 bytes later: 0x12340040', 'The field offset is the distance from the base: 0x12340000 + 0x40.', [panel('Player 1', 'blue', [playerRow('0x12340000', '0x12340040', true, '+ 0x40 bytes')])]),
+    frame('First player: yaw is 0x40 bytes after its base', 'The first allocation starts at 0x12340000. The field offset is the distance from that base: 0x12340000 + 0x40 = 0x12340040.', [panel('Player 1', 'blue', [playerRow('0x12340000', '0x12340040', true, '+ 0x40 bytes')])]),
     frame('A second player has a different base', 'Another allocation starts somewhere else. Its base address is not given.', [
       panel('Player 1', 'blue', [playerRow('0x12340000', '0x12340040', false, '+ 0x40 bytes')]),
       panel('Player 2', 'green', [row('Player allocation', [h('base', 'green', 2, { sub: 'a different base B' }), c('other fields', 'gray', 4, { ghost: true }), c('yaw', 'orange', 2, { sub: '?' })])]),
@@ -142,28 +138,23 @@ export const fieldDistanceCells: readonly CellScenario[] = [{
   ],
 }];
 
-/** Lesson 3.8 (pages/3/08.mdx): a buffer lives from the call until its release. */
-const lifetimeFrame = (label: string, caption: string, time: 'call' | 'inside' | 'release' | 'later' | null, aliveHot: boolean, read: ReturnType<typeof row> | null): CellFrame => frame(label, caption, [
-  panel('Timeline', 'purple', [
-    row('Time', [
-      time === 'call' ? h('call', 'purple') : c('call', 'purple'),
-      time === 'inside' ? h('inside the call', 'purple', 3) : c('inside the call', 'purple', 3),
-      time === 'release' ? h('return + release', 'purple') : c('return + release', 'purple'),
-      time === 'later' ? h('later', 'purple', 3) : c('later', 'purple', 3),
-    ]),
-    row('Buffer', [aliveHot ? h('alive', 'green', 4) : c('alive', 'green', 4), c('released', 'red', 4, { ghost: true })]),
-    ...(read ? [read] : []),
-  ]),
-]);
+/** Lesson 6.7 (pages/3/08.mdx): the saved address stays the same while the bytes behind it change owner. */
+const savedPointer = (sub: string) => row('Pointer the DLL saved', [c('0x0A401000', 'orange', 4, { sub })]);
+const bytesAt = (bytes: readonly string[], hue: 'blue' | 'gray', hot: boolean, sub: string) => row('4 bytes at 0x0A401000', bytes.map((byte, index) => (hot ? h : c)(byte, hue, 1, index === 0 ? { sub } : {})), { link: 'points to' });
 export const pointerLifetimeCells: readonly CellScenario[] = [{
   id: 'pointer-lifetime', tab: 'Outliving the call',
   title: 'A saved pointer can outlive the data it points to',
-  summary: 'The buffer lives from the call until it is released after the call returns. A read is only safe while it is alive.',
+  summary: 'The address in the saved pointer never changes. What is stored at that address does.',
   frames: [
-    lifetimeFrame('The call starts and the buffer exists', 'The caller hands over a buffer that exists only for this call.', 'call', true, null),
-    lifetimeFrame('Reading inside the call is fine', 'This read happens during the buffer’s lifetime.', 'inside', true, row('Read', [gap(1), h('read: inside the lifetime', 'green', 3), gap(4)])),
-    lifetimeFrame('The call returns and the buffer is released', 'After the release the memory can be reused for something else.', 'release', false, null),
-    lifetimeFrame('A saved pointer is read later: too late', 'Retaining a pointer needs the data to outlive the call. Here it did not, so this read is invalid.', 'later', false, row('Read', [gap(5), h('read through the saved pointer', 'red', 3, { sub: 'beyond the release' })])),
+    frame('During the call: the pointer is valid', 'The caller lends a buffer at 0x0A401000 holding 100 (64 00 00 00). The DLL keeps a copy of that address.', [
+      plain(savedPointer('copied from the argument'), bytesAt(['64', '00', '00', '00'], 'blue', false, 'caller’s buffer'), row('Read as u32', [h('100', 'green', 4, { sub: 'the caller’s value' })])),
+    ]),
+    frame('After the call: freed and reused', 'The caller frees its buffer. The allocator hands the same 4 bytes to other code, which stores 300 there (2C 01 00 00).', [
+      plain(savedPointer('unchanged'), bytesAt(['2C', '01', '00', '00'], 'gray', true, 'another object')),
+    ]),
+    frame('Later: the same pointer reads 300', 'The read succeeds, because the address is still mapped. It returns 300, a value that never belonged to the caller.', [
+      plain(savedPointer('unchanged'), bytesAt(['2C', '01', '00', '00'], 'gray', false, 'another object'), row('Read as u32', [h('300: wrong data', 'red', 4, { sub: 'not the caller’s 100' })])),
+    ]),
   ],
 }];
 
