@@ -74,9 +74,9 @@ export const detourRouteCells: readonly CellScenario[] = [{
 
 /** Lesson 3.10 (pages/3/05.mdx): appending to a full vector moves every element; a cached element address goes stale. */
 const elements = (hue: 'blue' | 'gray', cachedSub: string, extra: Cell[] = [], ghost = false): Cell[] => [
-  c('0', hue, 1, { ghost }), c('1', hue, 1, { ghost }), c('2', hue, 1, { ghost }),
-  h('3', ghost ? 'red' : hue, 3, { sub: cachedSub, ghost }),
-  c('…', hue, 1, { ghost }), c('31', hue, 1, { ghost }), ...extra,
+  c('0', hue, 1, { ghost }), c('…', hue, 1, { ghost }),
+  h('3', ghost ? 'red' : hue, 5, { sub: cachedSub, ghost }),
+  c('…', hue, 1, { ghost }), c('31', hue, 2, { ghost }), ...extra,
 ];
 export const collectionGrowthCells: readonly CellScenario[] = [{
   id: 'grow', tab: 'Append to a full vector',
@@ -87,12 +87,12 @@ export const collectionGrowthCells: readonly CellScenario[] = [{
       plain(row('Old block at 0x04531000', elements('blue', '0x04531060'), { ticks: { left: 'begin', right: 'end = capacity_end' } })),
     ]),
     frame('Append a 33rd: allocate, copy, add', 'A bigger block (here 64 slots) receives copies of all 32 elements, then the new one.', [
-      plain(row('New block at 0x06120000', elements('blue', '0x06120060', [h('32', 'green', 1, { sub: 'new' })]), { link: 'copy 32 elements' })),
+      plain(row('New block at 0x06120000', elements('blue', '0x06120060', [h('32', 'green', 2, { sub: 'new' })]), { link: 'copy 32 elements' })),
     ]),
     frame('The old block is freed', 'Element 3 is now at 0x06120000 + 0x60. The cached 0x04531060 points into freed memory.', [
       plain(
         row('Old block, now freed', elements('gray', '0x04531060: stale', [], true)),
-        row('New block at 0x06120000', elements('blue', '0x06120060', [c('32', 'green')])),
+        row('New block at 0x06120000', elements('blue', '0x06120060', [c('32', 'green', 2)])),
       ),
     ]),
   ],
