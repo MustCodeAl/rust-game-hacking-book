@@ -9,7 +9,9 @@ sidebar:
   order: 10
   label: "1.10 Bits, Masks, Shifts, and Rotations"
 ---
-import Frame from '../../../../components/kit/Frame.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
+import SpeedType from '../../../../components/kit/SpeedType.astro';
 import CodeTrace from '../../../../components/CodeTrace.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
@@ -87,6 +89,8 @@ For our status byte, setting the lamp uses OR with bit 1. Clearing the alarm
 uses AND with a mask that has **zero** at bit 2 and ones everywhere else.
 NOT constructs that clearing mask. XOR toggles the door bit:
 
+<SpeedType id="c1-flag-masks" title="Recall the three flag edits and their masks" recall={[{"text": "status | 0b00000010", "mask": "0b00000010", "kind": "argument", "hint": "The mask with only bit 1, the lamp, set."}, {"text": "status & !0b00000100", "mask": "0b00000100", "kind": "argument", "hint": "The alarm's bit 2 mask, inverted by the NOT in front of it."}, {"text": "status ^ 0b00000001", "mask": "0b00000001", "kind": "argument", "hint": "The mask for bit 0, the door, which XOR flips."}, {"text": "status & !0b00000100", "mask": "!", "kind": "logic", "hint": "Invert the mask so every bit except bit 2 is kept."}]}>
+
 ```rust
 let status: u8 = 0b00000101;          // Door and alarm are on.
 let lamp_on = status | 0b00000010;   // 00000111: all three are on.
@@ -94,14 +98,26 @@ let alarm_off = status & !0b00000100; // 00000001: only door is on.
 let door_flipped = status ^ 0b00000001; // 00000100: only alarm is on.
 ```
 
+</SpeedType>
+
 These are three separate calculations from the same starting status. They
 do not successively update one variable. OR sets an already-set bit to 1
-again; XOR would switch it off. Applying the same XOR mask twice returns
-the original value.
+again; XOR would switch it off.
 
-<Frame caption="Try the same XOR idea on a whole byte: 125 XOR 90 gives 39, and 39 XOR 90 returns 125. The mask flips the same selected positions on both passes.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/encoded-value.svg`} width="480" height="206" alt="The byte 01111101, decimal 125, XOR the mask 01011010, decimal 90, produces 00100111, decimal 39; applying the mask again restores 125." loading="lazy" decoding="async" />
-</Frame>
+<PredictReveal
+  id="c1-xor-undo"
+  setup="A game hides gold 125 (01111101) by storing 125 XOR 90, where 90 is 01011010. The stored byte is 39 (00100111)."
+  question="Which calculation gets 125 back from the stored 39?"
+  options={[
+    { label: '39 XOR 90', correct: true, why: 'XOR flips the positions where the key has a 1: bits 6, 4, 3 and 1 of 90. The first pass flipped those four bits of 125; flipping the same four again restores them. 00100111 XOR 01011010 = 01111101 = 125.' },
+    { label: '39 + 90', why: '39 + 90 = 129, not 125. XOR is not addition: where both bits are 1 it gives 0 and carries nothing, so adding the key cannot undo it.' },
+    { label: '39 AND 90', why: 'AND keeps only positions set in both: 00100111 AND 01011010 = 00000010, which is 2. AND throws away the positions where the key has 0, so it cannot rebuild 125.' },
+  ]}
+>
+
+<LiveCells lab="c1-xor-twice" />
+
+</PredictReveal>
 
 Width matters for NOT. Flipping `00000101` as a `u8` gives `11111010`, decimal
 250. A 32-bit value has 32 positions to flip. A bit pattern must be interpreted

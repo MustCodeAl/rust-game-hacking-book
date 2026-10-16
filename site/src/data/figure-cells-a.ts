@@ -4,25 +4,20 @@
 import { cell as c, frame, gap, hot as h, panel, plain, row, type CellFrame, type CellScenario } from '../lib/cell-model';
 
 /** Lesson 1.12 (pages/1/12.mdx): rules are data that one fixed interpreter reads. */
-const tapeFrame = (label: string, caption: string, tape: string, head: number, state: string, finished = false): CellFrame => frame(label, caption, [
-  panel('Rules (the program)', 'purple', [
-    row('Rule 1', [c('carry + 1  →  write 0, move left, keep carrying', 'purple', 4)]),
-    row('Rule 2', [c('carry + 0  →  write 1, finished', 'purple', 4)]),
+const tapeFrame = (label: string, caption: string, tape: string, head: number, state: string, rule: 1 | 2): CellFrame => frame(label, caption, [plain(
+  row('', [
+    h(rule === 1 ? 'carry, 1 → write 0, left' : 'carry, 0 → write 1, stay', 'purple', 4, { sub: `rule row ${rule} · next state ${state}` }),
+    ...[...tape].map((bit, i) => i === head ? h(bit, 'blue', 1, { sub: 'head' }) : c(bit, 'blue')),
   ]),
-  panel('Work tape', 'blue', [
-    row('Tape', [...tape].map((bit, i) => i === head ? h(bit, 'blue', 1, { sub: 'head' }) : c(bit, 'blue'))),
-    row('Interpreter state', [h(state, finished ? 'green' : 'orange', 4)]),
-  ]),
-]);
+)]);
 export const programInputCells: readonly CellScenario[] = [{
   id: 'increment', tab: 'Add one',
-  title: 'One fixed interpreter applies encoded rules to a tape',
-  summary: 'The rules are only data. The interpreter never changes; it reads a rule, applies it to the tape and moves the head.',
+  title: 'One fixed interpreter applies rule data to a tape',
+  summary: 'The three rule rows in the table above are data. The tape starts as 1011 in state carry; each step the interpreter finds the row for its state and the symbol under the head, then does what that row says.',
   frames: [
-    tapeFrame('Start: head on the rightmost 1, state carry', 'The tape holds 1011 and the interpreter is about to add one. The rules sit beside it as data.', '1011', 3, 'carry'),
-    tapeFrame('Rule 1: write 0 and move left', 'A 1 in carry becomes 0 and the carry moves one place left.', '1010', 2, 'carry'),
-    tapeFrame('Rule 1 again', 'The next bit is also 1, so it becomes 0 and the carry moves on.', '1000', 1, 'carry'),
-    tapeFrame('Rule 2: carry meets 0, write 1, finished', 'The carry is absorbed. The tape now reads 1100, which is 1011 plus one.', '1100', 1, 'done', true),
+    tapeFrame('Row 1 matches: write 0, move left', 'carry with a 1 under the head matches row 1: 1011 becomes 1010.', '1010', 2, 'carry', 1),
+    tapeFrame('Row 1 matches again', 'The next symbol is also 1, so the same row applies: 1010 becomes 1000.', '1000', 1, 'carry', 1),
+    tapeFrame('Row 2 matches: write 1, done', 'carry meets 0: write 1 and stop. 1100 is 1011 plus one. Different rule data would make the same interpreter compute something else.', '1100', 1, 'done', 2),
   ],
 }];
 
