@@ -294,64 +294,14 @@ A `u32` reads the same four bytes with none of these boundaries. It treats all
 An `f64` follows the same plan with more room: 1 sign bit, 11 exponent bits
 with a bias of 1,023, and 52 fraction bits.
 
-## What the rest of the fraction bits are for
-
-For 10.0, only one fraction bit is set and the other 22 are 0. They are not
-wasted. They hold finer and finer halves — ⅛, 1/16, 1/32, all the way down to
-1/8,388,608 — and 10.0 simply does not need any of them, because it is exactly
-1.25 × 8. That is like writing 1.2500000 in decimal: the extra zeros are real
-digits that happen to be zero.
-
-Most numbers are not that tidy. Take 10.1. It is 1.2625 × 8, so the fraction has
-to be 0.2625. In binary, 0.2625 never ends: its digits settle into `0011`
-repeating forever, the same way 1 ÷ 3 is 0.333… forever in decimal. The 23 bits
-store as much of it as fits, rounded at the last bit:
-
-<MemoryStrip
-  cells="sign=0|exponent=1000 0010|fraction=010 0001 1001 1001 1001 1010"
-  groups="1-1:130 − 127 = 3|2-2:about 0.26250005"
-  caption="10.1 as an `f32`, the bytes `9A 99 21 41` in memory. Nearly every fraction bit is now doing work, and the stored value is still only close to 10.1."
-/>
-
-The stored fraction is 0.2625000476…, so the value is 1.2625000476… × 8 =
-10.100000381…, the closest an `f32` can get. A debugger that prints enough
-digits shows `10.10000038`. This is why float values found in games are rarely
-round, and why memory scanners let you search for a float within a small range
-instead of only an exact value.
-
-The last fraction bit sets how fine that precision is. It is worth 1/8,388,608,
-and for numbers near 10 it is multiplied by 2³ = 8, so neighbouring `f32` values
-near 10 are about 0.00000095 apart. That works out to roughly seven
-significant decimal digits.
-
-<MarginNote kind="narration">Because most fractions are rounded, two floats that print alike can differ in the last bit. Exact equality tests can fail, so programs often allow a tiny margin.</MarginNote>
-
-<Accordion title="Where the binary digits of 0.2625 come from">
-
-To turn a fraction into binary digits, double it again and again. Each time the
-result reaches 1 or more, the next binary digit is 1 and you keep only the part
-after the point. Otherwise the digit is 0.
-
-```text
-0.2625 × 2 = 0.525   → digit 0
-0.525  × 2 = 1.05    → digit 1, keep 0.05
-0.05   × 2 = 0.1     → digit 0
-0.1    × 2 = 0.2     → digit 0
-0.2    × 2 = 0.4     → digit 0
-0.4    × 2 = 0.8     → digit 0
-0.8    × 2 = 1.6     → digit 1, keep 0.6
-0.6    × 2 = 1.2     → digit 1, keep 0.2
-```
-
-After the eighth line the leftover is 0.2 again, just as it was after the
-fourth line. So lines five to eight repeat forever, producing `0011` over and
-over: 0.2625 is `0.0100 0011 0011 0011 …` in binary. The fraction field holds
-the first 23 of those digits, rounded at the last one.
-
-Doubling works because each doubling moves the binary point one place to the
-right, pulling the next digit in front of it.
-
-</Accordion>
+10.0 is exactly 1.25 × 8, so its other 22 fraction bits are zeros it does not
+need. Most numbers are not that tidy. 10.1 is 1.2625 × 8, and 0.2625 has binary
+digits that repeat forever, so the 23 bits keep a rounded fraction and the
+`f32` holds 10.100000381…, the closest value it can store. This is why float
+values found in games are rarely round, and why memory scanners let you search
+for a float within a small range instead of only an exact value. [The optional
+rounding reference](#what-the-rest-of-the-fraction-bits-are-for) derives those
+bits and the spacing between neighbouring `f32` values.
 
 ## Patterns kept aside for special values
 
@@ -472,9 +422,10 @@ even though its own `usize` is 8.
 ### The pointee type sets the step size
 
 The pointee type also decides how far a pointer moves. Adding 1 to a pointer
-means "the next value of this type", not "the next byte". Rust writes this
-`p.add(1)`, and makes you wrap it in `unsafe`, because the compiler cannot check
-that the new address still lands inside the list:
+means "the next value of this type", not "the next byte", as [Lesson 3.1's
+`.offset()` example](/pages/3/01/#what-offset-actually-does) showed. Rust writes
+this `p.add(1)` inside `unsafe`, because the compiler cannot check that the new
+address still lands inside the list:
 
 <MemoryStrip
   cells="0x5000=0A|=00|=00|=00|0x5004=14|=00|=00|=00|0x5008=1E|=00|=00|=00"
@@ -484,8 +435,6 @@ that the new address still lands inside the list:
 
 `0x0A` is 10, `0x14` is 16 + 4 = 20, and `0x1E` is 16 + 14 = 30. A pointer to a
 64-byte structure would step 64 bytes at a time.
-
-<MarginNote kind="alternative">Think of stepping along a row of equal boxes: add 1 and you reach the next box, however big. Bigger boxes mean longer steps in bytes.</MarginNote>
 
 ### None of this is stored in memory
 
@@ -501,3 +450,71 @@ that representation still does not prove which object the bytes belong
 to or whether its address remains valid. [How External Tools Read Game
 Memory](/pages/3/02/) combines these widths, byte orders, and encodings with the safe boundary:
 copy a checked byte range first, then interpret the local result.
+
+## Optional reference: rounding and precision
+
+These derivations show where the rounded value of 10.1 comes from. The
+decoding steps above do not depend on them. [Lesson 5.6](/pages/2/12/) relies
+on the same binary32 rounding when floating-point instructions add, scale, or
+convert values.
+
+<span id="what-the-rest-of-the-fraction-bits-are-for" aria-hidden="true" />
+
+<Accordion title="Optional reference: what the rest of the fraction bits are for">
+
+For 10.0, only one fraction bit is set and the other 22 are 0. They are not
+wasted. They hold finer and finer halves — ⅛, 1/16, 1/32, all the way down to
+1/8,388,608 — and 10.0 simply does not need any of them, because it is exactly
+1.25 × 8. That is like writing 1.2500000 in decimal: the extra zeros are real
+digits that happen to be zero.
+
+Most numbers are not that tidy. Take 10.1. It is 1.2625 × 8, so the fraction has
+to be 0.2625. In binary, 0.2625 never ends: its digits settle into `0011`
+repeating forever, the same way 1 ÷ 3 is 0.333… forever in decimal. The 23 bits
+store as much of it as fits, rounded at the last bit:
+
+<MemoryStrip
+  cells="sign=0|exponent=1000 0010|fraction=010 0001 1001 1001 1001 1010"
+  groups="1-1:130 − 127 = 3|2-2:about 0.26250005"
+  caption="10.1 as an `f32`, the bytes `9A 99 21 41` in memory. Nearly every fraction bit is now doing work, and the stored value is still only close to 10.1."
+/>
+
+The stored fraction is 0.2625000476…, so the value is 1.2625000476… × 8 =
+10.100000381…, the closest an `f32` can get. A debugger that prints enough
+digits shows `10.10000038`.
+
+The last fraction bit sets how fine that precision is. It is worth 1/8,388,608,
+and for numbers near 10 it is multiplied by 2³ = 8, so neighbouring `f32` values
+near 10 are about 0.00000095 apart. That works out to roughly seven
+significant decimal digits.
+
+<MarginNote kind="narration">Because most fractions are rounded, two floats that print alike can differ in the last bit. Exact equality tests can fail, so programs often allow a tiny margin.</MarginNote>
+
+</Accordion>
+
+<Accordion title="Where the binary digits of 0.2625 come from">
+
+To turn a fraction into binary digits, double it again and again. Each time the
+result reaches 1 or more, the next binary digit is 1 and you keep only the part
+after the point. Otherwise the digit is 0.
+
+```text
+0.2625 × 2 = 0.525   → digit 0
+0.525  × 2 = 1.05    → digit 1, keep 0.05
+0.05   × 2 = 0.1     → digit 0
+0.1    × 2 = 0.2     → digit 0
+0.2    × 2 = 0.4     → digit 0
+0.4    × 2 = 0.8     → digit 0
+0.8    × 2 = 1.6     → digit 1, keep 0.6
+0.6    × 2 = 1.2     → digit 1, keep 0.2
+```
+
+After the eighth line the leftover is 0.2 again, just as it was after the
+fourth line. So lines five to eight repeat forever, producing `0011` over and
+over: 0.2625 is `0.0100 0011 0011 0011 …` in binary. The fraction field holds
+the first 23 of those digits, rounded at the last one.
+
+Doubling works because each doubling moves the binary point one place to the
+right, pulling the next digit in front of it.
+
+</Accordion>
