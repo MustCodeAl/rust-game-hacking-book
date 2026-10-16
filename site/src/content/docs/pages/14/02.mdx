@@ -214,9 +214,10 @@ flowchart LR
 The address the driver gives the device is not a virtual address, because a
 device has no access to any process's page tables. It is a physical address or,
 on a machine with an **IOMMU**, a device address that the IOMMU translates and
-limits to the buffers the driver approved. [Lesson 12.7](/pages/11/06/)
-explains that translation and why Windows uses it to stop a malicious device
-from reading all of memory.
+limits to the buffers the driver approved.
+[Lesson 13.1](/pages/11/06/#an-iommu-gives-devices-their-own-map) explains
+that translation and why Windows uses it to stop a malicious device from
+reading all of memory.
 
 ## A key press, from a USB keyboard to a game
 
@@ -266,60 +267,28 @@ presses that came through a keyboard.
 
 Loading a driver puts new code into ring 0, where, as Lesson 11.10 showed,
 nothing sits beneath it to catch its mistakes and nothing can overrule it. So
-Windows checks where a driver came from before loading it. 64-bit Windows
-refuses kernel-mode code without a valid digital signature, the kind of
-signature [Lesson 9.8](/pages/9/07/) checked on game files. Since Windows 10
-version 1607, on a PC with Secure Boot on, a new driver must be signed by
-Microsoft itself, through its hardware developer program, which requires the
-publisher to prove its identity with an extended-validation certificate.
-**Secure Boot** is the firmware check that allows only signed boot components
-to start, which also keeps these signature checks from being relaxed before Windows is
-running.
+64-bit Windows refuses kernel-mode code without a valid digital signature, the
+kind of signature [Lesson 9.8](/pages/9/07/) checked on game files.
 
 A signature answers two questions: who published this driver, and has it
 changed since? It does not answer the question that matters most: is the code
 safe? A correctly signed driver can still offer a control code that reads or
-writes any memory for any caller, or forget to check a buffer length. Attackers
-look for exactly those drivers, old and legitimately signed, and load one to
-borrow its bug. Microsoft's answer is the **vulnerable driver blocklist**: a
-list of signed drivers known to be exploitable, which Windows refuses to load.
-Since the Windows 11 2022 update the blocklist is on by default, and it is
-always enforced when memory integrity is on. [Lesson 14.1](/pages/14/03/)
-explains memory integrity, which uses the hypervisor to stop even kernel code
-from creating new executable code. [Lesson 12.6](/pages/11/05/) will show how to
-list the drivers loaded on your own machine and why each new one deserves a
-reason. That inventory follows the register lab, once the mechanics of a
-driver request are visible.
+writes any memory for any caller. Attackers look for exactly those drivers, old
+and legitimately signed, and load one to borrow its bug. So Windows also keeps
+a **vulnerable driver blocklist**: a list of signed drivers known to be
+exploitable, which it refuses to load.
 
-Developers testing their own drivers use test-signing modes that deliberately
-relax these checks. Those modes belong on a disposable test machine, and this
-book never uses them.
+<span id="why-a-cheat-driver-endangers-its-own-user" aria-hidden="true" />
 
-## Why a cheat driver endangers its own user
-
-Some cheats for online games ship as drivers, on the theory that ring 0 sees
-everything. Whatever such a driver does to a game, here is what it does to the
-machine running it:
-
-- **It runs with the kernel's full authority and comes from an anonymous
-  author.** Its bugs become bug checks and corrupted files on the user's own
-  computer, with no vendor, testing, or update process behind it.
-- **It often comes with instructions to switch protections off**, such as
-  Secure Boot, memory integrity, the vulnerable driver blocklist, or signature
-  checks. Each of those protects the machine against all kernel malware, not
-  only against cheats, and turning one off lowers the defense for everything.
-- **Many rely on an old signed driver with a known bug** to reach ring 0. The
-  bug cannot tell who is asking: while that driver is loaded, any other program
-  on the machine can send the same control code and read or write kernel
-  memory.
-- **A kernel driver is the most powerful place malware can live.** Installing
-  one from an anonymous seller hands that seller the whole computer: saved
-  passwords, browser sessions, banking, and the power to hide further software.
-- **Anti-cheat systems look for exactly these drivers**, and the penalties
-  usually apply to the whole account, sometimes to the hardware.
-
-The inventory lesson will put these habits into practice: know which drivers are installed,
-give every new one a reason and a trustworthy source, and never lower a Windows
-protection so that someone else's kernel code can load.
+The same reasoning shows why a cheat that ships as a driver endangers its own
+user. It runs with the kernel's full authority and comes from an anonymous
+author. It often comes with instructions to switch off **Secure Boot**, the
+firmware check that lets only signed boot components start, or memory
+integrity, the Windows feature that refuses to run kernel code it has not
+checked, or the blocklist. Each of those protects the machine against all
+kernel malware, not only against cheats.
+[Lesson 12.9](/pages/11/05/#why-windows-insists-on-signed-drivers) gives the
+signing rules in full and lists a cheat driver's risks one by one, then builds
+a read-only inventory of the drivers your own machine has loaded.
 
 References: [example I/O request](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/example-i-o-request---the-details), [security issues for I/O control codes](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/security-issues-for-i-o-control-codes), [keyboard and mouse HID client drivers](https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/keyboard-and-mouse-hid-client-drivers), [driver signing policy](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/kernel-mode-code-signing-policy--windows-vista-and-later-), and [Microsoft recommended driver block rules](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/design/microsoft-recommended-driver-block-rules).

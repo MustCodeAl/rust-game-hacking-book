@@ -11,7 +11,7 @@ sidebar:
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
 import Frame from '../../../../components/kit/Frame.astro';
-import { GitHub, SpeedType } from '../../../../components/kit';
+import { Accordion, GitHub, SpeedType } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
@@ -34,9 +34,9 @@ That small rule matters twice below.
 
 ## Shift registers: many bits through one wire
 
-A shift register moves every bit one place along on each clock. JTAG always
-shifts toward TDO: the cell next to TDO, bit 0, leaves first, every other bit
-moves down one place, and the bit arriving from TDI enters at the top.
+JTAG's shift registers always shift toward TDO: on each clock the cell next to
+TDO, bit 0, leaves first, every other bit moves down one place, and the bit
+arriving from TDI enters at the top.
 
 <MarginNote kind="alternative">Picture buckets moving toward the outlet together: each tick releases one old bit and takes one new bit at the far end.</MarginNote>
 
@@ -167,8 +167,21 @@ clocks:
 | 4 | 0 | Capture-DR, where the register loads | Shift-DR |
 
 Lesson 14.5 said that five clocks with TMS at 1 reach Test-Logic-Reset from any
-state. To check it, hold TMS at 1 and work outward from Test-Logic-Reset,
-following the arrows labelled TMS 1:
+state. Follow the arrows labelled TMS 1 from Shift-DR, one of the states
+furthest away: Exit1-DR, Update-DR, Select-DR-Scan, Select-IR-Scan, and
+Test-Logic-Reset, which is five clocks. [The reset reference](#tap-reset-reference)
+below checks every other state the same way. Extra clocks do no harm, because
+Test-Logic-Reset stays put while TMS is 1, so a debugger that is unsure of the
+state sends five 1s on TMS and starts from a known place. And because an
+undriven TMS reads as 1, a chip whose test port is not connected to anything
+sits in Test-Logic-Reset permanently and works normally.
+
+<span id="tap-reset-reference" aria-hidden="true" />
+
+<Accordion title="Optional reference: every state's path to Test-Logic-Reset">
+
+To check the rule for all 16 states, hold TMS at 1 and work outward from
+Test-Logic-Reset, following the arrows labelled TMS 1:
 
 | Starting state | Path with TMS at 1 | Clocks |
 |---|---|---:|
@@ -179,13 +192,9 @@ following the arrows labelled TMS 1:
 | Capture, Shift, or Pause, in either column | Exit1 from Capture or Shift, Exit2 from Pause, then as above | 1 + 4 = 5 |
 
 The rows cover 1 + 1 + 3 + 4 + 6 = 15 states, and Test-Logic-Reset itself needs
-0 clocks, so all 16 are accounted for and none needs more than five. From
-Shift-DR, for example, the path is Exit1-DR, Update-DR, Select-DR-Scan,
-Select-IR-Scan, and Test-Logic-Reset. Extra clocks do no harm, because
-Test-Logic-Reset stays put while TMS is 1, so a debugger that is unsure of the
-state sends five 1s on TMS and starts from a known place. And because an
-undriven TMS reads as 1, a chip whose test port is not connected to anything
-sits in Test-Logic-Reset permanently and works normally.
+0 clocks, so all 16 are accounted for and none needs more than five.
+
+</Accordion>
 
 ## BYPASS, IDCODE, and a chain that fails safe
 
@@ -277,8 +286,11 @@ fields plus the fixed 1:
 
 ## Halting a Cortex-M core with one write
 
-Lesson 14.5 showed that a Cortex-M debugger halts the core with an ordinary
-memory write through the debug port. The register it writes is DHCSR, the Debug
+Arm's Cortex-M processors keep their debug controls at fixed addresses in the
+memory map, and their debug logic includes a **memory access port** that
+performs bus reads and writes for the debugger. So halting the core takes one
+ordinary memory write through the debug port, and reading RAM afterwards takes
+one memory read. The register the halt writes is DHCSR, the Debug
 Halting Control and Status Register, at address `0xE000EDF0`, described in
 Arm's public architecture manual. Its low three bits are:
 
@@ -302,7 +314,7 @@ values to it:
 - step one instruction while halted: `0xA05F0000` + 4 + 1 = `0xA05F0005`;
 - resume: `0xA05F0000` + 1 = `0xA05F0001`.
 
-The write travels through the memory access port of Lesson 14.5. The port has an
+The write travels through that memory access port. The port has an
 address register and a data register, called TAR and DRW in Arm's
 documentation: write an address to the first, then read or write the second, and
 the port performs that bus access.
