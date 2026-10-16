@@ -10,7 +10,8 @@ sidebar:
   label: "12.1 DLL Identity and Search Order"
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import { Accordion, Badge, GitHub } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -32,10 +33,6 @@ A game may report that it loaded `opengl32.dll`, `zlib1.dll`, or another familia
 
 That matters for debugging as well as defense. Loading the wrong version of a legitimate DLL can cause missing exports, crashes, changed structure layouts, or code patterns that no longer match the ones this course uses.
 
-
-<Frame caption="A familiar basename is only the first clue">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/dll-identity.svg`} width="480" height="206" alt="The same DLL basename can identify different files; its resolved path and build identity distinguish them." loading="lazy" decoding="async" />
-</Frame>
 
 <CodeTrace trace="handoff-module-identity" />
 
@@ -95,7 +92,24 @@ flowchart TD
     F5 --> F6["search 6: the directories on PATH"]
 ```
 
-The first searched folder that contains a file with that name supplies the DLL. Every check above the numbered searches happens before any folder is searched, which is why a planted file cannot stand in for a KnownDLL. With safe DLL search mode off, the current directory moves up to second place, right after the application's directory; holding it back at fifth place, behind the system directories, is what the setting does. Packaged apps and a few redirection features add steps that the diagram leaves out.
+The first searched folder that contains a file with that name supplies the DLL. Every check above the numbered searches happens before any folder is searched, which is why a planted file cannot stand in for a KnownDLL. Packaged apps and a few redirection features add steps that the diagram leaves out.
+
+<PredictReveal
+  id="c5-dll-search-order"
+  setup="C:\Games\Demo\demo.exe calls LoadLibrary with the bare name example.dll, which is not loaded yet and not a KnownDLL. One copy is in C:\Windows\System32 and another in the current folder, C:\Users\Player\Downloads. Safe DLL search mode is on."
+  question="Which file loads?"
+  options={[
+    { label: 'The copy in System32', correct: true, why: 'With safe search mode on, System32 is search 2 and the current folder is search 5. The game folder (search 1) has no copy, so search 2 finds the file first and the search stops there.' },
+    { label: 'The copy in Downloads, the current folder', why: 'That is the order with safe search mode off: the current folder moves up to search 2, ahead of System32. With the mode on it waits until search 5, and search 2 has already found a file.' },
+    { label: 'Neither: two files with one name make LoadLibrary fail', why: 'The loader stops at the first folder that holds a file with that name. It never learns that a second copy exists further down the list.' },
+  ]}
+>
+
+<LiveCells lab="c5-dll-search" />
+
+</PredictReveal>
+
+With safe DLL search mode off, the current folder moves up to search 2, right after the application's folder; holding it back behind the system folders is what the setting does. Either way, both copies report the same short name, `example.dll`. Only the full path, and the file's hash and signer, tell a tool which one actually loaded.
 
 Safer application design uses:
 

@@ -10,8 +10,9 @@ sidebar:
   label: "6.5 Virtual Address Spaces and Page Protections"
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
 import SpeedType from '../../../../components/kit/SpeedType.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import { Accordion, Badge, Fields, GitHub, ResponseField, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -25,10 +26,6 @@ process has a changing map of pages, and each page has its own state and
 protection. We need both checks before interpreting a scanner failure.
 
 A process sees memory as a huge range of numbered virtual addresses. Windows does not manage that range one byte at a time. It groups adjacent addresses into fixed-size **pages**, commonly 4 KiB on x86 and x86-64 systems.
-
-<Frame caption="A handle does not make every page readable">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/page-read-checks.svg`} width="480" height="206" alt="Memory inspection checks process rights, page commitment and protection, and the actual returned byte count." loading="lazy" decoding="async" />
-</Frame>
 
 Pages that share the same state and protection are reported together as a **region**. A 200 KiB read-only region is therefore a run of many pages with matching state and protection, not one enormous hardware page.
 
@@ -385,6 +382,21 @@ offline DMA chapter introduces page-table translation separately because a raw
 capture file has no running Windows process to translate addresses for it.
 
 ## Why a scanner skips some pages
+
+<PredictReveal
+  id="c5-guard-region"
+  setup="VirtualQueryEx reports a region as MEM_COMMIT with protection PAGE_READWRITE | PAGE_GUARD. The scanner's handle includes PROCESS_VM_READ."
+  question="What does the course's scanner do with that region?"
+  options={[
+    { label: 'Reads it: the region is committed and RW-', why: 'Committed and RW- would be enough without the extra flag. PAGE_GUARD means the first touch raises an exception and clears the flag that Windows uses to grow a thread stack, so reading it is not harmless.' },
+    { label: 'Skips it', correct: true, why: 'The scanner reads only committed, readable, unguarded regions. PAGE_GUARD on top of RW- fails the third test, so ReadProcessMemory is never called for this region.' },
+    { label: 'Calls ReadProcessMemory and gets access denied', why: 'The handle does carry VM_READ, so a refusal would not come from the handle. The region filter runs first and the scanner never calls ReadProcessMemory here.' },
+  ]}
+>
+
+<LiveCells lab="c5-region-read" />
+
+</PredictReveal>
 
 The memory scanner visits only committed, readable, non-guarded regions. That avoids predictable failures and reduces wasted work. A later `ReadProcessMemory` can still fail because the process continues running and page state can change between the query and read.
 

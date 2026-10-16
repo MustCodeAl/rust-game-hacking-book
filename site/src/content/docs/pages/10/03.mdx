@@ -10,11 +10,11 @@ sidebar:
   label: "6.3 Process Access Rights"
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
 import SpeedType from '../../../../components/kit/SpeedType.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import { Accordion, Badge, Fields, GitHub, Panel, ParamField, ResponseField, CodeGroup, Tab } from '../../../../components/kit';
 
-import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## A PID identifies a process but grants no access
@@ -25,10 +25,6 @@ memory. Windows makes access a separate decision when it issues a process
 handle.
 
 A process ID identifies a running process. It does not grant access to that process. To ask Windows for a usable process **handle**, a program calls `OpenProcess` with an **access mask**: a group of bits describing the operations it wants.
-
-<Frame caption="A PID and a handle answer different questions">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/process-permission.svg`} width="480" height="206" alt="A process ID selects the process, while a granted handle carries the operations Windows allowed." loading="lazy" decoding="async" />
-</Frame>
 
 <MarginNote kind="alternative">The PID names the building, while the handle is a key issued for particular doors. Finding the address does not provide that key.</MarginNote>
 
@@ -346,16 +342,20 @@ That boolean is a visible decision at the call site. A scanner can open read-onl
 
 The "group of bits" from the top of this lesson is not a metaphor. Microsoft documents `PROCESS_QUERY_INFORMATION` as `0x0400` and `PROCESS_VM_READ` as `0x0010`. ORing them sets bit 10 and bit 4 of one 32-bit value and leaves every other bit 0, producing `0x0410`. Allowing writes ORs in `PROCESS_VM_OPERATION` (`0x0008`) and `PROCESS_VM_WRITE` (`0x0020`), setting two more bits for a final mask of `0x0438`. `OpenProcess` compares that exact bit pattern against what the target's DACL permits; there is no separate "and also let me read memory" step hiding behind the named constant.
 
-<MemoryStrip
-  cells="QUERY_INFO=1|VM_OPERATION=0|VM_READ=1|VM_WRITE=0"
-  caption="Read-only tools OR together `PROCESS_QUERY_INFORMATION` (`0x0400`, bit 10) and `PROCESS_VM_READ` (`0x0010`, bit 4) for mask `0x0410`. `PROCESS_VM_OPERATION` (bit 3) and `PROCESS_VM_WRITE` (bit 5) stay 0."
-/>
+<PredictReveal
+  id="c5-query-handle-read"
+  setup="A scanner found the game's correct PID and opened it with only PROCESS_QUERY_LIMITED_INFORMATION, mask 0x1000."
+  question="It now calls ReadProcessMemory with that handle. What happens?"
+  options={[
+    { label: 'The read works, because the PID names the right process', why: 'The PID was used once, by OpenProcess, to choose the process. ReadProcessMemory checks the rights stored with the handle, and 0x1000 does not include VM_READ (0x0010).' },
+    { label: 'ReadProcessMemory fails with access denied', correct: true, why: '0x1000 has only bit 12 set. VM_READ is bit 4, 0x0010, and 0x1000 AND 0x0010 is 0, so the handle lacks the one right a read needs.' },
+    { label: 'Windows adds VM_READ to the handle on first use', why: 'Rights are fixed when the handle is created. Getting VM_READ means calling OpenProcess again and asking for it, and Windows checks that new request against the target.' },
+  ]}
+>
 
-<MemoryStrip
-  cells="QUERY_INFO=1|VM_OPERATION=1|VM_READ=1|VM_WRITE=1"
-  marks="1|3"
-  caption="Opting into writes also sets `PROCESS_VM_OPERATION` and `PROCESS_VM_WRITE`, producing mask `0x0438` — exactly the bits the wrapper's `if allow_write` branch adds."
-/>
+<LiveCells lab="c5-access-mask" />
+
+</PredictReveal>
 
 The complete buildable tool is [`access_probe.rs`](/windows-labs/src/bin/access_probe.rs).
 
