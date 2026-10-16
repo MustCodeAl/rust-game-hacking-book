@@ -9,7 +9,8 @@ sidebar:
   order: 3
   label: "3.3 Rust: Collections, Bounds, and Bytes"
 ---
-import Frame from '../../../../components/kit/Frame.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import CodeTrace from '../../../../components/CodeTrace.astro';
 import { MarginNote, SpeedType } from '../../../../components/kit';
 
@@ -267,9 +268,20 @@ The range check establishes the length. `try_into` produces an exact
 conversion and produces the same four bytes. Use `from_be_bytes` and
 `to_be_bytes` when the format says the high byte comes first.
 
-<Frame caption="The same low-byte-first conversion with a second number: decimal 100 is hexadecimal 0x64, so its four-byte field is 64 00 00 00.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/little-endian.svg`} width="480" height="190" alt="A four-byte little-endian field for decimal 100 has 64 at offset zero, followed by three zero bytes." loading="lazy" decoding="async" />
-</Frame>
+<PredictReveal
+  id="c1-wrong-byte-order"
+  setup="Decimal 100 is 0x64, so 100_u32.to_le_bytes() gives the four bytes 64 00 00 00, lowest byte first."
+  question="A reader passes those same four bytes to u32::from_be_bytes. What number does it get?"
+  options={[
+    { label: '0x64000000, which is 1,677,721,600', correct: true, why: 'from_be_bytes treats the byte at +0 as the highest byte, so 0x64 lands in the top byte, which is worth 256 × 256 × 256 = 16,777,216: 100 × 16,777,216 = 1,677,721,600. The bytes did not change; only the reading order did.' },
+    { label: '100', why: 'That is the little-endian reading, where +0 is the lowest byte. from_be_bytes takes +0 as the highest byte instead.' },
+    { label: 'None, because the order does not match', why: 'from_be_bytes returns a plain u32, not an Option. Any four bytes are some number, so a mismatched order gives a wrong number silently.' },
+  ]}
+>
+
+<LiveCells lab="c1-le-bytes" />
+
+</PredictReveal>
 
 Reading the first four bytes leaves any later bytes unused. A format
 that requires exactly four bytes must also check the total length.
