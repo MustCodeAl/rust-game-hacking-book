@@ -2,7 +2,7 @@
 // cell frame, so the page renders the default on the server and the browser recomputes on every change.
 // Colours: blue = data, orange = addresses, green = accepted or correct, red = refused or wrong,
 // purple = rules and control, yellow = arithmetic, gray = unused.
-import { cell as c, frame, hot as h, panel, row, type Cell, type CellFrame } from './cell-model';
+import { cell as c, frame, hot as h, plain, row, type Cell, type CellFrame } from './cell-model';
 import type { LiveLab, LiveValues } from './live-model';
 
 const text = (values: LiveValues, id: string): string => values[id] ?? '';
@@ -67,17 +67,12 @@ const pointerPathRestart: LiveLab = {
       : id === '1'
         ? `Gold is at ${hex(field, 8)} in this run. Choose another run: the addresses change, the offsets do not.`
         : `Gold moved from 0x0691A230 in run 1 to ${hex(field, 8)}. The same three offsets found it, because every read used the pointer stored in this run.`;
-    return frame(`Run ${id}: add, read, add, read, add`, caption, [
-      panel('Walk the path', 'orange', [
-        row('Module base + 0x01A2B3C0', [c(hex(run.base, 8), 'orange', 3, { sub: 'module base' }), h(hex(root, 8), 'orange', 3, { sub: 'root slot' })]),
-        row('Read the root slot', [h(hex(run.manager, 8), 'blue', 6, { sub: 'manager, stored there this run' })], { link: 'read 4 bytes' }),
-        row('Manager + 0x18, then read', [c(hex(link, 8), 'orange', 3, { sub: 'slot' }), h(hex(run.player, 8), 'blue', 3, { sub: 'player' })], { link: 'add, read' }),
-        row('Player + 0x30', [h(hex(field, 8), 'orange', 6, { sub: 'the gold field' })], { link: 'add and stop' }),
-      ]),
-      last === 'field'
-        ? panel('Read the field', 'green', [row('Read 4 bytes', [h('250', 'green', 6, { sub: 'gold' })])])
-        : panel('One read too many', 'red', [row('Read a pointer instead', [c('0x000000FA', 'red', 3, { sub: '250 used as an address' }), h('fault: nothing mapped', 'red', 3)])]),
-    ]);
+    return frame(`Run ${id}: add, read, add, read, add`, caption, [plain(
+      row('Base + 0x01A2B3C0, read', [c(hex(run.base, 8), 'orange', 2, { sub: 'module base' }), c(hex(root, 8), 'orange', 2, { sub: 'root slot' }), h(hex(run.manager, 8), 'blue', 2, { sub: 'manager' })]),
+      row('Manager + 0x18, read', [c(hex(link, 8), 'orange', 3, { sub: 'slot' }), h(hex(run.player, 8), 'blue', 3, { sub: 'player' })]),
+      row('Player + 0x30, read 4 bytes', [c(hex(field, 8), 'orange', 3, { sub: 'gold field' }), last === 'field' ? h('250', 'green', 3, { sub: 'gold' }) : c('250', 'blue', 3, { sub: 'gold' })]),
+      ...(last === 'extra' ? [row('Read one more pointer', [c('0x000000FA', 'red', 3, { sub: '250 as an address' }), h('fault', 'red', 3, { sub: 'nothing mapped' })])] : []),
+    )]);
   },
 };
 
@@ -112,7 +107,7 @@ const remoteReadChecks: LiveLab = {
     const bytes: Cell[] = Array.from({ length: 4 }, (_, index) => index < inPage
       ? c(`+${index}`, readable ? 'blue' : 'gray', 1, { sub: readable ? 'this page' : pageText })
       : c(`+${index}`, 'gray', 1, { ghost: true, sub: 'next page' }));
-    const notReached = c('not reached', 'gray', 4, { ghost: true });
+    const notReached = c('not reached', 'gray', 2, { ghost: true });
     const caption = !allowed
       ? 'Windows checks the handle before it looks at the address. Without PROCESS_VM_READ the call fails with ERROR_ACCESS_DENIED, whatever the page holds.'
       : !readable
@@ -120,18 +115,18 @@ const remoteReadChecks: LiveLab = {
         : inPage < 4
           ? `The page ends after offset 4095, so only 4096 − ${offset} = ${inPage} of the 4 bytes ${inPage === 1 ? 'is' : 'are'} in it. The rest would come from the next page, which is not committed, so the call fails and no u32 can be decoded.`
           : `All 4 bytes, ${hex(address, 8)} to ${hex(address + 3, 8)}, lie in the readable page, so Windows copies all of them.`;
-    return frame('Rights, page, byte count', caption, [
-      panel(`4 bytes at ${hex(address, 8)}`, 'purple', [
-        row('Requested bytes', bytes, { ticks: inPage < 4 ? { left: `page offset ${offset}`, right: 'past the page end' } : { left: `page offset ${offset}` } }),
-        row('1. Handle rights', [allowed ? h('PROCESS_VM_READ granted', 'green', 4) : h('PROCESS_VM_READ missing', 'red', 4)]),
-        row('2. Page state', [!allowed ? notReached : readable ? h('committed and readable', 'green', 4) : h(pageText, 'red', 4)]),
-        row('3. Bytes copied', [!allowed || !readable ? notReached : inPage === 4 ? h('4 of 4', 'green', 4) : h(`at most ${inPage} of 4: ERROR_PARTIAL_COPY`, 'red', 4)]),
+    return frame(`4 bytes at ${hex(address, 8)}`, caption, [plain(
+      row('Requested bytes', bytes, { ticks: inPage < 4 ? { left: `page offset ${offset}`, right: 'past the page end' } : { left: `page offset ${offset}` } }),
+      row('Rights, page, bytes copied', [
+        allowed ? h('1. VM_READ: yes', 'green', 2) : h('1. VM_READ: no', 'red', 2),
+        !allowed ? notReached : readable ? h('2. readable', 'green', 2) : h(`2. ${pageText}`, 'red', 2),
+        !allowed || !readable ? notReached : inPage === 4 ? h('3. 4 of 4', 'green', 2) : h(`3. at most ${inPage} of 4`, 'red', 2, { sub: 'ERROR_PARTIAL_COPY' }),
       ]),
-      panel('What read_u32 returns', complete ? 'green' : 'red', [row('Result', [h(
+      row('read_u32 returns', [h(
         !allowed ? 'Err: access denied' : !readable ? 'Err(ReadError::Unreadable { address })' : inPage < 4 ? 'Err(ReadError::WrongSize { expected: 4, .. })' : 'Ok(u32) from 4 copied bytes',
-        complete ? 'green' : 'red', 4,
-      )])]),
-    ]);
+        complete ? 'green' : 'red', 6,
+      )]),
+    )]);
   },
 };
 
@@ -165,13 +160,13 @@ const vtableSlot: LiveLab = {
     const caption = exact
       ? `${hex(disp, 2)} is ${disp} bytes, and ${disp} ÷ ${width} = ${slot}, so the call reads slot ${slot}. Slot 0 is the first entry, at +0x00.`
       : `${disp} ÷ ${width} = ${slot} with ${rest} left over: this displacement lands ${rest} bytes inside slot ${slot}, not at the start of a slot. Re-check the pointer size or whether this is a function table at all.`;
-    return frame(exact ? `${hex(disp, 2)} selects slot ${slot}` : `${hex(disp, 2)} is not a slot start`, caption, [
-      panel(`Function table, ${width} bytes per slot`, 'purple', [row('Slots and their offsets', slots)]),
-      panel('Displacement ÷ pointer size', 'yellow', [row('Bytes ÷ bytes per slot', [
+    return frame(exact ? `${hex(disp, 2)} selects slot ${slot}` : `${hex(disp, 2)} is not a slot start`, caption, [plain(
+      row(`Table, ${width} bytes per slot`, slots),
+      row('Displacement ÷ slot size', [
         c(`${hex(disp, 2)} = ${disp}`, 'orange', 3), c(`÷ ${width}`, 'yellow', 2),
         h(exact ? `slot ${slot}` : `${slot}, remainder ${rest}`, exact ? 'green' : 'red', 3),
-      ])]),
-    ]);
+      ]),
+    )]);
   },
 };
 
@@ -201,14 +196,12 @@ const xorByte: LiveLab = {
     const caption = stored === value
       ? `Key 0 has no 1 bits, so no bit flips: memory holds ${value} itself and a scan for it succeeds.`
       : `Memory holds ${stored}, so a scan for ${value} finds nothing. XOR with ${key} again gives back ${back}.`;
-    return frame(`${value} XOR ${key} = ${stored}`, caption, [
-      panel('Encode', 'blue', [
-        row(`Value ${value}`, bitsOf(value).map(bit => c(bit, 'blue')), { ticks: { left: 'bit 7', right: 'bit 0' } }),
-        row(`Key ${key}`, keyBits.map(bit => c(bit, 'purple'))),
-        row(`Stored ${stored}`, flipped(bitsOf(stored), 'yellow'), { link: 'XOR: 1 where the bits differ' }),
-      ]),
-      panel('Decode', 'green', [row(`Stored XOR ${key} = ${back}`, flipped(bitsOf(back), 'green'), { link: 'XOR with the same key' })]),
-    ]);
+    return frame(`${value} XOR ${key} = ${stored}`, caption, [plain(
+      row(`Value ${value}`, bitsOf(value).map(bit => c(bit, 'blue')), { ticks: { left: 'bit 7', right: 'bit 0' } }),
+      row(`Key ${key}`, keyBits.map(bit => c(bit, 'purple'))),
+      row(`Stored: ${stored}`, flipped(bitsOf(stored), 'yellow'), { link: 'XOR: 1 where the bits differ' }),
+      row(`Decoded: ${stored} XOR ${key} = ${back}`, flipped(bitsOf(back), 'green'), { link: 'XOR with the same key' }),
+    )]);
   },
 };
 
@@ -250,15 +243,13 @@ const utf8Pack: LiveLab = {
     const caption = count === 1
       ? `${name} fits in the 7 payload bits of one byte, so it is stored as ${list}, the same byte as in ASCII.`
       : `${name} needs ${needed} bits. ${count - 1 === 1 ? 'One byte carries' : `${count - 1} bytes carry`} only ${smaller}, so UTF-8 uses ${count} bytes, which carry ${plan.payload}: ${list}.`;
-    return frame(`${name}: ${count} byte${count === 1 ? '' : 's'}`, caption, [
-      panel(`${name} in binary`, 'blue', [row(`${plan.payload} bits, split ${plan.groups.join(' + ')}`, parts.map(part => c(part, 'blue')))]),
-      panel('UTF-8 bytes', 'orange', [
-        row('Marker bits, then the payload', parts.map((part, index) => c(`${plan.marks[index] ?? ''} ${part}`, 'purple', 1, {
-          sub: index > 0 ? '10: continues' : count === 1 ? '0: one byte' : `${plan.marks[0] ?? ''}: ${count}-byte start`,
-        })), { link: 'add the markers' }),
-        row('In memory', bytes.map(value => h(byteText(value), 'orange')), { link: 'write as hex' }),
-      ]),
-    ]);
+    return frame(`${name}: ${count} byte${count === 1 ? '' : 's'}`, caption, [plain(
+      row(`${name} as ${plan.payload} bits, split ${plan.groups.join(' + ')}`, parts.map(part => c(part, 'blue'))),
+      row('Marker bits, then the payload', parts.map((part, index) => c(`${plan.marks[index] ?? ''} ${part}`, 'purple', 1, {
+        sub: index > 0 ? '10: continues' : count === 1 ? '0: one byte' : `${plan.marks[0] ?? ''}: ${count}-byte start`,
+      })), { link: 'add the markers' }),
+      row('UTF-8 bytes in memory', bytes.map(value => h(byteText(value), 'orange')), { link: 'write as hex' }),
+    )]);
   },
 };
 
@@ -327,15 +318,15 @@ const f32Fields: LiveLab = {
       formula = `${signWord}${shortNumber(significand)} × 2${superscript(power)} = ${floatText(value)}`;
       caption = `Most significant first the bits are ${hex(word, 8)}: sign ${sign}, exponent ${exponent} − 127 = ${signed(power)}, significand 1 + ${shortNumber(fractionValue)} = ${shortNumber(significand)}.`;
     }
-    return frame('Bytes, fields, value', caption, [
-      panel('In memory, lowest byte first', 'orange', [row('Bytes at +0 to +3', memory.map((part, index) => c(byteText(part), 'orange', 1, { sub: `+${index}` })))]),
-      panel('The same 32 bits as fields', 'blue', [row('sign · exponent · fraction', [
+    return frame('Bytes, fields, value', caption, [plain(
+      row('In memory, lowest byte first', memory.map((part, index) => c(byteText(part), 'orange', 1, { sub: `+${index}` }))),
+      row('Sign, exponent, fraction', [
         h(String(sign), 'purple', 1, { sub: sign ? 'negative' : 'positive' }),
         h(`${exponentBits.slice(0, 4)} ${exponentBits.slice(4)}`, 'yellow', 3, { sub: exponentSub }),
         h(fractionText, 'blue', 6, { sub: fractionSub }),
-      ])]),
-      panel('Value', exponent === 255 ? 'red' : 'green', [row('sign × significand × power of two', [h(formula, exponent === 255 ? 'red' : 'green', 10)])]),
-    ]);
+      ], { link: `regroup ${hex(word, 8)}` }),
+      row('Value', [h(formula, exponent === 255 ? 'red' : 'green', 10)]),
+    )]);
   },
 };
 

@@ -10,8 +10,7 @@ export const processReadFlows: readonly FlowScenario[] = [{
   lanes: [{ id: 'tool', label: 'Tool' }, { id: 'windows', label: 'Windows' }, { id: 'game', label: 'Game process' }],
   steps: [
     { from: 'tool', to: 'windows', kind: 'request', label: 'Read 4 bytes at game address 0x5000', caption: 'The tool names the game by handle and gives a number that only means something inside the game’s address map.' },
-    { from: 'windows', to: 'windows', kind: 'local', label: 'Check the target handle', caption: 'Windows first checks that the handle is valid and allows reading.' },
-    { from: 'windows', to: 'game', kind: 'request', label: 'Look up 0x5000 in the game’s map', caption: 'The address is translated with the game’s page tables, not the tool’s.' },
+    { from: 'windows', to: 'game', kind: 'request', label: 'Check the handle, look up 0x5000', caption: 'Windows checks that the handle allows reading, then translates 0x5000 with the game’s page tables, not the tool’s.' },
     { from: 'game', to: 'windows', kind: 'data', label: '64 00 00 00', caption: 'These four bytes are what the game has stored there.' },
     { from: 'windows', to: 'tool', kind: 'response', label: 'Copy into the tool’s own buffer', caption: 'The tool now holds a copy. It does not share the game’s memory.' },
     { from: 'tool', to: 'tool', kind: 'local', label: 'Decode the copy: u32 100', caption: 'Little-endian 64 00 00 00 is 0x00000064, which is 100. A local pointer numbered 0x5000 would use the tool’s own address map instead.' },
