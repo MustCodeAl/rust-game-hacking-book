@@ -63,16 +63,16 @@ export const optionChainCells: readonly CellScenario[] = [{
   title: 'Three slots through quoted_balance',
   summary: 'Budget 20 and costs = [4, 8, 12]. Each step works on the result of the step before; once a slot’s value is None, the later closures are skipped.',
   frames: [
-    frame('costs.get(slot).copied()', 'Slots 1 and 2 hold 8 and 12. Slot 4 is past the end of the three prices, so get returns None.', [
+    frame('costs.get(slot).copied()', 'Slot 4 is past the end of the three prices, so get returns None.', [
       lanes([['Some(8)', 'green'], ['Some(12)', 'green'], ['None', 'gray', 'no item']]),
     ]),
-    frame('map(|n| n * 2)', 'map runs its closure only for Some: 8 × 2 = 16 and 12 × 2 = 24. For None it is skipped.', [
+    frame('map(|n| n * 2)', 'The closure runs only for Some: 8 × 2 = 16 and 12 × 2 = 24.', [
       lanes([['Some(16)', 'green'], ['Some(24)', 'green'], ['None', 'gray', 'skipped']]),
     ]),
-    frame('and_then(|n| budget.checked_sub(n))', '20 − 16 = 4 fits in a u32, so Some(4). 20 − 24 would be −4, so checked_sub returns None.', [
+    frame('and_then(|n| budget.checked_sub(n))', '20 − 16 = 4 fits; 20 − 24 would be −4, so checked_sub gives None.', [
       lanes([['Some(4)', 'green'], ['None', 'red', '20 − 24 fails'], ['None', 'gray', 'skipped']]),
     ]),
-    frame('ok_or("not affordable")', 'Some becomes Ok and None becomes Err with the chosen reason, so a missing item and a high price end alike.', [
+    frame('ok_or("not affordable")', 'None becomes Err with the one chosen reason, whatever caused it.', [
       lanes([['Ok(4)', 'green'], ['Err', 'red', 'not affordable'], ['Err', 'red', 'not affordable']]),
     ]),
   ],
