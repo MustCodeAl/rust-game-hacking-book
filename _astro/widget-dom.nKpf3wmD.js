@@ -1,0 +1,1 @@
+function e(e,t,n){let r=document.createElement(e);return t&&(r.className=t),n!==void 0&&(r.textContent=n),r}function t(e,t){if(e==null)throw Error(`Widget data is missing ${t}.`);return e}export{t as n,e as t};

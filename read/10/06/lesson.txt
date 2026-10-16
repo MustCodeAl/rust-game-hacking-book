@@ -28,6 +28,94 @@ The process supplies shared resources, while each execution path keeps its own p
 
 This shared-versus-private split explains both communication between threads and the races that communication can create.
 
+Step through one game from program file to process to two threads taking turns on a core, with the numbers worked out:
+
+From a program file to a process to threadsOne game from disk to running threads, ten steps. The numbers continue the sample file from lesson 5.1. Step through them, or read the complete picture below.
+
+Complete picture: two threads in one process, one C P U core switching between them.
+
+The complete pictureEverything at once: the program file, the process Windows built from it, two threads that share the process's memory but keep their own stacks and registers, and one core that took turns between them for nine ticks. Thread A ran 6 instructions, B ran 3, and each kept its own count in e a x.
+
+Section: 1 Program: a file on disk.
+
+Headers hexadecimal 0 4 0 0
+
+.text hexadecimal 1 C 0 0
+
+.rdata hexadecimal 0 C 0 0
+
+.data hexadecimal 0 4 0 0
+
+.rsrc hexadecimal 0 8 0 0
+
+Instructions and data, written down. It sits still: no C P U time, no memory.
+
+Section: 2 Process: its own space in memory.
+
+No process yet: the file is still only a file.
+
+Address space The image sits at this value to this value.
+
+Handle table References to the files, events and sockets this process opens.
+
+Shared by every thread Global score at this value holds 10.
+
+Section: 3 Threads: paths of execution inside the process.
+
+Thread ARunning on the C P U Own stack (1 MiB)this value to hexadecimal 0 0 2 F F F F FLocal variablehexadecimal 0 0 2 F F F F CIn the C P U nowEIP this value, e s p this value, e a x 6
+
+Thread BReady: waiting for a turn Own stack (1 MiB)this value to hexadecimal 0 0 3 F F F F FLocal variablehexadecimal 0 0 3 F F F F CSaved in its thread contextEIP this value, e s p this value, e a x 3
+
+Section: 4 One C P U core: who runs now.
+
+A 1
+
+A 2
+
+A 3
+
+B 4
+
+B 5
+
+B 6
+
+A 7
+
+A 8
+
+A 9
+
+Each turn lasts 3 ticks, and a tick here is one instruction.
+
+The core is running thread A
+
+e i p this value, e s p this value, e a x 6
+
+Section: The steps.
+
+Step 1 A program is a file game.exe sits on disk: 14,336 bytes (this value) of headers, instructions and data. Nothing in it is running. It uses no C P U time and no memory, only disk space.
+
+Step 2 Starting it creates a process Windows creates a process: a private address space, a handle table for the files and events it will open, and an owner. The loader maps the file's sections into that space at the image base. The image is this value bytes, so it covers this value to this value. No instruction has run yet: a process only holds resources.
+
+Step 3 The first thread starts Windows creates thread A inside the process. It gets its own stack, 1 MiB of address space (this value to this value), and its own registers. e i p starts at the entry point: base this value + R V A, relative virtual address, this value equals this value. e s p is the first address past the empty stack, this value.
+
+Step 4 A second thread joins The game starts thread B. It lives in the same process, so it gets no new address space, only its own stack (this value to this value) and its own registers: e i p this value, e s p this value. One process can hold many threads.
+
+Step 5 Memory is shared, stacks are not Both threads see the same address shown here, the start of .data (base this value + R V A this value). If A stores 10 in the global score, B reads 10. A local variable is different: it lives on the thread's own stack, this value minus 4 equals this value for A and this value minus 4 equals this value for B, so the two never collide.
+
+Step 6 One core runs one thread at a time On a single core the scheduler gives each thread a turn of 3 ticks. Thread A goes first. Each tick runs add e a x, 1, which is 3 bytes, so e a x goes 1, 2, 3 and e i p goes this value + 3 times 3 equals this value. (A tick is one instruction here. A real time slice lasts a few milliseconds, millions of instructions.)
+
+Step 7 The turn ends: save one thread, load the other A context switch. The scheduler saves A's registers into A's thread context in memory: e a x 3, e i p this value. Then it loads B's saved registers into the C P U: e a x 0, e i p this value. e i p now points into B's code, so B is what runs next.
+
+Step 8 Thread B runs its turn Ticks 4 to 6 belong to B: e a x goes 1, 2, 3 and e i p goes this value + 3 times 3 equals this value. Thread A waits, ready to run, with its registers parked in its context.
+
+Step 9 Switch back: restore A The scheduler saves B (e a x 3, e i p this value) and restores A's saved registers: e a x 3, e i p this value. A cannot tell it was ever paused: the next instruction it runs is exactly the one it was about to run.
+
+Step 10 Thread A carries on Ticks 7 to 9 belong to A again. e a x goes from 3 to 6 and e i p goes this value + 3 times 3 equals this value. In nine ticks A ran six instructions and B three, and neither lost its place.
+
+The addresses are illustrative; a real run is placed by Windows and changes with A S L R, address space layout randomization. A real time slice lasts milliseconds, not three instructions, and the scheduler picks threads by priority and readiness. The shape is what matters: every thread keeps its own registers and stack, and the process memory is shared.
+
 Section: Scheduling is not the same as parallel execution.
 
 Windows schedules runnable threads by giving them turns on C P U cores. On one core, threads can interleave: one runs, pauses, and another runs. On several cores, some threads can also run truly in parallel. The program must be correct under both possibilities.

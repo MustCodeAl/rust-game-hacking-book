@@ -1,0 +1,1 @@
+import{t as e}from"./diagram-tabs.iKeQ_gLe.js";e();

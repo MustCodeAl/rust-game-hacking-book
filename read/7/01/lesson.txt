@@ -106,6 +106,160 @@ Static linking copies the needed library implementation into the output module. 
 
 Whichever linking choice produced the module, its file bytes still need the section map. For an illustrative .text row with raw start hexadecimal 4 0 0 and R V A start hexadecimal 1 0 0 0, file byte hexadecimal 5 2 0 is hexadecimal 1 2 0 bytes into the section. Its R V A is hexadecimal 1 1 2 0; at live base this value, its virtual address is this value. This example assumes the byte lies inside that section’s file-backed data.
 
+Try the example below, then change the offset to see where other bytes go: the two strips share one scale, and the section table is the converter.
+
+From a file offset to a live addressA section sits at one distance from the start of the file and a different distance from the start of the image. Both strips use the same scale, so the image is 2 times as long as the file.
+
+File on disk14336 bytes (hexadecimal 3 8 0 0)
+
+Image in memory28672 bytes (hexadecimal 7 0 0 0)
+
+Section bytes that exist in both places
+
+Zero-filled by the loader: in memory only
+
+Padding or unused space: no section owns it
+
+.text byte hexadecimal 0 1 2 0: R V A hexadecimal 1 1 2 0, virtual address shown here.
+
+hexadecimal 0 5 2 0 lies in .text, whose raw data covers hexadecimal 0 4 0 0 to hexadecimal 1 F F F.
+
+hexadecimal 0 5 2 0 minus hexadecimal 0 4 0 0 equals hexadecimal 0 1 2 0 bytes into the section.
+
+R V A equals section R V A hexadecimal 1 0 0 0 + hexadecimal 0 1 2 0 equals hexadecimal 1 1 2 0.
+
+Virtual address equals module base this value + R V A hexadecimal 1 1 2 0 equals this value.
+
+If Windows loads the module at a different base (A S L R, address space layout randomization,), the file offset and the R V A stay the same, and only the virtual address moves. The module base must be a multiple of hexadecimal 1 0 0 0 0.
+
+Headers are the exception: they are mapped at the start of the image, so for the first hexadecimal 0 4 0 0 bytes the R V A equals the file offset.
+
+The numbers a section row supplies are stored in the headers themselves. Here is the whole header chain with real file offsets, each one derived from the sizes before it:
+
+The headers of a P E file, byte by byteOffsets are counted from the first byte of the file. Open a part to read its fields, and point at a field to highlight it. The sample file puts the P E signature at hexadecimal 0 0 8 0.
+
+Section: PE32: 32-bit: the optional header is 224 bytes, so the section table starts at hexadecimal 0 1 7 8.
+
+hexadecimal 0 0 0 0 to hexadecimal 0 3 F F: the first hexadecimal 0 4 0 0 bytes of the file (1024 bytes), drawn to scale. Section data begins right after.
+
+hexadecimal 0 0 0 0 DOS headerhexadecimal 0 0 0 0 to hexadecimal 0 0 3 F dot 64 B A leftover from MS-DOS that every P E file still begins with. Two fields matter.Where it starts. Starts at the first byte of the file, hexadecimal 0 0 0 0, and is 64 (hexadecimal 4 0) bytes long: 2 + 58 + 4 equals 64.hexadecimal 0 0 0 0 emagic2 bytesThe two letters MZ (bytes 4D 5A). A parser checks them first: without MZ this is not a P E file.In the sample: MZ (4D 5A)The two A S C I I letters, always at the very start of the file.hexadecimal 0 0 0 2other DOS fields58 bytesOld MS-DOS values (page counts, relocation hints). Windows never reads them.hexadecimal 0 0 3 C elfanew4 bytesThe file offset of the P E signature. A file offset, not an R V A and not a live address.In the sample: hexadecimal 0 0 0 0 0 0 8 0The DOS header (hexadecimal 4 0 bytes) plus a hexadecimal 4 0-byte DOS stub end at hexadecimal 0 0 8 0, where the example puts the signature.
+
+Section: hexadecimal 0 0 0 0 DOS headerhexadecimal 0 0 0 0 to hexadecimal 0 0 3 F dot 64 B.
+
+hexadecimal 0 0 4 0 DOS stubhexadecimal 0 0 4 0 to hexadecimal 0 0 7 F dot 64 B A tiny MS-DOS program that Windows skips.Where it starts. Starts where the DOS header ends, hexadecimal 0 0 4 0, and runs up to e_lfanew hexadecimal 0 0 8 0: hexadecimal 0 0 8 0 minus hexadecimal 0 0 4 0 equals hexadecimal 0 0 4 0 equals 64 bytes.If someone starts the file under MS-DOS, this little 16-bit program prints “This program cannot be run in DOS mode.” and exits. Windows never runs it: it follows e_lfanew instead. Some toolchains also store build information here, so the size varies from file to file.
+
+Section: hexadecimal 0 0 4 0 DOS stubhexadecimal 0 0 4 0 to hexadecimal 0 0 7 F dot 64 B.
+
+hexadecimal 0 0 8 0PE signaturehexadecimal 0 0 8 0 to hexadecimal 0 0 8 3 dot 4 B Four bytes that say: the headers of a P E file start here.Where it starts. Starts at the file offset stored in e_lfanew: hexadecimal 0 0 8 0.hexadecimal 0 0 8 0Signature4 bytesThe letters P, E and two zero bytes: 50 45 00 00. As a little-endian number that is this value.In the sample: P E\0\0 (50 45 00 00)Four fixed bytes. If they are missing, stop: the file is damaged or not a P E file.
+
+Section: hexadecimal 0 0 8 0PE signaturehexadecimal 0 0 8 0 to hexadecimal 0 0 8 3 dot 4 B.
+
+hexadecimal 0 0 8 4 COFF file headerhexadecimal 0 0 8 4 to hexadecimal 0 0 9 7 dot 20 B The basics: which C P U, how many sections, how big the next header is.Where it starts. Starts right after the signature: e_lfanew + 4 equals hexadecimal 0 0 8 0 + 4 equals hexadecimal 0 0 8 4. It is 20 bytes long: 2 + 2 + 4 + 4 + 4 + 2 + 2 equals 20.hexadecimal 0 0 8 4Machine2 bytes dot COFF header + 0Which C P U the machine code is for.In the sample: hexadecimal 0 1 4 C (x86)The format defines hexadecimal 0 1 4 C for 32-bit x86 and hexadecimal 8 6 6 4 for x86-64.hexadecimal 0 0 8 6NumberOfSections2 bytes dot COFF header + 2How many 40-byte section rows follow the optional header.In the sample: 4One row each for .text.rdata.data.rsrc.hexadecimal 0 0 8 8TimeDateStamp4 bytes dot COFF header + 4When the linker built the file, in seconds since 1 January 1970. Some builds store a hash instead.hexadecimal 0 0 8 CPointerToSymbolTable4 bytes dot COFF header + 8File offset of an old COFF symbol table. Zero in modern programs, whose debug data lives elsewhere.hexadecimal 0 0 9 0NumberOfSymbols4 bytes dot COFF header + 12Number of entries in that table: zero when there is none.hexadecimal 0 0 9 4SizeOfOptionalHeader2 bytes dot COFF header + 16Bytes in the optional header, data directories included. It tells a parser how far to jump to reach the section table.In the sample: hexadecimal 0 0 E 0 (224)96 bytes of fields + 16 directories times 8 bytes equals 96 + 128 equals 224 equals hexadecimal E 0.hexadecimal 0 0 9 6 Characteristics2 bytes dot COFF header + 18Flag bits: an executable image, a D L L, 32-bit machine, and more.In the sample: hexadecimal 0 1 0 2 0x0002 (executable image) + hexadecimal 0 1 0 0 (32-bit machine) equals hexadecimal 0 1 0 2.
+
+Section: hexadecimal 0 0 8 4 COFF file headerhexadecimal 0 0 8 4 to hexadecimal 0 0 9 7 dot 20 B.
+
+hexadecimal 0 0 9 8Optional header: standard fieldshexadecimal 0 0 9 8 to hexadecimal 0 0 B 3 dot 28 B The first part of the optional header for PE32. It is required for programs despite its name.Where it starts. The optional header starts right after the COFF header: e_lfanew + 4 + 20 equals hexadecimal 0 0 8 0 + 24 equals hexadecimal 0 0 9 8. These fields are 2 + 1 + 1 + 4 + 4 + 4 + 4 + 4 + 4 equals 28 bytes.hexadecimal 0 0 9 8Magic2 bytes dot optional header + 0Tells the parser how to read everything after it: hexadecimal 0 1 0 B means PE32, hexadecimal 0 2 0 B means PE32+.In the sample: hexadecimal 0 1 0 BThe two magic numbers the format defines.hexadecimal 0 0 9 AMajorLinkerVersion1 byte dot optional header + 2Major version of the linker that made the file.hexadecimal 0 0 9 BMinorLinkerVersion1 byte dot optional header + 3Minor version of that linker.hexadecimal 0 0 9 CSizeOfCode4 bytes dot optional header + 4Total file size of the code sections.In the sample: hexadecimal 0 0 0 0 1 C 0 0Only .text holds code here, so this is its SizeOfRawData.hexadecimal 0 0 A 0SizeOfInitializedData4 bytes dot optional header + 8Total size of sections that hold initialised data.hexadecimal 0 0 A 4SizeOfUninitializedData4 bytes dot optional header + 12Total size of sections that are zero-filled in memory and take no file space.hexadecimal 0 0 A 8 A d dressOfEntryPoint4 bytes dot optional header + 16RVA of the first instruction Windows runs. It must lie inside the code section.In the sample: hexadecimal 0 0 0 0 1 2 C 0Illustrative: any R V A inside .text (hexadecimal 1 0 0 0 to hexadecimal 2 A 3 B) is valid; the linker picks the real one.hexadecimal 0 0 A C B aseOfCode4 bytes dot optional header + 20RVA where the code section begins.In the sample: hexadecimal 0 0 0 0 1 0 0 0The R V A of .text in the section table.hexadecimal 0 0 B 0 B aseOfData4 bytes dot optional header + 24RVA where the data begins. PE32+ dropped this field to make room for a wider ImageBase.In the sample: hexadecimal 0 0 0 0 3 0 0 0The R V A of .rdata, the first data section.
+
+Section: hexadecimal 0 0 9 8Optional header: standard fieldshexadecimal 0 0 9 8 to hexadecimal 0 0 B 3 dot 28 B.
+
+hexadecimal 0 0 B 4Optional header: Windows fieldshexadecimal 0 0 B 4 to hexadecimal 0 0 F 7 dot 68 B Fields the Windows loader needs. ImageBase is 4 bytes wide.Where it starts. Starts after the standard fields: optional header hexadecimal 0 0 9 8 + 28 equals hexadecimal 0 0 B 4. These 21 fields are 68 bytes long.hexadecimal 0 0 B 4ImageBase4 bytes dot optional header + 28The address the linker prefers for the first byte of the image. Always a multiple of 64 KiB.In the sample: hexadecimal 0 0 4 0 0 0 0 0The long-standing default for a 32-bit EXE.hexadecimal 0 0 B 8SectionAlignment4 bytes dot optional header + 32Sections start at multiples of this in memory.In the sample: hexadecimal 0 0 0 0 1 0 0 0One 4 KiB page.hexadecimal 0 0 B C FileAlignment4 bytes dot optional header + 36Raw section data starts at multiples of this in the file.In the sample: hexadecimal 0 0 0 0 0 2 0 0The default, 512 bytes (one old disk sector).hexadecimal 0 0 C 0MajorOperatingSystemVersion2 bytes dot optional header + 40Major version of Windows the image asks for.hexadecimal 0 0 C 2MinorOperatingSystemVersion2 bytes dot optional header + 42Minor version of that Windows.hexadecimal 0 0 C 4MajorImageVersion2 bytes dot optional header + 44Major version of this program, set by its author.hexadecimal 0 0 C 6MinorImageVersion2 bytes dot optional header + 46Minor version of this program.hexadecimal 0 0 C 8MajorSubsystemVersion2 bytes dot optional header + 48Major version of the Windows subsystem it needs.hexadecimal 0 0 C AMinorSubsystemVersion2 bytes dot optional header + 50Minor version of that subsystem.hexadecimal 0 0 C CWin32VersionValue4 bytes dot optional header + 52Reserved: must be zero.hexadecimal 0 0 D 0SizeOfImage4 bytes dot optional header + 56Bytes the whole image takes in memory, headers included. A multiple of SectionAlignment.In the sample: hexadecimal 0 0 0 0 7 0 0 0Last section .rsrc ends at R V A hexadecimal 6 0 0 0 + hexadecimal 6 5 0 equals hexadecimal 6 6 5 0, and rounding up to a multiple of hexadecimal 1 0 0 0 gives hexadecimal 7 0 0 0.hexadecimal 0 0 D 4SizeOfHeaders4 bytes dot optional header + 60DOS header, stub, P E headers and section table together, rounded up to FileAlignment. It is where the first section’s raw data begins.In the sample: hexadecimal 0 0 0 0 0 4 0 0The headers end at hexadecimal 2 1 8; rounded up to a multiple of hexadecimal 2 0 0 that is hexadecimal 4 0 0.hexadecimal 0 0 D 8 CheckSum4 bytes dot optional header + 64A file checksum. Windows checks it for drivers and boot-time DLLs; many programs leave it zero.hexadecimal 0 0 D CSubsystem2 bytes dot optional header + 68What kind of program this is: 2 means a Windows GUI program, 3 a console program.In the sample: hexadecimal 0 0 0 2 A game with a window is a GUI program.hexadecimal 0 0 D E DllCharacteristics2 bytes dot optional header + 70Flag bits for security features, such as hexadecimal 0 0 4 0 (A S L R may move the image) and hexadecimal 0 1 0 0 (DEP).hexadecimal 0 0 E 0SizeOfStackReserve4 bytes dot optional header + 72Address space reserved for the first thread’s stack.In the sample: this value MiB, the usual linker default.hexadecimal 0 0 E 4SizeOfStackCommit4 bytes dot optional header + 76How much of that stack is backed by memory at the start.In the sample: hexadecimal 0 0 0 0 1 0 0 0One 4 KiB page, the usual default.hexadecimal 0 0 E 8SizeOfHeapReserve4 bytes dot optional header + 80Address space reserved for the default heap.In the sample: this value MiB, the usual linker default.hexadecimal 0 0 E CSizeOfHeapCommit4 bytes dot optional header + 84How much of that heap is backed by memory at the start.In the sample: hexadecimal 0 0 0 0 1 0 0 0One 4 KiB page, the usual default.hexadecimal 0 0 F 0LoaderFlags4 bytes dot optional header + 88Reserved: must be zero.hexadecimal 0 0 F 4NumberOfRvaAndSizes4 bytes dot optional header + 92How many data-directory entries follow. Check it before reading a directory.In the sample: 16The format defines 16 directory slots, and every modern linker writes all 16.
+
+Section: hexadecimal 0 0 B 4Optional header: Windows fieldshexadecimal 0 0 B 4 to hexadecimal 0 0 F 7 dot 68 B.
+
+hexadecimal 0 0 F 8 D ata directorieshexadecimal 0 0 F 8 to hexadecimal 0 1 7 7 dot 128 B Sixteen R V A-plus-size pairs that point at tables inside the sections.Where it starts. Starts after the Windows fields: hexadecimal 0 0 B 4 + 68 equals hexadecimal 0 0 F 8, which is optional header + 96. 16 entries times 8 bytes equals 128 bytes.hexadecimal 0 0 F 8 0. Export table8 bytes dot optional header + 96The functions this module offers to others. DLLs have one; a game EXE usually does not.hexadecimal 0 1 0 0 1. Import table8 bytes dot optional header + 104Which DLLs and functions this module needs. The loader reads it to fill the import address table.hexadecimal 0 1 0 8 2. Resource table8 bytes dot optional header + 112Icons, dialogs, version information and other embedded files.In the sample: R V A this value, size hexadecimal 0 0 0 0 0 6 5 0 Exactly the .rsrc row of the section table: its VirtualAddress and VirtualSize.hexadecimal 0 1 1 0 3. Exception table8 bytes dot optional header + 120Unwind data the 64-bit system uses to handle exceptions. Normally empty in a 32-bit image.hexadecimal 0 1 1 8 4. Certificate table8 bytes dot optional header + 128A digital signature. Its first number is a file offset, the one directory that is not an R V A.hexadecimal 0 1 2 0 5. Base relocation table8 bytes dot optional header + 136Places to patch if the image is loaded away from ImageBase. A relocatable program needs it.hexadecimal 0 1 2 8 6. Debug directory8 bytes dot optional header + 144Points at debug information, for example the path of the .pdb file.hexadecimal 0 1 3 0 7. Architecture8 bytes dot optional header + 152Reserved: must be zero.hexadecimal 0 1 3 8 8. Global pointer8 bytes dot optional header + 160An R V A for CPUs that keep a global pointer register. Its size must be zero.hexadecimal 0 1 4 0 9. TLS table8 bytes dot optional header + 168Thread-local storage: a template for per-thread variables and start-up callbacks.hexadecimal 0 1 4 8 1 0. Load configuration8 bytes dot optional header + 176Security settings such as the stack cookie value and the exception-handler list.hexadecimal 0 1 5 0 1 1. Bound import8 bytes dot optional header + 184Pre-computed import addresses. Rarely used today.hexadecimal 0 1 5 8 1 2. Import address table8 bytes dot optional header + 192The array the loader fills with the real addresses of the imported functions.hexadecimal 0 1 6 0 1 3. Delay import8 bytes dot optional header + 200Imports that are only loaded the first time the program calls them.hexadecimal 0 1 6 8 1 4. CLR runtime header8 bytes dot optional header + 208Present only in .NET programs: the entry to their metadata.hexadecimal 0 1 7 0 1 5. Reserved8 bytes dot optional header + 216Reserved: must be zero.
+
+Section: hexadecimal 0 0 F 8 D ata directorieshexadecimal 0 0 F 8 to hexadecimal 0 1 7 7 dot 128 B.
+
+hexadecimal 0 1 7 8Section tablehexadecimal 0 1 7 8 to hexadecimal 0 2 1 7 dot 160 B 4 rows of 40 bytes, one per section. The first row is shown field by field.Where it starts. Starts after the optional header: optional header hexadecimal 0 0 9 8 + SizeOfOptionalHeader 224 (hexadecimal 0 0 E 0) equals hexadecimal 0 1 7 8. 4 rows times 40 equals 160 bytes, so the table ends at hexadecimal 0 2 1 7.Row n starts at hexadecimal 0 1 7 8 + n times 40: .text at hexadecimal 0 1 7 8.rdata at hexadecimal 0 1 A 0.data at hexadecimal 0 1 C 8.rsrc at hexadecimal 0 1 F 0. The offset calculator above uses these rows.hexadecimal 0 1 7 8Name8 bytes dot section row + 0Eight bytes of text, padded with zeros. Only a convention: the flags decide what a section may do.In the sample: .text (padded to 8 bytes)The first row of the table.hexadecimal 0 1 8 0VirtualSize4 bytes dot section row + 8Bytes the section occupies in memory. If it is larger than SizeOfRawData, the extra is zero-filled.In the sample: hexadecimal 0 0 0 0 1 A 3 CIllustrative: the size of the code the compiler produced.hexadecimal 0 1 8 4VirtualAddress4 bytes dot section row + 12The R V A where the section starts in memory. A multiple of SectionAlignment.In the sample: hexadecimal 0 0 0 0 1 0 0 0The headers (hexadecimal 0 4 0 0 bytes) fit in the first page, so the first section starts at the next multiple of hexadecimal 1 0 0 0.hexadecimal 0 1 8 8SizeOfRawData4 bytes dot section row + 16Bytes the section occupies in the file. A multiple of FileAlignment.In the sample: hexadecimal 0 0 0 0 1 C 0 0VirtualSize hexadecimal 1 A 3 C rounded up to a multiple of hexadecimal 0 2 0 0.hexadecimal 0 1 8 CPointerToRawData4 bytes dot section row + 20The file offset where the section’s bytes start. A multiple of FileAlignment.In the sample: hexadecimal 0 0 0 0 0 4 0 0Right after the headers, so it equals SizeOfHeaders.hexadecimal 0 1 9 0PointerToRelocations4 bytes dot section row + 24Zero in an executable (object files use it).hexadecimal 0 1 9 4PointerToLinenumbers4 bytes dot section row + 28Zero: COFF line numbers are deprecated.hexadecimal 0 1 9 8NumberOfRelocations2 bytes dot section row + 32Zero in an executable.hexadecimal 0 1 9 ANumberOfLinenumbers2 bytes dot section row + 34Zero: COFF line numbers are deprecated.hexadecimal 0 1 9 C Characteristics4 bytes dot section row + 36Flag bits that decide the protection of the section’s pages: code, readable, writable, executable.In the sample: hexadecimal 6 0 0 0 0 0 2 0 0x00000020 (contains code) + this value (executable) + this value (readable).
+
+Section: hexadecimal 0 1 7 8Section tablehexadecimal 0 1 7 8 to hexadecimal 0 2 1 7 dot 160 B.
+
+hexadecimal 0 2 1 8Padding to SizeOfHeadershexadecimal 0 2 1 8 to hexadecimal 0 3 F F dot 488 B Zero bytes that bring the headers up to the next FileAlignment boundary.Where it starts. The headers end at hexadecimal 0 2 1 8. SizeOfHeaders rounds that up to a multiple of hexadecimal 0 2 0 0: hexadecimal 0 4 0 0. Padding equals hexadecimal 0 4 0 0 minus hexadecimal 0 2 1 8 equals 488 bytes.Nothing lives here. Raw section data must start at a multiple of FileAlignment, so the file is padded with zeros until then.
+
+Section: hexadecimal 0 2 1 8Padding to SizeOfHeadershexadecimal 0 2 1 8 to hexadecimal 0 3 F F dot 488 B.
+
+hexadecimal 0 4 0 0Section datafrom hexadecimal 0 4 0 0 From here on the file holds the sections themselves.Where it starts. The first section's PointerToRawData is hexadecimal 0 4 0 0, equal to SizeOfHeaders..text starts at file offset hexadecimal 0 4 0 0. The offset calculator above shows how a file offset becomes an address in memory.
+
+Section: hexadecimal 0 4 0 0Section datafrom hexadecimal 0 4 0 0.
+
+The sample file is built to match the lesson: four sections, a hexadecimal 2 0 0 FileAlignment and a hexadecimal 1 0 0 0 SectionAlignment. Real files differ in e_lfanew (hexadecimal 8 0 and hexadecimal E 8 are both common), in the DOS stub and in their section list; the structures and their order do not change.
+
+Static and D L L linking package the library differently, but a file offset still becomes an address through the same section rows:
+
+Static and dynamic linking, in one processBoth pictures show the same program calling the same library. Choose how the library was linked and follow the call down to the kernel.
+
+Section: Static linking: the library is copied into the program.
+
+The linker copies the library code the game needs into game.exe when the program is built. One file, one image.
+
+On disk
+
+game.exe 100 KiB your code 40 KiB + library copy 60 KiB
+
+In the running process: user mode, one address space
+
+game.exe image One image holds your code and its own copy of the library.
+
+your code
+
+library code (copied in)
+
+Function call into a system D L L: still user mode
+
+ntdll.dll image A system D L L every Windows process has; its stubs run the system call.
+
+system-call stubs
+
+System call: the C P U switches to kernel mode
+
+The copy happens at build time, so the library cannot change unless you build and ship a new game.exe.
+
+Calling the library is an ordinary function call inside one image. It never leaves user mode.
+
+Disk space for two programs that use this library: 2 times (40 + 60) equals 200 KiB: each program carries its own copy.
+
+Section: Dynamic linking: the library stays in its own D L L.
+
+The linker only records which D L L and which functions the game needs. When the program starts, the loader maps library.dll into the same process.
+
+On disk
+
+game.exe 40 KiB your code 40 KiB and an import table
+
+library.dll 60 KiB library code 60 KiB
+
+In the running process: user mode, one address space
+
+game.exe image Your code only, plus the import address table the loader fills in.
+
+your code
+
+Function call into another image: still user mode, same address space
+
+library.dll image A separate image, mapped into the same process on the calling thread’s stack.
+
+library code
+
+Function call into a system D L L: still user mode
+
+ntdll.dll image A system D L L every Windows process has; its stubs run the system call.
+
+system-call stubs
+
+System call: the C P U switches to kernel mode
+
+The loader resolves the imports at start-up, so a fixed library.dll improves every program that uses it without rebuilding them.
+
+Calling the library jumps into another image, but still in user mode: the same process, the same address space.
+
+Disk space for two programs that use this library: 2 times 40 + 60 equals 140 KiB: one library.dll file serves both.
+
+Function call: stays in user mode
+
+System call: crosses into the kernel
+
+Sizes are illustrative: 40 KiB of your code and a 60 KiB library. On Windows a statically linked program still reaches the kernel through system DLLs such as ntdll.dll, because the system-call instruction lives there.
+
 In brief: Static storage is a lifetime term; static linking is a packaging choice. Neither makes a file offset equal to a live virtual address.
 
 Section: Run the real lab.
