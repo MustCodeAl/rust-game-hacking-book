@@ -9,6 +9,7 @@ sidebar:
   order: 1
   label: "14.1 Object Layouts Across Game Updates"
 ---
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import Frame from '../../../../components/kit/Frame.astro';
 import CellFrames from '../../../../components/CellFrames.astro';
 import { healthLayoutCells } from '../../../../data/figure-cells-b';
@@ -220,6 +221,44 @@ therefore decodes it as a plain integer first and accepts it only when it is
 one of the five known values, the kind of check that
 [rejecting impossible layouts](#reject-partial-reads-and-impossible-layouts)
 applies to every field.
+
+## Which claims about the guard a run settles
+
+Suppose the guard's 36 bytes came from a C++ build whose source you do not
+have, and you watched them through
+[the demo run](/pages/4/09/#one-run-tick-by-tick). Each line of the layout above
+is then a claim, and each needs its own check. The run settles some claims and
+cannot reach others:
+
+| Claim | Check | What the demo run showed |
+|---|---|---|
+| `+0x14` is the state | it changes exactly when the guard's behavior changes | 0, then 1 from tick 3 (chase), 2 on tick 7 (attack), 3 from tick 8 (search), 0 from tick 13: settled |
+| `+0x18` is `seen_for` | it rises by 1 per tick in sight, and drops to 0 when sight is lost | 1 to 7 on ticks 1 to 7, then 0: settled |
+| `+0x1C` is `search_ticks` | it counts while the guard searches | 0 to 4 on ticks 8 to 12: settled |
+| `+0x10` is health | it falls by the damage when the guard is hit | 100 on every tick, but nothing hit the guard: still open |
+| `+0x15` to `+0x17` are padding | no instruction reads or writes them | not checked yet |
+
+The health line shows the limit of any run: it settles only what it made
+happen. The demo never damaged the guard, so it shows only that `+0x10` held
+100. The `Confidence` value above sums up exactly this evidence, one field at a
+time.
+
+<PredictReveal
+  id="rea-guard-padding"
+  setup="Through all 16 ticks of the demo, bytes +0x15 to +0x17 read 00 00 00."
+  question="Does that settle the padding claim?"
+  options={[
+    { label: 'Yes, they never changed', why: 'Zero on every tick also fits a field the demo never used, such as a flag byte that only a rare event sets. Bytes that never change are consistent with padding, not proof of it.' },
+    { label: 'Yes, alignment forces 0x15 to 0x17 to be padding', why: 'Alignment only requires the 4-byte field at 0x18 to start at a multiple of 4. Up to three one-byte fields fit in 0x15 to 0x17 without moving it, so alignment allows padding there but does not require it.' },
+    { label: 'No: it needs a check that no instruction touches them, in every state', correct: true, why: 'Padding means bytes that no instruction uses. Access breakpoints, which fire on any read or write, that never fire on 0x15 to 0x17 settle it, but only for the states the run reached.' },
+  ]}
+>
+
+The demo reached Patrol, Chase, Attack and Search, never Flee. A run where the
+guard is hurt down to 25 health or less, the point at which it flees, tests the
+health claim and the padding claim in that last state at the same time.
+
+</PredictReveal>
 
 ## Migrate after an update by matching behavior
 
