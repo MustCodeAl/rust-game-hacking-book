@@ -43,7 +43,7 @@ function signedText(value: bigint): string {
 
 const MAX_FRAME = 1_048_576;
 const SAMPLE = [...'HelloLobby'].map(character => character.charCodeAt(0));
-const BIG_ENDIAN_WEIGHTS = ['×16,777,216', '×65,536', '×256', '×1'];
+const BIG_ENDIAN_WEIGHTS = ['×256³', '×256²', '×256', '×1'];
 
 const lengthPrefixFrame: LiveLab = {
   id: 'length-prefix-frame',
@@ -119,7 +119,7 @@ const lengthPrefixFrame: LiveLab = {
 // Lesson 9.9 (pages/6/08.mdx): the four checks a pipe receiver makes, in order, before it builds a String.
 
 const MAX_TEXT_BYTES = 1024;
-const LITTLE_ENDIAN_WEIGHTS = ['×1', '×256', '×65,536', '×16,777,216'];
+const LITTLE_ENDIAN_WEIGHTS = ['×1', '×256', '×256²', '×256³'];
 
 const pipeFrameChecks: LiveLab = {
   id: 'pipe-frame-checks',
@@ -173,7 +173,7 @@ const pipeFrameChecks: LiveLab = {
 // ---------------------------------------------------------------------------------------------------------------
 // Lesson 5.3 (pages/7/03.mdx): looking an export up by name, through the ordinal table, to an RVA or a forwarder.
 
-const EXPORT_NAMES = ['GetGold', 'GetHealth', 'QueryMemory', 'SetGold'];
+const EXPORT_NAMES = ['AddGold', 'GetGold', 'Query', 'SetGold'];
 const NAME_ORDINALS = [2, 0, 3, 1];
 const EXPORT_FUNCTIONS = [0x1A40, 0x1B10, 0x1C80, 0x9140, 0x1D00];
 const EXPORT_DIRECTORY = 0x9000;
@@ -191,7 +191,7 @@ const exportByName: LiveLab = {
   defaults: { name: 'GetGold', base: '1' },
   presets: [
     { label: 'GetGold: code in this DLL', values: { name: 'GetGold', base: '1' } },
-    { label: 'QueryMemory: forwarded', values: { name: 'QueryMemory', base: '1' } },
+    { label: 'Query: forwarded', values: { name: 'Query', base: '1' } },
     { label: 'SetGold with base 10', values: { name: 'SetGold', base: '10' } },
   ],
   compute(values): CellFrame {
@@ -213,7 +213,8 @@ const exportByName: LiveLab = {
         row('Name ordinals', NAME_ORDINALS.map((entry, at) => (at === nameRow ? h : c)(String(entry), at === nameRow ? 'yellow' : 'gray', 2)), { link: `row ${nameRow} gives index ${index}` }),
       ]),
       panel('Export address table', 'orange', [
-        row('functions[0] to [4]', EXPORT_FUNCTIONS.map((entry, at) => (at === index ? h : c)(hex(entry, 4), at === index ? (forwarded ? 'purple' : 'orange') : 'gray', 1, { sub: `ordinal ${base + at}` })), { link: `functions[${index}]` }),
+        row('functions[0] to [4], RVA in hex', EXPORT_FUNCTIONS.map((entry, at) => (at === index ? h : c)(entry.toString(16).toUpperCase(), at === index ? (forwarded ? 'purple' : 'orange') : 'gray')), { link: `functions[${index}]` }),
+        row('Public ordinal = base + k', EXPORT_FUNCTIONS.map((_, at) => (at === index ? h : c)(String(base + at), at === index ? 'yellow' : 'gray'))),
         row('What the entry is', [result]),
       ]),
     ]);
@@ -291,7 +292,7 @@ const decodeStart: LiveLab = {
         row('Real split (from offset 0)', [c('mov eax, 25', 'green', 5, { sub: 'offsets 0 to 4' }), c('ret', 'green', 1, { sub: '5' })]),
         row(`Split from offset ${start}`, CODE.map((byte, offset) => {
           const which = owner(offset);
-          return which === -1 ? c(byteText(byte), 'gray', 1, { ghost: true, sub: 'skipped' }) : h(byteText(byte), hues[which % hues.length], 1, { sub: `+${offset}` });
+          return which === -1 ? c(byteText(byte), 'gray', 1, { ghost: true, sub: `+${offset}` }) : h(byteText(byte), hues[which % hues.length], 1, { sub: `+${offset}` });
         }), { ticks: { left: 'offset 0', right: 'offset 5' } }),
       ]),
       panel(`What the decoder prints from offset ${start}`, decoded.every(aligned) ? 'green' : 'red', decoded.map(item => row(`at ${item.start}, ${plural(item.length, 'byte')}`, [c(item.text, aligned(item) ? 'green' : 'red', 6)]))),
@@ -331,7 +332,7 @@ const relativeCallTarget: LiveLab = {
     return frame('Bytes, then the CPU’s arithmetic', `The CPU measures from the end of the call, ${hex(next, 8)}, not from ${hex(site, 8)}. Adding ${signedText(displacement)} gives ${hex(target, 8)}, and ${hex(next, 8)} is pushed so ret can come back.`, [
       panel(`The five bytes at ${hex(site, 8)}`, 'blue', [row('Opcode, then displacement', [
         c('E8', 'purple', 1, { sub: 'call' }),
-        ...bytes.map((byte, index) => c(byteText(byte), 'yellow', 1, { sub: ['bits 0–7', 'bits 8–15', 'bits 16–23', 'bits 24–31'][index] ?? '' })),
+        ...bytes.map((byte, index) => c(byteText(byte), 'yellow', 1, { sub: LITTLE_ENDIAN_WEIGHTS[index] ?? '' })),
       ], { ticks: { left: hex(site, 8), right: hex((site + 4n) % SPAN_32, 8) } })]),
       panel('What the CPU computes', 'yellow', [
         row('Next instruction', [c(`${hex(site, 8)} + 5 = ${hex(next, 8)}`, 'orange', 8)]),
@@ -418,8 +419,8 @@ function edgeLab(words: EdgeWords): LiveLab {
       const released = levels.map((down, index) => !down && (before[index] ?? false));
       const presses = pressed.flatMap((yes, index) => (yes ? [index + 1] : []));
       const downs = levels.filter(Boolean).length;
-      const level = (down: boolean): Cell => c(down ? 'down' : 'up', down ? 'blue' : 'gray');
-      const edge = (yes: boolean): Cell => (yes ? h('yes', 'green') : c('no', 'gray'));
+      const level = (down: boolean): Cell => c(down ? '1' : '0', down ? 'blue' : 'gray');
+      const edge = (yes: boolean): Cell => (yes ? h('✓', 'green') : c('–', 'gray'));
       const lamp = (toggles: number): string => `${plural(toggles, 'toggle')}, lamp ends ${toggles % 2 ? 'on' : 'off'}`;
       const sampleRows = [
         row(words.level, levels.map(level), { ticks: { left: `${words.unit} 1`, right: `${words.unit} 8` } }),
@@ -445,7 +446,7 @@ function edgeLab(words: EdgeWords): LiveLab {
 const keyEdgePolls = edgeLab({
   id: 'key-edge-polls',
   title: 'KeyEdge over eight polls',
-  summary: 'pressed_now is down && !was_down, and was_down starts false. Click a poll to press or release the key there.',
+  summary: 'pressed_now is down && !was_down, and was_down starts false. Click a poll to press or release the key there. 1 = down, ✓ = true.',
   unit: 'poll',
   level: 'key_is_down',
   before: 'was_down (before)',
@@ -462,7 +463,7 @@ const keyEdgePolls = edgeLab({
 const buttonEdges = edgeLab({
   id: 'button-edges',
   title: 'Down now, just pressed, just released',
-  summary: 'Each frame compares this frame’s state with last frame’s. Click a frame to press or release the button there.',
+  summary: 'Each frame compares this frame’s state with last frame’s. Click a frame to press or release the button there. 1 = down, ✓ = yes.',
   unit: 'frame',
   level: 'Down now',
   before: 'Down last frame',

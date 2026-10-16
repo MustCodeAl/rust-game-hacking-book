@@ -74,11 +74,11 @@ export const breakpointHitCells: readonly CellScenario[] = [{
       breakpointMap('Armed'),
     ]),
     frame('The CPU executes CC', 'int3 is a whole one-byte instruction, so once it has run, ip already points one byte past it, and Windows reports EXCEPTION_BREAKPOINT.', [
-      panel('Code at 0x00A31000', 'blue', [row('Bytes', breakpointBytes('CC', 'red')), row('ip', [gap(1), h('ip', 'orange', 1, { sub: '0x00A31001' }), gap(1)])]),
+      panel('Code at 0x00A31000', 'blue', [row('Bytes', breakpointBytes('CC', 'red')), row('ip = 0x00A31001', [gap(1), h('ip', 'orange', 1, { sub: '…1001' }), gap(1)])]),
       breakpointMap('Armed'),
     ]),
     frame('Restore 0x29, move ip back one', '0x00A31001 − 1 = 0x00A31000, so ip points at the whole real instruction again, ready to run once.', [
-      panel('Code at 0x00A31000', 'blue', [row('Bytes', breakpointBytes('29', 'green', true)), row('ip', [h('ip', 'orange', 1, { sub: '0x00A31000' }), gap(2)])]),
+      panel('Code at 0x00A31000', 'blue', [row('Bytes', breakpointBytes('29', 'green', true)), row('ip = 0x00A31000', [h('ip', 'orange', 1, { sub: '…1000' }), gap(2)])]),
       breakpointMap('SteppingOriginal', true),
     ]),
   ],
@@ -98,7 +98,7 @@ export const patchLifecycleCells: readonly CellScenario[] = [{
     ]),
     frame('Apply: keep a copy, write the jump', 'AppliedPatch holds the six original bytes for as long as the jump sends execution through the cave.', [
       panel('Hook span at 0x00CCAF8A', 'blue', [row('Live bytes', span(JUMP_SPAN, 'orange', true)), row('AppliedPatch.original', span(ORIGINAL_SPAN, 'blue'))]),
-      panel('Execution', 'purple', [row('Path', [c('jump at the hook', 'orange', 2), c('cave at 0x6F201000', 'purple', 2), c('resume 0x00CCAF90', 'green', 2)])]),
+      panel('Execution', 'purple', [row('Path', [c('jump', 'orange', 2, { sub: 'at the hook' }), c('cave', 'purple', 2, { sub: '0x6F201000' }), c('resume', 'green', 2, { sub: '0x00CCAF90' })])]),
     ]),
     frame('Restore from the saved copy', 'restore writes the saved bytes back and sets active to false. The cave may be freed only once no thread can still be running in it.', [
       panel('Hook span at 0x00CCAF8A', 'blue', [row('Live bytes', span(ORIGINAL_SPAN, 'green', true)), row('AppliedPatch', [c('active: false', 'purple', 6)])]),
