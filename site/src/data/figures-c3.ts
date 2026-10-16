@@ -51,14 +51,14 @@ export const trianglePixelCells: readonly CellScenario[] = [{
   title: 'One triangle, from vertices to pixels',
   summary: 'Each stage hands its result to the next: three vertex records become one triangle, the triangle covers 16 pixel centres, and those fragments are coloured and stored.',
   frames: [
-    frame('Vertices, joined by the indices 0, 1, 2', 'Each vertex record holds a position, here in pixels with y growing downward. The index buffer 0, 1, 2 joins the three into one triangle.', [
-      plain(row('Vertex buffer', [c('v0 (0, 0)', 'blue'), c('v1 (8, 0)', 'blue'), c('v2 (0, 4)', 'blue')])),
+    frame('Vertices, joined by the indices 0, 1, 2', 'Positions are in pixels, with y growing downward. The indices 0, 1, 2 join the three vertices into one triangle.', [
+      plain(row('', [c('v0 (0, 0)', 'blue'), c('v1 (8, 0)', 'blue'), c('v2 (0, 4)', 'blue')])),
     ]),
     frame('Rasterize: which pixel centres are inside?', 'A pixel is covered when its centre lies inside the triangle. The slanted edge from v1 to v2 leaves 7, 5, 3 and 1 covered pixels in the four rows: 16 fragments.', [
       plain(...[0, 1, 2, 3].map(pixelRow)),
     ]),
-    frame('Colour each fragment, test it, store it', 'The fragment shader gives every fragment a colour, the depth test finds nothing nearer, and 16 framebuffer pixels change.', [plain(
-      row('The last stages', [c('fragment shader', 'yellow', 1, { sub: 'colour from material and light' }), c('depth test', 'purple', 1, { sub: 'nothing nearer: keep' }), h('framebuffer', 'green', 1, { sub: '16 pixels written' })]),
+    frame('Colour each fragment, test it, store it', 'The fragment shader colours each fragment. Nothing nearer is stored, so all pass the depth test and 16 framebuffer pixels change.', [plain(
+      row('', [c('shade', 'yellow', 1, { sub: 'fragment shader' }), c('test', 'purple', 1, { sub: 'depth: keep' }), h('write', 'green', 1, { sub: '16 pixels' })]),
     )]),
   ],
 }];

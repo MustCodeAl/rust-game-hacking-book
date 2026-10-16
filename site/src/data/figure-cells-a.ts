@@ -218,7 +218,7 @@ export const comReadsCells: readonly CellScenario[] = [{
       plain(row('Swap-chain object', [h('0x00007FFA1C305000', 'orange', 2, { sub: 'first field: read 1' }), c('other fields', 'gray', 2, { ghost: true })], { ticks: { left: '0x000001F48A200000' } })),
     ]),
     frame('Slot 8 is at offset 0x40', 'Eight slots of eight bytes put slot 8 at 0x00007FFA1C305000 + 0x40 = 0x00007FFA1C305040.', [
-      plain(row('vtable', [c('slots 0 to 7', 'purple', 8, { bracket: '8 slots × 8 bytes = 0x40', ghost: true }), h('slot 8', 'orange', 2, { sub: '0x00007FFA1C305040' })], { ticks: { left: '0x00007FFA1C305000' } })),
+      plain(row('vtable', [c('slots 0 to 7', 'purple', 6, { bracket: '8 slots × 8 bytes = 0x40', ghost: true }), h('slot 8', 'orange', 4, { sub: '0x00007FFA1C305040' })], { ticks: { left: '0x00007FFA1C305000' } })),
     ]),
     frame('Read 2: slot 8 holds the Present code address', 'Reading slot 8 gives 0x00007FFA1C289A10, where the Present implementation starts.', [
       plain(row('Slot 8, then the code it names', [c('slot 8', 'purple', 1, { sub: 'read 2' }), h('Present implementation', 'green', 2, { sub: '0x00007FFA1C289A10' })])),
