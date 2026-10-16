@@ -70,6 +70,32 @@ advances e i p or jumps somewhere else.
 
 e i p is the instruction pointer. It is not a normal game variable. It tells the C P U where this thread is executing. A jump, call, return, exception, or debugger action can change it.
 
+On the ordinary path, e i p advances by the length the decoder just found. The five bytes 29 42 04 85 C0 decode from offset 0 as sub dword ptr [e d x+4], e a x (3 bytes) and then test e a x, e a x (2 bytes), so the next instruction starts at 0 + 3 + 2 equals 5.
+
+Predict first
+
+Suppose e i p points at offset 1 instead, one byte inside the sub. What does the C P U do?
+
+Answer: It decodes different instructions from the same bytes. The C P U keeps no list of where instructions begin. At offset 1 the byte 42 is a complete instruction, inc e d x, and 04 85 is add a l, 85h: real instructions the program never meant.
+
+Each instruction’s length sets where the next one startseip moves past the bytes the instruction used: 0 + 3 equals 3, then 3 + 2 equals 5.
+
+1 e i p equals 0: 3 bytes, next start 0 + 3 equals 3 Bytes 29 42 04 85 C0offset 0offset 429 42 04sub dword ptr [e d x+4], eax85 C0not decoded yet 29 42 04 is one instruction, so decoding continues at offset 3.
+
+2 e i p equals 3: 2 bytes, next start 3 + 2 equals 5 Bytes 29 42 04 85 C0offset 0offset 429 42 04sub dword ptr [e d x+4], eax85 C0test e a x, e a x 85 C0 is the next instruction. The one after it starts at offset 5.
+
+e i p moves past the bytes the instruction used: 0 + 3 equals 3, then 3 + 2 equals 5.
+
+Starting one byte late decodes other instructionsThe same bytes, decoded from offset 1. Each result is a real instruction; none is what the program meant.
+
+1 e i p equals 1: 42 is inc e d x, next start 2 Bytes 29 42 04 85 C0offset 0offset 429skipped42inc edx04 85 C0not decoded yet The byte 42 is a complete one-byte instruction.
+
+2 e i p equals 2: 04 85 is add a l, 85h, next start 4 Bytes 29 42 04 85 C0offset 0offset 429skipped42inc edx04 85add a l, 85hC0not yet 04 means “add the next byte to a l”, so 85 becomes its number.
+
+3 e i p equals 4: C0 swallows what follows Bytes 29 42 04 85 C0offset 0offset 429skipped42inc edx04 85add a l, 85hC0 …needs 2+ more bytes C0 starts a shift or rotate that needs at least two more bytes, so it eats the start of the next real instruction at offset 5.
+
+The same bytes, decoded from offset 1. Each result is a real instruction; none is what the program meant.
+
 Section: Registers hold the C P U’s current working values.
 
 Registers are tiny, very fast storage locations built into the C P U. On 32-bit x86, each general-purpose register below holds 32 bits:

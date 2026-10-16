@@ -40,6 +40,26 @@ The gap between end and capacity_end is the container’s spare room. That is ex
 
 Alternative: Think of a bookshelf with empty slots: begin is the left end, end is just after the last book, capacity end is the shelf’s far edge. Count books, not slots.
 
+Spare room runs out. When end reaches capacity_end, the next append cannot fit in the same block.
+
+Predict first
+
+A vector of 32-byte entities is full: begin equals this value and end equals capacity_end equals this value, so it holds hexadecimal 4 0 0 divided by 32 equals 32 elements. Your tool cached element 3's address, this value + 3 times 32 equals this value.
+
+The game appends a 33rd entity. What is at this value afterwards?
+
+Answer: Freed memory that can be handed to anything. With no room left, the vector allocates a bigger block, copies the 32 elements into it, adds the new one and frees the old block. Element 3 now lives at the new begin + hexadecimal 6 0.
+
+Growing a full vector moves every element32-byte entities, begin equals this value. A tool cached element 3 at this value + 3 times 32 equals this value.
+
+1 Full: 32 of 32 slots used Old block at hexadecimal 0 4 5 3 1 0 0 0 b eginend equals capacity_end0…3hexadecimal 0 4 5 3 1 0 6 0…31 32 times 32 bytes equals hexadecimal 4 0 0, so end equals this value equals capacity_end: no room for one more.
+
+2 Append a 33rd: allocate, copy, add copy 32 elementsNew block at this value…3hexadecimal 0 6 1 2 0 0 6 0…3132new A bigger block (here 64 slots) receives copies of all 32 elements, then the new one.
+
+3 The old block is freed Old block, now freed0…3hexadecimal 0 4 5 3 1 0 6 0: stale…31New block at this value…3hexadecimal 0 6 1 2 0 0 6 0…3132 Element 3 is now at this value + hexadecimal 6 0. The cached this value points into freed memory.
+
+32-byte entities, begin equals this value. A tool cached element 3 at this value + 3 times 32 equals this value.
+
 Notice how much rests on element_size being correct. Guess 16 bytes instead of 32 and the same three pointers report 320 / 16 equals 20 elements, half of them the second halves of real entities. Every address is readable and the count looks entirely reasonable. The divisibility check rejects many wrong guesses, but not one that happens to divide evenly like this, so the element size has to come from somewhere else: the stride the code actually uses when it walks from one element to the next.
 
 Those checks describe meaning. They remain useful even if a compiler changes field order.

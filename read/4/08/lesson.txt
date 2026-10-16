@@ -54,7 +54,27 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Dropping an event sounds bad, but silently pausing every target thread can be worse. Report sample loss explicitly. The final report prints both written and dropped counts.
 
-Picture the queue as 128 numbered spaces between the sampler and the writer. Suppose the writer stalls while 127 spaces are occupied. The next sample takes space 128. Another sample arrives before the writer removes anything, so try_send returns Full; the sampler increments dropped to 1 and continues. When the writer resumes and removes one event, a later sample can enter again. The queue absorbed a short delay, but it did not make the disk faster or keep every sample. In the finished log, the count of one dropped event warns that the measured timeline has a gap even if the surrounding gold values look flat.
+Predict first
+
+The sampler sends one GoldEvent every 50 milliseconds into the empty 128-slot queue. Then the disk pauses, and the writer removes nothing for 10 seconds.
+
+How many of the samples sent during those 10 seconds does the sampler drop?
+
+Answer: 72. 10,000 milliseconds divided by 50 milliseconds equals 200 samples arrive. The first 128 fill the empty queue; the other 200 minus 128 equals 72 get Full, and each adds 1 to dropped.
+
+A stalled writer and a bounded queueThe sampler keeps sending while the writer removes nothing. try_send fills the free slots, then reports Full and the sampler counts a drop instead of waiting.
+
+Arrivals, free slots, drops
+
+Section: While the writer is stalled.
+
+Section: What try_send does with them.
+
+Full adds 1
+
+200 events arrive but only 128 slots are free, so 200 minus 128 equals 72 get Full. Each one adds 1 to dropped; none makes the sampler wait.
+
+When the writer resumes and removes events, later samples can enter again. The queue absorbed a short delay, but it did not make the disk faster or keep every sample. In the finished log, a nonzero dropped count warns that the measured timeline has a gap even if the surrounding gold values look flat.
 
 Different tools can choose different policies:
 

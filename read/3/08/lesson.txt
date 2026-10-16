@@ -40,25 +40,15 @@ In brief: A callable address still needs a correct signature, memory ownership, 
 
 Each part of the contract follows from something the machine code does. A callee that reads four bytes through the pointer and never stores it needs only a short read-only borrow. A callee that saves the pointer in a global needs the data to outlive the call.
 
-A saved pointer can outlive the data it points toThe buffer lives from the call until it is released after the call returns. A read is only safe while it is alive.
+A saved pointer can outlive the data it points toThe address in the saved pointer never changes. What is stored at that address does.
 
-1 The call starts and the buffer exists TimelineTimecallinside the callreturn + releaselaterBufferalivereleased The caller hands over a buffer that exists only for this call.
+1 During the call: the pointer is valid Saved pointer to its 4 bytes to readhexadecimal 0 A 4 0 1 0 0 0saved pointer64000000100correct The caller’s buffer (blue) holds 100 as 64 00 00 00.
 
-Section: Timeline.
+2 After the call: freed and reused Saved pointer to its 4 bytes to readhexadecimal 0 A 4 0 1 0 0 0saved pointer2C010000not read Other code (gray) now owns those bytes and stores 300 as 2C 01 00 00.
 
-2 Reading inside the call is fine TimelineTimecallinside the callreturn + releaselaterBufferalivereleasedReadread: inside the lifetime This read happens during the buffer’s lifetime.
+3 Later: the same pointer reads 300 Saved pointer to its 4 bytes to readhexadecimal 0 A 4 0 1 0 0 0saved pointer2C010000300wrong data The address is still mapped, so the read succeeds with the wrong value.
 
-Section: Timeline.
-
-3 The call returns and the buffer is released TimelineTimecallinside the callreturn + releaselaterBufferalivereleased After the release the memory can be reused for something else.
-
-Section: Timeline.
-
-4 A saved pointer is read later: too late TimelineTimecallinside the callreturn + releaselaterBufferalivereleasedReadread through the saved pointerbeyond the release Retaining a pointer needs the data to outlive the call. Here it did not, so this read is invalid.
-
-Section: Timeline.
-
-The buffer lives from the call until it is released after the call returns. A read is only safe while it is alive.
+The address in the saved pointer never changes. What is stored at that address does.
 
 Section: Begin with the caller.
 
@@ -102,7 +92,7 @@ GetProcAddress returns an untyped address. Keep the dangerous conversion in one 
 
 The resolver below takes the loaded module handle, asks for the exact gha_start export, and converts the returned address to one typed function pointer. A missing export must return an error; a found address is still safe to call only if the contract inferred above is correct for this D L L build.
 
-Code example. The code’s comments explain: SAFETY: the byte string is NUL-terminated and lives for this call. 🔎 SAFETY: our debugger evidence and matching test D L L establish this A B I.
+Code example. The code’s comments explain: SAFETY: the byte string is NUL-terminated and lives for this call. SAFETY: our debugger evidence and matching test D L L establish this A B I.
 
 Why not scatter transmute through the program? Because every conversion is a promise about A B I and types. One narrow boundary gives reviewers one place to check that promise.
 

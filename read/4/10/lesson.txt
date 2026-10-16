@@ -10,6 +10,14 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 The return false lines reject a target as soon as a check fails. normalized() returns an optional direction because a zero-length arrow has no direction; the let Some(direction) ... else branch handles that case. The following sections work through each calculation with positions you can draw on a grid.
 
+The guard’s three sight checksThe guard stands at (0, 0) and faces along x, the direction (1, 0). Move the target or add a wall: the first check that fails stops the rest.
+
+Checks in order, then the answer
+
+Section: Three checks, cheapest first.
+
+5 less than or equal to 10 and 0.8 greater than or equal to 0.5 (about 36.9 degrees from the facing), and nothing blocks the line: the guard sees the target.
+
 The first two checks read offset, the arrow from the guard to the target: the target’s position minus the guard’s, the same subtraction as in Lesson 4.4. For a guard at (0, 0) and a player at (4, 3), the offset is (4 minus 0, 3 minus 0) equals (4, 3): 4 units along x and 3 along y. The lab’s Vec2 type stores such a two-number vector, and the guard’s facing is one too.
 
 Section: Distance.
@@ -46,13 +54,29 @@ Section: Line of sight.
 
 The last check, line_of_sight, walks from the guard toward the target in steps of SIGHT_STEP equals 0.1 and tests each sample point against the walls. Each wall is an axis-aligned box, meaning its sides run along the x and y axes, stored as two corners, min and max. A point is inside when both of its coordinates lie between the corners.
 
-On tick 8 of Lesson 4.10’s run, the guard stands at (4, 0), the player at (8, 0), and a wall fills the box from (5.5, minus 1) to (6.5, 1) between them. The samples are (4.0, 0), (4.1, 0), (4.2, 0), and so on. By (5.6, 0) a sample is inside the wall, because 5.5 less than or equal to 5.6 less than or equal to 6.5 and minus 1 less than or equal to 0 less than or equal to 1, so the function returns false long before it reaches the player.
+On tick 8 of Lesson 4.10’s run, the guard stands at (4, 0), the player at (8, 0), and a wall fills the box from (5.5, minus 1) to (6.5, 1) between them. The samples are (4.0, 0), (4.1, 0), (4.2, 0), and so on. The 16th, (5.5, 0), is the first inside the wall, because 5.5 less than or equal to 5.5 less than or equal to 6.5 and minus 1 less than or equal to 0 less than or equal to 1 (a point on the edge counts as inside), so the function returns false long before it reaches the player.
+
+Predict first
+
+Same guard at (4, 0) and player at (8, 0), samples every 0.1: x equals 4.0, 4.1, 4.2 and so on. This time a thin wall covers only x from 5.62 to 5.68 (y from minus 1 to 1).
+
+Does line_of_sight find the thin wall?
+
+Answer: No: every sample misses it, so the guard sees the player. The wall is 5.68 minus 5.62 equals 0.06 wide, thinner than the 0.1 step. Samples 5.6 and 5.7 land on either side, all 40 samples test clear, and the function returns true. Try the thin-wall example below.
+
+Walk the sight line one sample at a timeThe guard at (4, 0) tests points toward the player at (8, 0). A wall spans y from minus 1 to 1; set where it starts and ends along x, and the step between samples.
+
+The walk stops at the first sample inside
+
+Section: Samples on y equals 0, guard at x 4, player at x 8.
+
+Samples land every 0.1 from x 4.0. The first one inside the wall is x 5.5, so the walk stops after 16 of 40 samples.
 
 Additional detail: Optional reference: the lab's second line-of-sight test.
 
 A line can also slip past a wall. From (0, 0) to (4, 3), the line rises 3 for every 4 across, so every point on it has y equals 3 divided by 4 times x equals 0.75 times x. A wall from (2, minus 1) to (3, 1) covers x from 2 to 3, where the line’s y runs from 0.75 times 2 equals 1.5 to 0.75 times 3 equals 2.25, higher than the wall’s top edge at y equals 1. No sample lands inside, and the guard sees the player. The lab’s tests check both cases.
 
-Stepping has a blind spot: a wall thinner than 0.1 can sit between two samples and be missed. It also costs more with distance. A check across the full view distance takes 10 divided by 0.1 equals 100 samples, each tested against every wall. Engines instead compute exactly where a ray crosses each collision shape, a ray cast, but the question they answer is the same one.
+Besides that blind spot for walls thinner than the step, stepping costs more with distance. A check across the full view distance takes 10 divided by 0.1 equals 100 samples, each tested against every wall. Engines instead compute exactly where a ray crosses each collision shape, a ray cast, but the question they answer is the same one.
 
 Section: Choose among actions: utility scoring.
 
