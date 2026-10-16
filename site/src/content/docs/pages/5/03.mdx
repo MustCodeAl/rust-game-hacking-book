@@ -334,10 +334,16 @@ translate it for each.
 <span id="variants-instancing-and-shaders-that-do-not-draw" aria-hidden="true" />
 <span id="why-many-small-draws-cost-frame-time" aria-hidden="true" />
 
-Shader variants, instancing, compute shaders, and the CPU cost of many small
-draws are worked through in
-[Lesson 7.11](/pages/5/11/#variants-instancing-and-shaders-that-do-not-draw),
-beside the bound state that each Direct3D draw carries.
+Each on/off switch in a shader's source doubles the programs that can be
+compiled, so three switches give 2 × 2 × 2 = 8 **variants**. **Instancing** draws
+many copies of one mesh in one call, with a 4 × 4 matrix of 16 four-byte floats,
+64 bytes, per copy. A **compute shader** does not draw at all: it reads and writes
+buffers for work such as particles. And every draw costs CPU time even when the
+GPU's share is tiny: at 5 microseconds each, 10,000 draws take 50 ms, three
+16.67 ms frames. If halving the window's pixel count leaves the frame time
+unchanged, the CPU is the limit.
+[Lesson 7.11](/pages/5/11/#variants-instancing-and-shaders-that-do-not-draw)
+works through these beside the bound state that each Direct3D draw carries.
 
 <span id="turn-the-wrapper-into-the-actual-urban-terror-wallhack" aria-hidden="true" />
 
@@ -363,7 +369,12 @@ combination — flatten the depth, then stop testing it — that pushes
 highlighted geometry through walls; neither call does it alone.
 
 The exact-build Urban Terror 4.3.4 wallhack applies that combination to
-player-sized draws from a cave inside `glDrawElements`. It is in
+player-sized draws from a cave inside `glDrawElements`. The cave saves the flags
+and every general-purpose register before calling its helper, because the
+interrupted OpenGL function expects them unchanged; it fills the sixth replaced
+byte with a `nop` so no fragment of the old instruction remains; it restores
+normal depth state on the next non-highlighted draw; and it is switched off
+before its code patch is removed, so `GL_ALWAYS` is never left active. It is in
 [Lesson 8.8](/pages/8/08/#turn-the-wrapper-into-the-actual-urban-terror-wallhack),
 after the DLL loading and detour lessons that its installation depends on.
 
