@@ -63,7 +63,8 @@ export const detourRouteCells: readonly CellScenario[] = [{
       row('Hook site, 6 bytes', [h('E9 rel32', 'purple', 5, { sub: 'jmp cave' }), c('90', 'gray', 1, { sub: 'nop' })], { ticks: { left: '0x00CCAF8A', right: '0x00CCAF8F' } }),
     )]),
     frame('In the cave: extra work, then the saved bytes', 'The extra logic runs between save and restore. Then the two whole instructions the jump covered run here, once.', [plain(
-      row('Cave', [h('save', 'green'), h('extra logic', 'green', 2), h('restore', 'green'), h('8B 01', 'blue', 1, { sub: 'mov eax,[ecx]' }), h('8D 74 26 00', 'blue', 2, { sub: 'lea esi,[esi]' }), c('jmp back', 'purple')]),
+      row('Cave: the added work', [h('save', 'green'), h('extra logic', 'green', 2), h('restore', 'green')]),
+      row('Cave: the saved bytes', [h('8B 01', 'blue', 2, { sub: 'mov eax,[ecx]' }), h('8D 74 26 00', 'blue', 2, { sub: 'lea esi,[esi]' }), c('jmp back', 'purple', 1)]),
     )]),
     frame('Back at 0x00CCAF90', 'jmp back lands on 0x00CCAF8A + 6 = 0x00CCAF90, the first byte the patch did not touch.', [plain(
       row('Game code again', [c('jmp back', 'purple', 2, { sub: 'from the cave' }), h('0x00CCAF90', 'blue', 6, { sub: 'first untouched instruction' })]),
@@ -74,7 +75,7 @@ export const detourRouteCells: readonly CellScenario[] = [{
 /** Lesson 3.10 (pages/3/05.mdx): appending to a full vector moves every element; a cached element address goes stale. */
 const elements = (hue: 'blue' | 'gray', cachedSub: string, extra: Cell[] = [], ghost = false): Cell[] => [
   c('0', hue, 1, { ghost }), c('1', hue, 1, { ghost }), c('2', hue, 1, { ghost }),
-  h('3', ghost ? 'red' : hue, 1, { sub: cachedSub, ghost }),
+  h('3', ghost ? 'red' : hue, 3, { sub: cachedSub, ghost }),
   c('…', hue, 1, { ghost }), c('31', hue, 1, { ghost }), ...extra,
 ];
 export const collectionGrowthCells: readonly CellScenario[] = [{
@@ -82,16 +83,16 @@ export const collectionGrowthCells: readonly CellScenario[] = [{
   title: 'Growing a full vector moves every element',
   summary: '32-byte entities, begin = 0x04531000. A tool cached element 3 at 0x04531000 + 3 × 32 = 0x04531060.',
   frames: [
-    frame('Full: 32 of 32 slots used', '32 elements × 32 bytes = 1024 = 0x400 bytes, so end = 0x04531400 = capacity_end. There is no room for one more.', [
+    frame('Full: 32 of 32 slots used', '32 × 32 bytes = 0x400, so end = 0x04531400 = capacity_end: no room for one more.', [
       plain(row('Old block at 0x04531000', elements('blue', '0x04531060'), { ticks: { left: 'begin', right: 'end = capacity_end' } })),
     ]),
-    frame('Append a 33rd: allocate, copy, add', 'The vector asks for a bigger block (here 64 slots at 0x06120000), copies all 32 elements and puts the new one at index 32.', [
-      plain(row('New block at 0x06120000', elements('blue', '0x06120060', [h('32', 'green', 1, { sub: 'new' }), c('', 'gray', 1, { ghost: true })]), { link: 'copy 32 elements' })),
+    frame('Append a 33rd: allocate, copy, add', 'A bigger block (here 64 slots) receives copies of all 32 elements, then the new one.', [
+      plain(row('New block at 0x06120000', elements('blue', '0x06120060', [h('32', 'green', 1, { sub: 'new' })]), { link: 'copy 32 elements' })),
     ]),
-    frame('The old block is freed', 'Element 3 now lives at 0x06120000 + 0x60 = 0x06120060. The cached 0x04531060 points into freed memory the allocator may hand to anything.', [
+    frame('The old block is freed', 'Element 3 is now at 0x06120000 + 0x60. The cached 0x04531060 points into freed memory.', [
       plain(
         row('Old block, now freed', elements('gray', '0x04531060: stale', [], true)),
-        row('New block at 0x06120000', elements('blue', '0x06120060', [c('32', 'green'), c('', 'gray', 1, { ghost: true })])),
+        row('New block at 0x06120000', elements('blue', '0x06120060', [c('32', 'green')])),
       ),
     ]),
   ],

@@ -68,10 +68,12 @@ const pointerPathRestart: LiveLab = {
         ? `Gold is at ${hex(field, 8)} in this run. Choose another run: the addresses change, the offsets do not.`
         : `Gold moved from 0x0691A230 in run 1 to ${hex(field, 8)}. The same three offsets found it, because every read used the pointer stored in this run.`;
     return frame(`Run ${id}: add, read, add, read, add`, caption, [plain(
-      row('Base + 0x01A2B3C0, read', [c(hex(run.base, 8), 'orange', 2, { sub: 'module base' }), c(hex(root, 8), 'orange', 2, { sub: 'root slot' }), h(hex(run.manager, 8), 'blue', 2, { sub: 'manager' })]),
-      row('Manager + 0x18, read', [c(hex(link, 8), 'orange', 3, { sub: 'slot' }), h(hex(run.player, 8), 'blue', 3, { sub: 'player' })]),
-      row('Player + 0x30, read 4 bytes', [c(hex(field, 8), 'orange', 3, { sub: 'gold field' }), last === 'field' ? h('250', 'green', 3, { sub: 'gold' }) : c('250', 'blue', 3, { sub: 'gold' })]),
-      ...(last === 'extra' ? [row('Read one more pointer', [c('0x000000FA', 'red', 3, { sub: '250 as an address' }), h('fault', 'red', 3, { sub: 'nothing mapped' })])] : []),
+      row('Module base + 0x01A2B3C0', [c(hex(run.base, 8), 'orange', 3, { sub: 'module base' }), h(hex(root, 8), 'orange', 3, { sub: 'root slot' })]),
+      row('Read it, then + 0x18', [h(hex(run.manager, 8), 'blue', 3, { sub: 'manager' }), c(hex(link, 8), 'orange', 3, { sub: 'slot' })]),
+      row('Read it, then + 0x30', [h(hex(run.player, 8), 'blue', 3, { sub: 'player' }), c(hex(field, 8), 'orange', 3, { sub: 'gold field' })]),
+      last === 'field'
+        ? row('Read 4 bytes there', [h('250', 'green', 6, { sub: 'gold' })])
+        : row('Read a pointer instead', [c('0x000000FA', 'red', 3, { sub: '250 as an address' }), h('fault', 'red', 3, { sub: 'nothing mapped' })]),
     )]);
   },
 };
@@ -321,7 +323,7 @@ const f32Fields: LiveLab = {
     return frame('Bytes, fields, value', caption, [plain(
       row('In memory, lowest byte first', memory.map((part, index) => c(byteText(part), 'orange', 1, { sub: `+${index}` }))),
       row('Sign, exponent, fraction', [
-        h(String(sign), 'purple', 1, { sub: sign ? 'negative' : 'positive' }),
+        h(String(sign), 'purple', 1, { sub: sign ? '−' : '+' }),
         h(`${exponentBits.slice(0, 4)} ${exponentBits.slice(4)}`, 'yellow', 3, { sub: exponentSub }),
         h(fractionText, 'blue', 6, { sub: fractionSub }),
       ], { link: `regroup ${hex(word, 8)}` }),
