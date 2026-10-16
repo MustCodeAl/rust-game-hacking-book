@@ -246,8 +246,7 @@ export const vmStackCells: readonly CellScenario[] = [{
   title: 'A stack machine adds 5 and 2',
   summary: 'Constants push values; Add pops two and pushes their sum. The stack is the working memory.',
   frames: [
-    vmFrame('Before running: the stack is empty', 'Three instructions wait at indexes 0, 1 and 2.', null, []),
-    vmFrame('Constant(0): push 5', 'The instruction at index 0 pushes the constant 5.', 0, ['5']),
+    vmFrame('Constant(0): push 5', 'The stack starts empty. The instruction at index 0 pushes the constant 5.', 0, ['5']),
     vmFrame('Constant(1): push 2', 'The instruction at index 1 pushes 2 on top of 5.', 1, ['5', '2']),
     vmFrame('Add: pop both, push 7', 'Add takes 2 and 5 off the stack and pushes 7.', 2, ['7'], ['2', '5']),
   ],
@@ -265,10 +264,9 @@ export const signalDiagnosisCells: readonly CellScenario[] = [{
   frames: [
     verdict('One unusual fixture sample', 'A single odd sample is not enough to conclude anything.', 'one unusual sample', 'NeedsAnotherSample', 'yellow'),
     verdict('The same signal repeats', 'A repeat makes it worth finding out why.', 'a repeated signal', 'NeedsDiagnosis', 'orange'),
-    verdict('The signal is explained', 'Once the cause is understood the signal can return to the baseline.', 'an explained signal', 'Baseline', 'green'),
-    frame('An environmental assessment is not validation', 'Concluding that the environment explains a signal does not check what the game accepts. Validation still happens where state changes.', [
-      panel('Assessment', 'purple', [row('Environment', [c('the signal is explained', 'purple', 4)])]),
-      panel('State-changing game boundary', 'red', [row('Still required', [h('validate every change here', 'red', 4)])]),
+    frame('The signal is explained: back to Baseline', 'Explaining a signal does not check what the game accepts. Validation still happens where state changes.', [
+      panel('Fixture evidence', 'blue', [row('Seen', [h('an explained signal', 'yellow', 4)])]),
+      panel('Decision', 'purple', [row('Next state', [h('Baseline', 'green', 2), c('still validate every change', 'red', 2)], { link: 'leads to' })]),
     ]),
   ],
 }];
@@ -285,8 +283,7 @@ export const healthLayoutCells: readonly CellScenario[] = [{
     frame('A clamp relates their values', 'With H for health and M for max health, the clamp keeps 0 ≤ H ≤ M.', [
       panel('The relation', 'purple', [row('Values', [c('0', 'gray'), c('≤', 'purple'), h('H', 'green'), c('≤', 'purple'), h('M', 'teal')])]),
     ]),
-    frame('These offsets belong to one exact build', 'Another build of the game may move the fields, so the numbers describe this build only.', [
-      panel('Candidate object', 'blue', [row('Object bytes', [c('health', 'green', 4, { sub: '0x138' }), c('max health', 'teal', 4, { sub: '0x13C' })])]),
+    frame('These offsets belong to one exact build', 'Another build of the game may move the fields, so 0x138 and 0x13C describe this build only.', [
       panel('Warning', 'yellow', [row('Scope', [h('one exact build', 'yellow', 4, { sub: 'recheck after an update' })])]),
     ]),
   ],
@@ -304,10 +301,7 @@ export const logRowsCells: readonly CellScenario[] = [{
     frame('Four rows in the order they were logged', 'Each row has a sequence number, an event, a correlation ID and sometimes a generation.', [
       panel('Log', 'blue', [logRow(41, 'denied', 7, '', 'none'), logRow(42, 'allowed', 8, '', 'none'), logRow(43, 'state changed', 7, 'gen 13', 'none'), logRow(44, 'state changed', 8, 'gen 14', 'none')]),
     ]),
-    frame('Follow correlation 7', 'Rows 41 and 43 share the ID 7, so they belong to the same request.', [
-      panel('Rows with correlation 7', 'blue', [logRow(41, 'denied', 7, '', 'match'), logRow(43, 'state changed', 7, 'gen 13', 'match')]),
-    ]),
-    frame('Correlation 7 changed state after being denied', 'Row 41 denied the request, yet row 43 records a change at generation 13: something is wrong.', [
+    frame('Correlation 7 changed state after being denied', 'Rows 41 and 43 share the ID 7, so they are one request. Row 41 denied it, yet row 43 records a change at generation 13: something is wrong.', [
       panel('Rows with correlation 7', 'red', [logRow(41, 'denied', 7, '', 'match'), logRow(43, 'state changed', 7, 'gen 13', 'bad')]),
     ]),
     frame('Correlation 8 was allowed, then changed', 'That order is what the log should show.', [
@@ -380,8 +374,7 @@ export const emulatorAddCells: readonly CellScenario[] = [{
   title: 'The toy emulator fetches and runs ADD #5',
   summary: 'Two bytes in memory make one instruction. Fetching reads them; executing changes A and PC and spends cycles.',
   frames: [
-    emulatorFrame('Before: A is 10 and PC is 0x04', 'The program counter points at the opcode byte.', '10', '0x04', '0', 'none'),
-    emulatorFrame('Fetch the opcode 03 at 0x04', 'Opcode 03 means ADD with an immediate operand.', '10', '0x04', '0', 'opcode'),
+    emulatorFrame('Fetch the opcode 03 at PC 0x04', 'A starts at 10. Opcode 03 means ADD with an immediate operand.', '10', '0x04', '0', 'opcode'),
     emulatorFrame('Fetch the operand 05 at 0x05', 'The operand byte follows the opcode.', '10', '0x06', '1', 'operand'),
     emulatorFrame('Execute: A = 10 + 5 = 15', 'PC has advanced to 0x06 and the instruction cost two cycles. The instruction bytes stay in memory.', '15', '0x06', '2', 'result'),
   ],
@@ -391,19 +384,18 @@ export const emulatorAddCells: readonly CellScenario[] = [{
 const budgetParts: readonly (readonly [number, Hue])[] = [[2, 'blue'], [12, 'green'], [11, 'orange'], [4, 'teal']];
 const budgetFrame = (label: string, caption: string, done: number, gold: string): CellFrame => frame(label, caption, [
   panel('Cycle budget (29 cycles, drawn to scale)', 'purple', [
-    row('Cycles', budgetParts.map(([span, hue], index) => index < done ? (index === done - 1 ? h : c)('', hue, span) : c('', hue, span, { ghost: true })), { ticks: { left: '0', right: '29 cycles' } }),
+    row('Cycles', budgetParts.map(([span, hue], index) => index < done ? (index >= done - (done === 2 ? 2 : 1) ? h : c)(`${span}`, hue, span) : c(`${span}`, hue, span, { ghost: true })), { ticks: { left: '0', right: '29 cycles' } }),
     row('Gold on the display', [h(gold, 'yellow', 1)]),
   ]),
-], { legend: [{ hue: 'blue', text: 'LDX: 2' }, { hue: 'green', text: 'first loop pass: 12' }, { hue: 'orange', text: 'second pass: 11' }, { hue: 'teal', text: 'display and halt: 4' }] });
+]);
 export const cycleBudgetCells: readonly CellScenario[] = [{
   id: 'cycle-budget', tab: 'Cycle budget',
   title: 'Where 29 cycles go',
   summary: 'The program loads X, loops twice and then shows gold. Each part has a cost in cycles.',
   frames: [
-    budgetFrame('LDX: 2 cycles', 'Loading X is the first instruction. Gold is still 10.', 1, '10'),
-    budgetFrame('First loop pass: 12 cycles', 'The first pass adds to gold, making it 15. 14 cycles so far.', 2, '15'),
-    budgetFrame('Second loop pass: 11 cycles', 'The second pass is one cycle cheaper and makes gold 20. 25 cycles so far.', 3, '20'),
-    budgetFrame('Display and halt: 4 cycles', 'The display shows 20 and the program halts after 29 cycles in total.', 4, '20'),
+    budgetFrame('LDX and the first loop pass: 2 + 12 = 14', 'Loading X costs 2 cycles; the first pass costs 12 and makes gold 15.', 2, '15'),
+    budgetFrame('Second loop pass: 14 + 11 = 25', 'The second pass is one cycle cheaper and makes gold 20.', 3, '20'),
+    budgetFrame('Display and halt: 25 + 4 = 29', 'The display shows 20 and the program halts after 29 cycles in total.', 4, '20'),
   ],
 }];
 
@@ -417,11 +409,9 @@ export const resetDataCells: readonly CellScenario[] = [{
   title: 'What startup does before Rust uses its statics',
   summary: 'On reset the RAM is not initialised. Startup copies .data from flash and zero-fills .bss.',
   frames: [
-    resetFrame('The memory map', 'Flash is 256 KiB at 0x00000000 to 0x0003FFFF. SRAM is 64 KiB at 0x20000000 to 0x2000FFFF.', '?', '?', false, false),
-    resetFrame('After reset, RAM holds nothing useful', 'The .data and .bss counters have unknown contents.', '??', '??', false, false),
+    resetFrame('After reset, RAM holds nothing useful', 'Flash is 256 KiB from 0x00000000; SRAM is 64 KiB from 0x20000000. The .data and .bss counters in SRAM have unknown contents.', '??', '??', false, false),
     resetFrame('Startup copies .data from flash', 'The initial value 7 stored in flash is copied into the .data counter in RAM.', '7', '??', true, false, 'copy from flash'),
-    resetFrame('Startup zero-fills .bss', 'The reserved .bss counter is filled with zero.', '7', '0', false, true, 'fill with zero'),
-    resetFrame('Now Rust may use both counters', 'Both statics hold their expected starting values before main runs.', '7', '0', false, false),
+    resetFrame('Startup zero-fills .bss: now Rust may use both', 'The .bss counter is filled with zero, so both statics hold their starting values before main runs.', '7', '0', false, true, 'fill with zero'),
   ],
 }];
 
@@ -431,8 +421,7 @@ export const eventCopiesCells: readonly CellScenario[] = [{
   title: 'Three notifications can describe one event',
   summary: 'Counting reports is not counting events. Distinct events still need their own evidence.',
   frames: [
-    frame('Event A happens once', 'Something happens in the game one time.', [panel('The game', 'blue', [row('Events', [h('event A', 'blue', 4)])])]),
-    frame('Three notifications describe it', 'The game log, a plugin forward and a player reference each mention event A.', [
+    frame('Event A happens once; three notifications describe it', 'The game log, a plugin forward and a player reference each mention the one event A.', [
       panel('The game', 'blue', [row('Events', [c('event A', 'blue', 4)])]),
       panel('Notifications', 'orange', [row('Reports of event A', [h('game log', 'orange'), h('plugin forward', 'orange'), h('player reference', 'orange')], { link: 'describe' })]),
     ]),
@@ -461,7 +450,6 @@ export const protectionSpansCells: readonly CellScenario[] = [{
   frames: [
     frame('The observation window and the game', 'The game runs for part of the window.', spans(false, false)),
     frame('Boot-managed protection starts at boot', 'It is already active before the game starts and continues after it ends, up to the right edge of the window.', spans(true, false)),
-    frame('Session-managed protection follows the game', 'It starts with the game and stops when the game ends.', spans(true, true)),
-    frame('Both may have kernel privilege while active', 'The difference is when they are active, not how privileged they are. These are not measured timelines of any product.', spans(true, true)),
+    frame('Session-managed protection follows the game', 'It starts and stops with the game. Both may have kernel privilege while active: they differ in when, not in how privileged.', spans(true, true)),
   ],
 }];

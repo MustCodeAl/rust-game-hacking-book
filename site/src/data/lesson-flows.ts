@@ -182,10 +182,8 @@ export const hookDrainFlows: readonly FlowScenario[] = [{
   lanes: [{ id: 'remover', label: 'Remover' }, { id: 'hook', label: 'Hook callbacks' }],
   steps: [
     { from: 'remover', to: 'hook', kind: 'control', label: 'Request removal: block new callbacks', caption: 'New callback work is refused from this moment, so the count can only go down.' },
-    { from: 'hook', to: 'hook', kind: 'local', label: 'Active callbacks: 2', caption: 'Two calls are still running inside the hook, so its code and data must stay alive.' },
-    { from: 'hook', to: 'hook', kind: 'local', label: 'Active callbacks: 1', caption: 'One caller has returned.' },
-    { from: 'hook', to: 'hook', kind: 'local', label: 'Active callbacks: 0', caption: 'The last caller has returned. Nothing is running inside the hook any more.' },
-    { from: 'remover', to: 'hook', kind: 'data', label: 'Restore the exact original site bytes', caption: 'Only now is it safe to put the original bytes back.' },
+    { from: 'hook', to: 'hook', kind: 'local', label: 'Active callbacks: 2, then 1, then 0', caption: 'While two calls are still running inside the hook, its code and data must stay alive. Each caller that returns lowers the count by one.' },
+    { from: 'remover', to: 'hook', kind: 'data', label: 'Restore the exact original site bytes', caption: 'At 0, nothing is running inside the hook, so it is now safe to put the original bytes back.' },
     { from: 'remover', to: 'remover', kind: 'local', label: 'Release the hook’s resources', caption: 'The hook’s memory is freed last, after nothing can reach it.' },
   ],
 }];
