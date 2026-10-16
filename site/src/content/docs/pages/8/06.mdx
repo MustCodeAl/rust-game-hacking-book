@@ -11,13 +11,13 @@ sidebar:
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
 import Frame from '../../../../components/kit/Frame.astro';
-import { Expandable, Fields, Panel, ParamField, Steps } from '../../../../components/kit';
+import { Accordion, Expandable, Fields, Panel, ParamField, Steps } from '../../../../components/kit';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## “Send a key” can mean three different things
 
-Our DLL now has a controlled lifecycle, and the scanner can do work off the game thread. A local tool also needs a deliberate way to start or stop a feature. Pressing a menu hotkey, sending a synthetic key to an offline game, and calling a window procedure solve different problems, even though all three sound like “input.” Lesson 6.6 explained what a game does with input once it has arrived: the three layers of device, state, and action, and why presses are edges. This lesson is about the ways Windows delivers that input and the ways a tool can read or send it.
+Our DLL now has a controlled lifecycle, and the scanner can do work off the game thread. A local tool also needs a deliberate way to start or stop a feature. Pressing a menu hotkey, sending a synthetic key to an offline game, and calling a window procedure solve different problems, even though all three sound like “input.” This lesson is about the ways Windows delivers input and the ways a tool can read or send it. [Lesson 8.5](/pages/8/11/) follows the input inside a game once it has arrived, from device events to per-frame state and actions.
 
 Windows has several input paths because programs receive interaction in
 different ways:
@@ -123,12 +123,7 @@ flowchart TD
 ```
 
 `TranslateMessage` can post character messages derived from key
-messages; `DispatchMessage` sends a retrieved message to its
-window procedure. `PeekMessage` reports no available queued
-message without waiting, which is why the game-style loop can
-continue its own work. The exact handling of Raw Input and other
-message types varies by application; do not assume every game
-consumes `WM_KEYDOWN` as its gameplay input. See Microsoft's
+messages. See Microsoft's
 [`GetMessageW`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmessagew)
 and [`PeekMessageW`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-peekmessagew)
 references for their return values and queue behavior.
@@ -330,52 +325,10 @@ fn tap_key(key: VIRTUAL_KEY) -> anyhow::Result<()> {
 
 A key event is an `INPUT` whose `type` says “keyboard” and whose union holds a
 `KEYBDINPUT`. The code above sets two of its fields and leaves the rest at zero:
-
-<Fields title="KEYBDINPUT: the fields that matter">
-<ParamField name="wVk" type="virtual-key code" required>
-
-Which key. This is the number from `VK_INSERT` and its relatives, the same ones
-`GetAsyncKeyState` takes.
-
-</ParamField>
-<ParamField name="dwFlags" type="flags" default="0">
-
-Zero means the key goes down. `KEYEVENTF_KEYUP` means it is released, which is why
-the code sends one of each. `KEYEVENTF_SCANCODE` switches the event to the
-hardware scan code in `wScan` instead.
-
-<Expandable title="The four flags and how they combine">
-
-| Flag | Value | Meaning |
-|---|---|---|
-| `KEYEVENTF_EXTENDEDKEY` | `0x0001` | the scan code carries the `0xE0` prefix that extended keys use, such as the arrow keys in their own cluster and the right-hand Ctrl and Alt |
-| `KEYEVENTF_KEYUP` | `0x0002` | the key is released |
-| `KEYEVENTF_UNICODE` | `0x0004` | `wScan` holds a Unicode character instead of a key, and `wVk` must be zero |
-| `KEYEVENTF_SCANCODE` | `0x0008` | `wScan` identifies the key, and `wVk` is ignored |
-
-Flags are bits, so they combine with OR. Releasing a key by scan code sets two of them:
-`0x0008 | 0x0002 = 0x000A`, which is 8 + 2 = 10.
-
-</Expandable>
-
-</ParamField>
-<ParamField name="wScan" type="scan code" default="0">
-
-The key's position on the keyboard, used only with `KEYEVENTF_SCANCODE`. Some games
-read scan codes, so a virtual-key event does not reach them.
-
-</ParamField>
-<ParamField name="time" type="milliseconds" default="0">
-
-Zero lets Windows stamp the event itself.
-
-</ParamField>
-<ParamField name="dwExtraInfo" type="integer" default="0">
-
-An extra value the receiving window can read back. Almost nothing uses it.
-
-</ParamField>
-</Fields>
+`wVk`, the same virtual-key number `GetAsyncKeyState` takes, and `dwFlags`, zero
+for a key going down and `KEYEVENTF_KEYUP` for its release.
+[The input API reference](#keybdinput-fields-reference) lists every field and
+flag, including the scan-code form that some games read instead.
 
 Always release a key or mouse button during shutdown, even if a feature fails.
 `SendInput` is subject to **User Interface Privilege Isolation (UIPI)**: Windows
@@ -449,7 +402,80 @@ may poll device state, consume Raw Input, or ignore messages while unfocused.
 Sending a window message is therefore not a stronger version of `SendInput`;
 it is a different communication path.
 
-## Other Windows APIs worth knowing
+## A controlled lab checklist
+
+<Steps>
+
+1. Start only the course's local/offline target.
+2. Discover its window by PID and confirm it is foreground.
+3. Use `Insert` only to toggle your menu; detect the rising edge yourself.
+4. Send one balanced input pair and count the events `SendInput` accepted.
+5. Move focus to Notepad and verify the tool pauses instead of typing there.
+6. Shut down while a feature is active and verify every held input is released.
+7. Log errors and stop; never escalate privileges or flood retries automatically.
+
+</Steps>
+
+## Optional input API references
+
+The code above uses only the fields and calls already explained; these
+references list the remaining variants.
+
+<span id="keybdinput-fields-reference" aria-hidden="true" />
+
+<Accordion title="Optional reference: every KEYBDINPUT field and flag">
+
+<Fields title="KEYBDINPUT: the fields that matter">
+<ParamField name="wVk" type="virtual-key code" required>
+
+Which key. This is the number from `VK_INSERT` and its relatives, the same ones
+`GetAsyncKeyState` takes.
+
+</ParamField>
+<ParamField name="dwFlags" type="flags" default="0">
+
+Zero means the key goes down. `KEYEVENTF_KEYUP` means it is released, which is why
+the code sends one of each. `KEYEVENTF_SCANCODE` switches the event to the
+hardware scan code in `wScan` instead.
+
+<Expandable title="The four flags and how they combine">
+
+| Flag | Value | Meaning |
+|---|---|---|
+| `KEYEVENTF_EXTENDEDKEY` | `0x0001` | the scan code carries the `0xE0` prefix that extended keys use, such as the arrow keys in their own cluster and the right-hand Ctrl and Alt |
+| `KEYEVENTF_KEYUP` | `0x0002` | the key is released |
+| `KEYEVENTF_UNICODE` | `0x0004` | `wScan` holds a Unicode character instead of a key, and `wVk` must be zero |
+| `KEYEVENTF_SCANCODE` | `0x0008` | `wScan` identifies the key, and `wVk` is ignored |
+
+Flags are bits, so they combine with OR. Releasing a key by scan code sets two of them:
+`0x0008 | 0x0002 = 0x000A`, which is 8 + 2 = 10.
+
+</Expandable>
+
+</ParamField>
+<ParamField name="wScan" type="scan code" default="0">
+
+The key's position on the keyboard, used only with `KEYEVENTF_SCANCODE`. Some games
+read scan codes, so a virtual-key event does not reach them.
+
+</ParamField>
+<ParamField name="time" type="milliseconds" default="0">
+
+Zero lets Windows stamp the event itself.
+
+</ParamField>
+<ParamField name="dwExtraInfo" type="integer" default="0">
+
+An extra value the receiving window can read back. Almost nothing uses it.
+
+</ParamField>
+</Fields>
+
+</Accordion>
+
+<span id="other-windows-apis-worth-knowing" aria-hidden="true" />
+
+<Accordion title="Optional reference: other Windows APIs worth knowing">
 
 Choose by question instead of memorizing a giant list:
 
@@ -474,19 +500,7 @@ not closed with `CloseHandle`. This is why “wrap every `H...` value in the sam
 RAII type” is wrong. Learn the creation, borrowing, and destruction contract
 for each API family.
 
-## A controlled lab checklist
-
-<Steps>
-
-1. Start only the course's local/offline target.
-2. Discover its window by PID and confirm it is foreground.
-3. Use `Insert` only to toggle your menu; detect the rising edge yourself.
-4. Send one balanced input pair and count the events `SendInput` accepted.
-5. Move focus to Notepad and verify the tool pauses instead of typing there.
-6. Shut down while a feature is active and verify every held input is released.
-7. Log errors and stop; never escalate privileges or flood retries automatically.
-
-</Steps>
+</Accordion>
 
 ## References
 

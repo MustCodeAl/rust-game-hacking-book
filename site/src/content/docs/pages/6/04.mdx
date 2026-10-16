@@ -66,7 +66,7 @@ Keep the raw log immutable and rebuild the model from it. If a parser or transit
 
 <MarginNote kind="alternative">Think of the log as receipts and the session state as the current balance. Replay rebuilds the balance from those receipts.</MarginNote>
 
-Not every message is an event that happened exactly once. A **snapshot** can repeat a whole state, while an **acknowledgment** refers to an earlier request. A retransmitted request may appear twice. Store direction, sequence identifiers, and timing with each frame; without them, duplicate bytes cannot be told apart from duplicate actions. The real-time section below works through those identifiers in detail.
+Not every message is an event that happened exactly once: a snapshot can repeat a whole state, and a retransmitted request may appear twice. Store direction, sequence identifiers, and timing with each frame; without them, duplicate bytes cannot be told apart from duplicate actions. The real-time section below defines those message kinds and identifiers.
 
 ## Model states and messages separately
 
@@ -105,8 +105,6 @@ enum ProtocolError {
 The parser creates `Message` values. The session machine decides whether each value makes sense now.
 
 <FlowDiagram id="chat-state-gate" title="One parsed Chat, two session states" scenarios={chatStateFlows} />
-
-Parsing established what the message is. The session gate decides whether it is allowed now.
 
 ## Make transitions explicit
 
@@ -238,7 +236,7 @@ The test does not sleep for `after_ms`. It validates timing metadata determinist
 
 Deterministic replay requires controlling every input that affects a transition: message order, clock readings, random choices, configuration, and initial state. If the same fixture sometimes reaches different states, one of those inputs is still hidden. Pass it into the model instead of reading a real clock or global setting from inside `apply`.
 
-For example, imagine a lobby rule that closes a connection if no greeting arrives within five seconds. The same captured `Greeting` should be accepted at 4,900 ms and rejected at 5,100 ms when a test supplies those times to a virtual clock. Reading the wall clock inside `apply` would make the result depend on how fast the test machine runs. The small `replay` function above only checks that `after_ms` is plausible; a timeout test needs a clock-aware version of the model. The same rule applies when testing cooldowns or turn timers in another game.
+For example, imagine a lobby rule that closes a connection if no greeting arrives within five seconds. The same captured `Greeting` should be accepted at 4,900 ms and rejected at 5,100 ms when a test supplies those times to a virtual clock. Reading the wall clock inside `apply` would make the result depend on how fast the test machine runs, so that timeout test needs a clock-aware version of the model rather than the small `replay` above.
 
 ## Mutate one fact at a time
 
@@ -267,13 +265,11 @@ A length larger than the available payload has to fail before any message is dec
 
 For messages that may be retried, test **idempotence** explicitly. Applying the same acknowledgment twice should either preserve the same state or return a clear duplicate error; it should not create a second match, grant a reward twice, or move backward in the session.
 
-Think of a toy server processing a request `claim reward #42`. If the reply is lost, the client may send the same request again. The server can remember request `#42` and return the earlier result, or reject it as a duplicate; adding five gold again would be a bug. The identifier is what makes “same request” testable. A repeated `Chat` with identical text could instead be a new message, so matching bytes alone is not a safe duplicate rule.
+[Lesson 9.1's purchase retry](/pages/6/01/#one-purchase-one-effect) showed the server side: it remembers each request identifier and returns the earlier result, or rejects the repeat as a duplicate. In a replay, that identifier is what makes “same request” testable. A repeated `Chat` with identical text could instead be a new message, so matching bytes alone is not a safe duplicate rule.
 
 ## Why replay beats manual clicking
 
-A capture preserves one session. A replay turns it into a repeatable test: when you change the parser, framing code, or session rules, the same frames run through them again in milliseconds.
-
-Keep live-network code at the edge. Feed the bytes it receives into the same parser and state machine tested by replay. That design keeps transport separate from parsing and makes the protocol model reproducible. 🌐
+Clicking through a live session tests one run once. A replay sends the same frames through a changed parser, framing code, or session rule again in milliseconds. Keep live-network code at the edge and feed the bytes it receives into the same parser and state machine tested by replay. That design keeps transport separate from parsing and makes the protocol model reproducible. 🌐
 
 ## From session replay to real-time state
 
@@ -307,7 +303,7 @@ sequenceDiagram
     C->>R: interpolate a display state
 ```
 
-A field's meaning depends on the kind of message carrying it. Imagine a player at `(10, 15)` requesting a move north to `(10, 14)`. The request is an **intent**; the coordinate is a desired destination. An **acknowledgment** confirms that a command arrived or was applied. A **snapshot** reports enough state to stand alone, while a **delta** reports only changes from an identified earlier state. If the server replies with `(10, 14)`, that coordinate is an accepted position. Equal-looking bytes can have different authority.
+A field's meaning depends on the kind of message carrying it. In [Lesson 9.1's move north](/pages/6/01/#client-and-server), `(10, 14)` in the request is a desired destination, an **intent**; the same `(10, 14)` in the server's reply is an accepted position. An **acknowledgment** confirms that a command arrived or was applied. A **snapshot** reports enough state to stand alone, while a **delta** reports only changes from an identified earlier state, its **baseline**. Equal-looking bytes can have different authority.
 
 Several similar-looking states can therefore coexist:
 
@@ -366,10 +362,8 @@ the window. The exact window is part of the protocol contract and deserves
 boundary tests; [RFC 1982's serial-number arithmetic](https://www.rfc-editor.org/info/rfc1982/)
 explains the half-range limit.
 
-A **snapshot** contains enough state to stand alone. A **delta** contains changes
-relative to a named baseline. Applying a delta to the wrong baseline may parse
-perfectly and still create nonsense. Robust tooling keeps the baseline ID with
-the bytes, refuses missing dependencies, and bounds how long incomplete state
-may wait.
+Applying a delta to the wrong baseline may parse perfectly and still create
+nonsense. Robust tooling keeps the baseline ID with the bytes, refuses missing
+dependencies, and bounds how long incomplete state may wait.
 
 The live bot in Lesson 8.5 returns to the simpler Wesnoth lobby conversation. It uses the same separation between framed bytes, decoded messages, and legal session actions that replay made visible.

@@ -234,13 +234,12 @@ self.cursor = if self.cursor == 0 { last } else { self.cursor - 1 };
 
 ### `GetAsyncKeyState` reports a level, not a press
 
-Lesson 6.7 made this point about input paths and it decides how a menu feels.
 `GetAsyncKeyState` answers "is this key down right now?", which is true on
-every frame of one press. A menu that acts on that answer scrolls the whole
-list in a fraction of a second.
-
-What a menu needs is the *edge* — the frame where the key changed from up to
-down — which means remembering the previous frame:
+every frame of one press, so a menu that acts on it scrolls the whole list in a
+fraction of a second. Act on the *edge* instead, the frame where the key
+changed from up to down, as
+[Lesson 8.6's menu hotkey](/pages/8/07/#add-a-menu-hotkey-without-accidental-repeats)
+does:
 
 <MarginNote kind="brief">A menu advances on a press transition, rather than on every frame in which the key remains down.</MarginNote>
 
@@ -249,8 +248,7 @@ let pressed = current.down && !previous.down;
 ```
 
 The lab test holds the key for ten frames and asserts the cursor moved exactly
-one row. That is the behavior to aim for, and it is the same edge-versus-level
-distinction Lesson 4.10 used for bot events.
+one row.
 
 ### Build the strings without allocating every frame
 
@@ -258,23 +256,24 @@ The render path runs thousands of times per second. Clear and reuse one buffer
 rather than allocating a fresh `Vec` per frame; the lab asserts the buffer's
 capacity is unchanged after a second render.
 
-The menu should also own only its own state. Keep the same split Lesson 6.8
-used: the menu produces settings and commands, and the worker reads them. A
-menu that reaches directly into game memory while the render thread is drawing
-has put a second writer on the same data.
+The menu should also own only its own state. Keep
+[Lesson 8.6's split](/pages/8/07/#give-the-worker-commands-not-widget-references):
+the menu produces settings and commands, and the worker reads them. A menu that
+writes game memory while the render thread draws puts a second writer on the
+same data.
 
 
 <CodeTrace trace="handoff-menu-wrap" />
 
 ## Restore the site, not just the feature
 
-Closing the menu is a display change. Unloading the tool is a lifetime change,
-and Lesson 7.12's ordering applies without modification: stop the worker, wait
-for it to leave the hooked path, restore the displaced bytes, then release the
-DLL. While an in-flight frame is still executing the detour, the hook is
-**draining**: no new calls should enter, but the current call must finish before
-its code is removed. Lesson 6.10 established this lifetime rule for a general
-hook manager; the render hook is another application of it.
+Closing the menu is a display change. Unloading the tool is a lifetime change
+with a fixed order: stop the worker, wait for it to leave the hooked path,
+restore the displaced bytes, then release the DLL. While an in-flight frame is
+still executing the detour, the hook is **draining**: no new calls should enter,
+but the current call must finish before its code is removed.
+[Lesson 8.10](/pages/13/05/#drain-before-removing) applies the same rule to a
+general hook manager.
 
 <LessonVideo
   title="Combined tools running in AssaultCube"
