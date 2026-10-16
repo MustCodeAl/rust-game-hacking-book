@@ -30,11 +30,11 @@ u32 big-endian compressed length
 gzip-compressed Simple WML payload
 ```
 
-The first four bytes do **not** include themselves in the length. If the header ends in `4E`, the following gzip member is 78 bytes and the complete TCP payload is 82 bytes.
+The first four bytes do **not** include themselves in the length. If the header ends in `4E`, the following gzip member is 78 bytes and the complete TCP payload is 4 + 78 = 82 bytes. The length is big endian, so 78, hexadecimal `0x0000004E`, appears on the wire as `00 00 00 4E`; `u32::from_be_bytes` states that order directly.
 
-This four-byte prefix solves a problem TCP does not solve for us: message boundaries. A TCP `read` might return two header bytes now and the rest later, or it might return several complete frames together. The receiver therefore accumulates bytes until it has four, interprets the advertised length, then accumulates exactly that many payload bytes.
-
-Big-endian means the most significant byte comes first. A length of 78 is hexadecimal `0x0000004E`, so the wire contains `00 00 00 4E`. `u32::from_be_bytes` documents that agreement directly; shifting bytes by hand would be harder to review.
+[Lesson 9.1 showed why a receiver needs this prefix](/pages/6/01/#tcp-is-a-stream):
+it accumulates bytes until it has the four-byte header, then exactly the
+advertised number of payload bytes, however TCP splits them across reads.
 
 The header is a claim from the sender, not permission to allocate whatever
 it asks for. Compare two headers followed by four bytes currently available:
@@ -80,10 +80,9 @@ TCP byte stream
   -> game meaning: a lobby chat message
 ```
 
-Each layer answers a different question. TCP delivers ordered bytes, not chat
-messages. Framing finds one complete compressed unit. Gzip recovers plain bytes.
-UTF-8 and WML give those bytes text structure. Only the game-level schema says
-that `sender`, `room`, and `message` form a chat event.
+[Lesson 9.1 introduced these layers](/pages/6/01/#one-message-is-wrapped-in-several-layers);
+here each one becomes its own parsing step. Only the last, the game-level
+schema, says that `sender`, `room`, and `message` form a chat event.
 
 <MarginNote kind="brief">Framing, compression, text encoding, syntax, and session meaning can each fail independently.</MarginNote>
 
@@ -205,7 +204,7 @@ caller reject hidden trailing data after one complete frame.
 
 The lifetime `'a` says every slice returned by the cursor borrows from the original input. The cursor owns only a position number; it does not copy payloads or create references that outlive the frame.
 
-`take` is the one place that advances parsing state. It first calculates the end with `checked_add`, asks the slice for a bounded range with `get`, and advances only after both checks succeed. This gives later field readers a simple promise: success consumes exactly the requested bytes; failure consumes nothing useful and returns an error.
+`take` is the one place that advances parsing state. `checked_add` stops a hostile count from wrapping the end to a small position, and `get` returns `None` for a range past the buffer. Later field readers get a simple promise: success consumes exactly the requested bytes; failure consumes nothing and returns an error.
 
 `try_into()` converts a four-byte slice into `[u8; 4]`, the fixed-size array required by `from_be_bytes`. The conversion can only succeed after `take(4)`, but keeping the error path explicit makes the invariant visible instead of using `unwrap()`.
 
@@ -273,8 +272,8 @@ Decompressing a captured chat frame reveals readable Simple WML:
 
 That is the actual structure we will rebuild.
 
-Simple WML is a tree-shaped text format. Bracketed tags open and close nodes;
-quoted assignments store fields. This lesson handles the one chat-message shape
+Simple WML nests these bracketed tags and quoted fields as a tree. This lesson
+handles the one chat-message shape
 needed by our local Wesnoth proxy. If you extend the tool to inspect maps,
 units, or arbitrary add-on messages, use a real tokenizer that handles escaping,
 nested nodes, repeated fields, and comments instead of adding more substring
