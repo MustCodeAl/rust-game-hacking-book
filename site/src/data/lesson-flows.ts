@@ -126,8 +126,7 @@ export const luaLogFlows: readonly FlowScenario[] = [{
   steps: [
     { from: 'host', to: 'lua', kind: 'control', label: 'Run the script', caption: 'The host asks its Lua runtime to execute the script.' },
     { from: 'lua', to: 'host', kind: 'request', label: 'game.log("observer started")', caption: 'game.log was registered by the host, so this call crosses back into native code with the message.' },
-    { from: 'host', to: 'host', kind: 'local', label: 'Logging callback handles the message', caption: 'The host decides what logging means: a file, a console or a buffer.' },
-    { from: 'host', to: 'lua', kind: 'response', label: 'Callback returns', caption: 'The script continues after the call.' },
+    { from: 'host', to: 'lua', kind: 'response', label: 'Callback logs it, then returns', caption: 'The host decides what logging means (a file, a console or a buffer); then the script continues after the call.' },
   ],
 }];
 
@@ -169,8 +168,7 @@ export const luaSlotFlows: readonly FlowScenario[] = [{
     { from: 'host', to: 'lua', kind: 'response', label: 'Handle: slot 3, generation 6', caption: 'Lua remembers both numbers.' },
     { from: 'host', to: 'host', kind: 'local', label: 'Slot 3 reused as generation 7', caption: 'The host reuses the cheap slot, and bumps the generation to mark it as a new life.' },
     { from: 'lua', to: 'host', kind: 'request', label: 'Use handle: slot 3, generation 6', caption: 'The script, unaware, still holds the old handle.' },
-    { from: 'host', to: 'host', kind: 'local', label: 'Slot 3 is generation 7, not 6', caption: 'The slot matches but the generation does not, so this handle names a dead entity.' },
-    { from: 'host', to: 'lua', kind: 'control', label: 'Rejected: stale handle', caption: 'The host refuses instead of acting on whoever lives in slot 3 now.' },
+    { from: 'host', to: 'lua', kind: 'control', label: 'Rejected: slot 3 is generation 7, not 6', caption: 'The slot matches but the generation does not, so the handle names a dead entity. The host refuses instead of acting on whoever lives in slot 3 now.' },
   ],
 }];
 
@@ -199,8 +197,7 @@ export const pendingReadFlows: readonly FlowScenario[] = [{
     { from: 'driver', to: 'driver', kind: 'local', label: 'No key event yet: park the IRP', caption: 'There is nothing to return, so the driver keeps the request instead of blocking.' },
     { from: 'driver', to: 'caller', kind: 'control', label: 'STATUS_PENDING', caption: 'The caller is told the request is not finished.' },
     { from: 'keypad', to: 'driver', kind: 'data', label: 'Key interrupt: 2 event bytes', caption: 'Later, a key press arrives as an interrupt carrying two bytes.' },
-    { from: 'driver', to: 'driver', kind: 'local', label: 'Copy 2 bytes into the parked buffer', caption: 'The driver fills the first two of the eight bytes. The other six are unused.' },
-    { from: 'driver', to: 'caller', kind: 'response', label: 'Complete the IRP: returned count 2', caption: 'The count says how many bytes are meaningful, not how large the buffer was.' },
+    { from: 'driver', to: 'caller', kind: 'response', label: 'Copy 2 bytes, complete: count 2', caption: 'The driver fills the first two of the eight bytes and completes the IRP. The count says how many bytes are meaningful, not how large the buffer was.' },
   ],
 }];
 
@@ -212,10 +209,8 @@ export const pickupRetryFlows: readonly FlowScenario[] = [{
   lanes: [{ id: 'client', label: 'Client' }, { id: 'server', label: 'Server (score 0, coin C)' }],
   steps: [
     { from: 'client', to: 'server', kind: 'request', label: 'Pick up coin C', caption: 'The request carries an identity for this pickup.' },
-    { from: 'server', to: 'server', kind: 'local', label: 'Consume C and commit score 1', caption: 'Consuming the coin and raising the score are committed together.' },
-    { from: 'server', to: 'client', kind: 'response', label: 'Result: score 1', caption: 'This reply is lost or delayed, so the client cannot tell whether it worked.' },
+    { from: 'server', to: 'client', kind: 'response', label: 'Commit C and score 1; reply is lost', caption: 'Consuming the coin and raising the score are committed together. The reply is lost or delayed, so the client cannot tell whether it worked.' },
     { from: 'client', to: 'server', kind: 'request', label: 'Same pickup again (retry)', caption: 'The client sends the same request with the same identity.' },
-    { from: 'server', to: 'server', kind: 'local', label: 'Already committed: reuse the stored result', caption: 'The server recognises the identity instead of treating it as a new pickup.' },
-    { from: 'server', to: 'client', kind: 'response', label: 'Result: score 1 (no second reward)', caption: 'The retry is safe: the score stays 1.' },
+    { from: 'server', to: 'client', kind: 'response', label: 'Stored result: score 1, no second reward', caption: 'The server recognises the identity and returns the committed result instead of paying again. The score stays 1.' },
   ],
 }];
