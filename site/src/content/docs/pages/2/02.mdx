@@ -9,8 +9,10 @@ sidebar:
   order: 3
   label: "2.3 How Assembly Describes a Running Game"
 ---
-import Frame from '../../../../components/kit/Frame.astro';
 import { Panel, Steps, SpeedType } from '../../../../components/kit';
+import PredictReveal from '../../../../components/PredictReveal.astro';
+import CellFrames from '../../../../components/CellFrames.astro';
+import { instructionStartCells } from '../../../../data/figures-c2';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Scene from '../../../../components/Scene.astro';
 import CodeTrace from '../../../../components/CodeTrace.astro';
@@ -138,9 +140,24 @@ flowchart LR
 
 `eip` is the **instruction pointer**. It is not a normal game variable. It tells the CPU where this thread is executing. A jump, call, return, exception, or debugger action can change it.
 
-<Frame caption="On the ordinary next-instruction path, advance by the decoded byte length. This illustrative stream has a three-byte instruction at offset 0, a two-byte instruction at offset 3, then the next start at offset 5.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/instruction-boundaries.svg`} width="480" height="206" alt="A three-byte instruction starts at byte offset zero, a two-byte instruction starts at offset three, and the following instruction starts at offset five." loading="lazy" decoding="async" />
-</Frame>
+On the ordinary path, `eip` advances by the length the decoder just found.
+The five bytes `29 42 04 85 C0` decode from offset 0 as
+`sub dword ptr [edx+4], eax` (3 bytes) and then `test eax, eax` (2 bytes), so
+the next instruction starts at 0 + 3 + 2 = 5.
+
+<PredictReveal
+  id="c2-late-start"
+  question="Suppose eip points at offset 1 instead, one byte inside the sub. What does the CPU do?"
+  options={[
+    { label: 'It decodes different instructions from the same bytes', correct: true, why: 'The CPU keeps no list of where instructions begin. At offset 1 the byte 42 is a complete instruction, inc edx, and 04 85 is add al, 85h: real instructions the program never meant.' },
+    { label: 'It reports that offset 1 is not an instruction start', why: 'Nothing in memory marks where an instruction starts. The CPU decodes whatever bytes eip points at.' },
+    { label: 'It skips forward to offset 3, the next real start', why: 'Offset 3 is only special because decoding began at 0. Starting at 1, the CPU learns lengths from the bytes it finds there.' },
+  ]}
+>
+
+<CellFrames id="instruction-starts" title="Decoding the same five bytes from two starting points" scenarios={instructionStartCells} />
+
+</PredictReveal>
 
 ## Registers hold the CPU's current working values
 

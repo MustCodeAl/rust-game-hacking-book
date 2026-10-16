@@ -10,8 +10,9 @@ sidebar:
   label: "3.9 Object-Oriented Clues in Machine Code"
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
 import { Steps } from '../../../../components/kit';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
@@ -20,10 +21,6 @@ import MarginNote from '../../../../components/kit/MarginNote.astro';
 A C++ programmer may write a class named `EnemyFactory`, a `State` interface, and an `Observer` list. The processor never sees those friendly names. After compilation it sees addresses, loads, stores, comparisons, and calls.
 
 That sounds discouraging, but design patterns still leave **shapes** in memory and code. A vtable is a row of function pointers. A factory allocates an object and initializes it. An observer loop walks a collection and calls similar functions. One shape alone is common in unrelated code, but several that fit together usually point to one pattern. 🧩
-
-<Frame caption="Several clues are stronger than one shape">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/object-pattern-clues.svg`} width="480" height="206" alt="A receiver, repeated field offsets, and an indirect function call together suggest object-oriented code." loading="lazy" decoding="async" />
-</Frame>
 
 When debug symbols exist for a build, they give the real names and layouts, so they can check a layout recovered from the version-pinned executable.
 
@@ -168,6 +165,21 @@ What this code shows is small:
 > Objects at these addresses share a function table, and slot four receives the object address.
 
 Slot four is at `+0x20` because each slot holds one 8-byte function address on 64-bit Windows, and `0x20` is 2 × 16 = 32 bytes, which is 32 ÷ 8 = 4 slots past slot zero.
+
+<PredictReveal
+  id="c2-vtable-slot-32"
+  setup="A 32-bit build of the same game makes the call as call dword ptr [eax+20h]. A 32-bit process stores each function address in 4 bytes."
+  question="Which slot of the table does this call use?"
+  options={[
+    { label: 'Slot 8', correct: true, why: '0x20 is still 32 bytes, but each slot is now 4 bytes wide, so 32 ÷ 4 = 8 slots past slot zero.' },
+    { label: 'Slot 4, as in the 64-bit build', why: 'Slot 4 came from 8-byte slots. With 4-byte slots, 32 bytes span twice as many entries.' },
+    { label: 'Slot 32', why: '32 is the distance in bytes. A slot number counts whole entries, so divide by the size of one entry.' },
+  ]}
+>
+
+<LiveCells lab="vtable-slot" />
+
+</PredictReveal>
 
 The code does **not** show the source class name, the inheritance tree, or the method name. Two facts can be checked directly: offset `0x00` points into read-only module memory, and the entries of that table point to executable module pages. Together they match how C++ compilers implement a vptr, so offset `0x00` is very likely one. A name such as `Actor` is a label chosen from the object's behavior; nothing in the binary says what the original class was called.
 

@@ -10,7 +10,9 @@ sidebar:
   label: "3.10 How Collections Live and Die in Memory"
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
+import CellFrames from '../../../../components/CellFrames.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
+import { collectionGrowthCells } from '../../../../data/figures-c2';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 import { Accordion } from '../../../../components/kit';
@@ -90,10 +92,6 @@ capacity_end - begin = 0x400 = 4×256         = 1024 bytes
 1024 / 32 = 32 elements of allocated room
 ```
 
-
-<Frame caption="A collection can outgrow its allocation">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/collection-growth.svg`} width="480" height="206" alt="Appending a third item to storage for two can require a new allocation and invalidate old element addresses." loading="lazy" decoding="async" />
-</Frame>
 <MemoryStrip
   cells="0x04531000=0|=1|=2|=· · ·|=9|0x04531140=10|=· · ·|=31"
   marks="0-4"
@@ -107,6 +105,24 @@ allocation — using the allocation would report 32 entities, 22 of which were
 never constructed.
 
 <MarginNote kind="alternative">Think of a bookshelf with empty slots: begin is the left end, end is just after the last book, capacity end is the shelf's far edge. Count books, not slots.</MarginNote>
+
+Spare room runs out. When `end` reaches `capacity_end`, the next append cannot
+fit in the same block.
+
+<PredictReveal
+  id="c2-vector-growth"
+  setup="A vector of 32-byte entities is full: begin = 0x0453_1000 and end = capacity_end = 0x0453_1400, so it holds 0x400 ÷ 32 = 32 elements. Your tool cached element 3's address, 0x0453_1000 + 3 × 32 = 0x0453_1060."
+  question="The game appends a 33rd entity. What is at 0x0453_1060 afterwards?"
+  options={[
+    { label: 'Still element 3', why: 'Element 3 was copied into a new block along with all the others. Nothing updates an address that a tool cached.' },
+    { label: 'Freed memory that can be handed to anything', correct: true, why: 'With no room left, the vector allocates a bigger block, copies the 32 elements into it, adds the new one and frees the old block. Element 3 now lives at the new begin + 0x60.' },
+    { label: 'Element 4, shifted one place along', why: 'Appending adds at the end and never shifts earlier elements. The problem is that the whole block moves.' },
+  ]}
+>
+
+<CellFrames id="vector-growth" title="Appending to a full vector" scenarios={collectionGrowthCells} />
+
+</PredictReveal>
 
 Notice how much rests on `element_size` being correct. Guess 16 bytes instead
 of 32 and the same three pointers report 320 / 16 = 20 elements, half of them
