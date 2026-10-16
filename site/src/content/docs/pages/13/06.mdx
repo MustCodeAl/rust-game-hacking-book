@@ -141,6 +141,86 @@ together with the accesses and value transitions that earned it, so a
 `Candidate` never becomes a trusted field just because it has a convenient
 name.
 
+## The guard's structure, byte by byte
+
+A recovered layout is easier to judge after reading one whose source is known.
+[Lesson 4.10](/pages/4/09/#an-npc-in-memory) numbered a toy guard's states for a
+C++ layout. Here is the whole structure. The guard's Rust lab,
+[`npc_brain_lab.rs`](/rust-labs/src/bin/npc_brain_lab.rs), cannot show one itself,
+because its Rust types use Rust's default layout, which lets the compiler order
+fields however it likes. In C++, the fields of a plain structure sit in memory
+in the order they are declared:
+
+```cpp
+struct Guard {              // offset
+    float x, y;             // 0x00, 0x04
+    float facing_x;         // 0x08
+    float facing_y;         // 0x0C
+    uint32_t health;        // 0x10
+    uint8_t state;          // 0x14: 0 Patrol, 1 Chase, 2 Attack, 3 Search, 4 Flee
+                            // 0x15 to 0x17: padding
+    uint32_t seen_for;      // 0x18
+    uint32_t search_ticks;  // 0x1C
+    uint32_t target_id;     // 0x20
+};                          // 0x24 bytes in total
+```
+
+Every `float` and `uint32_t` takes 4 bytes, so the offsets count up in fours:
+0, 4, 8, 12 (`0x0C`), and 16 (`0x10`). The state is stored as a single byte at
+20, which is `0x14` (1 × 16 + 4). The next field is 4 bytes wide, and its
+**alignment** requires it to start at a multiple of 4. Bytes 21, 22, and 23 are
+not, so the compiler leaves them as padding, and `seen_for` starts at 24, which
+is `0x18` (1 × 16 + 8). `search_ticks` follows at 28, `0x1C` (1 × 16 + 12), and
+`target_id` at 32, `0x20` (2 × 16). The structure ends at 36 bytes, `0x24`
+(2 × 16 + 4).
+
+Here is the guard at the end of tick 5 of
+[Lesson 4.10's run](/pages/4/09/#one-run-tick-by-tick), mid-chase. It has seen
+the player on ticks 1 to 5, so `seen_for` is 5, and chase steps of 1 on ticks 3,
+4, and 5 have taken it to (3, 0), still facing east. Its health is still the 100
+that the lab gives every new guard:
+
+<MemoryStrip
+  cells="+0x00 x=3.0|+0x04 y=0.0|+0x08 facing x=1.0|+0x0C facing y=0.0|+0x10 health=100"
+  groups="0-1:position|2-3:facing, a unit vector"
+  caption="Bytes `0x00` to `0x13` of the toy layout at tick 5: where the guard stands, which way it faces, and its health."
+/>
+
+<MemoryStrip
+  cells="+0x14 state=1|+0x15 padding=· · ·|+0x18 seen_for=5|+0x1C search_ticks=0|+0x20 target_id=7"
+  marks="0"
+  groups="0-1:one state byte, three padding bytes|2-3:timers|4-4:who it hunts"
+  caption="Bytes `0x14` to `0x23`. The highlighted byte is the state machine's current state, `1` for Chase. The target id `7` is a made-up entity number for the player."
+/>
+
+The target field is an id rather than a pointer. Some games store a raw pointer
+to the target object instead, and that pointer goes stale when the target is
+destroyed and its memory reused, the problem that generation-checked handles in
+[Lesson 3.6](/pages/3/05/#raw-pointers-smart-pointers-and-handles) solve.
+
+<MarginNote kind="narration">An id survives its target being destroyed in a way a raw pointer does not: the lookup simply finds nothing, instead of reading a reused address.</MarginNote>
+
+### A state value that means nothing
+
+A byte's 8 bits give 2⁸ = 256 different values, 0 to 255, but only 0 to 4 mean
+anything to the guard's code. Write 9 into the state byte of a toy program that
+uses the lab's five-state guard, and the result depends on how the compiler built the
+`switch` statement that picks a branch for each state. Compilers often turn a
+`switch` over small numbers into a table of jump targets, one code address per
+value. If the compiled code checks the range first, 9 goes to a default branch.
+If it indexes the table without a check, it reads whatever bytes lie past the
+table's end as an address, jumps there, and usually crashes.
+
+The guard's state is an **enum**, a type whose values come from a fixed list of
+names. In the Rust lab, safe code cannot store 9 in a `GuardState` at all. Rust
+treats an enum holding a value outside its list as **undefined behavior**: the
+language promises nothing about what the program then does, so safe code is
+never allowed to create one. A tool that reads this byte from another process
+therefore decodes it as a plain integer first and accepts it only when it is
+one of the five known values, the kind of check that
+[rejecting impossible layouts](#reject-partial-reads-and-impossible-layouts)
+applies to every field.
+
 ## Migrate after an update by matching behavior
 
 When a new build moves fields:

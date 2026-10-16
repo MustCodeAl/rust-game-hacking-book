@@ -1,6 +1,6 @@
 ---
 title: "How an NPC Sees, Chooses, and Remembers"
-description: "Work through the arithmetic inside Lesson 4.12's toy guard: Pythagoras and the dot product behind its view cone, stepped line-of-sight checks, utility scores and their switch points, behavior trees, and the byte offsets of its structure."
+description: "Work through the arithmetic inside Lesson 4.10's toy guard: the distance and dot product behind its view cone, stepped line-of-sight checks, utility scores and their switch points, and behavior trees."
 chapter: "11.1"
 minutes: 22
 author: "attilathedud"
@@ -11,25 +11,23 @@ sidebar:
 ---
 import SimLab from '../../../../components/SimLab.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
-import { Frame } from '../../../../components/kit';
+import { Accordion, Frame } from '../../../../components/kit';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
-[Lesson 4.12](/pages/4/09/) followed a toy guard through sixteen ticks of
+[Lesson 4.10](/pages/4/09/) followed a toy guard through sixteen ticks of
 sensing, deciding, and acting. This lesson opens up what it described in words:
-the arithmetic behind the guard's view cone and line of sight, two other ways
-games choose what an NPC does, and where each of the guard's fields sits in
-memory. The earlier lesson is the first-pass behavior model; this is the
-worked explanation you can return to when a real guard's choices or bytes
-need closer inspection. The geometry starts in two dimensions here and
-becomes the basis for the three-dimensional questions in Chapter 7.
+the arithmetic behind the guard's view cone and line of sight, and two other
+ways games choose what an NPC does. The earlier lesson is the first-pass
+behavior model; this is the worked explanation you can return to when a real
+guard's choices need closer inspection. The geometry is the two-dimensional
+case of the vectors in [Lesson 4.4](/pages/4/11/).
 
 ## The three checks in code
 
-In the lab, the guard asks three questions in order: Is the player close
-enough? Are they in front of me? Is a wall between us? The first two
-use `Vec2`, the lab's pair of x and y coordinates. The last uses the
-wall list. This method puts the inexpensive checks first, so it need
-not inspect every wall for a distant or out-of-view player:
+One method runs
+[the guard's three checks](/pages/4/09/#sense-three-checks-cheapest-first)
+in their cheapest-first order. The first two use `Vec2`, the lab's pair of x
+and y coordinates; the last uses the wall list:
 
 ```rust
 fn can_see(&self, target: Vec2, walls: &[Wall]) -> bool {
@@ -58,32 +56,32 @@ with positions you can draw on a grid.
 </Frame>
 
 The first two checks read `offset`, the arrow from the guard to the target: the
-target's position minus the guard's. For a guard at (0, 0) and a player at
-(4, 3), the offset is (4 − 0, 3 − 0) = (4, 3): 4 units along x and 3 along y. A
-pair of numbers read as an arrow like this is a **vector**, in the math sense
-rather than Rust's growable `Vec`. The lab's `Vec2` type stores one, and the
+target's position minus the guard's, the same subtraction as in
+[Lesson 4.4](/pages/4/11/#position-versus-direction). For a guard at (0, 0) and
+a player at (4, 3), the offset is (4 − 0, 3 − 0) = (4, 3): 4 units along x and
+3 along y. The lab's `Vec2` type stores such a two-number vector, and the
 guard's `facing` is one too.
 
 ### Distance
 
-The offset's x and y parts are the two short sides of a right-angled triangle
-whose long side is the arrow, so Pythagoras' theorem gives the arrow's length as
-√(x² + y²). For (4, 3), that is √(4² + 3²) = √(16 + 9) = √25 = 5, within
+The arrow's length is the distance from
+[Lesson 4.4](/pages/4/11/#extend-2d-coordinates-to-three-dimensions) with two
+coordinates, √(x² + y²). For (4, 3), that is √(4² + 3²) = √(16 + 9) = √25 = 5, within
 `VIEW_DISTANCE` = 10, so the first check passes. A player at (15, 0) is
 √(15² + 0²) = 15 away and fails it.
 
 ### The view cone and the dot product
 
-A **unit vector** is a vector of length 1. It stores a direction and nothing
-else. The guard keeps `facing` as a unit vector: (1, 0) means it faces east,
-along the x axis. `normalized` turns any offset into a unit vector by dividing
-both parts by the length. The offset (4, 3) has length 5, so its direction is
+A **unit vector** is a vector of length 1, the result of normalizing. It stores
+a direction and nothing else. The guard keeps `facing` as a unit vector: (1, 0)
+means it faces east, along the x axis. The offset (4, 3) has length 5, so its
+direction is
 (4 ÷ 5, 3 ÷ 5) = (0.8, 0.6), whose length is √(0.64 + 0.36) = √1 = 1. A target
 standing exactly on the guard has an offset of length 0 and no direction; the
 `let Some(direction) ... else` line counts it as seen.
 
-The **dot product** of two vectors multiplies their matching parts and adds the
-results:
+In two dimensions, the **dot product** from
+[Lesson 4.4](/pages/4/11/#length-normalization-and-alignment) has two terms:
 
 ```text
 a · b = a.x × b.x + a.y × b.y
@@ -127,7 +125,6 @@ equal angles, and a triangle's angles add up to 180°, so each is
 The test `direction.dot(self.facing) < VIEW_CONE_COS` therefore rejects every
 direction whose cosine is below 0.5. The cosine falls steadily as the angle
 grows, so that is every direction more than 60° from the facing, on either side.
-The cone is 60 + 60 = 120° wide.
 
 <MemoryStrip
   cells="0°=1.0|37°=0.8|60°=0.5|90°=0.0|120°=−0.5|180°=−1.0"
@@ -143,12 +140,10 @@ angle, puts them about 37° from the facing.) A player at (0, 5) has direction
 (0 ÷ 5, 5 ÷ 5) = (0, 1) and a dot product of 0 × 1 + 1 × 0 = 0, a full 90° to
 the side, so the guard does not see them.
 
-The code never computes an angle. Turning a dot product back into an angle would
-need that inverse cosine, a much slower function. Comparing the dot product with
-a cosine worked out once, when the constant was written, gives the same answer
-with two multiplications and one addition.
-[Lesson 4.7](/pages/4/11/#length-normalization-and-alignment) uses the same
-comparison in three dimensions, for a camera's field of view.
+Comparing with a cosine worked out once, when the constant was written, costs
+two multiplications and one addition and never needs the slower inverse cosine,
+the same saving as the three-dimensional view test in
+[Lesson 4.4](/pages/4/11/#length-normalization-and-alignment).
 
 <MarginNote kind="brief">The guard checks its view cone by comparing a dot product with a number worked out once. It never computes an angle.</MarginNote>
 
@@ -176,12 +171,16 @@ on. By (5.6, 0) a sample is inside the wall, because 5.5 ≤ 5.6 ≤ 6.5 and
   caption="Tick 8's line of sight along y = 0, each box labelled by its x values. The walk stops at the first sample inside the wall and never tests the rest."
 />
 
+<Accordion title="Optional reference: the lab's second line-of-sight test">
+
 A line can also slip past a wall. From (0, 0) to (4, 3), the line rises 3 for
 every 4 across, so every point on it has y = 3 ÷ 4 × x = 0.75 × x. A wall from
 (2, −1) to (3, 1) covers x from 2 to 3, where the line's y runs from
 0.75 × 2 = 1.5 to 0.75 × 3 = 2.25, higher than the wall's top edge at y = 1. No
 sample lands inside, and the guard sees the player. The lab's tests check both
 cases.
+
+</Accordion>
 
 Stepping has a blind spot: a wall thinner than 0.1 can sit between two samples
 and be missed. It also costs more with distance. A check across the full view
@@ -239,6 +238,13 @@ switch points, and that is how designers tune utility AI.
 
 <MarginNote kind="alternative">Think of a talent show: every option gets a score for the current situation and the judge picks the highest. Change a score weight or formula and the winner changes.</MarginNote>
 
+The lab's `choose` function keeps only scores above 0 before it picks the
+highest. With nobody in view, every option scores 0, so it returns `None`:
+nothing on this list is worth doing, and another system, such as the patrol,
+keeps control.
+
+<Accordion title="Optional reference: the demo's five situations">
+
 The demo also varies the situation, all at a health of 0.3 except where it says
 healthy:
 
@@ -251,10 +257,9 @@ healthy:
 | healthy, nobody in view | 0.00 | 0.00 | 0.00 | nothing |
 
 Once in cover, taking cover scores 0, so the next best option wins. With no
-potions, healing scores 0 too, and attacking is all that is left. With nobody in
-view, every option scores 0. The lab's `choose` function keeps only scores above
-0 before it picks the highest, so it returns `None`: nothing on this list is
-worth doing, and another system, such as the patrol, keeps control.
+potions, healing scores 0 too, and attacking is all that is left.
+
+</Accordion>
 
 Utility scoring has its own weak spot. Near a switch point, a tiny change in
 health can flip the choice back and forth every tick. Games damp this by adding
@@ -307,85 +312,19 @@ to choose between similar actions.
 
 <SimLab sim="behavior-tree" label="Explore behavior tree" />
 
-## The guard's structure, byte by byte
+<span id="the-guards-structure-byte-by-byte" aria-hidden="true" />
+<span id="a-state-value-that-means-nothing" aria-hidden="true" />
 
-[Lesson 4.12](/pages/4/09/#an-npc-in-memory) numbered the guard's states for a
-toy C++ layout. Here is the whole structure. The lab cannot show one itself,
-because its Rust types use Rust's default layout, which lets the compiler order
-fields however it likes. In C++, the fields of a plain structure sit in memory
-in the order they are declared:
+The guard's fields as a C++ structure, with their offsets, padding, and what an
+out-of-range state byte does, are worked through in
+[Lesson 14.1](/pages/13/06/#the-guards-structure-byte-by-byte), where recovering
+object layouts is the subject.
 
-```cpp
-struct Guard {              // offset
-    float x, y;             // 0x00, 0x04
-    float facing_x;         // 0x08
-    float facing_y;         // 0x0C
-    uint32_t health;        // 0x10
-    uint8_t state;          // 0x14: 0 Patrol, 1 Chase, 2 Attack, 3 Search, 4 Flee
-                            // 0x15 to 0x17: padding
-    uint32_t seen_for;      // 0x18
-    uint32_t search_ticks;  // 0x1C
-    uint32_t target_id;     // 0x20
-};                          // 0x24 bytes in total
-```
-
-Every `float` and `uint32_t` takes 4 bytes, so the offsets count up in fours:
-0, 4, 8, 12 (`0x0C`), and 16 (`0x10`). The state is stored as a single byte at
-20, which is `0x14` (1 × 16 + 4). The next field is 4 bytes wide, and its
-**alignment** requires it to start at a multiple of 4. Bytes 21, 22, and 23 are
-not, so the compiler leaves them as padding, and `seen_for` starts at 24, which
-is `0x18` (1 × 16 + 8). `search_ticks` follows at 28, `0x1C` (1 × 16 + 12), and
-`target_id` at 32, `0x20` (2 × 16). The structure ends at 36 bytes, `0x24`
-(2 × 16 + 4).
-
-Here is the guard at the end of tick 5 of
-[Lesson 4.12's run](/pages/4/09/#one-run-tick-by-tick), mid-chase. It has seen
-the player on ticks 1 to 5, so `seen_for` is 5, and chase steps of 1 on ticks 3,
-4, and 5 have taken it to (3, 0), still facing east. Its health is still the 100
-that the lab gives every new guard:
-
-<MemoryStrip
-  cells="+0x00 x=3.0|+0x04 y=0.0|+0x08 facing x=1.0|+0x0C facing y=0.0|+0x10 health=100"
-  groups="0-1:position|2-3:facing, a unit vector"
-  caption="Bytes `0x00` to `0x13` of the toy layout at tick 5: where the guard stands, which way it faces, and its health."
-/>
-
-<MemoryStrip
-  cells="+0x14 state=1|+0x15 padding=· · ·|+0x18 seen_for=5|+0x1C search_ticks=0|+0x20 target_id=7"
-  marks="0"
-  groups="0-1:one state byte, three padding bytes|2-3:timers|4-4:who it hunts"
-  caption="Bytes `0x14` to `0x23`. The highlighted byte is the state machine's current state, `1` for Chase. The target id `7` is a made-up entity number for the player."
-/>
-
-The target field is an id rather than a pointer. Some games store a raw pointer
-to the target object instead, and that pointer goes stale when the target is
-destroyed and its memory reused, the problem that generation-checked handles in
-[Lesson 3.6](/pages/3/05/#raw-pointers-smart-pointers-and-handles) solve.
-
-<MarginNote kind="narration">An id survives its target being destroyed in a way a raw pointer does not: the lookup simply finds nothing, instead of reading a reused address.</MarginNote>
-
-### A state value that means nothing
-
-A byte's 8 bits give 2⁸ = 256 different values, 0 to 255, but only 0 to 4 mean
-anything to the guard's code. Write 9 into the state byte of a toy program that
-uses the lab's five-state guard, and the result depends on how the compiler built the
-`switch` statement that picks a branch for each state. Compilers often turn a
-`switch` over small numbers into a table of jump targets, one code address per
-value. If the compiled code checks the range first, 9 goes to a default branch.
-If it indexes the table without a check, it reads whatever bytes lie past the
-table's end as an address, jumps there, and usually crashes.
-
-The guard's state is an **enum**, a type whose values come from a fixed list of
-names. In the Rust lab, safe code cannot store 9 in a `GuardState` at all. Rust
-treats an enum holding a value outside its list as **undefined behavior**: the
-language promises nothing about what the program then does, so safe code is
-never allowed to create one.
-
-The guard is now readable from three directions. Its sensing code tells us
-which facts it can observe; a state trace tells us which choice it made on
-each tick; and the layout tells us where the relevant values lived. None
-of those alone proves why a particular guard moved. Together they let us
-check a claim such as “the wall broke line of sight, so Chase became
-Search” against both behavior and state. Chapter 5 now shows how the
-executable stores the instructions and data that make such a claim testable.
-Chapter 7 later applies the coordinate ideas to camera frames and rendering.
+The guard can now be read in three ways. Its sensing code tells us which facts
+it can observe, a state trace tells us which choice it made on each tick, and
+`seen_for` and `last_known` hold what it carried from one tick into the next.
+None of those alone proves
+why a particular guard moved. Together they let us check a claim such as “the
+wall broke line of sight, so Chase became Search” against both behavior and
+state. The rest of this chapter moves decisions like these into Lua scripts
+that a game loads and limits.
