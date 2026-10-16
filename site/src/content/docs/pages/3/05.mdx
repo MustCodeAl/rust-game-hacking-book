@@ -13,6 +13,7 @@ import CodeTrace from '../../../../components/CodeTrace.astro';
 import Frame from '../../../../components/kit/Frame.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
+import { Accordion } from '../../../../components/kit';
 
 ## A field layout is only half a model
 
@@ -187,120 +188,28 @@ time settle it:
 - instruction width constrains a field's size, not necessarily its full type;
 - one readable value never distinguishes a pointer, handle, counter, or bit set.
 
-## Strings can store short text inside themselves
+## Other containers trade arithmetic for other clues
 
-Many C++ string implementations use a **small-string optimization**. Short names may live directly inside the string object, while longer names use a heap buffer. This explains a confusing sight: one player name looks like text at offset `0x20`, but a longer name makes the same bytes look like a pointer.
+A vector lets code reach element *n* with arithmetic on one block. A short C++
+string may instead keep its text inside the object and switch to a heap
+pointer when the text grows; a linked list, search tree, or hash table reaches
+its elements by following pointers or hashing a key. [The optional container
+reference](#linked-structures-leave-different-clues) shows each shape's clue in
+the code that walks it. Before walking any linked shape, a scanner needs a
+maximum-node limit and a visited-address set, because corrupted data can form a
+cycle that would otherwise trap it forever.
 
-Here is one real implementation's layout, the 32-bit Microsoft C++ library's
-`std::string`, holding the three-character example name `Ivy` and then a
-longer one. The name is only sample text; its length is what matters:
-
-<MemoryStrip
-  cells="+0x00=Ivy, then a zero byte|+0x10=size 3|+0x14=capacity 15"
-  groups="0-0:16 bytes: the text itself"
-  caption="Short: up to 15 characters live inside the object."
-/>
-
-<MemoryStrip
-  cells="+0x00=pointer to heap text|+0x10=size 40|+0x14=capacity ≥ 40"
-  marks="0"
-  groups="0-0:the same 16 bytes now start with a pointer"
-  caption="Long: the first four bytes point to a heap buffer, and the capacity tells you which mode you are in."
-/>
-
-Do not read an assumed pointer until you identify the mode flag or length behavior. Compare the same object with names on both sides of the suspected short-string limit. 🔬
-
-## Linked structures leave different clues
-
-A vector keeps its elements side by side, so code finds element *n* with
-arithmetic. Three other common containers give up that arithmetic in exchange
-for something else, and each exchange leaves a recognisable pattern in the code
-that walks it.
-
-### A linked list: every element points to the next
-
-A **linked list** stores each element in its own heap block, called a **node**,
-together with the address of the next node, and often the previous one too. It
-exists to make inserting and removing cheap. Taking the first of 10,000 elements
-out of a vector means sliding the other 9,999 down one place; taking it out of a
-doubly linked list means rewriting two pointers in its neighbours.
-
-```mermaid
-flowchart LR
-    A["node A<br/>prev · payload · next"] -->|"next"| B["node B<br/>prev · payload · next"]
-    B -->|"prev"| A
-    B -->|"next"| C["node C<br/>prev · payload · next"]
-    C -->|"prev"| B
-```
-
-The price is that a list has no arithmetic shortcut. Reaching the 1,000th node
-takes 1,000 reads, each one loading the next pointer out of the node just
-reached. That repeated load from a fixed offset inside the current node, such as
-`mov eax, [eax+4]` in a loop, is the list's clue. The nodes are wherever the
-allocator put them, not in one block.
-
-### A search tree: each comparison discards half
-
-A **binary search tree** node holds a key and two child pointers: smaller keys
-go to the left, larger ones to the right. Finding a key means comparing and
-stepping left or right. In a **balanced** tree, each step discards roughly half
-the remaining possibilities, so a tree of 1,000,000 entries needs about 20
-steps: 2²⁰ = 1,048,576. `std::map` typically maintains such a balanced tree.
-Its clue is a loop that compares a key and then loads one of two pointers
-depending on the result. Its failure is lopsidedness: keys inserted in sorted
-order all go the same way and turn the tree into a slow list, which is why real
-implementations rebalance themselves.
-
-### A hash table: arithmetic picks the bucket
-
-A **hash table** turns the key into a number, its **hash**, and uses that number
-to pick one slot, or **bucket**, in an array of buckets. Only the entries in that
-bucket are checked. With a suitable hash and enough buckets for the entries,
-lookup is usually close to constant time as the table grows; collisions or a
-full table can make it slower. With 16 buckets, a hash of `0x5A3` selects bucket
-`0x5A3 & 0xF` = 3, because the mask `0xF` keeps only the last hex digit. The
-clue is arithmetic on the key (multiplies, shifts, XORs), then that mask or a
-remainder, then a short walk through one bucket. Two keys can land in the same
-bucket, a **collision**, which is why each bucket may hold a short list.
-[Lesson 10.2](/pages/12/02/#how-a-map-finds-a-key) shows the same idea inside
-Lua's tables.
-
-Validate structural invariants:
-
-- a doubly linked node’s `next.prev` should return to the node;
-- tree children should eventually end at a sentinel or null;
-- bucket indices must stay below the bucket count;
-- traversal needs a maximum-node limit and a visited-address set.
-
-The visited set is important. Corrupted data could form a cycle and otherwise trap a scanner forever.
-
-Before choosing a container model, ask what the game actually does with
-the data: does it need an ordered list, lookup by key, first-in-first-out
-work, a tile grid, or links between waypoints? Then ask whether items can
-be inserted or removed while you read them. Those questions connect the
-shape you observe to the operation it supports; a readable address alone
-cannot identify a container.
+Choose the model from what the game does with the data, as [Lesson 3.3's
+collection choices](/pages/1/14/#choose-a-collection-for-the-question) do, and
+then ask whether items can be inserted or removed while you read them. A
+readable address alone cannot identify a container.
 
 ## Raw pointers, smart pointers, and handles
 
-### Unique ownership
-
-If one owner’s destructor directly destroys the pointed object, and moves clear the old pointer, unique ownership is likely. That resembles C++ `unique_ptr`, but use a neutral label until symbols confirm it.
-
-### Shared ownership
-
-Shared objects often have a separate control block with strong and weak reference counts. Copies increment a count; releases decrement it; a transition to zero calls a destructor. The object pointer and control-block pointer may travel together.
-
-```mermaid
-flowchart LR
-    P1["owner 1<br/>object pointer, control pointer"] --> O["the object"]
-    P2["owner 2<br/>object pointer, control pointer"] --> O
-    P1 --> CB["control block<br/>strong count 2, weak count 1"]
-    P2 --> CB
-    W["a weak observer"] --> CB
-```
-
-Never edit a suspected count. The calls around it show whether its updates are atomic, as a thread-safe reference count's must be; a plain integer that happens to rise and fall is not enough to call something a reference count.
+A field that leads to another object may own it alone, share it through
+reference counts, or name it indirectly. [The optional ownership
+reference](#unique-ownership) shows the clues that unique and shared owners
+leave. A handle is the indirect form.
 
 ### Handles
 
@@ -428,9 +337,9 @@ An `Option` says the field has not been confirmed. `Unknown` prevents a
 guess from silently becoming a fact. Once source, symbols, and repeated
 behavior agree, the model can become more precise.
 
-`#[derive(Debug, Clone, Copy)]` asks Rust to generate convenient
-formatting and copying for this small *description* of a layout. It
-does not make an unconfirmed game-memory layout safe to read.
+The `derive` line generates formatting and copying for this small
+*description* of a layout, as [Lesson 3.4](/pages/1/15/#let-derive-generate-ordinary-trait-implementations)
+explains; it does not make an unconfirmed game-memory layout safe to read.
 
 ## Checks a recovered layout should pass
 
@@ -446,5 +355,144 @@ does not make an unconfirmed game-memory layout safe to read.
 Those checks assume we know what each field's stored bytes represent.
 If the game's visible health is 125 but no candidate field contains 125,
 the next question is whether the game stores a transformed value.
-[Lesson 3.7](/pages/3/06/) follows that question without throwing away
+[Lesson 14.9](/pages/3/06/) follows that question without throwing away
 the object and lifetime checks we just built.
+
+## Optional reference: other containers and owners
+
+These layouts come from particular libraries and containers. The vector
+header, lifetime, and handle checks above do not depend on them.
+
+<span id="strings-can-store-short-text-inside-themselves" aria-hidden="true" />
+
+<Accordion title="Optional reference: strings can store short text inside themselves">
+
+Many C++ string implementations use a **small-string optimization**. Short names may live directly inside the string object, while longer names use a heap buffer. This explains a confusing sight: one player name looks like text at offset `0x20`, but a longer name makes the same bytes look like a pointer.
+
+Here is one real implementation's layout, the 32-bit Microsoft C++ library's
+`std::string`, holding the three-character example name `Ivy` and then a
+longer one. The name is only sample text; its length is what matters:
+
+<MemoryStrip
+  cells="+0x00=Ivy, then a zero byte|+0x10=size 3|+0x14=capacity 15"
+  groups="0-0:16 bytes: the text itself"
+  caption="Short: up to 15 characters live inside the object."
+/>
+
+<MemoryStrip
+  cells="+0x00=pointer to heap text|+0x10=size 40|+0x14=capacity ≥ 40"
+  marks="0"
+  groups="0-0:the same 16 bytes now start with a pointer"
+  caption="Long: the first four bytes point to a heap buffer, and the capacity tells you which mode you are in."
+/>
+
+Do not read an assumed pointer until you identify the mode flag or length behavior. Compare the same object with names on both sides of the suspected short-string limit. 🔬
+
+</Accordion>
+
+<span id="linked-structures-leave-different-clues" aria-hidden="true" />
+
+A vector keeps its elements side by side, so code finds element *n* with
+arithmetic. Three other common containers give up that arithmetic in exchange
+for something else, and each exchange leaves a recognisable pattern in the code
+that walks it.
+
+<span id="a-linked-list-every-element-points-to-the-next" aria-hidden="true" />
+
+<Accordion title="Optional reference: a linked list, every element points to the next">
+
+A **linked list** stores each element in its own heap block, called a **node**,
+together with the address of the next node, and often the previous one too. It
+exists to make inserting and removing cheap. Taking the first of 10,000 elements
+out of a vector means sliding the other 9,999 down one place; taking it out of a
+doubly linked list means rewriting two pointers in its neighbours.
+
+```mermaid
+flowchart LR
+    A["node A<br/>prev · payload · next"] -->|"next"| B["node B<br/>prev · payload · next"]
+    B -->|"prev"| A
+    B -->|"next"| C["node C<br/>prev · payload · next"]
+    C -->|"prev"| B
+```
+
+The price is that a list has no arithmetic shortcut. Reaching the 1,000th node
+takes 1,000 reads, each one loading the next pointer out of the node just
+reached. That repeated load from a fixed offset inside the current node, such as
+`mov eax, [eax+4]` in a loop, is the list's clue. The nodes are wherever the
+allocator put them, not in one block.
+
+</Accordion>
+
+<span id="a-search-tree-each-comparison-discards-half" aria-hidden="true" />
+
+<Accordion title="Optional reference: a search tree, each comparison discards half">
+
+A **binary search tree** node holds a key and two child pointers: smaller keys
+go to the left, larger ones to the right. Finding a key means comparing and
+stepping left or right. In a **balanced** tree, each step discards roughly half
+the remaining possibilities, so a tree of 1,000,000 entries needs about 20
+steps: 2²⁰ = 1,048,576. `std::map` typically maintains such a balanced tree.
+Its clue is a loop that compares a key and then loads one of two pointers
+depending on the result. Its failure is lopsidedness: keys inserted in sorted
+order all go the same way and turn the tree into a slow list, which is why real
+implementations rebalance themselves.
+
+</Accordion>
+
+<span id="a-hash-table-arithmetic-picks-the-bucket" aria-hidden="true" />
+
+<Accordion title="Optional reference: a hash table, arithmetic picks the bucket">
+
+A **hash table** turns the key into a number, its **hash**, and uses that number
+to pick one slot, or **bucket**, in an array of buckets. Only the entries in that
+bucket are checked. With a suitable hash and enough buckets for the entries,
+lookup is usually close to constant time as the table grows; collisions or a
+full table can make it slower. With 16 buckets, a hash of `0x5A3` selects bucket
+`0x5A3 & 0xF` = 3, because the mask `0xF` keeps only the last hex digit. The
+clue is arithmetic on the key (multiplies, shifts, XORs), then that mask or a
+remainder, then a short walk through one bucket. Two keys can land in the same
+bucket, a **collision**, which is why each bucket may hold a short list.
+[Lesson 11.3](/pages/12/02/#how-a-map-finds-a-key) shows the same idea inside
+Lua's tables.
+
+</Accordion>
+
+<Accordion title="Optional reference: invariants for walking linked structures">
+
+Validate structural invariants:
+
+- a doubly linked node’s `next.prev` should return to the node;
+- tree children should eventually end at a sentinel or null;
+- bucket indices must stay below the bucket count;
+- traversal needs a maximum-node limit and a visited-address set.
+
+The visited set is important. Corrupted data could form a cycle and otherwise trap a scanner forever.
+
+</Accordion>
+
+<span id="unique-ownership" aria-hidden="true" />
+
+<Accordion title="Optional reference: unique ownership">
+
+If one owner’s destructor directly destroys the pointed object, and moves clear the old pointer, unique ownership is likely. That resembles C++ `unique_ptr`, but use a neutral label until symbols confirm it.
+
+</Accordion>
+
+<span id="shared-ownership" aria-hidden="true" />
+
+<Accordion title="Optional reference: shared ownership">
+
+Shared objects often have a separate control block with strong and weak reference counts. Copies increment a count; releases decrement it; a transition to zero calls a destructor. The object pointer and control-block pointer may travel together.
+
+```mermaid
+flowchart LR
+    P1["owner 1<br/>object pointer, control pointer"] --> O["the object"]
+    P2["owner 2<br/>object pointer, control pointer"] --> O
+    P1 --> CB["control block<br/>strong count 2, weak count 1"]
+    P2 --> CB
+    W["a weak observer"] --> CB
+```
+
+Never edit a suspected count. The calls around it show whether its updates are atomic, as a thread-safe reference count's must be; a plain integer that happens to rise and fall is not enough to call something a reference count.
+
+</Accordion>
