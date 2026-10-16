@@ -496,7 +496,7 @@ async function backendSuite(): Promise<void> {
         same(await group.locator('[data-dg-panel]:visible').count(), 1, `backend ${width} ${scenario.id}: only the chosen panel shows`);
         same(await panel.locator('[data-dg-step]').count(), scenario.steps.length, `backend ${width} ${scenario.id}: step count`);
         same(await panel.locator('[data-dg-step][data-state="done"]').count(), scenario.steps.length, `backend ${width} ${scenario.id}: the default shows every step`);
-        same(await panel.locator('.flow__lane-names span').allTextContents(), scenario.lanes.map(l => l.label), `backend ${width} ${scenario.id}: lane names`);
+        same(await panel.locator('.flow__lane-names .flow__lane > span').allTextContents(), scenario.lanes.map(l => l.label), `backend ${width} ${scenario.id}: lane names`);
         same(await panel.locator('.flow__label strong').allTextContents(), scenario.steps.map(s => s.label), `backend ${width} ${scenario.id}: step labels in order`);
         same(await panel.locator('.flow__route').allInnerTexts().then(rows => rows.map(r => r.replace(/^Step \d+:\s*/, ''))), scenario.steps.map(s => stepRoute(scenario, s)), `backend ${width} ${scenario.id}: who talks to whom`);
         same(await panel.locator('.flow__caption').allTextContents(), scenario.steps.map(s => s.caption), `backend ${width} ${scenario.id}: captions`);

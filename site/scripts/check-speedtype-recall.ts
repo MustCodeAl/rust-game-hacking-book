@@ -46,6 +46,10 @@ function explicitCandidates(source: string, fragments: RecallFragment[], focus: 
   return matches;
 }
 async function inspectMasks(panel: Locator, source: string, fragments: RecallFragment[], id: string) {
+  // The practice panel is built right after the click; on a busy machine the first read can see it half drawn, so wait
+  // (up to five seconds) for the span count to settle. A real extra or missing span still fails below.
+  const expectedSpans = Array.from(source).length;
+  for (let tries = 0; tries < 50 && await panel.locator('.st-c').count() !== expectedSpans; tries++) await panel.page().waitForTimeout(100);
   const flags = await panel.locator('.st-c').evaluateAll(nodes => nodes.map(node => node.hasAttribute('data-recall-hidden')));
   const chars = Array.from(source), offsets = [];
   let offset = 0;

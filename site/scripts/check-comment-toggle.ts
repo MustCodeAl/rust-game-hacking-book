@@ -44,6 +44,8 @@ try {
       comments++;
     }
     const note = notes.first(), body = note.locator('p'), button = note.locator('.margin-note__toggle');
+    // In pin mode only one comment is open at a time, so the loop above leaves the first one closed.
+    if (await button.getAttribute('aria-expanded') === 'false') { await button.click(); clicks++; }
     await body.evaluate(p => { const a = document.createElement('a'); a.href = '#toggle-link-test'; a.textContent = 'Local link'; p.append(a); });
     await body.getByRole('link', { name: 'Local link' }).click(); clicks++;
     assert.equal(await button.getAttribute('aria-expanded'), 'true', 'A comment link keeps its own click');

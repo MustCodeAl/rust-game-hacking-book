@@ -1,7 +1,7 @@
 import type { Actor, ActorOptions, ActorBase, Scene, SceneDefinition, SceneState, AnimatedActor, AnimatedValues, Transform, PlayerSpec, Role, Format, Easing, Point, Label, Cue, Keyframe, Track, TrackMap, Tracks, TrackValue, TrackProperty, Timeline, TimelineCursor, Explorer, ExplorerField, ExplorerValues, ExplorerSettings } from './types.ts';
 // Draws a scene as SVG markup at any moment. The page gets the finished picture
 // from this at build time (so print, search, and a browser without scripts all
-// show something meaningful); scene-runtime.js then moves the same elements.
+// show something meaningful); runtime.ts then moves the same elements.
 import { ROLES, format, stateAt, transformOf } from './engine.ts';
 
 const escape = (text: unknown) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c as '&' | '<' | '>' | '"']);

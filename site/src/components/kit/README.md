@@ -139,7 +139,7 @@ Six existing pictures now rebuild from their own optional controls: BFS,
 world-to-screen projection, server authority, detector input windows, event
 identity merging, and snapshot edges. Each scene module exports `exploration`
 with fields, authored defaults, an invitation, and `build(values)`. Register its
-lazy import in `src/lib/scene/runtime.js`. Reset restores the exact authored
+lazy import in `src/lib/scene/runtime.ts`. Reset restores the exact authored
 scene. The same controls support checkbox and bounded numeric inputs. Keep a
 useful final still and a complete explanation for readers who never interact.
 

@@ -1,6 +1,6 @@
 # Claude continuation — 12 October 2026 (latest note first)
 
-Latest state: `codex/ts-learning` is merged and verified (T79). Five unmerged, unverified agent branches hold unfinished work (`codex/ts-chrome`, `ts-reader`, `ts-traces`, `ts-widgets`, `codex/diagrams-pe`); BOOK_REVISION_PROGRESS.md T78 lists what each contains and the merge order. Review and gate each one before merging; do not publish any of it unverified. Build with `mise x -- bun run build` and publish with `mise x -- node scripts/publish-pages.mjs`. TokenSave does not index this worktree; use `rtk read` and `rtk rg` for it, one step at a time.
+Latest state (15 October 2026): every agent branch is merged and gated (BOOK_REVISION_PROGRESS.md T92); no authored JavaScript remains outside generated aliases. Open: page-length balancing from CHAPTER_MAP_PROPOSAL.md, more later-chapter API drills, the Modern sidebar counter, and a colour-language pass over the PE, process and encoding components. Build with `mise x -- bun run build`, publish with `mise x -- node scripts/publish-pages.mjs`. TokenSave does not index this worktree; use `rtk read` and `rtk rg`.
 
 # Claude continuation — 10 October 2026 (older, still useful)
 

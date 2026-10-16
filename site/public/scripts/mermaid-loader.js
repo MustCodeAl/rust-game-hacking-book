@@ -11,7 +11,7 @@
 // of them at once when the page opens. The version is pinned so a diagram that
 // renders today renders the same tomorrow.
 //
-// astro.config.mjs loads this file with type="module", so it has module scope in
+// astro.config.ts loads this file with type="module", so it has module scope in
 // the browser. It uses no import or export statement (Mermaid arrives through a
 // dynamic import) and no top-level await. The function wrapper below keeps its
 // names private for the TypeScript program that checks every client script

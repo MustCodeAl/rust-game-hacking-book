@@ -51,7 +51,7 @@ export function mermaidBlocks(): HastPluginDefinition {
  * Draw $$ ... $$ maths with KaTeX while building. The Markdown processor, with
  * its math feature on, writes `<code class="language-math">` (inline) and
  * `<pre><code class="language-math">` (display); both become finished HTML.
- * Only the double-dollar form is maths (see astro.config.mjs): a single dollar
+ * Only the double-dollar form is maths (see astro.config.ts): a single dollar
  * sign is left alone, so a shell variable or a price never turns into a formula.
  */
 export function mathBlocks(): HastPluginDefinition {

@@ -73,7 +73,8 @@ try {
     assert.equal(await page.locator('[data-margin-note]:not(.margin-note--mine)').count(), 3, 'live lesson keeps its authored notes');
     for (let i = 0; i < 3; i++) { await mine.scrollIntoViewIfNeeded(); await page.waitForTimeout(200); }
     assert.equal(await mine.isVisible(), true, 'saved reader comment renders without the load event');
-    const styled = await mine.evaluate(node => parseFloat(getComputedStyle(node).paddingTop) > 0);
+    // A comment is padded text in the inline and margin layouts and a bordered round marker in pin mode.
+    const styled = await mine.evaluate(node => { const style = getComputedStyle(node); return parseFloat(style.paddingTop) > 0 || parseFloat(style.borderTopWidth) > 0; });
     assert.ok(styled, 'reader-only note has shared margin styling');
     const setComments = async (value: 'hide' | 'show') => {
       if (width === 420) { await page.locator('.sl-menu-button').click(); clicks++; }
@@ -124,7 +125,7 @@ try {
     assert.notEqual(await only.evaluate(() => document.readyState), 'complete', 'synthetic reader comments render before window.load');
     await only.waitForFunction(() => document.querySelector<HTMLElement>('.margin-note--mine')?.dataset.adopted === 'true');
     if (width === 1280) assert.ok(await only.evaluate(() => ['pin', 'margin'].includes(document.documentElement.dataset.noteMode ?? '')), 'Notes owns desktop layout on the synthetic reader-only page');
-    assert.ok(await readerComment.evaluate(node => parseFloat(getComputedStyle(node).paddingTop) > 0), 'synthetic reader-only comment has shared styles');
+    assert.ok(await readerComment.evaluate(node => { const style = getComputedStyle(node); return parseFloat(style.paddingTop) > 0 || parseFloat(style.borderTopWidth) > 0; }), 'synthetic reader-only comment has shared styles');
     const chooseComments = async (value: 'hide' | 'show') => {
       if (width === 420) { await only.locator('.sl-menu-button').click(); clicks++; }
       await only.locator('.theme-switcher__toggle:visible').first().click(); clicks++;
