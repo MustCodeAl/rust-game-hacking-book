@@ -1,6 +1,6 @@
 ---
 title: "World-to-Screen Projection and Overlays"
-description: "Follow a 3D point through world, view, clip, normalized, and screen coordinates to place stable overlays."
+description: "Follow a 3D point through world, view, clip, normalized, and screen coordinates, with the field of view, aspect ratio, and each camera's viewport, to place stable overlays."
 chapter: "7.9"
 minutes: 44
 author: "attilathedud"
@@ -9,7 +9,7 @@ sidebar:
   order: 9
   label: "7.9 World-to-Screen Projection and Overlays"
 ---
-import { Frame, GitHub, Panel, Steps } from '../../../../components/kit';
+import { Accordion, Example, Frame, GitHub, Panel, Steps, Tooltip } from '../../../../components/kit';
 import LessonVideo from '../../../../components/LessonVideo.astro';
 
 import PerspectivePlayground from '../../../../components/PerspectivePlayground.astro';
@@ -81,8 +81,8 @@ way usually points to the view transform. A marker that stretches after a
 resolution change points to the viewport or aspect ratio. A point behind the
 camera that appears mirrored points to the perspective divide or clipping.
 
-The `w` value is not another world direction. It carries information needed for
-perspective: after division, distant points become closer together on screen.
+The `w` value is not another world direction;
+[Why perspective uses `w`](#why-perspective-uses-w) shows how it carries depth.
 Reject unusable `w` values before dividing, then reject points outside the
 target API's depth interval. OpenGL commonly uses `-1..=1` after projection;
 Direct3D commonly uses `0..=1`. The matrix and convention must come from the
@@ -98,17 +98,90 @@ the view matrix is the inverse of the camera's world transform.
 
 For an orthonormal camera basis, inverse rotation is its transpose. The translation
 is not simply `-camera_position`; it is the negative position expressed along the
-camera basis. In dot-product form:
-
-```text
-d = world_point - camera_position
-view_x = dot(d, camera_right)
-view_y = dot(d, camera_up)
-view_z = dot(d, camera_forward_or_back)
-```
+camera basis. In dot-product form, that is the view transform from
+[Lesson 7.1](/pages/5/01/#a-basis-defines-the-local-axes): subtract the camera
+position, then take the dot product of the result with each camera axis.
 
 If positions track correctly until the camera rotates, the translation may be
 right while the basis order, handedness, or inverse operation is wrong.
+
+## Why perspective uses `w`
+
+Far-away objects look smaller. After the matrix transformation, perspective division divides the transformed `x`, `y`, and `z` by `w`:
+
+<MarginNote kind="brief">Perspective division makes the same world-sized object occupy fewer screen pixels as its depth increases.</MarginNote>
+
+```text
+ndc_x = clip_x / clip_w
+ndc_y = clip_y / clip_w
+```
+
+This creates perspective because the projection matrix is built so that the
+resulting `w` carries the point's distance from the camera: dividing by `w`
+divides by depth. Ignoring signs and API details, for a symmetric perspective
+camera:
+
+```text
+screen_x ∝ view_x / view_depth
+screen_y ∝ view_y / view_depth
+```
+
+Double the depth while keeping the sideways offset unchanged and the point moves
+half as far from the screen center, so an object twice as far away covers half
+as much screen. A perspective matrix stores this division in `w` so the GPU can
+delay it until after clipping.
+
+If `w` is zero, the division is undefined. In the convention used in this
+lesson, where a point in front of the camera has a positive `w`, a negative `w`
+puts the point behind the camera — and the division still yields a perfectly
+ordinary-looking coordinate, with both signs flipped. This is the classic
+overlay bug: an enemy standing directly behind the player gets drawn on screen
+in front, mirrored to the opposite side, with the box sliding the wrong way as
+they move. Nothing crashes and no number looks obviously wrong, so
+world-to-screen code must skip any point whose `w` is at or below a small
+positive threshold before producing pixels, as the `clip_w` test in
+[Transform a point](#transform-a-point) does.
+
+## What field of view and aspect ratio change
+
+The vertical field of view `fov_y` determines how much of the world fits from top
+to bottom. The aspect ratio is `width / height`. A common perspective scale is:
+
+```text
+y_scale = 1 / tan(fov_y / 2)
+x_scale = y_scale / aspect
+```
+
+Here is where that comes from. Picture the frustum at some depth `d` straight
+ahead of the camera. Half the vertical field of view is the angle from the
+center line up to the top edge of what the camera sees, so — for a right
+triangle with that angle and an adjacent side of length `d` — the frustum's
+half-height at that depth is `d × tan(fov_y / 2)`. A point sitting exactly on
+that top edge has `view_y = d × tan(fov_y / 2)`, and it needs to land at the
+very top of the screen, NDC `y = 1`. Since `screen_y` is proportional to
+`view_y / view_depth`, the scale factor that sends `tan(fov_y / 2)` to `1` is
+its reciprocal: `y_scale = 1 / tan(fov_y / 2)`.
+
+Concrete numbers make the zoom effect visible. At `fov_y = 90°`, half the angle
+is `45°` and `tan(45°) = 1`, so `y_scale = 1`. Narrow the field of view to
+`60°`: half the angle is `30°`, `tan(30°) ≈ 0.577`, and `y_scale ≈ 1.732` — a
+bigger multiplier, so the same `view_y / view_depth` now produces a larger NDC
+value and the scene looks zoomed in. A smaller field of view makes
+`tan(fov_y / 2)` smaller, so the scale grows and the view zooms in.
+
+One practical trap sits in that formula. Trigonometric functions take
+<Tooltip tip="A radian measures an angle by the arc it covers on a circle of radius 1. A full turn is 2π = 6.2832 radians, so a quarter turn, 90°, is 6.2832 ÷ 4 = 1.5708 radians.">radians</Tooltip>,
+not degrees. Passing `90.0` where `1.5708` was expected produces a scale that
+is wrong by a wide margin, and the symptom is a scene that looks nothing like a
+camera view rather than an obviously wrong number. Convert at the boundary and
+put the unit in the variable name.
+
+`x_scale` reuses that number instead of deriving a separate one. At the same
+depth `d`, the frustum's half-width must be `aspect` times its half-height,
+because `aspect` is defined as `width / height`. Dividing `y_scale` by `aspect`
+shrinks the horizontal scale by exactly that factor, so the wider half-width
+still maps to NDC `x = 1`. Skip that division and a widescreen monitor
+squashes the image horizontally instead of showing more of the scene.
 
 ## One concrete perspective matrix
 
@@ -121,7 +194,8 @@ Conventions must be attached to formulas. Under these assumptions:
 - OpenGL NDC depth `-1..1`;
 - positive near and far distances with `0 < near < far`;
 
-define `f = 1 / tan(fov_y / 2)`. One projection matrix is:
+define `f = 1 / tan(fov_y / 2)`, the `y_scale` from the previous section, so the
+matrix's first entry, `f/aspect`, is `x_scale`. One projection matrix is:
 
 ```text
 [ f/aspect   0             0                    0          ]
@@ -133,9 +207,6 @@ define `f = 1 / tan(fov_y / 2)`. One projection matrix is:
 Multiplying a view-space point gives `clip_w = -view_z`, so points in front have
 positive `w`. This exact matrix is not portable to a left-handed or Direct3D depth
 convention. Its purpose is to show where assumptions live.
-
-`fov_y` must be in radians for ordinary trigonometric functions. The half-angle
-appears because the camera center splits the vertical frustum symmetrically.
 
 ## Clipping happens before perspective division
 
@@ -161,8 +232,7 @@ projection example above; this makes the depth control read naturally and shows
 why formulas cannot be separated from their coordinate convention. Move the
 point sideways, vertically, and through depth; then change
 the vertical field of view. Watch how camera-space coordinates become NDC and
-finally pixels. Moving a point farther away reduces its NDC displacement because
-the perspective divide divides by a value proportional to depth.
+finally pixels.
 
 <PerspectivePlayground />
 
@@ -211,6 +281,13 @@ There are three independent questions:
 3. is the candidate already `view × projection`, `projection × view`, or one
    component only (**composition**)?
 
+A wrong answer to the first and a wrong answer to the second can cancel, and
+neither the identity matrix nor a still camera reveals it. Validate identity,
+translation, and a known 90-degree rotation together rather than repeatedly
+transposing until one screenshot looks plausible.
+
+<Accordion title="Optional reference: how two layout mistakes cancel">
+
 Those three interact in a way that actively hides mistakes. Transposing a
 matrix swaps its rows and columns, and switching between row-vector and
 column-vector multiplication has precisely the same effect on the arithmetic.
@@ -230,8 +307,7 @@ as forgiving. A translation matrix and a 90-degree rotation matrix are not
 symmetric, so under a cancelled pair of mistakes they are the first things to
 break.
 
-Validate identity, translation, and a known 90-degree rotation together rather
-than repeatedly transposing until one screenshot looks plausible.
+</Accordion>
 
 ## Transform a point
 
@@ -301,6 +377,45 @@ screen_y = viewport_y + (1 - ndc_y) × viewport_height / 2
 The y flip assumes an upper-left pixel origin. OpenGL's traditional viewport origin
 is lower-left, and UI/window systems commonly use upper-left. Confirm which layer
 the overlay draws into.
+
+## Several cameras, one world
+
+A camera is an object with a position and a turn like any other, plus a projection
+and a few settings: which surface it draws into (the window, or an off-screen image),
+which rectangle of that surface (its **viewport**), and when it draws compared with
+the other cameras (its **order**). A split screen, a minimap, a rear-view mirror, and
+a security monitor inside the game each use another camera. A camera that draws into
+an off-screen image makes a texture that a material can then show on a mirror or a
+monitor. Every formula in this lesson works for each camera separately, using that camera's viewport rather than the whole window.
+
+<Example title="A 1920 × 1080 window with two players and a minimap">
+
+| Camera | Viewport (x, y, width, height) | Aspect | Centre of its picture |
+|---|---|---|---|
+| player 1 | (0, 0, 960, 1080) | 960 ÷ 1080 = 0.889 | (480, 540) |
+| player 2 | (960, 0, 960, 1080) | 960 ÷ 1080 = 0.889 | (960 + 480, 540) = (1440, 540) |
+| minimap | (1664, 0, 256, 256) | 256 ÷ 256 = 1 | (1664 + 128, 128) = (1792, 128) |
+
+The window's own aspect is 1920 ÷ 1080 = 1.778. Give player 1's camera that value
+instead of 0.889, and its horizontal scale, `y_scale ÷ aspect`, comes out
+0.889 ÷ 1.778 = 0.5 times what it should be, so the picture is squeezed to half its
+width. And a world point that projects to the middle of player 2's picture belongs at
+pixel x = 1440, not at 480.
+
+</Example>
+
+The minimap's viewport lies inside player 2's, so the minimap must draw later. The
+camera with the lower order draws first, and a later camera can paint over what is
+already there instead of clearing it, which is how a minimap sits on top of the main
+picture. Which objects each camera draws is decided by the layer filters, culling, and visibility tests in Lesson 7.2.
+
+In memory, a game with several cameras can hold several view-projection matrices. The
+one that belongs to the picture you draw over is the one that changes when you turn
+that player's view, and its viewport is the rectangle to use in the pixel conversion
+above. `world_to_screen` counts pixels from the top left of the viewport whose
+width and height it receives, so add the viewport's own origin to get window
+pixels: for player 2, the centre of the picture is `(480, 540)` inside the
+viewport and `(960 + 480, 540)` in the window.
 
 ## Depth after projection is not world distance
 
