@@ -10,7 +10,6 @@ sidebar:
   label: "12.4 What an Operating System Kernel Does"
 ---
 import { Frame } from '../../../../components/kit';
-import Visual from '../../../../components/Visual.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 
@@ -27,15 +26,10 @@ programs away from the kernel's powers? How does a program ask the kernel for
 something anyway? What does the kernel do with its authority? And why can one
 kernel bug stop the whole computer, when a bug in a game only ends the game?
 A four-byte `ReadProcessMemory` request will carry these questions through the
-user/kernel boundary. The next lesson reads the exact bits
-the processor checks and follows the request one layer at a time.
-
-The API layers in the previous lesson showed the route a request takes. Here
-we examine the authority that makes that route work. After the privilege
-checks, a crash dump will bring threads, modules, and saved registers back
-together into one process snapshot. Chapter 12 then follows requests across
-DLL and device boundaries; Chapter 14 builds on that foundation to explain
-virtual machines and hardware.
+user/kernel boundary. The next two lessons open that request up:
+[Lesson 12.5](/pages/10/07/) follows the Windows DLL layers it passes through
+on the way down, and [Lesson 12.6](/pages/14/07/) reads the exact bits the
+processor checks and follows the request one layer at a time.
 
 ## Two modes, enforced by the processor
 
@@ -57,11 +51,10 @@ processors define four levels, numbered 0 to 3 and usually drawn as nested
 - **user mode**, ring 3, for everything else: games, browsers, debuggers, and
   every tool in this book.
 
-[Lesson 11.9](/pages/10/07/) introduced the two modes as permission levels. The
-processor records the current level in two bits of one of its registers, which
-[Lesson 11.11](/pages/14/07/#the-current-level-is-two-bits-of-a-register) reads
-in a debugger. What matters here is what the processor refuses to do while the
-level is 3.
+The processor records the current level in two bits of one of its registers,
+which [Lesson 12.6](/pages/14/07/#the-current-level-is-two-bits-of-a-register)
+reads in a debugger. What matters here is what the processor refuses to do
+while the level is 3.
 
 ### What ring 3 is not allowed to do
 
@@ -72,7 +65,7 @@ the machine. `hlt` stops the processor until the next interrupt. `cli` turns
 interrupts off, which would silence the timer the kernel relies on to take the
 processor back. `mov cr3, rax` switches to a different set of page tables,
 which selects a process's whole view of memory. The physical-memory lessons
-in Chapter 12 will follow those page tables. `wrmsr` rewrites the processor's internal
+in Chapter 13 will follow those page tables. `wrmsr` rewrites the processor's internal
 settings. At ring 3, each of these raises a **general-protection fault**
 instead of running, and the kernel turns the fault into an exception that
 normally ends the program.
@@ -110,8 +103,8 @@ the processor executes it, it:
 Step 3 is what makes the design safe. A program chooses *when* to request a
 service, never an arbitrary kernel instruction to run. The processor enters a
 kernel-controlled path, which identifies the requested service and checks its
-untrusted arguments. This is the controlled crossing promised in Chapter 11,
-now seen from the processor's side.
+untrusted arguments. This is the controlled crossing that the Windows API
+lessons relied on, now seen from the processor's side.
 
 <MarginNote kind="brief">A system call enters a kernel-chosen service path; it does not let the caller pick arbitrary privileged instructions to execute.</MarginNote>
 
@@ -141,29 +134,28 @@ sequenceDiagram
     Win->>Tool: success, 4 bytes read
 ```
 
-Your tool's call passes through `kernel32.dll` and `kernelbase.dll`, the layers
-that [Lesson 11.9](/pages/10/07/) followed down the stack, to
-`NtReadVirtualMemory` in `ntdll.dll`. That function is only a few instructions
-long: it puts a **service number**, which tells the kernel which of its
-routines to run, into the `eax` register, and executes `syscall`.
+The call passes through `kernel32.dll` and `kernelbase.dll` to
+`NtReadVirtualMemory` in `ntdll.dll`, which puts a **service number**, telling
+the kernel which of its routines to run, into the `eax` register and executes
+`syscall`. The kernel's own `NtReadVirtualMemory` then checks two things before
+it touches anything:
 
-On the other side, the kernel's entry code moves onto a stack of its own and
-saves your registers. Then the kernel's own `NtReadVirtualMemory` checks the
-request before touching anything. Both address ranges, the 4 bytes in the game
-and your tool's buffer, must lie in user space, which is why
-`ReadProcessMemory` can never read kernel memory, whatever handle you hold. And
-the handle must carry the right the operation needs: `PROCESS_VM_READ` for a
-read, which this handle has, or `PROCESS_VM_WRITE` for a write, which it lacks.
-A handle's rights are fixed when it is opened, and nothing done with it
-afterward can add one.
+- both address ranges, the 4 bytes in the game and your tool's buffer, must lie
+  in user space, so `ReadProcessMemory` can never read kernel memory, whatever
+  handle you hold;
+- the handle must carry the right the operation needs. This one has
+  `PROCESS_VM_READ`, so the read is allowed. It lacks `PROCESS_VM_WRITE`, so a
+  write through it would be refused, and nothing can add that right later: a
+  handle's rights are fixed when it is opened.
 
 Only then does the kernel copy the 4 bytes into your buffer. It puts a status
 code in `eax`, here `STATUS_SUCCESS`, which is 0, and executes `sysret`, the
-reverse of `syscall`, which drops the level back to 3 and resumes your thread
-after its `syscall`. On a failure, `kernelbase.dll` turns the status into the
-error number that `GetLastError` reports, such as 5 for access denied.
-[Lesson 11.11](/pages/14/07/#the-same-call-one-layer-at-a-time) follows each
-step with the values involved, including the arithmetic of the rights check.
+reverse of `syscall`: the level drops back to 3 and your thread resumes after
+its `syscall`. On a failure, `kernelbase.dll` turns the status into the error
+number that `GetLastError` reports, such as 5 for access denied.
+[Lesson 12.6](/pages/14/07/#the-same-call-one-layer-at-a-time) follows each
+step with its values: the kernel's own stack, the saved registers, and the
+arithmetic of the rights check.
 
 <span id="the-kernel-runs-only-when-a-door-opens" />
 
@@ -305,82 +297,41 @@ for new code.
 
 ## Why a kernel bug takes the whole machine down
 
-When user-mode code follows a bad pointer, the processor raises a page fault
-and the kernel handles it. The kernel checks its records, finds that nothing
-valid lives at that address, and turns the fault into an access-violation
-exception for that one process. The program's own handler, a debugger, or
-Windows Error Reporting deals with it, and in the worst case one process ends.
-The kernel is the safety net under every user-mode program.
+When user-mode code follows a bad pointer, the processor raises a page fault,
+the kernel finds that nothing valid lives at that address, and it turns the
+fault into an access-violation exception for that one process. In the worst
+case one process ends; the kernel is the safety net under every user-mode
+program.
 
-There is no separate part of Windows that can repair arbitrary damage to its
-own kernel state. A hypervisor may isolate a whole guest from the host, as
-Lesson 14.1 will show, but it cannot resume a guest kernel whose internal
-records are already corrupted. Kernel code does catch faults it expects, such
-as touching a user buffer that another thread may have freed; the copy behind
-`ReadProcessMemory` is written to catch exactly those. But a driver that follows
-a bad pointer by mistake can raise an unexpected fault inside the kernel, and
-kernel code and drivers share an address space and a set of data
-structures: the scheduler's lists, the memory manager's page records, and the
-locks that guard them. The fault may have struck halfway through updating one
-of those structures, with a lock still held. Windows cannot generally prove
-which of its own records remain sound, and carrying on could write corrupted
-data to disk. For an unrecoverable kernel failure, Windows stops on purpose.
-
-```mermaid
-flowchart TD
-    A["code follows a bad pointer"] --> B{"privilege level<br/>of the faulting code"}
-    B -->|"ring 3"| C["kernel handles the page fault"]
-    C --> D["access violation for<br/>that one process"]
-    D --> E["the process handles it or ends,<br/>everything else keeps running"]
-    B -->|"ring 0, unexpected"| F["no general in-OS repair<br/>for damaged kernel state"]
-    F --> G["shared kernel state<br/>may be half updated"]
-    G --> H["bug check: stop code,<br/>crash dump, restart"]
-```
-
-That deliberate stop is a **bug check**, better known as the blue screen.
-Windows shows a stop code, such as `0x50` PAGE_FAULT_IN_NONPAGED_AREA or `0xD1`
-DRIVER_IRQL_NOT_LESS_OR_EQUAL, writes a crash dump of the whole machine if it
-can ([Lesson 11.12](/pages/10/08/) will capture a dump of one process), and
-restarts.
-
-<Visual kind="fault-ring" />
-
-This is why the book keeps its labs in user mode and inside a virtual machine.
-The [kernel trust lesson](/pages/11/05/) will make that design choice concrete
-with a read-only driver inventory. A crash in a
-user-mode lab ends one process, and even a bug check inside a virtual machine
-stops only that virtual machine ([Lesson 14.1](/pages/14/03/)).
+Nothing sits beneath the kernel in the same way. Kernel code and drivers share
+one address space and one set of data structures, so a driver that follows a
+bad pointer by mistake may have stopped halfway through updating one of them,
+with a lock still held. Windows cannot prove which of its records are still
+sound, so it stops the whole machine on purpose. That stop is a **bug check**,
+better known as the blue screen: Windows shows a stop code, writes a crash
+dump if it can, and restarts.
+[Lesson 12.9](/pages/11/05/#why-a-kernel-bug-takes-the-whole-machine-down)
+follows that decision step by step, beside the other risks of trusted kernel
+code. It is also why the book keeps its labs in user mode and inside a virtual
+machine: a crash in a user-mode lab ends one process, and even a bug check
+inside a virtual machine stops only that virtual machine.
 
 ## Why some anti-cheat runs a kernel component
 
 Anti-cheat software exists to notice when another program interferes with a
-game. If an anti-cheat and an interfering tool both run in user mode, both
-are subject to process handles, access rights, and other Windows permission checks from
-Chapter 11. Running at the same processor privilege does not itself grant
-either process access to the other. It does limit what either can establish
-about system-wide events and privileged components from inside its own process.
+game. A kernel component lets it use Windows facilities that user-mode code
+cannot reach. One of them is a **handle-operation callback**, which runs while
+another process opens a handle to the game and may remove rights from the
+request. A tool that asks for read and write rights can receive a handle
+without them, and its `ReadProcessMemory` then fails at exactly the rights
+check described above.
 
-A kernel component changes that balance. Running in ring 0 lets it use
-documented Windows facilities that user-mode code cannot reach:
-
-- **process and image-load notifications**, so it learns about every new
-  process and every DLL or driver as it loads, instead of scanning for them
-  afterward;
-- **handle-operation callbacks**, which run while another process opens a handle
-  to the game and may remove rights from the request. A tool that asks for read
-  and write rights can receive a handle without them, and its
-  `ReadProcessMemory` then fails at exactly the rights check described above;
-- a view of loaded drivers and system state that user-mode code cannot quietly
-  alter.
-
-The costs are the other half of this lesson. Anti-cheat code in the kernel has
-the same authority as the rest of the kernel, so its bugs become bug checks on
-players' machines, and a vulnerability in it becomes a vulnerability in every
-machine it is installed on. It asks players to trust a game company with ring-0
-code. Kernel placement also creates another boundary to protect: which drivers
-may load and what authority they expose. Windows uses signing rules, vulnerable
-driver block policies, and memory integrity to reduce that risk. Chapter 12's
-driver pair explains what such code actually does and why its interface must
-be narrow, then examines the trust placed in a loaded driver.
+The cost is that such code has the same authority as the rest of the kernel.
+Its bugs become bug checks on players' machines, and a vulnerability in it
+becomes a vulnerability in every machine it is installed on.
+[Lesson 15.3](/pages/15/04/#why-some-anti-cheat-runs-a-kernel-component)
+weighs what that extra visibility buys against those costs. First, the next
+lessons in this chapter show what driver code actually does and why its
+interface must be narrow.
 
 References: [User mode and kernel mode](https://learn.microsoft.com/en-us/windows-hardware/drivers/gettingstarted/user-mode-and-kernel-mode), [process security and access rights](https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights), [bug check code reference](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2), and [`ObRegisterCallbacks`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-obregistercallbacks).

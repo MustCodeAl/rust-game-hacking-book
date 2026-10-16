@@ -56,6 +56,52 @@ The boundary is useful because callers do not receive kernel authority merely
 for asking Windows to do something. The kernel checks the request, and a sound
 driver checks it again before touching device or privileged memory.
 
+## Why a kernel bug takes the whole machine down
+
+When user-mode code follows a bad pointer, the processor raises a page fault
+and the kernel handles it. The kernel checks its records, finds that nothing
+valid lives at that address, and turns the fault into an access-violation
+exception for that one process. The program's own handler, a debugger, or
+Windows Error Reporting deals with it, and in the worst case one process ends.
+The kernel is the safety net under every user-mode program.
+
+There is no separate part of Windows that can repair arbitrary damage to its
+own kernel state. A hypervisor may isolate a whole guest from the host, as
+Lesson 14.1 will show, but it cannot resume a guest kernel whose internal
+records are already corrupted. Kernel code does catch faults it expects, such
+as touching a user buffer that another thread may have freed; the copy behind
+`ReadProcessMemory` is written to catch exactly those. But a driver that follows
+a bad pointer by mistake can raise an unexpected fault inside the kernel, and
+kernel code and drivers share an address space and a set of data
+structures: the scheduler's lists, the memory manager's page records, and the
+locks that guard them. The fault may have struck halfway through updating one
+of those structures, with a lock still held. Windows cannot generally prove
+which of its own records remain sound, and carrying on could write corrupted
+data to disk. For an unrecoverable kernel failure, Windows stops on purpose.
+
+```mermaid
+flowchart TD
+    A["code follows a bad pointer"] --> B{"privilege level<br/>of the faulting code"}
+    B -->|"ring 3"| C["kernel handles the page fault"]
+    C --> D["access violation for<br/>that one process"]
+    D --> E["the process handles it or ends,<br/>everything else keeps running"]
+    B -->|"ring 0, unexpected"| F["no general in-OS repair<br/>for damaged kernel state"]
+    F --> G["shared kernel state<br/>may be half updated"]
+    G --> H["bug check: stop code,<br/>crash dump, restart"]
+```
+
+That deliberate stop is a **bug check**, better known as the blue screen.
+Windows shows a stop code, such as `0x50` PAGE_FAULT_IN_NONPAGED_AREA or `0xD1`
+DRIVER_IRQL_NOT_LESS_OR_EQUAL, writes a crash dump of the whole machine if it
+can ([Lesson 11.12](/pages/10/08/) will capture a dump of one process), and
+restarts.
+
+<Visual kind="fault-ring" />
+
+This is why the book keeps its labs in user mode and inside a virtual machine.
+A crash in a user-mode lab ends one process, and even a bug check inside a
+virtual machine stops only that virtual machine ([Lesson 14.1](/pages/14/03/)).
+
 ## Why the course labs stay in user mode
 
 The old open-source games in this book do not need a driver. Their offline processes can be studied with documented Windows APIs, a debugger, a user-mode DLL, and reversible patches.
