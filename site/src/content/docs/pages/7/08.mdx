@@ -9,6 +9,9 @@ sidebar:
   order: 2
   label: "14.2 Call Tracing and Bounded Logs"
 ---
+import PredictReveal from '../../../../components/PredictReveal.astro';
+import CellFrames from '../../../../components/CellFrames.astro';
+import { traceBaselineCells } from '../../../../data/figures-rea';
 import CodeTrace from '../../../../components/CodeTrace.astro';
 import Frame from '../../../../components/kit/Frame.astro';
 import { Accordion, Badge, GitHub, Panel, Steps } from '../../../../components/kit';
@@ -322,6 +325,36 @@ This first complete version writes compact lines directly to the console. The bo
   duration="15 seconds"
   caption="The original call-logger recording shows the running game producing trace output. Each observed call requires a breakpoint hit, execution of the saved call, a single-step event, and re-arming; bytes discovered in a static scan have not necessarily executed."
 />
+
+## Compare a trace with a run that changed nothing
+
+One trace lists what ran while it recorded, but not which calls the action
+caused: most of them belong to drawing, input and timers that run anyway. To
+separate the two, fix the scenario first (the build, the save, the logging
+window and the event cap) and record it twice without changing anything. Then
+record it once more with a single change, such as recruiting one unit before
+ending the turn.
+
+The two unchanged runs show how far the counts move on their own. A function
+the game calls once per frame runs as many times as frames fit in the window,
+and that depends on timing, so even identical runs disagree. A count in the
+changed run points at the change only when it falls outside the range the
+unchanged runs produced.
+
+<PredictReveal
+  id="rea-trace-baseline"
+  setup="Two runs that only end the turn called wesnoth.exe+0x0E7710 212 and 219 times. A third run that first recruits one unit called it 215 times."
+  question="Does recruiting change how often +0x0E7710 runs?"
+  options={[
+    { label: 'Yes: 215 is 3 more than the first run', why: 'The second unchanged run did exactly what the first did and still called it 219 times. Identical runs already differ by 7, so a difference of 3 says nothing about the recruit.' },
+    { label: 'The counts cannot tell: 215 lies inside the 212 to 219 of the identical runs', correct: true, why: 'A count points at the change only when it falls outside what unchanged runs produce. 215 is inside, so this function may or may not take part in recruiting, and these counts cannot separate the two.' },
+    { label: 'No: it never runs during a recruit', why: 'It ran 215 times in the run that recruited. The counts cannot rule it out; they only fail to separate it from the timing noise.' },
+  ]}
+>
+
+<CellFrames id="trace-baseline" title="Two unchanged runs, then one change" scenarios={traceBaselineCells} />
+
+</PredictReveal>
 
 ## Diagnose by the last completed state
 
