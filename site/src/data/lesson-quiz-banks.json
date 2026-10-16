@@ -394,7 +394,7 @@
           "52"
         ],
         "answer": "0",
-        "explanation": "Lowest byte first means 0x34 + 0x12 × 256 = 52 + 4,608 = 4,660, which is 0x1234. Reading the bytes in the written order would give 13,330.",
+        "explanation": "Lowest byte first means 0x34 + 0x12 × 256 = 52 + 4,608 = 4,660, which is 0x1234. Reading the two low bytes in the written order, as 0x3412, would give 13,330.",
         "type": "multiple-choice"
       },
       {
@@ -490,15 +490,15 @@
       },
       {
         "id": "loader-first-check",
-        "prompt": "In the loader's flow, which check comes first?",
+        "prompt": "A save loader checks the file's size, its magic number, its version, its name length and its checksum. Why does the checksum comparison come last?",
         "options": [
-          "Whether the first four bytes are `GSAV`",
-          "Whether the sum matches the stored checksum",
-          "Whether the version byte is 1",
-          "Whether the gold is under 65,535"
+          "The checksum is the cheapest of the checks, so it is kept for the end",
+          "A checksum can only be compared after the gold field has been edited",
+          "Only then is it known where the checksum sits and which bytes it covers",
+          "The checksum is stored at the very start, so it is the last one read"
         ],
-        "answer": "0",
-        "explanation": "The magic number is checked before anything else, since a file that is not a `GSAV` save has no meaningful fields. The checksum is the last gate.",
+        "answer": "2",
+        "explanation": "The checksum's position depends on the name length, and the bytes it covers mean something only in a known format and version. Checking those first means the final comparison reads the right bytes; a file that fails earlier never gets that far.",
         "type": "multiple-choice"
       },
       {
@@ -516,7 +516,7 @@
       },
       {
         "id": "keyed-check",
-        "prompt": "Why can't you recompute a MAC or a digital signature the way you recomputed this checksum?",
+        "prompt": "Why can't you recompute a keyed check or a digital signature the way you can recompute a plain byte sum?",
         "options": [
           "It depends on a secret key you do not have",
           "It is stored in a different byte order than the game",
@@ -3226,15 +3226,15 @@
       },
       {
         "id": "open-by-name-false",
-        "prompt": "A tool that only inspects a process opens it with a 'read-only' setting. What does that mean?",
+        "prompt": "A memory map shows three neighbouring runs with different protections, and all three report the same allocation base. What does that tell you?",
         "options": [
-          "It asks only for query and read rights, not write rights",
-          "It opens the process but suspends all of its threads",
-          "It reads the process's memory from disk instead of live",
-          "It prevents every other tool from opening the process"
+          "They are three separate allocations that the system merged by mistake",
+          "The map is out of date, since one allocation has only one protection",
+          "Only the first run is real, and the other two are reserved copies of it",
+          "They are parts of one allocation whose pages were given different rules"
         ],
-        "answer": "0",
-        "explanation": "The handle should match the question being asked. A tool that only inspects has no need for rights to change things.",
+        "answer": "3",
+        "explanation": "A run is a stretch of pages with identical state, type and protection, so one allocation, such as a loaded module with code and data sections, can be reported as several runs. The shared allocation base shows where that whole allocation begins.",
         "type": "multiple-choice"
       },
       {
@@ -3296,15 +3296,15 @@
       },
       {
         "id": "parallel-capture-only-touches",
-        "prompt": "In a parallel scanner for another process, why should only one stage copy memory out of the target while workers search local buffers?",
+        "prompt": "A memory run reported by the system starts at 0x1000 and is 0x3000 bytes long, but the module being scanned spans 0x2000 up to 0x5000. Which range should be copied?",
         "options": [
-          "It keeps the unstable cross-process step in one place, and workers search stable private data",
-          "Workers cannot run on more than one core if they share a handle to the target process",
-          "Operating systems only allow a single thread to ever read from another process",
-          "Local buffers are always faster to read, so the target must never be touched again"
+          "0x1000 up to 0x4000, the whole run as reported by the system",
+          "0x2000 up to 0x5000, the whole module whatever the run covers",
+          "0x2000 up to 0x4000, the overlap of the run and the module",
+          "0x1000 up to 0x5000, from the lower start to the higher end"
         ],
-        "answer": "0",
-        "explanation": "Reading another process can fail or change under you. Doing that once, then scanning private copies, keeps the risky boundary small and lets workers run safely in parallel.",
+        "answer": "2",
+        "explanation": "Copy only the overlap: start at the larger start, max(0x1000, 0x2000) = 0x2000, and end at the smaller end, min(0x1000 + 0x3000, 0x5000) = 0x4000. Bytes outside the module are not the code you meant to search.",
         "type": "multiple-choice"
       },
       {
@@ -17528,15 +17528,15 @@
       },
       {
         "id": "enumeration-rule",
-        "prompt": "What does 'enumeration tells you what existed during the snapshot' mean for later reads?",
+        "prompt": "Which part of a running process describes the security context that Windows checks when the process asks for access to a protected object?",
         "options": [
-          "An address seen earlier may still fail to read and should give a normal error",
-          "Any address seen in the snapshot stays valid until the program exits",
-          "A read should be retried in a loop until Windows finally allows it",
-          "The tool should cache the address and skip checking the result next time"
+          "Its handle table",
+          "Its main thread's stack",
+          "Its access token",
+          "Its process environment block"
         ],
-        "answer": "0",
-        "explanation": "Seeing an address earlier does not guarantee it is valid now. The tool reports an error rather than assuming a previously seen address must remain valid.",
+        "answer": "2",
+        "explanation": "The access token records the security identity and privileges the process runs with. Windows compares it with an object's security rules when access is requested; the handle table only lists what has already been granted.",
         "type": "multiple-choice"
       },
       {
@@ -17570,7 +17570,7 @@
         "prompt": "If ASLR moves the whole module, why does the same RVA still name the same position?",
         "options": [
           "It is measured from the module's start, which moves along with every byte inside",
-          "It is an absolute address that Windows rewrites in the lab tool's output",
+          "It is an absolute address, which Windows rewrites whenever a module moves",
           "It is stored in the PEB, and the PEB is left unchanged when a module moves",
           "It is a file offset on disk, which does not depend on where the module loads"
         ],
@@ -17636,7 +17636,7 @@
         "options": [
           "Another thread may load or unload a module while the list is being walked",
           "The lists are stored encrypted and each entry needs a key from the TEB",
-          "The lists exist while a debugger is attached to the process",
+          "The lists exist only while a debugger is attached to the process",
           "The lists contain 32-bit modules, so 64-bit DLLs would be missed"
         ],
         "answer": "0",
@@ -18084,7 +18084,7 @@
       },
       {
         "id": "dump-no-exception",
-        "prompt": "The self-dump is captured during a normal function call, not a crash. Why is that useful for learning?",
+        "prompt": "A practice dump is captured while a program runs normally, during an ordinary function call rather than a crash. Why is that still useful for learning?",
         "options": [
           "You can practice module, thread, register, and stack navigation without any undefined behavior",
           "`!analyze -v` can only run on dumps that were written by a healthy, non-crashing process",
@@ -18224,7 +18224,7 @@
           "The folder shows what is installed; the module list shows what the running process mapped",
           "The module list is generated before launch, so it matches the folder in every case",
           "The folder lists files ending in `.dll`, which hides any executable beside them",
-          "The loaded modules appear for native games, so they separate native from managed"
+          "Loaded modules are listed only for native games, so they separate native from managed"
         ],
         "answer": "0",
         "explanation": "A launcher can start a different executable than the one you inspected. The module list reflects the real process, not the install directory.",
@@ -18240,7 +18240,7 @@
           "The assemblies hold plain C++ source files, so no decompiler step is needed"
         ],
         "answer": "0",
-        "explanation": "`Assembly-CSharp.dll` holds intermediate language that keeps class, method, and field names. The Chapter 3 recovery skills become confirmation rather than discovery.",
+        "explanation": "`Assembly-CSharp.dll` holds intermediate language that keeps class, method, and field names. Recovering a field by controlled experiments becomes confirmation rather than discovery.",
         "type": "multiple-choice"
       },
       {
@@ -18338,7 +18338,7 @@
         "id": "classification-goes-stale",
         "prompt": "A studio switches a Unity project from Mono to IL2CPP between early access and release. What should you do?",
         "options": [
-          "Re-read the folder and loaded modules for the new build, not reuse the old class",
+          "Re-read the folder and loaded modules for the new build, not reuse the old verdict",
           "Keep the old classification, because the scripting backend cannot change after launch",
           "Reuse the old offsets, because both backends share one object layout",
           "Check the executable's file name, since it records the backend"
@@ -18375,7 +18375,7 @@
       },
       {
         "id": "offset-vs-lifetime",
-        "prompt": "In every branch of the runtime flowchart, what does an offset actually describe?",
+        "prompt": "Whatever runtime a game uses, what does a field offset actually describe?",
         "options": [
           "A layout in one particular build; it does not keep the object alive",
           "A permanent identity that survives collection, scene reloads, and later builds",
@@ -18484,7 +18484,7 @@
       },
       {
         "id": "tab-in-path",
-        "prompt": "Why does the tool reject tabs and newlines inside file paths?",
+        "prompt": "A checksum manifest stores one file per line, with its fields separated by tabs. Why should the tool that writes it reject tabs and newlines inside file paths?",
         "options": [
           "They would make the one-line, tab-separated manifest format ambiguous to parse",
           "Windows forbids those characters in any file name, so the files could not exist",
@@ -19001,15 +19001,15 @@
       },
       {
         "id": "diff-limited-query",
-        "prompt": "A tool replaces a request for all rights with a narrow query-only right to read a process's image path. What does a successful open now tell you?",
+        "prompt": "A call that lets the operating system write into a buffer is marked unsafe, with a comment listing why the buffer stays valid. What does the unsafe marker mean?",
         "options": [
-          "That the tool did not quietly gain extra powers like writing memory",
-          "That the target process is trustworthy and safe to inspect fully",
-          "That the tool can now read the memory of the target process",
-          "That the target runs at the same integrity level as the tool"
+          "The compiler skips every check in the block, so its errors cannot occur",
+          "The block runs with administrator rights for as long as it executes",
+          "The programmer must supply a proof that the compiler cannot check itself",
+          "The operating system checks every pointer in the block before using it"
         ],
-        "answer": "0",
-        "explanation": "The small request documents the tool's purpose. If Windows grants it, no extra authority came along with it.",
+        "answer": "2",
+        "explanation": "The compiler cannot see what the operating system will do with the buffer, so it cannot prove the call is sound. Unsafe marks the place where a person must, by stating facts such as who owns the buffer and how long it stays alive.",
         "type": "multiple-choice"
       },
       {
@@ -19183,7 +19183,7 @@
           "The handle value changes at each call, so the debugger cannot match the two closes"
         ],
         "answer": "0",
-        "explanation": "Step 4 reports no error and the damage happens at a moment that depends on allocation order. That timing dependence makes them easy to blame on the wrong component.",
+        "explanation": "The second close reports no error, and the damage appears at a moment that depends on which object happened to receive the reused number. That timing dependence makes these bugs easy to blame on the wrong component.",
         "type": "multiple-choice"
       },
       {
@@ -19427,15 +19427,15 @@
       },
       {
         "id": "mutex-fix",
-        "prompt": "How does a mutex fix the gold race?",
+        "prompt": "A player record's position and health must always change together. Why is one mutex around both updates a better fit than a separate atomic operation on each field?",
         "options": [
-          "It makes read, add, and write one unit, so the purchase waits, reads 1,500, then writes 1,200",
-          "It runs the reward and the purchase on two cores at once so neither thread waits",
-          "It lets the purchase read first and skips the reward whenever the two threads overlap",
-          "It copies gold into each thread, then averages the two results at the end of the frame"
+          "A mutex is always faster than any atomic operation on the same data",
+          "Atomic operations work on one core only, while a mutex works on many",
+          "A mutex gives each thread its own copy, so nobody sees a change at all",
+          "Each atomic is indivisible alone, but a reader can still land between them"
         ],
-        "answer": "0",
-        "explanation": "The mutex protects a group of operations as one critical section. For a single number, an atomic add does the same job more cheaply.",
+        "answer": "3",
+        "explanation": "Two atomic updates are still two separate steps, so another thread can run between them and see the new position with the old health. Holding one mutex around both changes makes them a single critical section.",
         "type": "multiple-choice"
       },
       {
@@ -19591,7 +19591,7 @@
           "It applies the result and relies on the next frame to correct the entity"
         ],
         "answer": "0",
-        "explanation": "Workers send results through a channel, and the main thread picks them up at one known point. The generation check is the Lesson 3.6 idea reused.",
+        "explanation": "Workers send results through a channel, and the main thread picks them up at one known point. The generation check is the slot-and-generation handle idea reused.",
         "type": "multiple-choice"
       },
       {
@@ -19718,15 +19718,15 @@
       },
       {
         "id": "not-interpreted",
-        "prompt": "A learner says 'Windows interprets every ordinary game instruction'. What is the correction?",
+        "prompt": "A Windows function returns a 32-bit integer Boolean in which zero means false. How should a caller test the result for true?",
         "options": [
-          "Most instructions run directly on the CPU; Windows regains control through interrupts and system calls",
-          "Windows interprets the first thousand instructions after launch, then steps aside",
-          "Windows interprets instructions in kernel mode and runs user-mode ones natively on another core",
-          "Windows interprets all instructions, but its interpreter is built into the CPU"
+          "Test whether it equals exactly 1, since 1 is the only true value",
+          "Test whether it is nonzero, since any nonzero value means true",
+          "Test whether it is negative, since true sets the top sign bit",
+          "Test only its lowest byte, since a Boolean fits in one byte"
         ],
-        "answer": "0",
-        "explanation": "Windows is not in the path of each instruction, but timers and interrupts let it schedule, and system calls give a validated entry path.",
+        "answer": "1",
+        "explanation": "This kind of Boolean is false when zero and true for any other value, so comparing with exactly 1 can treat a valid true as false. Its 32-bit size also differs from a one-byte Rust bool, which is why bindings give it a separate type.",
         "type": "multiple-choice"
       },
       {
@@ -19770,15 +19770,15 @@
       },
       {
         "id": "syscall-number-fragile",
-        "prompt": "Why is copying a system-call number from one Windows build into a tool a poor idea?",
+        "prompt": "A Windows function's documentation gives a parameter the type DWORD. How wide should that parameter be in a 64-bit program?",
         "options": [
-          "Numbers and structures can change, which makes the tool fragile on other builds",
-          "The CPU rejects numbers that were not issued by `ntdll.dll` at the same address",
-          "System-call numbers are random for each process, so a copy is meaningless",
-          "Windows checks the numbers against the PE checksum of the calling program"
+          "64 bits, since every integer type grows in a 64-bit process",
+          "Pointer-sized, since it changes with the process's build",
+          "16 bits, the same width as the processor's original word",
+          "32 bits, since a DWORD stays an unsigned 32-bit integer"
         ],
-        "answer": "0",
-        "explanation": "The course does not call a native function or build a direct-syscall bypass. A documented Win32 contract is the stable route.",
+        "answer": "3",
+        "explanation": "A DWORD is a double 16-bit word: an unsigned 32-bit integer in 32-bit and 64-bit processes alike. Treating it as pointer-sized would shift every field after it in a structure and break the call.",
         "type": "multiple-choice"
       },
       {
@@ -19799,7 +19799,7 @@
         "prompt": "ASLR may map a DLL at a different base after a reboot. What should a tool store as stable identity?",
         "options": [
           "The export name, or an RVA when that is the stable identity",
-          "The absolute address that `api_layers` printed in the earlier run",
+          "The absolute address that a lookup printed in an earlier run",
           "The module base address from the last time the DLL was loaded",
           "The address of the first instruction found in the DLL's import table"
         ],
@@ -20126,15 +20126,15 @@
       },
       {
         "id": "dll-no-loader-manipulation",
-        "prompt": "Why does the course refuse to hide modules or unlink loader entries, even as an experiment?",
+        "prompt": "Why is hiding a module or unlinking it from the loader's lists a bad idea, even as an experiment?",
         "options": [
-          "Those actions corrupt loader records that this chapter's tools, debuggers, and crash reporters read",
-          "They are slow on the lab's 32-bit builds, which makes the experiments hard to repeat reliably",
-          "They would raise the process's integrity level, which the labs deliberately keep fixed at one value",
-          "They only work on 64-bit games, so the 32-bit lab games could not show the effect at all"
+          "It is slow on 32-bit programs, which makes an experiment hard to repeat reliably",
+          "It raises the process's integrity level, which an experiment should keep fixed",
+          "It works only on 64-bit programs, so a 32-bit program could not show the effect",
+          "It corrupts loader records that inspection tools, debuggers and crash reporters read"
         ],
-        "answer": "0",
-        "explanation": "The course observes and baselines modules; it does not alter loader state, which other tools read too.",
+        "answer": "3",
+        "explanation": "Debuggers, crash reporters and module inventories all read the loader's records. Editing them to hide something breaks those tools and conceals activity, so observe and baseline modules instead.",
         "type": "multiple-choice"
       }
     ]
@@ -20222,7 +20222,7 @@
       },
       {
         "id": "loader-createthread-success",
-        "prompt": "In that hang, thread creation reported success. Why does nothing look wrong at the creation call?",
+        "prompt": "A library's start-up callback creates a thread and then waits for it while the loader lock is held, and the process hangs. Why did the thread-creation call still report success?",
         "options": [
           "The thread exists, but it blocks before it reaches your own code",
           "The creation call is skipped until the wait has finished",
@@ -20357,7 +20357,7 @@
           "Skip restoring the patch, since nothing was installed and the lifecycle makes that state visible",
           "Restore the patch's original bytes anyway, to be safe, even though nothing was ever written there",
           "Wait for the loader lock and then retry the verification, since the failure is probably just timing",
-          "Call `gha_start` again, so the lifecycle begins from the first step and every patch is rechecked"
+          "Call the start function again, so the lifecycle begins from the first step and every patch is rechecked"
         ],
         "answer": "0",
         "explanation": "An explicit lifecycle makes partially initialized states visible. Cleanup should not pretend a patch exists when it was never installed.",
@@ -20474,7 +20474,7 @@
       },
       {
         "id": "dynres-three-params-x64",
-        "prompt": "On x86-64, the same under-declared signature is used: three parameters for a function that takes four. What goes wrong?",
+        "prompt": "On x86-64, a caller declares a function pointer with three parameters for a function that really takes four, all passed in registers. What goes wrong?",
         "options": [
           "It still reads the fourth register, whatever it holds",
           "Nothing, since the missing argument defaults to zero safely",
@@ -20487,15 +20487,15 @@
       },
       {
         "id": "dynres-option-none",
-        "prompt": "A lookup by name finds no address for an optional function. How should a robust resolver report that?",
+        "prompt": "On a system where an optional export really exists, how can you test that a run-time resolver handles the missing case correctly?",
         "options": [
-          "As a normal 'not available' result, with a fallback",
-          "As address zero, which the caller then goes on to call",
-          "As a fatal error that ends the whole process at once",
-          "As a guess at a similar function that does exist"
+          "Delete the system library briefly so that the export cannot be found",
+          "Call the real export with a null handle and watch whether it crashes",
+          "Look up a deliberately misspelled name and confirm the fallback runs",
+          "Run the tool once on an older system and trust whatever it reports"
         ],
-        "answer": "0",
-        "explanation": "An absent export is a supported state, not necessarily fatal. Returning an optional value makes the caller handle the missing case.",
+        "answer": "2",
+        "explanation": "A misspelled name is certain to be absent, so it drives the missing-export path without touching the operating system. Deleting system files is dangerous, and a bad call tests error handling rather than the fallback.",
         "type": "multiple-choice"
       },
       {
@@ -20941,12 +20941,12 @@
         "id": "trust-more-privilege",
         "prompt": "A teammate says that moving a tool's code into a kernel driver makes it better engineering. What is the right response?",
         "options": [
-          "More privilege enlarges both its authority and the damage a bug can do",
-          "Correct, since kernel code is faster and therefore safer",
-          "Correct, since drivers are checked more thoroughly when they load",
-          "Correct, since drivers cannot crash the whole system"
+          "Agree: kernel code runs faster, and faster code is always safer",
+          "Agree: drivers are checked much more thoroughly when they load",
+          "Disagree: more privilege enlarges both its power and a bug's damage",
+          "Disagree only for 32-bit tools, since 64-bit drivers never crash"
         ],
-        "answer": "0",
+        "answer": "2",
         "explanation": "Moving code into a driver enlarges its authority and the damage a bug can cause alike. It is not an engineering improvement in itself.",
         "type": "multiple-choice"
       },
@@ -20978,7 +20978,7 @@
       },
       {
         "id": "trust-not-built",
-        "prompt": "Which of these does the course deliberately not build?",
+        "prompt": "Which capability should a tool for studying games never provide, because it hands out control of the whole operating system?",
         "options": [
           "Arbitrary kernel or physical-memory read/write commands",
           "A read-only inventory of the drivers Windows has loaded",
@@ -20986,7 +20986,7 @@
           "A hash baseline of the modules a game has loaded"
         ],
         "answer": "0",
-        "explanation": "The course avoids arbitrary kernel read/write, privilege escalation, security or anti-cheat bypasses, hidden drivers, and loaders for vulnerable drivers. The inventory is read-only and defensive.",
+        "explanation": "Arbitrary kernel or physical-memory access turns studying one game into controlling the operating system, and any program could abuse it. A read-only inventory, a staged user-mode DLL and a hash baseline either stay inside one process or only observe.",
         "type": "multiple-choice"
       },
       {
@@ -21082,15 +21082,15 @@
       },
       {
         "id": "trust-fewer-details",
-        "prompt": "On a hardened Windows installation, the inventory shows fewer details. What should you do?",
+        "prompt": "On a hardened Windows installation, a read-only driver inventory run from a normal account shows fewer details. What should you do?",
         "options": [
           "Treat it as the security boundary working, and do not weaken the machine to lengthen the list",
           "Enable the debug privilege for the program so that it can see every driver on the whole machine",
           "Turn off memory integrity for the run, since that feature hides driver names from user programs",
-          "Run the lab as ring 0 code inside a driver, so that the list matches what the kernel itself sees"
+          "Run the tool as ring 0 code inside a driver, so that the list matches what the kernel itself sees"
         ],
         "answer": "0",
-        "explanation": "The program does not enable debug privileges. Fewer details are not a failure to fix by lowering defenses.",
+        "explanation": "A read-only inventory has no reason to enable debug privileges. Fewer details are the access boundary doing its job, not a failure to fix by lowering defenses.",
         "type": "multiple-choice"
       },
       {
@@ -21125,7 +21125,7 @@
         "options": [
           "Event ID 6; confirm the file, service, signature, source, and owning software before acting",
           "Event ID 1; delete the file with the unexpected name before looking at anything else",
-          "Event ID 6; assume it is malicious, since every driver load is a high-risk event",
+          "Event ID 11; assume it is malicious, since every new driver file is high risk",
           "Event ID 3; block the network connection of the driver before checking its signature"
         ],
         "answer": "0",
@@ -21334,15 +21334,15 @@
       },
       {
         "id": "dma-apartment",
-        "prompt": "In the apartment-number analogy, what plays the part of the building?",
+        "prompt": "A buffer fills two neighbouring 4 KiB virtual pages. Where must its second page sit in physical memory?",
         "options": [
-          "The page-table root (CR3) chosen for the address space",
-          "The physical RAM chip that holds the final byte",
-          "The byte offset inside the final 4 KiB page",
-          "The access type: read, write, or instruction fetch"
+          "In the frame right after the first page's frame, as pages stay in order",
+          "Anywhere: each page maps to its own frame, not always the next one",
+          "In the same frame as the first page, since one buffer uses one frame",
+          "At the same number as its virtual address, since paging keeps that"
         ],
-        "answer": "0",
-        "explanation": "Apartment 1000 means nothing without the building, just as `0x1000` means nothing without the page-table root. The analogy is limited, because real mappings can change and carry permissions.",
+        "answer": "1",
+        "explanation": "Paging maps each virtual page on its own. Two neighbouring virtual pages can land in frames far apart, so reading a capture across a page boundary needs a fresh translation for the second page.",
         "type": "multiple-choice"
       },
       {
@@ -21396,7 +21396,7 @@
           "`0x4003`, with the next table at 0x4000 and the low bits as flags",
           "`0x0340_0000_0000_0000`, since the first byte is the highest",
           "`0x0340`, since only the first two bytes count",
-          "`0x4003`, with the next table at 0x4003 and no flags"
+          "`0x4000`, since the low byte is only padding and means nothing"
         ],
         "answer": "0",
         "explanation": "Little-endian puts the lowest byte first, so 0x40 in the second byte is worth 0x4000 and 0x03 sets the low flag bits. Clearing the flag bits leaves the address 0x4000.",
@@ -21581,7 +21581,7 @@
           "A bounds check that was too strict for the capture file"
         ],
         "answer": "0",
-        "explanation": "A successful translation only says the page tables lead somewhere. The somewhere can still be the wrong object, which is why Lesson 12.9 adds provenance and independent checks.",
+        "explanation": "A successful translation only says the page tables lead somewhere. The somewhere can still be the wrong object, which is why provenance and independent checks are still needed.",
         "type": "multiple-choice"
       },
       {
@@ -21599,7 +21599,7 @@
       },
       {
         "id": "walk-max-bytes",
-        "prompt": "Why does the command-line tool limit the byte count to 1 through 4,096?",
+        "prompt": "A learning tool that reads from a memory capture accepts only 1 to 4,096 bytes per request. Why set such a small limit?",
         "options": [
           "A learning tool should make unexpectedly huge reads impossible",
           "The page-table walk can only translate a single 4 KiB page per command run",
@@ -21607,7 +21607,7 @@
           "Larger reads would need CR3 to change partway through the printed output"
         ],
         "answer": "0",
-        "explanation": "The limit is a deliberate safety choice, not a technical necessity. `read_virtual` does handle page crossings, so a limit is not there to avoid them.",
+        "explanation": "The limit is a deliberate safety choice, not a technical necessity. A careful reader already translates again at each page crossing, so the limit is not there to avoid them.",
         "type": "multiple-choice"
       },
       {
@@ -21721,7 +21721,7 @@
       },
       {
         "id": "prov-vptr-check",
-        "prompt": "What does the semantic check on the vptr verify?",
+        "prompt": "When validating a decoded C++ object from a capture, what should its vtable pointer (vptr) be checked against?",
         "options": [
           "That it points into the expected module's read-only section",
           "That it equals the virtual address where the object was found",
@@ -21799,7 +21799,7 @@
       },
       {
         "id": "prov-atomic",
-        "prompt": "The byte comparison is the last check, right before the toy write. What does that achieve?",
+        "prompt": "A validation function compares the target's current bytes as its last check, just before a write. What does that achieve?",
         "options": [
           "It shortens the time gap but does not make a remote read and write atomic",
           "It guarantees no other code can change the bytes before the write happens",
@@ -23051,15 +23051,15 @@
       },
       {
         "id": "tf-endless-list",
-        "prompt": "Why is adding more forbidden names to the denylist not a real fix?",
+        "prompt": "Why study a control gap in a tiny self-contained program instead of against a real game's anti-cheat?",
         "options": [
-          "There are as many names as commands, so the list is never complete",
-          "Forbidden names slow down the policy, so the lab would run too slowly",
-          "The compiler rejects an enum with more than three blocked names",
-          "Extra names make `Observe` look like a state-changing command"
+          "Real defenses contain no gaps, so only a made-up program can show one",
+          "A tiny program runs faster, and speed is the main reason to choose it",
+          "Real games refuse to start when any test code is present on the machine",
+          "The gap's shape can be studied while staying useless against real defenses"
         ],
-        "answer": "0",
-        "explanation": "A question about names has as many answers as there are names. A question about effect has a fixed number of answers and can be answered completely.",
+        "answer": "3",
+        "explanation": "A toy with no Windows APIs, drivers, networking or real targets makes each failure observable and testable, and nothing learned from it is a step that could be aimed at someone else's game or machine.",
         "type": "multiple-choice"
       },
       {
@@ -23129,7 +23129,7 @@
       },
       {
         "id": "tf-repair-2",
-        "prompt": "Where does the repair for Recipe 2 put its validation?",
+        "prompt": "A function checks a target's build and later writes to it. Where should its validation sit so that a change in between is caught?",
         "options": [
           "Beside the write, checking both the build and the expected old byte",
           "Before the program starts, checking the build only once for the whole run",
@@ -23137,12 +23137,12 @@
           "In the menu, so that the user can never select a stale command from it"
         ],
         "answer": "0",
-        "explanation": "Checking right next to the write shrinks the gap and lets a changed byte be refused as `state changed`.",
+        "explanation": "Checking right next to the write shrinks the gap, and comparing the expected old byte lets a changed target be refused as a normal error.",
         "type": "multiple-choice"
       },
       {
         "id": "tf-real-process",
-        "prompt": "Why can the toy's TOCTOU repair not fully close the gap in a real game process?",
+        "prompt": "Why can checking a target right before writing to it still not fully close a time-of-check/time-of-use gap in a real game process?",
         "options": [
           "The target can still change between two calls, and another process cannot be frozen",
           "Real processes ignore expected-byte comparisons for performance reasons in games",
@@ -23155,11 +23155,11 @@
       },
       {
         "id": "tf-telemetry-gap",
-        "prompt": "The old Recipe 3 code denies a write but records no event. Why is that still a problem?",
+        "prompt": "A control denies a write but records no event for the denial. Why is that still a problem?",
         "options": [
           "A reader cannot tell 'nothing happened' from 'a request was blocked'",
           "The denial lets the write go through without ever checking a policy at all",
-          "The event list overflows because every denial is counted twice in the lab",
+          "The event list overflows because every denial is counted twice in it",
           "The policy returns `Allowed` for every later command that follows the denial"
         ],
         "answer": "0",
@@ -23168,7 +23168,7 @@
       },
       {
         "id": "tf-log-fix",
-        "prompt": "What is the fix for the missing denial event?",
+        "prompt": "A control logs allowed requests but returns early, without logging, when it denies one. What is the fix?",
         "options": [
           "Compute the decision first, then log it whichever way it went",
           "Log the command before the policy runs, then delete denied entries",
@@ -23194,15 +23194,15 @@
       },
       {
         "id": "tf-anatomy",
-        "prompt": "A weak control promised to stop all state changes in read-only mode but checked only a single command's name. What did it actually check?",
+        "prompt": "Stripped of its specific commands and steps, what is a bypass of a control?",
         "options": [
-          "One command name, and nothing about the others",
-          "Every command's effect on state",
-          "The sink where every state change arrives",
-          "Whether the caller held the right permissions"
+          "A hidden command that the control's author forgot to remove",
+          "A gap between what the control promised and what it checked",
+          "A crash inside the control that switches it off for a while",
+          "A higher privilege level that lets a caller skip every control"
         ],
-        "answer": "0",
-        "explanation": "The promise was about state change, but the check covered one name, so an equivalent command reached the same sink.",
+        "answer": "1",
+        "explanation": "Every bypass has the same parts: a promise, what was actually checked, an equivalent effect the check missed, and where the invariant really belongs. Seeing it as that gap is what lets a defender close it.",
         "type": "multiple-choice"
       },
       {
@@ -23212,7 +23212,7 @@
           "It can only measure signals such as flags or timing and apply a rule",
           "Intent is stored in a field that the detector is simply not permitted to read",
           "Detectors run before the player ever acts, so that there is nothing for them to see",
-          "Intent can be read only for commands that the lab has already blocked earlier"
+          "Intent can be read only for commands that were already blocked earlier on"
         ],
         "answer": "0",
         "explanation": "A detector observes proxies. A process name, timing gap, or flag often accompanies a violation without being the invariant itself.",
@@ -23233,7 +23233,7 @@
       },
       {
         "id": "tf-false-negative-row",
-        "prompt": "In the four-outcome table, which row is 'the prohibited effect occurs without the expected signal'?",
+        "prompt": "A detector's results are sorted into true and false positives and negatives. Which outcome is 'the prohibited effect occurs without the expected signal'?",
         "options": [
           "False negative",
           "False positive",
@@ -30913,7 +30913,7 @@
         "prompt": "Before dereferencing a remembered address in a running program, which facts should you be able to state?",
         "options": [
           "Which build and state it belongs to, who owns it, which thread may change it, and how long it lasts",
-          "Its size in bytes, its color, its file name, and the time it was last printed",
+          "Its current value, its value at start-up, its type name, and which tool found it",
           "Which compiler built it, which linker joined it, how large it is, and who wrote it",
           "Whether it is in hexadecimal, whether it is signed, how wide it is, and where it was copied"
         ],
@@ -30936,15 +30936,15 @@
       },
       {
         "id": "disable-thread-calls",
-        "prompt": "Why should a library's load-time entry point do very little work?",
+        "prompt": "A library turns off name mangling so that a function is exported under its plain name. What risk does that add?",
         "options": [
-          "It runs while the loader holds a global lock, so heavy work there can deadlock",
-          "The entry point is only allowed to run for a fixed number of instructions",
-          "Anything in it runs in every process on the machine, so it must stay small",
-          "The entry point cannot call any other function, so only simple code fits"
+          "The function can then be called only from code inside the same library",
+          "The plain name makes every call to the function slower than a mangled one",
+          "A clash or a caller with another signature may no longer be caught for you",
+          "Windows refuses to load a library that exports any unmangled names"
         ],
-        "answer": "0",
-        "explanation": "Code running during load is under the loader lock. Keeping the entry point tiny and doing real work later, after loading has finished, avoids deadlocks.",
+        "answer": "2",
+        "explanation": "Mangling lets the toolchain keep same-named functions apart and check calls against their types. A plain exported name is an unchecked promise: a second export with that name, or a caller that assumes a different signature, may go unnoticed.",
         "type": "multiple-choice"
       },
       {
@@ -31361,8 +31361,8 @@
         "options": [
           "The target process id, both architectures, the exact path and the system error code",
           "Whether the target was started as an administrator, before checking anything else",
-          "Whether the library is bigger than the target, since size limits apply",
-          "Whether the library's name starts with a capital letter on this system"
+          "How often it fails when the identical call is simply repeated a few times",
+          "Whether the library file was built more recently than the target's program"
         ],
         "answer": "0",
         "explanation": "A null result means the load failed, and the basic facts usually explain why. Verify those before blaming permissions.",
@@ -31627,7 +31627,7 @@
           "4D 3C 2B 1A, because the least significant byte is stored first",
           "1A 2B 3C 4D, because bytes are stored in the same order as they are written",
           "D4 C3 B2 A1, because each byte is stored with its digits swapped",
-          "4D 3C 2B 1A, but only when the displacement is a negative number"
+          "3C 4D 1A 2B, because the low 16-bit half is stored before the high half"
         ],
         "answer": "0",
         "explanation": "x86 is little-endian, so the lowest byte comes first and the number reads backward in memory.",
@@ -31739,15 +31739,15 @@
       },
       {
         "id": "second-player-gold-display",
-        "prompt": "How does the second hook display the second player's gold?",
+        "prompt": "Inserted code shows a number by overwriting the first three characters of a live text buffer just before it is printed. Which approach is safe?",
         "options": [
-          "It caps gold at 999, makes up to three digits, and copies them into the live buffer",
-          "It writes a new string somewhere else in memory and replaces the text pointer in `edx`",
-          "It converts the gold to hexadecimal text and writes four bytes into the buffer",
-          "It changes the gold field itself to 999 and then redraws the whole description window"
+          "Write every digit of the number and let the buffer grow to fit a longer value",
+          "Cap the number at 999 and copy at most three digit characters into the buffer",
+          "Copy the number's four raw bytes, since an integer always fits in four characters",
+          "Write the digits just past the buffer's end, so the original text stays intact"
         ],
-        "answer": "0",
-        "explanation": "Writing exactly three bytes into the existing buffer avoids overrunning it, and the cap keeps the number within three digits.",
+        "answer": "1",
+        "explanation": "The buffer has a fixed size and the code may change only three of its bytes. Capping at 999 guarantees at most three digits, so the write never runs past the bytes it is allowed to change.",
         "type": "multiple-choice"
       },
       {
@@ -31861,15 +31861,15 @@
       },
       {
         "id": "walk-bound",
-        "prompt": "Why does the thunk loop run at most 2048 times?",
+        "prompt": "A parser walks a table that should end with an all-zero entry, but it also stops after a fixed maximum number of entries. Why add that cap?",
         "options": [
-          "A table with no zero terminator must not turn into an endless walk through memory",
-          "The Windows loader never allows more than 2048 imports from a single DLL",
-          "Each page can hold only 2048 four-byte slots, so the limit is the page size",
-          "The name hint is capped at 2048, so no further names exist beyond it"
+          "The file format forbids tables longer than the chosen maximum",
+          "The cap makes each entry quicker to read than an uncapped loop",
+          "The cap guarantees that every entry it does read is valid data",
+          "A corrupt table with no terminator must not cause an endless walk"
         ],
-        "answer": "0",
-        "explanation": "The bound is a safety net for corrupt data. It is not a Windows rule about imports.",
+        "answer": "3",
+        "explanation": "The cap is a safety net for damaged or malformed data. If the zero entry is missing, the walk still ends instead of running on through unrelated memory; it is not a rule of the format.",
         "type": "multiple-choice"
       },
       {
@@ -31939,15 +31939,15 @@
       },
       {
         "id": "three-boxes",
-        "prompt": "In the three-message-box proof, which text appears second?",
+        "prompt": "A test calls a hooked import three times: before the hook is installed, while it is installed, and after the guard that owns it is dropped. What should the three calls show?",
         "options": [
-          "\"Hook reached the replacement IAT entry.\"",
-          "\"The normal import runs first.\", from the untouched call",
-          "\"The original import is restored.\", from the dropped patch",
-          "No box appears second, because the hook replaces the display"
+          "The replacement each time, since the slot keeps the last value written",
+          "The original, then the replacement twice, since dropping changes nothing",
+          "The original behavior, then the replacement, then the original again",
+          "The replacement, then the original, then the replacement, in turn"
         ],
-        "answer": "0",
-        "explanation": "Order is original, redirected, restored. The second proves interception and the third proves the slot was put back.",
+        "answer": "2",
+        "explanation": "Before installation the slot holds the real address, while installed it holds the replacement, and dropping the owner puts the original back. Seeing all three proves both the interception and the restoration.",
         "type": "multiple-choice"
       },
       {
@@ -32204,15 +32204,15 @@
       },
       {
         "id": "bind-positions",
-        "prompt": "Why do games usually bind movement to key positions rather than letters?",
+        "prompt": "Why do engines usually name a controller's four face buttons by position, such as south and east, rather than by the letters or shapes printed on them?",
         "options": [
-          "The four keys under the left hand keep their roles on any keyboard layout",
-          "Letters are slower for the operating system to translate than scan codes are",
-          "Key positions let the game ignore the focus state of its own window",
-          "Letters are only valid inside text boxes, and not while a game is running"
+          "Printed labels cannot be read by the operating system's drivers",
+          "Different makers print different labels on the same four buttons",
+          "Positions are quicker to compare than printed letters or shapes",
+          "Players are not allowed to rebind buttons that carry printed labels"
         ],
-        "answer": "0",
-        "explanation": "On AZERTY the letter W moves to a different key, so a letter binding breaks. Positions keep the same hand shape.",
+        "answer": "1",
+        "explanation": "One maker labels the four buttons A, B, X and Y, another uses cross, circle, square and triangle. Naming them by position lets one binding, such as jump on the south button, mean the same physical button on every pad.",
         "type": "multiple-choice"
       },
       {
@@ -32472,7 +32472,7 @@
         "prompt": "Why might a game ignore an event that carries only a virtual-key code?",
         "options": [
           "Some games read scan codes, so a virtual-key event does not reach them",
-          "Virtual-key codes are valid only inside the lab window",
+          "Virtual-key codes exist only for letters, not for other keys",
           "Games read the `time` field and reject zero timestamps",
           "Virtual-key events are delivered only to games running as administrator"
         ],
@@ -32695,7 +32695,7 @@
       },
       {
         "id": "separate-window",
-        "prompt": "Why does the tutorial build a separate desktop window as the first menu?",
+        "prompt": "Why is a separate desktop window a good first home for a tool's menu, before drawing one inside the game?",
         "options": [
           "It is easy to debug, avoids loader lock, and can sit beside a local target",
           "It can draw directly into the game's renderer with no extra work",
@@ -32703,7 +32703,7 @@
           "It avoids needing a channel because the window shares the game's thread"
         ],
         "answer": "0",
-        "explanation": "Integrating the same widgets into an injected renderer is a later graphics-backend problem.",
+        "explanation": "An ordinary window runs in the tool's own process, outside the loader lock, and is easy to inspect with normal tools. Drawing the same widgets inside the game's renderer is a separate, harder graphics problem to solve later.",
         "type": "multiple-choice"
       },
       {
@@ -32864,20 +32864,20 @@
       },
       {
         "id": "min-size",
-        "prompt": "Why does the full example set a minimum window size?",
+        "prompt": "A tool's menu window has no minimum size. What can go wrong when the user drags it very narrow?",
         "options": [
-          "A narrow window can wrap Restore defaults into a column of one-letter lines",
-          "The OpenGL backend refuses to create windows below a certain width in pixels",
-          "The worker needs a minimum window size before it will receive any commands",
-          "Narrow windows lose keyboard focus and stop responding to the Escape key"
+          "The graphics backend refuses to draw anything below a certain width",
+          "The worker stops receiving commands until the window is wider again",
+          "The window loses keyboard focus and no longer responds to any keys",
+          "Button labels wrap into unreadable columns, though the buttons exist"
         ],
-        "answer": "0",
-        "explanation": "The button is still technically present but unreadable.",
+        "answer": "3",
+        "explanation": "Layout squeezes text to fit the width, so a label such as Restore defaults can become a column of single letters while the button is still technically present. A minimum size keeps the real text readable.",
         "type": "multiple-choice"
       },
       {
         "id": "shutdown-order",
-        "prompt": "Which statement matches the worker's shutdown order?",
+        "prompt": "A tool's worker receives a shutdown command. In which order should it clean up?",
         "options": [
           "Stop new commands, release input, restore changes, unhook, close handles, report",
           "Close handles, release input, stop new commands, restore changes, unhook, report",
@@ -32885,7 +32885,7 @@
           "Report, restore changes, stop new commands, close handles, release input, unhook"
         ],
         "answer": "0",
-        "explanation": "Shutdown is the reverse of setup.",
+        "explanation": "New commands stop first so nothing re-applies a change, held input and changed bytes are undone while the handles needed for that are still open, and completion is reported last, so the report is true.",
         "type": "multiple-choice"
       },
       {
@@ -33664,15 +33664,15 @@
     "questions": [
       {
         "id": "why-same-update",
-        "prompt": "Why must the positions and the camera used to project them come from the same captured update?",
+        "prompt": "A render hook switches the graphics API to 'always pass the depth test' for certain draw calls. Why must it switch the normal setting back afterwards?",
         "options": [
-          "Otherwise a well-organized tool can still draw markers for a different moment than the camera shows",
-          "Otherwise the projection function would refuse to run, since it checks the frame number",
-          "Otherwise the positions would be drawn in a different colour from the camera's own markers",
-          "Otherwise the camera matrix would be stored in the wrong byte order for the game"
+          "The graphics API resets every setting after each draw, so it is lost anyway",
+          "The setting stays in force until changed, so later draws would use it too",
+          "A changed setting slows the graphics card down until the next restart",
+          "The game reads the setting back and stops if it finds a different value"
         ],
-        "answer": "0",
-        "explanation": "Rendering adds a timing constraint on top of the tool architecture: features must describe the same update.",
+        "answer": "1",
+        "explanation": "Graphics APIs such as OpenGL keep their state between calls. A setting made for one draw keeps applying to every later draw until something changes it, so the hook restores the normal value for other draws and when it is disabled.",
         "type": "multiple-choice"
       },
       {
@@ -33807,15 +33807,15 @@
       },
       {
         "id": "shared-failure",
-        "prompt": "Which failure stops every consumer instead of only one feature?",
+        "prompt": "Several features read one shared snapshot. Which failure should stop every feature instead of only one?",
         "options": [
-          "A closed process or an invalid entity list",
-          "A missing camera matrix for the current frame",
-          "A failed overlay projection for the current frame",
-          "An unavailable debug-value display for the current frame"
+          "The camera matrix was missing while the snapshot was being taken",
+          "One marker failed to project while the overlay was being drawn",
+          "The target process closed while the snapshot was being taken",
+          "One debug value was unavailable while the display was updated"
         ],
-        "answer": "0",
-        "explanation": "A missing camera may disable only screen projection. The local decision is valid only when the rest of the snapshot is sound.",
+        "answer": "2",
+        "explanation": "Every feature reads the same snapshot, so a closed process (or an invalid entity list) leaves none of them with valid data. A missing camera matrix stops only screen projection, so other features can carry on.",
         "type": "multiple-choice"
       },
       {
@@ -33833,7 +33833,7 @@
       },
       {
         "id": "shutdown-order",
-        "prompt": "Which order does the shutdown diagram give?",
+        "prompt": "A render tool with worker threads, enabled features, patched code and open handles is shutting down. Which order is safe?",
         "options": [
           "Stop input, signal workers, wait for them, disable features, restore patches, close handles",
           "Close handles, restore patches and hooks, signal workers, wait for them, then stop input",
@@ -33841,7 +33841,7 @@
           "Restore hooks, stop input, close handles, disable features, then wait for the workers"
         ],
         "answer": "0",
-        "explanation": "Do not unload code while another thread may still execute it; a render callback may still be running after the menu closes.",
+        "explanation": "Input stops first so no new work arrives. Workers, including a render callback that may still be running, must finish before the features and patches they use are removed, and handles close last because the restoration steps may still use them.",
         "type": "multiple-choice"
       },
       {
@@ -33911,7 +33911,7 @@
           "Reusing a buffer that was already allocated"
         ],
         "answer": "0",
-        "explanation": "The hook sits in the render path, so it must finish quickly. Lesson 4.11 measures the same cost in a per-frame recorder.",
+        "explanation": "The hook sits in the render path, so it must finish quickly. A file read, a sleep or a blocking wait there holds up the next frame.",
         "type": "multiple-choice"
       },
       {
@@ -33989,7 +33989,7 @@
           "Each item is redrawn in a separate window that follows the position of the scroll bar"
         ],
         "answer": "0",
-        "explanation": "Clipping hides whatever falls outside a box, which is also how popups can be cut off at an edge.",
+        "explanation": "Clipping hides whatever falls outside a box. The items are only shifted by the scroll amount, and the list's box shows the part of them that lands inside it.",
         "type": "multiple-choice"
       },
       {
@@ -34015,7 +34015,7 @@
           "Immediate mode draws once at startup, while retained mode draws on each user click"
         ],
         "answer": "0",
-        "explanation": "Lesson 6.8 contrasts the two ways such code is written.",
+        "explanation": "An immediate-mode interface describes every element again on each frame from the current state. A retained-mode one keeps a tree of element objects in memory and changes them when something happens.",
         "type": "multiple-choice"
       },
       {
@@ -34132,7 +34132,7 @@
           "Commands are faster than direct writes by about a hundred times"
         ],
         "answer": "0",
-        "explanation": "The worker reads the menu's settings and does any writing, keeping the split from Lesson 6.8.",
+        "explanation": "The worker reads the menu's settings and does any writing, keeping the menu-and-worker split.",
         "type": "multiple-choice"
       },
       {
@@ -37343,7 +37343,7 @@
       },
       {
         "id": "bullets-despawn",
-        "prompt": "In the bullet texture example, the loader holds 1 strong handle and 40 bullets hold 1 each. After all 40 despawn, what is the state?",
+        "prompt": "A level's loader holds 1 strong handle to a texture, and 40 bullets that draw it hold 1 each. After all 40 bullets despawn, what is the state?",
         "options": [
           "1 strong handle remains, so the texture stays in memory",
           "0 strong handles remain, so the texture is freed",
@@ -37652,7 +37652,7 @@
           "Compression, encryption, a timestamp, or a checksum may be involved",
           "The game is storing the file as plain text with different line endings",
           "The hex editor has numbered the offsets from a different starting point",
-          "Flare writes its attributes in random order on each save"
+          "The second file was renamed with a new extension, which reorders its bytes"
         ],
         "answer": "0",
         "explanation": "A small cause should touch a small region. Differences everywhere suggest the whole file is transformed or covered by an integrity field.",
@@ -37790,11 +37790,11 @@
       },
       {
         "id": "newline-injection",
-        "prompt": "Why does the editor reject a new value that contains a newline character?",
+        "prompt": "A tool edits one value in a save made of key=value lines. Why should it reject a new value that contains a newline character?",
         "options": [
           "A newline would start a second field, turning a value edit into a structure change",
           "A newline makes the file larger than the maximum size Windows allows for a save",
-          "Newlines are not valid in the ASCII subset that the Flare loader accepts",
+          "Newlines are not part of ASCII, so a text loader has no way to read them",
           "A newline would make the editor erase the backup that is already stored"
         ],
         "answer": "0",
@@ -37803,14 +37803,14 @@
       },
       {
         "id": "success-definition",
-        "prompt": "When is the edit considered successful?",
+        "prompt": "A tool has edited one value in a game's save file. What is the strongest evidence that the edit really worked?",
         "options": [
-          "Flare loads it and a later normal save keeps the value",
-          "The editor prints that it changed the field in the original file",
-          "The temporary file has been deleted again after the swap finished",
-          "The backup has been created next to the save in the same folder"
+          "The tool prints that it changed the field in the original file",
+          "The temporary file was deleted again after the swap finished",
+          "A backup was created next to the save in the same folder",
+          "The game loads it, and a later normal save keeps the value"
         ],
-        "answer": "0",
+        "answer": "3",
         "explanation": "A game's own loader and serializer are the real test. Messages from the editor only show that its own steps ran.",
         "type": "multiple-choice"
       },
@@ -37873,15 +37873,15 @@
       },
       {
         "id": "rebuild-not-patch",
-        "prompt": "Why does the PK3 tool rebuild every ZIP entry rather than patch bytes inside the old archive?",
+        "prompt": "A tool must replace one file inside a ZIP archive. Why does it write a fresh archive, copying the other entries, instead of patching bytes inside the old one?",
         "options": [
-          "Only the `UP` entry gets new bytes; the rest are copied into a fresh file",
-          "ZIP files can be changed only by rewriting them from the first byte onward",
-          "Patching in place would also rewrite the backup file that sits beside it",
-          "Rebuilding makes the new sky image compress smaller than the old one did"
+          "ZIP tools refuse to open an archive that was ever edited in place",
+          "The original stays whole until the complete new archive is swapped in",
+          "Copying every entry makes the replaced image compress to a smaller size",
+          "A fresh archive is the only way to give the replaced file a new name"
         ],
-        "answer": "0",
-        "explanation": "The lab writes a new archive, so the original stays whole until the atomic swap. Entries other than the sky face are copied unchanged.",
+        "answer": "1",
+        "explanation": "Patching in place changes the only copy while it is being edited, and an entry of a different size would shift every later entry and the archive's index. Building a new file and swapping it in atomically keeps the original intact if anything fails.",
         "type": "multiple-choice"
       },
       {
@@ -37912,7 +37912,7 @@
       },
       {
         "id": "marker-size",
-        "prompt": "A routine draws a square marker whose side is limited, on each axis separately, to the smaller of 12 pixels and the image's own size on that axis. For an image 40 pixels wide and 5 pixels tall, what size is the marker?",
+        "prompt": "A routine draws a corner marker whose width and height are each limited to the smaller of 12 pixels and the image's own size on that axis. For an image 40 pixels wide and 5 pixels tall, what size is the marker?",
         "options": [
           "12 wide and 5 tall",
           "5 wide and 5 tall",
@@ -38107,7 +38107,7 @@
       },
       {
         "id": "crossfade-half",
-        "prompt": "Halfway through a 2-second cross-fade between two music tracks, what are the volumes?",
+        "prompt": "Halfway through a 2-second linear cross-fade between two music tracks, what are the volumes?",
         "options": [
           "Old track 0.5 and new track 0.5",
           "Old track 1.0 and new track 0.0",
@@ -38143,7 +38143,7 @@
           "At the end, since each later pack can replace data from earlier ones",
           "At the start, since the first pack loaded is protected from replacement",
           "In the middle, so both earlier and later packs can see its data",
-          "At the end, but only if its files are larger than the originals"
+          "Anywhere, since the pack with the most files always wins a conflict"
         ],
         "answer": "0",
         "explanation": "When packs are applied in sequence, the last one to supply a given file is the one the game ends up with. Putting a pack first would let everything after it override it.",
@@ -38268,15 +38268,15 @@
       },
       {
         "id": "no-resize-sheet",
-        "prompt": "Why paint a blue background behind the zombie's frames without resizing the sheet?",
+        "prompt": "A modder repaints a sprite sheet whose animation file picks each frame by a fixed rectangle of pixel coordinates. Why must the sheet keep its size and frame positions?",
         "options": [
-          "The animation file selects fixed rectangles, so a new size breaks frames",
-          "Flare rejects any PNG that is larger than the original sheet was",
-          "Resizing the sheet would also change the zombie's HP in the file",
-          "A bigger sheet would be loaded from the base mod and not from yours"
+          "The game rejects any image that is larger than the original sheet",
+          "Resizing the sheet would also change the unit's health in its file",
+          "A bigger sheet would be loaded from the base pack instead of the mod",
+          "The same rectangles would cut the wrong pixels from a changed sheet"
         ],
-        "answer": "0",
-        "explanation": "The chain runs from `zombie.txt` to the animation file to the sheet. Frames are fixed rectangles, so moving or resizing them shows the wrong pixels.",
+        "answer": "3",
+        "explanation": "The animation file stores each frame as a rectangle of pixel coordinates in the sheet. If frames move or the sheet is rescaled, those same coordinates select the wrong pixels; repainting inside the frames is safe.",
         "type": "multiple-choice"
       },
       {
@@ -38372,7 +38372,7 @@
           "Suspicious text only occurs in compressed archives and not in plain folders"
         ],
         "answer": "0",
-        "explanation": "Deleting text from `....//` leaves `../`, and odd separators, drive prefixes and links offer other disguises. Allow only an explicitly safe relative form instead.",
+        "explanation": "Deleting `../` once from `....//` leaves `../` again, and odd separators, drive prefixes and links offer other disguises. Allow only an explicitly safe relative form instead.",
         "type": "multiple-choice"
       },
       {
@@ -38481,15 +38481,15 @@
       },
       {
         "id": "before-moving",
-        "prompt": "In the nine-step transaction, which step comes right before moving validated files into place?",
+        "prompt": "A mod installer has validated its staged files and is about to move them over the game's own files. What should it do just before that move?",
         "options": [
-          "Backing up the affected original files",
-          "Hashing every one of the staged files",
-          "Parsing the mod manifest in the package",
-          "Creating the new staging directory"
+          "Delete the staging folder so that no stale copy remains",
+          "Clear the game's folder so the new files have room",
+          "Back up the original files that the move will replace",
+          "Rename the mod archive so it cannot be installed twice"
         ],
-        "answer": "0",
-        "explanation": "The order is: show the replacement plan, back up originals, move, and record an uninstall manifest. The backup is the way back.",
+        "answer": "2",
+        "explanation": "The move overwrites the game's own copies. A backup made just before it is what makes uninstalling, or recovering from a failed move, possible; the staged files are still needed for the move itself.",
         "type": "multiple-choice"
       },
       {
@@ -38566,7 +38566,7 @@
         "id": "relative-paths-only",
         "prompt": "Why avoid absolute paths in a portable manifest?",
         "options": [
-          "The game root is kept apart, and enclosed relative paths resolve under it",
+          "The game folder differs between machines, so paths resolve under its root",
           "Absolute paths are always longer than the hashes stored beside them",
           "Only relative paths can be hashed with SHA-256 by the installer",
           "Absolute paths cannot be written into a JSON file by the installer"
@@ -38707,20 +38707,20 @@
       },
       {
         "id": "edited-file-recovery-test",
-        "prompt": "In the recovery test, you edit one installed file by hand and then uninstall. What should happen?",
+        "prompt": "An uninstaller restores a game file from its backup. Why should it hash the restored file before recording the change as restored?",
         "options": [
-          "The edited file is kept, with a warning",
-          "The edited file is deleted, since it came from the mod",
-          "The edited file is replaced silently with the backup",
-          "The uninstall stops and all files are removed"
+          "Hashing the file is what actually copies the backup's bytes into place",
+          "It proves the restored bytes match the original before the record says so",
+          "The hash makes the restored file load faster the next time the game starts",
+          "The game refuses to open any file that has not been hashed since it changed"
         ],
-        "answer": "0",
-        "explanation": "The hash no longer matches, so the policy is to avoid erasing the user's later work and to say so.",
+        "answer": "1",
+        "explanation": "A restore can fail or stop part way. Comparing the restored file's hash with the recorded original hash shows the job really finished, so the manifest's restored status is true.",
         "type": "multiple-choice"
       },
       {
         "id": "interrupted-install-test",
-        "prompt": "Why does the recovery test interrupt the installer after the backup step?",
+        "prompt": "Why is it worth testing an installer by interrupting it right after it makes a backup, before it copies the new file?",
         "options": [
           "To confirm the original survives and recovery finishes from the status",
           "To make sure the mod's files are larger in size than the backup is",
@@ -38842,7 +38842,7 @@
       },
       {
         "id": "nonce-not-secret",
-        "prompt": "What is true of the 24-byte nonce?",
+        "prompt": "In authenticated encryption, what is true of the nonce stored in front of the ciphertext?",
         "options": [
           "It need not be hidden, but must not repeat under one key",
           "It must be kept secret in the same way that the key is",
