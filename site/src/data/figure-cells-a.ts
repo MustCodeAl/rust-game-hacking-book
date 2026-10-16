@@ -247,20 +247,16 @@ export const fileImageCells: readonly CellScenario[] = [{
   title: 'A PE file on disk and the image Windows maps from it',
   summary: 'The same payloads sit at different positions, and the image can have a zero-filled tail that the file does not store.',
   frames: [
-    frame('The file on disk: headers, then packed payloads', 'The file stores the headers and then each section’s bytes one after another.', [
+    frame('The file: headers, then payloads', 'The file stores the headers and then each section’s bytes one after another.', [
       panel('File on disk', 'blue', [row('File offsets', [c('headers', 'pink', 2), c('.text payload', 'blue', 6), c('.data payload', 'teal', 4)], { ticks: { left: 'offset 0', right: 'end of file' } })]),
     ]),
-    frame('The loaded image: the same bytes, new positions', 'Sections are laid out by their addresses in memory, so spacing and positions differ from the file.', [
+    frame('The image: same bytes, new places', 'Sections are laid out by their memory addresses, so the spacing differs, and the image reserves a zero-filled tail that the file never stored.', [
       panel('File on disk', 'blue', [row('File offsets', [c('headers', 'pink', 2), c('.text payload', 'blue', 6), c('.data payload', 'teal', 4)])]),
-      panel('Loaded image (RVAs)', 'purple', [row('Image addresses', [c('headers', 'pink', 2), gap(1), c('.text payload', 'blue', 6), gap(1), c('.data payload', 'teal', 4), c('zero tail', 'gray', 2, { ghost: true })], { ticks: { left: 'RVA 0', right: 'end of image' } })]),
+      panel('Loaded image (RVAs)', 'purple', [row('Image addresses', [c('headers', 'pink', 2), gap(1), c('.text payload', 'blue', 6), gap(1), c('.data payload', 'teal', 4), h('zero tail', 'gray', 2, { ghost: true, bracket: 'no file bytes' })], { ticks: { left: 'RVA 0', right: 'end of image' } })]),
     ]),
-    frame('A section row maps file bytes to image RVAs', 'The section table says which file offset becomes which RVA, so every payload byte can be found in both views.', [
+    frame('A section row links the two', 'The section table says which file offset becomes which RVA, so every payload byte can be found in both views.', [
       panel('Section row', 'pink', [row('.text', [h('file offset X', 'blue', 2), h('→ RVA Y', 'purple', 2), c('size in file', 'gray', 2), c('size in image', 'gray', 2)])]),
       panel('Loaded image (RVAs)', 'purple', [row('Image addresses', [c('headers', 'pink', 2), gap(1), h('.text payload', 'blue', 6), gap(1), c('.data payload', 'teal', 4), c('zero tail', 'gray', 2, { ghost: true })])]),
-    ]),
-    frame('The hatched tail exists only in the image', 'The image reserves more bytes than the file stored; the extra bytes are zero and have no file payload.', [
-      panel('File on disk', 'blue', [row('File offsets', [c('headers', 'pink', 2), c('.text payload', 'blue', 6), c('.data payload', 'teal', 4)])]),
-      panel('Loaded image (RVAs)', 'purple', [row('Image addresses', [c('headers', 'pink', 2), gap(1), c('.text payload', 'blue', 6), gap(1), c('.data payload', 'teal', 4), h('zero-filled tail', 'gray', 2, { ghost: true, bracket: 'no file bytes' })])]),
     ]),
   ],
 }];
@@ -307,17 +303,13 @@ export const etwBufferCells: readonly CellScenario[] = [{
   title: 'A full session buffer cannot take the fourth record',
   summary: 'Three slots, four arrivals. The fourth is stopped at the buffer and is not recorded.',
   frames: [
-    frame('An empty three-slot buffer', 'The session buffer has room for three records.', [panel('Session buffer', 'blue', [slots(0)])]),
-    frame('Records 1, 2 and 3 arrive', 'Each event fills one slot, and now the buffer is full.', [panel('Session buffer', 'blue', [slots(3)])]),
-    frame('A fourth event arrives: nowhere to put it', 'The buffer is full, so the new record is dropped before it is stored.', [
+    frame('Records 1, 2 and 3 fill it', 'The session buffer has three slots, and each event fills one.', [panel('Session buffer', 'blue', [slots(3)])]),
+    frame('Event 4 arrives: no free slot', 'The buffer is full, so the new record is dropped before it is stored.', [
       panel('Arrival', 'orange', [row('Fourth event', [h('event 4', 'red', 3, { sub: 'dropped' })])]),
       panel('Session buffer', 'blue', [slots(3)]),
     ]),
-    frame('The consumer drains the buffer later', 'Reading the records frees the slots, but event 4 is already gone.', [
+    frame('Draining later leaves a gap', 'Reading frees the slots, but event 4 is gone. The log shows a gap, not proof that the event never happened.', [
       panel('Session buffer', 'blue', [slots(0)]),
-      panel('What the log can say', 'purple', [row('Log', [c('records 1 to 3 exist', 'green', 2), c('no record of event 4', 'red', 2, { ghost: true })])]),
-    ]),
-    frame('A missing record does not prove the event never happened', 'The log shows a gap, not an absence: the event may have occurred and been lost.', [
       panel('What the log can say', 'purple', [row('Log', [c('records 1 to 3 exist', 'green', 2), h('event 4: unknown', 'yellow', 2, { sub: 'may have happened' })])]),
     ]),
   ],
