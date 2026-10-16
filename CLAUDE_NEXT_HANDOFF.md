@@ -1,6 +1,6 @@
 # Claude continuation — 12 October 2026 (latest note first)
 
-Latest state (15 October 2026): every agent branch is merged and gated (BOOK_REVISION_PROGRESS.md T92); no authored JavaScript remains outside generated aliases. Open: page-length balancing from CHAPTER_MAP_PROPOSAL.md, more later-chapter API drills, the Modern sidebar counter, and a colour-language pass over the PE, process and encoding components. Build with `mise x -- bun run build`, publish with `mise x -- node scripts/publish-pages.mjs`. TokenSave does not index this worktree; use `rtk read` and `rtk rg`.
+Latest state (15 October 2026): every agent branch is merged and gated (BOOK_REVISION_PROGRESS.md T92); no authored JavaScript remains outside generated aliases. Open: page-length balancing from CHAPTER_MAP_PROPOSAL.md, more later-chapter API drills, and a colour-language pass over the PE, process and encoding components. Build with `mise x -- bun run build`, publish with `mise x -- node scripts/publish-pages.mjs`. TokenSave does not index this worktree; use `rtk read` and `rtk rg`.
 
 # Claude continuation — 10 October 2026 (older, still useful)
 
