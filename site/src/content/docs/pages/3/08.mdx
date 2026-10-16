@@ -15,6 +15,7 @@ import { pointerLifetimeCells } from '../../../../data/figure-cells-a';
 import { Badge, Panel } from '../../../../components/kit';
 import CodeTrace from '../../../../components/CodeTrace.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
+import SpeedType from '../../../../components/kit/SpeedType.astro';
 
 The executable-analysis chapter showed how a DLL export name leads to a
 function address. Finding that address does not tell us how to call the
@@ -136,6 +137,13 @@ The resolver below takes the loaded module handle, asks for the exact
 pointer. A missing export must return an error; a found address is still safe
 to call only if the contract inferred above is correct for this DLL build.
 
+<SpeedType id="c2-resolve-export" title="Resolve one export" recall={[
+  { text: 'GetProcAddress(module, PCSTR', mask: 'GetProcAddress', kind: 'api', hint: 'Ask the loaded DLL for the address of one export.' },
+  { text: 'GetProcAddress(module, PCSTR', mask: 'module', kind: 'argument', hint: 'Pass the handle of the DLL that was loaded.' },
+  { text: 'PCSTR(b"gha_start', mask: 'gha_start', kind: 'argument', hint: 'Name the exact export, as NUL-terminated bytes.' },
+  { text: 'GhaStart>(raw)', mask: 'raw', kind: 'argument', hint: 'Convert the untyped address the lookup returned.' },
+]}>
+
 ```rust
 use core::ffi::c_void;
 use windows::{
@@ -146,7 +154,7 @@ use windows::{
 type GhaStart = unsafe extern "system" fn(*mut c_void) -> u32;
 
 unsafe fn resolve_gha_start(module: HMODULE) -> anyhow::Result<GhaStart> {
-    // SAFETY: the byte string is NUL-terminated and lives for this call. 🔎
+    // SAFETY: the byte string is NUL-terminated and lives for this call.
     let raw = unsafe { GetProcAddress(module, PCSTR(b"gha_start\0".as_ptr())) }
         .ok_or_else(|| anyhow::anyhow!("DLL does not export gha_start"))?;
 
@@ -154,6 +162,8 @@ unsafe fn resolve_gha_start(module: HMODULE) -> anyhow::Result<GhaStart> {
     Ok(unsafe { core::mem::transmute::<unsafe extern "system" fn() -> isize, GhaStart>(raw) })
 }
 ```
+
+</SpeedType>
 
 Why not scatter `transmute` through the program? Because every conversion is a promise about ABI and types. One narrow boundary gives reviewers one place to check that promise.
 

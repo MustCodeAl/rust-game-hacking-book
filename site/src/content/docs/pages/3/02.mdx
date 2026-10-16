@@ -18,6 +18,7 @@ import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import Scene from '../../../../components/Scene.astro';
 import SimLab from '../../../../components/SimLab.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
+import SpeedType from '../../../../components/kit/SpeedType.astro';
 
 ## External means “a separate process”
 
@@ -523,6 +524,14 @@ fn wesnoth_gold_address(process: &Process) -> anyhow::Result<usize> {
 
 Now perform the actual hack:
 
+<SpeedType id="c2-guarded-gold-write" title="Open, resolve, read, then write once" recall={[
+  { text: 'open_by_name("wesnoth.exe", true)', mask: 'true', kind: 'argument', hint: 'This run changes gold, so ask for write access when opening.' },
+  { text: 'process.read_u32(gold_address)', mask: 'gold_address', kind: 'argument', hint: 'Read at the address resolved for this run.' },
+  { text: 'process.write_u32_if(gold_address', mask: 'write_u32_if', kind: 'api', hint: 'Call the write that re-reads and compares first.' },
+  { text: 'gold_address, old_gold, 999)', mask: 'old_gold', kind: 'argument', hint: 'The value you expect to find there: the one just read.' },
+  { text: 'old_gold, 999)', mask: '999', kind: 'argument', hint: 'The new gold amount to store.' },
+]}>
+
 ```rust
 let process = Process::open_by_name("wesnoth.exe", true)?;
 let gold_address = wesnoth_gold_address(&process)?;
@@ -533,6 +542,8 @@ let changed = process.write_u32_if(gold_address, old_gold, 999)?;
 anyhow::ensure!(changed, "gold changed before the guarded write");
 println!("gold is now 999");
 ```
+
+</SpeedType>
 
 Return to Wesnoth and recruit a unit or end the turn to refresh the display. The gold should show `999` and behave as real spendable gold. Close and reopen the game to prove that the program resolves the dynamic address again.
 
