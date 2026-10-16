@@ -12,16 +12,13 @@ sidebar:
 import { Frame, CodeGroup, Tab } from '../../../../components/kit';
 
 import ConceptLab from '../../../../components/ConceptLab.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## The disappearing-address problem
 
 You find gold at `0x1234_5678`, restart the game, and the address is different. Nothing is broken. The address was never a permanent identity.
-
-<Frame caption="A pointer chain: add an offset, read a pointer, add another, and finally read the value.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/pointer-chain.svg`} width="480" height="200" style="width:480px;max-width:100%;height:auto;" alt="A module base, two pointers and the final value joined by arrows labelled with their offsets." loading="lazy" decoding="async" />
-</Frame>
-
 
 Two common reasons are:
 
@@ -128,6 +125,21 @@ health, gold, ammunition — are small numbers, so when one is mistakenly used
 as an address it points at the very bottom of the address space, where nothing
 is mapped. An error mentioning an address below a few thousand almost always
 means you dereferenced a value instead of a pointer.
+
+<PredictReveal
+  id="c2-path-after-restart"
+  setup="Restart the game. Windows loads wesnoth.exe at 0x13A2_0000 this time, and the game allocates its manager and player objects at new heap addresses."
+  question="You walk the same path: root offset 0x01A2_B3C0, then + 0x18, then + 0x30. Where do you end up?"
+  options={[
+    { label: 'At this run’s gold field', correct: true, why: 'The root slot moved with the module to 0x13A2_0000 + 0x01A2_B3C0 = 0x1544_B3C0, and the game stored this run’s manager address in it. Each read picks up a pointer the game wrote in this run, so the walk follows the objects to their new places.' },
+    { label: 'At the old gold address, 0x0691_A230', why: 'That address came from the first run’s pointers. The walk never reuses old pointer values; it reads the ones stored in memory now.' },
+    { label: 'Nowhere: a restart changes the offsets', why: 'Offsets are distances inside one exact build: the root slot from the module base, and each field from the start of its object. A restart moves the bases, not those distances.' },
+  ]}
+>
+
+<LiveCells lab="pointer-path-restart" />
+
+</PredictReveal>
 
 ## Pointer scan results need checking
 

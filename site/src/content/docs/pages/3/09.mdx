@@ -9,7 +9,8 @@ sidebar:
   order: 6
   label: "3.6 How Bytes Become Numbers and Pointers"
 ---
-import Frame from '../../../../components/kit/Frame.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import ConceptLab from '../../../../components/ConceptLab.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import { Accordion } from '../../../../components/kit';
@@ -158,10 +159,6 @@ Here are the fields drawn as boxes:
   caption="10.0 as an `f32`: 1.25 × 2³ = 10. The next six steps explain every number in this picture."
 />
 
-<Frame caption="Read from top to bottom: four bytes in memory order, then the same 32 bits regrouped into sign, exponent, and fraction. The sign is positive, 130 minus the bias 127 gives 3, and the significand is 1.25: 1.25 times 8 is 10.0.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/float-ten-bit-fields.svg`} width="480" height="310" alt="10.0 is stored as little-endian bytes 00 00 20 41. In significant-bit order its sign is zero, exponent is 10000010 or 130, and fraction starts 010 followed by zeros. The exponent is 3 after subtracting 127, and the significand is 1.25." loading="lazy" decoding="async" />
-</Frame>
-
 ### Step 1: the sign bit
 
 The first bit is 0, so the number is positive. A 1 there would make it −10.0 and
@@ -270,16 +267,20 @@ value  =  sign  ×  significand  ×  2^(stored exponent − 127)
        =  10.0
 ```
 
-```mermaid
-flowchart LR
-    B["bytes in memory<br/>00 00 20 41"] --> W["most significant first<br/>0x41200000"]
-    W --> S["sign bit 0<br/>positive"]
-    W --> E["exponent bits 1000 0010<br/>130 − 127 = 3"]
-    W --> F["fraction bits 010 0000 …<br/>1 + ¼ = 1.25"]
-    S --> V["+1.25 × 2³ = 10.0"]
-    E --> V
-    F --> V
-```
+<PredictReveal
+  id="c2-f32-third-byte"
+  setup="Memory holds 00 00 20 41, which is 10.0. A tool changes only the third byte, from 20 to A0, so memory now holds 00 00 A0 41."
+  question="What value does the f32 hold now?"
+  options={[
+    { label: '20.0', correct: true, why: 'Most significant first the bits are 0x41A00000. The top bit of A0 (1010 0000) is the lowest bit of the exponent field, so the exponent goes from 130 to 131. The significand stays 1.25, and 1.25 × 2⁴ = 1.25 × 16 = 20.0.' },
+    { label: '14.0', why: 'That would need the new bit to be the ½ fraction bit, giving 1.75 × 8 = 14.0. The fields do not follow byte boundaries: the top bit of the third byte belongs to the exponent.' },
+    { label: '138.0', why: 'That treats the change as adding 0x80 = 128 to the number 10. A float is not one whole number: its bits are regrouped into fields first, and this bit lands in the exponent.' },
+  ]}
+>
+
+<LiveCells lab="f32-fields" />
+
+</PredictReveal>
 
 A `u32` reads the same four bytes with none of these boundaries. It treats all
 32 bits as one whole number, and gets something unrecognisable:
