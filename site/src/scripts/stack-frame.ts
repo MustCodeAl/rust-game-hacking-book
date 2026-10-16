@@ -24,6 +24,14 @@ function mount(root: HTMLElement): void {
   const abort = new AbortController();
   const options = { signal: abort.signal };
 
+  // The step text, the cookie table and the defences are open in the page source so they read without scripts; with scripts the
+  // picture and its caption already show the current step, so they start folded to keep the figure short. Printing opens them.
+  const folds = Array.from(root.querySelectorAll<HTMLDetailsElement>('details[data-sf-collapse]'));
+  folds.forEach(fold => { fold.open = false; });
+  let reopened: HTMLDetailsElement[] = [];
+  window.addEventListener('beforeprint', () => { reopened = folds.filter(fold => !fold.open); reopened.forEach(fold => { fold.open = true; }); }, options);
+  window.addEventListener('afterprint', () => { reopened.forEach(fold => { fold.open = false; }); reopened = []; }, options);
+
   const draw = (state: FrameState, index: number | null): void => {
     title.textContent = index === null ? 'The frame at its fullest, while the function body runs' : `Step ${index + 1} of ${states.length}: ${state.instruction}`;
     explain.textContent = state.explanation;

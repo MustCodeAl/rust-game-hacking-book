@@ -61,13 +61,15 @@ const table = [8, 12, 16, 20].map(n => {
     </div>
   </div>
 
-  <h4>The steps</h4>
-  <ol class="sf-steps">
-    {states.map(state => <li class="sf-step" data-dg-step data-state="done" data-dg-caption={`Step ${state.index + 1} of ${states.length}: ${state.instruction}. ${state.explanation}`}>
-      <p class="sf-step-head"><b>Step {state.index + 1}</b> <code>{state.instruction}</code></p>
-      <p class="sf-step-text">{state.explanation}</p>
-    </li>)}
-  </ol>
+  <details class="sf-fold" open data-sf-collapse>
+    <summary>All {states.length} steps as text</summary>
+    <ol class="sf-steps">
+      {states.map(state => <li class="sf-step" data-dg-step data-state="done" data-dg-caption={`Step ${state.index + 1} of ${states.length}: ${state.instruction}. ${state.explanation}`}>
+        <p class="sf-step-head"><b>Step {state.index + 1}</b> <code>{state.instruction}</code></p>
+        <p class="sf-step-text">{state.explanation}</p>
+      </li>)}
+    </ol>
+  </details>
   <p class="mdg-note">Releasing stack space does not erase it: after leave and ret the old bytes are still in memory, but they are no longer part of any live frame. A compiler can also omit the EBP frame; this is the conventional layout.</p>
 
   <section class="sf-reach" data-sf-reach aria-labelledby={`${id}-reach-h`}>
@@ -91,6 +93,8 @@ const table = [8, 12, 16, 20].map(n => {
     </ol>
     <p class="mdg-status" data-sf-verdict role="status" aria-live="polite" aria-atomic="true">{reach.verdict}</p>
 
+    <details class="sf-fold" open data-sf-collapse>
+    <summary>The same write with and without a cookie, for 8, 12, 16 and 20 bytes</summary>
     <div class="mdg-table-wrap">
       <table class="mdg-table mdg-table--stack sf-reach-table">
         <caption>The same write, with and without a cookie. Byte n lands n &minus; 1 bytes above the start of the buffer.</caption>
@@ -98,8 +102,10 @@ const table = [8, 12, 16, 20].map(n => {
         <tbody>{table.map(row => <tr><td data-label="Bytes written">{row.n}</td><td data-label="Words damaged, no cookie">{row.plain}</td><td data-label="Words damaged, with a cookie">{row.cookie}{row.n > BUFFER_BYTES ? '; the program stops before ret' : ''}</td></tr>)}</tbody>
       </table>
     </div>
+    </details>
 
-    <h4>Why bounds checks, cookies, DEP and ASLR exist</h4>
+    <details class="sf-fold" open data-sf-collapse>
+    <summary>Why bounds checks, cookies, DEP and ASLR exist</summary>
     <dl class="mdg-terms sf-defences">
       <dt>Bounds check</dt><dd>Compare the number of bytes to copy with the buffer size before copying, or use calls that take the size. With the check, the write never leaves the buffer and nothing else is needed.</dd>
       <dt>Stack cookie</dt><dd>The compiler places a secret value between the locals and the saved EBP and checks it before the function returns. A copy that runs upward through the frame must cross the cookie, so the check fails and the program stops before ret runs. (Visual C++ calls this /GS.)</dd>
@@ -108,6 +114,7 @@ const table = [8, 12, 16, 20].map(n => {
       <dt>Memory-safe code</dt><dd>Rust&rsquo;s checked indexing and slice copies panic on a length that does not fit instead of writing past the end. The protection is gone inside <code>unsafe</code> code and in C-style APIs.</dd>
     </dl>
     <p class="mdg-note">These are defences, not a guarantee: they make the bug harder to use, and the fix is still to remove it.</p>
+    </details>
   </section>
   <noscript><p class="mdg-note">The picture above shows the frame at its fullest, and every step, the default write and the table are complete without JavaScript.</p></noscript>
 </figure>
