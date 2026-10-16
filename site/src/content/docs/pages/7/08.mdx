@@ -11,7 +11,7 @@ sidebar:
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
 import Frame from '../../../../components/kit/Frame.astro';
-import { Badge, GitHub, Panel, Steps } from '../../../../components/kit';
+import { Accordion, Badge, GitHub, Panel, Steps } from '../../../../components/kit';
 import LessonVideo from '../../../../components/LessonVideo.astro';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -206,11 +206,7 @@ fn logger_channel() -> (SyncSender<CallEvent>, mpsc::Receiver<CallEvent>) {
 }
 ```
 
-The debugger thread uses `try_send`. If the writer is behind, increment a dropped-event counter rather than blocking the debug loop.
-
-<MarginNote kind="narration">When the writer falls behind, a visible dropped-event count tells you the log has gaps instead of making the paused game wait for disk.</MarginNote>
-
-A bounded channel creates **backpressure**: it gives the producer a fixed amount of space instead of allowing logs to consume memory forever. `try_send` makes the policy explicit. Losing a counted event is better than holding every target thread suspended while a disk writer catches up.
+The debugger thread uses `try_send`, which fails at once when the channel is full. A bounded channel creates **backpressure**: it gives the producer a fixed amount of space instead of allowing logs to consume memory forever. Losing a counted event is better than holding every target thread suspended while a disk writer catches up, and the visible count tells you the log has gaps. [Lesson 14.6 compares other overload policies](/pages/13/07/#design-overload-behavior-deliberately) for the same bounded queue.
 
 ## Resolve addresses after capture
 
@@ -247,9 +243,7 @@ time_us,thread,call_site,target,stack_pointer
 15234,4108,0x1400012A0,0x140003500,0x000000BEEF...
 ```
 
-Include the target fingerprint so later analysis does not mix runs from different builds.
-
-CSV is intentionally boring. A version header explains how to parse it, a target hash binds it to one binary, and hexadecimal addresses preserve the notation used in the debugger. A future format can add columns without silently changing what older logs mean.
+The version header says how to parse the columns, and the target hash binds the log to one binary so later analysis does not mix runs from different builds. Hexadecimal addresses keep the debugger's notation. [Lesson 14.6 extends the same versioned schema](/pages/13/07/#give-each-event-a-stable-schema) with sequence numbers and correlation IDs that join the events of one action.
 
 ## Protect the target
 
@@ -298,11 +292,7 @@ This tool combines the whole section:
 - the logger moves events off the hot path;
 - RAII — resource acquisition is initialization, the habit of tying cleanup to a value's lifetime — restores bytes and closes handles.
 
-First prove the logger against a small test target whose source is available. Then run the real capstone against one narrow course target:
-
-- Wesnoth 1.14.9: log calls around `0x009B4D00` while ending one turn;
-- AssaultCube 1.2.0.2: log entries to the internal print function at `0x00419880` while names are drawn;
-- Urban Terror 4.3.4: log the render path around the memory-wall hook at `0x0052D2FD` for one local frame window.
+First prove the logger against a small test target whose source is available. Then run the real capstone against one narrow course target: in Wesnoth 1.14.9, log calls around `0x009B4D00` while ending one turn. [The optional build reference](#other-capstone-targets) lists an AssaultCube and an Urban Terror target for the same logger.
 
 Set a limit such as 1,000 events or five seconds. The output should show real module-relative callers and targets from the selected game. Compare the log with x64dbg, then detach and verify every breakpoint byte was restored.
 
@@ -316,7 +306,7 @@ The compiled course tool chooses the Wesnoth main module, asks `VirtualQueryEx` 
 .\target\i686-pc-windows-msvc\release\call_logger.exe
 ```
 
-Exercise a small Wesnoth path, then press **End**. The tool restores every installed call byte before detaching. The full code is [`call_logger.rs`](/windows-labs/src/bin/call_logger.rs); shared memory and region enumeration are in [`process.rs`](/windows-labs/src/windows_impl/process.rs).
+Exercise a small Wesnoth path, then press **End**. The tool restores every installed call byte before detaching. The full code is [`call_logger.rs`](/windows-labs/src/bin/call_logger.rs); shared memory and region enumeration are in [`process.rs`](/windows-labs/src/windows_impl/process.rs). [The optional build reference](#read-the-complete-source-in-six-passes) gives an order for reading the full source.
 
 <GitHub path="windows-labs/src/bin/call_logger.rs" />
 
@@ -330,23 +320,6 @@ This first complete version writes compact lines directly to the console. The bo
   duration="15 seconds"
   caption="The original call-logger recording shows the running game producing trace output. Each observed call requires a breakpoint hit, execution of the saved call, a single-step event, and re-arming; bytes discovered in a static scan have not necessarily executed."
 />
-
-## Read the complete source in six passes
-
-The full [`call_logger.rs`](/windows-labs/src/bin/call_logger.rs) is longer than the scanner because it owns a live state machine. Read it in this order:
-
-<Steps>
-
-1. **Constants and guards** — caps, trap flag, known exclusions, detach cleanup.
-2. **Thread context helpers** — open only the event thread and get or set its suspended register state.
-3. **Static discovery** — copy executable regions and let iced-x86 return verified call instructions.
-4. **Breakpoint transaction** — save `E8`, install `0xCC`, and roll back already-installed sites on partial failure.
-5. **Exception state machine** — pair each breakpoint event with a later per-thread single-step event.
-6. **Event loop and shutdown** — continue every event once, close transferred handles, restore bytes, and detach.
-
-</Steps>
-
-Do not begin at `main` and dive into every Windows name. First locate these six responsibilities; then read the helper used by the phase you are studying.
 
 ## Diagnose by the last completed state
 
@@ -364,3 +337,39 @@ Do not begin at `main` and dive into every Windows name. First locate these six 
 </Panel>
 
 This table is why the state machine is explained explicitly: the symptom tells you which transition to inspect instead of encouraging random breakpoint changes.
+
+## Optional build reference
+
+These notes help when you reproduce the logger on another course game or read
+its complete source. The breakpoint cycle and bounded record above do not
+depend on them.
+
+<span id="other-capstone-targets" aria-hidden="true" />
+
+<Accordion title="Optional build reference: other capstone targets">
+
+- AssaultCube 1.2.0.2: log entries to the internal print function at `0x00419880` while names are drawn;
+- Urban Terror 4.3.4: log the render path around the memory-wall hook at `0x0052D2FD` for one local frame window.
+
+</Accordion>
+
+<span id="read-the-complete-source-in-six-passes" aria-hidden="true" />
+
+<Accordion title="Optional build reference: read the complete source in six passes">
+
+The full [`call_logger.rs`](/windows-labs/src/bin/call_logger.rs) is longer than the scanner because it owns a live state machine. Read it in this order:
+
+<Steps>
+
+1. **Constants and guards** — caps, trap flag, known exclusions, detach cleanup.
+2. **Thread context helpers** — open only the event thread and get or set its suspended register state.
+3. **Static discovery** — copy executable regions and let iced-x86 return verified call instructions.
+4. **Breakpoint transaction** — save `E8`, install `0xCC`, and roll back already-installed sites on partial failure.
+5. **Exception state machine** — pair each breakpoint event with a later per-thread single-step event.
+6. **Event loop and shutdown** — continue every event once, close transferred handles, restore bytes, and detach.
+
+</Steps>
+
+Do not begin at `main` and dive into every Windows name. First locate these six responsibilities; then read the helper used by the phase you are studying.
+
+</Accordion>
