@@ -150,11 +150,11 @@ const checksumCoverage: LiveLab = {
     { kind: 'number', id: 'max', label: 'max_health now', min: 0, max: 65535 },
     { kind: 'choice', id: 'cover', label: 'The checksum covers', options: [{ value: 'short', label: 'player_id, health, generation (no max_health)' }, { value: 'full', label: 'all four fields (covered_checksum)' }] },
   ],
-  defaults: { health: '80', max: '90', cover: 'short' },
+  defaults: { health: '80', max: '60', cover: 'short' },
   presets: [
-    { label: 'max_health 100 → 90, short sum', values: { health: '80', max: '90', cover: 'short' } },
     { label: 'max_health 100 → 60, short sum', values: { health: '80', max: '60', cover: 'short' } },
     { label: 'max_health 100 → 60, full sum', values: { health: '80', max: '60', cover: 'full' } },
+    { label: 'max_health 100 → 90, short sum', values: { health: '80', max: '90', cover: 'short' } },
     { label: 'health 80 → 95, short sum', values: { health: '95', max: '100', cover: 'short' } },
   ],
   compute(values): CellFrame {
