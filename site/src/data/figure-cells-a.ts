@@ -7,13 +7,13 @@ import { cell as c, frame, gap, hot as h, panel, plain, row, type CellFrame, typ
 const tapeFrame = (label: string, caption: string, tape: string, head: number, state: string, rule: 1 | 2): CellFrame => frame(label, caption, [plain(
   row('', [
     h(rule === 1 ? 'carry, 1 → write 0, left' : 'carry, 0 → write 1, stay', 'purple', 4, { sub: `rule row ${rule} · next state ${state}` }),
-    ...[...tape].map((bit, i) => i === head ? h(bit, 'blue', 1, { sub: 'head' }) : c(bit, 'blue')),
+    ...[...tape].map((bit, i) => i === head ? h(bit, 'blue', 1, { sub: '▲' }) : c(bit, 'blue')),
   ]),
 )]);
 export const programInputCells: readonly CellScenario[] = [{
   id: 'increment', tab: 'Add one',
   title: 'One fixed interpreter applies rule data to a tape',
-  summary: 'The three rule rows in the table above are data. The tape starts as 1011 in state carry; each step the interpreter finds the row for its state and the symbol under the head, then does what that row says.',
+  summary: 'The three rule rows in the table above are data. The tape starts as 1011 in state carry; each step the interpreter finds the row for its state and the symbol under the head, then does what that row says. ▲ marks the cell under the head.',
   frames: [
     tapeFrame('Row 1 matches: write 0, move left', 'carry with a 1 under the head matches row 1: 1011 becomes 1010.', '1010', 2, 'carry', 1),
     tapeFrame('Row 1 matches again', 'The next symbol is also 1, so the same row applies: 1010 becomes 1000.', '1000', 1, 'carry', 1),
