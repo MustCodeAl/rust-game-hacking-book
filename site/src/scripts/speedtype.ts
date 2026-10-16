@@ -300,7 +300,8 @@ function open(root: HTMLElement, block: HTMLElement, starter: Starter, fragments
     item.el.dataset.s = state;
     if (item.recallHint || item.el.hasAttribute("data-recall-hidden")) {
       const masked = !!item.recallHint && state === "todo" && !answersVisible;
-      const display = item.nl ? "↵" : masked ? "_" : item.ch;
+      // A bullet marks a blank; "_" would look like the underscores real names contain.
+      const display = item.nl ? "↵" : masked ? "•" : item.ch;
       if (item.el.textContent !== display) item.el.textContent = display;
       readableChars[index] = display;
       item.el.toggleAttribute("data-recall-hidden", masked);

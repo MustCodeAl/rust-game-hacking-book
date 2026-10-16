@@ -1,0 +1,37 @@
+---
+// Predict, then reveal: a question first, the explanation and the hands-on part second. The reader picks an answer before
+// seeing anything; a wrong pick says why it fails and lets them try again, the right pick explains and opens whatever is in the
+// slot (usually a LiveCells calculator or a stepped diagram to try the idea with). Without JavaScript the slot is open and the
+// answer is written out under the question, so nothing is hidden from print, search or the listening edition.
+import '../styles/predict-reveal.css';
+interface Option { label: string; correct?: boolean; why: string }
+interface Props { id: string; question: string; options: readonly Option[]; setup?: string }
+const { id, question, options, setup } = Astro.props;
+const answer = options.find(option => option.correct);
+if (options.length < 2 || options.length > 4 || options.filter(option => option.correct).length !== 1 || !answer) {
+  throw new Error(`PredictReveal ${id}: give two to four options and mark exactly one correct.`);
+}
+---
+<section class="predict not-content" id={id} data-predict aria-labelledby={`${id}-q`}>
+  <p class="predict__kicker">Predict first</p>
+  {setup && <p class="predict__setup">{setup}</p>}
+  <p class="predict__q" id={`${id}-q`}>{question}</p>
+  <div class="predict__options" role="group" aria-labelledby={`${id}-q`} data-reader-skip hidden>
+    {options.map((option, index) => (
+      <button type="button" class="predict__opt" data-predict-opt={index} data-correct={option.correct ? 'true' : 'false'} data-why={option.why}>
+        <span class="predict__mark" aria-hidden="true"></span><span>{option.label}</span>
+      </button>
+    ))}
+  </div>
+  <p class="predict__feedback" role="status" aria-live="polite" aria-atomic="true" data-predict-feedback data-reader-skip></p>
+  <div class="predict__answer" data-predict-static>
+    <p><strong>Answer:</strong> {answer.label}. {answer.why}</p>
+  </div>
+  <div class="predict__after" data-predict-after>
+    <slot />
+  </div>
+</section>
+<script>
+  import { mountPredictReveals } from '../scripts/predict-reveal';
+  mountPredictReveals();
+</script>
