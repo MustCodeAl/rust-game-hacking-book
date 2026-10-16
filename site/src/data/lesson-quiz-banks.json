@@ -1997,7 +1997,7 @@
       },
       {
         "id": "truncated-example",
-        "prompt": "A length-prefixed message claims 6 payload bytes, but only 3 follow. What kind of error is this?",
+        "prompt": "A one-frame parser is handed a buffer whose header claims 6 payload bytes, but the buffer ends after 3. What kind of error is this?",
         "options": [
           "Truncated input: the claim cannot be met with the bytes there",
           "Oversized input, since the claim is larger than the data",
@@ -2566,15 +2566,15 @@
       },
       {
         "id": "race-other-errors",
-        "prompt": "A connect call can report \"already connected\" when a client connects before the server starts waiting. How should that be handled?",
+        "prompt": "A message-mode pipe holds one 600-byte message, but the reader passes a 512-byte buffer. What does that read give it?",
         "options": [
-          "As success, while other unexpected errors are returned",
-          "As a failure, since the connection should have been waited for",
-          "As a signal to retry forever, since the client will leave",
-          "As an error to ignore, along with every other connect error"
+          "All 600 bytes, since message mode keeps every write in one piece",
+          "Part of it: the first 512 bytes, with the rest still to be read",
+          "Nothing, because the read waits until a big enough buffer is given",
+          "The last 512 bytes, because the start of the message is dropped"
         ],
-        "answer": "0",
-        "explanation": "This race is documented and harmless, so it counts as success. Unexpected errors still need to propagate instead of being buried.",
+        "answer": "1",
+        "explanation": "Message mode remembers where each write ends, but 600 bytes cannot fit in 512. Windows hands over the first 512 and reports that more data remains, so a reader either keeps reading or sizes its buffer for the largest allowed frame.",
         "type": "multiple-choice"
       },
       {
@@ -12316,7 +12316,7 @@
       },
       {
         "id": "8.9-bank-12",
-        "prompt": "How many codes does the four-bit quantization example provide?",
+        "prompt": "How many different codes can a 4-bit field hold?",
         "options": [
           "Sixteen codes",
           "Four codes",
@@ -12328,7 +12328,7 @@
       },
       {
         "id": "8.9-bank-13",
-        "prompt": "What is the spacing across codes from 0 to 15 inclusive?",
+        "prompt": "Sixteen codes are spread evenly across the range 0 to 15, including both ends. How far apart are neighbouring codes?",
         "options": [
           "One position unit",
           "Fifteen position units",
@@ -36600,15 +36600,15 @@
       },
       {
         "id": "negotiation-41",
-        "prompt": "How many bytes did the historical capture of the server's negotiation reply contain?",
+        "prompt": "A chat bot answers one command with a reply. Why give it a short limit on how often it may send replies?",
         "options": [
-          "41 bytes",
-          "4 bytes",
-          "250 bytes",
-          "512 bytes"
+          "So the server has time to compress each reply before it is sent",
+          "So the length prefix of every reply stays below the size cap",
+          "So the read timeout can expire between two of the commands",
+          "So a repeated command cannot make it flood the room with replies"
         ],
-        "answer": "0",
-        "explanation": "The lesson notes 41 bytes. The 4 is the zero bytes the client sent, 250 is the quiet period in milliseconds, and 512 is the chunk size.",
+        "answer": "3",
+        "explanation": "Every matching message could trigger a reply, so someone repeating the command could make the bot fill the lobby. One reply per command frame plus a send rate limit keeps it well behaved.",
         "type": "multiple-choice"
       },
       {
@@ -37143,15 +37143,15 @@
       },
       {
         "id": "ready-running",
-        "prompt": "A writer updates the length field first and only then copies the new bytes. A reader looks in between. What can it see?",
+        "prompt": "A writer sets an event once a new record is ready in shared memory, and a reader copies the record when it sees the event. Why can the reader still copy a half-updated record?",
         "options": [
-          "The new length with partly old bytes, a message nobody published",
-          "The old message complete, since the reader always sees the last finished write",
-          "An error from the operating system, since reading during a write is blocked",
-          "Nothing at all, since shared memory is hidden while it is being written"
+          "Events arrive late, so the record is usually stale by the time it is read",
+          "Events hold a single byte, so a larger record gets split into two parts",
+          "The event announces readiness but does not stop a write during the copy",
+          "The reader must hold a mutex, or the operating system drops the signal"
         ],
-        "answer": "0",
-        "explanation": "Shared memory has no built-in ordering between writer and reader. Without an agreement on timing, a reader can see a mixture that passes simple checks.",
+        "answer": "2",
+        "explanation": "A signal says something happened; it does not keep anyone out. If the writer can change the record during the copy, both sides must take the same mutex, or the reader must check a sequence number before and after copying.",
         "type": "multiple-choice"
       },
       {
