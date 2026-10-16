@@ -44,7 +44,7 @@ A player ID and a health amount might both fit in a u32, yet swapping them shoul
 
 Code example. The code’s comments explain: damage(Health(50), PlayerId(3)); // rejected: the arguments are swapped
 
-These are newtypes. The wrapper tells the compiler that equal byte representations do not mean interchangeable values. The same technique keeps a remote address, a byte offset, and a game value from being passed to the wrong parameter just because all three happen to be integers. Chapter 1 first kept these ideas separate in words; a newtype can enforce the distinction in code.
+These are newtypes. The wrapper tells the compiler that equal byte representations do not mean interchangeable values, so a remote address, a byte offset, and a game value cannot be swapped just because all three are integers. Lesson 3.4 gives offsets and addresses their own newtypes and derives the traits they need.
 
 Alternative: Think of labelled jars: sugar and salt look alike, but the label stops you pouring one where the other belongs. A newtype is that label for numbers.
 
@@ -78,9 +78,7 @@ The ? means “if this step fails, return None now.” No out-of-bounds read and
 
 from_le_bytes names the byte order explicitly. transmute or an unchecked pointer cast would silently depend on layout, alignment, size, and host byte order. Low-level code is easier to review when every conversion states its assumption.
 
-Section: A missing value at a memory boundary.
-
-Some(0) holds a valid zero; None means no value was produced. The same distinction protects a memory read. read_u32 returns Some(number) only after it has obtained four bytes and decoded them; if the local buffer is too short, it returns None instead of reading past the end. The ? operator in this Option-returning function means “return None now if this step has no value.” The next boundary needs an actual error reason, so it uses Result.
+A three-byte buffer stops at the first ? and gives None, which is different from a decoded Some(0). Lesson 3.3 follows each step of this checked decode. The next boundary needs an actual error reason, so it uses Result.
 
 Section: Errors are part of the function.
 
@@ -88,11 +86,7 @@ Use Result<T, E> when callers need to know why an operation failed:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-For a one-purpose tool such as memory_scanner.exe, the anyhow crate is useful because each failed Windows call can say which process, address, or operation failed. Code reused by several lessons—such as a packet, P E (Portable Executable, the header-and-sections layout Windows uses for .exe and .dll files), or byte-pattern parser—benefits from a typed error enum. The caller can then handle truncated bytes differently from an unsupported size or invalid text. Those errors should also explain themselves when printed:
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-Debug shows the exact failure variant while you debug a parser. Display gives the learner a useful sentence such as “the packet ended before the requested value.” Implementing Error lets the scanner, proxy, or P E inspector keep that parser failure underneath its own context instead of flattening it into a string. The portable rust-labs implementation follows this pattern and tests the message produced for an oversized field. 🧭
+For a one-purpose tool such as memory_scanner.exe, the anyhow crate is useful because each failed Windows call can say which process, address, or operation failed. Code reused by several lessons—such as a packet, P E (Portable Executable, the header-and-sections layout Windows uses for .exe and .dll files), or byte-pattern parser—benefits from a typed error enum. The caller can then handle truncated bytes differently from an unsupported size or invalid text. Those errors should also explain themselves when printed. Debug shows the exact failure variant while you debug a parser. Display gives the learner a useful sentence such as “the input ended too soon.” Lesson 3.5 implements both traits by hand for a parser error, the code that thiserror would otherwise derive.
 
 Section: Separate the cause from the decision.
 

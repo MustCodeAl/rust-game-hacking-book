@@ -20,6 +20,20 @@ Microsoft’s vulnerable-driver blocklist illustrates an additional loading poli
 
 Trend Micro documented ransomware abuse of a vulnerable Genshin Impact anti-cheat driver. The lesson is broader than one game: a privileged security component can become a security liability if its exposed operations are unsafe. Driver revocation, updates, constrained interfaces, and operating-system protections all matter.
 
+Section: Why some anti-cheat runs a kernel component.
+
+If an anti-cheat and an interfering tool both run in user mode, both are subject to process handles, access rights, and the other Windows permission checks. Running at the same processor privilege does not itself grant either process access to the other. It does limit what either can establish about system-wide events and privileged components from inside its own process.
+
+A kernel component changes that balance. Running in ring 0 lets it use documented Windows facilities that user-mode code cannot reach:
+
+process and image-load notifications, so it learns about every new process and every D L L, dynamic link library, or driver as it loads, instead of scanning for them afterward;
+
+handle-operation callbacks, which run while another process opens a handle to the game and may remove rights from the request. A tool that asks for read and write rights can receive a handle without them, and its ReadProcessMemory then fails at the handle-rights check that Lesson 12.4 followed;
+
+a view of loaded drivers and system state that user-mode code cannot quietly alter.
+
+The costs described above fall on players. Anti-cheat code in the kernel has the same authority as the rest of the kernel, so its bugs become bug checks on players’ machines, and a vulnerability in it becomes a vulnerability in every machine it is installed on. It asks players to trust a game company with ring-0 code. Kernel placement also creates another boundary to protect: which drivers may load and what authority they expose. Windows uses signing rules, vulnerable driver block policies, and memory integrity to reduce that risk.
+
 Section: Boot trust and attestation answer narrower questions.
 
 Loading protection at boot can help it observe the environment before the game starts. Loading it with the game limits its lifetime. Neither timing choice makes privileged code infallible. A product may support different modes on systems with different security guarantees.

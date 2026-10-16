@@ -6,11 +6,9 @@ The controlled captures from Wesnoth 1.14.9 reveal this frame:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The first four bytes do not include themselves in the length. If the header ends in 4E, the following gzip member is 78 bytes and the complete T C P, transmission control protocol, payload is 82 bytes.
+The first four bytes do not include themselves in the length. If the header ends in 4E, the following gzip member is 78 bytes and the complete T C P, transmission control protocol, payload is 4 + 78 equals 82 bytes. The length is big endian, so 78, hexadecimal this value, appears on the wire as 00 00 00 4E; u32::from_be_bytes states that order directly.
 
-This four-byte prefix solves a problem T C P does not solve for us: message boundaries. A T C P read might return two header bytes now and the rest later, or it might return several complete frames together. The receiver therefore accumulates bytes until it has four, interprets the advertised length, then accumulates exactly that many payload bytes.
-
-Big-endian means the most significant byte comes first. A length of 78 is hexadecimal this value, so the wire contains 00 00 00 4E. u32::from_be_bytes documents that agreement directly; shifting bytes by hand would be harder to review.
+Lesson 9.1 showed why a receiver needs this prefix: it accumulates bytes until it has the four-byte header, then exactly the advertised number of payload bytes, however T C P splits them across reads.
 
 The header is a claim from the sender, not permission to allocate whatever it asks for. Compare two headers followed by four bytes currently available:
 
@@ -24,7 +22,7 @@ A protocol message has several nested layers. Each layer decodes the representat
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Each layer answers a different question. T C P delivers ordered bytes, not chat messages. Framing finds one complete compressed unit. Gzip recovers plain bytes. UTF-8 and W M L give those bytes text structure. Only the game-level schema says that sender, room, and message form a chat event.
+Lesson 9.1 introduced these layers; here each one becomes its own parsing step. Only the last, the game-level schema, says that sender, room, and message form a chat event.
 
 In brief: Framing, compression, text encoding, syntax, and session meaning can each fail independently.
 
@@ -60,7 +58,7 @@ Network input is allowed to be short, oversized, or malformed. Indexing panics w
 
 The lifetime 'a says every slice returned by the cursor borrows from the original input. The cursor owns only a position number; it does not copy payloads or create references that outlive the frame.
 
-take is the one place that advances parsing state. It first calculates the end with checked_add, asks the slice for a bounded range with get, and advances only after both checks succeed. This gives later field readers a simple promise: success consumes exactly the requested bytes; failure consumes nothing useful and returns an error.
+take is the one place that advances parsing state. checked_add stops a hostile count from wrapping the end to a small position, and get returns None for a range past the buffer. Later field readers get a simple promise: success consumes exactly the requested bytes; failure consumes nothing and returns an error.
 
 try_into() converts a four-byte slice into [u8; 4], the fixed-size array required by from_be_bytes. The conversion can only succeed after take(4), but keeping the error path explicit makes the invariant visible instead of using unwrap().
 
@@ -86,7 +84,7 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 That is the actual structure we will rebuild.
 
-Simple W M L is a tree-shaped text format. Bracketed tags open and close nodes; quoted assignments store fields. This lesson handles the one chat-message shape needed by our local Wesnoth proxy. If you extend the tool to inspect maps, units, or arbitrary add-on messages, use a real tokenizer that handles escaping, nested nodes, repeated fields, and comments instead of adding more substring searches.
+Simple W M L nests these bracketed tags and quoted fields as a tree. This lesson handles the one chat-message shape needed by our local Wesnoth proxy. If you extend the tool to inspect maps, units, or arbitrary add-on messages, use a real tokenizer that handles escaping, nested nodes, repeated fields, and comments instead of adding more substring searches.
 
 The receiver also has an expected schema, even when no formal schema file exists. That schema includes field names, allowed repetitions, value types, and which fields are required. The sender writes one version of that agreement; the receiver reads according to the version it understands.
 

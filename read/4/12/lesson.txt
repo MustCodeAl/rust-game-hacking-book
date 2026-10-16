@@ -30,7 +30,7 @@ The choice between a resource and an entity is about how the data is used. If ev
 
 Section: Events: messages with a short life.
 
-An event carries one fact from the systems that notice it to the systems that care. The collision system does not know that a score or a sound exists; it sends BrickHit and moves on. Any number of systems can read it, and a new system, such as a particle burst, can be added later without touching the collision code.
+An event says what changed rather than what is true now, the distinction Lesson 4.9 draws for an outside observer. Inside an engine it carries one fact from the systems that notice it to the systems that care. The collision system does not know that a score or a sound exists; it sends BrickHit and moves on. Any number of systems can read it, and a new system, such as a particle burst, can be added later without touching the collision code.
 
 Mechanically an event queue is a list. A sender appends to it. Each reader keeps its own count of how many entries it has read, so two readers each see every event once. The engine empties old entries after a short time. Bevy keeps each event for at least two frames, and other engines choose differently, so a system that does not run during that window never sees the event. A paused game is the usual case: the systems that read events stop, the events expire, and the reaction is lost for good.
 
@@ -74,7 +74,7 @@ For the 42 Breakout entities that is 42 times 41 divided by 2 equals 861 pairs. 
 
 Section: Change detection: do work only for what changed.
 
-Some work only needs doing when a value changed. A health bar must be redrawn when health changes, and not on every frame for every character. Change detection lets a system ask for exactly those entities.
+Some work only needs doing when a value changed. A health bar must be redrawn when health changes, and not on every frame for every character. An outside tool finds such changes by comparing two snapshots; an engine’s change detection records them as they are written, so a system can ask for exactly those entities.
 
 The engine keeps a counter that rises with every frame. When a system writes a component, the engine stamps that value with the current counter. Each system remembers the counter from the last time it ran, and a Changed query returns the entities whose stamp is newer than that. Suppose the health-bar system last ran at counter 41:
 
@@ -112,7 +112,7 @@ every system that was ordered before it has finished or been skipped;
 
 its run conditions, covered next, are true.
 
-A ready system starts on any free C P U, central processing unit, thread, so systems that touch different data run at the same time. When the order of two systems is not stated, the engine may run them either way round, and the order can even change from one frame to the next.
+The first condition is what prevents the lost update of Lesson 6.6: two systems never write, or read and write, the same data at the same time. A ready system starts on any free thread of the engine’s worker pool, so systems that touch different data run at the same time. When the order of two systems is not stated, the engine may run them either way round, and the order can even change from one frame to the next.
 
 Alternative: Think of cooks in a kitchen: those at different counters work at once, but two who need the same pan must take turns.
 
@@ -156,7 +156,9 @@ The consequence is a delay you can measure. A bullet spawned by a system in fram
 
 Section: How components are stored: tables and sparse sets.
 
-Lesson 4.1 said that each kind of component sits in its own run of memory. There are two common ways to arrange that, and an engine can offer both:
+Lesson 4.1 said that each kind of component sits in its own run of memory. There are two common ways to arrange that, and an engine can offer both: table storage, where entities with the same set of components share columns, and sparse-set storage, where one kind of component lives in its own pool. Tables make reading fast and adding a component slow; sparse sets make adding cheap and reading slower.
+
+Additional detail: Optional reference: table and sparse-set storage compared.
 
 Table storage
 
@@ -192,7 +194,7 @@ Section: Questions this raises.
 
 Three questions that come up once the pieces are in place, each worth a minute and none needed for the next lesson:
 
-Additional detail: Could more C P U threads make the frame's systems finish faster than 5 milliseconds?.
+Additional detail: Could more C P U, central processing unit, threads make the frame's systems finish faster than 5 milliseconds?.
 
 No. The chain read_input, move_player, collide, play_sounds runs one system after another, because each needs the one before it: 1 + 1 + 2 + 1 equals 5 milliseconds. Extra threads can run enemy_ai beside the chain, but nothing can start a system before the one it waits for has finished. The longest chain of waiting systems sets a floor under the frame, whatever the number of threads. In the first tab above, enemy_ai joined that chain because it read Position, and the floor rose to 3 + 1 + 2 + 1 equals 7 milliseconds.
 
@@ -210,6 +212,6 @@ Each mechanism above leaves a mark you can see from outside. Use the table to tu
 
 Symptoms and the engine mechanism behind them
 
-Lesson 4.2 returns to one player and builds a snapshot of the game’s state, the copy of those values that a tool can read without disturbing the game.
+Lesson 6.9 follows input from Windows into a frame like this one: polling, events, and window messages.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/4/12/

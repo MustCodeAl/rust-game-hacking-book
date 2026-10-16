@@ -150,6 +150,28 @@ The last store starts at +hexadecimal 1 0 and writes a qword—eight bytes—so 
 
 Narration: Bytes a constructor never writes are unknown, not zero. After an allocator reuses memory, they may still hold leftovers from an earlier object.
 
+Section: One object can have several useful identities.
+
+Lesson 3.8 placed a single-inheritance base part at the start of the derived object. Multiple inheritance makes the map less tidy:
+
+Multiple inheritance can add more than one base subobject and more than one vptr. A method may even adjust this before using it.
+
+When inspecting object-oriented code, separate three questions:
+
+Allocation identity: which complete block of memory was created and must eventually be released?
+
+Subobject view: which base-class-shaped part does this particular pointer address?
+
+Dynamic type: which most-derived implementation will virtual dispatch choose at this moment?
+
+These answers can differ. A pointer passed to a base-class method may point a few bytes into the complete allocation. A thunk — a tiny compiler-generated stub that fixes something up and then jumps to the real function — may adjust this before jumping to the real method. Subtracting every observed field from that adjusted pointer can produce negative offsets and a broken layout even though the pointer is valid for its particular base view.
+
+When two candidate bases always differ by the same small constant, they are usually two views of one object. The thunk or call site that adds the constant shows where the adjustment happens, and the constructor, which writes both vptrs, shows how the two views sit inside one allocation.
+
+RTTI stands for run-time type information: extra data the compiler emits so that code can ask what class an object really is while the program is running. It is what makes dynamic_cast possible.
+
+When it is present it can expose type-descriptor clues near virtual tables, sometimes including a readable class name. That name tells you what the class was called and nothing more: release builds can strip RTTI entirely, and a name does not tell you where any of the class’s fields sit.
+
 Section: A repeatable reconstruction method.
 
 Collect several live object addresses from the exact local build.

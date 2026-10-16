@@ -72,57 +72,15 @@ instruction width constrains a field’s size, not necessarily its full type;
 
 one readable value never distinguishes a pointer, handle, counter, or bit set.
 
-Section: Strings can store short text inside themselves.
+Section: Other containers trade arithmetic for other clues.
 
-Many C++ string implementations use a small-string optimization. Short names may live directly inside the string object, while longer names use a heap buffer. This explains a confusing sight: one player name looks like text at offset hexadecimal 2 0, but a longer name makes the same bytes look like a pointer.
+A vector lets code reach element n with arithmetic on one block. A short C++ string may instead keep its text inside the object and switch to a heap pointer when the text grows; a linked list, search tree, or hash table reaches its elements by following pointers or hashing a key. The optional container reference shows each shape’s clue in the code that walks it. Before walking any linked shape, a scanner needs a maximum-node limit and a visited-address set, because corrupted data can form a cycle that would otherwise trap it forever.
 
-Here is one real implementation’s layout, the 32-bit Microsoft C++ library’s std::string, holding the three-character example name Ivy and then a longer one. The name is only sample text; its length is what matters:
-
-Do not read an assumed pointer until you identify the mode flag or length behavior. Compare the same object with names on both sides of the suspected short-string limit. 🔬
-
-Section: Linked structures leave different clues.
-
-A vector keeps its elements side by side, so code finds element n with arithmetic. Three other common containers give up that arithmetic in exchange for something else, and each exchange leaves a recognisable pattern in the code that walks it.
-
-Section: A linked list: every element points to the next.
-
-A linked list stores each element in its own heap block, called a node, together with the address of the next node, and often the previous one too. It exists to make inserting and removing cheap. Taking the first of 10,000 elements out of a vector means sliding the other 9,999 down one place; taking it out of a doubly linked list means rewriting two pointers in its neighbours.
-
-The price is that a list has no arithmetic shortcut. Reaching the 1,000th node takes 1,000 reads, each one loading the next pointer out of the node just reached. That repeated load from a fixed offset inside the current node, such as mov e a x, [e a x+4] in a loop, is the list’s clue. The nodes are wherever the allocator put them, not in one block.
-
-Section: A search tree: each comparison discards half.
-
-A binary search tree node holds a key and two child pointers: smaller keys go to the left, larger ones to the right. Finding a key means comparing and stepping left or right. In a balanced tree, each step discards roughly half the remaining possibilities, so a tree of the large number shown entries needs about 20 steps: 2 to the power of 20 equals the large number shown. std::map typically maintains such a balanced tree. Its clue is a loop that compares a key and then loads one of two pointers depending on the result. Its failure is lopsidedness: keys inserted in sorted order all go the same way and turn the tree into a slow list, which is why real implementations rebalance themselves.
-
-Section: A hash table: arithmetic picks the bucket.
-
-A hash table turns the key into a number, its hash, and uses that number to pick one slot, or bucket, in an array of buckets. Only the entries in that bucket are checked. With a suitable hash and enough buckets for the entries, lookup is usually close to constant time as the table grows; collisions or a full table can make it slower. With 16 buckets, a hash of hexadecimal 5 A 3 selects bucket hexadecimal 5 A 3 & hexadecimal F equals 3, because the mask hexadecimal F keeps only the last hex digit. The clue is arithmetic on the key (multiplies, shifts, XORs), then that mask or a remainder, then a short walk through one bucket. Two keys can land in the same bucket, a collision, which is why each bucket may hold a short list. Lesson 11.3 shows the same idea inside Lua’s tables.
-
-Validate structural invariants:
-
-a doubly linked node’s next.prev should return to the node;
-
-tree children should eventually end at a sentinel or null;
-
-bucket indices must stay below the bucket count;
-
-traversal needs a maximum-node limit and a visited-address set.
-
-The visited set is important. Corrupted data could form a cycle and otherwise trap a scanner forever.
-
-Before choosing a container model, ask what the game actually does with the data: does it need an ordered list, lookup by key, first-in-first-out work, a tile grid, or links between waypoints? Then ask whether items can be inserted or removed while you read them. Those questions connect the shape you observe to the operation it supports; a readable address alone cannot identify a container.
+Choose the model from what the game does with the data, as Lesson 3.3’s collection choices do, and then ask whether items can be inserted or removed while you read them. A readable address alone cannot identify a container.
 
 Section: Raw pointers, smart pointers, and handles.
 
-Section: Unique ownership.
-
-If one owner’s destructor directly destroys the pointed object, and moves clear the old pointer, unique ownership is likely. That resembles C++ unique_ptr, but use a neutral label until symbols confirm it.
-
-Section: Shared ownership.
-
-Shared objects often have a separate control block with strong and weak reference counts. Copies increment a count; releases decrement it; a transition to zero calls a destructor. The object pointer and control-block pointer may travel together.
-
-Never edit a suspected count. The calls around it show whether its updates are atomic, as a thread-safe reference count’s must be; a plain integer that happens to rise and fall is not enough to call something a reference count.
+A field that leads to another object may own it alone, share it through reference counts, or name it indirectly. The optional ownership reference shows the clues that unique and shared owners leave. A handle is the indirect form.
 
 Section: Handles.
 
@@ -138,7 +96,23 @@ Narration: This is why games often store a handle instead of a raw pointer: when
 
 Section: Follow destruction as carefully as construction.
 
-Constructors show default values and vptr writes. Destructors show ownership:
+A memory snapshot shows one state. Construction and destruction show how the state came to exist and which parts belong together.
+
+A constructor candidate often:
+
+receives a newly allocated or caller-provided object address;
+
+writes repeated default values at fixed offsets;
+
+calls base constructors before initializing derived fields;
+
+writes one or more vptr candidates, sometimes replacing an earlier base vptr;
+
+returns the same object or passes it into a registration system.
+
+None of those clues identifies a constructor alone, because an ordinary reset function can also fill fields with defaults. What a reset function does not do is run right after an allocation, call base constructors first, and switch the vptr from the base table to the derived table.
+
+Destructors show ownership and the point after which a cached address is stale. For a memory tool, that lifetime boundary matters more than recovering the original C++ class name. Ask:
 
 Which child objects are destroyed?
 
@@ -151,6 +125,8 @@ Which collections remove the object?
 Is memory freed immediately or returned to a pool?
 
 Set a breakpoint on an owned toy object’s destructor and delete it through the normal game action. The call chain and the fields the destructor touches answer those five questions. Repeat the experiment, because one run may include unrelated cleanup.
+
+In brief: Constructors show how an object comes to exist, and destructors show when old addresses stop being safe to trust.
 
 Section: Component pools store fields in separate collections.
 
@@ -168,7 +144,7 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 An Option says the field has not been confirmed. Unknown prevents a guess from silently becoming a fact. Once source, symbols, and repeated behavior agree, the model can become more precise.
 
-#[derive(Debug, Clone, Copy)] asks Rust to generate convenient formatting and copying for this small description of a layout. It does not make an unconfirmed game-memory layout safe to read.
+The derive line generates formatting and copying for this small description of a layout, as Lesson 3.4 explains; it does not make an unconfirmed game-memory layout safe to read.
 
 Section: Checks a recovered layout should pass.
 
@@ -189,5 +165,57 @@ the layout is stored with the build it belongs to;
 disagreements remain visible instead of being “fixed” by guessing.
 
 Those checks assume we know what each field’s stored bytes represent. If the game’s visible health is 125 but no candidate field contains 125, the next question is whether the game stores a transformed value. Lesson 14.9 follows that question without throwing away the object and lifetime checks we just built.
+
+Section: Optional reference: other containers and owners.
+
+These layouts come from particular libraries and containers. The vector header, lifetime, and handle checks above do not depend on them.
+
+Additional detail: Optional reference: strings can store short text inside themselves.
+
+Many C++ string implementations use a small-string optimization. Short names may live directly inside the string object, while longer names use a heap buffer. This explains a confusing sight: one player name looks like text at offset hexadecimal 2 0, but a longer name makes the same bytes look like a pointer.
+
+Here is one real implementation’s layout, the 32-bit Microsoft C++ library’s std::string, holding the three-character example name Ivy and then a longer one. The name is only sample text; its length is what matters:
+
+Do not read an assumed pointer until you identify the mode flag or length behavior. Compare the same object with names on both sides of the suspected short-string limit. 🔬
+
+A vector keeps its elements side by side, so code finds element n with arithmetic. Three other common containers give up that arithmetic in exchange for something else, and each exchange leaves a recognisable pattern in the code that walks it.
+
+Additional detail: Optional reference: a linked list, every element points to the next.
+
+A linked list stores each element in its own heap block, called a node, together with the address of the next node, and often the previous one too. It exists to make inserting and removing cheap. Taking the first of 10,000 elements out of a vector means sliding the other 9,999 down one place; taking it out of a doubly linked list means rewriting two pointers in its neighbours.
+
+The price is that a list has no arithmetic shortcut. Reaching the 1,000th node takes 1,000 reads, each one loading the next pointer out of the node just reached. That repeated load from a fixed offset inside the current node, such as mov e a x, [e a x+4] in a loop, is the list’s clue. The nodes are wherever the allocator put them, not in one block.
+
+Additional detail: Optional reference: a search tree, each comparison discards half.
+
+A binary search tree node holds a key and two child pointers: smaller keys go to the left, larger ones to the right. Finding a key means comparing and stepping left or right. In a balanced tree, each step discards roughly half the remaining possibilities, so a tree of the large number shown entries needs about 20 steps: 2 to the power of 20 equals the large number shown. std::map typically maintains such a balanced tree. Its clue is a loop that compares a key and then loads one of two pointers depending on the result. Its failure is lopsidedness: keys inserted in sorted order all go the same way and turn the tree into a slow list, which is why real implementations rebalance themselves.
+
+Additional detail: Optional reference: a hash table, arithmetic picks the bucket.
+
+A hash table turns the key into a number, its hash, and uses that number to pick one slot, or bucket, in an array of buckets. Only the entries in that bucket are checked. With a suitable hash and enough buckets for the entries, lookup is usually close to constant time as the table grows; collisions or a full table can make it slower. With 16 buckets, a hash of hexadecimal 5 A 3 selects bucket hexadecimal 5 A 3 & hexadecimal F equals 3, because the mask hexadecimal F keeps only the last hex digit. The clue is arithmetic on the key (multiplies, shifts, XORs), then that mask or a remainder, then a short walk through one bucket. Two keys can land in the same bucket, a collision, which is why each bucket may hold a short list. Lesson 11.3 shows the same idea inside Lua’s tables.
+
+Additional detail: Optional reference: invariants for walking linked structures.
+
+Validate structural invariants:
+
+a doubly linked node’s next.prev should return to the node;
+
+tree children should eventually end at a sentinel or null;
+
+bucket indices must stay below the bucket count;
+
+traversal needs a maximum-node limit and a visited-address set.
+
+The visited set is important. Corrupted data could form a cycle and otherwise trap a scanner forever.
+
+Additional detail: Optional reference: unique ownership.
+
+If one owner’s destructor directly destroys the pointed object, and moves clear the old pointer, unique ownership is likely. That resembles C++ unique_ptr, but use a neutral label until symbols confirm it.
+
+Additional detail: Optional reference: shared ownership.
+
+Shared objects often have a separate control block with strong and weak reference counts. Copies increment a count; releases decrement it; a transition to zero calls a destructor. The object pointer and control-block pointer may travel together.
+
+Never edit a suspected count. The calls around it show whether its updates are atomic, as a thread-safe reference count’s must be; a plain integer that happens to rise and fall is not enough to call something a reference count.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/3/05/

@@ -106,11 +106,9 @@ The debug loop and the log writer run at different speeds. A bounded channel hol
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The debugger thread uses try_send. If the writer is behind, increment a dropped-event counter rather than blocking the debug loop.
+The debugger thread uses try_send, which fails at once when the channel is full. A bounded channel creates backpressure: it gives the producer a fixed amount of space instead of allowing logs to consume memory forever. Losing a counted event is better than holding every target thread suspended while a disk writer catches up. Lesson 14.6 compares other overload policies for the same bounded queue.
 
 Narration: When the writer falls behind, a visible dropped-event count tells you the log has gaps instead of making the paused game wait for disk.
-
-A bounded channel creates backpressure: it gives the producer a fixed amount of space instead of allowing logs to consume memory forever. try_send makes the policy explicit. Losing a counted event is better than holding every target thread suspended while a disk writer catches up.
 
 Section: Resolve addresses after capture.
 
@@ -128,9 +126,7 @@ The paused thread supplied the addresses; the background writer now records them
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Include the target fingerprint so later analysis does not mix runs from different builds.
-
-CSV is intentionally boring. A version header explains how to parse it, a target hash binds it to one binary, and hexadecimal addresses preserve the notation used in the debugger. A future format can add columns without silently changing what older logs mean.
+The version header says how to parse the columns, and the target hash binds the log to one binary so later analysis does not mix runs from different builds. Hexadecimal addresses keep the debugger’s notation. Lesson 14.6 extends the same versioned schema with sequence numbers and correlation IDs that join the events of one action.
 
 Section: Protect the target.
 
@@ -184,13 +180,7 @@ the logger moves events off the hot path;
 
 RAII — resource acquisition is initialization, the habit of tying cleanup to a value’s lifetime — restores bytes and closes handles.
 
-First prove the logger against a small test target whose source is available. Then run the real capstone against one narrow course target:
-
-Wesnoth 1.14.9: log calls around this value while ending one turn;
-
-AssaultCube 1.2.0.2: log entries to the internal print function at this value while names are drawn;
-
-Urban Terror 4.3.4: log the render path around the memory-wall hook at this value for one local frame window.
+First prove the logger against a small test target whose source is available. Then run the real capstone against one narrow course target: in Wesnoth 1.14.9, log calls around this value while ending one turn. The optional build reference lists an AssaultCube and an Urban Terror target for the same logger.
 
 Set a limit such as 1,000 events or five seconds. The output should show real module-relative callers and targets from the selected game. Compare the log with x64dbg, then detach and verify every breakpoint byte was restored.
 
@@ -202,11 +192,27 @@ Terminal window
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-Exercise a small Wesnoth path, then press End. The tool restores every installed call byte before detaching. The full code is call_logger.rs; shared memory and region enumeration are in process.rs.
+Exercise a small Wesnoth path, then press End. The tool restores every installed call byte before detaching. The full code is call_logger.rs; shared memory and region enumeration are in process.rs. The optional build reference gives an order for reading the full source.
 
 This first complete version writes compact lines directly to the console. The bounded-channel design above is the next performance step when you add file output; it is not required to run or reproduce the actual call logger.
 
-Section: Read the complete source in six passes.
+Section: Diagnose by the last completed state.
+
+Troubleshooting by the last completed state
+
+This table is why the state machine is explained explicitly: the symptom tells you which transition to inspect instead of encouraging random breakpoint changes.
+
+Section: Optional build reference.
+
+These notes help when you reproduce the logger on another course game or read its complete source. The breakpoint cycle and bounded record above do not depend on them.
+
+Additional detail: Optional build reference: other capstone targets.
+
+AssaultCube 1.2.0.2: log entries to the internal print function at this value while names are drawn;
+
+Urban Terror 4.3.4: log the render path around the memory-wall hook at this value for one local frame window.
+
+Additional detail: Optional build reference: read the complete source in six passes.
 
 The full call_logger.rs is longer than the scanner because it owns a live state machine. Read it in this order:
 
@@ -223,11 +229,5 @@ Exception state machine — pair each breakpoint event with a later per-thread s
 Event loop and shutdown — continue every event once, close transferred handles, restore bytes, and detach.
 
 Do not begin at main and dive into every Windows name. First locate these six responsibilities; then read the helper used by the phase you are studying.
-
-Section: Diagnose by the last completed state.
-
-Troubleshooting by the last completed state
-
-This table is why the state machine is explained explicitly: the symptom tells you which transition to inspect instead of encouraging random breakpoint changes.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/7/08/

@@ -114,15 +114,17 @@ Section: Turning without gimbal lock: quaternions.
 
 Yaw, pitch, and roll are easy to read, and they have two limits. Pitch to 90 degrees, so the view looks straight up, and yaw and roll then turn around the same line: one of the three controls is lost, which is called gimbal lock. And blending two sets of angles number by number can turn the long way round, since 350 degrees blended with 10 degrees passes through 180 degrees.
 
-Engines often store a turn as a quaternion instead: four numbers (x, y, z, w) for a turn of angle θ around a unit-length axis (a x, ay, az):
+Engines often store a turn as a quaternion instead, four numbers that avoid both limits. In memory, four adjacent floats whose squares add up to 1 are very likely a quaternion. Three angles, by contrast, are usually plain numbers in degrees or radians that wrap around.
+
+Additional detail: Optional reference: the four numbers of a quaternion and slerp.
+
+A quaternion stores (x, y, z, w) for a turn of angle θ around a unit-length axis (a x, ay, az):
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
 No turn at all is θ equals 0, so sin 0 equals 0 and cos 0 equals 1, giving (0, 0, 0, 1). A 90 degrees turn about z, the axis (0, 0, 1), has θ/2 equals 45 degrees, and sin 45 degrees equals cos 45 degrees approximately 0.7071, giving (0, 0, 0.7071, 0.7071). Every quaternion that stands for a turn has length 1: here 0.7071 to the power of 2 + 0.7071 to the power of 2 equals 0.5 + 0.5 equals 1. Applying that quaternion to (1, 0, 0) gives (0, 1, 0), the same result as the 90 degrees rotation in the transform section; the math library does the multiplication.
 
 Two turns combine by multiplying their quaternions, with no gimbal lock. To blend them, engines use slerp, spherical interpolation, which turns at a steady speed along the shortest way round. Halfway between no turn and the 90 degrees turn is a 45 degrees turn: θ/2 equals 22.5 degrees, so the quaternion is (0, 0, 0.3827, 0.9239), and 0.3827 to the power of 2 + 0.9239 to the power of 2 equals 0.1465 + 0.8535 equals 1.
-
-In memory, four adjacent floats whose squares add up to 1 are very likely a quaternion. Three angles, by contrast, are usually plain numbers in degrees or radians that wrap around.
 
 Section: World space to screen space.
 
@@ -232,45 +234,15 @@ After projection, (x, y, z, w) also represents the same Euclidean point as (kx, 
 
 A 4 times 4 view-projection matrix commonly combines the camera and projection steps. The transformed w value helps determine whether a point is in front of the camera.
 
-Section: Why perspective uses w.
-
-Far-away objects look smaller. After the matrix transformation, perspective division divides the transformed x, y, and z by w:
-
-In brief: Perspective division makes the same world-sized object occupy fewer screen pixels as its depth increases.
+A perspective projection fills w with the point’s depth, so dividing by w makes distant things small: an object twice as far away covers half as much screen. A point behind the camera gets a negative w, and dividing by it still gives ordinary-looking coordinates with both signs flipped, so world-to-screen code rejects a w at or below a small positive threshold before it produces pixels. The region such a camera can see is a frustum, a pyramid with its tip at the camera that widens with distance. Its vertical field of view fov_y and the aspect ratio width / height set how much of the view space fits on screen, through two scale factors:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The reason this creates perspective at all is that the projection matrix is built so that the resulting w carries the point’s distance from the camera. Dividing by w is therefore dividing by depth, and dividing by depth is precisely what makes distant things small: double the distance and the object covers half as much screen.
-
-If w is zero, the division is undefined. In the forward-positive projection convention used in this example, a negative w puts the point behind the camera — and the division still yields a perfectly ordinary-looking coordinate, with both signs flipped. This is the classic overlay bug: an enemy standing directly behind the player gets drawn on screen in front, mirrored to the opposite side, with the box sliding the wrong way as they move. Nothing crashes and no number looks obviously wrong, which is why the check has to be written out explicitly:
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-That is why world-to-screen code checks w before producing pixels.
-
-For a symmetric perspective camera, the projected scale is proportional to 1 / depth. Ignoring signs and A P I, application programming interface, details, the central idea is:
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-Double the depth while keeping the sideways offset unchanged and the point moves half as far from the screen center. A perspective matrix stores this division in w so the G P U, graphics processing unit, can delay it until after clipping.
-
-Section: What field of view and aspect ratio change.
-
-The vertical field of view fov_y determines how much of the world fits from top to bottom. The aspect ratio is width / height. A common perspective scale is:
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-Here is where that comes from. Picture the frustum at some depth d straight ahead of the camera. Half the vertical field of view is the angle from the center line up to the top edge of what the camera sees, so — for a right triangle with that angle and an adjacent side of length d — the frustum’s half-height at that depth is d times tan(fov_y / 2). A point sitting exactly on that top edge has view_y equals d times tan(fov_y / 2), and it needs to land at the very top of the screen, NDC y equals 1. Since screen_y is proportional to view_y / view_depth, the scale factor that sends tan(fov_y / 2) to 1 is its reciprocal: y_scale equals 1 / tan(fov_y / 2).
-
-Concrete numbers make the zoom effect visible. At fov_y equals 90 degrees, half the angle is 45 degrees and tan(45 degrees) equals 1, so y_scale equals 1. Narrow the field of view to 60 degrees: half the angle is 30 degrees, tan(30 degrees) approximately 0.577, and y_scale approximately 1.732 — a bigger multiplier, so the same view_y / view_depth now produces a larger NDC value and the scene looks zoomed in. A smaller field of view makes tan(fov_y / 2) smaller, so the scale grows and the view zooms in.
-
-One practical trap sits in that formula. Trigonometric functions take radians, not degrees. Passing 90.0 where 1.5708 was expected produces a scale that is wrong by a wide margin, and the symptom is a scene that looks nothing like a camera view rather than an obviously wrong number. Convert at the boundary and put the unit in the variable name.
-
-x_scale reuses that number instead of deriving a separate one. At the same depth d, the frustum’s half-width must be aspect times its half-height, because aspect is defined as width / height. Dividing y_scale by aspect shrinks the horizontal scale by exactly that factor, so the wider half-width still maps to NDC x equals 1. Skip that division and a widescreen monitor squashes the image horizontally instead of showing more of the scene.
+The angle must be in radians. A smaller field of view gives a larger scale, so the view zooms in: at 90 degrees, tan(45 degrees) equals 1 and y_scale equals 1; at 60 degrees, tan(30 degrees) approximately 0.577 and y_scale approximately 1.732. The division by aspect exists because a screen’s half-width is aspect times its half-height; without it a widescreen picture is squashed sideways instead of showing more of the scene. Lesson 7.9 derives both formulas and the projection matrix that uses them, starting from the view-space points this lesson produces.
 
 Section: Orthographic projection: no shrinking with distance.
 
-Perspective divides by depth, so distant things look smaller. An orthographic camera does not divide. It looks at a box-shaped volume, and an object has the same size at any depth. Two-dimensional games use it, strategy games use it so every tile keeps its size, and editors and shadow maps use it. Its settings are the size of the box, not a field of view.
+An orthographic camera does not divide by depth. It looks at a box-shaped volume, and an object has the same size at any depth. Two-dimensional games use it, strategy games use it so every tile keeps its size, and editors and shadow maps use it. Its settings are the size of the box, not a field of view.
 
 Say an orthographic camera shows a region 20 world units wide and 15 tall, centred on (0, 0), on an 800 times 600 screen. Across, that is 800 divided by 20 equals 40 pixels per unit, and down it is 600 divided by 15 equals 40, the same, so nothing is stretched. A point at (5, 3) lands at:
 
@@ -280,25 +252,11 @@ Move the point nearer or farther and (600, 180) does not change. Zooming changes
 
 The reverse also works, because nothing was divided. A click at pixel (600, 180) is the world point ((600 minus 400) divided by 40, (300 minus 180) divided by 40) equals (5, 3). Turning a cursor position into a world position is the first step of picking, which Lesson 7.5 builds on.
 
-Section: Several cameras, one world.
-
-A camera is an object with a position and a turn like any other, plus a projection and a few settings: which surface it draws into (the window, or an off-screen image), which rectangle of that surface (its viewport), and when it draws compared with the other cameras (its order). A split screen, a minimap, a rear-view mirror, and a security monitor inside the game each use another camera. A camera that draws into an off-screen image makes a texture that a material can then show on a mirror or a monitor. Every formula in this lesson works for each camera separately, using that camera’s viewport rather than the whole window.
-
-ExampleA 1920 times 1080 window with two players and a minimap
-
-The window’s own aspect is 1920 divided by 1080 equals 1.778. Give player 1’s camera that value instead of 0.889, and its horizontal scale, y_scale divided by aspect, comes out 0.889 divided by 1.778 equals 0.5 times what it should be, so the picture is squeezed to half its width. And a world point that projects to the middle of player 2’s picture belongs at pixel x equals 1440, not at 480.
-
-The minimap’s viewport lies inside player 2’s, so the minimap must draw later. The camera with the lower order draws first, and a later camera can paint over what is already there instead of clearing it, which is how a minimap sits on top of the main picture. Which objects each camera draws is decided by the layer filters, culling, and visibility tests in Lesson 7.2.
-
-In memory, a game with several cameras can hold several view-projection matrices. The one that belongs to the picture you draw over is the one that changes when you turn that player’s view, and its viewport is the rectangle to use in the pixel conversion that follows.
-
-Section: Screen coordinates.
-
-After projection and perspective division, normalized coordinates are often in -1..=1. Convert them to pixels:
+The last step turns normalized coordinates, which run from minus 1 to 1, into pixels, flipping y because screen rows count downward:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The 1.0 - y flips an upward math axis into a downward screen-pixel axis. The result counts from the top left of the viewport, so a game with several cameras needs the viewport’s own origin added to give window pixels: for player 2 above, the centre of the picture is (480, 540) inside the viewport and (960 + 480, 540) in the window.
+A game with several cameras, such as a split screen with a minimap, does that once per camera inside the camera’s own viewport, with that viewport’s aspect: a 960 times 1080 half of a 1920 times 1080 window has aspect 960 divided by 1080 equals 0.889, and giving it the window’s 1920 divided by 1080 equals 1.778 squeezes its picture to 0.889 divided by 1.778 equals 0.5 of its width; Lesson 7.9 works through both.
 
 Section: Texture coordinates: the same top-or-bottom choice.
 

@@ -66,27 +66,13 @@ Takeaway: validate a complete candidate range before comparing its contents.
 
 The direct indexes can panic near the end of the buffer, while get turns an incomplete window into false. PatternByte prevents a magic byte such as hexadecimal 0 0 from secretly meaning “wildcard.” zip and all express the matching condition directly: each discovered byte must satisfy its corresponding pattern item.
 
-Read this function from the outside inward:
-
-bytes.get(range) requests a window without risking an out-of-bounds panic.
-
-saturating_add prevents the end calculation from wrapping to a small number.
-
-zip pairs every found byte with one pattern item.
-
-all returns true only when every pair is acceptable.
-
-Any accepts the found byte; Exact(value) accepts only that value.
-
-The function borrows both slices. It does not copy the module again and does not own the pattern. That is why its signature uses &[u8] and &[PatternByte].
+saturating_add also keeps the end of the window from wrapping to a small number. Lesson 3.3’s checked slices and iterator chains explain get, zip, and all step by step. The function only borrows the copied bytes and the pattern, so it never copies the module again.
 
 Section: Scan safely.
 
 One safe comparison is not a scan yet. The next function tries every start position where the full pattern could fit, collecting offsets in the local buffer. If the buffer has three bytes and the pattern has two, both starts 0 and 1 must be considered; start 1 is easy to miss with an exclusive range.
 
 Code example. The code’s comments explain: ⚠️ An empty pattern would otherwise appear to match between every byte, and subtracting a longer pattern would underflow. ✅ The inclusive end keeps the final legal starting position searchable.
-
-Use less than or equal to so a match beginning at the final possible offset is included.
 
 For n input bytes and an m-byte pattern, this simple algorithm does at most roughly n times m comparisons. That is easy to reason about and fast enough for bounded course modules. More advanced search algorithms matter only after measurement shows this loop is the bottleneck.
 
@@ -202,7 +188,7 @@ Additional detail: Complete lab source: pattern_scanner.rs.
 
 Code example. The code’s comments explain: 🔒 Code signatures belong in executable image pages, not heaps or unrelated readable allocations that happen to share three bytes. 📏 Clip Windows' page-sized region to the exact module interval. 🔍 Copy once, then scan safe local slices while the game keeps running.
 
-Notice the order: restrict to the correct module, restrict again to readable executable regions, copy each region, scan the safe local copy, then demand one result. A three-byte match identifies a candidate only; patching requires a separately verified address and expected bytes.
+A three-byte match identifies a candidate only; patching requires a separately verified address and expected bytes.
 
 Section: When results are wrong.
 

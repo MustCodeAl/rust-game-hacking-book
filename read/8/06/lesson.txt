@@ -2,7 +2,7 @@ Windows Input: Polling, Events, and Messages
 
 Section: “Send a key” can mean three different things.
 
-Our D L L, dynamic link library, now has a controlled lifecycle, and the scanner can do work off the game thread. A local tool also needs a deliberate way to start or stop a feature. Pressing a menu hotkey, sending a synthetic key to an offline game, and calling a window procedure solve different problems, even though all three sound like “input.” Lesson 8.5 explained what a game does with input once it has arrived: the three layers of device, state, and action, and why presses are edges. This lesson is about the ways Windows delivers that input and the ways a tool can read or send it.
+Our D L L, dynamic link library, now has a controlled lifecycle, and the scanner can do work off the game thread. A local tool also needs a deliberate way to start or stop a feature. Pressing a menu hotkey, sending a synthetic key to an offline game, and calling a window procedure solve different problems, even though all three sound like “input.” This lesson is about the ways Windows delivers input and the ways a tool can read or send it. Lesson 8.5 follows the input inside a game once it has arrived, from device events to per-frame state and actions.
 
 Windows has several input paths because programs receive interaction in different ways:
 
@@ -32,7 +32,7 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 The waiting path and the continuously updating path look different:
 
-TranslateMessage can post character messages derived from key messages; DispatchMessage sends a retrieved message to its window procedure. PeekMessage reports no available queued message without waiting, which is why the game-style loop can continue its own work. The exact handling of Raw Input and other message types varies by application; do not assume every game consumes WM_KEYDOWN as its gameplay input. See Microsoft’s GetMessageW and PeekMessageW references for their return values and queue behavior.
+TranslateMessage can post character messages derived from key messages. See Microsoft’s GetMessageW and PeekMessageW references for their return values and queue behavior.
 
 The callback must also return promptly. While a window procedure is busy reading a large file or waiting on a network request, other messages for windows on that thread cannot be handled. The window may stop repainting or responding to input. Microsoft’s window-procedure guidance explains this bottleneck. The same concern appears when a hook adds work to a game’s time-sensitive path: move slow work elsewhere and make overload visible, as Lesson 6.11 does for a recorder.
 
@@ -54,7 +54,7 @@ Fullscreen. Exclusive fullscreen takes over the display and may change its resol
 
 Presenting. The game draws into a hidden back buffer and then presents it. With vertical sync on, the present waits for the display’s next refresh, so a 60 Hz display caps the game at 60 frames a second ( Lesson 4.1 ). A game with little moving, such as a menu, may redraw only when something changes, to save power. A screenshot is a copy of the finished back buffer saved as an image file.
 
-Focus and the cursor. A window that loses focus may pause its game, but GetAsyncKeyState still reports keys, so a tool must check focus itself (below). A game can hide the cursor, confine it to the window, replace it with its own image, or read relative mouse movement instead of a position (Lesson 8.5 shows the arithmetic of a look-around loop).
+Focus and the cursor. A window that loses focus may pause its game, but GetAsyncKeyState still reports keys, so a tool must check focus itself (below). A game can hide the cursor, confine it to the window, replace it with its own image, or read relative mouse movement instead of a position ( Lesson 8.5 shows the arithmetic of a look-around loop).
 
 Section: Read a hotkey with GetAsyncKeyState.
 
@@ -84,7 +84,43 @@ Then send a balanced key-down/key-up pair:
 
 Code example. The code’s comments explain: 🛡️ SAFETY: `events` is initialized and its element size matches INPUT.
 
-A key event is an INPUT whose type says “keyboard” and whose union holds a KEYBDINPUT. The code above sets two of its fields and leaves the rest at zero:
+A key event is an INPUT whose type says “keyboard” and whose union holds a KEYBDINPUT. The code above sets two of its fields and leaves the rest at zero: wVk, the same virtual-key number GetAsyncKeyState takes, and dwFlags, zero for a key going down and KEYEVENTF_KEYUP for its release. The input A P I reference lists every field and flag, including the scan-code form that some games read instead.
+
+Always release a key or mouse button during shutdown, even if a feature fails. SendInput is subject to User Interface Privilege Isolation (UIPI): Windows blocks input from a lower-integrity process into a window owned by a higher-integrity one, such as a game running as administrator while your tool does not. Windows does not tell you why: neither SendInput’s return value nor GetLastError identifies UIPI as the cause, and the target window simply never reacts, which looks identical to a wrong virtual-key code or an unfocused window.
+
+If synthetic input silently does nothing, check whether the target is elevated before suspecting your own code. Some games also intentionally use Raw Input or device APIs that do not behave like a normal text box. Do not respond by repeatedly flooding input.
+
+Section: SendMessageW is not simulated keyboard input.
+
+Every Win32 window has a window procedure that receives numbered messages. SendMessageW invokes that procedure synchronously and waits for it to finish. PostMessageW puts a message on the owning thread’s queue and returns. For a window outside your process, a bounded wait is usually safer than an unlimited one:
+
+Code example. The code’s comments explain: 🛡️ This custom message belongs to our own lab window. It carries only integer values—never a pointer into this process.
+
+Use PostMessageW when the receiver’s documented contract says queuing is correct and no immediate result is required. Never pass a local pointer in LPARAM to an unrelated process: Windows automatically marshals only certain system messages below WM_USER. A custom WM_APP message is appropriate when both sides share a pointer-free contract.
+
+Most 3D games do not treat WM_KEYDOWN as authoritative gameplay input. They may poll device state, consume Raw Input, or ignore messages while unfocused. Sending a window message is therefore not a stronger version of SendInput; it is a different communication path.
+
+Section: A controlled lab checklist.
+
+Start only the course’s local/offline target.
+
+Discover its window by P I D, process identifier, and confirm it is foreground.
+
+Use Insert only to toggle your menu; detect the rising edge yourself.
+
+Send one balanced input pair and count the events SendInput accepted.
+
+Move focus to Notepad and verify the tool pauses instead of typing there.
+
+Shut down while a feature is active and verify every held input is released.
+
+Log errors and stop; never escalate privileges or flood retries automatically.
+
+Section: Optional input A P I references.
+
+The code above uses only the fields and calls already explained; these references list the remaining variants.
+
+Additional detail: Optional reference: every KEYBDINPUT field and flag.
 
 KEYBDINPUT: the fields that matter
 
@@ -112,43 +148,13 @@ dwExtraInfointegerdefault 0
 
 An extra value the receiving window can read back. Almost nothing uses it.
 
-Always release a key or mouse button during shutdown, even if a feature fails. SendInput is subject to User Interface Privilege Isolation (UIPI): Windows blocks input from a lower-integrity process into a window owned by a higher-integrity one, such as a game running as administrator while your tool does not. Windows does not tell you why: neither SendInput’s return value nor GetLastError identifies UIPI as the cause, and the target window simply never reacts, which looks identical to a wrong virtual-key code or an unfocused window.
-
-If synthetic input silently does nothing, check whether the target is elevated before suspecting your own code. Some games also intentionally use Raw Input or device APIs that do not behave like a normal text box. Do not respond by repeatedly flooding input.
-
-Section: SendMessageW is not simulated keyboard input.
-
-Every Win32 window has a window procedure that receives numbered messages. SendMessageW invokes that procedure synchronously and waits for it to finish. PostMessageW puts a message on the owning thread’s queue and returns. For a window outside your process, a bounded wait is usually safer than an unlimited one:
-
-Code example. The code’s comments explain: 🛡️ This custom message belongs to our own lab window. It carries only integer values—never a pointer into this process.
-
-Use PostMessageW when the receiver’s documented contract says queuing is correct and no immediate result is required. Never pass a local pointer in LPARAM to an unrelated process: Windows automatically marshals only certain system messages below WM_USER. A custom WM_APP message is appropriate when both sides share a pointer-free contract.
-
-Most 3D games do not treat WM_KEYDOWN as authoritative gameplay input. They may poll device state, consume Raw Input, or ignore messages while unfocused. Sending a window message is therefore not a stronger version of SendInput; it is a different communication path.
-
-Section: Other Windows APIs worth knowing.
+Additional detail: Optional reference: other Windows APIs worth knowing.
 
 Choose by question instead of memorizing a giant list:
 
 Other input and window APIs
 
 An HWND is also called a handle, but it is owned by the window manager and is not closed with CloseHandle. This is why “wrap every H... value in the same RAII type” is wrong. Learn the creation, borrowing, and destruction contract for each A P I family.
-
-Section: A controlled lab checklist.
-
-Start only the course’s local/offline target.
-
-Discover its window by P I D, process identifier, and confirm it is foreground.
-
-Use Insert only to toggle your menu; detect the rising edge yourself.
-
-Send one balanced input pair and count the events SendInput accepted.
-
-Move focus to Notepad and verify the tool pauses instead of typing there.
-
-Shut down while a feature is active and verify every held input is released.
-
-Log errors and stop; never escalate privileges or flood retries automatically.
 
 Section: References.
 

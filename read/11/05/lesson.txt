@@ -42,6 +42,16 @@ A conceptual boundary picture, not a driver experiment: user-mode faults are usu
 
 The boundary is useful because callers do not receive kernel authority merely for asking Windows to do something. The kernel checks the request, and a sound driver checks it again before touching device or privileged memory.
 
+Section: Why a kernel bug takes the whole machine down.
+
+When user-mode code follows a bad pointer, the kernel finds that nothing valid lives at that address and turns the page fault into an access-violation exception for that one process. The program’s own handler, a debugger, or Windows Error Reporting deals with it, and in the worst case one process ends. The kernel is the safety net under every user-mode program.
+
+There is no separate part of Windows that can repair arbitrary damage to its own kernel state. A hypervisor may isolate a whole guest from the host, as Lesson 13.3 will show, but it cannot resume a guest kernel whose internal records are already corrupted. Kernel code does catch faults it expects, such as touching a user buffer that another thread may have freed; the copy behind ReadProcessMemory is written to catch exactly those. But a driver that follows a bad pointer by mistake can raise an unexpected fault inside the kernel, and kernel code and drivers share an address space and a set of data structures: the scheduler’s lists, the memory manager’s page records, and the locks that guard them. The fault may have struck halfway through updating one of those structures, with a lock still held. Windows cannot generally prove which of its own records remain sound, and carrying on could write corrupted data to disk. For an unrecoverable kernel failure, Windows stops on purpose.
+
+That deliberate stop is a bug check, better known as the blue screen. Windows shows a stop code, such as hexadecimal 5 0 PAGE_FAULT_IN_NONPAGED_AREA or hexadecimal D 1 DRIVER_IRQL_NOT_LESS_OR_EQUAL, writes a crash dump of the whole machine if it can (Lesson 14.3 will capture a dump of one process), and restarts.
+
+Inside a virtual machine, even a bug check stops only that virtual machine (Lesson 13.3), which is one more reason the book’s labs run inside one, in user mode.
+
 Section: Why the course labs stay in user mode.
 
 The old open-source games in this book do not need a driver. Their offline processes can be studied with documented Windows APIs, a debugger, a user-mode D L L, and reversible patches.
@@ -62,6 +72,12 @@ Those capabilities would expand the problem from studying one game process into 
 
 Microsoft’s own driver security guidance begins with the same design question: confirm that a kernel driver is actually required. If a service or application can do the job, it is the lower-risk boundary.
 
+Section: Why Windows insists on signed drivers.
+
+Loading a driver puts new code into ring 0, so Windows checks where a driver came from before loading it. 64-bit Windows refuses kernel-mode code without a valid digital signature, the kind of signature Lesson 10.8 checked on game files. Since Windows 10 version 1607, on a PC with Secure Boot on, a new driver must be signed by Microsoft itself, through its hardware developer program, which requires the publisher to prove its identity with an extended-validation certificate. Secure Boot is the firmware check that allows only signed boot components to start, which also keeps these signature checks from being relaxed before Windows is running. Developers’ test-signing modes relax them on purpose, so they belong only on a disposable test machine, and this book never uses them.
+
+A signature answers two questions: who published this driver, and has it changed since? It does not say whether the code is safe, as the next section shows. Attackers look for old, legitimately signed drivers with an exploitable bug and load one to borrow it. Microsoft’s answer is the vulnerable driver blocklist: a list of signed drivers known to be exploitable, which Windows refuses to load. Since the Windows 11 2022 update the blocklist is on by default, and it is always enforced when memory integrity is on.
+
 Section: The defensive problem: trusted code can still be vulnerable.
 
 A signed driver is not automatically a safe driver. If it exposes a badly protected command that can read or write arbitrary privileged memory, another program may abuse that power.
@@ -71,6 +87,20 @@ Narration: A valid signature identifies approval of a driver’s bytes; it canno
 Defenders should treat driver loading as a rare, high-impact event:
 
 Do not “test” a suspicious driver by loading it on your daily computer. Use an isolated disposable virtual machine and vendor-provided analysis guidance.
+
+Section: Why a cheat driver endangers its own user.
+
+Some cheats for online games ship as drivers, on the theory that ring 0 sees everything. Whatever such a driver does to a game, here is what it does to the machine running it:
+
+It runs with the kernel’s full authority and comes from an anonymous author. Its bugs become bug checks and corrupted files on the user’s own computer, with no vendor, testing, or update process behind it.
+
+It often comes with instructions to switch protections off, such as Secure Boot, memory integrity, the vulnerable driver blocklist, or signature checks. Each of those protects the machine against all kernel malware, not only against cheats, and turning one off lowers the defense for everything.
+
+Many rely on an old signed driver with a known bug to reach ring 0. The bug cannot tell who is asking: while that driver is loaded, any other program on the machine can send the same control code and read or write kernel memory.
+
+A kernel driver is the most powerful place malware can live. Installing one from an anonymous seller hands that seller the whole computer: saved passwords, browser sessions, banking, and the power to hide further software.
+
+Anti-cheat systems look for exactly these drivers, and the penalties usually apply to the whole account, sometimes to the hardware.
 
 Section: Build a read-only driver inventory.
 

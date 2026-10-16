@@ -74,6 +74,26 @@ Code example. The surrounding prose explains this example; the full lesson conta
 
 Generated metadata stores the confidence level beside each numeric offset, together with the accesses and value transitions that earned it, so a Candidate never becomes a trusted field just because it has a convenient name.
 
+Section: The guard’s structure, byte by byte.
+
+A recovered layout is easier to judge after reading one whose source is known. Lesson 4.10 numbered a toy guard’s states for a C++ layout. Here is the whole structure. The guard’s Rust lab, npc_brain_lab.rs, cannot show one itself, because its Rust types use Rust’s default layout, which lets the compiler order fields however it likes. In C++, the fields of a plain structure sit in memory in the order they are declared:
+
+Code example. The code’s comments explain: hexadecimal 1 5 to hexadecimal 1 7: padding
+
+Every float and uint32_t takes 4 bytes, so the offsets count up in fours: 0, 4, 8, 12 (hexadecimal 0 C), and 16 (hexadecimal 1 0). The state is stored as a single byte at 20, which is hexadecimal 1 4 (1 times 16 + 4). The next field is 4 bytes wide, and its alignment requires it to start at a multiple of 4. Bytes 21, 22, and 23 are not, so the compiler leaves them as padding, and seen_for starts at 24, which is hexadecimal 1 8 (1 times 16 + 8). search_ticks follows at 28, hexadecimal 1 C (1 times 16 + 12), and target_id at 32, hexadecimal 2 0 (2 times 16). The structure ends at 36 bytes, hexadecimal 2 4 (2 times 16 + 4).
+
+Here is the guard at the end of tick 5 of Lesson 4.10’s run, mid-chase. It has seen the player on ticks 1 to 5, so seen_for is 5, and chase steps of 1 on ticks 3, 4, and 5 have taken it to (3, 0), still facing east. Its health is still the 100 that the lab gives every new guard:
+
+The target field is an id rather than a pointer. Some games store a raw pointer to the target object instead, and that pointer goes stale when the target is destroyed and its memory reused, the problem that generation-checked handles in Lesson 3.10 solve.
+
+Narration: An id survives its target being destroyed in a way a raw pointer does not: the lookup simply finds nothing, instead of reading a reused address.
+
+Section: A state value that means nothing.
+
+A byte’s 8 bits give 2 to the power of 8 equals 256 different values, 0 to 255, but only 0 to 4 mean anything to the guard’s code. Write 9 into the state byte of a toy program that uses the lab’s five-state guard, and the result depends on how the compiler built the switch statement that picks a branch for each state. Compilers often turn a switch over small numbers into a table of jump targets, one code address per value. If the compiled code checks the range first, 9 goes to a default branch. If it indexes the table without a check, it reads whatever bytes lie past the table’s end as an address, jumps there, and usually crashes.
+
+The guard’s state is an enum, a type whose values come from a fixed list of names. In the Rust lab, safe code cannot store 9 in a GuardState at all. Rust treats an enum holding a value outside its list as undefined behavior: the language promises nothing about what the program then does, so safe code is never allowed to create one. A tool that reads this byte from another process therefore decodes it as a plain integer first and accepts it only when it is one of the five known values, the kind of check that rejecting impossible layouts applies to every field.
+
 Section: Migrate after an update by matching behavior.
 
 When a new build moves fields:

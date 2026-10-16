@@ -96,6 +96,78 @@ Load one supported profile after fingerprinting the target. Features receive ver
 
 The complete dispatcher and lifecycles are in dll.rs. The patch-owning primitives are in local_patch.rs; dropping each LocalPatch restores the bytes it captured only after an exact pre-patch verification.
 
+Section: Build the Urban Terror 4.3.4 memory wallhack.
+
+The flag trace and frame-local state model in Lesson 7.2 can be understood with the debugger alone. This pinned in-process implementation applies the verified detour and D L L lifecycle from Lesson 8.3 to the rendering boundary. Keep those ownership and restoration steps intact while following the exact build-specific addresses below.
+
+Additional detail: Exact-build reference: the Urban Terror 4.3.4 memory wallhack.
+
+The r_drawentities trace in this exact build leads through the call at this value. Inside the entity loop, e b x holds the current render entity at this value. The field at [e b x+4] cycles through values such as hexadecimal 0 D, hexadecimal 4 0, hexadecimal 8 2, and hexadecimal 8 3.
+
+Hook this exact point:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+A 32-bit detour cave has the same shape as the Wesnoth cave:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Install a six-byte verified detour at this value, enter a local game, enable cg_thirdperson, and add bots. The local player and bots should render through walls, as in Lesson 7.2’s depth-test experiment. Values hexadecimal 8 3 and hexadecimal 4 0 should not create the same effect; that comparison is how you prove hexadecimal 0 D is the relevant render state.
+
+Restore the original six hook bytes when the feature is disabled. This memory-based wallhack is intentionally kept as a full target-specific lab before the more general OpenGL approach below.
+
+The D L L already contains the complete verified implementation. Build and inject it into Quake3-UrT.exe, enter a local bot match, and press F1 to toggle this memory wallhook. Press End to stop and restore all six bytes. See install_urban_terror_memory_wallhook and the Urban Terror hotkey worker in dll.rs.
+
+Section: What the experiment proves.
+
+The comparison isolates how one C P U, central processing unit,-side flag changes G P U, graphics processing unit, behavior. It does not prove that every build uses the same flag, address, or rendering path, so keep the executable fingerprint and original bytes beside the result.
+
+Section: Turn the wrapper into the actual Urban Terror wallhack.
+
+The A P I, application programming interface, signature, draw-count interpretation, and sampling design in Lesson 7.3 stand on their own. The exact-build detour below applies the D L L and patch lifecycle from Lesson 8.3 to one verified OpenGL instruction. Recheck the displaced instruction span and restoration path before running it.
+
+Additional detail: Exact-build reference: the Urban Terror 4.3.4 OpenGL wallhack.
+
+In Urban Terror 4.3.4, resolve glDrawElements from opengl32.dll. The historical build hooks the instruction at glDrawElements + hexadecimal 1 6 and resumes six bytes later. This is not a function-entry wrapper: it is a real code cave in the middle of the OpenGL function. At this point in this 32-bit build, e b x holds count.
+
+Resolve these two OpenGL functions with GetProcAddress:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Lesson 7.3 explains why this pair matters: glDepthRange(0.0, 0.0) flattens every highlighted fragment to the nearest depth, and GL_ALWAYS stops the depth test from rejecting it.
+
+The six bytes we replace are one whole x86 instruction:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Before and after the patch, the six bytes at glDrawElements + hexadecimal 1 6 look like this:
+
+The installer refuses to patch if those bytes do not match. It writes a five-byte near jump plus one NOP, and LocalPatch owns the saved bytes so dropping the patch restores them:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The cave saves the C P U flags and all general-purpose registers, passes the live e b x value to an ordinary helper, replays the displaced instruction, and returns to the byte immediately after it:
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+Why save everything? The original OpenGL function expects its registers and flags to have particular values when it resumes. The compiler is free to use registers while apply_urban_terror_gl_state runs. Saving and restoring them makes the helper almost invisible to the interrupted function.
+
+The helper changes the live OpenGL state. A later non-highlighted draw restores normal depth state:
+
+Code example. The code’s comments explain: 🛡️ SAFETY: these pointers were resolved from this process's opengl32.dll, and the game reached the cave on its OpenGL render thread.
+
+Build the D L L for 32-bit Windows, inject it into Quake3-UrT.exe, enter a local match, and press F2. Geometry with count greater than 500 is forced to the near plane and uses GL_ALWAYS, producing the player/weapon-through-wall result shown below. Press F2 again or End to restore normal state and the original six code bytes.
+
+Terminal window
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+The complete compiled implementation—including export lookup, the naked cave, exact-byte verification, both graphics modes, and restoration—is in opengl_hooks.rs. The hotkey worker is in dll.rs.
+
+The threshold is a confirmed property of this lesson build, not a universal player detector. Log counts while toggling third-person and adding/removing bots so you can see exactly which models it includes.
+
+OpenGL state stays set until another call changes it. This middle-of-function cave cannot surround one typed glDrawElements call, so it restores the normal state when the next non-highlighted draw arrives and when the feature is disabled. Pressing End also disables the mode before removing the code patch. That ordering prevents the game from being left with GL_ALWAYS active.
+
 Section: Check the combined render path.
 
 The complete dispatcher and feature lifecycles bring the separate effects into one D L L, called the multihack in the original course. Test the connections as well as each effect:

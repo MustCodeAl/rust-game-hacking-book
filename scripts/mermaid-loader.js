@@ -131,6 +131,10 @@
             return;
         const mermaid = await loadMermaid();
         const id = diagramId(block);
+        // Labels are shown at 16px, but the block holds code until it is drawn and so measures at its own 14px: boxes then come out
+        // about 14% too narrow and one-line labels such as "Spend gold" are cut off. Measure at the size the labels are shown at.
+        const measuredAt = block.style.fontSize;
+        block.style.fontSize = '16px';
         try {
             // Drawing inside the block itself, as mermaid.run does, lets Mermaid
             // measure labels in the book's font; measured anywhere else, the boxes
@@ -150,6 +154,9 @@
         catch (error) {
             block.dataset.processed = 'error';
             console.error('Could not render a Mermaid diagram', error);
+        }
+        finally {
+            block.style.fontSize = measuredAt;
         }
     }
     // Mermaid is not safe to run twice at once, so diagrams render one after

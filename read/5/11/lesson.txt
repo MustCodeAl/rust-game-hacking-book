@@ -50,6 +50,28 @@ Every one of these is a proxy: an observable clue that may correlate with the ca
 
 In brief: Draw properties are category clues that need testing, rather than proof that a particular game object was drawn.
 
+Section: Shader programs and the cost of a draw.
+
+The bound pixel shader in the table above is one compiled program among many that a game can choose from, and the number of draws in a frame has a cost of its own.
+
+Section: Variants, instancing, and shaders that do not draw.
+
+Variants. One shader source can have switches, written as #ifdef lines, such as “has a normal map” or “has fog.” Each combination compiles to a separate program, so three switches give 2 times 2 times 2 equals 8 variants. Engines compile the ones a scene needs, which is why a game can hitch the first time something new appears.
+
+Instancing. To draw 1,000 copies of one tree mesh, the game makes one draw call with 1,000 instances. A buffer holds each copy’s transform, a 4 times 4 matrix of 16 four-byte floats, which is 64 bytes, so 1,000 copies take 64,000 bytes. Earlier we saw that one draw can contain many objects; instancing is the deliberate version of it.
+
+Compute shaders. A compute shader is not part of drawing. It is a general G P U program that runs once for each item in a grid of work, reading and writing buffers. Engines use it for particles, culling, mesh deformation, and post-processing.
+
+Post-processing shaders. A fragment shader run over a full-screen rectangle, reading the finished picture as a texture, produces effects such as bloom and colour grading ( Lesson 7.2 ).
+
+Extending the standard material. Engines let a game add its own shader code and extra vertex data, such as a per-vertex wind weight, to a standard material instead of rewriting it.
+
+Section: Why many small draws cost frame time.
+
+Each draw call costs the C P U, central processing unit, something even if the G P U’s share is tiny, because the driver checks the bound state and builds the commands. Suppose, as an illustration, one draw costs 5 microseconds of C P U time. Then 10,000 draws cost 10,000 times 5 equals 50,000 microseconds, which is 50 milliseconds, three frames of the 16.67 milliseconds budget from Lesson 4.1, with the G P U waiting. Instancing, merging meshes that share a material, texture atlases, and culling (Lesson 7.2) all exist to cut the number of draws.
+
+A stress test finds the limit by multiplying one thing, such as cubes, sprites, lights, animated characters, or text, and watching the frame time. If 1,000 cubes take 4 milliseconds and 4,000 take 16 milliseconds, each costs 0.004 milliseconds and the 16.67 milliseconds budget runs out at about 16.67 divided by 0.004 equals 4,167 cubes. Halving the window’s pixel count tells you which processor is the limit: if the frame time does not change, the C P U, not the G P U, is the bottleneck.
+
 Section: Draw a frame boundary around your samples.
 
 DrawIndexed fires many times per frame; Present fires once. Recording draws without frame boundaries produces a stream you cannot reason about, because you cannot tell where one frame’s ordering ends.

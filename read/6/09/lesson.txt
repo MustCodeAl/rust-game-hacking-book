@@ -26,11 +26,9 @@ Section: Modules ask for an interface by name.
 
 The engine cannot call an arbitrary function inside a loaded library and hope its arguments fit. The two sides need an agreed set of operations. That set is an interface: a contract describing which methods an object provides and how to call them.
 
-Source modules expose a factory named CreateInterface. A factory is a function that supplies an object through an agreed interface. The caller passes the requested name. The module searches its registered interfaces and returns a pointer to the matching object, or a null pointer if it cannot provide one. An optional status output receives IFACE_OK or IFACE_FAILED. The pointer is the function’s result; the status is a separate output.
+Source modules expose a factory named CreateInterface. A factory is a function that supplies an object through an agreed interface. The caller passes the requested name. The module searches its registered interfaces and returns a pointer to the matching object, or a null pointer if it cannot provide one. A separate, optional status output receives IFACE_OK or IFACE_FAILED.
 
-For this revision, VClient017 names the client game interface, while VEngineClient014 names engine services used by client code. On the server side, VEngineServer023 exposes engine services, ServerGameDLL012 exposes game callbacks, and ServerGameClients005 covers player-related callbacks. The suffix is part of the requested contract.
-
-The SDK’s registration macros, including EXPOSE_INTERFACE, attach a name and creation function to a registration list. Lookup matches that name. The returned object’s virtual methods use the C++ calling contract already introduced in earlier lessons. A different interface version can change that contract, even when its name looks similar.
+Each name carries a version suffix. In this revision, VClient017 names the client game interface and VEngineServer023 the engine services offered to server code. The suffix is part of the requested contract: the returned object’s virtual methods follow that version’s C++ calling contract, which a neighbouring version can change. CreateInterface itself is an ordinary export, found by name the way Lesson 8.1’s injector finds gha_start.
 
 Alternative: Picture a shared menu of operations. The version name selects the menu both modules agree to use.
 
@@ -82,7 +80,7 @@ The SDK’s default tick interval is 0.015 seconds. Multiply by 1000 to get 15 m
 
 The server game interface exposes GameFrame for simulation work and GetTickInterval for its interval. Drawing frames happens on another schedule. A faster renderer can draw additional views between simulation ticks; it does not give the player additional accepted movement.
 
-Waiting for a network reply before showing every step would make movement feel delayed. Prediction lets the client run its local player’s movement using input commands immediately. The server still runs its own simulation and returns authoritative results. Authoritative means that those results are the state the client must reconcile with.
+Waiting for a network reply before showing every step would make movement feel delayed. Prediction lets the client run its local player’s movement using input commands immediately. The server still runs its own simulation, and its results are authoritative in the sense of Lesson 9.1: they are the state the client must reconcile with.
 
 Use a deliberately small movement model to see the reconciliation. Start at x equals 0. Each accepted forward command adds one position unit. Commands 1 and 2 request +1, giving 0 + 1 equals 1, then 1 + 1 equals 2. These are toy displacements, not Source’s velocity and collision formulas. The scene’s 15-millisecond clock comes from the SDK default.
 
@@ -102,11 +100,9 @@ For another player’s movement, the client usually has received states rather t
 
 Prediction estimates the local player’s response to input. Interpolation fills the visible gaps between other entities’ received states. Neither makes a client observation newer than the information actually received.
 
-This delay also matters when a player fires. The target they saw may occupy an earlier position than the server’s current position. Lag compensation temporarily uses recorded earlier player states for the relevant server-side hit check, then restores the current simulation.
+This delay also matters when a player fires. The target they saw may occupy an earlier position than the server’s current position. Lag compensation temporarily uses recorded earlier player states for the relevant server-side hit check, then restores the current simulation. The server still performs the hit check, and the world does not permanently travel backward because a packet arrived.
 
 In this SDK, the initial target tick is the command’s tick_count minus the interpolation delay expressed in ticks. The server also checks that time against its latency estimate. A discrepancy greater than 0.2 seconds uses a latency-based target instead. The inspected sv_maxunlag default is 1 second and bounds the allowed correction. This is a bound on the decision; it is not a promise that every past state remains available for exactly one second.
-
-The important ownership stays intact: the server performs the hit check. It temporarily adjusts eligible recorded player state and then restores it. The world does not permanently travel backward because a packet arrived.
 
 Section: Console variables have permissions as well as values.
 
@@ -116,7 +112,7 @@ FCVAR_CHEAT restricts certain development controls to permitted cheat contexts, 
 
 A server can ask for a client’s variable through StartQueryCvarValue. The request returns a cookie, an identifier for matching a later reply to that request. It does not return the variable’s value immediately. OnQueryCvarValueFinished supplies the later status and value. The FCVAR_SERVER_CANNOT_QUERY flag forbids that query for the marked variable.
 
-For a defender, a client-reported setting is evidence about what the client reported. It does not replace server-side movement, inventory, or damage validation. A timeout or failed query also needs its own interpretation; it is not automatically proof of cheating.
+For a defender, a client-reported setting is evidence about what the client reported, not a replacement for the server-side movement, inventory, and damage checks of Lesson 9.2. A timeout or failed query is not automatically proof of cheating either.
 
 Section: The same engine loads packages and compiled maps.
 

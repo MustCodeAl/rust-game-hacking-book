@@ -114,27 +114,9 @@ A u32 reads the same four bytes with none of these boundaries. It treats all 32 
 
 An f64 follows the same plan with more room: 1 sign bit, 11 exponent bits with a bias of 1,023, and 52 fraction bits.
 
-Section: What the rest of the fraction bits are for.
-
-For 10.0, only one fraction bit is set and the other 22 are 0. They are not wasted. They hold finer and finer halves — ⅛, 1/16, 1/32, all the way down to 1/the large number shown — and 10.0 simply does not need any of them, because it is exactly 1.25 times 8. That is like writing 1.the numeric value shown in decimal: the extra zeros are real digits that happen to be zero.
-
-Most numbers are not that tidy. Take 10.1. It is 1.2625 times 8, so the fraction has to be 0.2625. In binary, 0.2625 never ends: its digits settle into 0011 repeating forever, the same way 1 divided by 3 is 0.333… forever in decimal. The 23 bits store as much of it as fits, rounded at the last bit:
-
-The stored fraction is 0.the numeric value shown…, so the value is 1.the numeric value shown… times 8 equals 10.the numeric value shown…, the closest an f32 can get. A debugger that prints enough digits shows 10.the numeric value shown. This is why float values found in games are rarely round, and why memory scanners let you search for a float within a small range instead of only an exact value.
-
-The last fraction bit sets how fine that precision is. It is worth 1/the large number shown, and for numbers near 10 it is multiplied by 2 to the power of 3 equals 8, so neighbouring f32 values near 10 are about 0.the numeric value shown apart. That works out to roughly seven significant decimal digits.
+10.0 is exactly 1.25 times 8, so its other 22 fraction bits are zeros it does not need. Most numbers are not that tidy. 10.1 is 1.2625 times 8, and 0.2625 has binary digits that repeat forever, so the 23 bits keep a rounded fraction and the f32 holds 10.the numeric value shown…, the closest value it can store. This is why float values found in games are rarely round, and why memory scanners let you search for a float within a small range instead of only an exact value. The optional rounding reference derives those bits and the spacing between neighbouring f32 values.
 
 Narration: Because most fractions are rounded, two floats that print alike can differ in the last bit. Exact equality tests can fail, so programs often allow a tiny margin.
-
-Additional detail: Where the binary digits of 0.2625 come from.
-
-To turn a fraction into binary digits, double it again and again. Each time the result reaches 1 or more, the next binary digit is 1 and you keep only the part after the point. Otherwise the digit is 0.
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-After the eighth line the leftover is 0.2 again, just as it was after the fourth line. So lines five to eight repeat forever, producing 0011 over and over: 0.2625 is 0.0100 0011 0011 0011 … in binary. The fraction field holds the first 23 of those digits, rounded at the last one.
-
-Doubling works because each doubling moves the binary point one place to the right, pulling the next digit in front of it.
 
 Section: Patterns kept aside for special values.
 
@@ -182,7 +164,7 @@ Rust’s usize, the pointer-sized whole number from Lesson 3.1, has the same wid
 
 Section: The pointee type sets the step size.
 
-The pointee type also decides how far a pointer moves. Adding 1 to a pointer means “the next value of this type”, not “the next byte”. Rust writes this p.add(1), and makes you wrap it in unsafe, because the compiler cannot check that the new address still lands inside the list:
+The pointee type also decides how far a pointer moves. Adding 1 to a pointer means “the next value of this type”, not “the next byte”, as Lesson 3.1’s .offset() example showed. Rust writes this p.add(1) inside unsafe, because the compiler cannot check that the new address still lands inside the list:
 
 hexadecimal 0 A is 10, hexadecimal 1 4 is 16 + 4 equals 20, and hexadecimal 1 E is 16 + 14 equals 30. A pointer to a 64-byte structure would step 64 bytes at a time.
 
@@ -193,5 +175,29 @@ Section: None of this is stored in memory.
 The pointee type lives in the source code and in the compiler, which uses it to choose the right instructions: a four-byte whole-number read, a float load, or a one-byte read. The compiled game keeps only those instructions. When you study a game, you work out what a pointer points to the same way you work out any other type: from what the code does at the destination.
 
 The same bytes can describe a whole number, a fraction, or an address, depending on the width and interpretation selected by the code. Knowing that representation still does not prove which object the bytes belong to or whether its address remains valid. How External Tools Read Game Memory combines these widths, byte orders, and encodings with the safe boundary: copy a checked byte range first, then interpret the local result.
+
+Section: Optional reference: rounding and precision.
+
+These derivations show where the rounded value of 10.1 comes from. The decoding steps above do not depend on them. Lesson 5.6 relies on the same binary32 rounding when floating-point instructions add, scale, or convert values.
+
+Additional detail: Optional reference: what the rest of the fraction bits are for.
+
+For 10.0, only one fraction bit is set and the other 22 are 0. They are not wasted. They hold finer and finer halves — ⅛, 1/16, 1/32, all the way down to 1/the large number shown — and 10.0 simply does not need any of them, because it is exactly 1.25 times 8. That is like writing 1.the numeric value shown in decimal: the extra zeros are real digits that happen to be zero.
+
+Most numbers are not that tidy. Take 10.1. It is 1.2625 times 8, so the fraction has to be 0.2625. In binary, 0.2625 never ends: its digits settle into 0011 repeating forever, the same way 1 divided by 3 is 0.333… forever in decimal. The 23 bits store as much of it as fits, rounded at the last bit:
+
+The stored fraction is 0.the numeric value shown…, so the value is 1.the numeric value shown… times 8 equals 10.the numeric value shown…, the closest an f32 can get. A debugger that prints enough digits shows 10.the numeric value shown.
+
+The last fraction bit sets how fine that precision is. It is worth 1/the large number shown, and for numbers near 10 it is multiplied by 2 to the power of 3 equals 8, so neighbouring f32 values near 10 are about 0.the numeric value shown apart. That works out to roughly seven significant decimal digits.
+
+Additional detail: Where the binary digits of 0.2625 come from.
+
+To turn a fraction into binary digits, double it again and again. Each time the result reaches 1 or more, the next binary digit is 1 and you keep only the part after the point. Otherwise the digit is 0.
+
+Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+
+After the eighth line the leftover is 0.2 again, just as it was after the fourth line. So lines five to eight repeat forever, producing 0011 over and over: 0.2625 is 0.0100 0011 0011 0011 … in binary. The fraction field holds the first 23 of those digits, rounded at the last one.
+
+Doubling works because each doubling moves the binary point one place to the right, pulling the next digit in front of it.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/3/09/

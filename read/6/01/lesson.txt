@@ -120,13 +120,7 @@ There are also two common ways to process a sequence of events:
 
 For example, a match event might carry match_id, event_id, and a score change. If a sender retries it after a lost acknowledgment, the receiver must recognise the same event rather than add the score twice. Event identity and retry behaviour belong to the model and protocol, not to whether T C P delivered the underlying bytes correctly.
 
-Section: Modularity and scaling follow the dependencies.
-
-Keep receiving bytes, parsing messages, checking requested actions, and saving results as identifiable jobs. Then measure where time is spent. A slow disk write, repeated full-player search, and long logging operation need different remedies; adding workers does not remove a shared bottleneck automatically.
-
-Several independent matches can often run on separate workers. Within one match, operations on shared state still need a defined order. Moving one job to another process also adds a message boundary, possible failures, and delay. Start with a small correct local service, preserve these contracts, and distribute work when measurements and the use case justify it.
-
-Bound queues as well as messages. If input arrives faster than it can be processed, an unbounded queue consumes memory and makes results increasingly stale. A newer position snapshot may replace an older one under a documented policy; a one-time item grant needs different handling. That is a decision about message meaning: discarding an old position can be useful, but discarding an unprocessed item grant loses the item.
+Bound queues as well as messages: an unbounded queue consumes memory when input arrives faster than it can be processed, and its results grow increasingly stale. Whether a full queue may discard something depends on what the message means, which Lesson 9.7 works through for a relay.
 
 Section: Design the backend for one match.
 
@@ -292,7 +286,7 @@ Optional: explore the smaller concurrency problem below. Starting at 1,000, a re
 
 Section: More matches, with explicit ownership.
 
-Sharding partitions work or records by a key: independent matches can run on different workers. A shared world crossing shard boundaries additionally needs ownership handoffs and ordered cross-boundary actions. Azure’s sharding pattern describes the partitioning tradeoff.
+Sharding partitions work or records by a key: independent matches can run on different workers. A shared world crossing shard boundaries additionally needs ownership handoffs and ordered cross-boundary actions. Moving a job to another process also adds a message boundary, possible failures, and delay, so start with a small correct local service and distribute work when measurements justify it. Azure’s sharding pattern describes the partitioning tradeoff.
 
 Coordination records which worker owns match 42. On failure, a replacement needs recoverable state and a new ownership generation; an expired worker must be prevented from committing late writes. Electing a replacement alone cannot reconstruct lost match state. Leader-election guidance explains leases and their failure limits. Retried result events also need persistent event IDs to avoid awarding the same win twice.
 

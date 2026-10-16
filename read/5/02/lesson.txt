@@ -114,7 +114,7 @@ Transparent objects often keep the depth test but disable depth writes and rende
 
 Perspective depth is normally nonlinear. More of the depth buffer’s numeric precision is concentrated near the camera. With the traditional mapping, making the near plane extremely small compared with the far plane wastes precision and can cause two nearby surfaces to alternate visibility, called z-fighting. Modern engines may use a floating-point reversed-z buffer, where farther values and the comparison direction are reversed to improve precision. Never hard-code “small depth means near” until the projection and comparison convention are confirmed.
 
-The depth buffer answers “which submitted fragment wins at this sample?” It does not answer whether an object is logically visible to gameplay. Collision queries, portals, fog-of-war systems, and server state may use entirely different data.
+The depth buffer answers “which submitted fragment wins at this sample?” It does not answer whether an object is logically visible to gameplay. Collision queries, portals, fog-of-war systems, and server state may use entirely different data; Lesson 9.2 shows why a server should not send a hidden enemy’s position at all.
 
 That visual result shows the depth-test behavior changed; it does not prove which objects a call represents. You still need classification tests.
 
@@ -168,31 +168,17 @@ When an object that should appear does not, the cause is usually one of these, a
 
 An object that should appear does not
 
-Section: A frame is several passes.
-
-Most frames are not drawn in one sweep. The engine renders the scene several times for different purposes, in order, and each sweep is a pass. A pass starts by clearing its target to a clear colour, and clearing depth to its farthest value, so the last frame’s picture is not left behind:
-
-Shadows. The shadow pass draws the scene’s depth as seen from the light into a texture called a shadow map. In the main pass, each pixel’s position is converted to the light’s view and compared with the stored depth: if something nearer was stored, the pixel is in shadow. A surface point 7.50 away from the light would be compared with its own stored depth, 7.50, and rounding could make it shadow itself, so the test uses a small bias: shadowed only if the stored depth is less than 7.50 minus 0.05 equals 7.45. It is not, so the point is lit.
-
-Sky and fog. A skybox is a cube texture drawn so that it always looks infinitely far away. Fog blends a surface toward a haze colour with distance. With the fog starting at 10 and ending at 50, a surface 30 away has the factor (50 minus 30) divided by (50 minus 10) equals 0.5, so a surface of rgb(200, 100, 50) in haze rgb(150, 150, 150) is drawn as rgb(175, 125, 100).
-
-Post-processing. The finished picture is stored as a texture and a full-screen rectangle is drawn with a shader that reads it. Bloom blurs the brightest parts and adds them back, and colour grading remaps colours. Tone mapping compresses HDR (high dynamic range) values, where lighting can produce colours above 1.0, into the 0 to 1 range a display can show. A simple tone-mapping formula, c divided by (1 + c), turns a value of 4.0 into 0.8, a value of 1.0 into 0.5, and a value of 0.5 into 0.33, so bright values are squeezed more than dim ones.
-
-Render to texture. A pass can draw into an off-screen texture, not the screen. The texture can then be used as a mirror, a security-camera monitor, a minimap, or a screen shown inside the 3D world.
-
-More than one camera. Each camera draws into its own rectangle, or its own texture. Split-screen is two cameras drawing into the left and right halves of one window.
-
-Forward and deferred. A forward renderer lights each object as it draws it. A deferred renderer first draws position, normal, and colour for every pixel into extra textures, then lights the pixels in one later pass, which makes many lights affordable but handles see-through surfaces less easily.
+Most frames are not drawn in one sweep. The engine renders the scene several times for different purposes, and each sweep is a pass: shadows, then the solid objects, the sky, the see-through objects, full-screen effects, and finally menus and text. The shadow pass stores the depth seen from the light, and a pixel is in shadow only if the stored depth is less than its own distance minus a small bias, so a surface 7.50 from the light with a bias of 0.05 is compared with 7.45 and does not shadow itself. Fog keeps the share (fog end minus distance) divided by (fog end minus fog start) of a surface’s own colour, 0.5 for a surface 30 away in fog from 10 to 50. Lesson 7.4 follows each pass, because the same object can be drawn in more than one of them.
 
 Section: Wider colours and smoother edges.
 
 Section: HDR needs wider pixels.
 
-An ordinary picture keeps each colour channel in 8 bits, which is 256 levels from 0 to 1, so nothing can be brighter than 1.0. Lighting can produce more. Say a sunlit wall comes out at 1.4 and a lamp at 12.0. In an 8-bit picture both are cut off at 1.0 and look equally bright. HDR rendering draws into a texture whose channels are wider and floating-point, commonly 16 bits each, so the difference survives until the tone-mapping step at the end compresses the result into the 0 to 1 range of the display. With the c divided by (1 + c) tone-mapping formula above, the wall becomes 1.4 divided by 2.4 equals 0.58 and the lamp 12 divided by 13 equals 0.92: still different, and both displayable.
+An ordinary picture keeps each colour channel in 8 bits, which is 256 levels from 0 to 1, so nothing can be brighter than 1.0. Lighting can produce more. Say a sunlit wall comes out at 1.4 and a lamp at 12.0. In an 8-bit picture both are cut off at 1.0 and look equally bright. HDR rendering draws into a texture whose channels are wider and floating-point, commonly 16 bits each, so the difference survives until the tone-mapping step at the end of the frame compresses the result into the 0 to 1 range of the display. A simple tone-mapping formula, c divided by (1 + c), turns a value of 4.0 into 0.8, a value of 1.0 into 0.5, and a value of 0.5 into 0.33, so bright values are squeezed more than dim ones. With it, the wall becomes 1.4 divided by 2.4 equals 0.58 and the lamp 12 divided by 13 equals 0.92: still different, and both displayable.
 
 The wider pixels cost memory. A 1920 times 1080 picture has 1920 times 1080 equals the large number shown pixels. With 4 channels of 1 byte it takes the large number shown times 4 equals the large number shown bytes, about 8.3 MB. With 4 channels of 2 bytes it takes the large number shown times 8 equals the large number shown bytes, about 16.6 MB.
 
-HDR is also what makes bloom mean something. Bloom blurs only the part of each pixel above a threshold, here 1.0. The wall has 1.4 minus 1.0 equals 0.4 above it and the lamp has 12.0 minus 1.0 equals 11.0, so the lamp glows 11.0 divided by 0.4 equals 27.5 times as strongly. In the 8-bit picture both had 0 above the threshold, and nothing could glow.
+HDR is also what makes bloom mean something. Bloom is a full-screen effect that blurs the brightest parts of the picture and adds them back, and it blurs only the part of each pixel above a threshold, here 1.0. The wall has 1.4 minus 1.0 equals 0.4 above it and the lamp has 12.0 minus 1.0 equals 11.0, so the lamp glows 11.0 divided by 0.4 equals 27.5 times as strongly. In the 8-bit picture both had 0 above the threshold, and nothing could glow.
 
 Section: Smoothing jagged edges.
 
@@ -268,28 +254,6 @@ Visibility failures by stage
 
 This table is a diagnostic order, not proof. Some engines merge or reorder stages, and G P U-driven pipelines can construct visible lists on the G P U.
 
-Section: Build the Urban Terror 4.3.4 memory wallhack.
-
-The flag trace and frame-local state model above can be understood with the debugger alone. This pinned in-process implementation applies the verified detour and D L L, dynamic link library, lifecycle from Lesson 8.3 to the rendering boundary. Keep those ownership and restoration steps intact while following the exact build-specific addresses below.
-
-The r_drawentities trace in this exact build leads through the call at this value. Inside the entity loop, e b x holds the current render entity at this value. The field at [e b x+4] cycles through values such as hexadecimal 0 D, hexadecimal 4 0, hexadecimal 8 2, and hexadecimal 8 3.
-
-Hook this exact point:
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-A 32-bit detour cave has the same shape as the Wesnoth cave:
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-Install a six-byte verified detour at this value, enter a local game, enable cg_thirdperson, and add bots. The local player and bots should render through walls exactly as in the screenshot. Values hexadecimal 8 3 and hexadecimal 4 0 should not create the same effect; that comparison is how you prove hexadecimal 0 D is the relevant render state.
-
-Restore the original six hook bytes when the feature is disabled. This memory-based wallhack is intentionally kept as a full target-specific lab before the more general OpenGL approach.
-
-The D L L already contains the complete verified implementation. Build and inject it into Quake3-UrT.exe, enter a local bot match, and press F1 to toggle this memory wallhook. Press End to stop and restore all six bytes. See install_urban_terror_memory_wallhook and the Urban Terror hotkey worker in dll.rs.
-
-Section: What the experiment proves.
-
-The comparison isolates how one C P U-side flag changes G P U behavior. It does not prove that every build uses the same flag, address, or rendering path, so keep the executable fingerprint and original bytes beside the result.
+The flag trace above leads to an exact-build in-process feature: the Urban Terror 4.3.4 memory wallhack, which detours the entity loop and writes the render flag for every entity. It is in Lesson 8.8, after the D L L, dynamic link library, and detour lessons that its installation depends on.
 
 Full lesson, including exact code and visuals: https://mustcodeal.github.io/rust-game-hacking-book/pages/5/02/
