@@ -39076,9 +39076,7 @@ local by_id = { [7] = "archer", [12] = "mage" }
 
 The first table uses integer keys `1`, `2`, and `3`. Lua sequences conventionally start at **one**, not zero.
 
-<Frame caption="A Lua table maps keys to values">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/lua-table-keys.svg`} width="480" height="206" alt="A Lua table can contain integer sequence keys and named record keys; sequence operations expect a particular shape." loading="lazy" decoding="async" />
-</Frame>
+<CellFrames id="lua-table-keys" title="A Lua table maps keys to values" scenarios={luaTableKeysCells} />
 
 A table is not “an array that sometimes has names.” It is one mapping abstraction that accepts several kinds of keys. Sequence operations add conventions on top: positive integer keys beginning at one, usually without holes. The length operator and `ipairs` are easiest to reason about when the script preserves that shape.
 
@@ -40228,14 +40226,12 @@ Choose whether a budget resets per callback, per frame, or per whole script sess
 When a limit is crossed, stop that update, discard its uncommitted actions, and
 report the exact budget. Do not quietly continue with half-produced output.
 
-<Frame caption="Each budget has its own cap and its own reset window.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/script-budgets.svg`} width="480" height="270" style="width:480px;max-width:100%;height:auto;" alt="Seven separate budgets, each with its own cap and reset window: source and bytecode at script load, Lua memory per session, VM instructions per update, call frames per call chain, host callbacks, wall-clock work, and actions and logs per update." loading="lazy" decoding="async" />
-</Frame>
-
 ## Limit memory
 
 The lab host applies a four-mebibyte Lua allocation limit. The multiplication
 converts four mebibytes to bytes before the host sets the limit:
+
+<SpeedType id="c6-lua-memory-limit" title="Recall the memory-limited Lua state" recall={[{"text": "mlua::StdLib::TABLE", "mask": "TABLE", "kind": "argument", "hint": "Grant the standard library that builds and edits tables."}, {"text": "mlua::StdLib::MATH", "mask": "MATH", "kind": "argument", "hint": "Grant the library of numeric helpers."}, {"text": "mlua::LuaOptions::default()", "mask": "LuaOptions", "kind": "argument", "hint": "Pass the ordinary runtime settings as the second argument."}, {"text": "lua.set_memory_limit(", "mask": "set_memory_limit", "kind": "api", "hint": "Cap the bytes that Lua itself may allocate."}, {"text": "(4 * 1024 * 1024)", "mask": "4", "kind": "argument", "hint": "The number of mebibytes the lab allows."}]}>
 
 ```rust
 let lua = mlua::Lua::new_with(
@@ -40245,6 +40241,8 @@ let lua = mlua::Lua::new_with(
 
 lua.set_memory_limit(4 * 1024 * 1024)?;
 ```
+
+</SpeedType>
 
 Choose a limit after measuring realistic scripts. Too low prevents normal work; unlimited growth lets one bug consume the process.
 
@@ -40296,6 +40294,21 @@ Since the hook fires every 1,000 instructions and allows at most 100 calls, a sc
 The hook is not a stopwatch. Different instructions cost different amounts of real time, and host callbacks can do work between hooks. It is one defense against runaway Lua bytecode.
 
 <Visual kind="script-budget" />
+
+<PredictReveal
+  id="c6-hook-window"
+  setup="The hook above fires every 1,000 instructions and raises an error when its count passes 100. Suppose the host never sets the count back to 0, and a well-behaved script runs 30,000 instructions in every update."
+  question="In which update does the instruction budget stop the script?"
+  options={[
+    { label: 'Never: 30,000 is far below 100,000', why: 'That compares one update with the limit. Without a reset the count carries over: 30 calls per update make it 30, 60, 90, and the 11th call in update 4 makes it 101.' },
+    { label: 'In update 4', correct: true, why: '30,000 ÷ 1,000 = 30 hook calls per update. After three updates the count is 30 + 30 + 30 = 90; in update 4 the 11th call makes it 101, more than 100, so the error fires after 11,000 of that update’s instructions.' },
+    { label: 'In update 1', why: 'Update 1 makes only 30 hook calls, and 30 is not more than 100. The error needs the count to reach 101.' },
+  ]}
+>
+
+<LiveCells lab="lua-hook-window" />
+
+</PredictReveal>
 
 Reset the instruction allowance at a controlled host boundary, not from inside the script. If the hook counter is shared across updates, document that as a session budget; if each update gets a fresh allowance, also cap how often updates can be requested.
 
@@ -41130,26 +41143,11 @@ Typical roots include:
 - open upvalues captured by closures;
 - host references intentionally kept alive.
 
-```mermaid
-flowchart TD
-    R["Roots<br/>globals, active frames, host references"] --> A["Reachable table"]
-    A --> B["Reachable string"]
-    A --> C["Reachable closure"]
-    X["Unreachable table A"] --> Y["Unreachable table B"]
-    Y --> X
-    M["Mark from every root"] --> R
-    M --> S["Sweep objects that were not reached"]
-    S -->|"reclaims"| X
-    S -->|"reclaims"| Y
-```
+<CellFrames id="mark-sweep-cycle" title="Reachability matters more than a reference cycle" scenarios={markSweepCells} />
 
-The cycle between the two unreachable tables keeps both reference counts above
-zero, but neither table can be reached from a root. A tracing collector can tell
-the difference because it asks about reachability, not just owner counts.
-
-<Frame caption="Reachability matters more than a reference cycle">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/reachable-objects.svg`} width="480" height="206" alt="A tracing collector follows references from roots and reclaims unreachable objects, including unreachable cycles." loading="lazy" decoding="async" />
-</Frame>
+The cycle keeps both reference counts above zero, but no root reaches either
+table. A tracing collector can tell the difference because it asks about
+reachability, not just owner counts.
 
 <MarginNote kind="brief">A tracing collector asks whether roots can reach an object; positive reference counts alone cannot show that a cycle is still useful.</MarginNote>
 
@@ -41220,17 +41218,7 @@ enum ResultCount {
 }
 ```
 
-<Frame caption="Call frames partition one value stack">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/vm-frame-slices.svg`} width="480" height="206" alt="Each VM call frame identifies a local range in a value stack and stores information needed to return to its caller." loading="lazy" decoding="async" />
-</Frame>
-
-<MemoryStrip
-  column
-  cells="index 0=caller's local 0|index 1=caller's local 1|base 2 →=callee's local 0|index 3=callee's local 1 (top)"
-  marks="2-3"
-  groups="0-1:caller's frame, base = 0|2-3:callee's frame, base = 2"
-  caption="For example, one shared value stack holding two frames. `base` marks where each frame's locals start, so a bytecode operand like local slot 1 means `base + 1` in this one vector, never a raw index into another frame."
-/>
+<CellFrames id="vm-call-frames" title="Call frames partition one value stack" scenarios={callFrameCells} />
 
 `base` says where this function’s local area begins. Bytecode operands can refer to `base + local_index` rather than carrying raw pointers into the vector.
 
@@ -42402,9 +42390,7 @@ program never sees the switch. Its registers come back exactly as they were.
 
 <MarginNote kind="alternative">A context switch changes the bookmark and working registers for an execution path; changing processes also selects that process’s memory map.</MarginNote>
 
-<Frame caption="A context switch saves one thread’s registers, loads the next thread’s, and swaps page tables only across processes.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/context-switch.svg`} width="480" height="230" style="width:480px;max-width:100%;height:auto;" alt="Thread A stops running. The kernel saves its registers, loads thread B’s registers and, only if B is in a different process, loads B’s page-table address into cr3. Thread B then runs." loading="lazy" decoding="async" />
-</Frame>
+<CellFrames id="context-switch-steps" title="One context switch, step by step" scenarios={contextSwitchCells} />
 
 ### It manages every process's memory
 
@@ -45043,10 +45029,6 @@ to have taken effect.
 
 <MarginNote kind="alternative">A VM exit is a service handoff: saved guest state and an exit reason let the hypervisor handle the event before resuming that guest.</MarginNote>
 
-<Frame caption="A virtual device is backed by host work">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/virtual-machine-views.svg`} width="480" height="206" alt="A guest device request reaches a virtual device implementation that uses a host resource." loading="lazy" decoding="async" />
-</Frame>
-
 Typical causes of an exit:
 
 - `cpuid`, the instruction that describes the processor. On Intel it always
@@ -45063,18 +45045,7 @@ Typical causes of an exit:
 Here is one exit, caused by a guest's network driver writing to a register of
 its virtual network card:
 
-```mermaid
-sequenceDiagram
-    participant G as Guest network driver
-    participant CPU as Processor
-    participant H as Hypervisor
-    G->>CPU: write 1 to the virtual card's START register
-    Note over CPU: that guest-physical page has<br/>no second-stage mapping
-    CPU->>H: VM exit with the guest-physical address
-    Note over H: decode the write, update the<br/>emulated card, pass the packet<br/>to the host's real network card
-    H->>CPU: move the guest past the write, VM entry
-    CPU->>G: the next instruction runs
-```
+<FlowDiagram id="virtual-device-exit" title="One VM exit for a device write" scenarios={deviceExitFlows} />
 
 Exits are expensive. The round trip of exit, handling, and entry takes hundreds
 to thousands of processor cycles, where an ordinary instruction takes about
@@ -45327,20 +45298,10 @@ safely less than 4,096. The page number is `0x403` = 4 × 256 + 3 = 1,027. As a
 check, page 1,027 starts at byte 1,027 × 4,096 = 4,206,592, and 4,206,592 +
 2,604 = 4,209,196, which is `0x0040_3A2C` written in decimal.
 
-<Frame caption="A guest address is translated twice">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/two-stage-address.svg`} width="480" height="206" alt="Guest page tables translate guest virtual to guest physical addresses, then EPT or NPT translates to host physical memory." loading="lazy" decoding="async" />
-</Frame>
-
 **Stage 1.** The guest kernel's page tables map guest virtual page `0x403` to
 guest physical frame `0x1F7`. A **frame** is a page-sized block of physical
 memory. Translation replaces the page number with the frame number and keeps
-the offset:
-
-<MemoryStrip
-  cells="=0|=0|=1|=F|=7|=A|=2|=C"
-  groups="0-4:guest physical frame `0x001F7`|5-7:offset `0xA2C`, unchanged"
-  caption="The guest physical address `0x001F_7A2C` = `0x1F7` × `0x1000` + `0xA2C`."
-/>
+the offset.
 
 Multiplying by `0x1000`, which is 4,096, shifts a number left by three hex
 digits, so `0x1F7` × `0x1000` = `0x1F_7000`, and adding the offset gives
@@ -45348,17 +45309,26 @@ digits, so `0x1F7` × `0x1000` = `0x1F_7000`, and adding the offset gives
 address. In a guest, `0x001F_7A2C` is only the guest's idea of one.
 
 **Stage 2.** The hypervisor's tables map guest physical frame `0x1F7` to host
-physical frame `0x52E3`:
+physical frame `0x52E3`.
 
-<MemoryStrip
-  cells="=0|=5|=2|=E|=3|=A|=2|=C"
-  groups="0-4:host physical frame `0x052E3`|5-7:offset `0xA2C`, unchanged"
-  caption="The host physical address `0x052E_3A2C`: where the byte really is in RAM."
-/>
+`0x52E3` × `0x1000` = `0x52E_3000`, and adding `0xA2C` gives `0x052E_3A2C`, where
+the byte really is in RAM. The offset rode through both stages untouched; each
+stage only swapped the number above it.
 
-`0x52E3` × `0x1000` = `0x52E_3000`, and adding `0xA2C` gives `0x052E_3A2C`. The
-offset rode through both stages untouched; each stage only swapped the number
-above it.
+<PredictReveal
+  id="c6-next-guest-page"
+  setup="The guest’s tables also map page 0x404 to guest frame 0x2A0. The hypervisor’s tables map frame 0x1F7 to host frame 0x52E3 and have no entry for frame 0x2A0."
+  question="The guest reads 0x0040_4010, one page above the lesson’s address. What happens?"
+  options={[
+    { label: 'It reads host 0x052E_4010, the next host page', why: 'Neighbouring guest pages need not be neighbours anywhere else. Page 0x404 goes to guest frame 0x2A0, not 0x1F8, and stage 2 looks that frame up separately.' },
+    { label: 'Stage 2 has no entry, so the processor makes a VM exit', correct: true, why: 'Stage 1 works: page 0x404 becomes frame 0x2A0, so the guest physical address is 0x2A0 × 0x1000 + 0x010 = 0x002A_0010. Stage 2 finds no entry for 0x2A0 and hands control to the hypervisor.' },
+    { label: 'The guest kernel gets a page fault', why: 'A page fault inside the guest comes from stage 1, and the guest’s tables do have page 0x404. The missing entry is in the hypervisor’s tables, which the guest cannot see, so the result is a VM exit.' },
+  ]}
+>
+
+<LiveCells lab="two-stage-translation" />
+
+</PredictReveal>
 
 
 <CodeTrace trace="handoff-nested-translation" />
@@ -45814,6 +45784,8 @@ The project uses Rust 2024 and requires Rust 1.85 or later.
 The project's [`.cargo/config.toml`](/firmware-labs/.cargo/config.toml) selects
 the target, passes `-Tlink.x` to the linker, and tells Cargo how to run the image:
 
+<SpeedType id="c6-qemu-runner" title="Recall the QEMU runner arguments" recall={[{"text": "runner = [", "mask": "runner", "kind": "api", "hint": "The key that tells Cargo which command runs a built image."}, {"text": "\"-cpu\", \"cortex-m3\"", "mask": "cpu", "kind": "argument", "hint": "The flag that chooses which processor QEMU emulates."}, {"text": "\"-machine\", \"lm3s6965evb\"", "mask": "machine", "kind": "argument", "hint": "The flag that chooses which emulated board to create."}, {"text": "\"-nographic\",", "mask": "nographic", "kind": "argument", "hint": "Keep all output in the terminal instead of opening a window."}, {"text": "\"-kernel\",", "mask": "kernel", "kind": "argument", "hint": "The last flag: Cargo appends the built image’s path right after it."}]}>
+
 ```toml
 [build]
 target = "thumbv7m-none-eabi"
@@ -45829,6 +45801,8 @@ runner = [
     "-kernel",
 ]
 ```
+
+</SpeedType>
 
 Cargo appends the built executable's path after `-kernel`. QEMU creates the
 selected machine and loads that image. `-nographic` uses terminal output;
@@ -46701,10 +46675,6 @@ arriving from TDI enters at the top.
 
 <MarginNote kind="alternative">Picture buckets moving toward the outlet together: each tick releases one old bit and takes one new bit at the far end.</MarginNote>
 
-<Frame caption="Each clock moves one bit through the chain">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/jtag-shift-register.svg`} width="480" height="206" alt="A shift clock moves one bit into the register from TDI and one old bit out through TDO." loading="lazy" decoding="async" />
-</Frame>
-
 Take a small chip with four pins and a 4-bit boundary-scan register, bits `b3`
 to `b0`. The test captures the pins: pin 0 reads 1, pin 1 reads 0, pin 2 reads
 1, and pin 3 reads 1. Each cell now holds its own pin's level:
@@ -46735,10 +46705,7 @@ The same four clocks did two jobs. They read the pins out in order, pin 0 to
 pin 3, and they loaded a new pattern. The first bit sent travelled furthest and
 ended in `b0`; the last bit sent stopped in `b3`:
 
-<MemoryStrip
-  cells="b3=0|b2=0|b1=1|b0=1"
-  caption="After four clocks, the old levels have left through TDO and the new pattern 1, 1, 0, 0 sits in `b0` to `b3`."
-/>
+<LiveCells lab="jtag-shift-clocks" />
 
 Look at the register after clock 2: `1 1 1 1`, a pattern nobody asked for. While
 bits ripple through, the register passes through meaningless in-between values.
@@ -48981,9 +48948,21 @@ leaves the rule itself unchanged: a state with `health = 120` and
 `max_health = 100` is invalid whichever of the three failed to catch it.
 
 
-<Frame caption="Accepted state must stay inside its bounds">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/damage-boundary.svg`} width="480" height="206" alt="Twenty damage against five health produces zero health when the simulation clamps its accepted result." loading="lazy" decoding="async" />
-</Frame>
+<PredictReveal
+  id="c6-clamp-lower-only"
+  setup="A damage routine guards health with max(new health, 0), and the same routine applies heals as positive changes. Health is 90 and max_health is 100."
+  question="A heal of 30 arrives. What health does the game store?"
+  options={[
+    { label: '100, because the control keeps health in range', why: 'max(new health, 0) only raises a value that is below 0. It never compares anything with max_health, so nothing brings 120 down to 100.' },
+    { label: '120, which breaks the invariant', correct: true, why: '90 + 30 = 120, and max(120, 0) = 120 because 120 is not below 0. The rule 0 ≤ health ≤ 100 is now false, and the health bar copies 120 as well.' },
+    { label: '90, because the heal is refused', why: 'Nothing in max(new health, 0) refuses a change. The routine computes 90 + 30 = 120 and adjusts only results below 0.' },
+  ]}
+>
+
+<LiveCells lab="damage-clamp-invariant" />
+
+</PredictReveal>
+
 ## State, transitions, controls, and detectors
 
 | Term | Precise meaning | Example in a toy game |
@@ -49477,10 +49456,6 @@ An integrity check answers a narrow question such as, “Do these bytes equal th
 expected bytes?” It does not automatically prove that the whole process, file,
 object, or later operation is unchanged.
 
-<Frame caption="A passing check describes only its coverage">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/integrity-scope.svg`} width="480" height="206" alt="An integrity result depends on the measured byte range, measurement time, and expected baseline." loading="lazy" decoding="async" />
-</Frame>
-
 <MarginNote kind="alternative">An integrity check resembles a dated photograph of a marked area: it says nothing about unpictured fields or changes after the picture was taken.</MarginNote>
 
 Every integrity check has five boundaries, and a passing result means nothing
@@ -49593,12 +49568,20 @@ one being updated. For player 7 that shorter sum is 217 + 80 + 24,576 = 24,873,
 and 24,873 is what the record stores. Now change `max_health` from 100 to 60
 and recompute nothing:
 
-<MemoryStrip
-  cells="player_id=7|health=80|max_health=60|generation=3|checksum=24,873"
-  marks="2"
-  groups="0-1:covered|2:not covered|3:covered|4:stored result"
-  caption="The shorter checksum after `max_health` drops from 100 to 60. The changed box is outside every covered range, so recomputing still gives 217 + 80 + 24,576 = 24,873, while health 80 now exceeds the maximum of 60."
-/>
+<PredictReveal
+  id="c6-short-checksum"
+  setup="The record stores the shorter checksum, 217 + 80 + 24,576 = 24,873. Then max_health drops from 100 to 60, and nothing is recomputed."
+  question="When verify recomputes the shorter checksum, does it still equal the stored 24,873?"
+  options={[
+    { label: 'No: a field changed, so the checksum changes', why: 'Only covered fields feed the sum. The shorter sum adds player_id × 31, health and the rotated generation; max_health is not one of its terms, so changing it cannot move the result.' },
+    { label: 'Yes: it is still 217 + 80 + 24,576 = 24,873', correct: true, why: 'None of the three terms reads max_health, so the recomputed sum equals the stored one. verify still refuses this record, but only because its second clause finds 80 > 60.' },
+    { label: 'No: the term 60 × 128 = 7,680 changes it', why: 'That term belongs to the complete covered_checksum. The shorter version has no max_health term, so 7,680 is never added.' },
+  ]}
+>
+
+<LiveCells lab="player-checksum-coverage" />
+
+</PredictReveal>
 
 The checksum is doing its job correctly. It is reporting that every byte it
 covers is unchanged, and that is true. The record is still impossible, because
@@ -50256,6 +50239,8 @@ is not a security boundary.
 
 A minimal reversible transform is:
 
+<SpeedType id="c6-encode-decode" title="Recall the reversible transform" recall={[{"text": "const ROTATION: u32 = 7;", "mask": "7", "kind": "argument", "hint": "The fixed number of bit positions both functions rotate by."}, {"text": "(value ^ key).rotate_left(ROTATION)", "mask": "rotate_left", "kind": "api", "hint": "After mixing in the key, move every bit toward the high end."}, {"text": ".rotate_left(ROTATION)", "mask": "ROTATION", "kind": "argument", "hint": "Pass the shared count, not a bare number, so both directions agree."}, {"text": "encoded.rotate_right(ROTATION) ^ key", "mask": "rotate_right", "kind": "api", "hint": "Undo the last encoding step first."}, {"text": "rotate_right(ROTATION) ^ key", "mask": "key", "kind": "argument", "hint": "XOR with the same value the encoder used."}]}>
+
 ```rust
 const ROTATION: u32 = 7;
 
@@ -50267,6 +50252,8 @@ pub const fn decode(encoded: u32, key: u32) -> u32 {
     encoded.rotate_right(ROTATION) ^ key
 }
 ```
+
+</SpeedType>
 
 Read `encode` left to right. XOR combines the value and key; rotation moves the
 bit positions. To invert it, reverse both the order and each operation:
@@ -50483,10 +50470,7 @@ An **authority boundary** separates a request from the party allowed to
 decide its result. In [Lesson 8.9](/pages/6/09/), a Source client predicts
 movement, while the server owns the accepted simulation.
 
-<Frame caption="The server compares requested movement with its own position and maximum step; the client only asks.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/server-authority.svg`} width="480" height="200" style="width:480px;max-width:100%;height:auto;" alt="A client asks to move to x 900, the server knew x 100 with a maximum step of 5 and refuses." loading="lazy" decoding="async" />
-</Frame>
-
+<FlowDiagram id="move-request-authority" title="The client asks; the server decides" scenarios={moveRequestFlows} />
 
 Consider a toy game with three points already earned. One uncollected coin
 is worth one point. A client claims that its score is now 99. The server
@@ -50579,9 +50563,7 @@ book revision. Its original forum discussion describes a detector built
 for Counter-Strike: Source bunnyhop servers. **Bunnyhopping** chains jumps
 to maintain movement speed under a game's movement rules.
 
-<Frame caption="Repeated input is an observation to explain">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/detector-observation.svg`} width="480" height="206" alt="A server detector observes button edges over a window but cannot identify the originating client program from timing alone." loading="lazy" decoding="async" />
-</Frame>
+<CellFrames id="same-button-samples" title="Repeated input is an observation to explain" scenarios={sameSamplesCells} />
 
 Macrodox remembers whether a player's jump button was already held. A new
 press increments its counter only when the input changes from released
@@ -50709,9 +50691,7 @@ files with trusted hashes, inspect loaded modules, or record permitted
 process-access events. Its permissions and operating-system interfaces
 limit what it can observe.
 
-<Frame caption="Each observer sees a limited part of a machine">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/client-check-view.svg`} width="480" height="206" alt="Client protection collects file, module, and process-access observations within the permissions of its execution environment." loading="lazy" decoding="async" />
-</Frame>
+<CellFrames id="client-check-views" title="Each observer sees a limited part of a machine" scenarios={clientChecksCells} />
 
 A **handle** grants access to an operating-system object, such as a process.
 An unexpected process with game-memory access can be relevant to an
@@ -51052,9 +51032,7 @@ interfaces, a defender may observe process access, loaded modules, or
 unexpected integrity changes. Legitimate development and accessibility
 software can create some of the same observations.
 
-<Frame caption="Tool location changes the available observations">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/process-location.svg`} width="480" height="206" alt="An external tool runs in another process and an internal tool runs inside the game, which changes the observations available to a defender." loading="lazy" decoding="async" />
-</Frame>
+<CellFrames id="tool-location-observations" title="Tool location changes the available observations" scenarios={toolLocationCells} />
 
 **Cheat Engine** is a development and modding tool with memory inspection,
 debugging, and scripting capabilities. Those capabilities can be useful in
@@ -51491,10 +51469,6 @@ Every control in this lesson makes a promise, and all three break it the same
 way: each one checks something *near* the thing it cares about instead of the
 thing itself.
 
-<Frame caption="A disabled button is not a command check">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/command-boundary.svg`} width="480" height="206" alt="A disabled interface control does not protect a separately callable command; the command checks accepted state." loading="lazy" decoding="async" />
-</Frame>
-
 A greyed-out button stands in for “this player is allowed to do that.” A
 checksum over one field stands in for “this record is intact.” A debugger flag
 stands in for “this request is honest.” Every stand-in is easier to check than
@@ -51560,12 +51534,7 @@ authority in a copy used for presentation.
 
 <MarginNote kind="alternative">A disabled button is a sign on a doorway; the engine’s effect boundary is the actual gate. Other request paths may never pass the sign.</MarginNote>
 
-```mermaid
-flowchart LR
-    UI["ui_button_unlocked<br/>(presentation state)"] --> D{"weak_award checks<br/>only this flag"}
-    POLICY["engine policy<br/>(the real permission)"] -.->|"never read by<br/>weak_award"| D
-    D --> EFFECT["bonus changes"]
-```
+<FlowDiagram id="award-command-boundary" title="A disabled button is not a command check" scenarios={awardCommandFlows} />
 
 ### Minimal reproduction
 
