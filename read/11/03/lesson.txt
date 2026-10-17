@@ -14,6 +14,32 @@ call it or choose a fallback.
 
 This is useful compatibility work. It is not a reason to hide imports or replace well-supported APIs with undocumented ones.
 
+The export exists: type it, then call itGetProcAddress returns an address. The declared function type turns it into a call with the right A B I, application binary interface, and arguments.
+
+Request GetModuleHandleW("kernel32.dll")Step 1: Tool to Loaded moduleskernel32.dll is already loaded in the tool’s process, so this borrows its handle without loading anything.
+
+Request GetProcAddress(module, "QueryFullProcessImageNameW")Step 2: Tool to kernel32 exportsThe name is looked up in kernel32’s export table.
+
+Data Some(address)Step 3: kernel32 exports to ToolThe export exists, so an address comes back. So far it is only an address.
+
+Alone transmute to the declared fn typeStep 4: Tool (alone)The SDK declaration fixes the A B I, the four parameters and the BOOL result. Only now is the address callable.
+
+Request call(process, 0, buffer, &mut length)Step 5: Tool to kernel32 exportsThe call can still fail, for example on a handle without query rights, so its result is checked as usual.
+
+GetProcAddress returns an address. The declared function type turns it into a call with the right A B I and arguments.
+
+The export is missing: take the planned fallbackGetProcAddress finds no such name. The tool never calls an unknown address; it switches to the fallback it designed first.
+
+Request GetModuleHandleW("kernel32.dll")Step 1: Tool to Loaded modulesThe same first step: borrow the loaded module’s handle.
+
+Request GetProcAddress(module, "QueryFullProcessImageNameW")Step 2: Tool to kernel32 exportsThe same lookup by name.
+
+Reply None: no such exportStep 3: kernel32 exports to ToolOn this Windows build the name is not in the export table. That is a supported state, not a crash.
+
+Alone use ImageNameSource::ToolHelpSnapshotStep 4: Tool (alone)The tool reads szExePath from a module snapshot instead, and labels the result with that source.
+
+GetProcAddress finds no such name. The tool never calls an unknown address; it switches to the fallback it designed first.
+
 Section: Detect the capability you need.
 
 Do not infer one A P I’s presence only from a Windows version string. Compatibility settings, servicing changes, and alternative implementations can make version checks lie about the capability that matters. Look up the documented export, validate the result, and take the fallback when it is absent.
@@ -30,7 +56,7 @@ Keep the type alias beside the resolver:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-The pointer type says more than “address of a function.” It records A B I, application binary interface,, argument order, mutability, and result width.
+The pointer type says more than “address of a function.” It records A B I, argument order, mutability, and result width.
 
 Alternative: A typed function pointer is a delivery contract, naming where arguments go and how results return—not merely an address to jump to.
 

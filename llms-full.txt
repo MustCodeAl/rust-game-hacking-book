@@ -15520,10 +15520,6 @@ An **import** says, “my program needs this name from another image.” An **ex
 
 Windows uses these tables while loading executables and DLLs. Reverse engineers inspect them to understand a game's dependencies, plug-in interfaces, graphics libraries, and engine boundaries before reading assembly.
 
-<Frame caption="A public name leads through an index">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/export-resolution.svg`} width="480" height="206" alt="The export name maps to an ordinal index, then to an address-table entry containing an RVA or a forwarder." loading="lazy" decoding="async" />
-</Frame>
-
 An export table connects three parallel ideas:
 
 | Piece | What it contains |
@@ -15650,12 +15646,11 @@ The loader follows that string to another DLL export. This is how Windows can ke
 
 <MarginNote kind="alternative">Think of a shop's old phone number that now redirects to a new branch: callers still dial it and are passed along. A forwarder does that for a function name.</MarginNote>
 
-```mermaid
-flowchart LR
-    A["AddressOfFunctions[i]<br/>a function RVA"] --> B{"inside export_rva..export_end?"}
-    B -->|"no"| C["RVA of real code or data"]
-    B -->|"yes"| D["forwarder string, e.g.<br/>KERNELBASE.VirtualQueryEx"]
-```
+Looking a function up by name uses all three tables. The name's row in the sorted name table
+selects the same row of the ordinal table, which holds an index into the address table; the
+entry there is either code or a forwarder:
+
+<LiveCells lab="export-by-name" />
 
 ## Every byte from a file is untrusted input
 
@@ -17831,10 +17826,6 @@ A disassembler does two jobs:
 
 x86 instructions have prefixes, several opcode maps, ModR/M and SIB bytes, displacements, immediates, and different modes. Hand-decoding `add` is a good exercise. A complete decoder is a major engineering project.
 
-<Frame caption="Instruction lengths decide the next start">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/instruction-boundaries.svg`} width="480" height="206" alt="A three-byte instruction followed by a two-byte instruction puts the next boundary at byte offset five." loading="lazy" decoding="async" />
-</Frame>
-
 Very roughly:
 
 - an **opcode** selects an operation;
@@ -17854,6 +17845,25 @@ detour must decode whole instructions before deciding how many bytes to replace.
 />
 
 <HexDisassemblyInspector />
+
+An instruction's length is known only after its first bytes are decoded, and the next
+instruction starts right after it: `B8` means four immediate bytes follow, so the instruction
+after `mov eax, 25` starts at 0 + 5 = 5.
+
+<PredictReveal
+  id="c4-decode-start"
+  setup="In 32-bit mode the six bytes B8 19 00 00 00 C3 are mov eax, 25 (offsets 0 to 4) and then ret (offset 5)."
+  question="A disassembler is told to start at offset 2 instead of 0. What does it show?"
+  options={[
+    { label: 'An error, because offset 2 is inside an instruction', why: 'Nothing in the bytes marks where an instruction starts. From offset 2 the decoder reads 00 as an opcode, and 00 is a valid one (an add), so it prints instructions, not an error.' },
+    { label: 'Different instructions that look valid', correct: true, why: 'The decoder treats the byte it starts on as an opcode. 00 00 decodes as add byte ptr [eax], al and 00 C3 as add bl, al, so even the ret vanishes into a wrong instruction.' },
+    { label: 'mov eax, 25 and ret, as from offset 0', why: 'The decoder never sees the B8 at offset 0, so it cannot know that a five-byte mov started there. It decodes from the byte it was given.' },
+  ]}
+>
+
+<LiveCells lab="decode-start" />
+
+</PredictReveal>
 
 ### A small opcode lookup table
 
@@ -18550,6 +18560,8 @@ promise: workers stop scanning once no more slots can be reserved.
 
 The scanner reserves each result through one atomic counter:
 
+<SpeedType id="c4-reserve-match" title="Recall the reservation arguments" recall={[{"text": ".fetch_update(Ordering::AcqRel, Ordering::Acquire", "mask": "AcqRel", "kind": "argument", "hint": "Ordering for a successful update, which both reads and writes the counter."}, {"text": ".fetch_update(Ordering::AcqRel, Ordering::Acquire", "mask": "Acquire", "kind": "argument", "hint": "Ordering for a failed attempt, which only reads the counter."}, {"text": "(current < MAX_MATCHES).then_some(current + 1)", "mask": "MAX_MATCHES", "kind": "argument", "hint": "The global cap that a reservation must stay below."}, {"text": ".fetch_update(Ordering::AcqRel", "mask": "fetch_update", "kind": "api", "hint": "Replace the value with the closure result in one atomic step, retrying if another worker changed it first."}, {"text": "(current < MAX_MATCHES).then_some(current + 1)", "mask": "then_some", "kind": "api", "hint": "Turn the comparison into Some(new value) or None."}]}>
+
 ```rust
 fn reserve_match(counter: &AtomicUsize) -> bool {
     counter
@@ -18559,6 +18571,8 @@ fn reserve_match(counter: &AtomicUsize) -> bool {
         .is_ok()
 }
 ```
+
+</SpeedType>
 
 `fetch_update` performs “check below cap and increment” as one atomic operation. When the cap is full, the worker sets a shared cancellation flag. Other workers notice and stop.
 
@@ -19116,9 +19130,7 @@ In any branch, an offset describes a layout in a particular build; it does not
 keep an object alive. The runtime changes what evidence is available for
 recovering that layout and whether the object can move during its lifetime.
 
-<Frame caption="An address is not a lifetime guarantee">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/object-identity.svg`} width="480" height="206" alt="Reading a field requires a matching build layout and a still-live object, not just a plausible address." loading="lazy" decoding="async" />
-</Frame>
+<CellFrames id="c5-field-read" title="An address is not a lifetime guarantee" scenarios={fieldReadCells} />
 
 <MarginNote kind="brief">An offset describes one layout; it cannot keep the object alive or prevent its storage from moving.</MarginNote>
 
@@ -19279,10 +19291,6 @@ memory. Windows makes access a separate decision when it issues a process
 handle.
 
 A process ID identifies a running process. It does not grant access to that process. To ask Windows for a usable process **handle**, a program calls `OpenProcess` with an **access mask**: a group of bits describing the operations it wants.
-
-<Frame caption="A PID and a handle answer different questions">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/process-permission.svg`} width="480" height="206" alt="A process ID selects the process, while a granted handle carries the operations Windows allowed." loading="lazy" decoding="async" />
-</Frame>
 
 <MarginNote kind="alternative">The PID names the building, while the handle is a key issued for particular doors. Finding the address does not provide that key.</MarginNote>
 
@@ -19600,16 +19608,20 @@ That boolean is a visible decision at the call site. A scanner can open read-onl
 
 The "group of bits" from the top of this lesson is not a metaphor. Microsoft documents `PROCESS_QUERY_INFORMATION` as `0x0400` and `PROCESS_VM_READ` as `0x0010`. ORing them sets bit 10 and bit 4 of one 32-bit value and leaves every other bit 0, producing `0x0410`. Allowing writes ORs in `PROCESS_VM_OPERATION` (`0x0008`) and `PROCESS_VM_WRITE` (`0x0020`), setting two more bits for a final mask of `0x0438`. `OpenProcess` compares that exact bit pattern against what the target's DACL permits; there is no separate "and also let me read memory" step hiding behind the named constant.
 
-<MemoryStrip
-  cells="QUERY_INFO=1|VM_OPERATION=0|VM_READ=1|VM_WRITE=0"
-  caption="Read-only tools OR together `PROCESS_QUERY_INFORMATION` (`0x0400`, bit 10) and `PROCESS_VM_READ` (`0x0010`, bit 4) for mask `0x0410`. `PROCESS_VM_OPERATION` (bit 3) and `PROCESS_VM_WRITE` (bit 5) stay 0."
-/>
+<PredictReveal
+  id="c5-query-handle-read"
+  setup="A scanner found the game's correct PID and opened it with only PROCESS_QUERY_LIMITED_INFORMATION, mask 0x1000."
+  question="It now calls ReadProcessMemory with that handle. What happens?"
+  options={[
+    { label: 'The read works, because the PID names the right process', why: 'The PID was used once, by OpenProcess, to choose the process. ReadProcessMemory checks the rights stored with the handle, and 0x1000 does not include VM_READ (0x0010).' },
+    { label: 'ReadProcessMemory fails with access denied', correct: true, why: '0x1000 has only bit 12 set. VM_READ is bit 4, 0x0010, and 0x1000 AND 0x0010 is 0, so the handle lacks the one right a read needs.' },
+    { label: 'Windows adds VM_READ to the handle on first use', why: 'Rights are fixed when the handle is created. Getting VM_READ means calling OpenProcess again and asking for it, and Windows checks that new request against the target.' },
+  ]}
+>
 
-<MemoryStrip
-  cells="QUERY_INFO=1|VM_OPERATION=1|VM_READ=1|VM_WRITE=1"
-  marks="1|3"
-  caption="Opting into writes also sets `PROCESS_VM_OPERATION` and `PROCESS_VM_WRITE`, producing mask `0x0438` — exactly the bits the wrapper's `if allow_write` branch adds."
-/>
+<LiveCells lab="c5-access-mask" />
+
+</PredictReveal>
 
 The complete buildable tool is [`access_probe.rs`](/windows-labs/src/bin/access_probe.rs).
 
@@ -19639,21 +19651,11 @@ if ownership is vague.
 
 Windows keeps kernel-managed objects for processes, threads, files, events, snapshots, and many other resources. A user-mode program normally refers to one of those objects through a **handle**.
 
-The numeric handle value is an index-like token meaningful to Windows in the current process. It is not the object's memory address, and reading memory at that number does not reveal the object.
-
-```text
-program value HANDLE(0x12C)
-          ↓
-current process's handle table
-          ↓
-Windows event, file, process, thread, or snapshot object
-```
+The numeric handle value is an index-like token meaningful to Windows in the current process: Windows uses it to find a row in that process's handle table, and the row points to the event, file, process, thread, or snapshot object. It is not the object's memory address, and reading memory at that number does not reveal the object.
 
 A handle entry also carries granted access rights. Two handles referring to the same process can permit different operations.
 
-<Frame caption="A handle is an index into this process’s table; each row holds rights and points to a kernel object.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/handle-table.svg`} width="480" height="230" style="width:480px;max-width:100%;height:auto;" alt="Two handle values, 0x12C and 0x134, are rows in the current process’s handle table. Each row stores access rights and points to the same process object; 0x12C allows query and read, 0x134 allows query only." loading="lazy" decoding="async" />
-</Frame>
+<CellFrames id="c5-handle-table" title="A handle value is a row in the handle table" scenarios={handleTableCells} />
 
 ## Handles have lifetimes
 
@@ -19961,10 +19963,6 @@ process has a changing map of pages, and each page has its own state and
 protection. We need both checks before interpreting a scanner failure.
 
 A process sees memory as a huge range of numbered virtual addresses. Windows does not manage that range one byte at a time. It groups adjacent addresses into fixed-size **pages**, commonly 4 KiB on x86 and x86-64 systems.
-
-<Frame caption="A handle does not make every page readable">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/page-read-checks.svg`} width="480" height="206" alt="Memory inspection checks process rights, page commitment and protection, and the actual returned byte count." loading="lazy" decoding="async" />
-</Frame>
 
 Pages that share the same state and protection are reported together as a **region**. A 200 KiB read-only region is therefore a run of many pages with matching state and protection, not one enormous hardware page.
 
@@ -20321,6 +20319,21 @@ offline DMA chapter introduces page-table translation separately because a raw
 capture file has no running Windows process to translate addresses for it.
 
 ## Why a scanner skips some pages
+
+<PredictReveal
+  id="c5-guard-region"
+  setup="VirtualQueryEx reports a region as MEM_COMMIT with protection PAGE_READWRITE | PAGE_GUARD. The scanner's handle includes PROCESS_VM_READ."
+  question="What does the course's scanner do with that region?"
+  options={[
+    { label: 'Reads it: the region is committed and RW-', why: 'Committed and RW- would be enough without the extra flag. PAGE_GUARD means the first touch raises an exception and clears the flag that Windows uses to grow a thread stack, so reading it is not harmless.' },
+    { label: 'Skips it', correct: true, why: 'The scanner reads only committed, readable, unguarded regions. PAGE_GUARD on top of RW- fails the third test, so ReadProcessMemory is never called for this region.' },
+    { label: 'Calls ReadProcessMemory and gets access denied', why: 'The handle does carry VM_READ, so a refusal would not come from the handle. The region filter runs first and the scanner never calls ReadProcessMemory here.' },
+  ]}
+>
+
+<LiveCells lab="c5-region-read" />
+
+</PredictReveal>
 
 The memory scanner visits only committed, readable, non-guarded regions. That avoids predictable failures and reduces wasted work. A later `ReadProcessMemory` can still fail because the process continues running and page state can change between the query and read.
 
@@ -21595,10 +21608,6 @@ debugging. ⌨️
 
 A game may combine several paths: Raw Input for aiming, ordinary window messages for menus, and polled key state for a developer console. Observe how the target consumes input before choosing an API. Sending `WM_KEYDOWN` to a window that reads device state is not a failed keyboard event; it is the wrong abstraction.
 
-<Frame caption="A held key is different from a fresh press">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/input-edge.svg`} width="480" height="206" alt="Comparing previous and current key state distinguishes a fresh press from a held key." loading="lazy" decoding="async" />
-</Frame>
-
 Always pair a down transition with an up transition, including cancellation and error paths. A state machine should own which synthetic inputs are currently held so shutdown can release exactly those inputs.
 
 
@@ -21782,14 +21791,20 @@ impl KeyEdge {
 }
 ```
 
-```mermaid
-stateDiagram-v2
-    [*] --> Up
-    Up --> Down: key goes down, pressed_now returns true
-    Down --> Down: key stays down, pressed_now returns false
-    Down --> Up: key goes up
-    Up --> Up: key stays up
-```
+<PredictReveal
+  id="c4-key-edge"
+  setup="KeyEdge starts with was_down = false, and the tool calls pressed_now once per poll."
+  question="The player holds Insert down across 5 polls in a row. How many times does pressed_now return true?"
+  options={[
+    { label: '5, once per poll with the key down', why: 'pressed_now is down && !was_down. The first of those polls stores was_down = true, so each of the next four computes true && false = false.' },
+    { label: '1', correct: true, why: 'Only the first down poll still has was_down = false, so true && !false = true there. The other four have was_down = true, so the hold reports exactly one press.' },
+    { label: '0, because the key never goes up', why: 'The first down poll compares with the poll before it, when the key was up, so down && !was_down is true there once.' },
+  ]}
+>
+
+<LiveCells lab="key-edge-polls" />
+
+</PredictReveal>
 
 Poll at a modest rate such as every 8–16 milliseconds. A tight loop wastes a
 CPU core. A zero result can also mean the desktop is inactive or Windows
@@ -22056,11 +22071,6 @@ Summary: Understand how Windows debug events, breakpoint bytes, and thread state
 
 The scanner in Lesson 5.5 found *where* a value was stored; the disassembler in Lesson 5.6 named instructions near an address. To learn which instruction actually changes Wesnoth's gold during one turn, we need to pause when that instruction runs and inspect the live registers. A debugger provides that pause.
 
-<Frame caption="A software breakpoint swaps one byte for CC, then the debugger restores it.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/breakpoint-byte.svg`} width="480" height="190" style="width:480px;max-width:100%;height:auto;" alt="The first byte 8B of an instruction replaced by CC while the breakpoint is set." loading="lazy" decoding="async" />
-</Frame>
-
-
 Windows reports events such as process creation, DLL loading, exceptions, and process exit. A breakpoint is one such event that this tool deliberately causes and then handles.
 
 ```mermaid
@@ -22126,6 +22136,8 @@ Setting a breakpoint:
 3. write `0xCC`;
 4. flush the instruction cache;
 5. mark it armed.
+
+<CellFrames id="breakpoint-hit" title="One breakpoint, set and hit" scenarios={breakpointHitCells} />
 
 <Frame caption="A basic debugger view of the target while it is paused.">
 
@@ -28636,9 +28648,7 @@ impl PatchPlan {
 }
 ```
 
-<Frame caption="Restoration needs the bytes that were replaced">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/patch-lifecycle.svg`} width="480" height="206" alt="A reversible patch records verified original bytes, installs temporary bytes, and restores the original after execution drains." loading="lazy" decoding="async" />
-</Frame>
+<CellFrames id="patch-lifecycle" title="One patch from verification to restoration" scenarios={patchLifecycleCells} />
 
 The planner performs no raw memory access. A disassembler should determine the whole-instruction span; never choose it by counting five arbitrary bytes.
 
@@ -28774,14 +28784,9 @@ impl Drop for AppliedPatch<'_> {
 ## Calculate jumps carefully
 
 A 5-byte relative jump stores a signed 32-bit displacement measured from the end of the jump:
+`rel32 = to − (from + 5)`, where `from` is the jump's own address and `to` is the cave's.
 
-```mermaid
-flowchart LR
-    F["from<br/>(the jump's own address)"] -->|"+ 5<br/>(the jump's own length)"| N["next_instruction<br/>(first byte after the jump)"]
-    N -->|"rel32 = to − next_instruction"| T["to<br/>(the cave's address)"]
-```
-
-This helper turns the diagram into five instruction bytes. It checks that the
+This helper turns that formula into five instruction bytes. It checks that the
 destination fits the jump's signed 32-bit displacement instead of truncating
 an out-of-range address.
 
@@ -28804,6 +28809,8 @@ fn near_jump(from: usize, to: usize) -> Option<[u8; 5]> {
 ```
 
 If the destination is too far away, `rel32` returns `None`. Do not truncate the number.
+
+<LiveCells lab="near-jump-rel32" />
 
 ## Architecture matters
 
@@ -29533,17 +29540,9 @@ For every button the engine can answer three questions on every frame:
 
 The last two are called **input edges**. The engine finds them by keeping last frame's
 copy of the state and comparing: a button is just pressed when it is down now and
-was not down last frame.
+was not down last frame. A lamp that the button toggles shows why the difference matters:
 
-<MotionPicture
-  id="input-button-edge"
-  still="/assets/images/original/input-edge-still.png"
-  motion="/assets/images/original/input-edge.gif"
-  width={360}
-  height={182}
-  alt="A held-button check toggles a lamp on three successive down samples; a new-press check toggles it only on the first down sample."
-  caption="Slow lamp illustration: false, false, true, true, true, false. Toggling on every down sample changes the lamp three times; toggling only on just pressed changes it once. Playback is slowed so each sample can be seen."
-/>
+<LiveCells lab="button-edges" />
 
 The engine collects the operating system's events once, at the start of each frame.
 A press that arrives while a frame is being processed therefore waits for the next
@@ -30259,10 +30258,6 @@ the font, the scale, the screen size, and the right moment in the frame to
 draw. Calling it is the cheapest way to put a menu on screen, because the
 hard graphics work is done and you are only supplying strings.
 
-<Frame caption="Text uses an existing rendering context">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/text-render-context.svg`} width="480" height="206" alt="An in-game text function combines the supplied text and position with existing font and frame state." loading="lazy" decoding="async" />
-</Frame>
-
 The trade is that you are now running inside the game's render path, so
 the hook must finish quickly. A file read, sleep, or blocking channel receive
 there delays the game's next frame; Lesson 4.11 measures the same cost in a
@@ -30339,20 +30334,14 @@ to draw its first menu line.
 <MarginNote kind="narration">Calling the hooked text function from its own replacement never reaches a finished menu line; each attempt creates another unfinished call on the stack.</MarginNote>
 
 Hook a site that runs **once per frame** instead, and call the text function
-from there as an ordinary function:
-
-```mermaid
-flowchart LR
-    A["Game draws its HUD"] --> B["Your detour at a per-frame site"]
-    B --> C["Replay the displaced instructions"]
-    C --> D["Call the text function once per menu line"]
-    D --> E["Return to the game"]
-```
+from there as an ordinary function.
 
 Lesson 7.9 already identified such a site in AssaultCube: the final print hook
 at `0x0040_BE7E`, resuming at `0x0040_BE83`. Drawing there puts your lines in
 the same pass as the game's own HUD, so they inherit its ordering and never
-appear underneath the world.
+appear underneath the world:
+
+<FlowDiagram id="text-call" title="One menu line through the game's print function" scenarios={textCallFlows} />
 
 ## Reconstruct the contract before you call it
 
@@ -30439,25 +30428,30 @@ expression is wrong:
 self.cursor = (self.cursor - 1) % self.items.len();   // ❌
 ```
 
-When `cursor` is `0`, `0 - 1` on an unsigned integer panics in a debug build
-and produces `usize::MAX` in a release build, which then indexes far outside
-the list. Handle the boundary explicitly and the intent is visible:
+When `cursor` is `0`, `0 - 1` on an unsigned integer panics in a debug build.
+A release build wraps it to `usize::MAX`, and `% len` then keeps the result
+inside the list, but usually on the wrong row:
+
+<PredictReveal
+  id="c4-cursor-wrap"
+  setup="A release build wraps 0 - 1 on usize to usize::MAX = 18,446,744,073,709,551,615. The menu has 3 rows and the cursor is on row 0."
+  question="Pressing up runs (cursor - 1) % len. Which row is selected?"
+  options={[
+    { label: 'Row 2, the last row', why: 'That is what the code means to do, but 18,446,744,073,709,551,615 % 3 is not 2. Its digits add up to 87, a multiple of 3, so it divides by 3 exactly.' },
+    { label: 'Row 0', correct: true, why: 'The digits of 18,446,744,073,709,551,615 add up to 87 = 3 × 29, so the number is a multiple of 3 and the remainder is 0. The cursor does not move at all.' },
+    { label: 'An index far outside the list', why: 'A remainder after dividing by 3 is always 0, 1 or 2, so % len keeps the index inside the list. The bug is the wrong row, not an index out of range.' },
+  ]}
+>
+
+<LiveCells lab="menu-cursor-wrap" />
+
+</PredictReveal>
+
+Handle the boundary explicitly and the intent is visible:
 
 ```rust
 self.cursor = if self.cursor == 0 { last } else { self.cursor - 1 };
 ```
-
-<MemoryStrip
-  cells="0=item 0|1=item 1|2=item 2|3=item 3"
-  marks="0"
-  caption="For example, four menu rows with the cursor on the first. Pressing up should wrap to the last row, not compute `0 - 1` on an unsigned index."
-/>
-
-<MemoryStrip
-  cells="0=item 0|1=item 1|2=item 2|3=item 3"
-  marks="3"
-  caption="After the explicit boundary check, the cursor wraps to the last row instead of underflowing."
-/>
 
 ### `GetAsyncKeyState` reports a level, not a press
 
@@ -30876,6 +30870,8 @@ this:
 
 The installer refuses to patch if those bytes do not match. It writes a five-byte near jump plus one `NOP`, and `LocalPatch` owns the saved bytes so dropping the patch restores them:
 
+<SpeedType id="c4-gl-draw-hook" title="Recall the glDrawElements hook arguments" recall={[{"text": "resolve(opengl, s!(\"glDrawElements\"))", "mask": "glDrawElements", "kind": "argument", "hint": "Name the exported OpenGL function whose code holds the hook site."}, {"text": "draw_elements.checked_add(0x16)", "mask": "0x16", "kind": "argument", "hint": "Add the distance from the start of that function to the six replaced bytes."}, {"text": "DRAW_RETURN.store(hook + 6, Ordering::Release)", "mask": "6", "kind": "argument", "hint": "The cave resumes right after the whole replaced instruction."}, {"text": "let mut replacement = [0x90_u8; 6];", "mask": "0x90_u8", "kind": "argument", "hint": "Fill all six bytes with the one-byte no-operation instruction first."}, {"text": "replacement[..5].copy_from_slice(&jump)", "mask": "5", "kind": "argument", "hint": "Overwrite only as many bytes as the near jump is long."}, {"text": "LocalPatch::apply(hook, &ORIGINAL, &replacement)", "mask": "ORIGINAL", "kind": "argument", "hint": "Pass the bytes that must already be at the hook before anything is written."}, {"text": "LocalPatch::apply(hook, &ORIGINAL, &replacement)", "mask": "apply", "kind": "api", "hint": "Install the replacement through the owner that saves and later restores the original bytes."}]}>
+
 ```rust
 let draw_elements = resolve(opengl, s!("glDrawElements"))?;
 let hook = draw_elements.checked_add(0x16)
@@ -30888,6 +30884,8 @@ let mut replacement = [0x90_u8; 6];
 replacement[..5].copy_from_slice(&jump);
 let patch = LocalPatch::apply(hook, &ORIGINAL, &replacement)?;
 ```
+
+</SpeedType>
 
 The cave saves the CPU flags and all general-purpose registers, passes the live `EBX` value to an ordinary helper, replays the displaced instruction, and returns to the byte immediately after it:
 
@@ -31011,11 +31009,6 @@ Five prototypes can each work alone and still fail when combined. Common causes 
 Adding conditions to each feature does not settle who owns shared resources.
 An explicit architecture does: it names the stages, the data crossing between
 them, and the component responsible for cleanup.
-
-<Frame caption="Shutdown follows the dependencies backwards">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/owned-cleanup.svg`} width="480" height="206" alt="Shutdown stops admission, waits for users of a component, then restores state and releases it." loading="lazy" decoding="async" />
-</Frame>
-
 
 ## Give each module one game-hacking job
 
@@ -31227,15 +31220,7 @@ rather than unload code that may still be reachable through a hook.
 
 ## Shut down in reverse order
 
-```mermaid
-flowchart TD
-    A["stop accepting input"] --> B["signal update workers"]
-    B --> C["wait for workers to finish"]
-    C --> D["disable features"]
-    D --> E["restore patches and<br/>hooks"]
-    E --> F["close handles"]
-    F --> G["exit or unload"]
-```
+<FlowDiagram id="shutdown-order" title="Shutdown order: right and wrong" scenarios={shutdownFlows} />
 
 Do not unload code while another thread may still execute it. Stop accepting
 new commands first, request worker shutdown, and wait for those workers to
@@ -32552,11 +32537,6 @@ Summary: Connect raw chat frames to typed messages through bounded parsing, seri
 
 The controlled captures from Wesnoth 1.14.9 reveal this frame:
 
-<Frame caption="A length-prefixed frame: four length bytes, then exactly that many payload bytes.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/packet-frame.svg`} width="480" height="190" style="width:480px;max-width:100%;height:auto;" alt="Bytes 00 00 00 05 followed by five payload bytes spelling Hello." loading="lazy" decoding="async" />
-</Frame>
-
-
 ```text
 u32 big-endian compressed length
 gzip-compressed Simple WML payload
@@ -32569,33 +32549,28 @@ it accumulates bytes until it has the four-byte header, then exactly the
 advertised number of payload bytes, however TCP splits them across reads.
 
 The header is a claim from the sender, not permission to allocate whatever
-it asks for. Compare two headers followed by four bytes currently available:
+it asks for:
 
-```text
-00 00 00 04  61 62 63 64   -> claims 4 bytes; four are present
-FF FF FF FF  61 62 63 64   -> claims 4,294,967,295 bytes
-```
+<PredictReveal
+  id="c4-frame-limit"
+  setup="This receiver refuses any length above its limit, MAX_FRAME = 1,048,576 bytes. Its buffer holds the header FF FF FF FF and then four payload bytes."
+  question="What should it do now?"
+  options={[
+    { label: 'Wait: TCP may still deliver the rest', why: 'Read big-endian, FF FF FF FF is 4,294,967,295. That is above 1,048,576, so no amount of waiting makes the frame acceptable; waiting would mean buffering almost 4 GB for it.' },
+    { label: 'Refuse the frame now', correct: true, why: 'FF FF FF FF is 255 × 16,777,216 + 255 × 65,536 + 255 × 256 + 255 = 4,294,967,295, which is above 1,048,576. The header alone decides it, so the receiver refuses before allocating or waiting.' },
+    { label: 'Accept the four bytes as the payload', why: 'The payload length comes from the header, not from how many bytes happen to be in the buffer. Four bytes is not the 4,294,967,295 the sender claimed.' },
+  ]}
+>
 
-<MemoryStrip
-  cells="=00|=00|=00|=04|=a|=b|=c|=d"
-  groups="0-3:claimed length: 4|4-7:four payload bytes"
-  caption="An acceptable four-byte payload: the header and available payload agree."
-/>
+<LiveCells lab="length-prefix-frame" />
 
-<MemoryStrip
-  cells="=FF|=FF|=FF|=FF|=a|=b|=c|=d"
-  marks="0-3"
-  groups="0-3:claimed length: 4,294,967,295|4-7:four payload bytes seen so far"
-  caption="The header is structurally valid but exceeds the configured size limit. More TCP bytes could arrive; waiting for this advertised size is still unacceptable."
-/>
+</PredictReveal>
 
-The second header is four valid bytes, but its advertised size is not an
-acceptable frame for this parser. Code that allocates from that claim
-could request nearly four gigabytes. First reject any length above the
-configured maximum; only then wait for the advertised number of payload
-bytes, with a bounded buffer and a way to stop a stalled connection.
-Having only four payload bytes *so far* does not by itself prove a
-network frame is false, because TCP may deliver the rest later.
+Code that allocates from that claim could request nearly four gigabytes.
+First reject any length above the configured maximum; only then wait for
+the advertised number of payload bytes, with a bounded buffer and a way to
+stop a stalled connection. Having only some payload bytes *so far* does not
+by itself prove a network frame is false, because TCP may deliver the rest later.
 After a complete frame is assembled, the parser checks its exact
 length before decoding it. This separates byte validation from the
 later question of whether the decoded chat message makes sense.
@@ -33353,12 +33328,10 @@ incoming message should travel through the pipeline before any reply is built:
 <Scene name="chat-client" />
 
 This separation lets a malformed frame fail before it reaches chat behavior,
-and it lets the command handler work with events instead of raw network bytes.
+and it lets the command handler work with events instead of raw network bytes:
 
+<FlowDiagram id="client-layers" title="What each layer passes on" scenarios={clientLayerFlows} />
 
-<Frame caption="Meaning comes after framing and decoding">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/protocol-layers.svg`} width="480" height="206" alt="A lobby client frames incoming bytes, decodes an event, and only then decides whether to reply." loading="lazy" decoding="async" />
-</Frame>
 ## Connect with timeouts
 
 Before reading protocol bytes, the client needs a connection that cannot
@@ -33780,6 +33753,8 @@ fn relay(mut source: TcpStream, mut destination: TcpStream) -> io::Result<u64> {
 
 TCP is full duplex, so run two relays:
 
+<SpeedType id="c4-proxy-pair-relays" title="Recall which socket each relay gets" recall={[{"text": "relay(client_to_server, server)", "mask": "server", "kind": "argument", "hint": "The upstream relay writes into the socket connected to the game server."}, {"text": "relay(client_to_server, server)", "mask": "client_to_server", "kind": "argument", "hint": "The upstream relay reads what the game client sent, through its own clone."}, {"text": "relay(server_to_client, client)", "mask": "server_to_client", "kind": "argument", "hint": "The downstream relay reads from the clone of the server socket."}, {"text": "let client_to_server = client.try_clone()?;", "mask": "try_clone", "kind": "api", "hint": "Make a second handle to the same socket so another thread can own it."}, {"text": "upstream.join()", "mask": "join", "kind": "api", "hint": "Wait for the upstream thread to finish and collect its result."}]}>
+
 ```rust
 fn proxy_pair(client: TcpStream, server: TcpStream) -> anyhow::Result<()> {
     let client_to_server = client.try_clone()?;
@@ -33793,6 +33768,8 @@ fn proxy_pair(client: TcpStream, server: TcpStream) -> anyhow::Result<()> {
     Ok(())
 }
 ```
+
+</SpeedType>
 
 For many connections, an async runtime such as Tokio scales better. Threads keep the first lab easy to see.
 
@@ -34066,10 +34043,6 @@ The proxy copied messages between sockets. A supported game add-on and a separat
 
 Two running programs can both use the address `0x00400000`, yet those numbers can refer to completely different physical storage. Each process has its own virtual address space.
 
-<Frame caption="Readers and writers need the same exclusion">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/shared-record-lock.svg`} width="480" height="206" alt="A shared mutex excludes a reader while the writer updates multiple fields; both sides take it." loading="lazy" decoding="async" />
-</Frame>
-
 That separation is a safety feature. A map helper should not need to patch a game process merely to receive a supported event from a mod. Windows provides **interprocess communication**, or IPC, for programs that intentionally cooperate.
 
 Named shared memory is one IPC option:
@@ -34186,16 +34159,7 @@ writing only once. Shared memory gives two processes access to the same bytes.
 It gives them no agreement about *when*. Nothing prevents a reader from
 arriving in the middle of a write:
 
-```mermaid
-sequenceDiagram
-    participant Writer
-    participant Memory as Shared bytes
-    participant Reader
-    Writer->>Memory: store length = 11
-    Reader->>Memory: read length (11) and the payload
-    Note over Reader: payload bytes are still<br/>the previous message
-    Writer->>Memory: copy the new text into the payload
-```
+<CellFrames id="torn-shared-read" title="A reader arrives between the length and the text" scenarios={tornReadCells} />
 
 The reader's length check passes, the UTF-8 decode very likely succeeds, and
 the text returned is simply wrong — or is half of the previous message. Writing
@@ -34204,15 +34168,11 @@ CPU and the compiler may reorder the two stores anyway. Closing it takes a
 sequence number the reader checks before and after copying, or a real
 synchronization object.
 
-For a small concrete case, suppose the old payload is `READY` (five bytes)
-and the writer announces a new seven-byte payload `RUNNING` before copying it.
-The reader can observe length 7 alongside `READY` and two old padding bytes.
-Seven bytes fit inside the mapping, and zero bytes are valid UTF-8, so both
-checks in `read_text` can succeed while the message is not the one the writer
-meant to publish. The sequence diagram shows that exact gap between publishing
-the length and finishing the payload. A shared map is like a notice board both
-programs can see; visibility does not give either program an agreed moment to
-read a completed notice.
+The figure shows the smallest case: old payload `READY` (five bytes), new
+payload `RUNNING` (seven bytes), and a reader that copies in the gap between
+publishing the length and finishing the text. Both checks in `read_text`
+succeed, yet the message is not one the writer ever meant to publish. Seeing
+the same bytes does not give either program an agreed moment to read them.
 
 
 <CodeTrace trace="handoff-shared-snapshot" />
@@ -34440,10 +34400,6 @@ Shared memory in Lesson 8.7 gave two programs views of the same bytes, but a con
 
 A **named pipe server** creates a known pipe name and waits. A **client** opens that name. After they connect, both sides can exchange bytes through ordinary Windows read and write calls.
 
-<Frame caption="A read can return only part of a message">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/pipe-message.svg`} width="480" height="206" alt="A framed named-pipe message accumulates its length and payload before parsing, even when reads return fragments." loading="lazy" decoding="async" />
-</Frame>
-
 This resembles a tiny network service, but the lab keeps both programs on the same Windows machine:
 
 ```text
@@ -34505,17 +34461,10 @@ The receiver checks all of these facts before making a `String`:
 3. The received frame size equals `4 + declared length`.
 4. The text bytes are valid UTF-8.
 
-```mermaid
-flowchart TD
-    A["bytes_read >= 4?"] -->|"no"| X1["reject: no header"]
-    A -->|"yes"| B["declared <= MAX_TEXT_BYTES?"]
-    B -->|"no"| X2["reject: header too large"]
-    B -->|"yes"| C["bytes_read == declared + 4?"]
-    C -->|"no"| X3["reject: length mismatch"]
-    C -->|"yes"| D["valid UTF-8?"]
-    D -->|"no"| X4["reject: bad UTF-8"]
-    D -->|"yes"| E["return the text"]
-```
+The first check that fails rejects the frame, and the later ones never run. Try the edge of
+the limit: 1,028 bytes whose header says 1,024 pass, because the limit is on the text length.
+
+<LiveCells lab="pipe-frame-checks" />
 
 The server accepts one client, handles one request, sends one fixed reply, and exits. Small limits make the behavior easy to reason about.
 
@@ -35992,10 +35941,6 @@ exact replacement bytes without decoding the whole file as text.
 HxD and ImHex are common examples; they show the same three columns, so nothing
 in this lesson depends on which one you use.
 
-<Frame caption="Changing bytes need not move later fields">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/binary-overwrite.svg`} width="480" height="206" alt="A four-byte overwrite changes a little-endian integer from 100 to 101 without inserting or deleting bytes." loading="lazy" decoding="async" />
-</Frame>
-
 This lesson uses a toy save format made for the book, `GSAV`, and a Rust lab
 that reads and writes it. Here is the complete save for a character called Nia,
 at level 3, with 250 gold. It is 19 bytes long:
@@ -36104,22 +36049,20 @@ be refused because its fields may have moved. The lab returns
 
 Games for x86 PCs usually write numbers to disk exactly as they sit in memory,
 which is little endian: the byte worth the least comes first. [Lesson 1.8](/pages/1/08/#byte-order-and-why-hex-dumps-look-backwards) explains why
-each box is worth 256 times the one before it. Gold occupies offsets 6 to 9:
+each box is worth 256 times the one before it. Gold occupies offsets 6 to 9,
+which hold `FA 00 00 00`. `0xFA` is 15 × 16 + 10 = 250 and the other three
+bytes are 0, so the gold is 250. Try other values: changing gold only
+overwrites these four bytes, and no later field moves.
 
-<MemoryStrip
-  cells="0x06=FA|0x07=00|0x08=00|0x09=00"
-  groups="0-0:× 1|1-1:× 256|2-2:× 65,536|3-3:× 16,777,216"
-  groups2="0-3:0xFA is 15 × 16 + 10 = 250, and every other byte is 0"
-  caption="The gold field. Read lowest byte first, `FA 00 00 00` is 250."
-/>
+<LiveCells lab="c5-gold-bytes" />
 
 The version works the same way with two bytes: `01 00` is 1 × 1 + 0 × 256 = 1.
 The level at offset 10 is a single byte, `03`, so there is no order to get
 wrong: it is 3.
 
 Reading in the wrong order gives a number that is obviously off, which makes a
-useful check. `FA 00 00 00` read with the most significant byte first is
-`0xFA000000`, which is 250 × 16,777,216 = 4,194,304,000 gold. When one byte
+useful check: read biggest byte first, `FA 00 00 00` is `0xFA000000`, which is
+250 × 16,777,216 = 4,194,304,000 gold. When one byte
 order gives a plausible value and the other gives billions, the plausible one is
 almost always the right one.
 
@@ -37016,25 +36959,25 @@ opening the file. Absolute entry names are worse still: joining an absolute
 path onto a base discards the base completely, so the result is simply whatever
 path the archive asked for.
 
-<Frame caption="Decide the destination before writing">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/archive-containment.svg`} width="480" height="206" alt="An installer checks the path and proves the final destination stays inside its mod directory before extracting bytes." loading="lazy" decoding="async" />
-</Frame>
+<PredictReveal
+  id="c5-archive-prefix"
+  setup="An installer joins each entry name onto C:\Games\Wesnoth\mods and accepts the result only if the joined text starts with that folder."
+  question="Does that check stop the entry name textures/../../save.dat?"
+  options={[
+    { label: 'Yes: it contains .., so the joined path is refused', why: 'The check never looks at the parts. The joined text is C:\\Games\\Wesnoth\\mods\\textures\\..\\..\\save.dat, which starts with the mod folder, so the check accepts it.' },
+    { label: 'No: the text starts with the mod folder, yet the file lands in C:\\Games\\Wesnoth', correct: true, why: 'textures goes one folder down, the first .. comes back to mods, and the second .. climbs to C:\\Games\\Wesnoth. The prefix check only read the text, which still begins with the mod folder.' },
+    { label: 'It depends on whether save.dat already exists', why: 'Whether a file exists does not change which folder the path names. The escape is decided by the .. parts alone.' },
+  ]}
+>
 
-Resolving the joined path one component at a time shows where it leaves the
-folder:
+<LiveCells lab="c5-archive-path" />
 
-```mermaid
-flowchart TD
-    A["Start: C:\Games\Wesnoth\mods"] -->|"first .."| B["C:\Games\Wesnoth"]
-    B -->|"second .."| C["C:\Games"]
-    C -->|"third .."| D["Root of drive C:"]
-    D -->|"Windows, then System32"| E["C:\Windows\System32"]
-    E -->|"example.dll"| F["C:\Windows\System32\example.dll"]
-```
+</PredictReveal>
 
 Each `..` climbs one level, so three of them undo the three folders below the
-drive root, and every component after that walks down a path the mod folder
-never contained.
+drive root, and every part after that walks down a path the mod folder
+never contained. Counting the depth part by part catches it at the first `..`
+that would go above the mod folder.
 
 The safe rule is therefore simple: **every extracted file must remain beneath one destination root after validation**.
 
@@ -37488,9 +37431,21 @@ flowchart TD
 
 Now type gold over as 9,999 and change nothing else. 9,999 is 39 × 256 + 15,
 and 39 = 2 × 16 + 7 = `0x27` while 15 = `0x0F`, so 9,999 is `0x270F` and its
-little-endian bytes are `0F 27 00 00`. The old gold bytes added 250 to the sum;
-the new ones add 15 + 39 = 54. The loader's total becomes 842 − 250 + 54 = 646,
-the stored checksum still says 842, and the loader refuses the save as corrupt.
+little-endian bytes are `0F 27 00 00`.
+
+<PredictReveal
+  id="c5-gsav-edit"
+  question="The last four bytes still say 4A 03 00 00, which is 842. What does the loader do with the edited file?"
+  options={[
+    { label: 'It loads 9,999 gold', why: 'The loader adds bytes 0 to 14 before it decodes any field. The new gold bytes add 15 + 39 = 54 where FA 00 00 00 added 250, so its total is 842 − 250 + 54 = 646, not the stored 842.' },
+    { label: 'It refuses the save as corrupt', correct: true, why: 'The old gold bytes FA 00 00 00 added 250 to the total; the new 0F 27 00 00 add 15 + 39 = 54. The total becomes 842 − 250 + 54 = 646 while the stored checksum still says 842, so the loader refuses the file.' },
+    { label: 'It loads the old 250 gold', why: 'Nothing in the file remembers 250: those four bytes now hold 0F 27 00 00. The loader either accepts the bytes that are there or refuses the whole file.' },
+  ]}
+>
+
+<LiveCells lab="c5-gsav-checksum" />
+
+</PredictReveal>
 
 The fix is to do what the game does when it saves: recompute the checksum. For
 1,250 gold, the gold bytes `E2 04 00 00` add 226 + 4 = 230 instead of 250, so
@@ -37503,7 +37458,8 @@ contained. The complete edited file is:
 ```
 
 A plain sum has a blind spot: adding numbers in a different order gives the same
-total, so swapping two bytes goes unnoticed. That is why real formats more often
+total, so swapping two bytes goes unnoticed. The 64,000 example above is that
+swap: `00 FA 00 00` still adds up to 250, so the file loads. That is why real formats more often
 use a CRC-32, a 32-bit checksum designed to change when bytes are reordered, or
 a hash. The editing procedure stays the same: work out which bytes are covered,
 which algorithm runs, where the result is stored, and in which byte order, as
@@ -37514,11 +37470,6 @@ recomputed without that key; [Lesson 10.9](/pages/9/08/) explains why.
 ## A hash and a signature answer different questions
 
 The manifest in Lesson 9.7 records the bytes before and after a mod installation. Its hash detects an unexpected later change. To decide whether a downloaded game or mod came from the publisher you expected, we need a different question: who approved these bytes?
-
-<Frame caption="One changed byte gives a completely different fingerprint (illustrative values).">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/hash-change.svg`} width="480" height="212" style="width:480px;max-width:100%;height:auto;" alt="Two nearly identical files go through one hash function and produce unrelated fixed-length fingerprints." loading="lazy" decoding="async" />
-</Frame>
-
 
 A SHA-256 hash is a fingerprint of exact bytes. Change one byte and the fingerprint should change dramatically. A saved baseline can answer:
 
@@ -38210,10 +38161,6 @@ Lesson 9.8 used a hash to compare exact files and a signature to check a publish
 
 AEAD means *authenticated encryption with associated data*. It is usually the right starting point for a new encrypted file or message because confidentiality without tamper detection is incomplete.
 
-<Frame caption="Encryption and authenticity travel together">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/authenticated-file.svg`} width="480" height="206" alt="Authenticated encryption produces ciphertext and a tag; opening validates the tag and rejects tampering." loading="lazy" decoding="async" />
-</Frame>
-
 ### One shared key or a key pair
 
 The lab uses **symmetric** encryption: one key both locks and unlocks, so
@@ -38301,6 +38248,10 @@ flowchart LR
 
 The associated data is not encrypted; it is included in the authentication calculation.
 
+Put together, sealing the 19-byte [`GSAV` save](/pages/9/09/) and opening it twice looks like this:
+
+<CellFrames id="c5-aead-envelope" title="Seal the save, then open it" scenarios={aeadEnvelopeCells} />
+
 
 <CodeTrace trace="handoff-envelope-context" />
 
@@ -38344,6 +38295,15 @@ This uses the current 0.11 API documented by [RustCrypto](https://docs.rs/chacha
 
 Decryption splits the nonce from the envelope, then authenticates both ciphertext and context:
 
+<SpeedType id="c5-aead-open-contract" title="Recall how open splits and authenticates" recall={[
+  { text: '.split_at_checked(24)', mask: '24', kind: 'argument', hint: 'Split right after the nonce, whose length XChaCha20 fixes.' },
+  { text: '.split_at_checked(24)', mask: 'split_at_checked', kind: 'api', hint: 'Split the envelope in two without panicking when it is too short.' },
+  { text: 'Payload { msg: ciphertext, aad: context }', mask: 'context', kind: 'argument', hint: 'Authenticate the same readable slot-and-format label used when sealing.' },
+  { text: 'Payload { msg: ciphertext, aad: context }', mask: 'ciphertext', kind: 'argument', hint: 'Pass everything after the nonce, which ends with the tag.' },
+  { text: '.decrypt(&nonce', mask: 'decrypt', kind: 'api', hint: 'Recompute the tag, and only then return plaintext.' },
+  { text: 'CryptoError::AuthenticationFailed', mask: 'AuthenticationFailed', kind: 'logic', hint: 'One generic error for any mismatch, so the failure reveals nothing.' },
+]}>
+
 ```rust
 let (nonce_bytes, ciphertext) = envelope
     .split_at_checked(24)
@@ -38355,6 +38315,8 @@ cipher
     .decrypt(&nonce, Payload { msg: ciphertext, aad: context })
     .map_err(|_| CryptoError::AuthenticationFailed)
 ```
+
+</SpeedType>
 
 Do not return partly decrypted data after an authentication error. Do not explain whether the key, nonce, tag, context, or ciphertext was wrong to an untrusted caller; one generic failure avoids turning error messages into an oracle.
 
@@ -41426,10 +41388,6 @@ A game may report that it loaded `opengl32.dll`, `zlib1.dll`, or another familia
 That matters for debugging as well as defense. Loading the wrong version of a legitimate DLL can cause missing exports, crashes, changed structure layouts, or code patterns that no longer match the ones this course uses.
 
 
-<Frame caption="A familiar basename is only the first clue">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/dll-identity.svg`} width="480" height="206" alt="The same DLL basename can identify different files; its resolved path and build identity distinguish them." loading="lazy" decoding="async" />
-</Frame>
-
 <CodeTrace trace="handoff-module-identity" />
 
 ## Imports begin a dependency graph
@@ -41488,7 +41446,24 @@ flowchart TD
     F5 --> F6["search 6: the directories on PATH"]
 ```
 
-The first searched folder that contains a file with that name supplies the DLL. Every check above the numbered searches happens before any folder is searched, which is why a planted file cannot stand in for a KnownDLL. With safe DLL search mode off, the current directory moves up to second place, right after the application's directory; holding it back at fifth place, behind the system directories, is what the setting does. Packaged apps and a few redirection features add steps that the diagram leaves out.
+The first searched folder that contains a file with that name supplies the DLL. Every check above the numbered searches happens before any folder is searched, which is why a planted file cannot stand in for a KnownDLL. Packaged apps and a few redirection features add steps that the diagram leaves out.
+
+<PredictReveal
+  id="c5-dll-search-order"
+  setup="C:\Games\Demo\demo.exe calls LoadLibrary with the bare name example.dll, which is not loaded yet and not a KnownDLL. One copy is in C:\Windows\System32 and another in the current folder, C:\Users\Player\Downloads. Safe DLL search mode is on."
+  question="Which file loads?"
+  options={[
+    { label: 'The copy in System32', correct: true, why: 'With safe search mode on, System32 is search 2 and the current folder is search 5. The game folder (search 1) has no copy, so search 2 finds the file first and the search stops there.' },
+    { label: 'The copy in Downloads, the current folder', why: 'That is the order with safe search mode off: the current folder moves up to search 2, ahead of System32. With the mode on it waits until search 5, and search 2 has already found a file.' },
+    { label: 'Neither: two files with one name make LoadLibrary fail', why: 'The loader stops at the first folder that holds a file with that name. It never learns that a second copy exists further down the list.' },
+  ]}
+>
+
+<LiveCells lab="c5-dll-search" />
+
+</PredictReveal>
+
+With safe DLL search mode off, the current folder moves up to search 2, right after the application's folder; holding it back behind the system folders is what the setting does. Either way, both copies report the same short name, `example.dll`. Only the full path, and the file's hash and signer, tell a tool which one actually loaded.
 
 Safer application design uses:
 
@@ -41994,10 +41969,8 @@ Normally the Windows loader resolves a program's imports before `main`. Sometime
 
 This is useful compatibility work. It is not a reason to hide imports or replace well-supported APIs with undocumented ones.
 
+<FlowDiagram id="c5-optional-api" title="Look up an optional export" scenarios={optionalApiFlows} />
 
-<Frame caption="Capability detection permits a clear fallback">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/optional-api.svg`} width="480" height="206" alt="An optional API is looked up in a trusted module; presence selects a correctly typed call and absence selects a fallback." loading="lazy" decoding="async" />
-</Frame>
 ## Detect the capability you need
 
 Do not infer one API's presence only from a Windows version string. Compatibility settings, servicing changes, and alternative implementations can make version checks lie about the capability that matters. Look up the documented export, validate the result, and take the fallback when it is absent.
@@ -48093,16 +48066,20 @@ A function call has two jobs:
 
 On 32-bit x86, a common direct call begins with opcode `E8` followed by a signed 32-bit relative displacement. The CPU adds that displacement to the address immediately after the call. A disassembler performs this calculation and exposes the final target.
 
-<Frame caption="A relative call uses the next address">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/relative-call.svg`} width="480" height="206" alt="A five-byte call at hexadecimal 1000 adds displacement 20 to next address 1005 to reach target 1025." loading="lazy" decoding="async" />
-</Frame>
+<PredictReveal
+  id="c4-call-target"
+  setup="At 0x00401000 the five bytes are E8 4B 00 00 00: the opcode E8, then the displacement 0x0000004B stored lowest byte first."
+  question="Which address does this call go to?"
+  options={[
+    { label: '0x0040104B', why: 'That adds 0x4B to the address of the call itself. The CPU adds it to the address right after the five-byte call, 0x00401000 + 5 = 0x00401005.' },
+    { label: '0x00401050', correct: true, why: 'The next instruction is at 0x00401000 + 5 = 0x00401005, and 0x00401005 + 0x4B = 0x00401050. The call also pushes 0x00401005, so ret comes back there.' },
+    { label: '0x0000004B', why: 'The four bytes are a distance, not an address. They say how far to go, measured from the end of the call.' },
+  ]}
+>
 
-<MemoryStrip
-  cells="0x00401000=E8|0x00401001=4B|0x00401002=00|0x00401003=00|0x00401004=00"
-  marks="0"
-  groups="0-0:opcode: direct near call|1-4:displacement, little endian: +0x4B"
-  caption="For example, a call at `0x00401000`: the CPU adds the displacement (`0x4B`) to the address right after this 5-byte instruction (`0x00401005`), landing on `0x00401050`."
-/>
+<LiveCells lab="relative-call-target" />
+
+</PredictReveal>
 
 An indirect call such as `call eax` or `call [ecx+8]` gets its destination from a register or memory at runtime. Static bytes alone do not reveal one final target, so the first course logger deliberately records only direct calls.
 
@@ -48681,10 +48658,6 @@ Summary: A plausible translation can still describe the wrong process, build, or
 
 Page-table translation can produce an address and still answer the wrong question. You may have the wrong CR3, a stale object pointer, a different build, or a capture taken between two related updates.
 
-<Frame caption="Successful translation is only one check">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/capture-evidence.svg`} width="480" height="206" alt="Capture provenance, the address-space root, and object evidence together establish what a translated address means." loading="lazy" decoding="async" />
-</Frame>
-
 None of those mistakes makes the walk fail. A wrong CR3 is still a valid page-table root for some other address space, a stale pointer can still land on mapped memory, and another build's object still has bytes where the old layout expects fields. A successful walk means only that the page tables in the file lead somewhere; each stage below checks, in a different way, that the somewhere is the object you meant:
 
 <MarginNote kind="brief">Successful translation proves that the saved tables lead somewhere; identity and semantic checks determine whether it is the intended object.</MarginNote>
@@ -48749,7 +48722,9 @@ Here is how several of those checks land on one small object, a toy 64-bit playe
   caption="A 48-byte `PlayerLayout`: an 8-byte vtable pointer, a 4-byte health value, three 4-byte floats, and three 8-byte container pointers, so 8 + 4 + 3 × 4 + 3 × 8 = 48 = 3 × 16 = `0x30` bytes, and `PlayerLayout::SIZE` is 48. Each brace is a check on different bytes."
 />
 
-A single field can look right by accident: plenty of unrelated memory holds a small integer that could pass for health. Four checks on different bytes, each failing in its own way, rarely all pass at a wrong address, so an object that passes every one is far more likely to be the one you meant.
+A single field can look right by accident: plenty of unrelated memory holds a small integer that could pass for health. Four checks on different bytes, each failing in its own way, rarely all pass at a wrong address. Try the four candidates below; only the intended player passes every check.
+
+<LiveCells lab="c5-player-checks" />
 
 
 <CodeTrace trace="handoff-capture-validation" />
@@ -48757,6 +48732,14 @@ A single field can look right by accident: plenty of unrelated memory holds a sm
 ## Separate capture parsing from game meaning
 
 Use layers:
+
+<SpeedType id="c5-read-player-layers" title="Recall the two-layer player read" recall={[
+  { text: 'capture.read_virtual(cr3, address, PlayerLayout::SIZE)', mask: 'read_virtual', kind: 'api', hint: 'Ask the capture layer for bytes at a virtual address.' },
+  { text: 'capture.read_virtual(cr3, address, PlayerLayout::SIZE)', mask: 'cr3', kind: 'argument', hint: 'Pass the page-table root that names the intended address space.' },
+  { text: 'capture.read_virtual(cr3, address, PlayerLayout::SIZE)', mask: 'SIZE', kind: 'argument', hint: 'Ask for exactly as many bytes as one player layout occupies.' },
+  { text: 'PlayerLayout::decode(&bytes)', mask: 'bytes', kind: 'argument', hint: 'Hand the layout layer what the capture layer returned.' },
+  { text: 'PlayerLayout::decode(&bytes)', mask: 'decode', kind: 'api', hint: 'Turn raw bytes into a checked snapshot or a named error.' },
+]}>
 
 ```rust
 fn read_player(
@@ -48768,6 +48751,8 @@ fn read_player(
     PlayerLayout::decode(&bytes)
 }
 ```
+
+</SpeedType>
 
 The capture layer understands physical ranges and page tables. The layout layer understands fields and invariants. The presentation layer prints a `PlayerSnapshot`.
 
@@ -51377,6 +51362,15 @@ denial that leaves no event hides repeated mistakes and makes the control
 difficult to test. The fix computes the decision first and then logs it,
 whichever way it went:
 
+<SpeedType id="c5-audit-every-decision" title="Recall the decide-then-log fix" recall={[
+  { text: 'effect_based_policy(command, false)', mask: 'effect_based_policy', kind: 'api', hint: 'Ask the policy that classifies effects for its decision.' },
+  { text: 'effect_based_policy(command, false)', mask: 'false', kind: 'argument', hint: 'Pass the setting that says writes are not allowed in this audit.' },
+  { text: 'effect_based_policy(command, false)', mask: 'command', kind: 'argument', hint: 'Pass the request being judged.' },
+  { text: 'events.push(format!("{result:?} {command:?}"))', mask: 'result', kind: 'argument', hint: 'Record the decision itself, whichever way it went.' },
+  { text: 'events.push(format!("{result:?} {command:?}"))', mask: 'push', kind: 'api', hint: 'Append one event to the audit list.' },
+  { text: 'AuditResult::Denied', mask: 'Denied', kind: 'logic', hint: 'The variant for a refused request, which is now logged too.' },
+]}>
+
 ```rust
 let result = if effect_based_policy(command, false) {
     AuditResult::Allowed
@@ -51385,6 +51379,8 @@ let result = if effect_based_policy(command, false) {
 };
 events.push(format!("{result:?} {command:?}"));
 ```
+
+</SpeedType>
 
 Do not log secrets, raw memory, authentication keys, or giant payloads. A useful
 event records time, operation category, verified target identity, allow/deny

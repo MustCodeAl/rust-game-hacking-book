@@ -8,11 +8,31 @@ The previous lesson opened a process with a specific set of rights. Now ask who 
 
 Windows keeps kernel-managed objects for processes, threads, files, events, snapshots, and many other resources. A user-mode program normally refers to one of those objects through a handle.
 
-The numeric handle value is an index-like token meaningful to Windows in the current process. It is not the object’s memory address, and reading memory at that number does not reveal the object.
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
+The numeric handle value is an index-like token meaningful to Windows in the current process: Windows uses it to find a row in that process’s handle table, and the row points to the event, file, process, thread, or snapshot object. It is not the object’s memory address, and reading memory at that number does not reveal the object.
 
 A handle entry also carries granted access rights. Two handles referring to the same process can permit different operations.
+
+Two handles to one process, with different rightsWindows looks a handle value up in the calling process’s table. The row holds the rights and points to the kernel object.
+
+1 ReadProcessMemory with handle hexadecimal 1 2 C This process’s handle table (kept by the kernel)Handle hexadecimal 1 2 Cquery, readrightsthe game’s process objectpoints toHandle hexadecimal 1 3 4query onlyrightsthe same process objectpoints toResultReadProcessMemoryallowed Row hexadecimal 1 2 C includes read, so the call reaches the game’s process object.
+
+Section: This process’s handle table (kept by the kernel).
+
+Section: Result.
+
+2 ReadProcessMemory with handle hexadecimal 1 3 4 This process’s handle table (kept by the kernel)Handle hexadecimal 1 2 Cquery, readrightsthe game’s process objectpoints toHandle hexadecimal 1 3 4query onlyrightsthe same process objectpoints toResultReadProcessMemoryaccess denied Same process object, but row hexadecimal 1 3 4 holds query rights only, so the read is refused.
+
+Section: This process’s handle table (kept by the kernel).
+
+Section: Result.
+
+3 Reading your own memory at address hexadecimal 1 2 C This process’s handle table (kept by the kernel)Handle hexadecimal 1 2 Cquery, readrightsthe game’s process objectpoints toHandle hexadecimal 1 3 4query onlyrightsthe same process objectpoints toYour process’s memoryAddress hexadecimal 1 2 Cnothing mapped: access violation A handle value is not an address. The low 64 KiB of a process are never mapped, so this read faults instead of showing the object.
+
+Section: This process’s handle table (kept by the kernel).
+
+Section: Your process’s memory.
+
+Windows looks a handle value up in the calling process’s table. The row holds the rights and points to the kernel object.
 
 Section: Handles have lifetimes.
 

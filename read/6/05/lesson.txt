@@ -8,7 +8,29 @@ This is not a toy protocol. It uses the exact flow we reversed from Wesnoth 1.14
 
 Keep transport, decoding, session meaning, and behavior as separate layers. One incoming message should travel through the pipeline before any reply is built:
 
-This separation lets a malformed frame fail before it reaches chat behavior, and it lets the command handler work with events instead of raw network bytes.
+This separation lets a malformed frame fail before it reaches chat behavior, and it lets the command handler work with events instead of raw network bytes:
+
+A well-formed command reaches the handlerEach layer passes on only what it has checked: a complete frame, then named fields, then an event.
+
+Data u32 length, then that many bytesStep 1: T C P, transmission control protocol, stream to read_frameread_frame reads the four-byte big-endian length, checks it against MAX_FRAME (the large number shown), then reads exactly that many bytes.
+
+Data one complete gzip payloadStep 2: read_frame to DecoderOnly a complete frame is passed on; a partial read never reaches the decoder.
+
+Data Chat event: text "\wave"Step 3: Decoder to Command handlergunzip and the W M L parser turn bytes into named fields, so the handler receives an event, not bytes.
+
+Reply new framed reply: Hello!Step 4: Command handler to T C P streamThe text matches \wave, so the handler builds new reply fields; they are serialized, compressed and framed before writing.
+
+Each layer passes on only what it has checked: a complete frame, then named fields, then an event.
+
+A malformed payload stops at the decoderThe frame is complete, but its bytes are not valid gzip. The error ends the chain before any behavior runs.
+
+Data u32 length, then that many bytesStep 1: T C P stream to read_frameThe length is within MAX_FRAME and all its bytes arrive, so framing succeeds.
+
+Data one complete payloadStep 2: read_frame to DecoderThe decoder receives the whole payload.
+
+Alone gunzip fails: return an errorStep 3: Decoder (alone)No Chat event is built, so the command handler never runs and no reply is sent.
+
+The frame is complete, but its bytes are not valid gzip. The error ends the chain before any behavior runs.
 
 Section: Connect with timeouts.
 
@@ -22,7 +44,7 @@ Section: Read and write exact frames.
 
 Lesson 9.4’s encode_wesnoth_frame performs the gzip compression and adds the four-byte big-endian length. write_all matters because one write may send only part of a buffer.
 
-The two helpers implement the strip in opposite directions. send_wml frames text and writes all bytes; read_frame reads the four-byte length, checks the cap, then reads that many payload bytes before a decoder sees them. A short T C P, transmission control protocol, read is normal, so both paths use the exact-read/write operations:
+The two helpers implement the strip in opposite directions. send_wml frames text and writes all bytes; read_frame reads the four-byte length, checks the cap, then reads that many payload bytes before a decoder sees them. A short T C P read is normal, so both paths use the exact-read/write operations:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 

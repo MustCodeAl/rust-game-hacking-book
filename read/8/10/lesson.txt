@@ -86,6 +86,30 @@ Box<dyn Feature> owns an implementation behind the common interface. The loop sk
 
 Section: Shut down in reverse order.
 
+Release each part after its last user stopsThe owner stops new work, waits for the worker, then restores the game and releases the D L L last.
+
+Control Stop accepting commandsStep 1: Owner (main.rs) to Input threadNo new command can start work that would need the hooks or the handles.
+
+Control Signal: stop after this updateStep 2: Owner (main.rs) to Update workerThe worker finishes the snapshot it is on instead of being cut off halfway through a write.
+
+Reply join returns: worker finishedStep 3: Update worker to Owner (main.rs)Now no thread is running feature code or passing through the patches.
+
+Data Disable features: restore bytesStep 4: Owner (main.rs) to Game processEach feature’s disable writes back the bytes its patch saved; a failure is reported, not hidden.
+
+Alone Close handles, then unloadStep 5: Owner (main.rs) (alone)The D L L’s code is released last, after its last user has gone.
+
+The owner stops new work, waits for the worker, then restores the game and releases the D L L last.
+
+Unloading while a worker still runsThe same parts in the wrong order: the D L L is released while a thread can still execute its code.
+
+Data Restore bytes, unload the DLLStep 1: Owner (main.rs) to Game processThe owner skipped stopping and joining the worker.
+
+Alone Next loop iterationStep 2: Update worker (alone)The worker thread still exists, and its next instruction is in the D L L’s code pages.
+
+Control Runs released code: crashStep 3: Update worker to Game processThose pages went away with the D L L, so the game process stops with an access violation.
+
+The same parts in the wrong order: the D L L is released while a thread can still execute its code.
+
 Do not unload code while another thread may still execute it. Stop accepting new commands first, request worker shutdown, and wait for those workers to finish before restoring their patches and releasing handles. A restoration failure must remain visible; a vanished window is not proof that cleanup completed.
 
 Narration: The window may disappear before a worker exits. Waiting for that worker keeps its final operations from reaching already-released code or handles.

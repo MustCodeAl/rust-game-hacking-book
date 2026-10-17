@@ -40,9 +40,23 @@ The hook calls the text function, and the text function runs the hook again: rec
 
 Narration: Calling the hooked text function from its own replacement never reaches a finished menu line; each attempt creates another unfinished call on the stack.
 
-Hook a site that runs once per frame instead, and call the text function from there as an ordinary function:
+Hook a site that runs once per frame instead, and call the text function from there as an ordinary function.
 
-Lesson 7.9 already identified such a site in AssaultCube: the final print hook at this value, resuming at this value. Drawing there puts your lines in the same pass as the game’s own HUD, so they inherit its ordering and never appear underneath the world.
+Lesson 7.9 already identified such a site in AssaultCube: the final print hook at this value, resuming at this value. Drawing there puts your lines in the same pass as the game’s own HUD, so they inherit its ordering and never appear underneath the world:
+
+Your text, the game’s font and frameAssaultCube’s HUD site this value jumps to your detour once per frame; the print function at this value does the drawing.
+
+Control jmp from hexadecimal 0 0 4 0 B E 7 EStep 1: Game’s HUD pass to Your detourOnce per frame the game reaches the patched site while it draws its HUD, so your code runs at the right moment.
+
+Request print(x, y, pointer to text)Step 2: Your detour to Print functionYou supply only a position and a pointer to an owned, zero-terminated string, passed the way the function expects (cdecl or thiscall).
+
+Data one glyph quad per letterStep 3: Print function to This frame’s imageThe function adds what it already knows: the font atlas, the scale, the screen size and this frame’s drawing state.
+
+Reply returnsStep 4: Print function to Your detourCall it again for each menu line; each call must finish quickly because the game’s frame is waiting.
+
+Control resume at hexadecimal 0 0 4 0 B E 8 3Step 5: Your detour to Game’s HUD passReplay the displaced instructions and jump back. The game finishes its HUD, so your lines appear in the same pass.
+
+AssaultCube’s HUD site this value jumps to your detour once per frame; the print function at this value does the drawing.
 
 Section: Reconstruct the contract before you call it.
 
@@ -90,7 +104,27 @@ Moving the cursor up from the first row should land on the last. The natural exp
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
-When cursor is 0, 0 - 1 on an unsigned integer panics in a debug build and produces usize::MAX in a release build, which then indexes far outside the list. Handle the boundary explicitly and the intent is visible:
+When cursor is 0, 0 - 1 on an unsigned integer panics in a debug build. A release build wraps it to usize::MAX, and % len then keeps the result inside the list, but usually on the wrong row:
+
+Predict first
+
+A release build wraps 0 - 1 on usize to usize::MAX equals the large number shown. The menu has 3 rows and the cursor is on row 0.
+
+Pressing up runs (cursor - 1) % len. Which row is selected?
+
+Answer: Row 0. The digits of the large number shown add up to 87 equals 3 times 29, so the number is a multiple of 3 and the remainder is 0. The cursor does not move at all.
+
+Moving the cursor up from row 0The obvious code is (cursor - 1) % len on usize. Change the number of rows, the cursor and the build.
+
+Pressing up with the cursor on row 0
+
+Section: 3 menu rows.
+
+Section: The arithmetic on usize.
+
+the large number shown % 3 equals 0. The remainder keeps the index inside the list, but it is row 0, not the last row, 2.
+
+Handle the boundary explicitly and the intent is visible:
 
 Code example. The surrounding prose explains this example; the full lesson contains the exact code.
 
