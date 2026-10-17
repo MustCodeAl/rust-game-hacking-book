@@ -12,20 +12,16 @@ sidebar:
 import SpeedType from '../../../../components/kit/SpeedType.astro';
 import CodeTrace from '../../../../components/CodeTrace.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
-import Frame from '../../../../components/kit/Frame.astro';
 import { Accordion, Badge, GitHub, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
 
 ## A named pipe is a local client/server channel
 
 Shared memory in Lesson 8.7 gave two programs views of the same bytes, but a concurrent writer needed an additional timing agreement. For one request followed by one reply, a named pipe gives us a connection with an explicit read/write order.
 
 A **named pipe server** creates a known pipe name and waits. A **client** opens that name. After they connect, both sides can exchange bytes through ordinary Windows read and write calls.
-
-<Frame caption="A read can return only part of a message">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/pipe-message.svg`} width="480" height="206" alt="A framed named-pipe message accumulates its length and payload before parsing, even when reads return fragments." loading="lazy" decoding="async" />
-</Frame>
 
 This resembles a tiny network service, but the lab keeps both programs on the same Windows machine:
 
@@ -88,17 +84,10 @@ The receiver checks all of these facts before making a `String`:
 3. The received frame size equals `4 + declared length`.
 4. The text bytes are valid UTF-8.
 
-```mermaid
-flowchart TD
-    A["bytes_read >= 4?"] -->|"no"| X1["reject: no header"]
-    A -->|"yes"| B["declared <= MAX_TEXT_BYTES?"]
-    B -->|"no"| X2["reject: header too large"]
-    B -->|"yes"| C["bytes_read == declared + 4?"]
-    C -->|"no"| X3["reject: length mismatch"]
-    C -->|"yes"| D["valid UTF-8?"]
-    D -->|"no"| X4["reject: bad UTF-8"]
-    D -->|"yes"| E["return the text"]
-```
+The first check that fails rejects the frame, and the later ones never run. Try the edge of
+the limit: 1,028 bytes whose header says 1,024 pass, because the limit is on the text length.
+
+<LiveCells lab="pipe-frame-checks" />
 
 The server accepts one client, handles one request, sends one fixed reply, and exits. Small limits make the behavior easy to reason about.
 

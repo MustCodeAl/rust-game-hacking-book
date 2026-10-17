@@ -15,6 +15,8 @@ import { Frame, GitHub, HexDisassemblyInspector } from '../../../../components/k
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import ModRMDecoder from '../../../../components/ModRMDecoder.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 For an unfamiliar operation, use the [instruction reference](/pages/2/10/):
@@ -70,10 +72,6 @@ A disassembler does two jobs:
 
 x86 instructions have prefixes, several opcode maps, ModR/M and SIB bytes, displacements, immediates, and different modes. Hand-decoding `add` is a good exercise. A complete decoder is a major engineering project.
 
-<Frame caption="Instruction lengths decide the next start">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/instruction-boundaries.svg`} width="480" height="206" alt="A three-byte instruction followed by a two-byte instruction puts the next boundary at byte offset five." loading="lazy" decoding="async" />
-</Frame>
-
 Very roughly:
 
 - an **opcode** selects an operation;
@@ -93,6 +91,25 @@ detour must decode whole instructions before deciding how many bytes to replace.
 />
 
 <HexDisassemblyInspector />
+
+An instruction's length is known only after its first bytes are decoded, and the next
+instruction starts right after it: `B8` means four immediate bytes follow, so the instruction
+after `mov eax, 25` starts at 0 + 5 = 5.
+
+<PredictReveal
+  id="c4-decode-start"
+  setup="In 32-bit mode the six bytes B8 19 00 00 00 C3 are mov eax, 25 (offsets 0 to 4) and then ret (offset 5)."
+  question="A disassembler is told to start at offset 2 instead of 0. What does it show?"
+  options={[
+    { label: 'An error, because offset 2 is inside an instruction', why: 'Nothing in the bytes marks where an instruction starts. From offset 2 the decoder reads 00 as an opcode, and 00 is a valid one (an add), so it prints instructions, not an error.' },
+    { label: 'Different instructions that look valid', correct: true, why: 'The decoder treats the byte it starts on as an opcode. 00 00 decodes as add byte ptr [eax], al and 00 C3 as add bl, al, so even the ret vanishes into a wrong instruction.' },
+    { label: 'mov eax, 25 and ret, as from offset 0', why: 'The decoder never sees the B8 at offset 0, so it cannot know that a five-byte mov started there. It decodes from the byte it was given.' },
+  ]}
+>
+
+<LiveCells lab="decode-start" />
+
+</PredictReveal>
 
 ### A small opcode lookup table
 

@@ -48,9 +48,11 @@ export const dllOwnersCells: readonly CellScenario[] = [
 
 /** Lesson 8.5 (pages/8/05.mdx): workers claim different regions from one atomic index. */
 const claimFrame = (label: string, caption: string, index: number, claimed: readonly [boolean, boolean, boolean], who: readonly [string, string]): CellFrame => frame(label, caption, [
-  panel('Shared', 'purple', [row('Atomic region index', [h(String(index), 'purple', 4, { sub: 'next region to claim' })])]),
-  panel('Copied regions (immutable)', 'blue', [row('Regions', [0, 1, 2].map(i => claimed[i] ? h(`region ${i}`, 'blue', 1, { sub: i === 0 ? 'Worker 1' : 'Worker 2' }) : c(`region ${i}`, 'gray', 1, { ghost: true })))]),
-  panel('Workers', 'green', [row('Worker 1', [c(who[0], 'green', 4)]), row('Worker 2', [c(who[1], 'teal', 4)])]),
+  panel('Shared', 'purple', [
+    row('Atomic region index', [h(String(index), 'purple', 3, { sub: 'next region to claim' })]),
+    row('Regions (immutable copies)', [0, 1, 2].map(i => claimed[i] ? h(`region ${i}`, 'blue', 1, { sub: i === 0 ? 'Worker 1' : 'Worker 2' }) : c(`region ${i}`, 'gray', 1, { ghost: true }))),
+  ]),
+  panel('Workers', 'green', [row('Worker 1', [c(who[0], 'green', 3)]), row('Worker 2', [c(who[1], 'teal', 3)])]),
 ]);
 export const scanClaimsCells: readonly CellScenario[] = [{
   id: 'region-claims', tab: 'Claiming regions',
@@ -70,15 +72,11 @@ export const frameBundleCells: readonly CellScenario[] = [{
   summary: 'The tool captures players and the camera once. Radar and overlay both read that same captured set.',
   frames: [
     frame('One owned FrameSnapshot', 'It holds the players and the camera captured for this frame.', [panel('FrameSnapshot', 'blue', [row('Contents', [h('players', 'blue', 3), h('camera', 'teal', 1)])])]),
-    frame('Radar reads that captured set', 'The radar draws from the snapshot, not from the live game.', [
+    frame('Radar and overlay read that copy', 'Both draw from the snapshot, not from the live game, so the two views agree.', [
       panel('FrameSnapshot', 'blue', [row('Contents', [c('players', 'blue', 3), c('camera', 'teal', 1)])]),
-      panel('Radar', 'green', [row('Reads', [h('players and camera from the snapshot', 'green', 4)], { link: 'reads' })]),
+      panel('Radar and overlay', 'green', [row('Readers', [h('Radar', 'green', 2), h('Overlay', 'purple', 2)], { link: 'both read' })]),
     ]),
-    frame('Overlay reads the same set', 'Both views agree, because they use one copy.', [
-      panel('FrameSnapshot', 'blue', [row('Contents', [c('players', 'blue', 3), c('camera', 'teal', 1)])]),
-      panel('Radar and overlay', 'green', [row('Readers', [c('Radar', 'green', 2), h('Overlay', 'purple', 2)], { link: 'both read' })]),
-    ]),
-    frame('Sharing the copy is not proof the game stood still', 'The snapshot is consistent with itself, but the live game may have changed while the capture was running.', [
+    frame('Not proof the game stood still', 'The snapshot is consistent with itself, but the live game may have changed while the capture was running.', [
       panel('Live game while capturing', 'orange', [row('Time', [c('read players', 'blue', 2), h('game changes', 'yellow', 1), c('read camera', 'teal', 1)], { ticks: { left: 'capture starts', right: 'capture ends' } })]),
     ]),
   ],

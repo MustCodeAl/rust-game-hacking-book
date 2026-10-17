@@ -14,6 +14,9 @@ import { Frame, GitHub, SpeedType, CodeGroup, Tab } from '../../../../components
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
+import CellFrames from '../../../../components/CellFrames.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import { patchLifecycleCells } from '../../../../data/figures-c4';
 
 ## Typed code manages the machine-code boundary
 
@@ -87,9 +90,7 @@ impl PatchPlan {
 }
 ```
 
-<Frame caption="Restoration needs the bytes that were replaced">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/patch-lifecycle.svg`} width="480" height="206" alt="A reversible patch records verified original bytes, installs temporary bytes, and restores the original after execution drains." loading="lazy" decoding="async" />
-</Frame>
+<CellFrames id="patch-lifecycle" title="One patch from verification to restoration" scenarios={patchLifecycleCells} />
 
 The planner performs no raw memory access. A disassembler should determine the whole-instruction span; never choose it by counting five arbitrary bytes.
 
@@ -225,14 +226,9 @@ impl Drop for AppliedPatch<'_> {
 ## Calculate jumps carefully
 
 A 5-byte relative jump stores a signed 32-bit displacement measured from the end of the jump:
+`rel32 = to − (from + 5)`, where `from` is the jump's own address and `to` is the cave's.
 
-```mermaid
-flowchart LR
-    F["from<br/>(the jump's own address)"] -->|"+ 5<br/>(the jump's own length)"| N["next_instruction<br/>(first byte after the jump)"]
-    N -->|"rel32 = to − next_instruction"| T["to<br/>(the cave's address)"]
-```
-
-This helper turns the diagram into five instruction bytes. It checks that the
+This helper turns that formula into five instruction bytes. It checks that the
 destination fits the jump's signed 32-bit displacement instead of truncating
 an out-of-range address.
 
@@ -255,6 +251,8 @@ fn near_jump(from: usize, to: usize) -> Option<[u8; 5]> {
 ```
 
 If the destination is too far away, `rel32` returns `None`. Do not truncate the number.
+
+<LiveCells lab="near-jump-rel32" />
 
 ## Architecture matters
 

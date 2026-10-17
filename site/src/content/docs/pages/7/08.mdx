@@ -10,7 +10,8 @@ sidebar:
   label: "14.2 Call Tracing and Bounded Logs"
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import { Accordion, Badge, GitHub, Panel, Steps } from '../../../../components/kit';
 import LessonVideo from '../../../../components/LessonVideo.astro';
 
@@ -42,16 +43,20 @@ A function call has two jobs:
 
 On 32-bit x86, a common direct call begins with opcode `E8` followed by a signed 32-bit relative displacement. The CPU adds that displacement to the address immediately after the call. A disassembler performs this calculation and exposes the final target.
 
-<Frame caption="A relative call uses the next address">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/relative-call.svg`} width="480" height="206" alt="A five-byte call at hexadecimal 1000 adds displacement 20 to next address 1005 to reach target 1025." loading="lazy" decoding="async" />
-</Frame>
+<PredictReveal
+  id="c4-call-target"
+  setup="At 0x00401000 the five bytes are E8 4B 00 00 00: the opcode E8, then the displacement 0x0000004B stored lowest byte first."
+  question="Which address does this call go to?"
+  options={[
+    { label: '0x0040104B', why: 'That adds 0x4B to the address of the call itself. The CPU adds it to the address right after the five-byte call, 0x00401000 + 5 = 0x00401005.' },
+    { label: '0x00401050', correct: true, why: 'The next instruction is at 0x00401000 + 5 = 0x00401005, and 0x00401005 + 0x4B = 0x00401050. The call also pushes 0x00401005, so ret comes back there.' },
+    { label: '0x0000004B', why: 'The four bytes are a distance, not an address. They say how far to go, measured from the end of the call.' },
+  ]}
+>
 
-<MemoryStrip
-  cells="0x00401000=E8|0x00401001=4B|0x00401002=00|0x00401003=00|0x00401004=00"
-  marks="0"
-  groups="0-0:opcode: direct near call|1-4:displacement, little endian: +0x4B"
-  caption="For example, a call at `0x00401000`: the CPU adds the displacement (`0x4B`) to the address right after this 5-byte instruction (`0x00401005`), landing on `0x00401050`."
-/>
+<LiveCells lab="relative-call-target" />
+
+</PredictReveal>
 
 An indirect call such as `call eax` or `call [ecx+8]` gets its destination from a register or memory at runtime. Static bytes alone do not reveal one final target, so the first course logger deliberately records only direct calls.
 
