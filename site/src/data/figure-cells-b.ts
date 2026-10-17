@@ -110,18 +110,13 @@ export const labelDigestCells: readonly CellScenario[] = [{
   title: 'Two files with the same label but different bytes',
   summary: 'A label says what someone claims. A digest is computed from the bytes themselves.',
   frames: [
-    frame('Two files carry the same version label', 'Both say “version 1.2”, so by the label they look identical.', [
-      panel('File A', 'blue', [row('Label', [h('version 1.2', 'blue', 3)])]),
-      panel('File B', 'teal', [row('Label', [h('version 1.2', 'teal', 3)])]),
+    frame('Same label, one different byte', 'Both say “version 1.2”, but File A ends 03 and File B ends 04.', [
+      panel('File A', 'blue', [row('Label', [c('version 1.2', 'blue', 3)]), row('Bytes', [c('01', 'blue'), c('02', 'blue'), h('03', 'blue')])]),
+      panel('File B', 'teal', [row('Label', [c('version 1.2', 'teal', 3)]), row('Bytes', [c('01', 'teal'), c('02', 'teal'), h('04', 'teal')])]),
     ], { side: true }),
-    frame('Their bytes differ in the last byte', 'File A ends 03 and File B ends 04.', [
-      panel('File A', 'blue', [row('Bytes', [c('01', 'blue'), c('02', 'blue'), h('03', 'blue')])]),
-      panel('File B', 'teal', [row('Bytes', [c('01', 'teal'), c('02', 'teal'), h('04', 'teal')])]),
-    ], { side: true }),
-    frame('So their SHA-256 digests differ', 'Any change to the bytes changes the digest, whatever the label says.', [
+    frame('So their SHA-256 digests differ', 'Any change to the bytes changes the digest, whatever the label says: these are not the same file.', [
       panel('File A', 'blue', [row('SHA-256', [h('digest A', 'blue', 3)])]),
       panel('File B', 'teal', [row('SHA-256', [h('digest B', 'red', 3)])]),
-      panel('Compared', 'purple', [row('Same label, different digests', [h('not the same file', 'red', 3)])]),
     ], { side: true }),
     frame('Compare against a trusted baseline', 'Check the bytes or the digest against a known good copy instead of relying on the label.', [
       panel('Trusted baseline', 'green', [row('Known good digest', [h('digest of the trusted file', 'green', 4)])]),
@@ -136,9 +131,8 @@ export const dumpInstantCells: readonly CellScenario[] = [{
   title: 'A dump records one chosen moment',
   summary: 'The dump holds the state at its capture point. It does not hold how the program got there.',
   frames: [
-    frame('A capture point on the timeline', 'Something chooses one instant to save.', [panel('Timeline', 'purple', [row('Time', [c('earlier history', 'gray', 4, { ghost: true }), h('capture point', 'red', 1), c('later', 'gray', 3, { ghost: true })])])]),
-    frame('The saved records at that instant', 'The dump keeps module, thread and stack records as they were at the capture point.', [
-      panel('Timeline', 'purple', [row('Time', [c('earlier history', 'gray', 4, { ghost: true }), c('capture point', 'red', 1), c('later', 'gray', 3, { ghost: true })])]),
+    frame('One chosen instant, saved', 'Something chooses one capture point; the dump keeps module, thread and stack records as they were then.', [
+      panel('Timeline', 'purple', [row('Time', [c('earlier history', 'gray', 4, { ghost: true }), h('capture point', 'red', 1), c('later', 'gray', 3, { ghost: true })])]),
       panel('Saved in the dump', 'blue', [row('Records', [h('modules', 'blue'), h('threads', 'teal'), h('stacks', 'orange')], { link: 'saved from that instant' })]),
     ]),
     frame('Earlier history is not in the dump', 'How the state came about needs logs or tracing, which a dump does not contain.', [
@@ -163,8 +157,7 @@ export const policyEffectCells: readonly CellScenario[] = [{
   title: 'A read-only policy that checks names instead of effects',
   summary: 'The toy policy blocks WriteMemory by name. ApplyPatch changes state just as much, and the name check lets it through.',
   frames: [
-    policyFrame('The policy checks command names', 'It lists WriteMemory as forbidden and judges commands by name alone.', 'name: blocked', 'name: not checked yet', 'red', 'green', 'Policy by name'),
-    policyFrame('ApplyPatch is not on the list', 'Its name is not blocked, so the policy allows it.', 'name: blocked', 'name: allowed', 'red', 'green', 'Policy by name'),
+    policyFrame('The policy blocks one name', 'It lists WriteMemory as forbidden. ApplyPatch is not on the list, so the policy allows it.', 'name: blocked', 'name: allowed', 'red', 'green', 'Policy by name'),
     policyFrame('Both commands change state', 'The invariant says no state changes, so the name check missed one of them.', 'name: blocked', 'name: allowed (wrong)', 'red', 'red', 'Policy by name: one gap'),
     policyFrame('Repair: classify the effect', 'The repaired invariant looks at what a command does, so any state-changing command is refused.', 'effect: blocked', 'effect: blocked', 'green', 'green', 'Repaired: policy by effect'),
   ],
@@ -182,8 +175,7 @@ export const kernelFaultCells: readonly CellScenario[] = [{
   frames: [
     frame('Three user-mode processes with separate memory', 'Each process can only touch its own bounded memory.', scope('none')),
     frame('A user-mode fault usually ends one process', 'The failing process stops; the others and the kernel carry on.', scope('process')),
-    frame('Kernel and driver authority spans much more', 'Kernel code can reach mappings, devices, processes and security decisions.', scope('none')),
-    frame('A kernel fault can reach the whole system', 'Nothing separates the kernel from what it manages, so the damage is not confined to one process.', scope('all')),
+    frame('A kernel fault can reach the whole system', 'Kernel code has authority over mappings, devices, processes and security, so a fault there is not confined to one process.', scope('all')),
   ],
 }];
 

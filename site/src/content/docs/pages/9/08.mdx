@@ -10,8 +10,9 @@ sidebar:
   label: "10.10 Encryption and Key Lifecycles"
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
-import { Badge, Panel } from '../../../../components/kit';
+import CellFrames from '../../../../components/CellFrames.astro';
+import { aeadEnvelopeCells } from '../../../../data/figures-c5';
+import { Badge, Panel, SpeedType } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
@@ -33,10 +34,6 @@ Lesson 9.8 used a hash to compare exact files and a signature to check a publish
 </Panel>
 
 AEAD means *authenticated encryption with associated data*. It is usually the right starting point for a new encrypted file or message because confidentiality without tamper detection is incomplete.
-
-<Frame caption="Encryption and authenticity travel together">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/authenticated-file.svg`} width="480" height="206" alt="Authenticated encryption produces ciphertext and a tag; opening validates the tag and rejects tampering." loading="lazy" decoding="async" />
-</Frame>
 
 ### One shared key or a key pair
 
@@ -125,6 +122,10 @@ flowchart LR
 
 The associated data is not encrypted; it is included in the authentication calculation.
 
+Put together, sealing the 19-byte [`GSAV` save](/pages/9/09/) and opening it twice looks like this:
+
+<CellFrames id="c5-aead-envelope" title="Seal the save, then open it" scenarios={aeadEnvelopeCells} />
+
 
 <CodeTrace trace="handoff-envelope-context" />
 
@@ -168,6 +169,15 @@ This uses the current 0.11 API documented by [RustCrypto](https://docs.rs/chacha
 
 Decryption splits the nonce from the envelope, then authenticates both ciphertext and context:
 
+<SpeedType id="c5-aead-open-contract" title="Recall how open splits and authenticates" recall={[
+  { text: '.split_at_checked(24)', mask: '24', kind: 'argument', hint: 'Split right after the nonce, whose length XChaCha20 fixes.' },
+  { text: '.split_at_checked(24)', mask: 'split_at_checked', kind: 'api', hint: 'Split the envelope in two without panicking when it is too short.' },
+  { text: 'Payload { msg: ciphertext, aad: context }', mask: 'context', kind: 'argument', hint: 'Authenticate the same readable slot-and-format label used when sealing.' },
+  { text: 'Payload { msg: ciphertext, aad: context }', mask: 'ciphertext', kind: 'argument', hint: 'Pass everything after the nonce, which ends with the tag.' },
+  { text: '.decrypt(&nonce', mask: 'decrypt', kind: 'api', hint: 'Recompute the tag, and only then return plaintext.' },
+  { text: 'CryptoError::AuthenticationFailed', mask: 'AuthenticationFailed', kind: 'logic', hint: 'One generic error for any mismatch, so the failure reveals nothing.' },
+]}>
+
 ```rust
 let (nonce_bytes, ciphertext) = envelope
     .split_at_checked(24)
@@ -179,6 +189,8 @@ cipher
     .decrypt(&nonce, Payload { msg: ciphertext, aad: context })
     .map_err(|_| CryptoError::AuthenticationFailed)
 ```
+
+</SpeedType>
 
 Do not return partly decrypted data after an authentication error. Do not explain whether the key, nonce, tag, context, or ciphertext was wrong to an untrusted caller; one generic failure avoids turning error messages into an oracle.
 
