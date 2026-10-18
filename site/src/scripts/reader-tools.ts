@@ -1,5 +1,5 @@
 import { adaptReaderArticle, showReaderVariant, chunkSpeechBlocks, collectReadableBlocks, plainLessonText, type SpeechSegment } from '../lib/reader-text.ts';
-import { chooseVoice, fillVoiceSelect, listVoices, speakSample, type VoiceChoice } from './speech-voices';
+import { chooseVoice, fillVoiceSelect, listVoices, speakSample, type VoiceChoice } from './speech-voices.ts';
 
 type Playback = 'idle' | 'speaking' | 'paused' | 'finished';
 

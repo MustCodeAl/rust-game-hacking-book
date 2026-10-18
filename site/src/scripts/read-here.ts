@@ -3,7 +3,7 @@
 import {
   chooseVoice, fillVoiceSelect, formatSpeed, listVoices, nextSpeed, readRatePreference, readVoicePreference,
   saveRatePreference, saveVoicePreference, speakSample, watchVoices, type VoiceChoice,
-} from './speech-voices';
+} from './speech-voices.ts';
 
 type Playback = 'idle' | 'loading' | 'speaking' | 'paused' | 'finished';
 interface SpeechBlock { text: string }
