@@ -54,10 +54,14 @@ for (const page of pages) {
 	const records = manifest.figures.filter((figure) => figure.page === page);
 	assert.equal(records.length, figures.length, `${page}: one still per native figure`);
 
-	// The figures' own words: captions, steps, labels. None may be spoken.
+	// The figures' own words: captions, steps, labels. None may be spoken, unless
+	// the lesson also says them outside its figures (a code line it repeats).
+	const rest = article.cloneNode(true) as Element;
+	for (const root of nativeFigureRoots(rest)) root.remove();
+	const outside = cleanReaderText(rest.textContent);
 	const figureLines = new Set(figures.flatMap(({ figure }) => [...figure.querySelectorAll('p, li, span, strong, td, th')]
 		.map((node) => cleanReaderText(node.textContent))
-		.filter((text) => text.split(' ').length >= 6)));
+		.filter((text) => text.split(' ').length >= 6 && !outside.includes(text))));
 	const speech = (blocks: readonly StoredReaderBlock[]) => chunkSpeechBlocks(blocks.map((block) => ({ ...block, element: null }))).map((segment) => segment.text).join('\n');
 	const spoken = [speech(variants.prose), speech(variants.withCode), transcriptPassages(html).map((passage) => passage.text).join('\n'), readFileSync(join(dist, 'read', page, 'lesson.txt'), 'utf8')];
 
