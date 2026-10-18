@@ -2757,6 +2757,45 @@ result, write down the important value and condition too. Update the record
 when the tool or target changes so an old address or command is not mistaken
 for a current promise.
 
+## Say how you know each claim
+
+The record above holds statements you trust for different reasons, and the
+reason decides what can be built on each one. Four kinds cover most of them:
+
+| Kind | What makes it that kind | From the purchase |
+|---|---|---|
+| seen | you watched it happen | the display went from 100 to 75 |
+| worked out | arithmetic on things you saw | the item cost 100 − 75 = 25 |
+| guessed | an explanation no test has checked yet | the address the scan kept holds the gold the purchase check reads |
+| open | a question, with the test that would answer it | which instruction writes that address? A write breakpoint on it during one purchase shows each one |
+
+A guess becomes *seen* only when a test you ran shows it; an explanation that
+merely sounds right leaves it a guess. A search that finds nothing is the claim
+most often given the wrong kind, because its result covers only what it
+searched.
+
+<PredictReveal
+  id="rea-empty-scan"
+  setup="After the purchase you scan every readable region for the four-byte whole number 75 and get no matches."
+  question="Which line belongs in the record?"
+  options={[
+    { label: 'Gold is not stored in memory', why: 'The scan answered a narrower question. It compared only four-byte whole numbers in the regions it could read, so gold stored any other way could never match.' },
+    { label: 'No readable region held 75 as a four-byte whole number when the scan ran', correct: true, why: 'That is exactly what the scan checked, and nothing more. Every other way the game could store gold stays open until a search that looks for it runs.' },
+    { label: 'The game must keep gold on a server', why: 'That is one explanation among several, and the scan says nothing about servers. It belongs in the record as a guess to test, not as a result.' },
+  ]}
+>
+
+The scan compared memory with the bytes `4B 00 00 00`: 75 is `0x4B`
+(4 × 16 + 11), stored lowest byte first. Gold kept as a 32-bit floating-point
+number (Rust's `f32`) would be the bytes `00 00 96 42` instead, which
+[How Bytes Become Numbers and Pointers](/pages/3/09/#fractions-how-an-f32-splits-its-32-bits)
+works out, so a whole-number scan can never match it. A scan that checks only
+every fourth position also misses a value that starts between them. Each of
+those possibilities stays open until its own search runs: a scan for the `f32`
+value 75.0, or one that checks every position.
+
+</PredictReveal>
+
 ## What a candidate address tells you
 
 A matching address is a lead. A repeatable action and a predicted check or calculation
@@ -6026,6 +6065,45 @@ were answering.
 ![Code branching between menu operations](/assets/images/2/5/wesnoth9.png)
 
 </Frame>
+
+## Find every caller without running it
+
+The call stack lists the one route that reached your breakpoint this time. The
+code itself can list every route. A direct call is the byte `E8` followed by a
+four-byte distance, stored lowest byte first, which the CPU adds to the address
+of the next instruction. Work out that target for every `call` in the module,
+keep the ones that land on the first byte of the function you are in, and you
+have its callers. Each one is a **cross-reference**: a place in the code that
+refers to this address. In x64dbg, right-click the function's first instruction
+and choose **Find references to**, then **Selected Address(es)**.
+
+Take an illustrative helper that starts at `0x00402000`. A call at `0x00401020`
+stores `DB 0F 00 00`, which read lowest byte first is `0x00000FDB`. The next
+instruction starts at `0x00401020 + 5 = 0x00401025`, and
+`0x00401025 + 0xFDB = 0x00402000`, so this call is a caller. A distance whose
+top bit is set counts as
+[a negative number](/pages/3/09/#negative-whole-numbers), which lets a call
+reach backward; the calculator's second example works one out.
+
+The two lists answer different questions. A cross-reference shows that an
+instruction *can* call the helper, and the call stack shows which caller *did*.
+An indirect call such as `call eax` takes its target from a register while the
+game runs, so it never appears in the cross-reference list.
+
+<PredictReveal
+  id="rea-second-caller"
+  setup="During one recruit the call stack showed a single caller, at 0x00401020. The cross-reference list also has a call at 0x00403100 whose target is 0x00402000."
+  question="What does the second call site tell you?"
+  options={[
+    { label: 'It also ran during this recruit', why: 'A cross-reference is worked out from bytes, so it shows that the call can reach the helper, not that it did. The call stack of this recruit passed through 0x00401020 only.' },
+    { label: 'Some other action can reach the same helper, and a breakpoint on 0x00403100 shows which', correct: true, why: 'Both calls land on 0x00402000, so the helper serves at least two callers. Breaking on the second call site and trying other actions that spend gold names the one that uses it.' },
+    { label: 'The list is wrong, because the call stack showed one caller', why: 'The call stack shows only the route of the run you paused. Callers that other actions use never appear in it, and listing them is what cross-references add.' },
+  ]}
+>
+
+<LiveCells lab="rea-call-target" />
+
+</PredictReveal>
 
 ## Restore before changing direction
 
@@ -16838,6 +16916,39 @@ flowchart TD
     F --> G["Decode again and verify meaning"]
 ```
 
+## When a moved field changes the instruction's length
+
+A field offset is a displacement, and moving the field can change more than the
+displacement's own bytes. `mov eax, [ecx+offset]` has two encodings. When the
+offset fits in one signed byte (−128 to 127, so at most `0x7F` here), the
+compiler uses the short form: `8B 41` and that one byte, three bytes in all. A
+larger offset needs the long form: `8B 81` and four displacement bytes, six in
+all. The second byte is the ModR/M byte, and its top two bits say which form
+follows: `41` is `01 000 001` in binary, one displacement byte, and `81` is
+`10 000 001`, four.
+
+So a field that moves from `0x138` to `0x140` turns `8B 81 38 01 00 00` into
+`8B 81 40 01 00 00`. One byte differs, and `8B 81 ?? ?? ?? ??` covers both
+builds, with one stated reason for all four wildcards: the field moved. A field
+that moves from `0x7C` to `0x84` changes the shape instead: `8B 41 7C` in one
+build, `8B 81 84 00 00 00` in the other, and every later byte sits three places
+further on.
+
+<PredictReveal
+  id="rea-length-change"
+  setup="Build A reads a field with 8B 41 7C, which is mov eax, [ecx+0x7C]. In build B a new 8-byte field before it moves it to 0x84."
+  question="Which pattern finds the instruction in both builds?"
+  options={[
+    { label: '8B 41 ??', why: 'In build B the offset 0x84, which is 132, is too big for a signed byte, whose largest value is 127. The compiler uses the long form 8B 81 84 00 00 00, whose second byte is 81, so this pattern misses build B.' },
+    { label: '8B ?? ?? ?? ?? ??', why: 'It matches both builds and far too much else. Build A’s instruction is only three bytes long, so the last three wildcards swallow whatever follows it, and many other instructions start with 8B, the commonest form of mov.' },
+    { label: 'No single pattern: one per build, each checked by decoding', correct: true, why: 'The builds encode different instruction shapes, three bytes against six. A pattern per build, each required to match once and to decode as mov eax, [ecx+offset], states that difference instead of hiding it.' },
+  ]}
+>
+
+<LiveCells lab="rea-build-diff" />
+
+</PredictReveal>
+
 ## Represent exact and wildcard bytes
 
 A written signature such as `29 47 04 E8 ?? ?? ?? ??` contains two different
@@ -18098,6 +18209,40 @@ Add tests for truncated instructions, invalid bitness, a relative branch, 32-bit
 ## What a disassembler can and cannot prove
 
 Use a mature decoder for instruction truth. Spend your effort on the tool around it: safe process reads, section selection, navigation, symbols, and clear error messages.
+
+## Start from a string and follow what refers to it
+
+An unfamiliar executable has thousands of functions, and nothing labels the one
+behind a message such as `Not enough gold`. The message is easier to find: its
+bytes sit in read-only data, where a text search finds them. The code that
+shows it must use the string's address, so the next search is for code that
+refers to that address. Each hit is a **cross-reference**, and decoding the
+instructions around it leads to the function you wanted.
+
+How the address appears in code depends on bitness. 32-bit code, such as this
+course's Wesnoth build, usually stores the whole address inside the
+instruction: `push 0x00C4A2F0` is the bytes `68 F0 A2 C4 00`, so a byte search
+of `.text` for `F0 A2 C4 00` finds it. Decode around each hit, because data can
+contain the same four bytes by chance. If the loader moved the module, it has
+already rewritten such addresses, so search the live code for the live address.
+64-bit code usually stores a distance instead, measured from the end of the
+instruction. The CPU adds it to **RIP**, the 64-bit instruction pointer, which
+by then holds the address of the next instruction.
+
+<PredictReveal
+  id="rea-string-xref"
+  setup="A 64-bit game keeps the string at 0x1_4002_A4F0. A byte search of its code for the eight address bytes F0 A4 02 40 01 00 00 00 finds nothing."
+  question="What does the empty search show?"
+  options={[
+    { label: 'No code refers to the string', why: '64-bit code reaches data through a four-byte distance from the next instruction, so the eight address bytes never appear in it. The search comes back empty even when many instructions use the string.' },
+    { label: 'Nothing yet: decode each instruction and work out where its distance points', correct: true, why: 'Only decoding gives each instruction its length, and so the address of the next instruction that the distance is measured from. Then every target can be compared with 0x1_4002_A4F0.' },
+    { label: 'Search for the low four bytes, F0 A4 02 40, instead', why: 'The stored distance is different at every instruction. A 7-byte lea at 0x1_4000_1000 stores 0x1_4002_A4F0 − 0x1_4000_1007 = 0x294E9, the bytes E9 94 02 00, which match nothing in the address.' },
+  ]}
+>
+
+<LiveCells lab="rea-rip-target" />
+
+</PredictReveal>
 
 ## Disassemble the real Wesnoth function
 
@@ -47925,6 +48070,44 @@ one of the five known values, the kind of check that
 [rejecting impossible layouts](#reject-partial-reads-and-impossible-layouts)
 applies to every field.
 
+## Which claims about the guard a run settles
+
+Suppose the guard's 36 bytes came from a C++ build whose source you do not
+have, and you watched them through
+[the demo run](/pages/4/09/#one-run-tick-by-tick). Each line of the layout above
+is then a claim, and each needs its own check. The run settles some claims and
+cannot reach others:
+
+| Claim | Check | What the demo run showed |
+|---|---|---|
+| `+0x14` is the state | it changes exactly when the guard's behavior changes | 0, then 1 from tick 3 (chase), 2 on tick 7 (attack), 3 from tick 8 (search), 0 from tick 13: settled |
+| `+0x18` is `seen_for` | it rises by 1 per tick in sight, and drops to 0 when sight is lost | 1 to 7 on ticks 1 to 7, then 0: settled |
+| `+0x1C` is `search_ticks` | it counts while the guard searches | 0 to 4 on ticks 8 to 12: settled |
+| `+0x10` is health | it falls by the damage when the guard is hit | 100 on every tick, but nothing hit the guard: still open |
+| `+0x15` to `+0x17` are padding | no instruction reads or writes them | not checked yet |
+
+The health line shows the limit of any run: it settles only what it made
+happen. The demo never damaged the guard, so it shows only that `+0x10` held
+100. The `Confidence` value above sums up exactly this evidence, one field at a
+time.
+
+<PredictReveal
+  id="rea-guard-padding"
+  setup="Through all 16 ticks of the demo, bytes +0x15 to +0x17 read 00 00 00."
+  question="Does that settle the padding claim?"
+  options={[
+    { label: 'Yes, they never changed', why: 'Zero on every tick also fits a field the demo never used, such as a flag byte that only a rare event sets. Bytes that never change are consistent with padding, not proof of it.' },
+    { label: 'Yes, alignment forces 0x15 to 0x17 to be padding', why: 'Alignment only requires the 4-byte field at 0x18 to start at a multiple of 4. Up to three one-byte fields fit in 0x15 to 0x17 without moving it, so alignment allows padding there but does not require it.' },
+    { label: 'No: it needs a check that no instruction touches them, in every state', correct: true, why: 'Padding means bytes that no instruction uses. Access breakpoints, which fire on any read or write, that never fire on 0x15 to 0x17 settle it, but only for the states the run reached.' },
+  ]}
+>
+
+The demo reached Patrol, Chase, Attack and Search, never Flee. A run where the
+guard is hurt down to 25 health or less, the point at which it flees, tests the
+health claim and the padding claim in that last state at the same time.
+
+</PredictReveal>
+
 ## Migrate after an update by matching behavior
 
 When a new build moves fields:
@@ -48350,6 +48533,36 @@ This first complete version writes compact lines directly to the console. The bo
   duration="15 seconds"
   caption="The original call-logger recording shows the running game producing trace output. Each observed call requires a breakpoint hit, execution of the saved call, a single-step event, and re-arming; bytes discovered in a static scan have not necessarily executed."
 />
+
+## Compare a trace with a run that changed nothing
+
+One trace lists what ran while it recorded, but not which calls the action
+caused: most of them belong to drawing, input and timers that run anyway. To
+separate the two, fix the scenario first (the build, the save, the logging
+window and the event cap) and record it twice without changing anything. Then
+record it once more with a single change, such as recruiting one unit before
+ending the turn.
+
+The two unchanged runs show how far the counts move on their own. A function
+the game calls once per frame runs as many times as frames fit in the window,
+and that depends on timing, so even identical runs disagree. A count in the
+changed run points at the change only when it falls outside the range the
+unchanged runs produced.
+
+<PredictReveal
+  id="rea-trace-baseline"
+  setup="Two runs that only end the turn called wesnoth.exe+0x0E7710 212 and 219 times. A third run that first recruits one unit called it 215 times."
+  question="Does recruiting change how often +0x0E7710 runs?"
+  options={[
+    { label: 'Yes: 215 is 3 more than the first run', why: 'The second unchanged run did exactly what the first did and still called it 219 times. Identical runs already differ by 7, so a difference of 3 says nothing about the recruit.' },
+    { label: 'The counts cannot tell: 215 lies inside the 212 to 219 of the identical runs', correct: true, why: 'A count points at the change only when it falls outside what unchanged runs produce. 215 is inside, so this function may or may not take part in recruiting, and these counts cannot separate the two.' },
+    { label: 'No: it never runs during a recruit', why: 'It ran 215 times in the run that recruited. The counts cannot rule it out; they only fail to separate it from the timing noise.' },
+  ]}
+>
+
+<CellFrames id="trace-baseline" title="Two unchanged runs, then one change" scenarios={traceBaselineCells} />
+
+</PredictReveal>
 
 ## Diagnose by the last completed state
 

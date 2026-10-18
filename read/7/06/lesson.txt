@@ -208,6 +208,36 @@ Section: What a disassembler can and cannot prove.
 
 Use a mature decoder for instruction truth. Spend your effort on the tool around it: safe process reads, section selection, navigation, symbols, and clear error messages.
 
+Section: Start from a string and follow what refers to it.
+
+An unfamiliar executable has thousands of functions, and nothing labels the one behind a message such as Not enough gold. The message is easier to find: its bytes sit in read-only data, where a text search finds them. The code that shows it must use the string’s address, so the next search is for code that refers to that address. Each hit is a cross-reference, and decoding the instructions around it leads to the function you wanted.
+
+How the address appears in code depends on bitness. 32-bit code, such as this course’s Wesnoth build, usually stores the whole address inside the instruction: push this value is the bytes 68 F0 A2 C4 00, so a byte search of .text for F0 A2 C4 00 finds it. Decode around each hit, because data can contain the same four bytes by chance. If the loader moved the module, it has already rewritten such addresses, so search the live code for the live address. 64-bit code usually stores a distance instead, measured from the end of the instruction. The C P U adds it to r i p, the 64-bit instruction pointer, which by then holds the address of the next instruction.
+
+Predict first
+
+A 64-bit game keeps the string at this value. A byte search of its code for the eight address bytes F0 A4 02 40 01 00 00 00 finds nothing.
+
+What does the empty search show?
+
+Answer: Nothing yet: decode each instruction and work out where its distance points. Only decoding gives each instruction its length, and so the address of the next instruction that the distance is measured from. Then every target can be compared with this value.
+
+Where does this r i p-relative operand point?A 64-bit instruction stores a signed four-byte distance, lowest byte first, measured from the end of the whole instruction. Add it to the next instruction’s address and compare the result with the string.
+
+From the stored distance to an address
+
+Section: The last four bytes of the instruction at this value.
+
+Section: Work out the address.
+
+r i p holds this while the instruction runs
+
+add
+
+Section: Compared with the string.
+
+this value + hexadecimal 2 9 4 E 9 equals this value, the string’s first byte: this instruction refers to the string.
+
 Section: Disassemble the real Wesnoth function.
 
 The completed binary opens the live 32-bit Wesnoth process, reads hexadecimal 5 0 bytes beginning at the verified lesson address shown here, decodes with a 32-bit iced-x86 decoder, and prints the real address, raw bytes, and NASM-style instruction text:

@@ -38,6 +38,32 @@ Do not weaken a pattern until it matches an unknown build and then declare succe
 
 In brief: A good signature keeps the stable bytes and wildcards the ones that legitimately change. It must find the same instruction in every build you support.
 
+Section: When a moved field changes the instruction’s length.
+
+A field offset is a displacement, and moving the field can change more than the displacement’s own bytes. mov e a x, [e c x+offset] has two encodings. When the offset fits in one signed byte ( minus 128 to 127, so at most hexadecimal 7 F here), the compiler uses the short form: 8B 41 and that one byte, three bytes in all. A larger offset needs the long form: 8B 81 and four displacement bytes, six in all. The second byte is the ModR/M byte, and its top two bits say which form follows: 41 is 01 000 001 in binary, one displacement byte, and 81 is 10 000 001, four.
+
+So a field that moves from hexadecimal 1 3 8 to hexadecimal 1 4 0 turns 8B 81 38 01 00 00 into 8B 81 40 01 00 00. One byte differs, and 8B 81 ?? ?? ?? ?? covers both builds, with one stated reason for all four wildcards: the field moved. A field that moves from hexadecimal 7 C to hexadecimal 8 4 changes the shape instead: 8B 41 7C in one build, 8B 81 84 00 00 00 in the other, and every later byte sits three places further on.
+
+Predict first
+
+Build A reads a field with 8B 41 7C, which is mov e a x, [e c x+hexadecimal 7 C]. In build B a new 8-byte field before it moves it to hexadecimal 8 4.
+
+Which pattern finds the instruction in both builds?
+
+Answer: No single pattern: one per build, each checked by decoding. The builds encode different instruction shapes, three bytes against six. A pattern per build, each required to match once and to decode as mov e a x, [e c x+offset], states that difference instead of hiding it.
+
+The same three instructions in two buildsmov e a x, [e c x+offset]; sub e a x, e d x; mov [e c x+offset], e a x. Change the field offset in either build and compare the bytes position by position.
+
+Same shape, different displacement
+
+Section: Build A.
+
+Section: Build B.
+
+Section: Pattern that covers both builds.
+
+2 of 14 bytes differ, all inside the two displacements. The whole displacement is the field offset, so every byte of it becomes a wildcard for one stated reason: the field moved.
+
 Section: Represent exact and wildcard bytes.
 
 A written signature such as 29 47 04 E8 ?? ?? ?? ?? contains two different kinds of instruction: compare this byte exactly, or accept any byte at this position. Represent that choice in the type rather than reserving a magic value like zero. The matcher below receives copied code bytes, a starting offset, and that typed pattern; it returns false when the whole pattern would run past the buffer.
