@@ -631,6 +631,9 @@
         var language = frameLanguage(frame);
         if (["rust", "asm", "nasm", "powershell", "ps1"].indexOf(language) === -1)
             return;
+        // A typing drill copies this block character by character. Comment icons would add characters the source does not have.
+        if (frame.closest("[data-speedtype]"))
+            return;
         frame.dataset.semanticReady = "true";
         frame.querySelectorAll(".ec-line .code").forEach(function (code) {
             var walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
