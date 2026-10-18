@@ -22,50 +22,6 @@ The stack is one place a running function keeps its bookkeeping and temporary va
 
 These are roles in virtual memory, not three physical kinds of R A M, random access memory. Windows describes thread stacks and heaps; Microsoft’s C++ storage-duration guide explains why a local static value can survive repeated calls. A compiler can also keep a local in a register or eliminate it entirely.
 
-Three places, three lifetimesA pointer inside a stack frame can refer to a heap block with a different lifetime. Step through one call to watch each place start and end on its own. Positions are schematic.
-
-1 The program is running Module data: lasts as long as the programMAX_UNITS6liveThread stack: lasts as long as each callCaller’s frameunit equals not setliverecruit() frame—not created yetHeap: lasts until its owner frees itUnit block—not created yet Static data exists. The caller’s frame is on the stack. The heap holds no Unit yet, and its variable unit is not set.
-
-Section: Module data: lasts as long as the program.
-
-Section: Thread stack: lasts as long as each call.
-
-Section: Heap: lasts until its owner frees it.
-
-2 Call recruit() Module data: lasts as long as the programMAX_UNITS6liveThread stack: lasts as long as each callCaller’s frameunit equals not setliverecruit() framecount equals 3, p equals not setliveHeap: lasts until its owner frees itUnit block—not created yet The call creates a new frame on the stack, with room for count and the pointer p. p holds no address yet.
-
-Section: Module data: lasts as long as the program.
-
-Section: Thread stack: lasts as long as each call.
-
-Section: Heap: lasts until its owner frees it.
-
-3 Allocate a Unit on the heap Module data: lasts as long as the programMAX_UNITS6liveThread stack: lasts as long as each callCaller’s frameunit equals not setliverecruit() framecount equals 3, p equals hexadecimal 0 0 A 4 1 F 0 0liveHeap: lasts until its owner frees it p points hereUnit blockat this value: Unit { hp: 10 }live The allocator hands back a block at this value. That number is stored in p, so p, a slot inside the stack frame, now refers to an object that is not inside the frame.
-
-Section: Module data: lasts as long as the program.
-
-Section: Thread stack: lasts as long as each call.
-
-Section: Heap: lasts until its owner frees it.
-
-4 recruit() returns the pointer Module data: lasts as long as the programMAX_UNITS6liveThread stack: lasts as long as each callCaller’s frameunit equals hexadecimal 0 0 A 4 1 F 0 0liverecruit() framereleased; old bytes may lingerreleasedHeap: lasts until its owner frees it unit points hereUnit blockat this value: Unit { hp: 10 }live Returning ends the frame, so count and p are released. The heap block is not part of the frame, so it stays. The caller received the number shown here and keeps it in unit.
-
-Section: Module data: lasts as long as the program.
-
-Section: Thread stack: lasts as long as each call.
-
-Section: Heap: lasts until its owner frees it.
-
-5 The owner frees the block Module data: lasts as long as the programMAX_UNITS6liveThread stack: lasts as long as each callCaller’s frameunit equals this value (dangling)liverecruit() framereleased; old bytes may lingerreleasedHeap: lasts until its owner frees itUnit blockfreedreleased Freeing ends the block’s life. The caller’s variable still holds this value, but that number now names memory the program no longer owns: a dangling pointer. Static data is untouched throughout.
-
-Section: Module data: lasts as long as the program.
-
-Section: Thread stack: lasts as long as each call.
-
-Section: Heap: lasts until its owner frees it.
-
-A pointer inside a stack frame can refer to a heap block with a different lifetime. Step through one call to watch each place start and end on its own. Positions are schematic.
-
 In brief: The location of a pointer is not the location of its object. Ending a raw-pointer stack slot does not release its heap allocation. An owning local can release that allocation when it is dropped during return.
 
 Section: Read one concrete 32-bit call frame.
@@ -73,114 +29,6 @@ Section: Read one concrete 32-bit call frame.
 Here is an illustrative near call with no arguments, not an address from Wesnoth. A five-byte call at this value must resume at this value. Start with e s p equals this value and caller e b p equals this value:
 
 A conventional e b p frame makes the saved return address visible at e b p + 4. The values below are illustrative and the call has no arguments.
-
-Follow one call through the stackA near call with no arguments at this value. Each step shows the three registers that move and the four-byte stack words, higher addresses at the top.
-
-Frame at its fullest, while the function body runs.
-
-The frame at its fullest, while the function body runsThe body uses the locals at [e b p-hexadecimal 1 0] to [e b p-1]. e s p and e b p stay put. e i p moves on 10 bytes, from this value to this value, where leave is.
-
-0012FF90 caller data caller’s last pushed word (e s p pointed here before the call) live
-
-0012FF8C the numeric value shown return address live
-
-e b p 0012FF88 0012FFC0 saved e b p (the caller’s) live
-
-0012FF84 not initialised local, [e b p-4] live
-
-0012FF80 not initialised local, [e b p-8] live
-
-0012FF7C not initialised local, [e b p-hexadecimal C] live
-
-e s p 0012FF78 not initialised local, [e b p-hexadecimal 1 0] live
-
-0012FF74 — below the frame: not in use empty
-
-Section: The instructions.
-
-the numeric value shown E8 DB 00 00 00 call this value
-
-the numeric value shown (the next caller instruction)
-
-the numeric value shown 55 push e b p
-
-the numeric value shown 8B EC mov e b p, e s p
-
-the numeric value shown 83 EC 10 sub e s p, hexadecimal 1 0
-
-the numeric value shown (function body, 10 bytes, not shown)
-
-the numeric value shown C9 leave
-
-the numeric value shown C3 ret
-
-e i p always holds the address of the next instruction to run, so the highlighted line is the one that runs next. The addresses are illustrative.
-
-Additional detail: All 8 steps as text.
-
-Step 1 before the call e s p is this value, the caller’s last pushed word. e b p is this value, the caller’s frame base. e i p is this value, the call instruction.
-
-Step 2 call this value The return address is the next instruction: this value + 5 equals this value. call pushes it: e s p equals this value minus 4 equals this value, and this value is stored there. e i p becomes the call target this value (displacement hexadecimal D B from the end of the call).
-
-Step 3 push e b p e s p equals this value minus 4 equals this value. The caller’s e b p, this value, is stored there so it can be restored later.
-
-Step 4 mov e b p, e s p e b p equals e s p equals this value. From now on [e b p+4] equals this value is the return address and locals live below e b p.
-
-Step 5 sub e s p, hexadecimal 1 0 e s p equals this value minus hexadecimal 1 0 equals this value. The sixteen bytes from this value to this value are reserved for locals; nothing has initialised them.
-
-Step 6 function body runs The body uses the locals at [e b p-hexadecimal 1 0] to [e b p-1]. e s p and e b p stay put. e i p moves on 10 bytes, from this value to this value, where leave is.
-
-Step 7 leave leave is mov e s p, e b p (e s p equals this value) followed by pop e b p: e b p equals the word at this value equals this value, then e s p equals this value + 4 equals this value. The locals are released; their bytes are not erased.
-
-Step 8 ret ret pops the return address: e i p equals the word at this value equals this value, then e s p equals this value + 4 equals this value. Execution resumes right after the call.
-
-Releasing stack space does not erase it: after leave and ret the old bytes are still in memory, but they are no longer part of any live frame. A compiler can also omit the e b p frame; this is the conventional layout.
-
-Section: What can a write past the end of a local buffer reach?.
-
-Suppose the function copies bytes into a 8-byte local buffer and never checks the length. A copy goes from lower to higher addresses, so past the end of the buffer lie, in order, the rest of the frame: saved e b p, the return address, then the caller’s own data. Choose how many bytes the copy writes.
-
-0012FF94 untouched caller’s data
-
-0012FF90 untouched caller’s data
-
-0012FF8C 4 of 4 bytes written return address
-
-0012FF88 4 of 4 bytes written saved e b p
-
-0012FF84 4 of 4 bytes written buffer, bytes 5 to 8
-
-0012FF80 4 of 4 bytes written buffer, bytes 1 to 4
-
-0012FF7C untouched another local
-
-0012FF78 untouched another local
-
-8 bytes went past the buffer: the first 4 damaged the saved e b p and 4 bytes reached the return address. When the function runs ret, the C P U, central processing unit, loads e i p from those bytes, so the function returns wherever the written data says. This is the classic stack buffer overflow bug.
-
-Additional detail: The same write with and without a cookie, for 8, 12, 16 and 20 bytes.
-
-Additional detail: Why bounds checks, cookies, DEP and A S L R, address space layout randomization, exist.
-
-These are defences, not a guarantee: they make the bug harder to use, and the fix is still to remove it.
-
-Section: Follow a cdecl call and its cleanup.
-
-A bounded 32-bit near call with one four-byte integer argument. The helper adds seven, returns its result in e a x, and the cdecl caller releases the argument. This is an illustrative calling convention, not executed code.
-
-12 / 12: add e s p, 4 ; caller cleanup
-
-The cdecl caller releases its four-byte argument. e s p is back at this value; e a x remains 28.
-
-Outlined slots are live. Released slots show possible leftover bytes, not live objects. Reserved local values are uninitialized.
-
-Additional detail: Complete default worked example and listing.
-
-This reference keeps the default values. The live picture above follows your input and selected step.
-
-Code example. The surrounding prose explains this example; the full lesson contains the exact code.
-
-A plain RET pops the return address, leaving the argument for caller cleanup. Released stack bytes can remain readable without being live objects. Compilers can omit this conventional e b p frame.
 
 Intel’s CALL and RET descriptions define the instruction behavior. The e b p prologue is a conventional frame layout, not something call creates by itself. Releasing or popping stack space need not erase its old bytes, so readable leftovers do not prove a local object is still alive. The compiler caveats above explain why a real optimized call may have a different layout.
 
@@ -268,7 +116,7 @@ Answering them one at a time matters. The common way to get lost is to chase e a
 
 Section: Find every caller without running it.
 
-The call stack lists the one route that reached your breakpoint this time. The code itself can list every route. A direct call is the byte E8 followed by a four-byte distance, stored lowest byte first, which the C P U adds to the address of the next instruction. Work out that target for every call in the module, keep the ones that land on the first byte of the function you are in, and you have its callers. Each one is a cross-reference: a place in the code that refers to this address. In x64dbg, right-click the function’s first instruction and choose Find references to, then Selected Address(es).
+The call stack lists the one route that reached your breakpoint this time. The code itself can list every route. A direct call is the byte E8 followed by a four-byte distance, stored lowest byte first, which the C P U, central processing unit, adds to the address of the next instruction. Work out that target for every call in the module, keep the ones that land on the first byte of the function you are in, and you have its callers. Each one is a cross-reference: a place in the code that refers to this address. In x64dbg, right-click the function’s first instruction and choose Find references to, then Selected Address(es).
 
 Take an illustrative helper that starts at this value. A call at this value stores DB 0F 00 00, which read lowest byte first is this value. The next instruction starts at this value + 5 equals this value, and this value + hexadecimal F D B equals this value, so this call is a caller. A distance whose top bit is set counts as a negative number, which lets a call reach backward; the calculator’s second example works one out.
 
@@ -281,22 +129,6 @@ During one recruit the call stack showed a single caller, at this value. The cro
 What does the second call site tell you?
 
 Answer: Some other action can reach the same helper, and a breakpoint on this value shows which. Both calls land on this value, so the helper serves at least two callers. Breaking on the second call site and trying other actions that spend gold names the one that uses it.
-
-Where does this call land?A direct call stores a signed distance, lowest byte first. The C P U adds it to the address of the next instruction. A call that lands on the helper’s first byte is one of its callers.
-
-From the call bytes to its target
-
-Section: Five bytes at this value.
-
-Section: Work out the target.
-
-the distance is measured from here
-
-add
-
-Section: Compared with the helper.
-
-this value + hexadecimal F D B equals this value, the helper’s first byte, so this call is one of its callers.
 
 Section: Restore before changing direction.
 

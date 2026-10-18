@@ -52,18 +52,6 @@ an immediate is a value stored directly in the instruction.
 
 Not every instruction contains every piece. Their variable length is why a detour must decode whole instructions before deciding how many bytes to replace.
 
-The opcode B8 means mov e a x, imm32. Its next four bytes hold the immediate, least significant byte first. Point to or focus a byte or an assembly term to see its partner. Select one to keep the pair marked.
-
-Instruction bytes
-
-Assembly
-
-Opcode ↔ mnemonicOperand bytes ↔ value
-
-25 is hexadecimal 1 9. Encoding: B8 19 00 00 00.
-
-Additional detail: Read the byte layout.
-
 An instruction’s length is known only after its first bytes are decoded, and the next instruction starts right after it: B8 means four immediate bytes follow, so the instruction after mov e a x, 25 starts at 0 + 5 equals 5.
 
 Predict first
@@ -74,16 +62,6 @@ A disassembler is told to start at offset 2 instead of 0. What does it show?
 
 Answer: Different instructions that look valid. The decoder treats the byte it starts on as an opcode. 00 00 decodes as add byte ptr [e a x], a l and 00 C3 as add b l, a l, so even the ret vanishes into a wrong instruction.
 
-Start decoding at a different byteB8 19 00 00 00 C3 is mov e a x, 25 then ret in 32-bit mode. Choose where the decoder starts; nothing in the bytes marks the real starts.
-
-Decoded from offset 2
-
-Section: Six bytes, offsets 0 to 5.
-
-Section: What the decoder prints from offset 2.
-
-Offset 2 is inside mov e a x, 25. The bytes still decode, but as add byte ptr [e a x], a l, then add b l, a l. The C3 of ret is now part of add b l, a l, so the ret is gone.
-
 Section: A small opcode lookup table.
 
 These are complete encodings in 32-bit mode, with hexadecimal bytes and decimal assembly operands. They are examples, not every form of each instruction:
@@ -91,32 +69,6 @@ These are complete encodings in 32-bit mode, with hexadecimal bytes and decimal 
 Notice that 83 alone does not distinguish add from sub. A ModR/M byte has three fields: mod, reg, and r/m, containing 2, 3, and 3 bits. Here C0 is 11 000 000, while E8 is 11 101 000. For this opcode, 11 chooses a register operand, the middle field selects addition (000) or subtraction (101), and the final 000 names e a x. In other instructions, the middle field can name a second register instead.
 
 The decoder below takes any ModR/M byte apart the same way. Try C0 and E8 from the table, then 45, which turns the r/m field into a memory address.
-
-Take a ModR/M byte apartOne byte holds three fields. Pick or type a byte and see what each field says about the instruction's operands.
-
-ModR/M byte 45 equals binary 01 000 101
-
-0
-
-1
-
-0
-
-0
-
-0
-
-1
-
-0
-
-1
-
-Operand form from Table 2-2: [e b p]+disp8 After this byte come an 8-bit displacement (1 byte): 1 byte.
-
-Section: Six real instructions, decoded.
-
-The table reproduces the 32-bit rows of Intel's Table 2-2 (Intel SDM Volume 2, section 2.1.5). In 64-bit mode a REX prefix can extend each field to four bits, and mod 00 with r/m 101 means r i p-relative addressing instead of an absolute address. The M M X and X M M register columns of the Intel table are left out.
 
 In brief: The opcode is only part of an instruction. Read its operand form and C P U mode before interpreting the following bytes.
 
@@ -221,22 +173,6 @@ A 64-bit game keeps the string at this value. A byte search of its code for the 
 What does the empty search show?
 
 Answer: Nothing yet: decode each instruction and work out where its distance points. Only decoding gives each instruction its length, and so the address of the next instruction that the distance is measured from. Then every target can be compared with this value.
-
-Where does this r i p-relative operand point?A 64-bit instruction stores a signed four-byte distance, lowest byte first, measured from the end of the whole instruction. Add it to the next instruction’s address and compare the result with the string.
-
-From the stored distance to an address
-
-Section: The last four bytes of the instruction at this value.
-
-Section: Work out the address.
-
-r i p holds this while the instruction runs
-
-add
-
-Section: Compared with the string.
-
-this value + hexadecimal 2 9 4 E 9 equals this value, the string’s first byte: this instruction refers to the string.
 
 Section: Disassemble the real Wesnoth function.
 

@@ -68,26 +68,6 @@ Takeaway: agree on an explicit length format at both ends, and validate the head
 
 One hazard is worth naming here, even though this one-shot lab sidesteps it by writing only once. Shared memory gives two processes access to the same bytes. It gives them no agreement about when. Nothing prevents a reader from arriving in the middle of a write:
 
-The new length arrives before the new textThe mapping holds READY (5 bytes). The writer is replacing it with RUNNING (7 bytes) and stores the new length first.
-
-1 READY is published Shared mappingBytes 0 to 3: length05= 5000000Bytes 4 to 10: textR52E45A41D44Y5900zero00zero A little-endian u32 length of 5, then the five text bytes. The rest of the mapping is zero.
-
-Section: Shared mapping.
-
-2 Length 7 stored, text not yet Shared mappingBytes 0 to 3: length07= 7000000Bytes 4 to 10: textR52E45A41D44Y5900zero00zeroWhat the reader returnsread_textREADY + two zero bytesneither the old nor the new message If the reader copies now, 7 fits in the mapping and zero bytes are valid UTF-8, so both checks in read_text pass.
-
-Section: Shared mapping.
-
-Section: What the reader returns.
-
-3 Both sides take one named mutex Shared mappingBytes 0 to 3: length07= 7000000Bytes 4 to 10: textR52U55N4EN4EI49N4EG47OrderWriterlocklength and textunlockReaderlock: waitscopy 11 bytesunlock The reader waits while the writer holds the mutex, so it copies all of READY or all of RUNNING, never a mix.
-
-Section: Shared mapping.
-
-Section: Order.
-
-The mapping holds READY (5 bytes). The writer is replacing it with RUNNING (7 bytes) and stores the new length first.
-
 The reader’s length check passes, the UTF-8 decode very likely succeeds, and the text returned is simply wrong — or is half of the previous message. Writing the payload before the length narrows that window without closing it, since the C P U, central processing unit, and the compiler may reorder the two stores anyway. Closing it takes a sequence number the reader checks before and after copying, or a real synchronization object.
 
 The figure shows the smallest case: old payload READY (five bytes), new payload RUNNING (seven bytes), and a reader that copies in the gap between publishing the length and finishing the text. Both checks in read_text succeed, yet the message is not one the writer ever meant to publish. Seeing the same bytes does not give either program an agreed moment to read them.

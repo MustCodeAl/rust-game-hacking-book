@@ -38,20 +38,6 @@ Here is a read from this lesson’s toy keypad, a simple imaginary device that t
 
 The driver’s dispatch routine is the function the I/O manager calls with a new IRP. If the dispatch routine can finish at once, it completes the IRP, handing it back with a status and a byte count. If it has to wait for the hardware, it keeps the IRP, returns STATUS_PENDING, and completes the IRP later, from the code that runs when the device interrupts. Meanwhile the program’s thread waits inside ReadFile.
 
-A read with no data yet completes after a key interruptThe toy read owns eight bytes of capacity. Only two event bytes are returned after the interrupt.
-
-Request Read with an 8-byte bufferStep 1: Caller to DriverThe request carries room for eight bytes.
-
-Alone No key event yet: park the IRPStep 2: Driver (alone)There is nothing to return, so the driver keeps the request instead of blocking.
-
-Control STATUS_PENDINGStep 3: Driver to CallerThe caller is told the request is not finished.
-
-Data Key interrupt: 2 event bytesStep 4: Keypad to DriverLater, a key press arrives as an interrupt carrying two bytes.
-
-Reply Copy 2 bytes, complete: count 2Step 5: Driver to CallerThe driver fills the first two of the eight bytes and completes the IRP. The count says how many bytes are meaningful, not how large the buffer was.
-
-The toy read owns eight bytes of capacity. Only two event bytes are returned after the interrupt.
-
 A DeviceIoControl request is checked twice. Each control code declares the rights that the caller’s handle must hold, and the I/O manager refuses a request from a handle without them before the driver ever runs. The IRP also records that the request came from user mode, so the driver must treat every parameter as untrusted: it compares the whole control code with the ones it defines, and it never writes more bytes than the request says the caller’s buffer can hold. Lesson 12.8 unpacks a control code into its four fields.
 
 Section: Registers: how a driver talks to hardware.
