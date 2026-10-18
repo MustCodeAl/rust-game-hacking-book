@@ -58,8 +58,9 @@ export default defineConfig({
 			title: 'Game Hacking Academy',
 			description:
 				'A beginner-friendly systems course for learning how games, memory, debuggers, graphics, networking, and reverse-engineering tools work.',
+			// The header draws the mark inline (SiteTitle override) so it can use the palette's colours; logo.svg is the same mark as a file.
 			logo: { src: './src/assets/logo.svg', alt: 'Game Hacking Academy' },
-			favicon: '/favicon.ico',
+			favicon: '/favicon.svg',
 			social: [
 				{ icon: 'github', label: 'Source on GitHub', href: 'https://github.com/MustCodeAl/rust-game-hacking-book' },
 			],
@@ -101,6 +102,8 @@ export default defineConfig({
 				Pagination: './src/components/overrides/Pagination.astro',
 				Sidebar: './src/components/overrides/Sidebar.astro',
 				PageSidebar: './src/components/overrides/PageSidebar.astro',
+				SiteTitle: './src/components/overrides/SiteTitle.astro',
+				Footer: './src/components/overrides/Footer.astro',
 			},
 			head: [
 				// The design layer (src/styles/design/) is the site's theme: it always applies. data-design is only the specificity anchor its selectors use, and the script mirrors the reader-theme choices (data-academy-*) into the attributes those styles read.
@@ -113,6 +116,14 @@ export default defineConfig({
 					tag: 'script',
 					content: readerSettingsScript,
 				},
+				// Icons and the social card (written by scripts/make-identity-assets.mjs). The .ico serves browsers without SVG icons.
+				{ tag: 'link', attrs: { rel: 'icon', href: `${BASE}/favicon.ico`, sizes: '32x32' } },
+				{ tag: 'link', attrs: { rel: 'apple-touch-icon', href: `${BASE}/apple-touch-icon.png` } },
+				{ tag: 'meta', attrs: { property: 'og:image', content: `${SITE}${BASE}/og-card.png` } },
+				{ tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
+				{ tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
+				{ tag: 'meta', attrs: { property: 'og:image:alt', content: 'Game Hacking Academy: a health bar at 100 above the four bytes 64 00 00 00 that store it in memory.' } },
+				{ tag: 'meta', attrs: { name: 'twitter:image', content: `${SITE}${BASE}/og-card.png` } },
 				{ tag: 'link', attrs: { rel: 'glossary', href: `${BASE}/glossary/` } },
 				{ tag: 'link', attrs: { rel: 'glossary-index', type: 'application/json', href: `${BASE}/assets/glossary-index.json` } },
 				{ tag: 'link', attrs: { rel: 'alternate', type: 'text/plain', title: 'LLM-friendly summary', href: `${BASE}/llms.txt` } },
