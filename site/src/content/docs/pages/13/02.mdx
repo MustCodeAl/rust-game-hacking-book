@@ -11,7 +11,8 @@ sidebar:
 ---
 import SpeedType from '../../../../components/kit/SpeedType.astro';
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
@@ -26,10 +27,6 @@ indicator describes the authoritative value.
 An integrity check answers a narrow question such as, “Do these bytes equal the
 expected bytes?” It does not automatically prove that the whole process, file,
 object, or later operation is unchanged.
-
-<Frame caption="A passing check describes only its coverage">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/integrity-scope.svg`} width="480" height="206" alt="An integrity result depends on the measured byte range, measurement time, and expected baseline." loading="lazy" decoding="async" />
-</Frame>
 
 <MarginNote kind="alternative">An integrity check resembles a dated photograph of a marked area: it says nothing about unpictured fields or changes after the picture was taken.</MarginNote>
 
@@ -143,12 +140,20 @@ one being updated. For player 7 that shorter sum is 217 + 80 + 24,576 = 24,873,
 and 24,873 is what the record stores. Now change `max_health` from 100 to 60
 and recompute nothing:
 
-<MemoryStrip
-  cells="player_id=7|health=80|max_health=60|generation=3|checksum=24,873"
-  marks="2"
-  groups="0-1:covered|2:not covered|3:covered|4:stored result"
-  caption="The shorter checksum after `max_health` drops from 100 to 60. The changed box is outside every covered range, so recomputing still gives 217 + 80 + 24,576 = 24,873, while health 80 now exceeds the maximum of 60."
-/>
+<PredictReveal
+  id="c6-short-checksum"
+  setup="The record stores the shorter checksum, 217 + 80 + 24,576 = 24,873. Then max_health drops from 100 to 60, and nothing is recomputed."
+  question="When verify recomputes the shorter checksum, does it still equal the stored 24,873?"
+  options={[
+    { label: 'No: a field changed, so the checksum changes', why: 'Only covered fields feed the sum. The shorter sum adds player_id × 31, health and the rotated generation; max_health is not one of its terms, so changing it cannot move the result.' },
+    { label: 'Yes: it is still 217 + 80 + 24,576 = 24,873', correct: true, why: 'None of the three terms reads max_health, so the recomputed sum equals the stored one. verify still refuses this record, but only because its second clause finds 80 > 60.' },
+    { label: 'No: the term 60 × 128 = 7,680 changes it', why: 'That term belongs to the complete covered_checksum. The shorter version has no max_health term, so 7,680 is never added.' },
+  ]}
+>
+
+<LiveCells lab="player-checksum-coverage" />
+
+</PredictReveal>
 
 The checksum is doing its job correctly. It is reporting that every byte it
 covers is unchanged, and that is true. The record is still impossible, because

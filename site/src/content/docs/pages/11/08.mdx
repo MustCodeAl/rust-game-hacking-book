@@ -10,18 +10,14 @@ sidebar:
   label: "14.4 Capture Provenance and Validation"
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
-import { Badge, Steps } from '../../../../components/kit';
+import LiveCells from '../../../../components/LiveCells.astro';
+import { Badge, Steps, SpeedType } from '../../../../components/kit';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
 ## A clean translation can still be the wrong one
 
 Page-table translation can produce an address and still answer the wrong question. You may have the wrong CR3, a stale object pointer, a different build, or a capture taken between two related updates.
-
-<Frame caption="Successful translation is only one check">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/capture-evidence.svg`} width="480" height="206" alt="Capture provenance, the address-space root, and object evidence together establish what a translated address means." loading="lazy" decoding="async" />
-</Frame>
 
 None of those mistakes makes the walk fail. A wrong CR3 is still a valid page-table root for some other address space, a stale pointer can still land on mapped memory, and another build's object still has bytes where the old layout expects fields. A successful walk means only that the page tables in the file lead somewhere; each stage below checks, in a different way, that the somewhere is the object you meant:
 
@@ -87,7 +83,9 @@ Here is how several of those checks land on one small object, a toy 64-bit playe
   caption="A 48-byte `PlayerLayout`: an 8-byte vtable pointer, a 4-byte health value, three 4-byte floats, and three 8-byte container pointers, so 8 + 4 + 3 × 4 + 3 × 8 = 48 = 3 × 16 = `0x30` bytes, and `PlayerLayout::SIZE` is 48. Each brace is a check on different bytes."
 />
 
-A single field can look right by accident: plenty of unrelated memory holds a small integer that could pass for health. Four checks on different bytes, each failing in its own way, rarely all pass at a wrong address, so an object that passes every one is far more likely to be the one you meant.
+A single field can look right by accident: plenty of unrelated memory holds a small integer that could pass for health. Four checks on different bytes, each failing in its own way, rarely all pass at a wrong address. Try the four candidates below; only the intended player passes every check.
+
+<LiveCells lab="c5-player-checks" />
 
 
 <CodeTrace trace="handoff-capture-validation" />
@@ -95,6 +93,14 @@ A single field can look right by accident: plenty of unrelated memory holds a sm
 ## Separate capture parsing from game meaning
 
 Use layers:
+
+<SpeedType id="c5-read-player-layers" title="Recall the two-layer player read" recall={[
+  { text: 'capture.read_virtual(cr3, address, PlayerLayout::SIZE)', mask: 'read_virtual', kind: 'api', hint: 'Ask the capture layer for bytes at a virtual address.' },
+  { text: 'capture.read_virtual(cr3, address, PlayerLayout::SIZE)', mask: 'cr3', kind: 'argument', hint: 'Pass the page-table root that names the intended address space.' },
+  { text: 'capture.read_virtual(cr3, address, PlayerLayout::SIZE)', mask: 'SIZE', kind: 'argument', hint: 'Ask for exactly as many bytes as one player layout occupies.' },
+  { text: 'PlayerLayout::decode(&bytes)', mask: 'bytes', kind: 'argument', hint: 'Hand the layout layer what the capture layer returned.' },
+  { text: 'PlayerLayout::decode(&bytes)', mask: 'decode', kind: 'api', hint: 'Turn raw bytes into a checked snapshot or a named error.' },
+]}>
 
 ```rust
 fn read_player(
@@ -106,6 +112,8 @@ fn read_player(
     PlayerLayout::decode(&bytes)
 }
 ```
+
+</SpeedType>
 
 The capture layer understands physical ranges and page tables. The layout layer understands fields and invariants. The presentation layer prints a `PlayerSnapshot`.
 

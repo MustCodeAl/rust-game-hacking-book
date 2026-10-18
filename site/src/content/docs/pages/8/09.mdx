@@ -10,7 +10,10 @@ sidebar:
   label: "8.7 In-Game Menus and Text Rendering"
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
+import FlowDiagram from '../../../../components/FlowDiagram.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
+import { textCallFlows } from '../../../../data/figures-c4';
 import { GitHub } from '../../../../components/kit';
 
 import LessonVideo from '../../../../components/LessonVideo.astro';
@@ -31,10 +34,6 @@ AssaultCube's print function at `0x0041_9880` to label players. That function al
 the font, the scale, the screen size, and the right moment in the frame to
 draw. Calling it is the cheapest way to put a menu on screen, because the
 hard graphics work is done and you are only supplying strings.
-
-<Frame caption="Text uses an existing rendering context">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/text-render-context.svg`} width="480" height="206" alt="An in-game text function combines the supplied text and position with existing font and frame state." loading="lazy" decoding="async" />
-</Frame>
 
 The trade is that you are now running inside the game's render path, so
 the hook must finish quickly. A file read, sleep, or blocking channel receive
@@ -112,20 +111,14 @@ to draw its first menu line.
 <MarginNote kind="narration">Calling the hooked text function from its own replacement never reaches a finished menu line; each attempt creates another unfinished call on the stack.</MarginNote>
 
 Hook a site that runs **once per frame** instead, and call the text function
-from there as an ordinary function:
-
-```mermaid
-flowchart LR
-    A["Game draws its HUD"] --> B["Your detour at a per-frame site"]
-    B --> C["Replay the displaced instructions"]
-    C --> D["Call the text function once per menu line"]
-    D --> E["Return to the game"]
-```
+from there as an ordinary function.
 
 Lesson 7.9 already identified such a site in AssaultCube: the final print hook
 at `0x0040_BE7E`, resuming at `0x0040_BE83`. Drawing there puts your lines in
 the same pass as the game's own HUD, so they inherit its ordering and never
-appear underneath the world.
+appear underneath the world:
+
+<FlowDiagram id="text-call" title="One menu line through the game's print function" scenarios={textCallFlows} />
 
 ## Reconstruct the contract before you call it
 
@@ -212,25 +205,30 @@ expression is wrong:
 self.cursor = (self.cursor - 1) % self.items.len();   // ❌
 ```
 
-When `cursor` is `0`, `0 - 1` on an unsigned integer panics in a debug build
-and produces `usize::MAX` in a release build, which then indexes far outside
-the list. Handle the boundary explicitly and the intent is visible:
+When `cursor` is `0`, `0 - 1` on an unsigned integer panics in a debug build.
+A release build wraps it to `usize::MAX`, and `% len` then keeps the result
+inside the list, but usually on the wrong row:
+
+<PredictReveal
+  id="c4-cursor-wrap"
+  setup="A release build wraps 0 - 1 on usize to usize::MAX = 18,446,744,073,709,551,615. The menu has 3 rows and the cursor is on row 0."
+  question="Pressing up runs (cursor - 1) % len. Which row is selected?"
+  options={[
+    { label: 'Row 2, the last row', why: 'That is what the code means to do, but 18,446,744,073,709,551,615 % 3 is not 2. Its digits add up to 87, a multiple of 3, so it divides by 3 exactly.' },
+    { label: 'Row 0', correct: true, why: 'The digits of 18,446,744,073,709,551,615 add up to 87 = 3 × 29, so the number is a multiple of 3 and the remainder is 0. The cursor does not move at all.' },
+    { label: 'An index far outside the list', why: 'A remainder after dividing by 3 is always 0, 1 or 2, so % len keeps the index inside the list. The bug is the wrong row, not an index out of range.' },
+  ]}
+>
+
+<LiveCells lab="menu-cursor-wrap" />
+
+</PredictReveal>
+
+Handle the boundary explicitly and the intent is visible:
 
 ```rust
 self.cursor = if self.cursor == 0 { last } else { self.cursor - 1 };
 ```
-
-<MemoryStrip
-  cells="0=item 0|1=item 1|2=item 2|3=item 3"
-  marks="0"
-  caption="For example, four menu rows with the cursor on the first. Pressing up should wrap to the last row, not compute `0 - 1` on an unsigned index."
-/>
-
-<MemoryStrip
-  cells="0=item 0|1=item 1|2=item 2|3=item 3"
-  marks="3"
-  caption="After the explicit boundary check, the cursor wraps to the last row instead of underflowing."
-/>
 
 ### `GetAsyncKeyState` reports a level, not a press
 

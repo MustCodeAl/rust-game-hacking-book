@@ -9,6 +9,8 @@ sidebar:
   order: 7
   label: "5.7 Byte Signatures and Pattern Scanning"
 ---
+import PredictReveal from '../../../../components/PredictReveal.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
 import { Accordion, Badge, Frame, GitHub, Panel, Steps, CodeGroup, Tab } from '../../../../components/kit';
 
 import Scene from '../../../../components/Scene.astro';
@@ -112,6 +114,39 @@ flowchart TD
     E --> F["Require exactly one match"]
     F --> G["Decode again and verify meaning"]
 ```
+
+## When a moved field changes the instruction's length
+
+A field offset is a displacement, and moving the field can change more than the
+displacement's own bytes. `mov eax, [ecx+offset]` has two encodings. When the
+offset fits in one signed byte (−128 to 127, so at most `0x7F` here), the
+compiler uses the short form: `8B 41` and that one byte, three bytes in all. A
+larger offset needs the long form: `8B 81` and four displacement bytes, six in
+all. The second byte is the ModR/M byte, and its top two bits say which form
+follows: `41` is `01 000 001` in binary, one displacement byte, and `81` is
+`10 000 001`, four.
+
+So a field that moves from `0x138` to `0x140` turns `8B 81 38 01 00 00` into
+`8B 81 40 01 00 00`. One byte differs, and `8B 81 ?? ?? ?? ??` covers both
+builds, with one stated reason for all four wildcards: the field moved. A field
+that moves from `0x7C` to `0x84` changes the shape instead: `8B 41 7C` in one
+build, `8B 81 84 00 00 00` in the other, and every later byte sits three places
+further on.
+
+<PredictReveal
+  id="rea-length-change"
+  setup="Build A reads a field with 8B 41 7C, which is mov eax, [ecx+0x7C]. In build B a new 8-byte field before it moves it to 0x84."
+  question="Which pattern finds the instruction in both builds?"
+  options={[
+    { label: '8B 41 ??', why: 'In build B the offset 0x84, which is 132, is too big for a signed byte, whose largest value is 127. The compiler uses the long form 8B 81 84 00 00 00, whose second byte is 81, so this pattern misses build B.' },
+    { label: '8B ?? ?? ?? ?? ??', why: 'It matches both builds and far too much else. Build A’s instruction is only three bytes long, so the last three wildcards swallow whatever follows it, and many other instructions start with 8B, the commonest form of mov.' },
+    { label: 'No single pattern: one per build, each checked by decoding', correct: true, why: 'The builds encode different instruction shapes, three bytes against six. A pattern per build, each required to match once and to decode as mov eax, [ecx+offset], states that difference instead of hiding it.' },
+  ]}
+>
+
+<LiveCells lab="rea-build-diff" />
+
+</PredictReveal>
 
 ## Represent exact and wildcard bytes
 

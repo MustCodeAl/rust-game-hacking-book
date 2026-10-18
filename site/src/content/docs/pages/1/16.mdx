@@ -9,7 +9,9 @@ sidebar:
   order: 5
   label: "3.5 Rust: Cleanup and Helpful Errors"
 ---
-import Frame from '../../../../components/kit/Frame.astro';
+import CellFrames from '../../../../components/CellFrames.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
+import { byteGuardCells } from '../../../../data/figures-c1';
 import CodeTrace from '../../../../components/CodeTrace.astro';
 import { GitHub, MarginNote, SpeedType } from '../../../../components/kit';
 
@@ -71,15 +73,25 @@ fn main() {
 
 </SpeedType>
 
-The guard holds the exclusive borrow and saves `75`. It temporarily stores
-`90`. Whether `inspect` returns `Ok(())` or the early `Err`, normal scope exit
-drops the guard and restores `75`. `main` can borrow the byte again after
-`inspect` returns. This example's cleanup cannot fail: it writes through a
-valid exclusive reference to a local byte.
+<PredictReveal
+  id="c1-guard-early-return"
+  setup={'main sets byte to 75 and calls inspect(&mut byte, true). The guard stores 90, then inspect takes the early return Err("stopped early"). No line in inspect writes 75.'}
+  question="What does main print as the restored byte?"
+  options={[
+    { label: '75', correct: true, why: 'Returning leaves the scope of inspect, and leaving the scope drops guard. Its drop method writes the saved 75 back through the borrow before main reads the byte.' },
+    { label: '90', why: 'The early return skips the remaining lines of inspect, but not the guard’s Drop: Rust runs drop whenever the guard leaves its scope, on either return.' },
+    { label: 'Nothing: main may not read a borrowed byte', why: 'The guard’s exclusive borrow ends when the guard is dropped at the end of inspect, so main can read the byte again afterward.' },
+  ]}
+>
 
-<Frame caption="The guard saves 75 and temporarily writes 90. Both ordinary return paths leave its scope and run Drop, which restores the saved 75 before the caller reads the byte again.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/byte-guard-return-paths.svg`} width="480" height="292" alt="The local byte changes from 75 to 90 while the guard saves 75. Both Err stopped early and Ok leave scope, drop the guard, and restore byte 75." loading="lazy" decoding="async" />
-</Frame>
+<CellFrames id="c1-byte-guard" title="The early return and the guard" scenarios={byteGuardCells} />
+
+</PredictReveal>
+
+The `Ok(())` return leaves the scope the same way, so it also ends with `75`,
+and `main` can borrow the byte again after either return. This example's
+cleanup cannot fail: it writes through a valid exclusive reference to a local
+byte.
 
 <CodeTrace trace="idiom-drop-guard" />
 

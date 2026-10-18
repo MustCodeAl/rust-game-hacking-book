@@ -9,7 +9,7 @@ sidebar:
   order: 3
   label: "10.3 Binary Saves and Hex Editing"
 ---
-import Frame from '../../../../components/kit/Frame.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
 import { GitHub, Panel } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -30,10 +30,6 @@ written as two hexadecimal digits. In byte-overwrite mode, it can save the
 exact replacement bytes without decoding the whole file as text.
 HxD and ImHex are common examples; they show the same three columns, so nothing
 in this lesson depends on which one you use.
-
-<Frame caption="Changing bytes need not move later fields">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/binary-overwrite.svg`} width="480" height="206" alt="A four-byte overwrite changes a little-endian integer from 100 to 101 without inserting or deleting bytes." loading="lazy" decoding="async" />
-</Frame>
 
 This lesson uses a toy save format made for the book, `GSAV`, and a Rust lab
 that reads and writes it. Here is the complete save for a character called Nia,
@@ -143,22 +139,20 @@ be refused because its fields may have moved. The lab returns
 
 Games for x86 PCs usually write numbers to disk exactly as they sit in memory,
 which is little endian: the byte worth the least comes first. [Lesson 1.8](/pages/1/08/#byte-order-and-why-hex-dumps-look-backwards) explains why
-each box is worth 256 times the one before it. Gold occupies offsets 6 to 9:
+each box is worth 256 times the one before it. Gold occupies offsets 6 to 9,
+which hold `FA 00 00 00`. `0xFA` is 15 × 16 + 10 = 250 and the other three
+bytes are 0, so the gold is 250. Try other values: changing gold only
+overwrites these four bytes, and no later field moves.
 
-<MemoryStrip
-  cells="0x06=FA|0x07=00|0x08=00|0x09=00"
-  groups="0-0:× 1|1-1:× 256|2-2:× 65,536|3-3:× 16,777,216"
-  groups2="0-3:0xFA is 15 × 16 + 10 = 250, and every other byte is 0"
-  caption="The gold field. Read lowest byte first, `FA 00 00 00` is 250."
-/>
+<LiveCells lab="c5-gold-bytes" />
 
 The version works the same way with two bytes: `01 00` is 1 × 1 + 0 × 256 = 1.
 The level at offset 10 is a single byte, `03`, so there is no order to get
 wrong: it is 3.
 
 Reading in the wrong order gives a number that is obviously off, which makes a
-useful check. `FA 00 00 00` read with the most significant byte first is
-`0xFA000000`, which is 250 × 16,777,216 = 4,194,304,000 gold. When one byte
+useful check: read biggest byte first, `FA 00 00 00` is `0xFA000000`, which is
+250 × 16,777,216 = 4,194,304,000 gold. When one byte
 order gives a plausible value and the other gives billions, the plausible one is
 almost always the right one.
 

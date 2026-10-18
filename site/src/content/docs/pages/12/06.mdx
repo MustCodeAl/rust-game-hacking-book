@@ -9,7 +9,9 @@ sidebar:
   order: 7
   label: "11.7 Script Budgets, Errors, and Recovery"
 ---
-import { Frame } from '../../../../components/kit';
+import { SpeedType } from '../../../../components/kit';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import Visual from '../../../../components/Visual.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
@@ -84,14 +86,12 @@ Choose whether a budget resets per callback, per frame, or per whole script sess
 When a limit is crossed, stop that update, discard its uncommitted actions, and
 report the exact budget. Do not quietly continue with half-produced output.
 
-<Frame caption="Each budget has its own cap and its own reset window.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/script-budgets.svg`} width="480" height="270" style="width:480px;max-width:100%;height:auto;" alt="Seven separate budgets, each with its own cap and reset window: source and bytecode at script load, Lua memory per session, VM instructions per update, call frames per call chain, host callbacks, wall-clock work, and actions and logs per update." loading="lazy" decoding="async" />
-</Frame>
-
 ## Limit memory
 
 The lab host applies a four-mebibyte Lua allocation limit. The multiplication
 converts four mebibytes to bytes before the host sets the limit:
+
+<SpeedType id="c6-lua-memory-limit" title="Recall the memory-limited Lua state" recall={[{"text": "mlua::StdLib::TABLE", "mask": "TABLE", "kind": "argument", "hint": "Grant the standard library that builds and edits tables."}, {"text": "mlua::StdLib::MATH", "mask": "MATH", "kind": "argument", "hint": "Grant the library of numeric helpers."}, {"text": "mlua::LuaOptions::default()", "mask": "LuaOptions", "kind": "argument", "hint": "Pass the ordinary runtime settings as the second argument."}, {"text": "lua.set_memory_limit(", "mask": "set_memory_limit", "kind": "api", "hint": "Cap the bytes that Lua itself may allocate."}, {"text": "(4 * 1024 * 1024)", "mask": "4", "kind": "argument", "hint": "The number of mebibytes the lab allows."}]}>
 
 ```rust
 let lua = mlua::Lua::new_with(
@@ -101,6 +101,8 @@ let lua = mlua::Lua::new_with(
 
 lua.set_memory_limit(4 * 1024 * 1024)?;
 ```
+
+</SpeedType>
 
 Choose a limit after measuring realistic scripts. Too low prevents normal work; unlimited growth lets one bug consume the process.
 
@@ -152,6 +154,21 @@ Since the hook fires every 1,000 instructions and allows at most 100 calls, a sc
 The hook is not a stopwatch. Different instructions cost different amounts of real time, and host callbacks can do work between hooks. It is one defense against runaway Lua bytecode.
 
 <Visual kind="script-budget" />
+
+<PredictReveal
+  id="c6-hook-window"
+  setup="The hook above fires every 1,000 instructions and raises an error when its count passes 100. Suppose the host never sets the count back to 0, and a well-behaved script runs 30,000 instructions in every update."
+  question="In which update does the instruction budget stop the script?"
+  options={[
+    { label: 'Never: 30,000 is far below 100,000', why: 'That compares one update with the limit. Without a reset the count carries over: 30 calls per update make it 30, 60, 90, and the 11th call in update 4 makes it 101.' },
+    { label: 'In update 4', correct: true, why: '30,000 ÷ 1,000 = 30 hook calls per update. After three updates the count is 30 + 30 + 30 = 90; in update 4 the 11th call makes it 101, more than 100, so the error fires after 11,000 of that update’s instructions.' },
+    { label: 'In update 1', why: 'Update 1 makes only 30 hook calls, and 30 is not more than 100. The error needs the count to reach 101.' },
+  ]}
+>
+
+<LiveCells lab="lua-hook-window" />
+
+</PredictReveal>
 
 Reset the instruction allowance at a controlled host boundary, not from inside the script. If the hook counter is shared across updates, document that as a session budget; if each update gets a fresh allowance, also cap how often updates can be requested.
 

@@ -9,6 +9,8 @@ sidebar:
   order: 9
   label: "5.9 Instruction Decoding and Disassembly"
 ---
+import PredictReveal from '../../../../components/PredictReveal.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
 import SimLab from '../../../../components/SimLab.astro';
 import SpeedType from '../../../../components/kit/SpeedType.astro';
 import { Frame, GitHub, HexDisassemblyInspector } from '../../../../components/kit';
@@ -70,10 +72,6 @@ A disassembler does two jobs:
 
 x86 instructions have prefixes, several opcode maps, ModR/M and SIB bytes, displacements, immediates, and different modes. Hand-decoding `add` is a good exercise. A complete decoder is a major engineering project.
 
-<Frame caption="Instruction lengths decide the next start">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/instruction-boundaries.svg`} width="480" height="206" alt="A three-byte instruction followed by a two-byte instruction puts the next boundary at byte offset five." loading="lazy" decoding="async" />
-</Frame>
-
 Very roughly:
 
 - an **opcode** selects an operation;
@@ -93,6 +91,25 @@ detour must decode whole instructions before deciding how many bytes to replace.
 />
 
 <HexDisassemblyInspector />
+
+An instruction's length is known only after its first bytes are decoded, and the next
+instruction starts right after it: `B8` means four immediate bytes follow, so the instruction
+after `mov eax, 25` starts at 0 + 5 = 5.
+
+<PredictReveal
+  id="c4-decode-start"
+  setup="In 32-bit mode the six bytes B8 19 00 00 00 C3 are mov eax, 25 (offsets 0 to 4) and then ret (offset 5)."
+  question="A disassembler is told to start at offset 2 instead of 0. What does it show?"
+  options={[
+    { label: 'An error, because offset 2 is inside an instruction', why: 'Nothing in the bytes marks where an instruction starts. From offset 2 the decoder reads 00 as an opcode, and 00 is a valid one (an add), so it prints instructions, not an error.' },
+    { label: 'Different instructions that look valid', correct: true, why: 'The decoder treats the byte it starts on as an opcode. 00 00 decodes as add byte ptr [eax], al and 00 C3 as add bl, al, so even the ret vanishes into a wrong instruction.' },
+    { label: 'mov eax, 25 and ret, as from offset 0', why: 'The decoder never sees the B8 at offset 0, so it cannot know that a five-byte mov started there. It decodes from the byte it was given.' },
+  ]}
+>
+
+<LiveCells lab="decode-start" />
+
+</PredictReveal>
 
 ### A small opcode lookup table
 
@@ -327,6 +344,40 @@ Add tests for truncated instructions, invalid bitness, a relative branch, 32-bit
 ## What a disassembler can and cannot prove
 
 Use a mature decoder for instruction truth. Spend your effort on the tool around it: safe process reads, section selection, navigation, symbols, and clear error messages.
+
+## Start from a string and follow what refers to it
+
+An unfamiliar executable has thousands of functions, and nothing labels the one
+behind a message such as `Not enough gold`. The message is easier to find: its
+bytes sit in read-only data, where a text search finds them. The code that
+shows it must use the string's address, so the next search is for code that
+refers to that address. Each hit is a **cross-reference**, and decoding the
+instructions around it leads to the function you wanted.
+
+How the address appears in code depends on bitness. 32-bit code, such as this
+course's Wesnoth build, usually stores the whole address inside the
+instruction: `push 0x00C4A2F0` is the bytes `68 F0 A2 C4 00`, so a byte search
+of `.text` for `F0 A2 C4 00` finds it. Decode around each hit, because data can
+contain the same four bytes by chance. If the loader moved the module, it has
+already rewritten such addresses, so search the live code for the live address.
+64-bit code usually stores a distance instead, measured from the end of the
+instruction. The CPU adds it to **RIP**, the 64-bit instruction pointer, which
+by then holds the address of the next instruction.
+
+<PredictReveal
+  id="rea-string-xref"
+  setup="A 64-bit game keeps the string at 0x1_4002_A4F0. A byte search of its code for the eight address bytes F0 A4 02 40 01 00 00 00 finds nothing."
+  question="What does the empty search show?"
+  options={[
+    { label: 'No code refers to the string', why: '64-bit code reaches data through a four-byte distance from the next instruction, so the eight address bytes never appear in it. The search comes back empty even when many instructions use the string.' },
+    { label: 'Nothing yet: decode each instruction and work out where its distance points', correct: true, why: 'Only decoding gives each instruction its length, and so the address of the next instruction that the distance is measured from. Then every target can be compared with 0x1_4002_A4F0.' },
+    { label: 'Search for the low four bytes, F0 A4 02 40, instead', why: 'The stored distance is different at every instruction. A 7-byte lea at 0x1_4000_1000 stores 0x1_4002_A4F0 − 0x1_4000_1007 = 0x294E9, the bytes E9 94 02 00, which match nothing in the address.' },
+  ]}
+>
+
+<LiveCells lab="rea-rip-target" />
+
+</PredictReveal>
 
 ## Disassemble the real Wesnoth function
 

@@ -9,7 +9,10 @@ sidebar:
   label: "6.8 How an Engine Orders and Shares Its Work"
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
+import CellFrames from '../../../../components/CellFrames.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
+import { frameVersionCells } from '../../../../data/figures-c3';
 import { Accordion, AccordionGroup, Badge, Example, Fields, HoverCard, Math, Panel, ParamField, Steps, Tab, Tabs } from '../../../../components/kit';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
@@ -231,21 +234,26 @@ flowchart TD
 
 Two things about this list explain a great deal of what you will measure.
 
-<Frame caption="A system sees the version it was given">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/engine-snapshot-order.svg`} width="480" height="206" alt="Input requests movement, simulation updates position, and rendering consumes a chosen snapshot." loading="lazy" decoding="async" />
-</Frame>
-
 First, the fixed steps from Lesson 4.1 are a loop inside the frame. A fixed step
 is a slice of game time, not of real time, so the number of steps a frame runs
 depends on how long the frame took. With a 60 Hz step, a step is 1000 ÷ 60 = 16.67
-ms:
+ms. At 30 frames a second every frame runs 2 steps, at 60 exactly 1, and at 240 one
+frame in 4 runs a step.
 
-| Frame rate | Frame time | Fixed steps per frame |
-|---|---|---|
-| 30 frames a second | 33.33 ms | 2 on every frame |
-| 60 frames a second | 16.67 ms | 1 on every frame |
-| 144 frames a second | 6.94 ms | 60 ÷ 144 = 5 of every 12 frames run one step; the other 7 run none |
-| 240 frames a second | 4.17 ms | 1 of every 4 frames runs one step |
+<PredictReveal
+  id="c3-fixed-steps"
+  setup="The game runs 60 fixed steps a second, so each step covers 16.67 ms of game time. The screen draws 144 frames a second, so each frame lasts 1000 ÷ 144 = 6.94 ms."
+  question="How many fixed steps does one frame run?"
+  options={[
+    { label: 'One on every frame', why: 'That holds only when a frame lasts exactly one step, at 60 frames a second. A 6.94 ms frame is shorter than a 16.67 ms step, so most frames have no whole step to run.' },
+    { label: '0.42 of a step', why: '6.94 ÷ 16.67 ≈ 0.42 is the average, but a step never runs partly. The engine saves the leftover time and runs a whole step once 16.67 ms have built up.' },
+    { label: 'None on most frames, one on some: 5 of every 12', correct: true, why: '12 frames last 12 × 6.94 = 83.33 ms, which holds 83.33 ÷ 16.67 = 5 whole steps. The leftover time carries over, so 5 of those 12 frames run one step and the other 7 run none.' },
+  ]}
+>
+
+<LiveCells lab="fixed-steps" />
+
+</PredictReveal>
 
 <HoverCard kind="example" body="Bevy's default fixed step is 64 steps a second, which is 1000 ÷ 64 = 15.625 ms. Many games choose 60.">The step rate</HoverCard> is
 a setting of the game, so a value your tool watches can change once per step in
@@ -256,6 +264,8 @@ phases. Updating the world position of every object from its parents, and decidi
 which objects are visible, run in the bookkeeping phase near the end of the frame.
 Anything that reads those results earlier in the frame sees yesterday's answer,
 which Lesson 7.1 shows for positions.
+
+<CellFrames id="c3-frame-versions" title="A system sees the version it was given" scenarios={frameVersionCells} />
 
 ## Order and parallel work: when a system may run
 

@@ -9,8 +9,9 @@ sidebar:
   order: 1
   label: "3.1 Safe Boundaries for Game Memory"
 ---
-import Frame from '../../../../components/kit/Frame.astro';
 import SpeedType from '../../../../components/kit/SpeedType.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import { CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
@@ -275,9 +276,20 @@ operating-system boundary. Programming Fundamentals called this an
 abstraction: a smaller interface hides the details of a larger operation.
 The reader trait now gives that idea a concrete shape.
 
-<Frame caption="The small reader interface hides several checks: process access, the requested page range, and the actual returned byte count. A handle alone does not guarantee a complete readable value.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/page-read-checks.svg`} width="480" height="206" alt="Reading remote memory checks the process handle rights, committed readable page state, and whether the requested bytes were returned." loading="lazy" decoding="async" />
-</Frame>
+<PredictReveal
+  id="c2-short-remote-read"
+  setup="Windows maps memory in 4096-byte pages, so offsets inside a page run from 0 to 4095. A read_u32 call has a handle with the read right, and its address is offset 4094 of a readable page. The next page is not committed: nothing backs it yet."
+  question="What should read_u32 return?"
+  options={[
+    { label: 'An error: only 2 of the 4 bytes can be copied', correct: true, why: 'The page ends after offset 4095, so 4096 − 4094 = 2 bytes lie inside it. The other 2 would come from the uncommitted page, so the copy is short and there is no complete u32 to decode.' },
+    { label: 'Ok, using the 2 readable bytes and zeros for the rest', why: 'Zeros were never read from the game. Decoding them would invent a value, which is why the reader checks the byte count Windows reports.' },
+    { label: 'Ok, because the handle has the read right', why: 'The handle is only the first check. The page state and the number of bytes actually copied can still fail the read.' },
+  ]}
+>
+
+<LiveCells lab="remote-read-checks" />
+
+</PredictReveal>
 
 ## Give each game helper one obvious import path
 

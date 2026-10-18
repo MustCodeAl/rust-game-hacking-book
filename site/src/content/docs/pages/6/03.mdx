@@ -14,16 +14,12 @@ import SpeedType from '../../../../components/kit/SpeedType.astro';
 import { Frame, GitHub, CodeGroup, Tab } from '../../../../components/kit';
 
 import ConceptLab from '../../../../components/ConceptLab.astro';
-import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 
 ## Parse the real Wesnoth frame
 
 The controlled captures from Wesnoth 1.14.9 reveal this frame:
-
-<Frame caption="A length-prefixed frame: four length bytes, then exactly that many payload bytes.">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/packet-frame.svg`} width="480" height="190" style="width:480px;max-width:100%;height:auto;" alt="Bytes 00 00 00 05 followed by five payload bytes spelling Hello." loading="lazy" decoding="async" />
-</Frame>
-
 
 ```text
 u32 big-endian compressed length
@@ -37,33 +33,28 @@ it accumulates bytes until it has the four-byte header, then exactly the
 advertised number of payload bytes, however TCP splits them across reads.
 
 The header is a claim from the sender, not permission to allocate whatever
-it asks for. Compare two headers followed by four bytes currently available:
+it asks for:
 
-```text
-00 00 00 04  61 62 63 64   -> claims 4 bytes; four are present
-FF FF FF FF  61 62 63 64   -> claims 4,294,967,295 bytes
-```
+<PredictReveal
+  id="c4-frame-limit"
+  setup="This receiver refuses any length above its limit, MAX_FRAME = 1,048,576 bytes. Its buffer holds the header FF FF FF FF and then four payload bytes."
+  question="What should it do now?"
+  options={[
+    { label: 'Wait: TCP may still deliver the rest', why: 'Read big-endian, FF FF FF FF is 4,294,967,295. That is above 1,048,576, so no amount of waiting makes the frame acceptable; waiting would mean buffering almost 4 GB for it.' },
+    { label: 'Refuse the frame now', correct: true, why: 'FF FF FF FF is 255 × 16,777,216 + 255 × 65,536 + 255 × 256 + 255 = 4,294,967,295, which is above 1,048,576. The header alone decides it, so the receiver refuses before allocating or waiting.' },
+    { label: 'Accept the four bytes as the payload', why: 'The payload length comes from the header, not from how many bytes happen to be in the buffer. Four bytes is not the 4,294,967,295 the sender claimed.' },
+  ]}
+>
 
-<MemoryStrip
-  cells="=00|=00|=00|=04|=a|=b|=c|=d"
-  groups="0-3:claimed length: 4|4-7:four payload bytes"
-  caption="An acceptable four-byte payload: the header and available payload agree."
-/>
+<LiveCells lab="length-prefix-frame" />
 
-<MemoryStrip
-  cells="=FF|=FF|=FF|=FF|=a|=b|=c|=d"
-  marks="0-3"
-  groups="0-3:claimed length: 4,294,967,295|4-7:four payload bytes seen so far"
-  caption="The header is structurally valid but exceeds the configured size limit. More TCP bytes could arrive; waiting for this advertised size is still unacceptable."
-/>
+</PredictReveal>
 
-The second header is four valid bytes, but its advertised size is not an
-acceptable frame for this parser. Code that allocates from that claim
-could request nearly four gigabytes. First reject any length above the
-configured maximum; only then wait for the advertised number of payload
-bytes, with a bounded buffer and a way to stop a stalled connection.
-Having only four payload bytes *so far* does not by itself prove a
-network frame is false, because TCP may deliver the rest later.
+Code that allocates from that claim could request nearly four gigabytes.
+First reject any length above the configured maximum; only then wait for
+the advertised number of payload bytes, with a bounded buffer and a way to
+stop a stalled connection. Having only some payload bytes *so far* does not
+by itself prove a network frame is false, because TCP may deliver the rest later.
 After a complete frame is assembled, the parser checks its exact
 length before decoding it. This separates byte validation from the
 later question of whether the decoded chat message makes sense.

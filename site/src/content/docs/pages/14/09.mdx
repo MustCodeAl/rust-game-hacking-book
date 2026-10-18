@@ -10,7 +10,8 @@ sidebar:
   label: "13.4 Guest Execution and Address Translation"
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
 
@@ -84,20 +85,10 @@ safely less than 4,096. The page number is `0x403` = 4 × 256 + 3 = 1,027. As a
 check, page 1,027 starts at byte 1,027 × 4,096 = 4,206,592, and 4,206,592 +
 2,604 = 4,209,196, which is `0x0040_3A2C` written in decimal.
 
-<Frame caption="A guest address is translated twice">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/two-stage-address.svg`} width="480" height="206" alt="Guest page tables translate guest virtual to guest physical addresses, then EPT or NPT translates to host physical memory." loading="lazy" decoding="async" />
-</Frame>
-
 **Stage 1.** The guest kernel's page tables map guest virtual page `0x403` to
 guest physical frame `0x1F7`. A **frame** is a page-sized block of physical
 memory. Translation replaces the page number with the frame number and keeps
-the offset:
-
-<MemoryStrip
-  cells="=0|=0|=1|=F|=7|=A|=2|=C"
-  groups="0-4:guest physical frame `0x001F7`|5-7:offset `0xA2C`, unchanged"
-  caption="The guest physical address `0x001F_7A2C` = `0x1F7` × `0x1000` + `0xA2C`."
-/>
+the offset.
 
 Multiplying by `0x1000`, which is 4,096, shifts a number left by three hex
 digits, so `0x1F7` × `0x1000` = `0x1F_7000`, and adding the offset gives
@@ -105,17 +96,26 @@ digits, so `0x1F7` × `0x1000` = `0x1F_7000`, and adding the offset gives
 address. In a guest, `0x001F_7A2C` is only the guest's idea of one.
 
 **Stage 2.** The hypervisor's tables map guest physical frame `0x1F7` to host
-physical frame `0x52E3`:
+physical frame `0x52E3`.
 
-<MemoryStrip
-  cells="=0|=5|=2|=E|=3|=A|=2|=C"
-  groups="0-4:host physical frame `0x052E3`|5-7:offset `0xA2C`, unchanged"
-  caption="The host physical address `0x052E_3A2C`: where the byte really is in RAM."
-/>
+`0x52E3` × `0x1000` = `0x52E_3000`, and adding `0xA2C` gives `0x052E_3A2C`, where
+the byte really is in RAM. The offset rode through both stages untouched; each
+stage only swapped the number above it.
 
-`0x52E3` × `0x1000` = `0x52E_3000`, and adding `0xA2C` gives `0x052E_3A2C`. The
-offset rode through both stages untouched; each stage only swapped the number
-above it.
+<PredictReveal
+  id="c6-next-guest-page"
+  setup="The guest’s tables also map page 0x404 to guest frame 0x2A0. The hypervisor’s tables map frame 0x1F7 to host frame 0x52E3 and have no entry for frame 0x2A0."
+  question="The guest reads 0x0040_4010, one page above the lesson’s address. What happens?"
+  options={[
+    { label: 'It reads host 0x052E_4010, the next host page', why: 'Neighbouring guest pages need not be neighbours anywhere else. Page 0x404 goes to guest frame 0x2A0, not 0x1F8, and stage 2 looks that frame up separately.' },
+    { label: 'Stage 2 has no entry, so the processor makes a VM exit', correct: true, why: 'Stage 1 works: page 0x404 becomes frame 0x2A0, so the guest physical address is 0x2A0 × 0x1000 + 0x010 = 0x002A_0010. Stage 2 finds no entry for 0x2A0 and hands control to the hypervisor.' },
+    { label: 'The guest kernel gets a page fault', why: 'A page fault inside the guest comes from stage 1, and the guest’s tables do have page 0x404. The missing entry is in the hypervisor’s tables, which the guest cannot see, so the result is a VM exit.' },
+  ]}
+>
+
+<LiveCells lab="two-stage-translation" />
+
+</PredictReveal>
 
 
 <CodeTrace trace="handoff-nested-translation" />

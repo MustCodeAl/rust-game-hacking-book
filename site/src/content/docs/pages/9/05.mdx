@@ -10,7 +10,8 @@ sidebar:
   label: "10.6 Mod Archives and Safe Extraction"
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import { Steps, SpeedType } from '../../../../components/kit';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
@@ -54,25 +55,25 @@ opening the file. Absolute entry names are worse still: joining an absolute
 path onto a base discards the base completely, so the result is simply whatever
 path the archive asked for.
 
-<Frame caption="Decide the destination before writing">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/archive-containment.svg`} width="480" height="206" alt="An installer checks the path and proves the final destination stays inside its mod directory before extracting bytes." loading="lazy" decoding="async" />
-</Frame>
+<PredictReveal
+  id="c5-archive-prefix"
+  setup="An installer joins each entry name onto C:\Games\Wesnoth\mods and accepts the result only if the joined text starts with that folder."
+  question="Does that check stop the entry name textures/../../save.dat?"
+  options={[
+    { label: 'Yes: it contains .., so the joined path is refused', why: 'The check never looks at the parts. The joined text is C:\\Games\\Wesnoth\\mods\\textures\\..\\..\\save.dat, which starts with the mod folder, so the check accepts it.' },
+    { label: 'No: the text starts with the mod folder, yet the file lands in C:\\Games\\Wesnoth', correct: true, why: 'textures goes one folder down, the first .. comes back to mods, and the second .. climbs to C:\\Games\\Wesnoth. The prefix check only read the text, which still begins with the mod folder.' },
+    { label: 'It depends on whether save.dat already exists', why: 'Whether a file exists does not change which folder the path names. The escape is decided by the .. parts alone.' },
+  ]}
+>
 
-Resolving the joined path one component at a time shows where it leaves the
-folder:
+<LiveCells lab="c5-archive-path" />
 
-```mermaid
-flowchart TD
-    A["Start: C:\Games\Wesnoth\mods"] -->|"first .."| B["C:\Games\Wesnoth"]
-    B -->|"second .."| C["C:\Games"]
-    C -->|"third .."| D["Root of drive C:"]
-    D -->|"Windows, then System32"| E["C:\Windows\System32"]
-    E -->|"example.dll"| F["C:\Windows\System32\example.dll"]
-```
+</PredictReveal>
 
 Each `..` climbs one level, so three of them undo the three folders below the
-drive root, and every component after that walks down a path the mod folder
-never contained.
+drive root, and every part after that walks down a path the mod folder
+never contained. Counting the depth part by part catches it at the first `..`
+that would go above the mod folder.
 
 The safe rule is therefore simple: **every extracted file must remain beneath one destination root after validation**.
 

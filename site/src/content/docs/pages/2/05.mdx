@@ -9,6 +9,8 @@ sidebar:
   order: 6
   label: "2.6 Tracing an Action Through Its Callers"
 ---
+import PredictReveal from '../../../../components/PredictReveal.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
 import MemoryMechanism from '../../../../components/MemoryMechanism.astro';
 import { Frame } from '../../../../components/kit';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
@@ -247,6 +249,45 @@ were answering.
 ![Code branching between menu operations](/assets/images/2/5/wesnoth9.png)
 
 </Frame>
+
+## Find every caller without running it
+
+The call stack lists the one route that reached your breakpoint this time. The
+code itself can list every route. A direct call is the byte `E8` followed by a
+four-byte distance, stored lowest byte first, which the CPU adds to the address
+of the next instruction. Work out that target for every `call` in the module,
+keep the ones that land on the first byte of the function you are in, and you
+have its callers. Each one is a **cross-reference**: a place in the code that
+refers to this address. In x64dbg, right-click the function's first instruction
+and choose **Find references to**, then **Selected Address(es)**.
+
+Take an illustrative helper that starts at `0x00402000`. A call at `0x00401020`
+stores `DB 0F 00 00`, which read lowest byte first is `0x00000FDB`. The next
+instruction starts at `0x00401020 + 5 = 0x00401025`, and
+`0x00401025 + 0xFDB = 0x00402000`, so this call is a caller. A distance whose
+top bit is set counts as
+[a negative number](/pages/3/09/#negative-whole-numbers), which lets a call
+reach backward; the calculator's second example works one out.
+
+The two lists answer different questions. A cross-reference shows that an
+instruction *can* call the helper, and the call stack shows which caller *did*.
+An indirect call such as `call eax` takes its target from a register while the
+game runs, so it never appears in the cross-reference list.
+
+<PredictReveal
+  id="rea-second-caller"
+  setup="During one recruit the call stack showed a single caller, at 0x00401020. The cross-reference list also has a call at 0x00403100 whose target is 0x00402000."
+  question="What does the second call site tell you?"
+  options={[
+    { label: 'It also ran during this recruit', why: 'A cross-reference is worked out from bytes, so it shows that the call can reach the helper, not that it did. The call stack of this recruit passed through 0x00401020 only.' },
+    { label: 'Some other action can reach the same helper, and a breakpoint on 0x00403100 shows which', correct: true, why: 'Both calls land on 0x00402000, so the helper serves at least two callers. Breaking on the second call site and trying other actions that spend gold names the one that uses it.' },
+    { label: 'The list is wrong, because the call stack showed one caller', why: 'The call stack shows only the route of the run you paused. Callers that other actions use never appear in it, and listing them is what cross-references add.' },
+  ]}
+>
+
+<LiveCells lab="rea-call-target" />
+
+</PredictReveal>
 
 ## Restore before changing direction
 

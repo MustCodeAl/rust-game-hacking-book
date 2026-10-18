@@ -9,7 +9,7 @@ sidebar:
   order: 8
   label: "7.8 Radar Coordinates and Marker Filtering"
 ---
-import { Frame, GitHub, Panel } from '../../../../components/kit';
+import { Frame, GitHub, Panel, SpeedType } from '../../../../components/kit';
 import Scene from '../../../../components/Scene.astro';
 import CodeTrace from '../../../../components/CodeTrace.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
@@ -252,6 +252,8 @@ This is the exercise the original course called the **radar hack**.
 
 In AssaultCube 1.2.0.2, breaking on the team field while the radar draws leads through `0x00415322` and eventually to the six-byte team comparison at **`0x00409FB3`**. NOPing that comparison lets the existing radar draw path handle every player:
 
+<SpeedType id="c3-radar-patch" title="Recall the radar branch patch" recall={[{"text": "LocalPatch::apply_masked", "mask": "apply_masked", "kind": "api", "hint": "Check the expected bytes, allowing unknown positions, then write the replacement."}, {"text": "RADAR_TEAM_FILTER,", "mask": "RADAR_TEAM_FILTER", "kind": "argument", "hint": "Patch at the address of the six-byte team comparison."}, {"text": "Some(0x0F), Some(0x85)", "mask": "0x85", "kind": "argument", "hint": "Require the second opcode byte of the six-byte conditional near jump."}, {"text": "None, None, None, None", "mask": "None", "kind": "argument", "hint": "Leave the four destination bytes unchecked, because they hold a relative offset."}, {"text": "&SHOW_ALL_PLAYERS,", "mask": "SHOW_ALL_PLAYERS", "kind": "argument", "hint": "Write the six one-byte do-nothing instructions in place of the branch."}, {"text": "[0x90; 6]", "mask": "0x90", "kind": "argument", "hint": "Fill every byte with the instruction that does nothing."}]}>
+
 ```rust
 const RADAR_TEAM_FILTER: usize = 0x0040_9FB3;
 const SHOW_ALL_PLAYERS: [u8; 6] = [0x90; 6];
@@ -262,6 +264,8 @@ let mut radar_patch = LocalPatch::apply_masked(
     &SHOW_ALL_PLAYERS,
 )?;
 ```
+
+</SpeedType>
 
 `0F 85` is the opcode for a six-byte near `jne`. Its remaining four bytes
 hold a signed relative destination. The masked verifier checks the opcode and

@@ -10,7 +10,8 @@ sidebar:
   label: "6.9 Windows Input: Polling, Events, and Messages"
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import { Accordion, Expandable, Fields, Panel, ParamField, Steps } from '../../../../components/kit';
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
@@ -58,10 +59,6 @@ debugging. ⌨️
 <MarginNote kind="brief">Choose input APIs by what the receiver consumes: sampled state, desktop input events, and window messages describe different things.</MarginNote>
 
 A game may combine several paths: Raw Input for aiming, ordinary window messages for menus, and polled key state for a developer console. Observe how the target consumes input before choosing an API. Sending `WM_KEYDOWN` to a window that reads device state is not a failed keyboard event; it is the wrong abstraction.
-
-<Frame caption="A held key is different from a fresh press">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/input-edge.svg`} width="480" height="206" alt="Comparing previous and current key state distinguishes a fresh press from a held key." loading="lazy" decoding="async" />
-</Frame>
 
 Always pair a down transition with an up transition, including cancellation and error paths. A state machine should own which synthetic inputs are currently held so shutdown can release exactly those inputs.
 
@@ -246,14 +243,20 @@ impl KeyEdge {
 }
 ```
 
-```mermaid
-stateDiagram-v2
-    [*] --> Up
-    Up --> Down: key goes down, pressed_now returns true
-    Down --> Down: key stays down, pressed_now returns false
-    Down --> Up: key goes up
-    Up --> Up: key stays up
-```
+<PredictReveal
+  id="c4-key-edge"
+  setup="KeyEdge starts with was_down = false, and the tool calls pressed_now once per poll."
+  question="The player holds Insert down across 5 polls in a row. How many times does pressed_now return true?"
+  options={[
+    { label: '5, once per poll with the key down', why: 'pressed_now is down && !was_down. The first of those polls stores was_down = true, so each of the next four computes true && false = false.' },
+    { label: '1', correct: true, why: 'Only the first down poll still has was_down = false, so true && !false = true there. The other four have was_down = true, so the hold reports exactly one press.' },
+    { label: '0, because the key never goes up', why: 'The first down poll compares with the poll before it, when the key was up, so down && !was_down is true there once.' },
+  ]}
+>
+
+<LiveCells lab="key-edge-polls" />
+
+</PredictReveal>
 
 Poll at a modest rate such as every 8–16 milliseconds. A tight loop wastes a
 CPU core. A zero result can also mean the desktop is inactive or Windows

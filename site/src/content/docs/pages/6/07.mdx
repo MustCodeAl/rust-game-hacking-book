@@ -11,20 +11,17 @@ sidebar:
 ---
 import CodeTrace from '../../../../components/CodeTrace.astro';
 import MarginNote from '../../../../components/kit/MarginNote.astro';
-import Frame from '../../../../components/kit/Frame.astro';
 import { Accordion, Badge, GitHub, CodeGroup, Tab } from '../../../../components/kit';
 
 import MemoryStrip from '../../../../components/MemoryStrip.astro';
+import CellFrames from '../../../../components/CellFrames.astro';
+import { tornReadCells } from '../../../../data/figures-c4';
 
 ## Processes normally have separate address spaces
 
 The proxy copied messages between sockets. A supported game add-on and a separate visualizer could instead agree on a local shared byte region. The message still needs a layout and a lifetime; only the transport changes.
 
 Two running programs can both use the address `0x00400000`, yet those numbers can refer to completely different physical storage. Each process has its own virtual address space.
-
-<Frame caption="Readers and writers need the same exclusion">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/shared-record-lock.svg`} width="480" height="206" alt="A shared mutex excludes a reader while the writer updates multiple fields; both sides take it." loading="lazy" decoding="async" />
-</Frame>
 
 That separation is a safety feature. A map helper should not need to patch a game process merely to receive a supported event from a mod. Windows provides **interprocess communication**, or IPC, for programs that intentionally cooperate.
 
@@ -142,16 +139,7 @@ writing only once. Shared memory gives two processes access to the same bytes.
 It gives them no agreement about *when*. Nothing prevents a reader from
 arriving in the middle of a write:
 
-```mermaid
-sequenceDiagram
-    participant Writer
-    participant Memory as Shared bytes
-    participant Reader
-    Writer->>Memory: store length = 11
-    Reader->>Memory: read length (11) and the payload
-    Note over Reader: payload bytes are still<br/>the previous message
-    Writer->>Memory: copy the new text into the payload
-```
+<CellFrames id="torn-shared-read" title="A reader arrives between the length and the text" scenarios={tornReadCells} />
 
 The reader's length check passes, the UTF-8 decode very likely succeeds, and
 the text returned is simply wrong — or is half of the previous message. Writing
@@ -160,15 +148,11 @@ CPU and the compiler may reorder the two stores anyway. Closing it takes a
 sequence number the reader checks before and after copying, or a real
 synchronization object.
 
-For a small concrete case, suppose the old payload is `READY` (five bytes)
-and the writer announces a new seven-byte payload `RUNNING` before copying it.
-The reader can observe length 7 alongside `READY` and two old padding bytes.
-Seven bytes fit inside the mapping, and zero bytes are valid UTF-8, so both
-checks in `read_text` can succeed while the message is not the one the writer
-meant to publish. The sequence diagram shows that exact gap between publishing
-the length and finishing the payload. A shared map is like a notice board both
-programs can see; visibility does not give either program an agreed moment to
-read a completed notice.
+The figure shows the smallest case: old payload `READY` (five bytes), new
+payload `RUNNING` (seven bytes), and a reader that copies in the gap between
+publishing the length and finishing the text. Both checks in `read_text`
+succeed, yet the message is not one the writer ever meant to publish. Seeing
+the same bytes does not give either program an agreed moment to read them.
 
 
 <CodeTrace trace="handoff-shared-snapshot" />

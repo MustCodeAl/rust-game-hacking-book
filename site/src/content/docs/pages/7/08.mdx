@@ -9,8 +9,11 @@ sidebar:
   order: 2
   label: "14.2 Call Tracing and Bounded Logs"
 ---
+import CellFrames from '../../../../components/CellFrames.astro';
+import { traceBaselineCells } from '../../../../data/figures-rea';
 import CodeTrace from '../../../../components/CodeTrace.astro';
-import Frame from '../../../../components/kit/Frame.astro';
+import LiveCells from '../../../../components/LiveCells.astro';
+import PredictReveal from '../../../../components/PredictReveal.astro';
 import { Accordion, Badge, GitHub, Panel, Steps } from '../../../../components/kit';
 import LessonVideo from '../../../../components/LessonVideo.astro';
 
@@ -42,16 +45,20 @@ A function call has two jobs:
 
 On 32-bit x86, a common direct call begins with opcode `E8` followed by a signed 32-bit relative displacement. The CPU adds that displacement to the address immediately after the call. A disassembler performs this calculation and exposes the final target.
 
-<Frame caption="A relative call uses the next address">
-  <img src={`${import.meta.env.BASE_URL}assets/images/original/relative-call.svg`} width="480" height="206" alt="A five-byte call at hexadecimal 1000 adds displacement 20 to next address 1005 to reach target 1025." loading="lazy" decoding="async" />
-</Frame>
+<PredictReveal
+  id="c4-call-target"
+  setup="At 0x00401000 the five bytes are E8 4B 00 00 00: the opcode E8, then the displacement 0x0000004B stored lowest byte first."
+  question="Which address does this call go to?"
+  options={[
+    { label: '0x0040104B', why: 'That adds 0x4B to the address of the call itself. The CPU adds it to the address right after the five-byte call, 0x00401000 + 5 = 0x00401005.' },
+    { label: '0x00401050', correct: true, why: 'The next instruction is at 0x00401000 + 5 = 0x00401005, and 0x00401005 + 0x4B = 0x00401050. The call also pushes 0x00401005, so ret comes back there.' },
+    { label: '0x0000004B', why: 'The four bytes are a distance, not an address. They say how far to go, measured from the end of the call.' },
+  ]}
+>
 
-<MemoryStrip
-  cells="0x00401000=E8|0x00401001=4B|0x00401002=00|0x00401003=00|0x00401004=00"
-  marks="0"
-  groups="0-0:opcode: direct near call|1-4:displacement, little endian: +0x4B"
-  caption="For example, a call at `0x00401000`: the CPU adds the displacement (`0x4B`) to the address right after this 5-byte instruction (`0x00401005`), landing on `0x00401050`."
-/>
+<LiveCells lab="relative-call-target" />
+
+</PredictReveal>
 
 An indirect call such as `call eax` or `call [ecx+8]` gets its destination from a register or memory at runtime. Static bytes alone do not reveal one final target, so the first course logger deliberately records only direct calls.
 
@@ -322,6 +329,36 @@ This first complete version writes compact lines directly to the console. The bo
   duration="15 seconds"
   caption="The original call-logger recording shows the running game producing trace output. Each observed call requires a breakpoint hit, execution of the saved call, a single-step event, and re-arming; bytes discovered in a static scan have not necessarily executed."
 />
+
+## Compare a trace with a run that changed nothing
+
+One trace lists what ran while it recorded, but not which calls the action
+caused: most of them belong to drawing, input and timers that run anyway. To
+separate the two, fix the scenario first (the build, the save, the logging
+window and the event cap) and record it twice without changing anything. Then
+record it once more with a single change, such as recruiting one unit before
+ending the turn.
+
+The two unchanged runs show how far the counts move on their own. A function
+the game calls once per frame runs as many times as frames fit in the window,
+and that depends on timing, so even identical runs disagree. A count in the
+changed run points at the change only when it falls outside the range the
+unchanged runs produced.
+
+<PredictReveal
+  id="rea-trace-baseline"
+  setup="Two runs that only end the turn called wesnoth.exe+0x0E7710 212 and 219 times. A third run that first recruits one unit called it 215 times."
+  question="Does recruiting change how often +0x0E7710 runs?"
+  options={[
+    { label: 'Yes: 215 is 3 more than the first run', why: 'The second unchanged run did exactly what the first did and still called it 219 times. Identical runs already differ by 7, so a difference of 3 says nothing about the recruit.' },
+    { label: 'The counts cannot tell: 215 lies inside the 212 to 219 of the identical runs', correct: true, why: 'A count points at the change only when it falls outside what unchanged runs produce. 215 is inside, so this function may or may not take part in recruiting, and these counts cannot separate the two.' },
+    { label: 'No: it never runs during a recruit', why: 'It ran 215 times in the run that recruited. The counts cannot rule it out; they only fail to separate it from the timing noise.' },
+  ]}
+>
+
+<CellFrames id="trace-baseline" title="Two unchanged runs, then one change" scenarios={traceBaselineCells} />
+
+</PredictReveal>
 
 ## Diagnose by the last completed state
 
