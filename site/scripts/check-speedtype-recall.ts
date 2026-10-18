@@ -159,7 +159,13 @@ try {
         const source = lines.map(line => /^\s*$/.test(line) ? '' : line).join('\n');
         const typeable = lines.map(line => Array.from(/^\s*$/.test(line) ? '' : line.replace(/^[ \t]+|[ \t]+$/g, '')).filter(ch => ch === '\t' || (ch >= ' ' && ch <= '~')).join('')).join('\n');
         for (const fragment of fragments) assert.ok(source.includes(fragment.text), `${id}: an actual code fragment is hidden`);
+        // A drill may sit inside a collapsed Accordion; a reader opens it first, so the check does too.
         const primary = root.locator('.kit-speedtype__start').first();
+        // Page scripts may still close the accordion while the page settles, so open it again until the button shows.
+        for (let attempt = 0; attempt < 30 && !await primary.isVisible(); attempt++) {
+          await root.evaluate(node => { for (let item = node.closest('details'); item; item = item.parentElement?.closest('details') ?? null) item.open = true; });
+          await page.waitForTimeout(150);
+        }
         assert.equal(await primary.getAttribute('data-speedtype-start'), 'recall');
         const copySeed = JSON.stringify({ wpm: 31, acc: 97 });
         await page.evaluate(({ id, seed }) => {
