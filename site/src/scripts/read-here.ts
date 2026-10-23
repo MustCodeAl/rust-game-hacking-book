@@ -77,8 +77,8 @@ function mount(root: HTMLElement): void {
   const speedButton = q<HTMLButtonElement>('[data-read-here-speed]');
   const voiceSelect = q<HTMLSelectElement>('[data-read-here-voice]');
   const sample = q<HTMLButtonElement>('[data-read-here-sample]');
-  const stop = q<HTMLButtonElement>('[data-read-here-stop]');
-  if (!start || !status || !bar || !now || !progress || !back || !toggle || !toggleLabel || !playIcon || !pauseIcon || !forward || !speedButton || !voiceSelect || !sample || !stop) return;
+  const stop = q<HTMLButtonElement>('[data-read-here-stop]'); const cc = q<HTMLButtonElement>('[data-read-here-captions]');
+  if (!start || !status || !bar || !now || !progress || !back || !toggle || !toggleLabel || !playIcon || !pauseIcon || !forward || !speedButton || !voiceSelect || !sample || !stop || !cc) return;
   if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
     status.textContent = 'Read-aloud is unavailable in this browser.';
     return;
@@ -89,7 +89,7 @@ function mount(root: HTMLElement): void {
   let utterance: SpeechSynthesisUtterance | null = null;
   let request: AbortController | null = null;
   let rate = readRatePreference();
-  let voices: VoiceChoice[] = [];
+  let voices: VoiceChoice[] = []; let captions = (() => { try { return localStorage.getItem('gha-captions') === 'on'; } catch { return false; } })();
 
   const active = (): boolean => state === 'speaking' || state === 'paused';
   // Floating buttons (Notes, chat) rise by the player's height so they never sit on it.
@@ -115,7 +115,7 @@ function mount(root: HTMLElement): void {
     progress.max = Math.max(passages.length, 1);
     progress.value = Math.min(index + 1, passages.length);
     const current = passages[Math.min(index, passages.length - 1)];
-    now.textContent = current && active() ? trimmed(current.text) : state === 'loading' ? 'Loading the listening text…' : '';
+    bar.dataset.captions = captions ? 'on' : 'off'; cc.setAttribute('aria-pressed', String(captions)); now.textContent = current && active() ? (captions ? current.text : trimmed(current.text)) : state === 'loading' ? 'Loading the listening text…' : '';
   };
   const cancel = (message = 'Stopped.'): void => {
     generation++;
@@ -202,7 +202,7 @@ function mount(root: HTMLElement): void {
   });
   back.addEventListener('click', () => skip(-1));
   forward.addEventListener('click', () => skip(1));
-  speedButton.addEventListener('click', () => { rate = nextSpeed(rate); saveRatePreference(rate); paint(); restartPassage(); });
+  speedButton.addEventListener('click', () => { rate = nextSpeed(rate); saveRatePreference(rate); paint(); restartPassage(); }); cc.addEventListener('click', () => { captions = !captions; try { localStorage.setItem('gha-captions', captions ? 'on' : 'off'); } catch { /* The choice still applies to this page. */ } paint(); });
   voiceSelect.addEventListener('change', () => { saveVoicePreference(voiceSelect.value); restartPassage(); });
   sample.addEventListener('click', () => speakSample(synth, chooseVoice(voices, voiceSelect.value), rate));
   stop.addEventListener('click', () => { cancel(); start.focus(); });
