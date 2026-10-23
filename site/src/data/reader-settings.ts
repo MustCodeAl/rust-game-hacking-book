@@ -28,7 +28,7 @@ export const readerSettingsScript = `(${function () {
     ['academyToc', 'gha-toc', ['shown', 'hidden'], 'shown'],
     ['academyTier', 'gha-settings-tier', ['basic', 'advanced', 'detailed'], 'basic'],
     ['academyDrawer', 'gha-drawer', ['popover', 'sheet'], 'popover'],
-    ['academyAppearance', 'gha-appearance', ['original', 'modern'], 'original'],
+    ['academyAppearance', 'gha-appearance', ['modern'], 'modern'],
     ['academyDepth', 'gha-depth', ['flat', 'soft'], 'flat'],
     ['academySurface', 'gha-surface', ['default', 'unified'], 'default'],
     ['academyInlineCode', 'gha-inline-code', ['classic', 'soft'], 'classic'],
