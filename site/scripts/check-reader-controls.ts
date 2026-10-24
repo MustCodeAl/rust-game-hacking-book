@@ -26,13 +26,13 @@ try {
         return !!hit && (node === hit || node.contains(hit));
       });
       assert.ok(painted, 'expanded comment is painted above the sidebar');
-      for (const panel of ['sidebar', 'toc']) {
+      for (const panel of ['sidebar']) {
         await page.locator(`[data-panel-hide="${panel}"]`).click(); clicks++;
         await page.waitForFunction(name => document.documentElement.dataset[name] === 'hidden', panel === 'sidebar' ? 'academySidebar' : 'academyToc');
         await page.locator(`[data-panel-show="${panel}"]`).click(); clicks++;
         await page.waitForFunction(name => document.documentElement.dataset[name] === 'shown', panel === 'sidebar' ? 'academySidebar' : 'academyToc');
       }
-      const tocLink = page.locator('starlight-toc a[href="#selection-run-only-the-path-that-fits"]').first();
+      const outlineOpen = page.locator('[data-outline-open]').first(); if (await outlineOpen.isVisible()) { await outlineOpen.click(); clicks++; } const tocLink = page.locator('[data-outline-link][href="#selection-run-only-the-path-that-fits"]').first();
       await tocLink.click(); clicks++;
       assert.equal(new URL(page.url()).hash, '#selection-run-only-the-path-that-fits');
     }
