@@ -83,7 +83,7 @@ function mount(root: HTMLElement): void {
     status.textContent = 'Read-aloud is unavailable in this browser.';
     return;
   }
-  const synth = window.speechSynthesis;
+  const synth = window.speechSynthesis; let sawBoundary = false, lastChar = -1; const caption = (document.querySelector('.read-caption') as HTMLElement | null) ?? Object.assign(document.createElement('div'), { className: 'read-caption', hidden: true }); if (!caption.isConnected) { caption.setAttribute('aria-hidden', 'true'); document.body.appendChild(caption); } const showCaption = (text: string, charIndex = -1): void => { const on = captions && !!text; caption.hidden = !on; if (!on) { caption.textContent = ''; return; } if (charIndex < 0) { caption.dataset.mode = 'passage'; caption.textContent = text; return; } caption.dataset.mode = 'sentence'; const sentences = text.match(/[^.!?]+[.!?]*["')\]]*\s*/g) ?? [text]; let at = 0, pick = sentences[sentences.length - 1] ?? text; for (const s of sentences) { if (charIndex < at + s.length) { pick = s; break; } at += s.length; } caption.textContent = pick.trim(); }; const capKey = 'gha-caption-style'; const capStyle: Record<string, string> = { size: 'medium', look: 'dark', pos: 'bottom' }; try { Object.assign(capStyle, JSON.parse(localStorage.getItem(capKey) || '{}')); } catch { /* defaults */ } const applyCapStyle = (): void => { caption.dataset.size = capStyle.size ?? 'medium'; caption.dataset.look = capStyle.look ?? 'dark'; caption.dataset.pos = capStyle.pos ?? 'bottom'; }; applyCapStyle(); root.querySelectorAll<HTMLSelectElement>('[data-read-caption-opt]').forEach((select) => { const key = select.dataset.readCaptionOpt ?? ''; select.value = capStyle[key] ?? select.value; select.addEventListener('change', () => { capStyle[key] = select.value; applyCapStyle(); try { localStorage.setItem(capKey, JSON.stringify(capStyle)); } catch { /* still applies on this page */ } }); });
   let state: Playback = 'idle', generation = 0, index = 0;
   let passages: Passage[] = [];
   let utterance: SpeechSynthesisUtterance | null = null;
@@ -115,7 +115,7 @@ function mount(root: HTMLElement): void {
     progress.max = Math.max(passages.length, 1);
     progress.value = Math.min(index + 1, passages.length);
     const current = passages[Math.min(index, passages.length - 1)];
-    bar.dataset.captions = captions ? 'on' : 'off'; cc.setAttribute('aria-pressed', String(captions)); now.textContent = current && active() ? (captions ? current.text : trimmed(current.text)) : state === 'loading' ? 'Loading the listening text…' : '';
+    cc.setAttribute('aria-pressed', String(captions)); showCaption(current && active() ? current.text : '', sawBoundary ? lastChar : -1); now.textContent = current && active() ? trimmed(current.text) : state === 'loading' ? 'Loading the listening text…' : '';
   };
   const cancel = (message = 'Stopped.'): void => {
     generation++;
@@ -135,7 +135,7 @@ function mount(root: HTMLElement): void {
     const chosen = chooseVoice(voices, readVoicePreference());
     if (chosen) next.voice = chosen.voice;
     next.lang = chosen?.lang || document.documentElement.lang || 'en';
-    next.rate = rate;
+    next.rate = rate; sawBoundary = false; lastChar = -1; next.onboundary = (event: SpeechSynthesisEvent) => { if (version !== generation) return; sawBoundary = true; lastChar = event.charIndex; showCaption(passage.text, lastChar); };
     next.onstart = () => { if (version === generation) { status.textContent = `Reading passage ${index + 1} of ${passages.length}.`; paint(); } };
     next.onend = () => {
       if (version !== generation) return;
