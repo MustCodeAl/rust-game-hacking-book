@@ -1,0 +1,1 @@
+import{t as e}from"./preload-helper.BZvExlye.js";import{t}from"./lazy-mount.C7tdk55J.js";t(`[data-live]`,async()=>{let{mountLiveCells:t}=await e(async()=>{let{mountLiveCells:e}=await import(`./live-cells.D8xofIGd.js`);return{mountLiveCells:e}},[]);t()});
