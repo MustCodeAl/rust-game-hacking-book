@@ -29,7 +29,7 @@
         diagramLabels: { attribute: "academyDiagramLabels", key: "gha-diagram-labels", values: ["soft", "outlined", "none"], fallback: "soft", control: "data-diagram-labels-choice" },
         diagramBorders: { attribute: "academyDiagramBorders", key: "gha-diagram-borders", values: ["soft", "strong", "none"], fallback: "soft", control: "data-diagram-borders-choice" },
         diagramSize: { attribute: "academyDiagramSize", key: "gha-diagram-size", values: ["fit", "actual"], fallback: "fit", control: "data-diagram-size-choice" },
-        grid: { attribute: "academyGrid", key: "gha-grid", values: ["on", "off"], fallback: "on", control: "data-grid-choice" },
+        grid: { attribute: "academyGrid", key: "gha-grid", values: ["on", "off"], fallback: "off", control: "data-grid-choice" },
         cards: { attribute: "academyCards", key: "gha-cards", values: ["on", "off"], fallback: "on", control: "data-cards-choice" },
         comments: { attribute: "academyComments", key: "gha-comments", values: ["show", "hide"], fallback: "show", control: "data-comments-choice" },
         chat: { attribute: "academyChat", key: "gha-chat", values: ["bottom-right", "bottom-left", "top-right", "top-left", "off"], fallback: "bottom-right", control: "data-chat-choice" },
