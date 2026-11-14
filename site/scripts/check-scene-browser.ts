@@ -12,7 +12,7 @@ try{for(const width of [420,1280]){
  for(const item of items){
   const path=item.hosts[0].path;console.log(width,item.name);const p=await ctx.newPage();const errors: string[]=[];p.on('pageerror',e=>errors.push(e.message));
   const response=await p.goto(`${(process.env.BOOK_BASE_URL || 'http://127.0.0.1:8766/rust-game-hacking-book/').replace(/\/?$/, '/') }pages/${path}/`,{waitUntil:'domcontentloaded'});assert.ok(response, 'Scene page returned a response');assert.equal(response.status(),200);
-  const r=p.locator(`[data-scene-id="scene-${item.name}"]`);await r.scrollIntoViewIfNeeded();const scrub=r.locator('[data-scene-scrub]');await scrub.waitFor({state:'visible'});
+  const r=p.locator(`[data-scene-id="scene-${item.name}"]`);await r.scrollIntoViewIfNeeded();await p.waitForTimeout(500);const scrub=r.locator('[data-scene-scrub]');await scrub.waitFor({state:'visible'});
   await scrub.focus();await scrub.press('Home');actions++;
   await r.locator('[data-scene-action="play"]').click();actions++;await p.waitForTimeout(170);
   assert(Number(await scrub.inputValue())>0,item.name+': playback progresses');
