@@ -67,16 +67,17 @@ export function mountMarginNotes(): void {
 		});
 	};
 	const settle = (): void => {
+		// Clear every note's offset first, then read all of them in one pass, so the browser lays out once instead of once per note.
+		notes.forEach(note => { note.style.top = ''; });
+		const measured = notes.map(note => ({ note, natural: note.offsetTop, height: note.offsetHeight }));
 		const bottoms = { left: 0, right: 0 };
-		notes.forEach(note => {
-			note.style.top = '';
-			const natural = note.offsetTop;
+		for (const { note, natural, height } of measured) {
 			const side = note.dataset.side === 'left' ? 'left' : 'right';
 			const top = Math.max(natural, bottoms[side] + 10);
 			if (top !== natural) note.style.top = top + 'px';
-			bottoms[side] = top + note.offsetHeight;
-		});
-	};
+			bottoms[side] = top + height;
+		}
+	}
 	const layout = (): void => {
 		notes = Array.from(content.querySelectorAll<HTMLElement>('[data-margin-note]'));
 		notes.forEach(adopt);
