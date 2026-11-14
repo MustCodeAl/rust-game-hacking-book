@@ -12,7 +12,7 @@ export const readerSettingsScript = `(${function () {
     ['academyDiagramLabels', 'gha-diagram-labels', ['soft', 'outlined', 'none'], 'soft'],
     ['academyDiagramBorders', 'gha-diagram-borders', ['soft', 'strong', 'none'], 'soft'],
     ['academyDiagramSize', 'gha-diagram-size', ['fit', 'actual'], 'fit'],
-    ['academyGrid', 'gha-grid', ['on', 'off'], 'on'],
+    ['academyGrid', 'gha-grid', ['on', 'off'], 'off'],
     ['academyCards', 'gha-cards', ['on', 'off'], 'on'],
     ['academyComments', 'gha-comments', ['show', 'hide'], 'show'],
     ['academyChat', 'gha-chat', ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'off'], 'bottom-right'],
