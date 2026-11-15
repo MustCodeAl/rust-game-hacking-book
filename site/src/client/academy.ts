@@ -998,27 +998,32 @@
       hint.setAttribute("aria-hidden", "true");
       button.setAttribute("aria-label", (label.textContent + " " + hint.textContent).trim());
     });
-    document.querySelectorAll<HTMLElement>('.sl-markdown-content pre, .sl-markdown-content .mem-figure, .sl-markdown-content .table-scroll').forEach(function (region) {
-      if (readingResizeObserver && !readingObserved.has(region)) {
-        readingObserved.add(region);
-        readingResizeObserver.observe(region);
-      }
-      var managed = region.dataset.keyboardScroll === "true";
-      if (!managed && region.hasAttribute("tabindex")) return;
-      var style = window.getComputedStyle(region);
-      var visible = region.clientWidth > 0 && !region.closest('[hidden], [aria-hidden="true"], .sr-only');
-      var overflow = visible && (
-        (/auto|scroll/.test(style.overflowX) && region.scrollWidth > region.clientWidth + 1) ||
-        (/auto|scroll/.test(style.overflowY) && region.scrollHeight > region.clientHeight + 1)
-      );
-      if (overflow) {
-        region.tabIndex = 0;
-        region.dataset.keyboardScroll = "true";
-      } else if (managed) {
-        region.removeAttribute("tabindex");
-        delete region.dataset.keyboardScroll;
-      }
-    });
+    var regions = Array.from(document.querySelectorAll<HTMLElement>('.sl-markdown-content pre, .sl-markdown-content .mem-figure, .sl-markdown-content .table-scroll'));
+        // Read every region's layout first and write afterwards, so the browser lays the page out once instead of once per region.
+        var verdicts = regions.map(function (region) {
+          if (readingResizeObserver && !readingObserved.has(region)) {
+            readingObserved.add(region);
+            readingResizeObserver.observe(region);
+          }
+          var managed = region.dataset.keyboardScroll === "true";
+          if (!managed && region.hasAttribute("tabindex")) return "keep";
+          var style = window.getComputedStyle(region);
+          var visible = region.clientWidth > 0 && !region.closest('[hidden], [aria-hidden="true"], .sr-only');
+          var overflow = visible && (
+            (/auto|scroll/.test(style.overflowX) && region.scrollWidth > region.clientWidth + 1) ||
+            (/auto|scroll/.test(style.overflowY) && region.scrollHeight > region.clientHeight + 1)
+          );
+          return overflow ? "on" : managed ? "off" : "keep";
+        });
+        regions.forEach(function (region, index) {
+          if (verdicts[index] === "on") {
+            region.tabIndex = 0;
+            region.dataset.keyboardScroll = "true";
+          } else if (verdicts[index] === "off") {
+            region.removeAttribute("tabindex");
+            delete region.dataset.keyboardScroll;
+          }
+        });
   }
   function polishLabs(): void {
     labPolishQueued = false;
